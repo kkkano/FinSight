@@ -35,7 +35,7 @@ graph TD
 
 1.  **克隆仓库**：
     ```bash
-    git clone https://github.com/your-username/FinSight-main.git
+    git clone https://github.com/kkkano/FinSight-main.git
     cd FinSight-main
     ```
 
