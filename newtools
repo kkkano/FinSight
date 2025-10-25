@@ -1,13 +1,3 @@
-import yfinance as yf
-import json
-from ddgs import DDGS
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime, timedelta, date
-import time
-import re
-
-
 def search(query: str) -> str:
     """
     使用 DuckDuckGo 执行网页搜索并格式化结果。
