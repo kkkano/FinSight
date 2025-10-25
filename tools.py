@@ -8,12 +8,17 @@ import time
 import re
 import finnhub  # 新增
 import pandas as pd # 新增
+import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件中的环境变量
+load_dotenv()
 
 # ============================================
 # API配置
 # ============================================
-ALPHA_VANTAGE_API_KEY = "QE084WG39H15OX1X"
-FINNHUB_API_KEY = "d3uf9opr01qil4apq1ogd3uf9opr01qil4apq1p0" 
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "").strip('"')  # 移除可能的引号
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "").strip('"')
 
 # ============================================
 # API 客户端初始化
@@ -275,11 +280,109 @@ def get_company_info(ticker: str) -> str:
 # 新闻获取
 # ============================================
 
+MARKET_INDICES = {
+    "^GSPC": "S&P 500 index",
+    "^IXIC": "Nasdaq Composite index", 
+    "^DJI": "Dow Jones Industrial Average",
+    "^RUT": "Russell 2000 index",
+    "^VIX": "VIX volatility index",
+    "^NYA": "NYSE Composite index",
+    "^FTSE": "FTSE 100 index",
+    "^N225": "Nikkei 225 index",
+    "^HSI": "Hang Seng index"
+}
+
+def _is_market_index(ticker: str) -> bool:
+    """判断ticker是否为市场指数"""
+    # 方法1: 检查是否在已知指数列表中
+    if ticker in MARKET_INDICES:
+        return True
+    
+    # 方法2: 检查常见指数命名模式
+    index_patterns = [
+        r'^\^',      # 以 ^ 开头（Yahoo Finance指数标记）
+        r'SPX$',     # S&P 500 的另一种写法
+        r'NDX$',     # Nasdaq 100
+        r'DJI$',     # Dow Jones
+    ]
+    
+    for pattern in index_patterns:
+        if re.match(pattern, ticker):
+            return True
+    
+    return False
+
+def _get_index_news(ticker: str) -> str:
+    """
+    专门为市场指数获取新闻的方法。
+    策略：通过搜索获取宏观市场新闻和指数分析。
+    """
+    friendly_name = MARKET_INDICES.get(ticker, ticker.replace('^', ''))
+    
+    print(f"  → Detected market index: {friendly_name}")
+    print(f"  → Using specialized search strategy for index news...")
+    
+    # 策略1: 搜索指数最近表现和分析
+    current_date = datetime.now().strftime('%B %Y')
+    search_queries = [
+        f"{friendly_name} recent performance analysis {current_date}",
+        f"{friendly_name} market news today",
+        f"What's driving {friendly_name} this week"
+    ]
+    
+    all_results = []
+    for query in search_queries[:2]:  # 只用前2个查询，避免过多请求
+        try:
+            results = search(query)
+            if results and "No search results" not in results:
+                all_results.append(results)
+            time.sleep(1)
+        except Exception as e:
+            print(f"  → Search failed for '{query}': {e}")
+            continue
+    
+    if not all_results:
+        return f"Unable to fetch recent news for {friendly_name}. Please check financial news sites manually."
+    
+    # 解析并格式化搜索结果
+    combined_results = "\n\n".join(all_results)
+    
+    # 尝试从搜索结果中提取新闻标题和日期
+    news_items = []
+    lines = combined_results.split('\n')
+    
+    for i, line in enumerate(lines):
+        # 寻找标题模式（通常以数字开头）
+        if re.match(r'^\d+\.', line.strip()):
+            title = line.strip()
+            # 尝试找到日期信息
+            date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})', 
+                                  ' '.join(lines[i:i+3]), re.IGNORECASE)
+            date_str = date_match.group(1) if date_match else 'Recent'
+            news_items.append(f"[{date_str}] {title}")
+            
+            if len(news_items) >= 5:
+                break
+    
+    if news_items:
+        return f"Latest Market News & Analysis ({friendly_name}):\n" + "\n".join(news_items)
+    else:
+        # 如果无法提取结构化新闻，返回原始搜索摘要
+        preview = combined_results[:800] + "..." if len(combined_results) > 800 else combined_results
+        return f"Recent Market Context ({friendly_name}):\n{preview}"
+
 def get_company_news(ticker: str) -> str:
     """
-    使用多种方法获取公司新闻。
-    优先使用 yfinance，失败后尝试 Finnhub, Alpha Vantage，最后回退到搜索。
+    智能获取新闻：自动识别是公司股票还是市场指数。
+    - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
+    - 市场指数：使用搜索策略获取宏观市场新闻
     """
+    # 🔍 关键判断：这是指数还是公司股票？
+    if _is_market_index(ticker):
+        return _get_index_news(ticker)
+    
+    # --- 以下是原有的公司新闻获取逻辑 ---
+    
     # 方法1: yfinance
     try:
         stock = yf.Ticker(ticker)
@@ -296,7 +399,7 @@ def get_company_news(ticker: str) -> str:
     except Exception as e:
         print(f"yfinance news error for {ticker}: {e}")
 
-    # 方法2: Finnhub (新增)
+    # 方法2: Finnhub
     if finnhub_client:
         try:
             print(f"Trying Finnhub news for {ticker}")
@@ -335,9 +438,9 @@ def get_company_news(ticker: str) -> str:
     except Exception as e:
         print(f"Alpha Vantage news fetch failed: {e}")
     
-    # 方法4: 网页搜索
+    # 方法4: 回退到公司特定搜索
     print(f"Falling back to search for {ticker} news")
-    return search(f"{ticker} latest news stock")
+    return search(f"{ticker} company latest news stock")
 
 # ============================================
 # 其他工具函数（保持不变或稍作修改）
