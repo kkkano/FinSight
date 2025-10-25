@@ -56,10 +56,23 @@ graph TD
     ```
 
 4.  **Configure API Keys**:
-    Create a file named `.env` in the project's root directory and add your API key:
+    Create a file named `.env` in the project's root directory and add your API keys:
     ```env
-    GEMINI_PROXY_API_KEY="your_gemini_api_key_here"
+    # Required: LLM API Key
+    GEMINI_PROXY_API_KEY=your_gemini_api_key_here
+    GEMINI_PROXY_API_BASE=https://your-proxy-url.com/v1
+    
+    # Optional but Recommended: Financial Data APIs
+    ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+    FINNHUB_API_KEY=your_finnhub_key_here
     ```
+    
+    **API Key Sources:**
+    - **Gemini/LLM**: Your LLM provider's API key (required for AI analysis)
+    - **Alpha Vantage**: [Get free key](https://www.alphavantage.co/support/#api-key) (500 requests/day)
+    - **Finnhub**: [Get free key](https://finnhub.io/register) (60 requests/minute)
+    
+    > 💡 **Note**: Alpha Vantage and Finnhub provide more stable financial data compared to free sources. While optional, they significantly improve reliability and reduce rate-limiting issues.
 
 5.  **Run the Agent**:
     ```bash
@@ -155,8 +168,92 @@ Here is a complete walkthrough of FinSight's thought and execution process when 
 ## Project Structure
 
 -   `agent.py`: The core ReAct loop, responsible for parsing the LLM's thoughts and actions.
--   `tools.py`: Definitions for all financial tools (e.g., `get_stock_price`).
+-   `tools.py`: Definitions for all financial tools with **multi-source data strategy**:
+    - **Stock Prices**: Alpha Vantage → Finnhub → yfinance → Web Scraping → Search
+    - **Company Info**: yfinance → Finnhub → Alpha Vantage → Web Search
+    - **News**: Intelligent routing (company stocks use APIs, market indices use search)
+    - **Market Sentiment**: CNN Fear & Greed Index with fallback mechanisms
+    - **Economic Events**: DuckDuckGo search with smart parsing
+    - **Performance Comparison**: Multi-ticker YTD and 1-year analysis
+    - **Historical Drawdowns**: 20-year drawdown analysis with recovery tracking
 -   `llm_service.py`: A wrapper for making calls to the LiteLLM proxy.
 -   `main.py`: The command-line entry point for the project.
 -   `requirements.txt`: A list of project dependencies.
 -   `.env`: Stores API keys.
+
+---
+
+## Key Features & Improvements
+
+### 🚀 Multi-Source Data Strategy
+FinSight now implements a **cascading fallback system** for data retrieval:
+1. **Primary**: Premium APIs (Alpha Vantage, Finnhub) - faster, more reliable
+2. **Secondary**: Free APIs (yfinance) - good but prone to rate limits
+3. **Tertiary**: Web scraping from Yahoo Finance
+4. **Last Resort**: Search engine parsing
+
+This ensures **maximum uptime** even when individual data sources fail or hit rate limits.
+
+### 📊 Intelligent Tool Selection
+- **Company Stocks** (e.g., AAPL, TSLA): Uses financial APIs for accurate real-time data
+- **Market Indices** (e.g., ^IXIC, ^GSPC): Uses specialized search strategies for macro analysis
+- Automatically detects ticker type and routes to appropriate data source
+
+### 🛡️ Enhanced Error Handling
+- Retry mechanisms with exponential backoff
+- Graceful degradation when APIs fail
+- Detailed logging for troubleshooting
+- User-friendly error messages
+
+---
+
+## Available Tools
+
+| Tool Name | Description | Data Sources |
+|-----------|-------------|--------------|
+| `get_stock_price` | Real-time stock price & changes | Alpha Vantage, Finnhub, yfinance, scraping |
+| `get_company_info` | Company profile, sector, market cap | yfinance, Finnhub, Alpha Vantage |
+| `get_company_news` | Latest news (auto-detects indices) | yfinance, Finnhub, Alpha Vantage, search |
+| `get_market_sentiment` | CNN Fear & Greed Index | CNN API, web scraping, search |
+| `get_economic_events` | Upcoming FOMC, CPI, jobs reports | DuckDuckGo search |
+| `get_performance_comparison` | Compare multiple tickers (YTD, 1Y) | yfinance historical data |
+| `analyze_historical_drawdowns` | Top 3 historical crashes & recovery | yfinance 20-year data |
+| `search` | General web search | DuckDuckGo |
+| `get_current_datetime` | Current timestamp | System time |
+
+---
+
+## Troubleshooting
+
+### Rate Limiting Issues
+If you encounter `Too Many Requests` errors:
+1. **Add API keys**: Set up Alpha Vantage and Finnhub in `.env`
+2. **Wait**: Free tiers have cooldown periods (usually 1 minute)
+3. **Use premium tier**: Upgrade to paid plans for higher limits
+
+### API Key Not Working
+- Ensure no quotes around keys in `.env` file
+- Check for extra spaces: `KEY=value` not `KEY = value`
+- Verify keys are active on provider websites
+
+### Tool Failures
+- Check internet connection
+- Review terminal output for specific error messages
+- Most tools have fallback mechanisms and will attempt alternative sources
+
+---
+
+## Contributing
+
+Contributions are welcome! Possible enhancements:
+- Additional data sources (Bloomberg API, Reuters, etc.)
+- More analysis tools (technical indicators, sentiment analysis)
+- Support for cryptocurrency and commodities
+- Visualization features (charts, graphs)
+- Web interface or Discord bot
+
+---
+
+## License
+
+This project is open-source under the MIT License.

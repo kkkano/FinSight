@@ -58,8 +58,21 @@ graph TD
 4.  **配置 API 密钥**：
     在项目根目录创建一个名为 `.env` 的文件，并添加你的 API 密钥：
     ```env
-    GEMINI_PROXY_API_KEY="your_gemini_api_key_here"
+    # 必需：LLM API 密钥
+    GEMINI_PROXY_API_KEY=your_gemini_api_key_here
+    GEMINI_PROXY_API_BASE=https://your-proxy-url.com/v1
+    
+    # 可选但强烈推荐：金融数据 API
+    ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+    FINNHUB_API_KEY=your_finnhub_key_here
     ```
+    
+    **API 密钥获取：**
+    - **Gemini/LLM**：你的 LLM 提供商的 API 密钥（必需，用于 AI 分析）
+    - **Alpha Vantage**：[获取免费密钥](https://www.alphavantage.co/support/#api-key)（每天 500 次请求）
+    - **Finnhub**：[获取免费密钥](https://finnhub.io/register)（每分钟 60 次请求）
+    
+    > 💡 **注意**：Alpha Vantage 和 Finnhub 相比免费数据源提供更稳定的金融数据。虽然是可选的，但它们能显著提高可靠性并减少速率限制问题。
 
 5.  **运行代理**：
     ```bash
@@ -155,8 +168,92 @@ graph TD
 ## 项目结构
 
 -   `agent.py`: 核心 ReAct 循环，负责解析 LLM 的思考与行动。
--   `tools.py`: 所有金融工具的定义（如 `get_stock_price`）。
+-   `tools.py`: 所有金融工具的定义，采用**多数据源策略**：
+    - **股票价格**：Alpha Vantage → Finnhub → yfinance → 网页爬取 → 搜索引擎
+    - **公司信息**：yfinance → Finnhub → Alpha Vantage → 网页搜索
+    - **新闻资讯**：智能路由（公司股票使用 API，市场指数使用搜索）
+    - **市场情绪**：CNN 恐惧与贪婪指数，带有备用机制
+    - **经济事件**：DuckDuckGo 搜索配合智能解析
+    - **性能比较**：多股票代码的年初至今和1年期分析
+    - **历史回撤**：20年回撤分析及恢复期追踪
 -   `llm_service.py`: 封装对 LiteLLM 代理的调用。
 -   `main.py`: 项目的命令行入口。
 -   `requirements.txt`: 项目依赖列表。
 -   `.env`: 存储 API 密钥。
+
+---
+
+## 核心特性与改进
+
+### 🚀 多数据源策略
+FinSight 现在实现了**级联回退系统**来获取数据：
+1. **主要**：高级 API（Alpha Vantage、Finnhub）- 更快、更可靠
+2. **次要**：免费 API（yfinance）- 好用但容易遇到速率限制
+3. **第三**：从 Yahoo Finance 爬取网页数据
+4. **最后手段**：搜索引擎解析
+
+这确保了即使单个数据源失败或达到速率限制，系统仍能**保持最大正常运行时间**。
+
+### 📊 智能工具选择
+- **公司股票**（如 AAPL、TSLA）：使用金融 API 获取准确的实时数据
+- **市场指数**（如 ^IXIC、^GSPC）：使用专门的搜索策略进行宏观分析
+- 自动检测股票代码类型并路由到合适的数据源
+
+### 🛡️ 增强的错误处理
+- 带指数退避的重试机制
+- API 失败时优雅降级
+- 详细的日志记录便于故障排查
+- 用户友好的错误消息
+
+---
+
+## 可用工具
+
+| 工具名称 | 描述 | 数据源 |
+|---------|------|--------|
+| `get_stock_price` | 实时股价和涨跌幅 | Alpha Vantage、Finnhub、yfinance、爬虫 |
+| `get_company_info` | 公司简介、行业、市值 | yfinance、Finnhub、Alpha Vantage |
+| `get_company_news` | 最新新闻（自动检测指数） | yfinance、Finnhub、Alpha Vantage、搜索 |
+| `get_market_sentiment` | CNN 恐惧与贪婪指数 | CNN API、网页爬取、搜索 |
+| `get_economic_events` | 即将到来的 FOMC、CPI、就业报告 | DuckDuckGo 搜索 |
+| `get_performance_comparison` | 比较多个股票代码（YTD、1年） | yfinance 历史数据 |
+| `analyze_historical_drawdowns` | 前3大历史崩盘与恢复 | yfinance 20年数据 |
+| `search` | 通用网页搜索 | DuckDuckGo |
+| `get_current_datetime` | 当前时间戳 | 系统时间 |
+
+---
+
+## 故障排除
+
+### 速率限制问题
+如果遇到 `Too Many Requests` 错误：
+1. **添加 API 密钥**：在 `.env` 中配置 Alpha Vantage 和 Finnhub
+2. **等待**：免费层有冷却期（通常为 1 分钟）
+3. **使用高级版**：升级到付费计划以获得更高限制
+
+### API 密钥不工作
+- 确保 `.env` 文件中密钥周围没有引号
+- 检查额外空格：应为 `KEY=value` 而不是 `KEY = value`
+- 在提供商网站上验证密钥是否有效
+
+### 工具故障
+- 检查网络连接
+- 查看终端输出中的具体错误消息
+- 大多数工具都有备用机制，会尝试替代数据源
+
+---
+
+## 贡献
+
+欢迎贡献！可能的增强功能：
+- 额外的数据源（Bloomberg API、路透社等）
+- 更多分析工具（技术指标、情绪分析）
+- 支持加密货币和大宗商品
+- 可视化功能（图表、图形）
+- Web 界面或 Discord 机器人
+
+---
+
+## 许可证
+
+本项目在 MIT 许可证下开源。
