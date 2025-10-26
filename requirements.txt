@@ -1,4 +1,54 @@
-litellm
-ddgs==9.6.0
-google-auth==2.41.1
+# FinSight AI - 智能金融分析系统
+# 真正的LangChain 1.0.2 Agent实现
+
+# Core LangChain packages (最新版本)
+langchain==1.0.2
+langchain-core==1.0.1
+langchain-openai==1.0.1
+langchain-anthropic==1.0.0
+langchain-community==0.4
+langchain-text-splitters==1.0.0
+langchain-classic==1.0.0
+
+# LangGraph (最新Agent框架)
+langgraph==1.0.1
+
+# LLM服务
+litellm==1.30.0
+ddgs==9.6.1
 yfinance==0.2.66
+finnhub-python==2.4.25
+requests==2.32.5
+beautifulsoup4==4.14.2
+pandas==2.3.3
+python-dotenv==1.1.1
+
+# 性能优化
+tenacity==9.1.2
+pydantic==2.12.3
+pydantic-settings==2.11.0
+
+# 额外工具
+openai==2.6.1
+tiktoken==0.12.0
+anthropic==0.71.0
+docstring-parser==0.17.0
+httpx-sse==0.4.3
+dataclasses-json==0.6.7
+orjson==3.11.4
+ormsgpack==1.11.0
+jsonpatch==1.33
+jsonpointer==3.0.0
+requests-toolbelt==1.0.0
+xxhash==3.6.0
+zstandard==0.25.0
+
+# 数据库和缓存
+SQLAlchemy==2.0.44
+marshmallow==3.26.1
+typing-inspect==0.9.0
+mypy-extensions==1.1.0
+
+# 监控和日志
+colorama==0.4.6
+tqdm==4.67.1

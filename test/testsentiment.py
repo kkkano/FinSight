@@ -16,7 +16,7 @@ def get_market_sentiment() -> str:
         }
         
         response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status() # 如果状态码是4xx或5xx，这里会抛出异常
+        response.raise_for_status() 
         
         data = response.json()
         score = float(data['fear_and_greed']['score'])
@@ -24,12 +24,9 @@ def get_market_sentiment() -> str:
         return f"CNN Fear & Greed Index: {score:.1f} ({rating})"
     
     except requests.exceptions.HTTPError as http_err:
-        # 更具体地捕获HTTP错误
         print(f"CNN API failed with HTTP error: {http_err}. Trying fallback search...")
-        # ... 你的回退逻辑 ...
     except Exception as e:
         print(f"CNN API failed with other error: {e}. Trying fallback search...")
-        # ... 你的回退逻辑 ...
 
     # 你的回退逻辑可以保持不变
     return "Fear & Greed Index: Unable to fetch. Please check manually."
