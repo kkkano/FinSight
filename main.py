@@ -71,8 +71,7 @@ def create_agent_with_config(provider: str = "gemini_proxy",
             provider=provider,
             model=model,
             verbose=True,
-            max_iterations=15,
-            show_intermediate_steps=True
+            max_iterations=15
         )
 
         print(f"Agent创建成功 | 提供商: {provider} | 模型: {model}")
