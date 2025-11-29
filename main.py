@@ -4,6 +4,7 @@
 FinSight AI金融分析主程序
 使用LangChain 1.0.1框架的最新版本
 支持流式输出和实时进度显示
+集成 LangSmith 可观测性追踪
 """
 
 import sys
@@ -31,12 +32,29 @@ except ImportError:
     AsyncFinancialStreamer = None
     FinancialDashboard = None
 
+# LangSmith 可观测性（可选）
+try:
+    from langsmith_integration import quick_init as init_langsmith, get_status as langsmith_status
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    init_langsmith = lambda: False
+    langsmith_status = lambda: {"enabled": False}
+
 def print_banner():
     """打印程序横幅"""
     print("=" * 80)
     print("FinSight AI - 智能金融分析系统")
     print("LangChain 1.0.1驱动 | 实时流式分析 | 专业投资报告")
     print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # 初始化并显示 LangSmith 状态
+    if LANGSMITH_AVAILABLE:
+        init_langsmith()
+        status = langsmith_status()
+        if status.get("enabled"):
+            print(f"🔭 LangSmith: 已启用 | 项目: {status.get('project', 'FinSight')}")
+    
     print("=" * 80)
 
 def print_help():

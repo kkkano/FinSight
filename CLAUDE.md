@@ -1,7 +1,10 @@
 # CLAUDE.md
 
 此文件为 Claude Code (claude.ai/code) 在此代码库中工作时提供指导。
-
+GEMINI_PROXY_API_KEY=sk-WVS6RWVmBc31UsF982MAb8Cd9oWSR31OmCm0ewtPx30bQMbX
+GEMINI_PROXY_API_BASE=https://x666.me/v1
+ALPHA_VANTAGE_API_KEY=QE084WG39H15OX1X
+FINNHUB_API_KEY=d3uf9opr01qil4apq1ogd3uf9opr01qil4apq1p0 
 ## 项目概述
 
 FinSight 是一个 AI 驱动的股票分析代理，使用 ReAct (推理和行动) 框架来提供全面的金融分析。系统能够自主从多个来源收集实时数据，并生成详细的专业投资报告。

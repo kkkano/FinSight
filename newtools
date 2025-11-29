@@ -19,8 +19,8 @@ def search(query: str) -> str:
                 formatted.append(f"{i}. {title}\n   {body[:150]}...\n   {href}")
                 
             return "Search Results:\n" + "\n\n".join(formatted)
+            print(f"Search attempt {attempt  + 1} failed: {e}. Retrying in 2 seconds...")
         except Exception as e:
-            print(f"Search attempt {attempt + 1} failed: {e}. Retrying in 2 seconds...")
             time.sleep(2)
             
     return "Search error: Exceeded maximum retries."

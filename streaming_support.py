@@ -4,6 +4,7 @@
 FinSight 流式支持模块
 实现实时流式输出和用户友好的进度显示
 兼容 LangChain 1.0+ 和 LangGraph 架构
+集成 LangSmith 可观测性追踪
 """
 
 import time
@@ -13,12 +14,26 @@ from typing import Optional, Dict, Any, List
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+# LangSmith 集成（可选）
+try:
+    from langsmith_integration import (
+        is_enabled as langsmith_enabled,
+        start_run,
+        log_event,
+        finish_run,
+        RunContext
+    )
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    langsmith_enabled = lambda: False
+
 # ============================================
 # 流式回调处理器
 # ============================================
 
 class FinancialStreamingCallbackHandler(BaseCallbackHandler):
-    """金融分析专用的流式回调处理器 - 兼容 LangGraph"""
+    """金融分析专用的流式回调处理器 - 兼容 LangGraph + LangSmith"""
 
     def __init__(self, show_progress: bool = True, show_details: bool = True):
         self.show_progress = show_progress
@@ -33,6 +48,10 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
         # 防止重复显示
         self._header_shown = False
         self._last_tool = None
+        
+        # LangSmith 追踪
+        self._langsmith_run: Optional[Any] = None
+        self._current_query: str = ""
 
     def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs) -> None:
         """Chain 开始时的回调"""
@@ -51,6 +70,19 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
                 query = first_msg.content
         elif "input" in inputs:
             query = inputs["input"]
+        
+        self._current_query = query
+        
+        # LangSmith: 开始追踪
+        if LANGSMITH_AVAILABLE and langsmith_enabled():
+            try:
+                self._langsmith_run = start_run(
+                    name=f"FinSight: {query[:50]}",
+                    query=query,
+                    metadata={"start_time": self.start_time.isoformat()}
+                )
+            except Exception:
+                pass  # 静默失败
         
         if self.show_progress:
             print(f"\n{'='*70}")
@@ -72,6 +104,16 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
         self.tool_calls += 1
         self._last_tool = tool_key
         
+        # LangSmith: 记录工具开始
+        if LANGSMITH_AVAILABLE and self._langsmith_run:
+            try:
+                log_event(self._langsmith_run, "tool_start", {
+                    "tool": tool_name,
+                    "input": str(input_str)[:200]
+                })
+            except Exception:
+                pass
+        
         if self.show_details:
             print(f"\n[Step {self.tool_calls}] {tool_name}")
             if input_str and len(input_str) < 200:
@@ -79,6 +121,16 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
 
     def on_tool_end(self, output: str, **kwargs) -> Any:
         """工具执行完成时的回调"""
+        # LangSmith: 记录工具结束
+        if LANGSMITH_AVAILABLE and self._langsmith_run:
+            try:
+                output_str = str(output) if not isinstance(output, str) else output
+                log_event(self._langsmith_run, "tool_end", {
+                    "output": output_str[:200]
+                })
+            except Exception:
+                pass
+        
         if self.show_details:
             # 安全处理输出 - output 可能是 ToolMessage 对象
             try:
@@ -90,6 +142,23 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs) -> None:
         """Chain 完成时的回调"""
+        # LangSmith: 完成追踪
+        if LANGSMITH_AVAILABLE and self._langsmith_run:
+            try:
+                duration = (datetime.now() - self.start_time).total_seconds() if self.start_time else 0
+                finish_run(
+                    self._langsmith_run,
+                    status="success",
+                    outputs={
+                        "tool_calls": self.tool_calls,
+                        "duration": duration,
+                        "query": self._current_query
+                    }
+                )
+                self._langsmith_run = None
+            except Exception:
+                pass
+        
         if self.show_progress and self.start_time:
             duration = (datetime.now() - self.start_time).total_seconds()
             print(f"\n{'='*70}")
@@ -111,6 +180,18 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
 
     def on_chain_error(self, error: Exception, **kwargs) -> None:
         """Chain 错误时的回调"""
+        # LangSmith: 记录错误
+        if LANGSMITH_AVAILABLE and self._langsmith_run:
+            try:
+                finish_run(
+                    self._langsmith_run,
+                    status="error",
+                    error=str(error)
+                )
+                self._langsmith_run = None
+            except Exception:
+                pass
+        
         print(f"\n❌ 错误: {str(error)}")
 
 

@@ -52,3 +52,6 @@ mypy-extensions==1.1.0
 # 监控和日志
 colorama==0.4.6
 tqdm==4.67.1
+
+# LangSmith 可观测性（可选）
+langsmith>=0.1.0

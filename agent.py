@@ -180,7 +180,7 @@ Now begin your analysis.
 """
 
 class Agent:
-    def __init__(self, provider="gemini_proxy", model="gemini-2.5-flash-preview-05-20"):
+    def __init__(self, provider="gemini_proxy", model="gemini-2.5-flash"):
         self.provider = provider
         self.model = model
         self.tools = {
