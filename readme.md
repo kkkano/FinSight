@@ -1,670 +1,306 @@
+# FinSight AI – Conversational Market Intelligence Agent
 
+[![LangChain](https://img.shields.io/badge/LangChain-1.1.0-green)](https://github.com/langchain-ai/langchain)
+[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-blue)](https://github.com/langchain-ai/langgraph)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-18+-blue)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 
-
-# FinSight: AI Smart Financial Analysis System (LangChain 1.0.2 Version)
-
-[![LangChain](https://img.shields.io/badge/LangChain-1.0.2-green)](https://github.com/langchain-ai/langchain)
-[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](./LICENSE)
-
-[English Version](./readme.md) | [中文版](./readme_cn.md) | [Migration Summary](./docs/migration_summary.md) | [Technical Report](./docs/LangChain_1.0_迁移报告.md) | [In-depth Analysis](./docs/LangChain_版本对比与架构演进分析.md)
+[English Version](./readme.md) | [中文文档](./readme_cn.md) | [Docs](./docs/)
 
 ---
 
 ## 🚀 Overview
 
-FinSight is an intelligent financial analysis agent powered by the LangChain 1.0.2 framework. It leverages the advanced **ReAct (Reasoning + Acting)** paradigm to autonomously call various financial data tools and generate professional investment analysis reports in real-time.
+FinSight AI is a **conversational, tool‑calling financial research assistant**.  
+It combines a FastAPI backend, a LangGraph‑powered CIO agent, and a modern React + TypeScript frontend:
 
-### ✨ Key Features
+- Multi‑turn chat interface, optimized for equity and index analysis.
+- LangGraph agent that calls structured **LangChain tools** for prices, fundamentals, news, macro data, and risk metrics.
+- Dual‑panel UI: left‑side chat, right‑side market visualization (auto‑expands when charts are requested).
+- Theme + layout controls (dark/light, centered vs full‑width), and PDF export for conversations.
 
-- **Latest Tech Stack**: Built on LangChain 1.0.2 + Pydantic v2 + LangGraph Architecture
-- **Smart Tool Routing**: 9 professional financial tools with automatic optimal data source selection
-- **Real-time Analysis**: LangGraph-based execution with built-in state management
-- **Multi-source Strategy**: Cascading fallback mechanism ensuring 99% availability
-- **Professional Reports**: 800+ word structured investment analysis
-- **Type Safety**: Full Pydantic v2 validation with 95% type coverage
-- **Performance**: 42% code reduction, 86% fewer bugs, 8-21% faster response
+The goal is to feel like talking to a **Chief Investment Officer** who can quickly pull data, run a playbook, and produce professional‑grade reports.
 
 ---
 
-## 🏗️ Architecture Evolution
+## ✨ Key Features
 
-### LangChain 0.3.x vs 1.0.2 Architecture
+- **Conversational CIO Agent**
+  - Multi‑turn dialogue with lightweight context management.
+  - Intent routing: fast chat vs deep report vs follow‑up.
+  - Uses a LangGraph CIO report agent for long‑form analysis.
+
+- **Smart Charting & Visualization**
+  - Inline chart tags in responses (e.g. `[CHART:AAPL:line]`).
+  - Right‑side `StockChart` panel auto‑expands when a ticker is requested.
+  - ECharts‑based visualization (price history, performance, etc.).
+
+- **Multi‑Source Financial Data with Fallback**
+  - Tools read from multiple providers (`yfinance`, Finnhub, Alpha Vantage, scraping, search APIs).
+  - Each tool is resilient: if one source fails, it falls back to the next.
+
+- **Reasoning Trace**
+  - Optional “thinking process” view in the chat UI.
+  - Shows intermediate steps, tool calls, and elapsed time.
+
+- **Modern Frontend UX**
+  - ChatGPT‑style layout with a fixed header.
+  - Theme toggle, layout mode (centered vs full‑width), Settings modal.
+  - Conversation export as PDF.
+
+---
+
+## 🧱 Architecture
+
+### System Architecture
 
 ```mermaid
-graph TB
-    subgraph "Old Architecture - LangChain 0.3.x"
-        A1[User Query] --> B1[PromptTemplate<br/>350+ lines]
-        B1 --> C1[create_react_agent]
-        C1 --> D1[AgentExecutor<br/>7 parameters]
-        D1 --> E1[Tool Selection]
-        E1 --> F1[Serial Execution]
-        F1 --> G1[Manual State]
-        G1 --> H1[Dict Result]
-        
-        style B1 fill:#ffcccc
-        style D1 fill:#ffcccc
-        style F1 fill:#ffcccc
+flowchart LR
+    U[User] --> FE[Frontend (React + TS)]
+    FE -->|HTTP / JSON| API[FastAPI Backend]
+
+    subgraph Backend
+        API --> AG[ConversationAgent]
+        AG --> RT[Router + ContextManager]
+        AG --> HD[Handlers (Chat / Report / Followup)]
+        HD --> ORC[ToolOrchestrator]
+        HD --> CIO[LangGraph CIO Agent\n(LangChainFinancialAgent)]
+        ORC --> TOOLS[backend.tools\n+ langchain_tools]
     end
-    
-    subgraph "New Architecture - LangChain 1.0.2"
-        A2[User Query] --> B2[System Prompt<br/>100 lines]
-        B2 --> C2[create_agent<br/>3 parameters]
-        C2 --> D2[LangGraph<br/>Built-in]
-        D2 --> E2[Smart Routing]
-        E2 --> F2[Parallel Support]
-        F2 --> G2[Auto State Mgmt]
-        G2 --> H2[Message List]
-        
-        style B2 fill:#90EE90
-        style C2 fill:#90EE90
-        style F2 fill:#90EE90
-        style G2 fill:#90EE90
+
+    subgraph Data Sources
+        TOOLS --> PX[Prices & OHLCV\nyfinance / APIs]
+        TOOLS --> FUND[Fundamentals\ncompany profiles]
+        TOOLS --> NEWS[News & Search\nTavily / DDGS / web]
+        TOOLS --> MACRO[Macro & Sentiment\nindices / calendars]
     end
+
+    FE <-->|Streaming / Responses| API
 ```
 
-### LangChain 1.0.2 Technical Stack
+### Conversational Flow
 
 ```mermaid
-graph TD
-    A[User Query] --> B[create_agent]
-    B --> C[LangGraph Engine]
-    C --> D[ReAct Loop]
-    D --> E[Tool Router]
-    E --> F[Tool Decorator]
-    F --> G[Multi-source Data]
-    G --> H[Auto Error Handle]
-    H --> I[StateGraph Output]
-    I --> J[Structured Report]
-    J --> K[User Interface]
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant FastAPI
+    participant ConvAgent
+    participant Handler
+    participant Tools
+    participant CIO
 
-    subgraph "LangChain 1.0.2 Tools"
-        F --> F1[get_stock_price]
-        F --> F2[get_company_info]
-        F --> F3[get_company_news]
-        F --> F4[get_market_sentiment]
-        F --> F5[get_economic_events]
-        F --> F6[analyze_historical_drawdowns]
-        F --> F7[get_performance_comparison]
-        F --> F8[search]
-        F --> F9[get_current_datetime]
-    end
-
-    subgraph "Data Sources"
-        G --> G1[Alpha Vantage]
-        G --> G2[Finnhub API]
-        G --> G3[Yahoo Finance]
-        G --> G4[Web Scraping]
-        G --> G5[DuckDuckGo]
-    end
-
-    subgraph "LangChain Core"
-        C --> C1[SystemMessage]
-        C --> C2[ChatOpenAI]
-        C --> C3[Built-in Recovery]
-        C --> C4[Message History]
-    end
+    User->>Frontend: "分析 AAPL 最近走势，并生成图表"
+    Frontend->>FastAPI: POST /chat
+    FastAPI->>ConvAgent: chat(query, capture_thinking=True)
+    ConvAgent->>ConvAgent: Resolve context & intent
+    ConvAgent->>Handler: Dispatch to Chat/Report handler
+    Handler->>Tools: Call multi‑source tools (price, news, macro...)
+    Tools-->>Handler: Data with fallback applied
+    Handler->>CIO: (optional) call LangGraph CIO agent for deep report
+    CIO-->>Handler: Long‑form professional report
+    Handler-->>ConvAgent: Final answer + thinking steps
+    ConvAgent-->>FastAPI: JSON response
+    FastAPI-->>Frontend: Chat + thinking + chart hints
+    Frontend->>Frontend: Render messages + charts
 ```
+
+### Data Fallback Strategy (Simplified)
+
+The `backend.tools` module implements **multi‑source strategies**. Example (price fetch):
+
+```mermaid
+graph LR
+    Q[Query Ticker] --> A[yfinance]
+    A -->|success| R[Return price]
+    A -->|fail| B[Finnhub]
+    B -->|success| R
+    B -->|fail| C[Alpha Vantage]
+    C -->|success| R
+    C -->|fail| D[Web scraping / search]
+    D -->|success| R
+    D -->|fail| E[Graceful error message]
+```
+
+Each tool follows a similar pattern: try the cheapest / fastest source first, then fall back while logging failures.
 
 ---
 
-## 📊 Performance Metrics
+## 🛠 Available Tools (LangChain / LangGraph)
 
-### Migration Impact Analysis
+The LangGraph CIO agent uses tools defined in `langchain_tools.py`, which wrap implementations in `backend/tools.py`.
 
-| Metric | Before (0.3.x) | After (1.0.2) | Improvement |
-|--------|---------------|---------------|-------------|
-| **Code Lines** | 828 lines | 484 lines | -42% |
-| **Response Time** | 10-15s | 8-12s | -20% |
-| **Bug Rate** | 35 bugs/6mo | 5 bugs/6mo | -86% |
-| **Memory Usage** | 180MB | 140MB | -22% |
-| **Type Safety** | 20% | 95% | +375% |
-| **Maintainability** | 58/100 | 82/100 | +41% |
-| **Code Complexity** | McCabe 28 | McCabe 12 | -57% |
-| **Error Recovery** | 5s+ | 1s | -80% |
+| Tool Name                    | Description                                                     |
+|-----------------------------|-----------------------------------------------------------------|
+| `get_current_datetime`      | Get the current timestamp for anchoring reports.               |
+| `get_stock_price`           | Live quote for a ticker or index with multi‑source fallback.   |
+| `get_company_info`          | Company fundamentals (industry, cap, profile).                 |
+| `get_company_news`          | Latest headlines for a ticker / index.                         |
+| `search`                    | Market / macro search (Tavily + DDGS + Wikipedia fallback).    |
+| `get_market_sentiment`      | Current market fear/greed sentiment index.                     |
+| `get_economic_events`       | Upcoming macro events (FOMC, CPI, payrolls, etc.).            |
+| `get_performance_comparison`| YTD / 1Y performance for a labeled set of tickers.            |
+| `analyze_historical_drawdowns` | Major drawdowns with depth, duration, recovery stats.     |
 
-### System Resources (LangChain 1.0.2)
-
-- **Memory**: < 140MB (22% reduction)
-- **CPU**: < 25% during analysis
-- **Concurrency**: Supports parallel tool execution
-- **Cache Hit Rate**: 85%+
-- **Availability**: 99.5%
-
-### Real-world Test Results
-
-```bash
-# Test: NVDA Stock Analysis
-python test_langchain.py
-
-# Results:
-Steps: 5 tool calls
-Response Time: 2.8s (8% faster)
-Report Quality: Professional-grade
-Success Rate: 100%
-```
+> The CIO report agent is encouraged (via its system prompt) to call `get_current_datetime` first, then search + price + news + macro tools, and finally risk tools.
 
 ---
 
-## 🚀 Quick Start
+## 📦 Requirements
 
-### 1. Clone Repository
+- **Python**: 3.10+  
+- **Node.js**: 18+ (for the React frontend)
+- See `requirements.txt` for exact Python dependencies (LangChain 1.1, LangGraph 1.0.4, FastAPI 0.122, etc.).
 
-```bash
-git clone https://github.com/kkkano/FinSight.git
-cd FinSight
-```
+Environment variables (`.env` in project root):
 
-### 2. Create Virtual Environment
+- `GEMINI_PROXY_API_KEY`, `GEMINI_PROXY_API_BASE` – OpenAI‑compatible Gemini proxy used by the LangGraph agent.
+- Optional financial data APIs:
+  - `ALPHA_VANTAGE_API_KEY`, `FINNHUB_API_KEY`, `TIINGO_API_KEY`, `MARKETSTACK_API_KEY`, etc.
+- Optional search / observability:
+  - `TAVILY_API_KEY`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `ENABLE_LANGSMITH`.
 
-**Recommended (Conda)**:
-
-```bash
-conda create -n FSenv python=3.11
-conda activate FSenv
-```
-
-**Alternative (venv)**:
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate  # Linux/macOS
-python -m venv .venv && .venv\Scripts\activate      # Windows
-```
-
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements_langchain.txt
-```
-
-**Note**: Use `requirements_langchain.txt` for LangChain 1.0.2 dependencies
-
-### 4. Configure API Keys
-
-Create `.env` file:
-
-```env
-# Required: LLM API Key
-GEMINI_PROXY_API_KEY=your_gemini_api_key_here
-GEMINI_PROXY_API_BASE=https://your-proxy-url.com/v1
-
-# Optional but recommended: Financial Data APIs
-ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
-FINNHUB_API_KEY=your_finnhub_key_here
-```
-
-**Get API Keys**:
-- **Gemini/LLM**: Your LLM provider API key (Required)
-- **Alpha Vantage**: [Get free key](https://www.alphavantage.co/support/#api-key) (500 requests/day)
-- **Finnhub**: [Get free key](https://finnhub.io/register) (60 requests/minute)
-
-### 5. Run Tests
-
-```bash
-# Basic functionality test
-python test_langchain.py
-
-# Should output:
-# [OK] All basic tests passed!
-```
-
-### 6. Use the Agent
-
-```bash
-# Python API
-python
->>> from langchain_agent import create_financial_agent
->>> agent = create_financial_agent()
->>> result = agent.analyze("What is NVDA stock price?")
->>> print(result["output"])
-```
+Even with only `GEMINI_PROXY_API_KEY` set, the agent can work using public/anonymous data sources (yfinance, DDGS, Wikipedia), but some tools will be richer when API keys are configured.
 
 ---
 
-## 🎯 Usage Examples
+## ▶️ Running the Project
 
-### 1. Real-time Streaming Analysis (NEW! 🔥)
-
-FinSight now supports **real-time streaming output** to visualize the entire analysis process:
+From repository root:
 
 ```bash
-python main.py "Analyze AAPL stock"
+# 1. Backend (FastAPI)
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 
-# Output Example:
-======================================================================
-📈 FinSight 流式分析 - LangChain 1.0+
-======================================================================
-🎯 查询: Analyze AAPL stock...
-📅 开始时间: 2025-10-27 00:42:02
-──────────────────────────────────────────────────────────────────────
-
-🤔 AI 思考中... (第 1 轮)
-✓ 完成思考
-
-[Step 1] get_stock_price
-   Input: {'ticker': 'AAPL'}
-   Result: AAPL Current Price: $262.82 | Change: $3.24 (+1.25%)
-
-[Step 2] get_current_datetime
-   Input: {}
-   Result: 2025-10-27 00:42:20
-
-🤔 AI 思考中... (第 2 轮)
-✓ 完成思考
-
-[Step 3] search
-   Input: {'query': 'current market trends and economic outlook'}
-   Result: Search Results: 1. Strategic Alternatives Podcast...
-
-[Step 4] get_company_info
-   Input: {'ticker': 'AAPL'}
-   Result: Company Profile (AAPL): Name: Apple Inc, Sector: Technology...
-
-======================================================================
-✅ 分析完成!
-⏱️  总耗时: 78.5秒
-🔧 工具调用: 7次
-======================================================================
-
-# Apple Inc. (AAPL) - Professional Analysis Report
-*Report Date: 2025-10-27 00:42:20*
-
-## EXECUTIVE SUMMARY
-Apple Inc. (AAPL) currently trades at $262.82, showing a modest gain...
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-
-**Key Features:**
-- 🎯 **Real-time Tool Tracking**: See each tool call as it happens
-- 📊 **Progress Indicators**: Visual feedback on analysis progress
-- 🤔 **AI Reasoning Display**: Track LLM thinking rounds
-- ⏱️ **Performance Metrics**: Tool count, execution time, success rate
-- 🎨 **Formatted Output**: Beautiful emojis and structured display
-
-**Architecture:**
-```python
-# streaming_support.py - LangGraph-compatible streaming
-class FinancialStreamingCallbackHandler(BaseCallbackHandler):
-    def on_chain_start(...)  # Analysis lifecycle
-    def on_tool_start(...)   # Tool execution tracking
-    def on_llm_start(...)    # LLM thinking display
-    def on_chain_end(...)    # Final summary
-
-# Automatic graceful fallback if streaming unavailable
-```
-
-### 2. Code Example: Before vs After
-
-#### Before (LangChain 0.3.x)
 
 ```bash
-# Output Style
-PROFESSIONAL FINANCIAL ANALYSIS AGENT
-Query: Analyze AAPL stock
-Started: 2025-10-26 10:30:15
-
-Step 1/20
-Thought: I need to start analyzing AAPL stock, first get the current date and time
-Action: get_current_datetime
-Executing: get_current_datetime()
-Result: 2025-10-26 10:30:16
-
-[... 8 steps executed manually ...]
-
-Step 9/20
-Thought: I now have enough information, should generate the final report
-Final Answer:
-# Apple Inc. - Professional Analysis Report
-[Full report...]
+# 2. Frontend (React + Vite)
+cd frontend
+npm install
+npm run dev
 ```
 
-### 2. Code Example: Before vs After
+Then open Vite’s dev URL (typically `http://localhost:5173`) in a browser.
 
-#### Before (LangChain 0.3.x)
-
-```bash
-# Output Style
-PROFESSIONAL FINANCIAL ANALYSIS AGENT
-Query: Analyze AAPL stock
-Started: 2025-10-26 10:30:15
-
-Step 1/20
-Thought: I need to start analyzing AAPL stock, first get the current date and time
-Action: get_current_datetime
-Executing: get_current_datetime()
-Result: 2025-10-26 10:30:16
-
-[... 8 steps executed manually ...]
-
-Step 9/20
-Thought: I now have enough information, should generate the final report
-Final Answer:
-# Apple Inc. - Professional Analysis Report
-[Full report...]
-```
-
-#### After Migration (LangChain 1.0.2)
-
-```bash
-# Output Style
-[OK] LangChain Agent initialized successfully
-   Provider: gemini_proxy
-   Model: gemini-2.5-flash-preview-05-20
-   Tools: 9
-   Framework: LangChain 1.0.2
-
-[Analysis Start] Analyze AAPL stock
-======================================================================
-
-> Entering new AgentExecutor chain...
-Invoking: get_current_datetime with {}
-Observation: 2025-10-26 10:30:16
-
-Thought: Now I need to search for the latest information on AAPL
-Invoking: search with {'query': 'Apple AAPL stock news October 2025'}
-Observation: [Search results...]
-
-Invoking: get_stock_price with {'ticker': 'AAPL'}
-Observation: [Stock price data...]
-
-[Automatic reasoning and tool calls...]
-
-Thought: I now know the final answer
-Final Answer: # Apple Inc. - Professional Analysis Report
-*Report Date: 2025-10-26*
-## EXECUTIVE SUMMARY
-Based on current technical and fundamental analysis, Apple Inc. shows...
-
-[Analysis Complete]
-======================================================================
-   Tool calls: 6
-   Report length: 1250 words
-   Data points used: 6
-   Analysis time: 12.3 seconds
-```
-
-### 3. Interactive Dashboard
-
-- Tool call statistics and monitoring
-- Analysis history
-- Real-time performance metrics display
-- LangChain intermediate step tracking
-
-### 3. Batch Processing Mode
-
-```bash
-python main.py "AAPL MSFT GOOGL AMZN" --batch
-
-# Benefits:
-# - Parallel analysis of multiple stocks
-# - Comprehensive comparison reports
-# - LangChain optimized scheduling
-# - 80% efficiency improvement
-```
+> The Settings panel (LLM and layout) reads and writes `/api/config`, but **layout mode and theme also persist locally** via `localStorage`, so basic layout switching works even when the backend is not reachable.
 
 ---
 
-## 📂 Core File Structure
+## 💬 Example Usage
+
+### 1. Quick Market Check
+
+> “简单分析一下 AAPL 最近 3 个月的走势，顺便和纳指比较一下表现。”  
+
+Flow:
+
+1. Router classifies this as `chat` + `report` hybrid.
+2. Handler calls tools: `get_stock_price`, `get_performance_comparison`, `get_company_news`.
+3. CIO agent may be used for a short structured summary.
+4. Response includes a narrative plus chart hints; frontend shows the chart in the right panel.
+
+### 2. Deep CIO‑Style Report
+
+> “用专业机构报告的风格，生成一份关于 NVIDIA 的详细投资分析报告，至少 800 字，并给出风险和建议。”  
+
+Flow:
+
+1. ConversationAgent routes to the `ReportHandler`.
+2. `ReportHandler` invokes the LangGraph CIO agent (`LangChainFinancialAgent.analyze`).
+3. CIO agent calls `get_current_datetime`, `search`, `get_stock_price`, `get_company_info`, `get_company_news`, `get_market_sentiment`, and risk tools as needed.
+4. Final response follows the CIO system prompt template (Executive Summary / Macro / Risk / Strategy / Takeaways).
+
+### 3. Follow‑Up Question
+
+> “相比纳指，这样的回撤算严重吗？再帮我看看 2022 年最大的几次跌幅。”  
+
+The context manager resolves references to the previous ticker and timeframe, then routes to the follow‑up handler, which reuses tools (especially `analyze_historical_drawdowns`) and produces incremental analysis instead of a full report.
+
+---
+
+## 📁 Project Structure (Current)
+
+Simplified view of the main directories:
 
 ```text
 FinSight/
-├── 📁 Core Modules
-│   ├── main.py                      # Main program entry (updated to 1.0.2)
-│   ├── langchain_agent.py           # LangChain 1.0.2 Agent
-│   ├── streaming_support.py         # Streaming support component
-│   ├── llm_service.py              # LLM service compatibility layer (retained)
-│   └── config.py                   # Configuration management
-├── 📁 Tool Modules
-│   ├── tools.py                    # Original tool collection
-│   └── tools/                      # Modularized tool directory
-├── 📁 Original Modules (retained for compatibility)
-│   ├── agent.py                    # Original manual ReAct Agent
-│   └── langchain_tools.py          # LangChain tools definitions
-├── 📁 Test Modules
-│   ├── test_migration_complete.py   # Full migration test
-│   ├── test_stage1_environment.py  # Environment verification test
-│   ├── test_stage2_tools.py        # Tool system test
-│   ├── test_stage3_agent.py        # Agent system test
-│   └── test_stage5_main.py         # Main program test
-├── 📁 Documentation
-│   ├── LangChain_Migration_Report.md        # Standard migration report
-│   ├── LangChain_Migration_Deep_Analysis_Report.md # Detailed technical comparison analysis
-│   ├── migration_summary.md         # Migration summary
-│   ├── migration_report.md          # Technical report
-│   └── future.md                   # Migration plan
-└── 📁 Configuration Files
-    ├── requirements.txt             # Dependency package list (updated)
-    └── .env                        # Environment variable configuration
+├── backend/
+│   ├── api/
+│   │   ├── main.py              # FastAPI app (chat, streaming, config, PDF export, stock APIs)
+│   │   └── chart_detector.py    # Chart type detection helper
+│   ├── conversation/
+│   │   ├── agent.py             # ConversationAgent (router + handlers + context)
+│   │   ├── context.py           # ContextManager (multi‑turn history)
+│   │   └── router.py            # Intent routing (CHAT / REPORT / FOLLOWUP / ALERT / CLARIFY ...)
+│   ├── handlers/                # Chat / report / follow‑up handlers
+│   ├── orchestration/           # ToolOrchestrator and tool bridge
+│   ├── services/                # PDF export, email subscription, etc.
+│   ├── tests/                   # Backend tests
+│   ├── tools.py                 # Core financial tools with fallback logic
+│   └── langchain_agent.py       # LangGraph CIO agent (LangChainFinancialAgent)
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              # Main layout (chat + chart panels, header)
+│   │   ├── api/client.ts        # Axios client for FastAPI
+│   │   ├── components/
+│   │   │   ├── ChatList.tsx
+│   │   │   ├── ChatInput.tsx
+│   │   │   ├── StockChart.tsx
+│   │   │   ├── InlineChart.tsx
+│   │   │   ├── SettingsModal.tsx
+│   │   │   └── ThinkingProcess.tsx
+│   │   └── store/useStore.ts    # Zustand store (messages, theme, layoutMode, currentTicker)
+│   └── ...                      # Vite config, assets, Tailwind config
+│
+├── docs/                        # Design docs, blueprints, logs
+│   ├── CONVERSATIONAL_AGENT_BLUEPRINT_V3.md
+│   ├── Future_Blueprint_CN.md
+│   ├── DATA_SOURCES_ADDED.md
+│   ├── API_KEYS_CONFIGURED.md
+│   └── ...
+│
+├── test/                        # High‑level tests (e.g. LangGraph agent)
+├── archive/                     # Legacy agents/tools/tests kept for reference
+├── langchain_tools.py           # LangChain tool registry used by LangGraph
+├── streaming_support.py         # Streaming utilities (planned integration)
+├── requirements.txt             # Python dependencies
+└── readme*.md                   # This documentation (EN/CN)
 ```
 
 ---
 
-## 🔧 LangChain 1.0.2 Core Components Explained
+## 🔁 Rollback & Compatibility Strategy
 
-### Agent Executor (New Architecture)
-
-```python
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_openai import ChatOpenAI
-
-class LangChainFinancialAgent:
-    def __init__(self):
-        # Standardized LLM integration
-        self.llm = ChatOpenAI(
-            model=self.model,
-            api_key=api_key,
-            base_url=api_base
-        )
-        
-        # Automated Agent creation
-        self.agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=self.prompt
-        )
-        
-        # Professional executor
-        self.agent_executor = AgentExecutor(
-            agent=self.agent,
-            tools=self.tools,
-            verbose=True,
-            handle_parsing_errors=True,  # Automatic error handling
-            return_intermediate_steps=True
-        )
-```
-
-### Tool System (Standardized)
-
-```python
-from langchain.tools import StructuredTool
-
-# LangChain standardized tools
-tools = [
-    StructuredTool.from_function(
-        func=get_stock_price,
-        name="get_stock_price",
-        description="Get real-time stock price. Input: ticker symbol (e.g., 'AAPL', '^IXIC')"
-    ),
-    StructuredTool.from_function(
-        func=get_company_info,
-        name="get_company_info",
-        description="Get basic company information. Input: ticker symbol"
-    )
-    # ... Other 8 professional tools
-]
-```
-
-### Streaming Output Support (New)
-
-```python
-from streaming_support import AsyncFinancialStreamer
-
-# Real-time streaming analysis
-streamer = AsyncFinancialStreamer(
-    show_progress=True,
-    show_details=True
-)
-result = streamer.stream_analysis(agent, query)
-```
+- **Legacy agent and tools are archived but kept** under `archive/` to make rollback easy.
+- `backend.tools` functions are still usable directly and are wrapped by `langchain_tools` for LangGraph.
+- The ConversationAgent interface (`agent.chat(...)`) remains stable, so the frontend can keep calling the same `/chat` endpoint even as internal implementations evolve.
+- The new LangGraph CIO agent is injected as the report engine inside `ConversationAgent`, so you can:
+  - Temporarily disable it and fall back to a simpler report generator.
+  - Or extend it with more tools without changing the HTTP API.
 
 ---
 
-## 📊 Available Tools
+## 🧪 Testing
 
-| Tool Name | Function Description | Data Source | Input Validation |
-|-----------|---------------------|-------------|------------------|
-| get_stock_price | Real-time stock price and changes | Alpha Vantage, Finnhub, yfinance | Pydantic Validation |
-| get_company_info | Company profile, industry, market cap | yfinance, Finnhub, Alpha Vantage | Type Safe |
-| get_company_news | Latest news (smart routing) | yfinance, Finnhub, Search Engine | Auto-detection |
-| get_market_sentiment | CNN Fear & Greed Index | CNN API, Web Scraping | Fallback Mechanism |
-| get_economic_events | Upcoming economic events | DuckDuckGo Search | Smart Parsing |
-| get_performance_comparison | Multi-stock performance comparison | yfinance historical data | Batch Processing |
-| analyze_historical_drawdowns | Historical maximum drawdown analysis | yfinance 20-year data | Recovery Tracking |
-| search | General web search | DuckDuckGo | Query Optimization |
-| get_current_datetime | Current timestamp | System Time | Formatting |
-
----
-
-## 🛠️ Development Guide
-
-### Adding New Tools
-
-```python
-from langchain_core.tools import tool
-from pydantic import BaseModel, Field
-
-class NewToolInput(BaseModel):
-    parameter: str = Field(..., description="Parameter description")
-
-@tool(args_schema=NewToolInput)
-def your_new_tool(input_data: NewToolInput) -> str:
-    """Tool function description"""
-    # Implementation logic
-    return "Result"
-```
-
-### Custom Callback Handler
-
-```python
-class CustomCallbackHandler(BaseCallbackHandler):
-    def on_agent_action(self, action, **kwargs) -> Any:
-        # Custom processing logic
-        pass
-```
-
-### Extending LLM Providers
-
-```python
-# Add in config.py
-NEW_PROVIDER = {
-    "api_key": "your_key",
-    "api_base": "https://api.example.com/v1",
-    "model": "your_model"
-}
-```
-
----
-
-## 📈 Performance Metrics
-
-### Migration Comparison
-
-| Metric | Before Migration | After Migration | Improvement |
-|--------|------------------|-----------------|-------------|
-| Response Time | 10-15 seconds | 8-12 seconds | +20% |
-| Error Rate | 15% | 5% | -67% |
-| Type Safety | 0% | 95% | +95% |
-| Asynchronous Support | None | 100% | +100% |
-| Test Coverage | None | 90% | +90% |
-
-### System Resource Usage
-
-- **Memory Footprint**: < 200MB
-- **CPU Usage**: < 30% (during normal analysis)
-- **Concurrency Support**: Up to 10 parallel analyses
-- **Cache Hit Rate**: 85%+
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### 1. Encoding Issues
+Basic backend tests (including the LangGraph agent) live under `test/` and `backend/tests/`:
 
 ```bash
-# Windows console UTF-8 support
-chcp 65001
+python -m pytest
 ```
 
-#### 2. API Limits
-
-- Add more API keys
-- Use paid plans
-- Enable caching mechanisms
-
-#### 3. Dependency Conflicts
-
-```bash
-# Reinstall dependencies
-pip uninstall -r requirements.txt -y
-pip install -r requirements.txt --force-reinstall
-```
-
-#### 4. LangChain Version Issues
-
-```bash
-# Verify LangChain version
-python -c "import langchain; print(langchain.__version__)"
-# Should display 1.0.1
-```
+You can also add focused tests for tools and handlers to keep the agent’s behavior stable as you iterate on prompts and tools.
 
 ---
 
-## 🤝 Contribution Guide
+## 📌 Status
 
-Contributions are welcome! Potential enhancement directions:
+- **Backend**: FastAPI + ConversationAgent + LangGraph CIO agent in production use.  
+- **Frontend**: React + TS + Tailwind, dual‑panel layout with theme/layout controls and PDF export.  
+- **Docs**: See `docs/Future_Blueprint_CN.md` and the new execution blueprint for upcoming multi‑agent and DeepSearch features.
 
-### High Priority
-
-- [ ] More data sources (Bloomberg, Reuters)
-- [ ] Technical indicator analysis tools
-- [ ] Enhanced sentiment analysis
-- [ ] Visualization chart generation
-
-### Medium Priority
-
-- [ ] Cryptocurrency support
-- [ ] Web interface development
-- [ ] Mobile application
-- [ ] API as a service
-
-### Low Priority
-
-- [ ] Machine learning prediction models
-- [ ] Social features
-- [ ] Portfolio management
-- [ ] Real-time alert system
-
----
-
-## 📄 License
-
-This project is open-sourced under the MIT License.
-
----
-
-## 🙏 Acknowledgements
-
-Special thanks to the following open-source projects:
-
-- **LangChain** - Powerful LLM application framework
-- **Alpha Vantage** - Financial data API
-- **yfinance** - Yahoo Finance data
-- **LiteLLM** - Unified LLM interface
-
----
-
-**Last Updated**: 2025-10-26  
-**Version**: LangChain 1.0.2  
-**Status**: Production Ready  
-**Migration Status**: ✅ Complete and Tested

@@ -1,0 +1,205 @@
+# -*- coding: utf-8 -*-
+"""
+Step 1.1 测试 - 验证目录结构
+确保所有模块可以正确导入
+"""
+
+import sys
+import os
+
+# 添加项目根目录到路径
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, PROJECT_ROOT)
+
+
+def test_backend_package():
+    """测试 backend 包可以导入"""
+    try:
+        import backend
+        assert hasattr(backend, '__version__')
+        print("✅ backend 包导入成功")
+        return True
+    except ImportError as e:
+        print(f"❌ backend 包导入失败: {e}")
+        return False
+
+
+def test_orchestration_module():
+    """测试 orchestration 模块"""
+    try:
+        from backend.orchestration import DataCache, DataValidator, ValidationResult
+        
+        # 测试 DataCache 实例化
+        cache = DataCache()
+        assert cache is not None
+        
+        # 测试基本功能
+        cache.set("test_key", {"value": 123}, data_type="default")
+        result = cache.get("test_key")
+        assert result is not None
+        assert result["value"] == 123
+        
+        # 测试 DataValidator 实例化
+        validator = DataValidator()
+        assert validator is not None
+        
+        print("✅ orchestration 模块测试通过")
+        return True
+    except Exception as e:
+        print(f"❌ orchestration 模块测试失败: {e}")
+        return False
+
+
+def test_conversation_module():
+    """测试 conversation 模块"""
+    try:
+        from backend.conversation import ContextManager, ConversationTurn, ConversationRouter, Intent
+        
+        # 测试 ContextManager 实例化
+        context = ContextManager()
+        assert context is not None
+        
+        # 测试添加对话轮次
+        turn = context.add_turn("测试查询", "chat")
+        assert turn is not None
+        assert turn.query == "测试查询"
+        
+        # 测试 Intent 枚举
+        assert Intent.CHAT.value == "chat"
+        assert Intent.REPORT.value == "report"
+        
+        # 测试 ConversationRouter 实例化（不带 LLM）
+        router = ConversationRouter()
+        assert router is not None
+        
+        # 测试意图分类
+        intent, metadata = router.classify_intent("AAPL 股价多少")
+        assert intent == Intent.CHAT
+        assert "AAPL" in metadata.get('tickers', [])
+        
+        print("✅ conversation 模块测试通过")
+        return True
+    except Exception as e:
+        print(f"❌ conversation 模块测试失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_handlers_module():
+    """测试 handlers 模块"""
+    try:
+        from backend.handlers import ChatHandler, ReportHandler, FollowupHandler
+        
+        # 测试实例化
+        chat_handler = ChatHandler()
+        assert chat_handler is not None
+        
+        report_handler = ReportHandler()
+        assert report_handler is not None
+        
+        followup_handler = FollowupHandler()
+        assert followup_handler is not None
+        
+        print("✅ handlers 模块测试通过")
+        return True
+    except Exception as e:
+        print(f"❌ handlers 模块测试失败: {e}")
+        return False
+
+
+def test_prompts_module():
+    """测试 prompts 模块"""
+    try:
+        from backend.prompts import (
+            CHAT_SYSTEM_PROMPT,
+            REPORT_SYSTEM_PROMPT,
+            ALERT_SYSTEM_PROMPT,
+            CLASSIFICATION_PROMPT,
+        )
+        
+        # 验证提示词不为空
+        assert len(CHAT_SYSTEM_PROMPT) > 100
+        assert len(REPORT_SYSTEM_PROMPT) > 100
+        assert len(ALERT_SYSTEM_PROMPT) > 100
+        assert len(CLASSIFICATION_PROMPT) > 100
+        
+        # 验证包含关键占位符
+        assert "{query}" in CLASSIFICATION_PROMPT
+        assert "{current_date}" in CHAT_SYSTEM_PROMPT
+        assert "{tools}" in REPORT_SYSTEM_PROMPT
+        
+        print("✅ prompts 模块测试通过")
+        return True
+    except Exception as e:
+        print(f"❌ prompts 模块测试失败: {e}")
+        return False
+
+
+def test_directory_structure():
+    """验证目录结构"""
+    required_dirs = [
+        "backend",
+        "backend/orchestration",
+        "backend/conversation", 
+        "backend/handlers",
+        "backend/prompts",
+        "backend/tests",
+        "backend/api",
+    ]
+    
+    all_exist = True
+    for dir_path in required_dirs:
+        full_path = os.path.join(PROJECT_ROOT, dir_path)
+        if os.path.isdir(full_path):
+            print(f"✅ 目录存在: {dir_path}")
+        else:
+            print(f"❌ 目录缺失: {dir_path}")
+            all_exist = False
+    
+    return all_exist
+
+
+def run_all_tests():
+    """运行所有测试"""
+    print("=" * 60)
+    print("Step 1.1 测试 - 验证目录结构和模块导入")
+    print("=" * 60)
+    print()
+    
+    results = {
+        "目录结构": test_directory_structure(),
+        "backend 包": test_backend_package(),
+        "orchestration 模块": test_orchestration_module(),
+        "conversation 模块": test_conversation_module(),
+        "handlers 模块": test_handlers_module(),
+        "prompts 模块": test_prompts_module(),
+    }
+    
+    print()
+    print("=" * 60)
+    print("测试结果汇总")
+    print("=" * 60)
+    
+    passed = sum(1 for v in results.values() if v)
+    total = len(results)
+    
+    for test_name, result in results.items():
+        status = "✅ 通过" if result else "❌ 失败"
+        print(f"  {test_name}: {status}")
+    
+    print()
+    print(f"总计: {passed}/{total} 测试通过")
+    
+    if passed == total:
+        print("\n🎉 Step 1.1 测试全部通过！可以继续下一步。")
+        return True
+    else:
+        print("\n⚠️ 部分测试失败，请修复后再继续。")
+        return False
+
+
+if __name__ == "__main__":
+    success = run_all_tests()
+    sys.exit(0 if success else 1)
+

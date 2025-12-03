@@ -1,19 +1,19 @@
 # FinSight AI - 智能金融分析系统
-# 真正的LangChain 1.0.2 Agent实现
+# 基于 LangChain + LangGraph 的对话式 Agent 实现
 
-# Core LangChain packages (最新版本)
-langchain==1.0.2
-langchain-core==1.0.1
-langchain-openai==1.0.1
+# Core LangChain packages
+langchain==1.1.0
+langchain-core==1.1.0
+langchain-openai==1.1.0
 langchain-anthropic==1.0.0
 langchain-community==0.4
 langchain-text-splitters==1.0.0
 langchain-classic==1.0.0
 
-# LangGraph (最新Agent框架)
-langgraph==1.0.1
+# LangGraph (现代 Agent 框架)
+langgraph==1.0.4
 
-# LLM服务
+# LLM 服务 & 数据抓取
 litellm==1.30.0
 ddgs==9.6.1
 yfinance==0.2.66
@@ -22,6 +22,10 @@ requests==2.32.5
 beautifulsoup4==4.14.2
 pandas==2.3.3
 python-dotenv==1.1.1
+
+# Tavily Search (AI 搜索 API)
+tavily-python==0.3.0
+langchain-tavily==0.2.13
 
 # 性能优化
 tenacity==9.1.2
@@ -55,3 +59,17 @@ tqdm==4.67.1
 
 # LangSmith 可观测性（可选）
 langsmith>=0.1.0
+
+# FastAPI & Web Server
+fastapi==0.122.0
+uvicorn[standard]==0.38.0
+
+# Email Service
+# 使用 Python 内置 smtplib，无需额外依赖
+
+# PDF Export
+reportlab==4.2.5
+
+# Wikipedia (免费，无需 API key)
+wikipedia==1.4.0
+

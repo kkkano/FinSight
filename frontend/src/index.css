@@ -1,0 +1,79 @@
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --fin-bg: #09090b;
+  --fin-panel: #18181b;
+  --fin-border: #27272a;
+  --fin-hover: #1f2933;
+  --fin-text: #e4e4e7;
+  --fin-muted: #a1a1aa;
+  --fin-primary: #3b82f6;
+  color-scheme: dark;
+}
+
+:root.light {
+  --fin-bg: #f7f8fb;
+  --fin-panel: #eef1f5;
+  --fin-border: #dce0e6;
+  --fin-hover: #e6eaf2;
+  --fin-text: #1f2937;
+  --fin-muted: #5b6472;
+  --fin-primary: #2563eb;
+  color-scheme: light;
+}
+
+body {
+  @apply bg-fin-bg text-fin-text antialiased overflow-hidden;
+  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  background-image: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.06), transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.05), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Subtle grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(#ffffff0d 1px, transparent 0);
+  background-size: 18px 18px;
+  opacity: 0.4;
+  z-index: -1;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-fin-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-fin-muted;
+}
+
+/* Remove number input arrows */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Markdown tweaks */
+.prose-invert {
+  @apply text-fin-muted;
+}
+.prose-invert strong {
+  @apply text-fin-text font-semibold;
+}
