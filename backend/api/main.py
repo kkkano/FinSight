@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 import uvicorn
 import os
 import sys
@@ -38,7 +38,8 @@ from backend.conversation.agent import create_agent as CreateReActAgent
 
 # Pydantic Models
 class ChatRequest(BaseModel):
-    query: str
+    # 至少 1 个字符，避免空查询直接进入主链路
+    query: constr(min_length=1)  # type: ignore[valid-type]
     session_id: str = None
 
 class AnalysisRequest(BaseModel):
@@ -81,7 +82,25 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "FinSight API is running"}
+    """
+    根路径健康检查，附带简要说明。
+    """
+    return {
+        "status": "healthy",
+        "message": "FinSight API is running",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.get("/health")
+def health_check():
+    """
+    轻量健康检查端点，便于监控/探活。
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -113,6 +132,9 @@ async def chat_endpoint(request: ChatRequest):
             "session_id": request.session_id or "new_session",
             "thinking": result.get('thinking', [])  # 思考过程
         }
+    except HTTPException:
+        # 已经构造好的业务错误（如 400/404），直接透传
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

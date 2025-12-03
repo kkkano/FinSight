@@ -187,6 +187,9 @@ npm run dev
 
 Then open Vite’s dev URL (typically `http://localhost:5173`) in a browser.
 
+Once running, you can check backend health via:  
+- `http://127.0.0.1:8000/` or `http://127.0.0.1:8000/health` (both return `status: "healthy"` plus a UTC timestamp).
+
 > The Settings panel (LLM and layout) reads and writes `/api/config`, but **layout mode and theme also persist locally** via `localStorage`, so basic layout switching works even when the backend is not reachable.
 
 ---
@@ -303,4 +306,3 @@ You can also add focused tests for tools and handlers to keep the agent’s beha
 - **Backend**: FastAPI + ConversationAgent + LangGraph CIO agent in production use.  
 - **Frontend**: React + TS + Tailwind, dual‑panel layout with theme/layout controls and PDF export.  
 - **Docs**: See `docs/Future_Blueprint_CN.md` and the new execution blueprint for upcoming multi‑agent and DeepSearch features.
-
