@@ -65,6 +65,7 @@ class ContextManager:
         }
         self.accumulated_data: Dict[str, Any] = {}  # 已收集的数据缓存
         self.session_start: datetime = datetime.now()
+        self.last_long_response: Optional[str] = None  # 最近的长文本（报告/长回答）
     
     def add_turn(
         self, 
@@ -99,6 +100,10 @@ class ContextManager:
                 self.current_focus = metadata['tickers'][0]
             if 'company_name' in metadata:
                 self.current_focus_name = metadata['company_name']
+        
+        # 记录长文本供后续翻译/摘要
+        if response and len(response) > 400:
+            self.last_long_response = response
         
         return turn
     
@@ -178,6 +183,16 @@ class ContextManager:
         if self.history and len(self.history) >= 1:
             return self.history[-1].query
         return None
+
+    def get_last_long_response(self) -> Optional[str]:
+        """获取最近的长文本（报告/长回答），若无缓存则从历史中挑最长一条"""
+        if self.last_long_response:
+            return self.last_long_response
+        longest = None
+        for turn in self.history:
+            if turn.response and (longest is None or len(turn.response) > len(longest)):
+                longest = turn.response
+        return longest
     
     def resolve_reference(self, query: str) -> str:
         """
