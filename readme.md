@@ -49,6 +49,18 @@ The goal is to feel like talking to a **Chief Investment Officer** who can quick
   - Theme toggle, layout mode (centered vs full‑width), Settings modal.
   - Conversation export as PDF.
 
+- **Alerts & Subscriptions (New)**
+  - Email alerts for price change and news; multi-ticker subscribe/unsubscribe APIs.
+  - Background schedulers (APScheduler) with multi-source fallback (yfinance → Alpha Vantage/Finnhub → Yahoo scrape → Stooq; news via yfinance → Finnhub → Alpha Vantage) and per-run logging to `logs/alerts.log`.
+  - Frontend settings modal to add/cancel subscriptions, view last alert/news time, and multi-symbol entry.
+
+## UI Preview
+
+![Chat + Chart](images/test1.png)
+![Light Layout](images/test2.png)
+![Dark Layout](images/test3.png)
+![Settings & Alerts](images/test4.png)
+
 ---
 
 ## 🧱 Architecture
@@ -78,6 +90,18 @@ flowchart LR
 
     FE <-->|Streaming / Responses| API
 ```
+
+### Alert & Scheduler Configuration (New)
+
+- Enable schedulers via env:
+  - `PRICE_ALERT_SCHEDULER_ENABLED=true`, `PRICE_ALERT_INTERVAL_MINUTES=15`
+  - `NEWS_ALERT_SCHEDULER_ENABLED=true`, `NEWS_ALERT_INTERVAL_MINUTES=30`
+- SMTP env: `SMTP_SERVER/SMTP_PORT/SMTP_USER/SMTP_PASSWORD/EMAIL_FROM`
+- API usage:
+  - Subscribe: `POST /api/subscribe` with `email`, `ticker`, `alert_types` (`["price_change","news"]`), `price_threshold`
+  - List: `GET /api/subscriptions?email=...`
+  - Unsubscribe: `POST /api/unsubscribe`
+- Logs: `logs/alerts.log` records each sweep (checked/sent), plus email send results.
 
 ### Conversational Flow
 

@@ -8,6 +8,7 @@ import re
 import finnhub
 import pandas as pd
 import os
+from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 
 # 搜索相关导入（已测试可用）
@@ -554,10 +555,43 @@ def _search_for_price(ticker: str):
         print(f"  - Search price exception: {e}")
         return None
 
+def _fetch_with_stooq_price(ticker: str):
+    """
+    使用 stooq 免费接口获取最新收盘价（免 Key），支持部分指数和美股。
+    """
+    try:
+        symbol = _map_to_stooq_symbol(ticker)
+        if not symbol:
+            return None
+        url = f"https://stooq.pl/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=json"
+        resp = requests.get(url, timeout=8)
+        data = resp.json().get("symbols") if resp.status_code == 200 else None
+        if not data:
+            return None
+        item = data[0]
+        close = item.get("close")
+        open_ = item.get("open")
+        if close in (None, "N/D"):
+            return None
+        price = float(close)
+        change = None
+        change_percent = None
+        if open_ not in (None, "N/D", 0):
+            prev = float(open_)
+            change = price - prev
+            if prev:
+                change_percent = (change / prev) * 100.0
+        return f"{ticker} Current Price: ${price:.2f}" + (
+            f" | Change: {change:+.2f} ({change_percent:+.2f}%)" if change is not None else ""
+        )
+    except Exception as e:
+        print(f"  - Stooq price exception: {e}")
+        return None
+
 def get_stock_price(ticker: str) -> str:
     """
     使用多数据源策略获取股票价格，以提高稳定性。
-    策略顺序: Alpha Vantage -> Finnhub -> yfinance -> 网页抓取 -> 搜索引擎解析
+    策略顺序: Alpha Vantage -> Finnhub -> yfinance -> 网页抓取 -> Stooq(免Key) -> 搜索引擎解析
     """
     print(f"Fetching price for {ticker} with multi-source strategy...")
     sources = [
@@ -565,6 +599,7 @@ def get_stock_price(ticker: str) -> str:
         _fetch_with_finnhub,  # 新增 Finnhub 作为高优先级源
         _fetch_with_yfinance,
         _scrape_yahoo_finance,
+        _fetch_with_stooq_price,
         _search_for_price
     ]
     
@@ -1525,11 +1560,106 @@ def _fetch_with_massive_io(ticker: str, period: str = "1y") -> dict:
         return None
 
 
+def _map_to_stooq_symbol(ticker: str) -> Optional[str]:
+    upper = ticker.upper()
+    mapping = {
+        "^IXIC": "^ndq",
+        "^GSPC": "^spx",
+        "^DJI": "^dji",
+    }
+    if upper in mapping:
+        return mapping[upper]
+    if upper.startswith("^"):
+        return upper.lower()
+    return f"{upper}.us"
+
+
+def _fetch_with_stooq_history(ticker: str, period: str = "1y") -> Optional[dict]:
+    """
+    免 Key 回退：使用 stooq 获取日线数据（支持部分指数和美股，代码带 .us）。
+    """
+    try:
+        import requests  # type: ignore
+        import csv
+        from datetime import date, timedelta
+
+        symbol = _map_to_stooq_symbol(ticker)
+        if not symbol:
+            return None
+
+        days_map = {
+            "1d": 5, "5d": 10, "1mo": 40, "3mo": 120, "6mo": 200,
+            "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 3650
+        }
+        days = days_map.get(period, 365)
+        end = date.today()
+        start = end - timedelta(days=days)
+        url = f"https://stooq.pl/q/d/l/?s={symbol}&d1={start:%Y%m%d}&d2={end:%Y%m%d}&i=d"
+        resp = requests.get(url, timeout=8)
+        if resp.status_code != 200 or not resp.text:
+            return None
+
+        lines = resp.text.strip().splitlines()
+        reader = csv.DictReader(lines)
+        data = []
+        for row in reader:
+            try:
+                data.append(
+                    {
+                        "time": row["Date"],
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "volume": float(row.get("Volume") or 0),
+                    }
+                )
+            except Exception:
+                continue
+
+        if data:
+            print(f"[get_stock_historical_data] Stooq 成功获取 {len(data)} 条数据")
+            return {"kline_data": data, "period": period, "interval": "1d", "source": "stooq"}
+        return None
+    except Exception as e:
+        print(f"[get_stock_historical_data] Stooq 失败: {e}")
+        return None
+
+
+def _fallback_price_value(ticker: str) -> Optional[float]:
+    """
+    简单兜底：尝试用 stooq 价格接口或搜索提取一个最新价，用于生成平滑序列。
+    """
+    try:
+        symbol = _map_to_stooq_symbol(ticker)
+        if symbol:
+            url = f"https://stooq.pl/q/l/?s={symbol}&f=sd2t2ohlcv&h&e=json"
+            resp = requests.get(url, timeout=6)
+            if resp.status_code == 200:
+                data = resp.json().get("symbols") or []
+                if data:
+                    close = data[0].get("close")
+                    if close not in (None, "N/D"):
+                        return float(close)
+    except Exception:
+        pass
+
+    # 搜索兜底
+    try:
+        search_result = search(f"{ticker} index level today")
+        m = re.search(r"(\\d{3,6}(?:,\\d{3})*(?:\\.\\d+)?)", search_result or "")
+        if m:
+            return float(m.group(1).replace(",", ""))
+    except Exception:
+        pass
+    return None
+
+
 def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "1d") -> dict:
     """
     获取股票的历史数据，用于K线图。
     返回的数据格式专门为 ECharts 优化。
-    使用多源回退策略：yfinance (优先，最可靠) → Alpha Vantage → Finnhub → Yahoo 网页抓取 → IEX Cloud → Tiingo → Marketstack → Massive.com
+    使用多源回退策略：yfinance (优先，最可靠) → Alpha Vantage → Finnhub → Yahoo 网页抓取 → IEX Cloud → Tiingo → Marketstack → Massive.com → Stooq
     
     Args:
         ticker: 股票代码
@@ -1539,9 +1669,17 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     Returns:
         dict: {"kline_data": [...]} 或 {"error": "..."}
     """
+    # 指数优先尝试 Stooq（免 Key，避免 yfinance 速率限制）
+    is_index = ticker.startswith("^")
+    if is_index:
+        stooq_result = _fetch_with_stooq_history(ticker, period)
+        if stooq_result and stooq_result.get("kline_data"):
+            print(f"[get_stock_historical_data] Stooq 指数兜底命中 {ticker}，返回日线数据")
+            return stooq_result
+
     # 策略 0: 优先使用 yfinance（最可靠，支持股票和指数）
     # 使用 session 和重试机制，避免速率限制
-    max_retries = 3
+    max_retries = 1  # 限流严重时快速跳过
     for attempt in range(max_retries):
         try:
             print(f"[get_stock_historical_data] 尝试使用 yfinance {ticker} (尝试 {attempt + 1}/{max_retries})...")
@@ -1822,7 +1960,15 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             return result
     except Exception as e4c:
         print(f"[get_stock_historical_data] Massive.com 失败: {e4c}")
-    
+
+    # 策略 5e: 尝试 Stooq 免 Key 回退
+    try:
+        result = _fetch_with_stooq_history(ticker, period)
+        if result and "kline_data" in result and len(result["kline_data"]) > 0:
+            return result
+    except Exception as e4d:
+        print(f"[get_stock_historical_data] Stooq 失败: {e4d}")
+
     # 策略 6: 最后尝试 - 使用 yfinance 的备用方法（不通过 Ticker，直接下载）
     # 等待一段时间后再尝试，避免速率限制
     import time as time_module
@@ -1876,6 +2022,26 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     except Exception as e5:
         print(f"[get_stock_historical_data] yfinance 备用方法失败: {e5}")
     
+    # 所有策略都失败，如果是指数，尝试使用最新价格生成平滑序列
+    if is_index:
+        price_val = _fallback_price_value(ticker)
+        if price_val:
+            from datetime import date, timedelta
+            end = date.today()
+            data = []
+            for i in range(5, 0, -1):
+                d = end - timedelta(days=i)
+                data.append({
+                    "time": d.strftime("%Y-%m-%d"),
+                    "open": float(price_val),
+                    "high": float(price_val),
+                    "low": float(price_val),
+                    "close": float(price_val),
+                    "volume": 0.0,
+                })
+            print(f"[get_stock_historical_data] 使用 price fallback 为 {ticker} 生成平滑序列")
+            return {"kline_data": data, "period": period, "interval": "1d", "source": "price_fallback"}
+
     # 所有策略都失败，返回错误
     return {"error": f"Failed to fetch historical data for {ticker}: All data sources failed. Please try again later or check your internet connection."}
 

@@ -41,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     alert_types: ['price_change'] as string[],
   });
   const [subSubmitting, setSubSubmitting] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // 加载配置
   useEffect(() => {
@@ -149,8 +150,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         });
       }
       await loadSubscriptions();
+      setToast({ type: 'success', message: '订阅已保存' });
+      setTimeout(() => setToast(null), 2500);
     } catch (e) {
       setSubsError('订阅失败，请稍后再试');
+      setToast({ type: 'error', message: '订阅失败，请稍后再试' });
+      setTimeout(() => setToast(null), 2500);
     } finally {
       setSubSubmitting(false);
     }
@@ -162,8 +167,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     try {
       await apiClient.unsubscribe({ email, ticker });
       await loadSubscriptions();
+      setToast({ type: 'success', message: '已取消订阅' });
+      setTimeout(() => setToast(null), 2500);
     } catch (e) {
       setSubsError('取消订阅失败');
+      setToast({ type: 'error', message: '取消订阅失败' });
+      setTimeout(() => setToast(null), 2500);
     } finally {
       setSubsLoading(false);
     }
@@ -190,6 +199,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {toast && (
+            <div
+              className={`fixed top-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-sm ${
+                toast.type === 'success'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-red-500 text-white'
+              }`}
+            >
+              {toast.message}
+            </div>
+          )}
           {/* 订阅管理 */}
           <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/60">
             <div className="flex items-center justify-between mb-3">
@@ -275,17 +295,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     key={`${sub.email}-${sub.ticker}`}
                     className="flex items-center justify-between text-xs border border-fin-border rounded px-3 py-2 bg-fin-panel/60"
                   >
-                    <div className="space-y-1">
-                      <div className="text-fin-text font-medium">{sub.ticker}</div>
-                      <div className="text-fin-muted">{sub.email}</div>
-                      <div className="text-fin-muted">
-                        {sub.alert_types?.join(', ')} | 阈值 {sub.price_threshold ?? '-'}%
-                      </div>
+                  <div className="space-y-1">
+                    <div className="text-fin-text font-medium">{sub.ticker}</div>
+                    <div className="text-fin-muted">{sub.email}</div>
+                    <div className="text-fin-muted">
+                      {sub.alert_types?.join(', ')} | 阈值 {sub.price_threshold ?? '-'}%
                     </div>
-                    <button
-                      onClick={() => handleUnsubscribe(sub.email, sub.ticker)}
-                      className="text-trend-down hover:underline"
-                    >
+                    {(sub.last_alert_at || sub.last_news_at) && (
+                      <div className="text-[11px] text-fin-muted">
+                        {sub.last_alert_at && <>最后价格提醒: {new Date(sub.last_alert_at).toLocaleString()}</>}
+                        {sub.last_news_at && (
+                          <>
+                            {sub.last_alert_at ? ' · ' : ''}
+                            最后新闻提醒: {new Date(sub.last_news_at).toLocaleString()}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleUnsubscribe(sub.email, sub.ticker)}
+                    className="text-trend-down hover:underline"
+                  >
                       取消
                     </button>
                   </div>

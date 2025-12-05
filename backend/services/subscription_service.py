@@ -86,7 +86,8 @@ class SubscriptionService:
             "price_threshold": price_threshold,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
-            "last_alert_at": None
+            "last_alert_at": None,
+            "last_news_at": None,
         }
         
         self.subscriptions[email].append(subscription)
@@ -169,6 +170,15 @@ class SubscriptionService:
             for sub in self.subscriptions[email]:
                 if sub['ticker'] == ticker:
                     sub['last_alert_at'] = datetime.now().isoformat()
+                    self._save_subscriptions()
+                    break
+
+    def update_last_news(self, email: str, ticker: str):
+        """更新最后新闻提醒时间"""
+        if email in self.subscriptions:
+            for sub in self.subscriptions[email]:
+                if sub['ticker'] == ticker:
+                    sub['last_news_at'] = datetime.now().isoformat()
                     self._save_subscriptions()
                     break
 

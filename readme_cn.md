@@ -46,6 +46,19 @@ FinSight AI 是一个面向股票 / 指数的 **对话式金融研究 Agent**：
   - 左右布局：左侧对话，右侧图表，可折叠。
   - 支持深色 / 浅色主题，支持“居中布局”与“铺满宽度”两种布局模式，并可在设置中切换。
 
+- **订阅提醒（新增）**
+  - 支持邮件提醒：价格波动（`price_change`）、新闻（`news`），多只股票一次性订阅。
+  - 后台调度（APScheduler）：价格/新闻定期扫描，多源回退（yfinance → Alpha Vantage/Finnhub → Yahoo 抓取 → Stooq 兜底；新闻 yfinance → Finnhub → Alpha Vantage）。
+  - 前端设置弹窗可添加/取消订阅，查看最近价格/新闻提醒时间。
+  - 调度日志写入 `logs/alerts.log`，便于排查发送/限流问题。
+
+## 界面预览
+
+![聊天与图表](images/test1.png)
+![浅色布局](images/test2.png)
+![深色布局](images/test3.png)
+![订阅设置与提醒](images/test4.png)
+
 ---
 
 ## 🧱 当前架构
