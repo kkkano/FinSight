@@ -103,18 +103,18 @@ def test_subscribe_validation_and_unsubscribe_missing(tmp_path):
             "ticker": "AAPL",
         },
     )
-    assert resp.status_code == 500 or resp.status_code == 400
+    assert resp.status_code in (400, 422)
 
-    # 缺少 email 取消订阅（目前会走到通用 500 分支，也接受）
+    # 缺少 email 取消订阅（FastAPI 可能返回 422；显式校验时返回 400）
     resp = client.post(
         "/api/unsubscribe",
         json={
             "ticker": "AAPL",
         },
     )
-    assert resp.status_code in (400, 500)
+    assert resp.status_code in (400, 422)
 
-    # 对不存在订阅的用户取消订阅，理想行为是 404，这里接受 404 或 500
+    # 对不存在订阅的用户取消订阅，应返回 404
     resp = client.post(
         "/api/unsubscribe",
         json={
@@ -122,4 +122,4 @@ def test_subscribe_validation_and_unsubscribe_missing(tmp_path):
             "ticker": "AAPL",
         },
     )
-    assert resp.status_code in (404, 500)
+    assert resp.status_code in (404,)

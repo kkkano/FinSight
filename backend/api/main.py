@@ -1,17 +1,22 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, constr, field_validator
 import uvicorn
 import os
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi.responses import StreamingResponse
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 # 将项目根目录添加到 sys.path
 # 这样可以确保 backend, config, langchain_agent 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+# Load env once for scheduler/SMTP configs, etc.
+load_dotenv()
 
 # 尝试导入核心工具
 try:
@@ -46,6 +51,36 @@ class AnalysisRequest(BaseModel):
     query: str
     user_id: str = "default_user"
 
+
+class SubscriptionRequest(BaseModel):
+    email: constr(min_length=3)  # type: ignore[valid-type]
+    ticker: constr(min_length=1)  # type: ignore[valid-type]
+    alert_types: list[str] | None = None
+    price_threshold: float | None = None
+
+    @field_validator("alert_types", mode="before")
+    def default_alert_types(cls, v):
+        return v or ["price_change", "news"]
+
+    @field_validator("alert_types")
+    def validate_alert_types(cls, v):
+        allowed = {"price_change", "news", "report"}
+        invalid = [x for x in v if x not in allowed]
+        if invalid:
+            raise ValueError(f"unsupported alert_types: {invalid}. allowed: {sorted(allowed)}")
+        return v
+
+    @field_validator("price_threshold")
+    def validate_price_threshold(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("price_threshold must be positive")
+        return v
+
+
+class UnsubscribeRequest(BaseModel):
+    email: constr(min_length=3)  # type: ignore[valid-type]
+    ticker: constr(min_length=1) | None = None
+
 # SubscribeRequest 已移除，改用 dict
 
 # 初始化 Agent
@@ -62,11 +97,47 @@ except Exception as e:
     traceback.print_exc()
     agent = None
 
+_price_scheduler = None
+
+def _env_bool(key: str, default: str = "false") -> bool:
+    return os.getenv(key, default).lower() in ("true", "1", "yes", "on")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan handler to start/stop price_change scheduler.
+    """
+    from backend.services.alert_scheduler import run_price_change_cycle
+    from backend.services.scheduler_runner import start_price_change_scheduler
+
+    enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", "false")
+    if enabled:
+        interval = float(os.getenv("PRICE_ALERT_INTERVAL_MINUTES", "15"))
+        global _price_scheduler
+        _price_scheduler = start_price_change_scheduler(
+            run_price_change_cycle,
+            interval_minutes=interval,
+            enabled=True,
+        )
+    else:
+        print("[Scheduler] PRICE_ALERT_SCHEDULER_ENABLED is false; skip start.")
+
+    try:
+        yield
+    finally:
+        try:
+            if _price_scheduler:
+                _price_scheduler.shutdown(wait=False)
+                print("[Scheduler] price_change scheduler stopped.")
+        except Exception as e:
+            print(f"[Scheduler] shutdown error: {e}")
+
 # 初始化 FastAPI
 app = FastAPI(
     title="FinSight API",
     description="FinSight 后端服务",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS 配置
@@ -295,10 +366,10 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         return {"ticker": ticker, "data": {"error": str(e)}, "cached": False}
 
 @app.post("/api/subscribe")
-async def subscribe_email(request: dict):
+async def subscribe_email(request: SubscriptionRequest):
     """
     订阅股票提醒
-    
+
     请求体:
     {
         "email": "user@example.com",
@@ -309,39 +380,33 @@ async def subscribe_email(request: dict):
     """
     try:
         from backend.services.subscription_service import get_subscription_service
-        
-        email = request.get('email')
-        ticker = request.get('ticker')
-        alert_types = request.get('alert_types', ['price_change', 'news'])
-        price_threshold = request.get('price_threshold')
-        
-        if not email or not ticker:
-            raise HTTPException(status_code=400, detail="email 和 ticker 是必需的")
-        
+
         subscription_service = get_subscription_service()
         success = subscription_service.subscribe(
-            email=email,
-            ticker=ticker,
-            alert_types=alert_types,
-            price_threshold=price_threshold
+            email=request.email,
+            ticker=request.ticker,
+            alert_types=request.alert_types,
+            price_threshold=request.price_threshold,
         )
-        
+
         if success:
             return {
                 "success": True,
-                "message": f"已成功订阅 {ticker} 的提醒",
-                "email": email,
-                "ticker": ticker
+                "message": f"已成功订阅 {request.ticker} 的提醒",
+                "email": request.email,
+                "ticker": request.ticker,
             }
         else:
             raise HTTPException(status_code=500, detail="订阅失败")
-            
+
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/unsubscribe")
-async def unsubscribe_email(request: dict):
+async def unsubscribe_email(request: UnsubscribeRequest):
     """
     取消订阅
     
@@ -353,26 +418,30 @@ async def unsubscribe_email(request: dict):
     """
     try:
         from backend.services.subscription_service import get_subscription_service
-        
-        email = request.get('email')
-        ticker = request.get('ticker')
-        
-        if not email:
-            raise HTTPException(status_code=400, detail="email 是必需的")
-        
+
         subscription_service = get_subscription_service()
-        success = subscription_service.unsubscribe(email=email, ticker=ticker)
-        
+
+        # email 在模型中必填，但仍做一次保护性校验，缺失时按 400 返回
+        if not request.email:
+            raise HTTPException(status_code=400, detail="email 是必需的")
+
+        success = subscription_service.unsubscribe(
+            email=request.email,
+            ticker=request.ticker,
+        )
+
         if success:
             return {
                 "success": True,
-                "message": f"已成功取消订阅",
-                "email": email,
-                "ticker": ticker or "所有股票"
+                "message": "已成功取消订阅",
+                "email": request.email,
+                "ticker": request.ticker or "所有股票",
             }
         else:
             raise HTTPException(status_code=404, detail="未找到订阅记录")
-            
+
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

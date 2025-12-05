@@ -77,11 +77,12 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
             
-            print(f"✅ 邮件已发送到 {to_email}")
+            # 使用纯 ASCII 日志，避免控制台编码问题
+            print(f"[EmailService] Sent email to {to_email}")
             return True
             
         except Exception as e:
-            print(f"❌ 发送邮件失败: {e}")
+            print(f"[EmailService] Failed to send email: {e}")
             return False
     
     def send_stock_alert(
