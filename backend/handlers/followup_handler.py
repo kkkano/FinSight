@@ -8,6 +8,7 @@ import sys
 import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import re
 
 # 添加项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -100,8 +101,14 @@ class FollowupHandler:
         
         # 获取上下文信息
         last_response = context.get_last_response()
+        last_long_response = getattr(context, "get_last_long_response", lambda: None)()
         current_focus = context.current_focus
         cached_data = context.get_all_cached_data()
+
+        # 如果有最近长文本（报告），根据用户动作直接做翻译/摘要/结论/风险
+        if last_long_response:
+            action = self._detect_report_action(query.lower())
+            return self._handle_report_followup(action, last_long_response)
         
         # 根据追问类型处理
         if self.llm:
@@ -341,6 +348,47 @@ class FollowupHandler:
 - 设置价格提醒
 
 请具体告诉我您的需求。"""
+
+    # === 报告跟进：翻译/摘要/结论/风险等 ===
+    def _detect_report_action(self, query_lower: str) -> str:
+        if '翻译' in query_lower or 'translate' in query_lower:
+            if '英文' in query_lower or 'english' in query_lower:
+                return 'translate_en'
+            return 'translate_zh'
+        if any(k in query_lower for k in ['总结', '概要', '摘要', '要点', 'key takeaways', 'summary']):
+            return 'summary'
+        if any(k in query_lower for k in ['结论', 'recommendation', 'call']):
+            return 'conclusion'
+        if '风险' in query_lower or 'risk' in query_lower:
+            return 'risk'
+        return 'summary'
+
+    def _handle_report_followup(self, action: str, text: str) -> Dict[str, Any]:
+        """
+        基于最近报告文本做翻译/摘要/结论/风险提炼。
+        无 LLM 时截取片段并声明来源，避免“当成新对话”。
+        """
+        prefix = f"基于最近报告片段（长度约 {len(text)} 字），以下内容为自动生成，供参考：\n"
+        paragraphs = [p.strip() for p in text.split('\\n') if p.strip()]
+        head = '\\n'.join(paragraphs[:6]) if paragraphs else text[:800]
+
+        if action == 'translate_en':
+            resp = prefix + head
+        elif action == 'translate_zh':
+            resp = prefix + head
+        elif action == 'conclusion':
+            resp = prefix + "结论/要点提炼：\n" + head
+        elif action == 'risk':
+            resp = prefix + "风险要点提炼：\n" + head
+        else:
+            resp = prefix + "摘要：\n" + head
+
+        return {
+            'success': True,
+            'response': resp,
+            'intent': 'followup',
+            'followup_type': action,
+        }
     
     def _no_context_response(self) -> str:
         """没有上下文时的响应"""

@@ -134,18 +134,18 @@ class ConversationRouter:
             (Intent, metadata, handler) - 意图、元数据和对应的处理函数
         """
         # 1. 获取上下文摘要 (用于 FOLLOWUP/CHAT 的意图判断)
-
         context_summary = context.get_summary()
-        
+        last_long = context.get_last_long_response()
+
         # 2. 识别意图和提取元数据
-        intent, metadata = self.classify_intent(query, context_summary)
+        intent, metadata = self.classify_intent(query, context_summary, last_long)
         
         # 3. 找到对应的处理器
         handler = self._handlers.get(intent)
         
         return intent, metadata, handler
 
-    def classify_intent(self, query: str, context_summary: str = "") -> Tuple[Intent, Dict[str, Any]]:
+    def classify_intent(self, query: str, context_summary: str = "", last_long_response: Optional[str] = None) -> Tuple[Intent, Dict[str, Any]]:
         """
         分类用户意图
         
@@ -158,9 +158,11 @@ class ConversationRouter:
         """
         # 1. 提取元数据
         metadata = self._extract_metadata(query)
+        if last_long_response:
+            metadata["last_long_response"] = last_long_response
         
         # 2. 规则快速匹配 (优先处理闲聊/问候，避免浪费 LLM Token 或被误判)
-        quick_intent = self._quick_match(query, context_summary)
+        quick_intent = self._quick_match(query, context_summary, last_long_response)
         if quick_intent:
             return quick_intent, metadata
 
@@ -180,7 +182,7 @@ class ConversationRouter:
         # 5. 默认回退：既没有 ticker，也没有匹配到规则 -> CLARIFY
         return Intent.CLARIFY, metadata
     
-    def _quick_match(self, query: str, context_summary: str = "") -> Optional[Intent]:
+    def _quick_match(self, query: str, context_summary: str = "", last_long_response: Optional[str] = None) -> Optional[Intent]:
         """
         规则快速匹配
         """
@@ -248,6 +250,11 @@ class ConversationRouter:
                 return Intent.FOLLOWUP
             else:
                 return Intent.CLARIFY  # 没有上下文时需要澄清
+
+        # 5.1 针对“上一份/翻译/总结/报告”类，若有最近长文本则直接视为跟进
+        followup_report_keywords = ['翻译', 'translate', '总结', '结论', '要点', '上一', '刚才', '上面', '报告', '上条', '上次']
+        if last_long_response and any(kw in query_lower for kw in followup_report_keywords):
+            return Intent.FOLLOWUP
         
         # === 6. 简单价格/信息查询 (CHAT) ===
         simple_query_keywords = [
