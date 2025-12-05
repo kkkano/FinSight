@@ -31,11 +31,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const { setLayoutMode } = useStore();
+  const [subs, setSubs] = useState<any[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsError, setSubsError] = useState<string | null>(null);
+  const [subForm, setSubForm] = useState({
+    email: '',
+    tickers: '',
+    price_threshold: 5,
+    alert_types: ['price_change'] as string[],
+  });
+  const [subSubmitting, setSubSubmitting] = useState(false);
 
   // 加载配置
   useEffect(() => {
     if (isOpen) {
       loadConfig();
+      loadSubscriptions();
     }
   }, [isOpen]);
 
@@ -81,6 +92,83 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
+  const loadSubscriptions = async () => {
+    setSubsLoading(true);
+    setSubsError(null);
+    try {
+      const res = await apiClient.listSubscriptions();
+      if (res.success) {
+        setSubs(res.subscriptions || []);
+      } else {
+        setSubsError(res.detail || '加载订阅失败');
+      }
+    } catch (e) {
+      setSubsError('加载订阅失败');
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
+  const handleSubChange = (key: string, value: any) => {
+    setSubForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleAlertType = (value: string) => {
+    setSubForm((prev) => {
+      const exists = prev.alert_types.includes(value);
+      const next = exists
+        ? prev.alert_types.filter((v) => v !== value)
+        : [...prev.alert_types, value];
+      return { ...prev, alert_types: next };
+    });
+  };
+
+  const handleSubscribe = async () => {
+    if (!subForm.email || !subForm.tickers) {
+      setSubsError('请填写邮箱与股票代码');
+      return;
+    }
+    // 支持逗号/空格/换行分隔多只股票
+    const tickerList = subForm.tickers
+      .split(/[,\\s]+/)
+      .map((t) => t.trim().toUpperCase())
+      .filter(Boolean);
+    if (!tickerList.length) {
+      setSubsError('请输入至少一个股票代码');
+      return;
+    }
+    setSubSubmitting(true);
+    setSubsError(null);
+    try {
+      for (const t of tickerList) {
+        await apiClient.subscribe({
+          email: subForm.email.trim(),
+          ticker: t,
+          alert_types: subForm.alert_types,
+          price_threshold: subForm.price_threshold ?? null,
+        });
+      }
+      await loadSubscriptions();
+    } catch (e) {
+      setSubsError('订阅失败，请稍后再试');
+    } finally {
+      setSubSubmitting(false);
+    }
+  };
+
+  const handleUnsubscribe = async (email: string, ticker?: string) => {
+    setSubsLoading(true);
+    setSubsError(null);
+    try {
+      await apiClient.unsubscribe({ email, ticker });
+      await loadSubscriptions();
+    } catch (e) {
+      setSubsError('取消订阅失败');
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -102,6 +190,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* 订阅管理 */}
+          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/60">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-fin-text">订阅管理</h3>
+              {subsLoading && (
+                <span className="text-[11px] text-fin-muted">刷新中…</span>
+              )}
+            </div>
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <div className="space-y-2">
+                <label className="text-xs text-fin-muted">邮箱</label>
+                <input
+                  type="email"
+                  value={subForm.email}
+                  onChange={(e) => handleSubChange('email', e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-fin-muted">股票代码（可多只，逗号/空格分隔）</label>
+                <textarea
+                  rows={2}
+                  value={subForm.tickers}
+                  onChange={(e) => handleSubChange('tickers', e.target.value)}
+                  placeholder="如 AAPL, MSFT, TSLA"
+                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm uppercase resize-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-fin-muted">触发阈值(涨跌幅%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={subForm.price_threshold}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    handleSubChange('price_threshold', isNaN(v) ? null : v);
+                  }}
+                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-fin-muted">提醒类型</label>
+                <div className="flex gap-2 text-xs">
+                  <label className="inline-flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={subForm.alert_types.includes('price_change')}
+                      onChange={() => toggleAlertType('price_change')}
+                    />
+                    价格波动
+                  </label>
+                  <label className="inline-flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={subForm.alert_types.includes('news')}
+                      onChange={() => toggleAlertType('news')}
+                    />
+                    新闻
+                  </label>
+                </div>
+              </div>
+            </div>
+            {subsError && (
+              <p className="text-xs text-trend-down mt-2">{subsError}</p>
+            )}
+            <div className="flex justify-end mt-3">
+              <button
+                onClick={handleSubscribe}
+                disabled={subSubmitting}
+                className="px-3 py-2 rounded bg-fin-primary text-white text-sm hover:bg-blue-600 disabled:opacity-60"
+              >
+                {subSubmitting ? '提交中…' : '保存订阅'}
+              </button>
+            </div>
+            <div className="mt-4 border-t border-fin-border pt-3">
+              <h4 className="text-xs font-medium text-fin-muted mb-2">已订阅</h4>
+              <div className="space-y-2 max-h-48 overflow-auto pr-1">
+                {subs.map((sub) => (
+                  <div
+                    key={`${sub.email}-${sub.ticker}`}
+                    className="flex items-center justify-between text-xs border border-fin-border rounded px-3 py-2 bg-fin-panel/60"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-fin-text font-medium">{sub.ticker}</div>
+                      <div className="text-fin-muted">{sub.email}</div>
+                      <div className="text-fin-muted">
+                        {sub.alert_types?.join(', ')} | 阈值 {sub.price_threshold ?? '-'}%
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleUnsubscribe(sub.email, sub.ticker)}
+                      className="text-trend-down hover:underline"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ))}
+                {!subs.length && !subsLoading && (
+                  <p className="text-xs text-fin-muted">暂无订阅</p>
+                )}
+              </div>
+            </div>
+          </section>
           {/* UI 布局设置 */}
           <section>
             <h3 className="text-sm font-medium text-fin-text mb-3">界面布局</h3>

@@ -63,6 +63,7 @@ langsmith>=0.1.0
 # FastAPI & Web Server
 fastapi==0.122.0
 uvicorn[standard]==0.38.0
+APScheduler==3.10.4
 
 # Email Service
 # 使用 Python 内置 smtplib，无需额外依赖
@@ -72,4 +73,3 @@ reportlab==4.2.5
 
 # Wikipedia (免费，无需 API key)
 wikipedia==1.4.0
-

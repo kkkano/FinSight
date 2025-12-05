@@ -90,6 +90,29 @@ export const apiClient = {
     return response.data;
   },
 
+  // 订阅管理
+  async subscribe(payload: {
+    email: string;
+    ticker: string;
+    alert_types?: string[];
+    price_threshold?: number | null;
+  }): Promise<any> {
+    const response = await api.post('/api/subscribe', payload);
+    return response.data;
+  },
+
+  async unsubscribe(payload: { email: string; ticker?: string | null }): Promise<any> {
+    const response = await api.post('/api/unsubscribe', payload);
+    return response.data;
+  },
+
+  async listSubscriptions(email?: string): Promise<any> {
+    const response = await api.get('/api/subscriptions', {
+      params: email ? { email } : {},
+    });
+    return response.data;
+  },
+
   // 导出 PDF
   async exportPDF(messages: any[], charts?: any[], title?: string): Promise<Blob> {
     const response = await api.post('/api/export/pdf', {

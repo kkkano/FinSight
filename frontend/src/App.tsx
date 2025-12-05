@@ -118,7 +118,7 @@ function App() {
 
           {/* Right: Visualization Panel */}
           {isChartPanelExpanded && (
-            <div className="hidden md:flex flex-1 flex-col bg-fin-bg relative transition-all duration-300">
+            <div className="flex flex-1 flex-col bg-fin-bg relative transition-all duration-300">
               {/* 折叠按钮 */}
               <button
                 onClick={() => {
@@ -172,15 +172,17 @@ function App() {
         </div>
 
         {/* 当图表收起时，显示展开按钮 */}
-        {!isChartPanelExpanded && (
-          <button
-            onClick={() => setIsChartPanelExpanded(true)}
-            className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-20 p-2 bg-fin-panel border border-fin-border rounded-l-lg hover:bg-fin-border transition-colors"
-            title="Expand chart"
-          >
+        <button
+          onClick={() => setIsChartPanelExpanded(!isChartPanelExpanded)}
+          className="flex fixed right-0 top-1/2 -translate-y-1/2 z-20 p-2 bg-fin-panel border border-fin-border rounded-l-lg hover:bg-fin-border transition-colors"
+          title={isChartPanelExpanded ? 'Collapse chart' : 'Expand chart'}
+        >
+          {isChartPanelExpanded ? (
+            <ChevronRight size={16} className="text-fin-muted" />
+          ) : (
             <ChevronLeft size={16} className="text-fin-muted" />
-          </button>
-        )}
+          )}
+        </button>
       </div>
     </div>
   );

@@ -161,3 +161,39 @@
 - 小结：  
   - 现在订阅相关 API 已经具备“可用 + 可测”的最小能力：可以在不影响生产数据的前提下，通过自动化测试保证基本行为。  
   - 下一步 P1.2 将在此基础上扩展：增加对订阅数据的结构约束（例如校验 `alert_types` 合法值）、为 `unsubscribe` 补充更精确的 400/404 错误语义，以及规划定时检查 + 邮件发送的调度骨架。  
+> ## 2025-12-05 — P1.2 取消订阅接口重写与验证
+
+- 代码调整：
+  - `/api/unsubscribe` 改为直接使用 `UnsubscribeRequest`，缺少 email 返回 400，未找到订阅返回 404，成功返回 200；增加保护性校验并保持其它异常按 500 返回。
+- 测试命令：`python -m pytest backend/tests/test_subscriptions_api.py`
+- 结果：*通过（2 passed）*，存在 Pydantic V1 validator 的弃用警告（暂接受，后续迁移）。
+- 结论：订阅/查询/取消闭环按预期工作，为后续 price_change 调度与邮件告警奠定基础。
+> ## 2025-12-05 — P1.3 price_change 调度骨架 + 邮件联通（干运行）
+
+- 代码调整：
+  - 新增 `backend/services/alert_scheduler.py`，提供 `PriceChangeScheduler.run_once`，注入式依赖（SubscriptionService、EmailService、price_fetcher），在变动幅度达到 `price_threshold` 时触发邮件并写入 `last_alert_at`。
+- 新增测试：`backend/tests/test_alert_scheduler.py`
+- 测试结果：*通过（2 passed）*。
+- 说明：测试使用 FakeEmailService 与假价格数据，未触发真实邮件，为后续接入真实行情源与调度器保留接口。
+> ## 2025-12-05 — P1.4 price_change 默认取价器 + Pydantic v2 校验器
+
+- 代码调整：
+  - `SubscriptionRequest` 校验器迁移为 `@field_validator`，消除 Pydantic v1 弃用警告。
+  - `backend/services/alert_scheduler.py` 增加 `fetch_price_snapshot`（yfinance fast_info），以及 `run_price_change_cycle()` 便于 APScheduler/cron 调用，保持同步单次扫。
+- 测试命令：`python -m pytest backend/tests/test_subscriptions_api.py backend/tests/test_alert_scheduler.py`
+- 结果：*通过（4 passed）*。
+- 说明：价格获取失败时打印日志并跳过，不影响其它订阅；后续可替换为生产行情源或多源回退策略。
+> ## 2025-12-05 — P1.5 行情源多路回退（免 Key）
+
+- 代码调整：`fetch_price_snapshot` 增加多路免 Key 回退：yfinance fast_info -> Yahoo quote API -> Yahoo chart(2d/1d)，任一路取到则返回涨跌幅。
+- 测试命令：`python -m pytest backend/tests/test_subscriptions_api.py backend/tests/test_alert_scheduler.py`
+- 结果：*通过（4 passed）*；调度测试仍使用假行情，不触网。
+> ## 2025-12-05 — P1.6 APScheduler 落地 + 调度冒烟测试
+
+- 代码调整：
+  - 新增 `backend/services/scheduler_runner.py`，使用 APScheduler BackgroundScheduler 周期调用 price_change 扫描，首次立即执行；支持 enabled/interval 参数。
+  - `backend/api/main.py` 在 startup/shutdown 事件中读取 env 启动/关闭调度：`PRICE_ALERT_SCHEDULER_ENABLED`（默认 false）、`PRICE_ALERT_INTERVAL_MINUTES`（默认 15）。
+  - 依赖增加 APScheduler；安装版本 3.10.4。
+- 新增测试：`backend/tests/test_scheduler_runner.py`（禁用时返回 None；启用后任务至少跑一次）。
+- 测试命令：`python -m pytest backend/tests/test_subscriptions_api.py backend/tests/test_alert_scheduler.py backend/tests/test_scheduler_runner.py`
+- 结果：*通过（6 passed）*，存在 FastAPI on_event 弃用与 datetime.utcnow 弃用告警，暂不影响行为，后续可按需迁移 lifespan / timezone-aware。
