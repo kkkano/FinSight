@@ -10,14 +10,22 @@ import { apiClient } from './api/client';
 function App() {
   const [isChartPanelExpanded, setIsChartPanelExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userCollapsed, setUserCollapsed] = useState(false);
   const { currentTicker, messages, theme, setTheme, layoutMode } = useStore();
 
-  // 生成图表时自动展开右侧面板
+  // 生成图表时自动展开右侧面板（仅当用户未手动收起）
   useEffect(() => {
-    if (currentTicker && !isChartPanelExpanded) {
+    if (currentTicker && !isChartPanelExpanded && !userCollapsed) {
       setIsChartPanelExpanded(true);
     }
-  }, [currentTicker, isChartPanelExpanded]);
+  }, [currentTicker, isChartPanelExpanded, userCollapsed]);
+
+  // ticker 变化时重置手动折叠标记
+  useEffect(() => {
+    if (currentTicker) {
+      setUserCollapsed(false);
+    }
+  }, [currentTicker]);
 
   return (
     <div className="relative h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
@@ -150,14 +158,15 @@ function App() {
                         Market Data Visualization
                       </span>
                     </div>
-                    <button
-                      onClick={() => {
-                        setIsChartPanelExpanded(false);
-                      }}
-                      className="p-2 hover:bg-fin-primary hover:text-white rounded-lg transition-all group cursor-pointer"
-                      title="Collapse chart"
-                    >
-                      <ChevronRight size={16} className="text-fin-muted group-hover:text-white transition-colors" />
+                <button
+                  onClick={() => {
+                    setIsChartPanelExpanded(false);
+                    setUserCollapsed(true);
+                  }}
+                  className="p-2 hover:bg-fin-primary hover:text-white rounded-lg transition-all group cursor-pointer"
+                  title="Collapse chart"
+                >
+                  <ChevronRight size={16} className="text-fin-muted group-hover:text-white transition-colors" />
                     </button>
                   </div>
 
@@ -173,7 +182,12 @@ function App() {
 
         {/* 当图表收起时，显示展开按钮 */}
         <button
-          onClick={() => setIsChartPanelExpanded(!isChartPanelExpanded)}
+          onClick={() => {
+            const next = !isChartPanelExpanded;
+            setIsChartPanelExpanded(next);
+            if (!next) setUserCollapsed(true);
+            else setUserCollapsed(false);
+          }}
           className="flex fixed right-0 top-1/2 -translate-y-1/2 z-20 p-2 bg-fin-panel border border-fin-border rounded-l-lg hover:bg-fin-border transition-colors"
           title={isChartPanelExpanded ? 'Collapse chart' : 'Expand chart'}
         >

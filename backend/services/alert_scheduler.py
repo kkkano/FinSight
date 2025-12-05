@@ -18,6 +18,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 import time
+import os
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from datetime import datetime, timedelta
 
 from backend.services.subscription_service import SubscriptionService
 from backend.services.email_service import EmailService
@@ -57,11 +62,13 @@ class PriceChangeScheduler:
         """
         sent: List[Dict] = []
         subscriptions = self.subscription_service.get_subscriptions()
+        checked = 0
 
         for sub in subscriptions:
             alert_types = sub.get("alert_types") or []
             if "price_change" not in alert_types:
                 continue
+            checked += 1
 
             threshold = sub.get("price_threshold")
             if threshold is None:
@@ -100,6 +107,102 @@ class PriceChangeScheduler:
                 }
             )
 
+        logger.info(
+            "price_change run completed: checked=%s, sent=%s",
+            checked,
+            len(sent),
+        )
+        return sent
+
+
+class NewsAlertScheduler:
+    """
+    News alert: fetch recent articles and notify when related to subscribed ticker.
+    """
+
+    def __init__(
+        self,
+        subscription_service: SubscriptionService,
+        email_service: EmailService,
+        news_fetcher: Callable[[str], List[Dict]],
+    ) -> None:
+        self.subscription_service = subscription_service
+        self.email_service = email_service
+        self.news_fetcher = news_fetcher
+
+    def run_once(self) -> List[Dict]:
+        sent: List[Dict] = []
+        subs = self.subscription_service.get_subscriptions()
+        now = datetime.utcnow()
+        lookback = now - timedelta(hours=24)
+        checked = 0
+
+        for sub in subs:
+            alert_types = sub.get("alert_types") or []
+            if "news" not in alert_types:
+                continue
+            checked += 1
+
+            last_news_at = sub.get("last_news_at")
+            last_dt = datetime.fromisoformat(last_news_at) if last_news_at else None
+
+            articles = self.news_fetcher(sub["ticker"])
+            if not articles:
+                continue
+
+            # 相关性：优先 related_tickers 命中，其次标题包含 TICKER
+            related: List[Dict] = []
+            for art in articles:
+                pub_dt = art.get("published_at")
+                if isinstance(pub_dt, str):
+                    try:
+                        pub_dt = datetime.fromisoformat(pub_dt)
+                    except Exception:
+                        pub_dt = None
+                if not pub_dt or pub_dt < lookback:
+                    continue
+                if last_dt and pub_dt <= last_dt:
+                    continue
+
+                rel = art.get("related_tickers") or []
+                title = art.get("title", "")
+                if sub["ticker"].upper() in rel or sub["ticker"].upper() in title.upper():
+                    related.append({**art, "published_at": pub_dt})
+
+            if not related:
+                continue
+
+            # 取最新几条组成邮件
+            related = sorted(related, key=lambda x: x["published_at"], reverse=True)[:3]
+            lines = []
+            for art in related:
+                ts = art["published_at"].strftime("%Y-%m-%d %H:%M")
+                lines.append(f"[{ts}] {art.get('title','')} ({art.get('source','')}) {art.get('url','')}")
+            message = "\n".join(lines)
+
+            self.email_service.send_stock_alert(
+                to_email=sub["email"],
+                ticker=sub["ticker"],
+                alert_type="news",
+                message=message,
+                current_price=None,
+                change_percent=None,
+            )
+            self.subscription_service.update_last_news(sub["email"], sub["ticker"])
+
+            sent.append(
+                {
+                    "email": sub["email"],
+                    "ticker": sub["ticker"],
+                    "articles": lines,
+                }
+            )
+
+        logger.info(
+            "news run completed: checked=%s, sent=%s",
+            checked,
+            len(sent),
+        )
         return sent
 
 
@@ -127,6 +230,110 @@ def fetch_price_snapshot(ticker: str) -> Optional[PriceSnapshot]:
             _set_cache_snapshot(ticker, snapshot)
             return snapshot
     return None
+
+
+def fetch_news_articles(ticker: str) -> List[Dict]:
+    """
+    Fetch recent news for ticker. Uses yfinance news; filters to last 48h and attaches related tickers if provided.
+    """
+    articles: List[Dict] = []
+    cutoff = datetime.utcnow() - timedelta(hours=48)
+    ticker_up = ticker.upper()
+
+    def _add_article(title: str, url: str, source: str, published_at: datetime, related: List[str] | None = None):
+        if not published_at or published_at < cutoff:
+            return
+        articles.append(
+            {
+                "title": title,
+                "url": url,
+                "source": source,
+                "published_at": published_at,
+                "related_tickers": [r.upper() for r in (related or []) if isinstance(r, str)],
+            }
+        )
+
+    try:
+        import yfinance as yf  # type: ignore
+
+        t = yf.Ticker(ticker)
+        news = getattr(t, "news", []) or []
+        for item in news:
+            title = item.get("title", "")
+            link = item.get("link") or item.get("url")
+            pub_ts = item.get("providerPublishTime") or item.get("pubDate")
+            pub_dt = None
+            try:
+                if pub_ts:
+                    pub_dt = datetime.fromtimestamp(float(pub_ts))
+            except Exception:
+                pub_dt = None
+            if not pub_dt or pub_dt < cutoff:
+                continue
+            related = item.get("relatedTickers") or item.get("tickers") or []
+            _add_article(title, link, item.get("publisher") or item.get("source") or "", pub_dt, related)
+    except Exception as e:
+        print(f"[NewsFetcher] yfinance news failed for {ticker}: {e}")
+
+    # Finnhub fallback
+    if not articles:
+        key = os.getenv("FINNHUB_API_KEY")
+        if key:
+            try:
+                import requests  # type: ignore
+
+                to_date = datetime.utcnow().date()
+                from_date = to_date - timedelta(days=2)
+                url = "https://finnhub.io/api/v1/company-news"
+                params = {
+                    "symbol": ticker_up,
+                    "from": from_date.isoformat(),
+                    "to": to_date.isoformat(),
+                    "token": key,
+                }
+                resp = requests.get(url, params=params, timeout=8)
+                if resp.status_code == 200:
+                    for item in resp.json() or []:
+                        title = item.get("headline", "")
+                        link = item.get("url", "")
+                        source = item.get("source", "")
+                        ts = item.get("datetime")
+                        pub_dt = datetime.fromtimestamp(ts) if ts else None
+                        related = item.get("related", "").split(",") if item.get("related") else [ticker_up]
+                        _add_article(title, link, source, pub_dt, related)
+            except Exception as e:
+                print(f"[NewsFetcher] finnhub news failed for {ticker}: {e}")
+
+    # Alpha Vantage fallback
+    if not articles:
+        key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        if key:
+            try:
+                import requests  # type: ignore
+
+                url = "https://www.alphavantage.co/query"
+                params = {"function": "NEWS_SENTIMENT", "tickers": ticker_up, "limit": 10, "apikey": key}
+                resp = requests.get(url, params=params, timeout=8)
+                data = resp.json()
+                feed = data.get("feed") or []
+                for item in feed:
+                    title = item.get("title", "")
+                    link = item.get("url") or item.get("link", "")
+                    source = item.get("source", "")
+                    ts_str = item.get("time_published", "")
+                    pub_dt = None
+                    if ts_str:
+                        try:
+                            pub_dt = datetime.strptime(ts_str[:12], "%Y%m%d%H%M")
+                        except Exception:
+                            pub_dt = None
+                    related = item.get("ticker_sentiment", [])
+                    rel_codes = [r.get("ticker") for r in related if isinstance(r, dict) and r.get("ticker")]
+                    _add_article(title, link, source, pub_dt, rel_codes or [ticker_up])
+            except Exception as e:
+                print(f"[NewsFetcher] alpha vantage news failed for {ticker}: {e}")
+
+    return articles
 
 
 def _fetch_with_yfinance(ticker: str) -> Optional[PriceSnapshot]:
@@ -264,4 +471,41 @@ def run_price_change_cycle() -> List[Dict]:
         email_service=get_email_service(),
         price_fetcher=fetch_price_snapshot,
     )
-    return scheduler.run_once()
+    res = scheduler.run_once()
+    return res
+
+
+def run_news_alert_cycle() -> List[Dict]:
+    """
+    One-shot news sweep using default services and fetcher.
+    """
+    from backend.services.subscription_service import get_subscription_service
+    from backend.services.email_service import get_email_service
+
+    scheduler = NewsAlertScheduler(
+        subscription_service=get_subscription_service(),
+        email_service=get_email_service(),
+        news_fetcher=fetch_news_articles,
+    )
+    res = scheduler.run_once()
+    return res
+LOG_DIR = Path(os.getenv("ALERT_LOG_DIR", Path(__file__).resolve().parent.parent.parent / "logs"))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def _get_logger() -> logging.Logger:
+    logger = logging.getLogger("alerts")
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    log_path = LOG_DIR / "alerts.log"
+    handler = RotatingFileHandler(log_path, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    # also console friendly
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    return logger
+
+logger = _get_logger()

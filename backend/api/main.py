@@ -21,19 +21,19 @@ load_dotenv()
 # 尝试导入核心工具
 try:
     from backend.tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
-    print("✅ Core tools imported successfully.")
+    print("[Init] Core tools imported successfully.")
 except ImportError as e:
     # 如果 backend.tools 失败，尝试从根目录 tools 导入（兼容旧结构）
     try:
         from tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
-        print("✅ Core tools imported from root successfully.")
+        print("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
         print(f"❌ Error importing tools: {e2}")
 
 # 导入图表检测器
 try:
     from backend.api.chart_detector import ChartTypeDetector
-    print("✅ Chart detector imported successfully.")
+    print("[Init] Chart detector imported successfully.")
 except ImportError as e:
     print(f"❌ Error importing chart detector: {e}")
     ChartTypeDetector = None
@@ -91,13 +91,13 @@ try:
         use_orchestrator=True,
         use_report_agent=True
     )
-    print("✅ ReAct Agent initialized successfully.")
+    print("[Init] ReAct Agent initialized successfully.")
 except Exception as e:
-    print(f"❌ Error initializing ReAct Agent: {e}")
+    print(f"[Init] Error initializing ReAct Agent: {e}")
     traceback.print_exc()
     agent = None
 
-_price_scheduler = None
+_schedulers = []
 
 def _env_bool(key: str, default: str = "false") -> bool:
     return os.getenv(key, default).lower() in ("true", "1", "yes", "on")
@@ -113,22 +113,39 @@ async def lifespan(app: FastAPI):
     enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", "false")
     if enabled:
         interval = float(os.getenv("PRICE_ALERT_INTERVAL_MINUTES", "15"))
-        global _price_scheduler
-        _price_scheduler = start_price_change_scheduler(
+        sched = start_price_change_scheduler(
             run_price_change_cycle,
             interval_minutes=interval,
             enabled=True,
         )
+        if sched:
+            _schedulers.append(sched)
     else:
         print("[Scheduler] PRICE_ALERT_SCHEDULER_ENABLED is false; skip start.")
+
+    # News scheduler
+    from backend.services.alert_scheduler import run_news_alert_cycle
+    news_enabled = _env_bool("NEWS_ALERT_SCHEDULER_ENABLED", "false")
+    if news_enabled:
+        news_interval = float(os.getenv("NEWS_ALERT_INTERVAL_MINUTES", "30"))
+        sched = start_price_change_scheduler(
+            run_news_alert_cycle,
+            interval_minutes=news_interval,
+            enabled=True,
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        print("[Scheduler] NEWS_ALERT_SCHEDULER_ENABLED is false; skip start.")
 
     try:
         yield
     finally:
         try:
-            if _price_scheduler:
-                _price_scheduler.shutdown(wait=False)
-                print("[Scheduler] price_change scheduler stopped.")
+            for sched in _schedulers:
+                sched.shutdown(wait=False)
+            if _schedulers:
+                print("[Scheduler] all schedulers stopped.")
         except Exception as e:
             print(f"[Scheduler] shutdown error: {e}")
 
