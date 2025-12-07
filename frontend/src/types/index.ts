@@ -24,6 +24,10 @@ export interface Message {
   responseTime?: number;  // 响应时间（秒）
   error?: string;  // 错误信息
   canRetry?: boolean;  // 是否可以重试
+  data_origin?: string;
+  as_of?: string | null;
+  fallback_used?: boolean;
+  tried_sources?: string[];
 }
 
 export interface KlineData {
@@ -48,8 +52,10 @@ export interface ChatResponse {
   intent: Intent;
   current_focus?: string | null;
   response_time_ms: number;
+  thinking_elapsed_seconds?: number;
   session_id: string;
   thinking?: ThinkingStep[];  // 思考过程
+  data?: any;
 }
 
 export interface KlineResponse {

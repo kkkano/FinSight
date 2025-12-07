@@ -16,7 +16,7 @@ const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', 
 
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addMessage, setLoading, isChatLoading, setTicker } = useStore();
+  const { addMessage, setLoading, isChatLoading, setTicker, setStatus } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -59,6 +59,7 @@ export const ChatInput: React.FC = () => {
     });
 
     setLoading(true);
+    setStatus('Analyzing query & routing...');
 
     try {
       const response = await apiClient.sendMessage(userMsgContent);
@@ -79,7 +80,15 @@ export const ChatInput: React.FC = () => {
         intent: response.intent,
         relatedTicker: response.current_focus || tickerToChart || undefined,
         thinking: response.thinking,
+        data_origin: response.data?.data_origin,
+        as_of: response.data?.as_of ?? null,
+        fallback_used: response.data?.fallback_used,
+        tried_sources: response.data?.tried_sources,
       });
+
+      const elapsedSeconds =
+        (response.thinking_elapsed_seconds ?? response.response_time_ms / 1000).toFixed(1);
+      setStatus(`Completed in ${elapsedSeconds}s`);
 
       if (response.current_focus || tickerToChart) {
         setTicker(response.current_focus || tickerToChart);
@@ -91,8 +100,11 @@ export const ChatInput: React.FC = () => {
         content: 'Network request failed. Please confirm the backend service is running.',
         timestamp: Date.now(),
       });
+      setStatus('Request failed');
     } finally {
       setLoading(false);
+      // 短暂展示完成状态后清理
+      setTimeout(() => setStatus(null), 2000);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
@@ -129,6 +141,22 @@ export const ChatInput: React.FC = () => {
         <p className="text-xs text-fin-muted">
           FinSight AI generated content may be inaccurate. Not financial advice.
         </p>
+        <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
+          <button
+            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            onClick={() => setInput('推荐几只股票')}
+            disabled={isChatLoading}
+          >
+            快速试用：推荐几只股票
+          </button>
+          <button
+            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            onClick={() => setInput('分析 AAPL 现在能不能买')}
+            disabled={isChatLoading}
+          >
+            示例：分析 AAPL
+          </button>
+        </div>
       </div>
     </div>
   );

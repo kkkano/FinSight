@@ -123,5 +123,15 @@ export const apiClient = {
       responseType: 'blob' // 关键：声明返回二进制流
     });
     return response.data;
-  }
+  },
+
+  async diagnosticsLanggraph(): Promise<any> {
+    const response = await api.get('/diagnostics/langgraph');
+    return response.data;
+  },
+
+  async diagnosticsOrchestrator(): Promise<any> {
+    const response = await api.get('/diagnostics/orchestrator');
+    return response.data;
+  },
 };

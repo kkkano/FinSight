@@ -6,6 +6,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { CandlestickChart, ChevronRight, ChevronLeft, Settings, Download, Sun, Moon } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { apiClient } from './api/client';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 
 function App() {
   const [isChartPanelExpanded, setIsChartPanelExpanded] = useState(true);
@@ -65,7 +66,8 @@ function App() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                <DiagnosticsPanel wrapperClassName="relative inline-flex" />
                 <button
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                   className="p-1.5 rounded-full border border-fin-border/60 bg-fin-panel/80 hover:-translate-y-0.5 hover:bg-fin-border transition-all duration-200 shadow-sm"
