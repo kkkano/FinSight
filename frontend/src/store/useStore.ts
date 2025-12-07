@@ -35,6 +35,9 @@ interface AppState {
   updateLastMessage: (content: string) => void;
   setLoading: (loading: boolean) => void;
   isChatLoading: boolean;
+  statusMessage: string | null;
+  statusSince: number | null;
+  setStatus: (message: string | null) => void;
   abortController: AbortController | null;
   setAbortController: (controller: AbortController | null) => void;
   currentTicker: string | null;
@@ -56,6 +59,8 @@ export const useStore = create<AppState>((set) => ({
     },
   ],
   isChatLoading: false,
+  statusMessage: null,
+  statusSince: null,
   currentTicker: null,
   abortController: null,
   theme: initialTheme,
@@ -76,6 +81,11 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setLoading: (loading) => set({ isChatLoading: loading }),
+  setStatus: (message) =>
+    set(() => ({
+      statusMessage: message,
+      statusSince: message ? Date.now() : null,
+    })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
   setAbortController: (controller) => set({ abortController: controller }),
 

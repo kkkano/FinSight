@@ -9,9 +9,10 @@ import { apiClient } from '../api/client';
 import type { KlineData, ChartType } from '../types/index';
 
 export const ChatList: React.FC = () => {
-  const { messages, isChatLoading } = useStore();
+  const { messages, isChatLoading, statusMessage, statusSince } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [elapsed, setElapsed] = useState<string>('0.0');
 
   // 只滚动聊天容器本身，避免整页被拉走
   useEffect(() => {
@@ -22,6 +23,19 @@ export const ChatList: React.FC = () => {
       behavior: 'smooth',
     });
   }, [messages, isChatLoading]);
+
+  // 动态计时
+  useEffect(() => {
+    if (!statusSince) {
+      setElapsed('0.0');
+      return;
+    }
+    const timer = setInterval(() => {
+      const delta = (Date.now() - statusSince) / 1000;
+      setElapsed(delta.toFixed(1));
+    }, 200);
+    return () => clearInterval(timer);
+  }, [statusSince]);
 
   return (
     <div
@@ -60,6 +74,19 @@ export const ChatList: React.FC = () => {
               ) : (
                 <>
                   <MessageWithChart content={msg.content} />
+                  {msg.data_origin && (
+                    <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
+                        来源: {msg.data_origin} {msg.fallback_used ? '(兜底)' : ''}
+                      </span>
+                      {msg.as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {msg.as_of}</span>}
+                      {msg.tried_sources && msg.tried_sources.length > 0 && (
+                        <span className="text-[10px] text-fin-muted/70">
+                          尝试: {msg.tried_sources.join(' → ')}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {msg.thinking && msg.thinking.length > 0 && (
                     <ThinkingProcess thinking={msg.thinking} />
                   )}
@@ -73,13 +100,15 @@ export const ChatList: React.FC = () => {
       {/* Loading Indicator */}
       {isChatLoading && (
         <div className="flex w-full justify-start animate-fade-in">
-          <div className="flex flex-row items-center ml-12">
+          <div className="flex flex-row items-center ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 gap-2 shadow-sm">
             <div className="flex space-x-1">
               <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
-            <span className="ml-2 text-xs text-fin-muted">FinSight 正在分析...</span>
+            <span className="text-xs text-fin-muted">
+              {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
+            </span>
           </div>
         </div>
       )}
