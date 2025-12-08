@@ -89,6 +89,27 @@ class ChatHandler:
         
         try:
             tickers = metadata.get('tickers', [])
+            if not tickers and context and hasattr(context, 'current_focus') and context.current_focus:
+                tickers = [context.current_focus]
+            primary_ticker = tickers[0] if tickers else None
+
+            # 优先处理新闻意图：有 ticker 直接拉新闻；无 ticker 先用市场泛化新闻，再兜底默认指数
+            if self._is_news_query(query_lower):
+                if primary_ticker:
+                    return self._handle_news_query(primary_ticker, query, context)
+                if self.tools_module and hasattr(self.tools_module, "get_market_news_headlines"):
+                    try:
+                        news_text = self.tools_module.get_market_news_headlines()
+                        return {
+                            'success': True,
+                            'response': news_text,
+                            'intent': 'market_news',
+                            'data': {'raw_news': news_text}
+                        }
+                    except Exception as e:
+                        print(f"[ChatHandler] market news fallback failed: {e}")
+                default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
+                return self._handle_news_query(default_news_ticker, query, context)
             
             # 检查是否为对比查询
             if metadata.get('is_comparison') and len(tickers) >= 2:
@@ -100,6 +121,11 @@ class ChatHandler:
             
             if not tickers:
                 print(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
+                
+                # 新闻类无 ticker 查询：默认用大盘指数
+                if self._is_news_query(query_lower):
+                    default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
+                    return self._handle_news_query(default_news_ticker, query, context)
                 
                 if self._is_advice_query(query_lower):
                     print("[ChatHandler] ✅ 命中泛化建议意图（无 ticker）")
@@ -113,7 +139,9 @@ class ChatHandler:
                 return self._handle_with_search(query, context)
             
             # 获取第一个股票的信息 (如果 tickers 有内容)
-            ticker = tickers[0]
+            ticker = primary_ticker or (tickers[0] if tickers else None)
+            if not ticker and context and hasattr(context, 'current_focus') and context.current_focus:
+                ticker = context.current_focus
             
             # 判断查询类型并获取相应数据
             if self._is_composition_query(query_lower):
@@ -152,7 +180,7 @@ class ChatHandler:
         return any(kw in query for kw in keywords)
     
     def _is_news_query(self, query: str) -> bool:
-        keywords = ['新闻', '消息', 'news', '最新', '发生', '事件']
+        keywords = ['新闻', '消息', 'news', '最新', '发生', '事件', '近几天', '最近', '头条', 'headline']
         return any(kw in query for kw in keywords)
     
     def _is_info_query(self, query: str) -> bool:
@@ -709,6 +737,10 @@ Search Results: {search_result[:3000]}
         # 1. 首先获取基础数据
         basic_result = self.handle(query, metadata, context)
         
+        # 行情类直接返回，避免 LLM 改写价格细节
+        if basic_result.get('intent') in {'price'}:
+            return basic_result
+        
         if not basic_result.get('success') or not self.llm or not LANGCHAIN_AVAILABLE:
             return basic_result
         
@@ -716,17 +748,17 @@ Search Results: {search_result[:3000]}
         try:
             raw_response = basic_result.get('response', '')
             
-            prompt = f"""Based on the following data, answer the user's question in a concise and friendly manner in Chinese.
+            prompt = f"""你是财经助手，请基于以下“检索结果”用中文简洁回答用户。保持 2-5 句摘要，并保留所有可用链接，格式为 Markdown 可点击链接。
 
-User Question: {query}
-Retrieved Data: {raw_response}
+用户问题: {query}
+检索结果:
+{raw_response}
 
-Requirements:
-1. Keep the answer concise, 2-5 sentences
-2. Include key data points
-3. If the data shows price movements, provide a brief evaluation
-4. Use a friendly and natural tone
-5. DO NOT mention "Retrieved Data" or "Raw Response".
+输出要求:
+1) 先给 2-5 句摘要，包含关键日期、事件、影响。
+2) 在摘要后追加“链接:”小节，逐条列出检索结果里出现的 URL，使用 Markdown 链接格式 `[来源或URL](URL)`，不丢失任何链接。
+3) 如果没有找到有效链接，明确说明“暂无可用链接”。
+4) 不要提到“检索结果/原文”等字样。
 """
             response = self.llm.invoke([HumanMessage(content=prompt)])
             

@@ -312,14 +312,17 @@ class ConversationAgent:
         图表标记格式: [CHART:TICKER:TYPE]
         """
         try:
+            # 问候/澄清等非行情意图不自动加图表
+            intent = result.get('intent') or metadata.get('intent')
+            if intent in {'greeting', 'clarify', 'followup', 'alert'}:
+                return result
+
             from backend.api.chart_detector import ChartTypeDetector
             
-            # 获取当前焦点或查询中的 ticker
+            # 仅使用显式解析到的 ticker，避免沿用旧的 current_focus 误加图表
             ticker = None
             if metadata.get('tickers'):
                 ticker = metadata['tickers'][0]
-            elif self.context.current_focus:
-                ticker = self.context.current_focus
             
             if not ticker:
                 return result
