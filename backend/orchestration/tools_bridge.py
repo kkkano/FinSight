@@ -65,11 +65,13 @@ def register_all_financial_tools(orchestrator: ToolOrchestrator) -> None:
     # 配置股价数据源
     orchestrator.sources['price'] = []
     price_sources = [
+        ('index_price', getattr(tools_module, '_fetch_index_price', None), 1, 10),
         ('alpha_vantage', getattr(tools_module, '_fetch_with_alpha_vantage', None), 1, 5),
         ('finnhub', getattr(tools_module, '_fetch_with_finnhub', None), 2, 60),
         ('yfinance', getattr(tools_module, '_fetch_with_yfinance', None), 3, 30),
-        ('yahoo_scrape', getattr(tools_module, '_scrape_yahoo_finance', None), 4, 10),
-        ('search', getattr(tools_module, '_search_for_price', None), 5, 30),
+        ('twelve_data', getattr(tools_module, '_fetch_with_twelve_data_price', None), 4, 30),
+        ('yahoo_scrape', getattr(tools_module, '_scrape_yahoo_finance', None), 5, 10),
+        ('search', getattr(tools_module, '_search_for_price', None), 6, 30),
     ]
     for name, func, priority, rate_limit in price_sources:
         if func:

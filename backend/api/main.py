@@ -190,6 +190,47 @@ def health_check():
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 
+
+@app.get("/diagnostics/langgraph")
+def diagnostics_langgraph():
+    """
+    LangGraph 报告 Agent 的自检与描述。
+    返回 DAG 概览、模型/提供商及自检状态，不触发外部 LLM 调用。
+    """
+    if not agent:
+        raise HTTPException(status_code=500, detail="Agent not initialized")
+    try:
+        info = agent.describe_report_agent() if hasattr(agent, "describe_report_agent") else {
+            "available": False,
+            "error": "describe_report_agent_not_supported",
+        }
+        return {
+            "status": "ok" if info.get("available") else "degraded",
+            "data": info,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"diagnostics failed: {exc}")
+
+
+@app.get("/diagnostics/orchestrator")
+def diagnostics_orchestrator():
+    """
+    返回 Orchestrator 的聚合健康信息：总请求、缓存命中、回退次数、按源统计。
+    供前端健康面板使用。
+    """
+    if not agent or not getattr(agent, "orchestrator", None):
+        raise HTTPException(status_code=500, detail="Orchestrator not initialized")
+    try:
+        stats = agent.orchestrator.get_stats()
+        return {
+            "status": "ok",
+            "data": stats,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}")
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
