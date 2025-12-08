@@ -64,19 +64,41 @@ def register_all_financial_tools(orchestrator: ToolOrchestrator) -> None:
     
     # 配置股价数据源
     orchestrator.sources['price'] = []
+    def _cfg_int(name: str, default: int) -> int:
+        try:
+            return int(os.getenv(name, default))
+        except Exception:
+            return default
+
+    def _is_configured(source_name: str) -> bool:
+        key_map = {
+            'tiingo': 'TIINGO_API_KEY',
+            'iex_cloud': 'IEX_CLOUD_API_KEY',
+            'twelve_data': 'TWELVE_DATA_API_KEY',
+            'alpha_vantage': 'ALPHA_VANTAGE_API_KEY',
+            'finnhub': 'FINNHUB_API_KEY',
+        }
+        key_attr = key_map.get(source_name)
+        if not key_attr:
+            return True
+        val = getattr(tools_module, key_attr, "") if tools_module else ""
+        return bool(val)
+
     price_sources = [
-        ('index_price', getattr(tools_module, '_fetch_index_price', None), 1, 10),
-        ('alpha_vantage', getattr(tools_module, '_fetch_with_alpha_vantage', None), 1, 5),
-        ('finnhub', getattr(tools_module, '_fetch_with_finnhub', None), 2, 60),
-        ('yfinance', getattr(tools_module, '_fetch_with_yfinance', None), 3, 30),
-        ('twelve_data', getattr(tools_module, '_fetch_with_twelve_data_price', None), 4, 30),
-        ('yahoo_scrape', getattr(tools_module, '_scrape_yahoo_finance', None), 5, 10),
-        ('search', getattr(tools_module, '_search_for_price', None), 6, 30),
+        ('index_price', getattr(tools_module, '_fetch_index_price', None), _cfg_int('PRICE_PRIORITY_INDEX', 1), _cfg_int('PRICE_RATE_INDEX', 10), _cfg_int('PRICE_COOLDOWN_INDEX', 0)),
+        ('alpha_vantage', getattr(tools_module, '_fetch_with_alpha_vantage', None), _cfg_int('PRICE_PRIORITY_ALPHA', 1), _cfg_int('PRICE_RATE_ALPHA', 5), _cfg_int('PRICE_COOLDOWN_ALPHA', 0)),
+        ('finnhub', getattr(tools_module, '_fetch_with_finnhub', None), _cfg_int('PRICE_PRIORITY_FINNHUB', 2), _cfg_int('PRICE_RATE_FINNHUB', 60), _cfg_int('PRICE_COOLDOWN_FINNHUB', 0)),
+        ('yfinance', getattr(tools_module, '_fetch_with_yfinance', None), _cfg_int('PRICE_PRIORITY_YFIN', 3), _cfg_int('PRICE_RATE_YFIN', 30), _cfg_int('PRICE_COOLDOWN_YFIN', 0)),
+        ('twelve_data', getattr(tools_module, '_fetch_with_twelve_data_price', None), _cfg_int('PRICE_PRIORITY_TWELVEDATA', 4), _cfg_int('PRICE_RATE_TWELVEDATA', 30), _cfg_int('PRICE_COOLDOWN_TWELVEDATA', 0)),
+        ('yahoo_scrape', getattr(tools_module, '_scrape_yahoo_finance', None), _cfg_int('PRICE_PRIORITY_YAHOO', 5), _cfg_int('PRICE_RATE_YAHOO', 10), _cfg_int('PRICE_COOLDOWN_YAHOO', 0)),
+        ('search', getattr(tools_module, '_search_for_price', None), _cfg_int('PRICE_PRIORITY_SEARCH', 6), _cfg_int('PRICE_RATE_SEARCH', 30), _cfg_int('PRICE_COOLDOWN_SEARCH', 0)),
     ]
-    for name, func, priority, rate_limit in price_sources:
+    for name, func, priority, rate_limit, cooldown in price_sources:
         if func:
+            if not _is_configured(name):
+                continue
             orchestrator.sources['price'].append(
-                DataSource(name, func, priority, rate_limit)
+                DataSource(name, func, priority, rate_limit, cooldown_seconds=cooldown)
             )
     
     # 配置公司信息数据源

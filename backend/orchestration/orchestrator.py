@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
+import os
 
 # 添加项目根目录到路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,6 +32,8 @@ class DataSource:
     consecutive_failures: int = 0
     total_calls: int = 0
     total_successes: int = 0
+    cooldown_seconds: int = 0
+    last_fail: Optional[datetime] = None
 
 
 @dataclass
@@ -95,6 +98,10 @@ class ToolOrchestrator:
             'total_failures': 0,
             'sources': {},  # name -> {'calls': int, 'success': int, 'fail': int}
         }
+        # 健康阈值默认值（可在 _init_sources 时用 ENV 覆盖）
+        self.health_fail_rate_threshold = 0.6
+        self.health_min_calls = 3
+        self.health_skip_seconds = 300
         
         # 如果提供了工具模块，立即初始化数据源
         if tools_module:
@@ -105,23 +112,50 @@ class ToolOrchestrator:
         if not self.tools_module:
             return
         
+        # 健康阈值（用于跳过坏源 / 动态优先级）
+        self.health_fail_rate_threshold = float(os.getenv("PRICE_HEALTH_FAIL_RATE", "0.6"))
+        self.health_min_calls = int(os.getenv("PRICE_HEALTH_MIN_CALLS", "3"))
+        self.health_skip_seconds = int(os.getenv("PRICE_HEALTH_SKIP_SECONDS", "300"))
+        
+        def _cfg_int(name: str, default: int) -> int:
+            try:
+                return int(os.getenv(name, default))
+            except Exception:
+                return default
+
+        def _is_configured(source_name: str) -> bool:
+            key_map = {
+                'tiingo': 'TIINGO_API_KEY',
+                'iex_cloud': 'IEX_CLOUD_API_KEY',
+                'twelve_data': 'TWELVE_DATA_API_KEY',
+                'alpha_vantage': 'ALPHA_VANTAGE_API_KEY',
+                'finnhub': 'FINNHUB_API_KEY',
+            }
+            key_attr = key_map.get(source_name)
+            if not key_attr:
+                return True
+            val = getattr(self.tools_module, key_attr, "") if self.tools_module else ""
+            return bool(val)
+        
         # 从 tools.py 中获取各个数据获取函数
         # 注意：这里使用 getattr 安全获取，避免模块中不存在某函数时报错
         
         # 股价数据源
         self.sources['price'] = []
         price_funcs = [
-            ('index_price', getattr(self.tools_module, '_fetch_index_price', None), 1, 10),
-            ('alpha_vantage', getattr(self.tools_module, '_fetch_with_alpha_vantage', None), 1, 5),
-            ('finnhub', getattr(self.tools_module, '_fetch_with_finnhub', None), 2, 60),
-            ('yfinance', getattr(self.tools_module, '_fetch_with_yfinance', None), 3, 30),
-            ('twelve_data', getattr(self.tools_module, '_fetch_with_twelve_data_price', None), 4, 30),
-            ('yahoo_scrape', getattr(self.tools_module, '_scrape_yahoo_finance', None), 5, 10),
-            ('search', getattr(self.tools_module, '_search_for_price', None), 6, 30),
+            ('index_price', getattr(self.tools_module, '_fetch_index_price', None), _cfg_int('PRICE_PRIORITY_INDEX', 1), _cfg_int('PRICE_RATE_INDEX', 10), _cfg_int('PRICE_COOLDOWN_INDEX', 0)),
+            ('alpha_vantage', getattr(self.tools_module, '_fetch_with_alpha_vantage', None), _cfg_int('PRICE_PRIORITY_ALPHA', 1), _cfg_int('PRICE_RATE_ALPHA', 5), _cfg_int('PRICE_COOLDOWN_ALPHA', 0)),
+            ('finnhub', getattr(self.tools_module, '_fetch_with_finnhub', None), _cfg_int('PRICE_PRIORITY_FINNHUB', 2), _cfg_int('PRICE_RATE_FINNHUB', 60), _cfg_int('PRICE_COOLDOWN_FINNHUB', 0)),
+            ('yfinance', getattr(self.tools_module, '_fetch_with_yfinance', None), _cfg_int('PRICE_PRIORITY_YFIN', 3), _cfg_int('PRICE_RATE_YFIN', 30), _cfg_int('PRICE_COOLDOWN_YFIN', 0)),
+            ('twelve_data', getattr(self.tools_module, '_fetch_with_twelve_data_price', None), _cfg_int('PRICE_PRIORITY_TWELVEDATA', 4), _cfg_int('PRICE_RATE_TWELVEDATA', 30), _cfg_int('PRICE_COOLDOWN_TWELVEDATA', 0)),
+            ('yahoo_scrape', getattr(self.tools_module, '_scrape_yahoo_finance', None), _cfg_int('PRICE_PRIORITY_YAHOO', 5), _cfg_int('PRICE_RATE_YAHOO', 10), _cfg_int('PRICE_COOLDOWN_YAHOO', 0)),
+            ('search', getattr(self.tools_module, '_search_for_price', None), _cfg_int('PRICE_PRIORITY_SEARCH', 6), _cfg_int('PRICE_RATE_SEARCH', 30), _cfg_int('PRICE_COOLDOWN_SEARCH', 0)),
         ]
-        for name, func, priority, rate_limit in price_funcs:
+        for name, func, priority, rate_limit, cooldown in price_funcs:
             if func:
-                self.sources['price'].append(DataSource(name, func, priority, rate_limit))
+                if not _is_configured(name):
+                    continue
+                self.sources['price'].append(DataSource(name, func, priority, rate_limit, cooldown_seconds=cooldown))
     
     def set_tools_module(self, tools_module):
         """设置工具模块并初始化数据源"""
@@ -182,13 +216,41 @@ class ToolOrchestrator:
             # 没有配置数据源，尝试直接调用工具模块的函数
             return self._fallback_direct_call(data_type, ticker, start_time)
         
-        # 动态排序：失败次数少的优先
-        sources = sorted(sources, key=lambda s: (s.consecutive_failures, s.priority))
+        # 动态排序：按失败率 / 连续失败 / 手工优先级
+        def _fail_rate(src: DataSource) -> float:
+            if src.total_calls == 0:
+                return 0.0
+            return 1.0 - (src.total_successes / src.total_calls)
+        
+        now_dt = datetime.now()
+        sorted_sources = []
+        for src in sources:
+            # 健康跳过：达到最小调用数且失败率过高，且仍在 skip 窗口
+            fr = _fail_rate(src)
+            if (
+                src.total_calls >= self.health_min_calls
+                and fr >= self.health_fail_rate_threshold
+                and src.last_fail
+                and (now_dt - src.last_fail).total_seconds() < self.health_skip_seconds
+            ):
+                continue
+            sorted_sources.append((fr, src.consecutive_failures, src.priority, src))
+        
+        # 如果全部被跳过，退回原列表
+        if not sorted_sources:
+            sorted_sources = [( _fail_rate(s), s.consecutive_failures, s.priority, s) for s in sources]
+        
+        sources = [item[3] for item in sorted(sorted_sources, key=lambda x: (x[0], x[1], x[2]))]
         
         tried_sources = []
         last_error = None
         
         for i, source in enumerate(sources):
+            # 冷却期跳过
+            if source.cooldown_seconds > 0 and source.last_fail:
+                elapsed = (datetime.now() - source.last_fail).total_seconds()
+                if elapsed < source.cooldown_seconds:
+                    continue
             tried_sources.append(source.name)
             self._stats['sources'].setdefault(source.name, {'calls': 0, 'success': 0, 'fail': 0})
             self._stats['sources'][source.name]['calls'] += 1
@@ -240,6 +302,7 @@ class ToolOrchestrator:
                 
             except Exception as e:
                 source.consecutive_failures += 1
+                source.last_fail = datetime.now()
                 last_error = str(e)
                 self._stats['total_failures'] += 1
                 self._stats['sources'][source.name]['fail'] += 1
@@ -386,9 +449,20 @@ class ToolOrchestrator:
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         cache_stats = self.cache.get_stats()
+        now_dt = datetime.now()
         
         source_stats = {}
         for data_type, sources in self.sources.items():
+            # 根据当前健康阈值判断是否被跳过
+            def _skip_reason(src: DataSource):
+                if src.total_calls >= self.health_min_calls and src.last_fail:
+                    fail_rate = 1.0 - (src.total_successes / src.total_calls) if src.total_calls > 0 else 0.0
+                    if fail_rate >= self.health_fail_rate_threshold:
+                        elapsed = (now_dt - src.last_fail).total_seconds()
+                        if elapsed < self.health_skip_seconds:
+                            return f"high_fail_rate:{fail_rate:.2f};cooldown:{int(self.health_skip_seconds - elapsed)}s"
+                return None
+
             source_stats[data_type] = [
                 {
                     'name': s.name,
@@ -396,7 +470,12 @@ class ToolOrchestrator:
                     'total_calls': s.total_calls,
                     'total_successes': s.total_successes,
                     'consecutive_failures': s.consecutive_failures,
-                    'success_rate': f"{s.total_successes / s.total_calls:.1%}" if s.total_calls > 0 else "N/A"
+                    'success_rate': f"{s.total_successes / s.total_calls:.1%}" if s.total_calls > 0 else "N/A",
+                    'fail_rate': 1.0 - (s.total_successes / s.total_calls) if s.total_calls > 0 else 0.0,
+                    'cooldown_remaining': max(0, s.cooldown_seconds - ((now_dt - s.last_fail).total_seconds() if s.last_fail else 0)),
+                    'last_fail': s.last_fail.isoformat() if s.last_fail else None,
+                    'last_success': s.last_success.isoformat() if s.last_success else None,
+                    'skip_reason': _skip_reason(s),
                 }
                 for s in sources
             ]
