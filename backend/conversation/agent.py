@@ -193,6 +193,7 @@ class ConversationAgent:
             result['intent'] = intent.value
             result['metadata'] = metadata
             result['response_time_ms'] = (datetime.now() - start_time).total_seconds() * 1000
+            result['thinking_elapsed_seconds'] = round((datetime.now() - start_time).total_seconds(), 2)
             result['current_focus'] = self.context.current_focus
             
             if capture_thinking and thinking_steps:
@@ -207,6 +208,7 @@ class ConversationAgent:
                 'response': f"处理查询时出错: {str(e)}",
                 'error': str(e),
                 'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000,
+                'thinking_elapsed_seconds': round((datetime.now() - start_time).total_seconds(), 2),
             }
             if capture_thinking and thinking_steps:
                 error_result['thinking'] = thinking_steps
@@ -380,6 +382,29 @@ class ConversationAgent:
         self.context.current_focus = ticker
         if company_name:
             self.context.current_focus_name = company_name
+
+    def describe_report_agent(self) -> Dict[str, Any]:
+        """
+        诊断报告 Agent（LangGraph）状态，供前端流水线面板/健康检查使用。
+        不触发外部 LLM 调用。
+        """
+        info: Dict[str, Any] = {"available": False}
+        if not getattr(self, "report_agent", None):
+            info["error"] = "report_agent_not_initialized"
+            return info
+        info["available"] = True
+        # 优先使用 self_check，其次 get_agent_info
+        if hasattr(self.report_agent, "self_check"):
+            try:
+                info["self_check"] = self.report_agent.self_check()
+            except Exception as exc:  # pragma: no cover (诊断路径)
+                info["self_check_error"] = str(exc)
+        if hasattr(self.report_agent, "get_agent_info"):
+            try:
+                info["agent_info"] = self.report_agent.get_agent_info()
+            except Exception as exc:  # pragma: no cover
+                info["agent_info_error"] = str(exc)
+        return info
 
 
 # === 便捷函数 ===

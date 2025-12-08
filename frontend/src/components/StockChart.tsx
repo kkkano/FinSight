@@ -35,9 +35,9 @@ export const StockChart: React.FC = () => {
     if (option) {
       return { interval: option.interval, period: option.period || option.value };
     }
-    // 对于"24小时"，使用5d获取数据，但interval用1d（因为yfinance可能不支持1h）
+    // 对于"24小时"，使用5d获取数据，interval 用 1h
     if (periodValue === '5d') {
-      return { interval: '1d', period: '5d' }; // 获取5天数据，显示最近24小时
+      return { interval: '1h', period: '5d' }; // 获取5天数据，前端截取近24小时
     }
     return { interval: '1d', period: periodValue };
   };
@@ -72,10 +72,11 @@ export const StockChart: React.FC = () => {
           // 检查是否有 kline_data
           else if (responseData.kline_data && Array.isArray(responseData.kline_data) && responseData.kline_data.length > 0) {
             console.log(`[StockChart] ✅ 成功获取 ${responseData.kline_data.length} 条真实数据 (来源: ${responseData.source || 'unknown'})`);
+            const isIntraday = responseData.kline_data.some((item: KlineData) => (item.time || '').includes(':'));
             let processedData = responseData.kline_data;
             
             // 如果是"24小时"视图，只显示最近24小时的数据
-            if (period === '5d') {
+            if (period === '5d' && isIntraday) {
               const now = new Date().getTime();
               const oneDayAgo = now - 24 * 60 * 60 * 1000;
               processedData = responseData.kline_data.filter((item: KlineData) => {
@@ -158,6 +159,7 @@ export const StockChart: React.FC = () => {
   };
 
   const returnsData = calculateReturns(data);
+  const isIntradayView = data.some(item => (item.time || '').includes(':'));
 
   // ECharts 配置 - K线图
   const candlestickOption = {
@@ -241,7 +243,7 @@ export const StockChart: React.FC = () => {
       type: 'category',
       data: data.map(item => {
         // 如果是24小时视图，显示时间；否则显示日期
-        if (period === '5d') {
+        if (period === '5d' && isIntradayView) {
           const date = new Date(item.time);
           return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
         }
@@ -314,7 +316,7 @@ export const StockChart: React.FC = () => {
       type: 'category',
       data: returnsData.map(item => {
         // 如果是24小时视图，显示时间；否则显示日期
-        if (period === '5d') {
+        if (period === '5d' && isIntradayView) {
           const date = new Date(item.time);
           return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
         }

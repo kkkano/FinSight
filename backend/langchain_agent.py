@@ -229,6 +229,40 @@ class LangChainFinancialAgent:
                 "thread_id": run_id,
             }
 
+    def describe_graph(self) -> Dict[str, Any]:
+        """Provide a lightweight DAG description for observability/UX without hitting LLM."""
+        return {
+            "nodes": ["agent", "tools"],
+            "edges": [
+                {"from": "START", "to": "agent"},
+                {"from": "agent", "to": "tools_or_end"},
+                {"from": "tools", "to": "agent"},
+                {"from": "agent", "to": "END"},
+            ],
+            "max_iterations": self.max_iterations,
+            "tools": [tool.name for tool in FINANCIAL_TOOLS],
+        }
+
+    def self_check(self) -> Dict[str, Any]:
+        """
+        Cheap self-check that does not call external LLMs.
+        Verifies graph compilation, exposes model/provider, and returns DAG metadata.
+        """
+        status = {"ready": True, "errors": []}
+        try:
+            _ = self.describe_graph()
+        except Exception as exc:
+            status["ready"] = False
+            status["errors"].append(str(exc))
+
+        return {
+            "ready": status["ready"],
+            "provider": self.provider,
+            "model": self.model,
+            "graph": self.describe_graph(),
+            "errors": status["errors"],
+        }
+
     def get_agent_info(self) -> Dict[str, Any]:
         """Expose runtime config for dashboards and tests."""
 

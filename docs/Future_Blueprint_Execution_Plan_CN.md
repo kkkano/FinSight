@@ -1,4 +1,4 @@
-﻿# FinSight AI 升级蓝图执行计划（Sub‑Agent & 深度研究方向）
+﻿# FinSight AI 升级蓝图执行计划（Sub-Agent & 深度研究方向）
 
 > 本文是对 [`Future_Blueprint_CN.md`](./Future_Blueprint_CN.md) 与  
 > [`CONVERSATIONAL_AGENT_BLUEPRINT_V3.md`](./CONVERSATIONAL_AGENT_BLUEPRINT_V3.md) 的 **落地版执行蓝图**，
@@ -24,7 +24,7 @@
 - 思考过程：ThinkingProcess 组件可显示推理步骤、用时、调用的工具。
 - PDF 导出：支持将对话导出为 PDF（含基础信息）。
 
-> 结论：当前版本已经有「单 Agent + 强工具层 + LangGraph CIO 报告」的基础，接下来重点从 **稳定性 → Sub‑Agent → 主动提醒（Alert）→ 深度研究（DeepSearch）** 逐步迭代。
+> 结论：当前版本已经有「单 Agent + 强工具层 + LangGraph CIO 报告」的基础，接下来重点从 **稳定性 → Sub-Agent → 主动提醒（Alert）→ 深度研究（DeepSearch）** 逐步迭代。
 
 ---
 
@@ -41,7 +41,7 @@
    - 订阅模型、触发规则、调度服务。  
    - 邮件内容模版化，支持一键生成简报。  
 
-3. **P2 – Sub‑Agent 多 Agent 协作**  
+3. **P2 – Sub-Agent 多 Agent 协作**  
    - Technical / Fundamental / Macro / Quant / Research 等子 Agent。  
    - 顶层 CIO Agent 负责协调与冲突消解。  
 
@@ -157,7 +157,7 @@ flowchart TB
 
 ---
 
-## 5. P2：Sub‑Agent 多 Agent 协作
+## 5. P2：Sub-Agent 多 Agent 协作
 
 ### 5.1 目标
 
@@ -278,16 +278,16 @@ flowchart TB
    - 建议在 `backend/tools.py` 中为高成本调用增加简单的节流逻辑或缓存（例如 1 小时内相同请求优先命中缓存）。  
 
 2. **多 Agent 复杂度**  
-   - Sub‑Agent 过早、过度设计，可能导致调试难度暴涨。  
+   - Sub-Agent 过早、过度设计，可能导致调试难度暴涨。  
    - 建议先在 LangGraph 内实现“单图多工具”的 CIO Agent，当 P0 / P1 稳定后再逐步拆成多个子图。  
 
 3. **前端信息过载**  
-   - 随着 Alert / DeepSearch / Multi‑Agent 引入，前端信息量会增加。  
+   - 随着 Alert / DeepSearch / Multi-Agent 引入，前端信息量会增加。  
    - 需要注意：不要一次把所有信息堆在一个聊天气泡里，适当使用 Tab、折叠、摘要。  
 
 4. **成本与可观测性**  
    - 建议继续利用 LangSmith 记录调用链路，结合本地日志，观察最常用的工具与失败率。  
-   - 在 Sub‑Agent 阶段，可以为每个子 Agent 单独打标签，方便分析“谁最贵 / 谁最不稳定”。  
+   - 在 Sub-Agent 阶段，可以为每个子 Agent 单独打标签，方便分析“谁最贵 / 谁最不稳定”。  
 
 ---
 
@@ -305,7 +305,7 @@ flowchart TB
 - [ ] 至少一种事件类型可以可靠触发 Alert。  
 - [ ] 邮件格式规范，包含简短 AI 解读与“是否需要进一步分析”的提示。  
 
-### P2：Sub‑Agent
+### P2：Sub-Agent
 
 - [ ] 至少 2 个子 Agent（例如 Technical + Fundamental）已接入 CIO Orchestrator。  
 - [ ] CIO 报告中能明显区分不同维度的结论。  
@@ -321,7 +321,7 @@ flowchart TB
 
 概括来说，未来演进路线可以用一句话概括：
 
-> **先把“单 Agent + 强工具 + 稳体验”打磨到极致，再逐步引入 Alert、Sub‑Agent 和 DeepSearch，最终演化为一款可持续积累、可审计的研究助手。**
+> **先把“单 Agent + 强工具 + 稳体验”打磨到极致，再逐步引入 Alert、Sub-Agent 和 DeepSearch，最终演化为一款可持续积累、可审计的研究助手。**
 
 本文件将作为后续开发的「执行路线图」使用：  
 每完成一个阶段或一个模块，建议在此文末更新实际完成内容与遇到的问题，保持设计与实现同步演进。

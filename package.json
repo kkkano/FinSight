@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "echo \"No frontend tests yet - smoke only\""
+  },
   "devDependencies": {
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",

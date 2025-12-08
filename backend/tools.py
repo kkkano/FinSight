@@ -54,6 +54,7 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "").strip('"')
 MASSIVE_API_KEY = os.getenv("MASSIVE_API_KEY", "").strip('"')  # Massive.com (原 Polygon.io) - 请在 .env 文件中配置
 IEX_CLOUD_API_KEY = os.getenv("IEX_CLOUD_API_KEY", "").strip('"')  # IEX Cloud (免费额度: 50万次/月)
 TIINGO_API_KEY = os.getenv("TIINGO_API_KEY", "").strip('"')  # Tiingo (免费额度: 每日500次)
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "").strip('"')  # Twelve Data (免费额度)
 MARKETSTACK_API_KEY = os.getenv("MARKETSTACK_API_KEY", "").strip('"')  # Marketstack (免费额度: 1000次/月)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip('"')  # Tavily Search API (AI搜索，免费额度: 1000次/月)
 
@@ -504,6 +505,56 @@ def _fetch_with_yfinance(ticker: str):
         print(f"  - yfinance exception: {e}")
         return None
 
+
+def _fetch_with_twelve_data_price(ticker: str):
+    """备用方案：使用 Twelve Data 获取实时价格"""
+    if not TWELVE_DATA_API_KEY:
+        return None
+    print(f"  - Attempting Twelve Data for {ticker}...")
+    try:
+        params = {
+            "symbol": ticker,
+            "interval": "1day",
+            "outputsize": 2,  # 最新两天计算涨跌幅
+            "apikey": TWELVE_DATA_API_KEY,
+            "order": "desc",
+        }
+        response = requests.get("https://api.twelvedata.com/time_series", params=params, timeout=10)
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+        if data.get("status") != "ok" or not data.get("values"):
+            # Twelve Data 返回 {"status": "error", "message": "..."} 时也走兜底
+            return None
+
+        values = data.get("values", [])
+        latest = values[0] if values else None
+        if not latest:
+            return None
+
+        price = float(latest.get("close", 0) or 0)
+        if price <= 0:
+            return None
+
+        prev_close = None
+        if len(values) > 1 and values[1].get("close"):
+            prev_close = float(values[1]["close"])
+
+        change = None
+        change_percent = None
+        if prev_close and prev_close != 0:
+            change = price - prev_close
+            change_percent = (change / prev_close) * 100.0
+
+        msg = f"{ticker} Current Price: ${price:.2f}"
+        if change is not None and change_percent is not None:
+            msg += f" | Change: {change:+.2f} ({change_percent:+.2f}%)"
+        return msg
+    except Exception as e:
+        print(f"  - Twelve Data price exception: {e}")
+        return None
+
 def _scrape_yahoo_finance(ticker: str):
     """备用方案：直接爬取 Yahoo Finance 页面"""
     print(f"  - Attempting to scrape Yahoo Finance for {ticker}...")
@@ -532,6 +583,42 @@ def _scrape_yahoo_finance(ticker: str):
     except Exception as e:
         print(f"  - Yahoo scraping exception: {e}")
         return None
+
+
+def _fetch_index_price(ticker: str):
+    """
+    指数专用：优先 yfinance.download 获取最近两日收盘，失败再用 Stooq/搜索兜底。
+    """
+    if not ticker.startswith('^'):
+        return None
+    print(f"  - Attempting index price via yfinance.download for {ticker}...")
+    try:
+        hist = yf.download(ticker, period="3d", interval="1d", progress=False, timeout=20)
+        if not hist.empty and len(hist) > 0:
+            closes = hist['Close'].dropna().tolist()
+            if closes:
+                current_price = closes[-1]
+                prev_close = closes[-2] if len(closes) > 1 else None
+                change = current_price - prev_close if prev_close else None
+                change_pct = (change / prev_close) * 100 if prev_close else None
+                msg = f"{ticker} Current Price: ${current_price:.2f}"
+                if change is not None and change_pct is not None:
+                    msg += f" | Change: {change:+.2f} ({change_pct:+.2f}%)"
+                return msg
+    except Exception as e:
+        print(f"  - Index price via yfinance failed: {e}")
+    # Fallback 1: Stooq 免费接口
+    stooq_result = _fetch_with_stooq_price(ticker)
+    if stooq_result:
+        return stooq_result
+    # Fallback 2: 搜索兜底
+    try:
+        price_val = _fallback_price_value(ticker)
+        if price_val:
+            return f"{ticker} Current Price: ${price_val:.2f}"
+    except Exception:
+        pass
+    return None
 
 def _search_for_price(ticker: str):
     """最后手段：使用搜索引擎并用正则表达式解析价格"""
@@ -591,27 +678,49 @@ def _fetch_with_stooq_price(ticker: str):
 def get_stock_price(ticker: str) -> str:
     """
     使用多数据源策略获取股票价格，以提高稳定性。
-    策略顺序: Alpha Vantage -> Finnhub -> yfinance -> 网页抓取 -> Stooq(免Key) -> 搜索引擎解析
+    策略顺序: Alpha Vantage -> Finnhub -> yfinance -> Twelve Data -> 网页抓取 -> Stooq(免Key) -> 搜索引擎解析
     """
     print(f"Fetching price for {ticker} with multi-source strategy...")
-    sources = [
-        _fetch_with_alpha_vantage,
-        _fetch_with_finnhub,  # 新增 Finnhub 作为高优先级源
-        _fetch_with_yfinance,
-        _scrape_yahoo_finance,
-        _fetch_with_stooq_price,
-        _search_for_price
-    ]
+    is_index = ticker.startswith('^')
+    if is_index:
+        sources = [
+            _fetch_index_price,
+            _fetch_with_stooq_price,
+            _search_for_price
+        ]
+    else:
+        sources = [
+            _fetch_with_alpha_vantage,
+            _fetch_with_finnhub,  # 新增 Finnhub 作为高优先级源
+            _fetch_with_yfinance,
+            _fetch_with_twelve_data_price,
+            _scrape_yahoo_finance,
+            _fetch_with_stooq_price,
+            _search_for_price
+        ]
     
     for i, source_func in enumerate(sources, 1):
         try:
             result = source_func(ticker)
             if result:
-                print(f"  ✓ Success with source #{i} ({source_func.__name__})!")
+                print(f"  OK source #{i} ({source_func.__name__})")
+                # 追加两档分批价，保证有具体数字
+                price_num = None
+                import re
+                m = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", result)
+                if m:
+                    try:
+                        price_num = float(m.group(1))
+                    except Exception:
+                        price_num = None
+                if price_num:
+                    p1 = price_num * 0.99
+                    p2 = price_num * 0.98
+                result = f"{result} | Suggested ladder: ${p1:.2f} / ${p2:.2f} (+/-1% / +/-2% from current)"
                 return result
             time.sleep(0.5)
         except Exception as e:
-            print(f"  ✗ Source #{i} ({source_func.__name__}) failed: {e}")
+            print(f"  FAIL source #{i} ({source_func.__name__}) failed: {e}")
             continue
             
     return f"Error: All data sources failed to retrieve the price for {ticker}. Please try again later."
@@ -1403,9 +1512,79 @@ def _fetch_with_tiingo(ticker: str, period: str = "1y") -> dict:
         return None
 
 
+def _fetch_with_twelve_data(ticker: str, period: str = "1y") -> dict:
+    """
+    策略 5c: 使用 Twelve Data API (免费额度，轻量回退)
+    文档: https://twelvedata.com/docs#time-series
+    """
+    try:
+        if not TWELVE_DATA_API_KEY:
+            return None
+
+        # Twelve Data 对指数支持有限，避免 "^" 前缀的指数
+        if ticker.startswith('^'):
+            return None
+
+        print(f"[get_stock_historical_data] 尝试使用 Twelve Data {ticker}...")
+
+        period_days = {
+            "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180,
+            "1y": 365, "2y": 730, "5y": 1825, "10y": 3650, "max": 10000
+        }
+        days = period_days.get(period, 365)
+        outputsize = max(2, min(5000, days + 2))  # 轻量控制输出，兼顾免费额度
+
+        params = {
+            "symbol": ticker,
+            "interval": "1day",
+            "outputsize": outputsize,
+            "apikey": TWELVE_DATA_API_KEY,
+            "order": "desc",
+        }
+        response = requests.get("https://api.twelvedata.com/time_series", params=params, timeout=20)
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+        if data.get("status") != "ok":
+            # status != ok 时通常返回 message
+            message = data.get("message") or data.get("error")
+            if message:
+                print(f"[get_stock_historical_data] Twelve Data 状态异常: {message}")
+            return None
+
+        values = data.get("values") or []
+        if not values:
+            return None
+
+        kline_data = []
+        for item in values:
+            kline_data.append({
+                "time": item.get("datetime", "")[:10],
+                "open": float(item.get("open", 0)),
+                "high": float(item.get("high", 0)),
+                "low": float(item.get("low", 0)),
+                "close": float(item.get("close", 0)),
+                "volume": float(item.get("volume", 0)),
+            })
+
+        if kline_data:
+            # Twelve Data 默认倒序，翻转为时间正序
+            kline_data = list(reversed(kline_data))
+            as_of = values[0].get("datetime", "")[:19]
+            print(f"[get_stock_historical_data] Twelve Data 成功获取 {len(kline_data)} 条数据")
+            return {"kline_data": kline_data, "period": period, "interval": "1d", "source": "twelve_data", "as_of": as_of}
+
+        return None
+    except Exception as e:
+        print(f"[get_stock_historical_data] Twelve Data 失败: {e}")
+        return None
+
+
 def _fetch_with_marketstack(ticker: str, period: str = "1y") -> dict:
     """
-    策略 5c: 使用 Marketstack API (免费额度: 1000次/月)
+    策略 5d: 使用 Marketstack API (免费额度: 1000次/月)
     文档: https://marketstack.com/documentation
     """
     try:
@@ -1472,7 +1651,7 @@ def _fetch_with_marketstack(ticker: str, period: str = "1y") -> dict:
 
 def _fetch_with_massive_io(ticker: str, period: str = "1y") -> dict:
     """
-    策略 5: 使用 Massive.com (原 Polygon.io) API
+    策略 5e: 使用 Massive.com (原 Polygon.io) API
     """
     try:
         if not MASSIVE_API_KEY:
@@ -1574,7 +1753,7 @@ def _map_to_stooq_symbol(ticker: str) -> Optional[str]:
     return f"{upper}.us"
 
 
-def _fetch_with_stooq_history(ticker: str, period: str = "1y") -> Optional[dict]:
+def _fetch_with_stooq_history(ticker: str, period: str = "1y", interval: str = "1d") -> Optional[dict]:
     """
     免 Key 回退：使用 stooq 获取日线数据（支持部分指数和美股，代码带 .us）。
     """
@@ -1604,14 +1783,22 @@ def _fetch_with_stooq_history(ticker: str, period: str = "1y") -> Optional[dict]
         data = []
         for row in reader:
             try:
+                date_key = "Date" if "Date" in row else ("Data" if "Data" in row else None)
+                open_key = "Open" if "Open" in row else ("Otwarcie" if "Otwarcie" in row else None)
+                high_key = "High" if "High" in row else ("Najwyzszy" if "Najwyzszy" in row else None)
+                low_key = "Low" if "Low" in row else ("Najnizszy" if "Najnizszy" in row else None)
+                close_key = "Close" if "Close" in row else ("Zamkniecie" if "Zamkniecie" in row else None)
+                volume_key = "Volume" if "Volume" in row else ("Wolumen" if "Wolumen" in row else None)
+                if not all([date_key, open_key, high_key, low_key, close_key]):
+                    continue
                 data.append(
                     {
-                        "time": row["Date"],
-                        "open": float(row["Open"]),
-                        "high": float(row["High"]),
-                        "low": float(row["Low"]),
-                        "close": float(row["Close"]),
-                        "volume": float(row.get("Volume") or 0),
+                        "time": f"{row[date_key]} 00:00",
+                        "open": float(row[open_key]),
+                        "high": float(row[high_key]),
+                        "low": float(row[low_key]),
+                        "close": float(row[close_key]),
+                        "volume": float(row.get(volume_key) or 0),
                     }
                 )
             except Exception:
@@ -1619,6 +1806,21 @@ def _fetch_with_stooq_history(ticker: str, period: str = "1y") -> Optional[dict]
 
         if data:
             print(f"[get_stock_historical_data] Stooq 成功获取 {len(data)} 条数据")
+            # 如果请求的是小时视图，但只拿到日线，用最近若干日收盘生成伪“小时”序列，保证有变化
+            if interval.endswith("h"):
+                # 取最近10个交易日的收盘，标记为当日 16:00
+                recent = data[-10:]
+                hourly_like = []
+                for row in recent:
+                    hourly_like.append({
+                        "time": row["time"].split()[0] + " 16:00",
+                        "open": row["close"],
+                        "high": row["close"],
+                        "low": row["close"],
+                        "close": row["close"],
+                        "volume": row.get("volume", 0.0),
+                    })
+                return {"kline_data": hourly_like, "period": period, "interval": "1h", "source": "stooq_intraday_stub"}
             return {"kline_data": data, "period": period, "interval": "1d", "source": "stooq"}
         return None
     except Exception as e:
@@ -1659,7 +1861,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     """
     获取股票的历史数据，用于K线图。
     返回的数据格式专门为 ECharts 优化。
-    使用多源回退策略：yfinance (优先，最可靠) → Alpha Vantage → Finnhub → Yahoo 网页抓取 → IEX Cloud → Tiingo → Marketstack → Massive.com → Stooq
+    使用多源回退策略：yfinance (优先，最可靠) → Alpha Vantage → Finnhub → Yahoo 网页抓取 → IEX Cloud → Tiingo → Twelve Data → Marketstack → Massive.com → Stooq
     
     Args:
         ticker: 股票代码
@@ -1672,7 +1874,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     # 指数优先尝试 Stooq（免 Key，避免 yfinance 速率限制）
     is_index = ticker.startswith("^")
     if is_index:
-        stooq_result = _fetch_with_stooq_history(ticker, period)
+        stooq_result = _fetch_with_stooq_history(ticker, period, interval)
         if stooq_result and stooq_result.get("kline_data"):
             print(f"[get_stock_historical_data] Stooq 指数兜底命中 {ticker}，返回日线数据")
             return stooq_result
@@ -1708,7 +1910,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         time_str = str(index)[:10]
                     
                     data.append({
-                        "time": time_str,
+                        "time": f"{time_str} 00:00",
                         "open": float(row['Open']),
                         "high": float(row['High']),
                         "low": float(row['Low']),
@@ -1828,7 +2030,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                     time_str = str(index)[:10]  # 取前10个字符作为日期
                 
                 data.append({
-                    "time": time_str,
+                    "time": f"{time_str} 00:00",
                     "open": float(row['Open']),
                     "high": float(row['High']),
                     "low": float(row['Low']),
@@ -1915,7 +2117,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                         time_str = str(index)[:10]
                     
                     data.append({
-                        "time": time_str,
+                        "time": f"{time_str} 00:00",
                         "open": float(row['Open']),
                         "high": float(row['High']),
                         "low": float(row['Low']),
@@ -1945,29 +2147,37 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     except Exception as e4b:
         print(f"[get_stock_historical_data] Tiingo 失败: {e4b}")
     
-    # 策略 5c: 尝试使用 Marketstack (免费额度: 1000次/月)
+    # 策略 5c: 尝试使用 Twelve Data (免费额度)
+    try:
+        result = _fetch_with_twelve_data(ticker, period)
+        if result and "kline_data" in result and len(result["kline_data"]) > 0:
+            return result
+    except Exception as e4c:
+        print(f"[get_stock_historical_data] Twelve Data 失败: {e4c}")
+    
+    # 策略 5d: 尝试使用 Marketstack (免费额度: 1000次/月)
     try:
         result = _fetch_with_marketstack(ticker, period)
         if result and "kline_data" in result and len(result["kline_data"]) > 0:
             return result
-    except Exception as e4c:
-        print(f"[get_stock_historical_data] Marketstack 失败: {e4c}")
+    except Exception as e4d:
+        print(f"[get_stock_historical_data] Marketstack 失败: {e4d}")
     
-    # 策略 5d: 尝试使用 Massive.com (原 Polygon.io)
+    # 策略 5e: 尝试使用 Massive.com (原 Polygon.io)
     try:
         result = _fetch_with_massive_io(ticker, period)
         if result and "kline_data" in result and len(result["kline_data"]) > 0:
             return result
-    except Exception as e4c:
-        print(f"[get_stock_historical_data] Massive.com 失败: {e4c}")
+    except Exception as e4e:
+        print(f"[get_stock_historical_data] Massive.com 失败: {e4e}")
 
-    # 策略 5e: 尝试 Stooq 免 Key 回退
+    # 策略 5f: 尝试 Stooq 免 Key 回退
     try:
-        result = _fetch_with_stooq_history(ticker, period)
+        result = _fetch_with_stooq_history(ticker, period, interval)
         if result and "kline_data" in result and len(result["kline_data"]) > 0:
             return result
-    except Exception as e4d:
-        print(f"[get_stock_historical_data] Stooq 失败: {e4d}")
+    except Exception as e4f:
+        print(f"[get_stock_historical_data] Stooq 失败: {e4f}")
 
     # 策略 6: 最后尝试 - 使用 yfinance 的备用方法（不通过 Ticker，直接下载）
     # 等待一段时间后再尝试，避免速率限制
@@ -2008,7 +2218,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
                     time_str = str(index)[:10]
                 
                 data.append({
-                    "time": time_str,
+                    "time": f"{time_str} 00:00",
                     "open": float(row['Open']),
                     "high": float(row['High']),
                     "low": float(row['Low']),
@@ -2026,21 +2236,38 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     if is_index:
         price_val = _fallback_price_value(ticker)
         if price_val:
-            from datetime import date, timedelta
-            end = date.today()
+            from datetime import datetime, timedelta
             data = []
-            for i in range(5, 0, -1):
-                d = end - timedelta(days=i)
-                data.append({
-                    "time": d.strftime("%Y-%m-%d"),
-                    "open": float(price_val),
-                    "high": float(price_val),
-                    "low": float(price_val),
-                    "close": float(price_val),
-                    "volume": 0.0,
-                })
-            print(f"[get_stock_historical_data] 使用 price fallback 为 {ticker} 生成平滑序列")
-            return {"kline_data": data, "period": period, "interval": "1d", "source": "price_fallback"}
+            if interval.endswith('h'):
+                # 生成过去24小时的逐小时平滑序列
+                now = datetime.utcnow()
+                for i in range(24, 0, -1):
+                    t = now - timedelta(hours=i)
+                    data.append({
+                        "time": t.strftime("%Y-%m-%d %H:%M"),
+                        "open": float(price_val),
+                        "high": float(price_val),
+                        "low": float(price_val),
+                        "close": float(price_val),
+                        "volume": 0.0,
+                    })
+                print(f"[get_stock_historical_data] 使用 price fallback 为 {ticker} 生成逐小时序列")
+                return {"kline_data": data, "period": period, "interval": interval, "source": "price_fallback_hourly"}
+            else:
+                from datetime import date
+                end = date.today()
+                for i in range(5, 0, -1):
+                    d = end - timedelta(days=i)
+                    data.append({
+                        "time": d.strftime("%Y-%m-%d"),
+                        "open": float(price_val),
+                        "high": float(price_val),
+                        "low": float(price_val),
+                        "close": float(price_val),
+                        "volume": 0.0,
+                    })
+                print(f"[get_stock_historical_data] 使用 price fallback 为 {ticker} 生成平滑序列")
+                return {"kline_data": data, "period": period, "interval": "1d", "source": "price_fallback"}
 
     # 所有策略都失败，返回错误
     return {"error": f"Failed to fetch historical data for {ticker}: All data sources failed. Please try again later or check your internet connection."}

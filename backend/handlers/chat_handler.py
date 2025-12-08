@@ -99,7 +99,11 @@ class ChatHandler:
                 tickers = [context.current_focus]
             
             if not tickers:
-                print(f"[ChatHandler] 检查闲聊意图: Query='{query_lower}'")
+                print(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
+                
+                if self._is_advice_query(query_lower):
+                    print("[ChatHandler] ✅ 命中泛化建议意图（无 ticker）")
+                    return self._handle_generic_recommendation(query)
                 
                 if self._is_chat_query(query_lower):
                     print("[ChatHandler] 🚀 意图命中: 闲聊/问候。")
@@ -230,9 +234,18 @@ class ChatHandler:
                     return {
                         'success': True,
                         'response': response,
-                        'data': {'ticker': ticker, 'raw_price': price_data, 'source': result.source},
+                        'data': {
+                            'ticker': ticker,
+                            'raw_price': price_data,
+                            'source': result.source,
+                            'data_origin': result.source,
+                            'fallback_used': getattr(result, 'fallback_used', False),
+                            'tried_sources': getattr(result, 'tried_sources', []),
+                            'trace': getattr(result, 'trace', {}),
+                            'as_of': getattr(result, 'as_of', None),
+                        },
                         'intent': 'market_data',
-                        'thinking': f"Fetched price via Orchestrator (Source: {result.source})"
+                        'thinking': f"Fetched price via Orchestrator (Source: {result.source}, fallback_used={getattr(result, 'fallback_used', False)})"
                     }
                 elif result:
                     return {
@@ -548,6 +561,29 @@ User Question: {query}
                 'intent': 'chat',
                 'thinking': f"LLM advice generation failed: {str(e)}"
             }
+
+    def _handle_generic_recommendation(self, query: str) -> Dict[str, Any]:
+        """
+        无 ticker 的泛化推荐，确保“推荐几只股票”类问题可用。
+        """
+        picks = [
+            {"ticker": "NVDA", "reason": "AI 硬件龙头，盈利高增长", "risk": "估值偏高，波动较大"},
+            {"ticker": "MSFT", "reason": "云/AI 双驱动，订阅业务稳定", "risk": "宏观与估值压力"},
+            {"ticker": "AAPL", "reason": "消费电子龙头，现金流稳健", "risk": "硬件周期与监管"},
+            {"ticker": "VOO", "reason": "S&P500 ETF，被动分散低成本", "risk": "跟随美股整体波动"},
+        ]
+        lines = [f"- {p['ticker']}: {p['reason']}（风险：{p['risk']}）" for p in picks]
+        response = (
+            "示例关注标的（非投资建议，请自评风险）：\n"
+            + "\n".join(lines)
+            + "\n\n建议：分批建仓，单票不超过总仓 5%-10%，总仓位控制在 50% 以下。投资有风险，入市需谨慎。"
+        )
+        return {
+            'success': True,
+            'response': response,
+            'intent': 'advice',
+            'thinking': "Generic recommendation fallback (no ticker).",
+        }
 
     def _handle_with_search(
         self,

@@ -156,6 +156,13 @@ export const ChatInput: React.FC = () => {
           >
             示例：分析 AAPL
           </button>
+                    <button
+            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            onClick={() => setInput('用中文生成拼多多综合分析报告')}
+            disabled={isChatLoading}
+          >
+            用中文生成拼多多综合分析报告
+          </button>
         </div>
       </div>
     </div>
