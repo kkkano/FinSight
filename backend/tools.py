@@ -635,7 +635,12 @@ def _search_for_price(ticker: str):
             match = re.search(pattern, search_result)
             if match:
                 price = match.group(1).replace(',', '')
-                return f"{ticker} Current Price (via search): ${price}"
+                price_val = float(price)
+                if price_val <= 0 or price_val > 1e8:
+                    return None
+                from datetime import date
+                today = date.today().isoformat()
+                return f"{ticker} Current Price (via search): ${price_val:.2f} (as of {today})"
         
         return None
     except Exception as e:
@@ -1791,13 +1796,16 @@ def _fetch_with_stooq_history(ticker: str, period: str = "1y", interval: str = "
                 volume_key = "Volume" if "Volume" in row else ("Wolumen" if "Wolumen" in row else None)
                 if not all([date_key, open_key, high_key, low_key, close_key]):
                     continue
+                close_val = float(row[close_key])
+                if close_val <= 0 or close_val > 1e8:
+                    continue
                 data.append(
                     {
                         "time": f"{row[date_key]} 00:00",
                         "open": float(row[open_key]),
                         "high": float(row[high_key]),
                         "low": float(row[low_key]),
-                        "close": float(row[close_key]),
+                        "close": close_val,
                         "volume": float(row.get(volume_key) or 0),
                     }
                 )
@@ -1812,14 +1820,19 @@ def _fetch_with_stooq_history(ticker: str, period: str = "1y", interval: str = "
                 recent = data[-10:]
                 hourly_like = []
                 for row in recent:
+                    close_val = row["close"]
+                    if close_val <= 0 or close_val > 1e8:
+                        continue
                     hourly_like.append({
                         "time": row["time"].split()[0] + " 16:00",
-                        "open": row["close"],
-                        "high": row["close"],
-                        "low": row["close"],
-                        "close": row["close"],
+                        "open": close_val,
+                        "high": close_val,
+                        "low": close_val,
+                        "close": close_val,
                         "volume": row.get("volume", 0.0),
                     })
+                if not hourly_like:
+                    return None
                 return {"kline_data": hourly_like, "period": period, "interval": "1h", "source": "stooq_intraday_stub"}
             return {"kline_data": data, "period": period, "interval": "1d", "source": "stooq"}
         return None
@@ -1851,7 +1864,10 @@ def _fallback_price_value(ticker: str) -> Optional[float]:
         search_result = search(f"{ticker} index level today")
         m = re.search(r"(\\d{3,6}(?:,\\d{3})*(?:\\.\\d+)?)", search_result or "")
         if m:
-            return float(m.group(1).replace(",", ""))
+            val = float(m.group(1).replace(",", ""))
+            if val <= 0 or val > 1e8:
+                return None
+            return val
     except Exception:
         pass
     return None
@@ -2235,7 +2251,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     # 所有策略都失败，如果是指数，尝试使用最新价格生成平滑序列
     if is_index:
         price_val = _fallback_price_value(ticker)
-        if price_val:
+        if price_val and 0 < price_val <= 1e8:
             from datetime import datetime, timedelta
             data = []
             if interval.endswith('h'):

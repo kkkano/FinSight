@@ -10,6 +10,22 @@
 
 ---
 
+## Roadmap (near?term)
+
+- Finish P1 reliability: source health probes + dynamic ordering/cooldown, strict fallback validation (search/stubs).
+- Observability: diagnostics panel surfaces fail_rate / cooldown / skip_reason; API diagnostics ready for dashboard use.
+- Next: DeepSearch sub?agent for high?recall fundamentals/news + lightweight RAG cache; homepage dashboard (hot tickers, movers, source health).
+
+---
+
+## Roadmap (near?term)
+
+- Finish P1 reliability: source health probes + dynamic ordering/cooldown, strict fallback validation (search/stubs).
+- Observability: diagnostics panel surfaces fail_rate / cooldown / skip_reason; API diagnostics ready for dashboard use.
+- Next: DeepSearch sub?agent for high?recall fundamentals/news + lightweight RAG cache; homepage dashboard (hot tickers, movers, source health).
+
+---
+
 ## 🚀 Overview
 
 FinSight AI is a **conversational, tool‑calling financial research assistant**.  
