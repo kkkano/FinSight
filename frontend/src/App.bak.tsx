@@ -12,17 +12,17 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { currentTicker, messages, theme, setTheme } = useStore();
 
-  // 当生成新图表时自动展开（只�?currentTicker 变化时，不是 isChartPanelExpanded 变化时）
+  // 当生成新图表时自动展开（只�?currentTicker 变化时，不是 isChartPanelExpanded 变化时）
   const prevTickerRef = useRef<string | null>(null);
   useEffect(() => {
-    // 只有�?currentTicker 发生变化（新图表）时才自动展开
+    // 只有�?currentTicker 发生变化（新图表）时才自动展开
     if (currentTicker && currentTicker !== prevTickerRef.current) {
       prevTickerRef.current = currentTicker;
       if (!isChartPanelExpanded) {
         setIsChartPanelExpanded(true);
       }
     }
-  }, [currentTicker]); // 只依�?currentTicker，不依赖 isChartPanelExpanded
+  }, [currentTicker]); // 只依�?currentTicker，不依赖 isChartPanelExpanded
 
   return (
     <div className="relative h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
@@ -32,7 +32,7 @@ function App() {
       </div>
 
       <div className="relative z-10 flex h-full w-full overflow-hidden">
-        {/* Left: Chat Panel - 当图表收起时占据更多空间并居�?*/}
+        {/* Left: Chat Panel - 当图表收起时占据更多空间并居�?*/}
         <div className={`flex h-full flex-col bg-fin-bg z-10 shadow-xl transition-all duration-300 ${
         isChartPanelExpanded
           ? 'w-full md:w-[450px] lg:w-[500px] border-r border-fin-border'
@@ -106,7 +106,7 @@ function App() {
         </div>
       </div>
 
-      {/* Right: Visualization Panel - 可收�?展开 */}
+      {/* Right: Visualization Panel - 可收�?展开 */}
       {isChartPanelExpanded && (
       <div className="hidden md:flex flex-1 flex-col bg-fin-bg relative transition-all duration-300">
         {/* 收起/展开按钮 - 固定在左侧边缘，确保可见和可点击 */}
@@ -119,7 +119,7 @@ function App() {
             e.preventDefault();
             e.stopPropagation();
           }}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-50 p-2 bg-fin-panel border border-fin-border rounded-l-lg hover:bg-fin-primary hover:text-white transition-all shadow-lg cursor-pointer"
+          
           title="Collapse chart"
         >
           <ChevronRight size={16} />

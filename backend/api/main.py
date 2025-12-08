@@ -138,6 +138,21 @@ async def lifespan(app: FastAPI):
     else:
         print("[Scheduler] NEWS_ALERT_SCHEDULER_ENABLED is false; skip start.")
 
+    # Health probe scheduler (optional)
+    from backend.services.health_probe import run_health_probe_cycle
+    health_enabled = _env_bool("HEALTH_PROBE_ENABLED", "false")
+    if health_enabled:
+        health_interval = float(os.getenv("HEALTH_PROBE_INTERVAL_MINUTES", "30"))
+        sched = start_price_change_scheduler(
+            run_health_probe_cycle,
+            interval_minutes=health_interval,
+            enabled=True,
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        print("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
+
     try:
         yield
     finally:

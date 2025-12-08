@@ -86,6 +86,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClass
                       {(items || []).map((s: any) => {
                         const fr = typeof s.fail_rate === 'number' ? s.fail_rate : null;
                         const cooldown = Math.max(0, Math.round(s.cooldown_remaining || 0));
+                        const healthScore = typeof s.health_score === 'number' ? s.health_score : null;
                         return (
                           <div key={s.name} className="flex flex-wrap gap-2 text-[11px]">
                             <span>{s.name}</span>
@@ -93,7 +94,9 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClass
                             <span>succ {s.total_successes}</span>
                             <span>fail {s.consecutive_failures}</span>
                             {fr !== null && <span>fail_rate {(fr * 100).toFixed(0)}%</span>}
+                            {healthScore !== null && <span>health {(healthScore * 100).toFixed(0)}%</span>}
                             {cooldown > 0 && <span className="text-trend-down">cooldown {cooldown}s</span>}
+                            {s.skip_reason && <span className="text-trend-down">skip {s.skip_reason}</span>}
                           </div>
                         );
                       })}

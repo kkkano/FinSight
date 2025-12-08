@@ -226,3 +226,14 @@
 2025-12-08 17:28:25,466 [INFO] news run completed: checked=1, sent=0
 2025-12-08 17:28:41,205 [INFO] price_change run completed: checked=1, sent=0
 2025-12-08 17:28:42,381 [INFO] news run completed: checked=1, sent=0
+2025-12-08 17:43:41,193 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 17:58:41,361 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 17:58:41,638 [INFO] news run completed: checked=1, sent=0
+2025-12-08 18:00:30,372 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 18:00:31,232 [INFO] news run completed: checked=1, sent=0
+2025-12-08 18:02:36,484 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 18:02:37,312 [INFO] news run completed: checked=1, sent=0
+2025-12-08 18:02:51,997 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 18:02:52,758 [INFO] news run completed: checked=1, sent=0
+2025-12-08 18:03:06,847 [INFO] price_change run completed: checked=1, sent=0
+2025-12-08 18:03:07,661 [INFO] news run completed: checked=1, sent=0
