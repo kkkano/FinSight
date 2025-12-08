@@ -102,6 +102,7 @@ class ToolOrchestrator:
         self.health_fail_rate_threshold = 0.6
         self.health_min_calls = 3
         self.health_skip_seconds = 300
+        self.health_latency_threshold_ms = int(os.getenv("PRICE_HEALTH_LATENCY_MS", "5000"))
         
         # 如果提供了工具模块，立即初始化数据源
         if tools_module:
@@ -221,6 +222,10 @@ class ToolOrchestrator:
             if src.total_calls == 0:
                 return 0.0
             return 1.0 - (src.total_successes / src.total_calls)
+        
+        def _latency_penalty(src: DataSource) -> float:
+            # 简化：用平均耗时（如果有 trace 中记录的话）; 这里保留接口，暂不改变排序
+            return 0.0
         
         now_dt = datetime.now()
         sorted_sources = []
@@ -476,6 +481,7 @@ class ToolOrchestrator:
                     'last_fail': s.last_fail.isoformat() if s.last_fail else None,
                     'last_success': s.last_success.isoformat() if s.last_success else None,
                     'skip_reason': _skip_reason(s),
+                    'health_score': max(0.0, 1.0 - (1.0 - (s.total_successes / s.total_calls) if s.total_calls > 0 else 0.0)),
                 }
                 for s in sources
             ]

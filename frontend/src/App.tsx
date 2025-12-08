@@ -138,7 +138,7 @@ function App() {
                   e.preventDefault();
                   e.stopPropagation();
                 }}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-50 p-2 bg-fin-panel border border-fin-border rounded-l-lg hover:bg-fin-primary hover:text-white transition-all shadow-lg cursor-pointer"
+               
                 title="Collapse chart"
               >
                 <ChevronRight size={16} />

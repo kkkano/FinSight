@@ -32,7 +32,9 @@ applyThemeClass(initialTheme);
 interface AppState {
   messages: Message[];
   addMessage: (message: Message) => void;
+  updateMessage: (id: string, patch: Partial<Message>) => void;
   updateLastMessage: (content: string) => void;
+  removeMessage: (id: string) => void;
   setLoading: (loading: boolean) => void;
   isChatLoading: boolean;
   statusMessage: string | null;
@@ -46,6 +48,8 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
+  setDraft: (text: string) => void;
+  draft: string;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -63,12 +67,18 @@ export const useStore = create<AppState>((set) => ({
   statusSince: null,
   currentTicker: null,
   abortController: null,
+  draft: '',
   theme: initialTheme,
   layoutMode: initialLayout,
 
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],
+    })),
+
+  updateMessage: (id, patch) =>
+    set((state) => ({
+      messages: state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     })),
 
   updateLastMessage: (content) =>
@@ -79,6 +89,11 @@ export const useStore = create<AppState>((set) => ({
       }
       return { messages: newMessages };
     }),
+
+  removeMessage: (id) =>
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== id),
+    })),
 
   setLoading: (loading) => set({ isChatLoading: loading }),
   setStatus: (message) =>
@@ -104,4 +119,7 @@ export const useStore = create<AppState>((set) => ({
       }
       return { layoutMode: mode };
     }),
+
+  setDraft: (text) =>
+    set(() => ({ draft: text })),
 }));

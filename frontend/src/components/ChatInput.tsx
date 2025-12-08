@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { SendHorizontal } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,7 +16,7 @@ const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', 
 
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addMessage, setLoading, isChatLoading, setTicker, setStatus } = useStore();
+  const { addMessage, setLoading, isChatLoading, setTicker, setStatus, draft, setDraft } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -50,6 +50,7 @@ export const ChatInput: React.FC = () => {
 
     const userMsgContent = input.trim();
     setInput('');
+    setDraft('');
 
     addMessage({
       id: uuidv4(),
@@ -65,7 +66,7 @@ export const ChatInput: React.FC = () => {
       const response = await apiClient.sendMessage(userMsgContent);
 
       const chartInfo = await shouldGenerateChart(userMsgContent, response.current_focus ?? null);
-      const tickerToChart = chartInfo.ticker || response.current_focus || null;
+      const tickerToChart = chartInfo.ticker || null;
 
       let responseContent = response.response;
       if (tickerToChart && chartInfo.chartType) {
@@ -109,6 +110,14 @@ export const ChatInput: React.FC = () => {
     }
   };
 
+  // 同步外部草稿（重试/编辑时填充输入框）
+  useEffect(() => {
+    setInput(draft || '');
+    if (draft && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [draft]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -121,6 +130,7 @@ export const ChatInput: React.FC = () => {
       <div className="relative flex items-center max-w-5xl mx-auto">
         <input
           ref={inputRef}
+          id="chat-input"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
