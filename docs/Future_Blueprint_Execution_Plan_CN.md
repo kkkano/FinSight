@@ -26,6 +26,19 @@
 
 > 结论：当前版本已经有「单 Agent + 强工具层 + LangGraph CIO 报告」的基础，接下来重点从 **稳定性 → Sub-Agent → 主动提醒（Alert）→ 深度研究（DeepSearch）** 逐步迭代。
 
+**启动项（2025-12-08）**
+- DeepSearch 子 Agent（最小可用）：主链路工具失败/数据不足时触发，高召回聚合新闻/要点，返回 as_of/source，并写入 KV 复用。
+- 轻量 KV/RAG 缓存：以 `ticker+字段+as_of` 存储 DeepSearch 结果，主 Agent 优先查 KV 再决定是否重搜。
+- 前端链接保持可点击，LLM 摘要必须输出链接列表。
+
+### BettaFish 多 Agent 参考要点（新增）
+- 议会式多 Agent：参考 BettaFish 的 Query/Media/Insight/Report 分工，映射为 News/Tech/Fund/Macro/Report 子链路，由一个“主持”节点做观点融合与冲突消解。
+- 高召回聚合 + KV：新闻/基本面抓取并行调用 Tavily + DDG + 搜索兜底，LLM 仅做 2-5 句摘要并保留 Markdown 链接，然后写入 KV（key=`{ticker}:{field}`, value 含 as_of/source/text/links，按字段设置 TTL）。
+- 中间表示（IR）：长回答/报告先生成简版 IR（summary、bullets、links、risks、next_steps），校验后再渲染输出，便于前端展示与后续复用。
+- 触发策略：主链路先查 KV，命中过期则重搜；若工具超时/限流/数据不足（空列表或 as_of 过旧），自动触发对应子 Agent（news/tech/fund）。
+- 可观测性：在日志与诊断面板展示来源、耗时、fallback/skip 原因、KV 命中与否，方便调优优先级与冷却时间。
+- 短期优先：补 KV 过期判定 + 子 Agent 触发；统一新闻/报告提示词要求“先摘要后列出可点击链接”；前端诊断显示 KV 命中/重搜标记。
+
 ---
 
 ## 2. 分阶段目标与优先级
@@ -433,6 +446,7 @@ flowchart TB
 ---
 
 ## 最新决议（Sub-Agent & DeepSearch 路线，2025-12-08）
+
 
 - 现状：P1 数据源可靠性已补齐（多源回退、冷却/优先级可配置、fail_rate 跳过、兜底校验），诊断面板已显示 fail_rate / cooldown / skip_reason。  
 - 下一步顺序：  
