@@ -324,6 +324,41 @@ class ChatHandler:
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
         """处理新闻查询"""
+        cache_key = f"deepsearch:news:{ticker}"
+
+        # 先查 KV 缓存
+        if self.orchestrator and getattr(self.orchestrator, "cache", None):
+            cached = self.orchestrator.cache.get(cache_key)
+            if cached:
+                text = cached.get("text") if isinstance(cached, dict) else str(cached)
+                return {
+                    'success': True,
+                    'response': text,
+                    'data': {'ticker': ticker, 'raw_news': text, 'cached': True, 'as_of': cached.get('as_of') if isinstance(cached, dict) else None},
+                    'intent': 'company_news',
+                    'thinking': "News served from KV cache.",
+                }
+
+        # 尝试 DeepSearch 聚合（高召回，含链接）
+        if self.tools_module and hasattr(self.tools_module, 'deepsearch_news'):
+            try:
+                ds_result = self.tools_module.deepsearch_news(ticker)
+                text = ds_result.get("text", "")
+                if self.orchestrator and getattr(self.orchestrator, "cache", None):
+                    self.orchestrator.cache.set(cache_key, ds_result, data_type='news')
+                if context and hasattr(context, 'cache_data'):
+                    context.cache_data(f'news:{ticker}', ds_result)
+                return {
+                    'success': True,
+                    'response': text,
+                    'data': {'ticker': ticker, 'raw_news': ds_result, 'source': ds_result.get('source'), 'as_of': ds_result.get('as_of')},
+                    'intent': 'company_news',
+                    'thinking': "Fetched news via DeepSearch aggregation.",
+                }
+            except Exception as e:
+                print(f"[ChatHandler] DeepSearch news failed for {ticker}: {e}")
+
+        # 回退常规新闻工具
         if self.tools_module and hasattr(self.tools_module, 'get_company_news'):
             try:
                 news_info = self.tools_module.get_company_news(ticker)
@@ -336,7 +371,7 @@ class ChatHandler:
                     'response': news_info,
                     'data': {'ticker': ticker, 'raw_news': news_info},
                     'intent': 'company_news',
-                    'thinking': "Fetched company news via tools module."
+                    'thinking': "Fetched company news via tools module.",
                 }
             except Exception as e:
                 traceback.print_exc()

@@ -282,7 +282,22 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
 
   return (
     <div className="prose prose-invert prose-sm max-w-none">
-      <ReactMarkdown>{textContent}</ReactMarkdown>
+      <ReactMarkdown
+        components={{
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              className="text-blue-400 underline hover:text-blue-300"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {textContent}
+      </ReactMarkdown>
       {chartData && (
         <InlineChart 
           ticker={chartData.ticker}

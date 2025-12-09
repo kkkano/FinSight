@@ -102,9 +102,9 @@ def search(query: str) -> str:
     all_results = []
     sources_used = []
     
-    lower_q = query.lower()
 
-    # 1. 尝试 Tavily Search (AI搜索) —— 强制放在首位，以提高新闻命中
+    
+    # 1.尝试 Tavily Search (AI搜索)
     if TAVILY_API_KEY and TAVILY_AVAILABLE:
         try:
             tavily_result = _search_with_tavily(query)
@@ -122,8 +122,20 @@ def search(query: str) -> str:
                 print(f"[Search] Tavily API 认证失败 ({error_type}): 请检查 TAVILY_API_KEY 是否正确")
             else:
                 print(f"[Search] Tavily 搜索失败: {error_msg}")
-
-    # 2. 尝试 DuckDuckGo
+        # 2. 尝试维基百科（最准确，免费）——若为新闻/头条关键词则跳过，避免背景条目
+    if WIKIPEDIA_AVAILABLE and "news" not in query.lower() and "headline" not in query.lower():
+        try:
+            wiki_result = _search_with_wikipedia(query)
+            if wiki_result and len(wiki_result) > 100:
+                all_results.append({
+                    'source': 'Wikipedia',
+                    'content': wiki_result
+                })
+                sources_used.append('Wikipedia')
+                print(f"[Search] ✅ 维基百科获取信息成功: {query[:50]}...")
+        except Exception as e:
+            print(f"[Search] 维基百科搜索失败: {e}")
+    # 3. 尝试 DuckDuckGo
     if DDGS_AVAILABLE and DDGS is not None:
         try:
             ddgs_result = _search_with_duckduckgo(query)
@@ -136,20 +148,6 @@ def search(query: str) -> str:
                 print(f"[Search] ✅ DuckDuckGo 搜索成功: {query[:50]}...")
         except Exception as e:
             print(f"[Search] DuckDuckGo 搜索失败: {e}")
-
-    # 3. 维基百科：仅当非新闻/头条场景时使用，避免返回背景介绍
-    if WIKIPEDIA_AVAILABLE and "news" not in lower_q and "headline" not in lower_q:
-        try:
-            wiki_result = _search_with_wikipedia(query)
-            if wiki_result and len(wiki_result) > 100:
-                all_results.append({
-                    'source': 'Wikipedia',
-                    'content': wiki_result
-                })
-                sources_used.append('Wikipedia')
-                print(f"[Search] ✅ 维基百科获取信息成功: {query[:50]}...")
-        except Exception as e:
-            print(f"[Search] 维基百科搜索失败: {e}")
     
     # 4. 合并所有结果
     if not all_results:
@@ -229,50 +227,6 @@ def _search_with_duckduckgo(query: str) -> str:
                 raise e
     
     return None
-
-
-def _format_tavily_results(results: list, limit: int = 5, title_prefix: str = "Latest News") -> str:
-    """格式化 Tavily 结果，包含可点击链接"""
-    if not results:
-        return ""
-    lines = []
-    for i, res in enumerate(results[:limit], 1):
-        title = res.get("title") or "No title"
-        url = res.get("url") or ""
-        domain = _extract_domain(url)
-        snippet = (res.get("content") or "")[:160]
-        link_part = f" {url}" if url else ""
-        lines.append(f"{i}. {title} ({domain}) - {snippet}{link_part}")
-    return f"{title_prefix}:\n" + "\n".join(lines)
-
-
-def _search_duckduckgo_links(query: str, limit: int = 5) -> str:
-    """直接返回 DuckDuckGo 的可点击链接列表"""
-    if not DDGS_AVAILABLE or DDGS is None:
-        return ""
-    try:
-        ddgs = DDGS()
-        results = list(ddgs.text(query, max_results=limit, safesearch='moderate'))
-        lines = []
-        for i, res in enumerate(results[:limit], 1):
-            title = (res.get('title') or 'No title').strip()
-            href = res.get('href') or ''
-            snippet = (res.get('body') or '')[:140].strip()
-            link_part = f" {href}" if href else ""
-            lines.append(f"{i}. {title} - {snippet}{link_part}")
-        return "\n".join(lines)
-    except Exception as e:
-        print(f"[DuckDuckGo Links] failed: {e}")
-        return ""
-
-
-def _standard_news_links(t: str) -> str:
-    return (
-        f"\nLinks:\n"
-        f"- [Yahoo Finance](https://finance.yahoo.com/quote/{t}/news)\n"
-        f"- [Google News](https://news.google.com/search?q={t})\n"
-        f"- [Reuters](https://www.reuters.com/markets/companies/{t})\n"
-    )
 
 
 def _merge_search_results(results: list, query: str) -> str:
@@ -1130,79 +1084,65 @@ def _get_index_news(ticker: str) -> str:
 def get_company_news(ticker: str) -> str:
     """
     智能获取新闻：自动识别是公司股票还是市场指数。
-    逻辑改为“收集所有可用来源后汇总”，避免单源失败/无链接。
+    - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
+    - 市场指数：使用搜索策略获取宏观市场新闻
     """
-    collected = []
-
-    # 辅助函数
-    def add_entries(entries):
-        if not entries:
-            return
-        if isinstance(entries, str):
-            collected.append(entries)
-        elif isinstance(entries, list):
-            collected.extend(entries)
-
-    # 🔍 判断指数：用市场抓取 + 索引
+    # 🔍 关键判断：这是指数还是公司股票？
     if _is_market_index(ticker):
-        # alert_scheduler
+        # 优先用 alert_scheduler 的新闻抓取（含48h过滤）
         try:
             from backend.services.alert_scheduler import fetch_news_articles
             articles = fetch_news_articles(ticker)
-            entries = []
-            for i, a in enumerate(articles[:5], 1) if articles else []:
-                title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
-                source = a.get("source") or a.get("publisher") or "Unknown"
-                published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
-                if isinstance(published_at, str):
-                    date_str = published_at.split("T")[0]
-                else:
-                    date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
-                entries.append(f"{i}. [{date_str}] {title} ({source})")
-            add_entries(entries)
+            if articles:
+                lines = []
+                for i, a in enumerate(articles[:5], 1):
+                    title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
+                    source = a.get("source") or a.get("publisher") or "Unknown"
+                    published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
+                    if isinstance(published_at, str):
+                        date_str = published_at.split("T")[0]
+                    else:
+                        date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
+                    lines.append(f"{i}. [{date_str}] {title} ({source})")
+                if lines:
+                    return f"Latest Market News ({ticker}):\n" + "\n".join(lines)
         except Exception as e:
             print(f"index news via alert_scheduler failed: {e}")
 
-        # yfinance 指数
+        # 先试 yfinance 的新闻（部分指数也有）
         try:
             stock = yf.Ticker(ticker)
-            news = stock.news or []
-            entries = []
+            news = stock.news
+            if news:
+                news_list = []
+                for i, article in enumerate(news[:5], 1):
+                    title = article.get('title', 'No title')
+                    publisher = article.get('publisher', 'Unknown source')
+                    pub_time = article.get('providerPublishTime', 0)
+                    date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
+                    news_list.append(f"{i}. [{date_str}] {title} ({publisher})")
+                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
+        except Exception as e:
+            print(f"yfinance index news error for {ticker}: {e}")
+
+        # 再退回搜索策略
+        return _get_index_news(ticker)
+    
+    # --- 以下是原有的公司新闻获取逻辑 ---
+    
+    # 方法1: yfinance
+    try:
+        stock = yf.Ticker(ticker)
+        news = stock.news
+        if news:
+            news_list = []
             for i, article in enumerate(news[:5], 1):
                 title = article.get('title', 'No title')
                 publisher = article.get('publisher', 'Unknown source')
                 pub_time = article.get('providerPublishTime', 0)
                 date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
-                url = article.get('link') or article.get('url') or ''
-                url_part = f" - {url}" if url else ""
-                entries.append(f"{i}. [{date_str}] {title} ({publisher}){url_part}")
-            add_entries(entries)
-        except Exception as e:
-            print(f"yfinance index news error for {ticker}: {e}")
-
-        # 搜索兜底
-        add_entries(_get_index_news(ticker))
-
-        if collected:
-            return f"Latest Market News ({ticker}) [Aggregated]:\n" + "\n".join(collected) + _standard_news_links(ticker)
-        return f"No reliable market news for {ticker}." + _standard_news_links(ticker)
-
-    # --- 公司新闻聚合 ---
-
-    # 方法1: yfinance
-    try:
-        stock = yf.Ticker(ticker)
-        news = stock.news or []
-        entries = []
-        for i, article in enumerate(news[:5], 1):
-            title = article.get('title', 'No title')
-            publisher = article.get('publisher', 'Unknown source')
-            pub_time = article.get('providerPublishTime', 0)
-            date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
-            url = article.get('link') or article.get('url') or ''
-            url_part = f" - {url}" if url else ""
-            entries.append(f"{i}. [{date_str}] {title} ({publisher}){url_part}")
-        add_entries(entries)
+                news_list.append(f"{i}. [{date_str}] {title} ({publisher})")
+            return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"yfinance news error for {ticker}: {e}")
 
@@ -1212,17 +1152,16 @@ def get_company_news(ticker: str) -> str:
             print(f"Trying Finnhub news for {ticker}")
             to_date = date.today().strftime("%Y-%m-%d")
             from_date = (date.today() - timedelta(days=7)).strftime("%Y-%m-%d")
-            news = finnhub_client.company_news(ticker, _from=from_date, to=to_date) or []
-            entries = []
-            for i, article in enumerate(news[:5], 1):
-                title = article.get('headline', 'No title')
-                source = article.get('source', 'Unknown')
-                pub_time = article.get('datetime', 0)
-                date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown'
-                url = article.get('url') or ''
-                url_part = f" - {url}" if url else ""
-                entries.append(f"{i}. [{date_str}] {title} ({source}){url_part}")
-            add_entries(entries)
+            news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
+            if news:
+                news_list = []
+                for i, article in enumerate(news[:5], 1):
+                    title = article.get('headline', 'No title')
+                    source = article.get('source', 'Unknown')
+                    pub_time = article.get('datetime', 0)
+                    date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown'
+                    news_list.append(f"{i}. [{date_str}] {title} ({source})")
+                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
         except Exception as e:
             print(f"Finnhub news fetch failed: {e}")
 
@@ -1234,84 +1173,29 @@ def get_company_news(ticker: str) -> str:
         response = requests.get(url, params=params, timeout=10)
         data = response.json()
         if 'feed' in data and data['feed']:
-            entries = []
+            news_list = []
             for i, article in enumerate(data['feed'][:5], 1):
                 title = article.get('title', 'No title')
                 source = article.get('source', 'Unknown')
                 date_str = article.get('time_published', '')[:8]
                 if date_str:
                     date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                url = article.get('url') or ''
-                url_part = f" - {url}" if url else ""
-                entries.append(f"{i}. [{date_str}] {title} ({source}){url_part}")
-            add_entries(entries)
+                news_list.append(f"{i}. [{date_str}] {title} ({source})")
+            return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"Alpha Vantage news fetch failed: {e}")
-
-    # 方法3b: Tavily 直接抓公司新闻并返回可点击链接
-    if TAVILY_API_KEY and TAVILY_AVAILABLE:
-        try:
-            client = TavilyClient(api_key=TAVILY_API_KEY)
-            tavily_resp = client.search(
-                query=f"{ticker} stock breaking news today",
-                search_depth="advanced",
-                max_results=8,
-                include_answer=False,
-                include_raw_content=False,
-            )
-            results = tavily_resp.get("results", []) if tavily_resp else []
-            formatted = _format_tavily_results(results, limit=5, title_prefix=f"Latest News ({ticker}) [Tavily]")
-            if formatted:
-                add_entries(formatted)
-        except Exception as e:
-            print(f"Tavily company news failed for {ticker}: {e}")
     
-    # 方法3c: DuckDuckGo 链接兜底
-    ddg_links = _search_duckduckgo_links(f"{ticker} stock news today", limit=5)
-    if ddg_links:
-        add_entries(f"Latest News ({ticker}) [DuckDuckGo]:\n{ddg_links}")
-    
-    # 方法4: 回退到公司特定搜索 + 明确提供可点击新闻站点
+    # 方法4: 回退到公司特定搜索
     print(f"Falling back to search for {ticker} news")
-    fallback_search = search(f"{ticker} company latest news stock")
-    add_entries(fallback_search)
-
-    if collected:
-        return f"Latest News ({ticker}) [Aggregated]:\n" + "\n".join(collected) + _standard_news_links(ticker)
-    return f"No reliable news for {ticker}." + _standard_news_links(ticker)
+    return search(f"{ticker} company latest news stock")
 
 
 def get_market_news_headlines(limit: int = 5) -> str:
     """
     市场泛化新闻：不带 ticker 的情况，抓取全球/美股要闻。
-    优先 Tavily → alert_scheduler → 搜索聚合。
+    使用搜索聚合并提取编号行作为标题，否则返回简短提示。
     """
-    # 0) Tavily 直接抓头条
-    if TAVILY_API_KEY and TAVILY_AVAILABLE:
-        try:
-            client = TavilyClient(api_key=TAVILY_API_KEY)
-            tavily_resp = client.search(
-                query="top stock market breaking news today",
-                search_depth="advanced",
-                max_results=8,
-                include_answer=False,
-                include_raw_content=False,
-            )
-            results = tavily_resp.get("results", []) if tavily_resp else []
-            if results:
-                headlines = []
-                for i, res in enumerate(results[:limit], 1):
-                    title = res.get("title") or "No title"
-                    url = res.get("url") or ""
-                    domain = _extract_domain(url)
-                    snippet = (res.get("content") or "")[:120]
-                    headlines.append(f"{i}. {title} ({domain}) - {snippet}")
-                if headlines:
-                    return "Latest Market Headlines (Tavily):\n" + "\n".join(headlines)
-        except Exception as e:
-            print(f"[MarketNews] Tavily headlines failed: {e}")
-
-    # 1) alert_scheduler 的新闻抓取（已含48h过滤），优先 ^GSPC，其次 ^IXIC
+    # 1) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先 ^GSPC，其次 ^IXIC
     try:
         from backend.services.alert_scheduler import fetch_news_articles
         for idx_ticker in ["^GSPC", "^IXIC"]:
@@ -1363,24 +1247,9 @@ def get_market_news_headlines(limit: int = 5) -> str:
                 break
     if headlines:
         return "Latest Market Headlines:\n" + "\n".join(headlines)
-
-    # 若无编号标题，尝试提取前几条有日期/时间特征的句子
-    fallback = []
-    for ln in lines:
-        if len(fallback) >= limit:
-            break
-        snippet = ln.strip()
-        if len(snippet) < 25 or len(snippet) > 200:
-            continue
-        if not _is_reasonable_headline(snippet):
-            continue
-        fallback.append(snippet)
-    if fallback:
-        return "Latest Market Headlines (filtered):\n" + "\n".join(fallback)
-
     preview = text[:400] + "..." if len(text) > 400 else text
     return (
-        "No reliable market headlines extracted. Raw context:\n"
+        "Latest Market Context (unstructured):\n"
         f"{preview}\n"
         "Please verify via trusted sources (Bloomberg/Reuters/WSJ)."
     )
