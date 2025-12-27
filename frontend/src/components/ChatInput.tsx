@@ -16,7 +16,7 @@ const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', 
 
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addMessage, setLoading, isChatLoading, setTicker, setStatus, draft, setDraft } = useStore();
+  const { addMessage, updateMessage, setLoading, isChatLoading, setTicker, setStatus, draft, setDraft } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -59,52 +59,62 @@ export const ChatInput: React.FC = () => {
       timestamp: Date.now(),
     });
 
+    // 创建 AI 消息占位符
+    const aiMsgId = uuidv4();
+    addMessage({
+      id: aiMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isLoading: true,
+    });
+
     setLoading(true);
-    setStatus('Analyzing query & routing...');
+    setStatus('Streaming response...');
+
+    let fullContent = '';
 
     try {
-      const response = await apiClient.sendMessage(userMsgContent);
-
-      const chartInfo = await shouldGenerateChart(userMsgContent, response.current_focus ?? null);
-      const tickerToChart = chartInfo.ticker || null;
-
-      let responseContent = response.response;
-      if (tickerToChart && chartInfo.chartType) {
-        responseContent += `\n\n[CHART:${tickerToChart}:${chartInfo.chartType}]`;
-      }
-
-      addMessage({
-        id: uuidv4(),
-        role: 'assistant',
-        content: responseContent,
-        timestamp: Date.now(),
-        intent: response.intent,
-        relatedTicker: response.current_focus || tickerToChart || undefined,
-        thinking: response.thinking,
-        data_origin: response.data?.data_origin,
-        as_of: response.data?.as_of ?? null,
-        fallback_used: response.data?.fallback_used,
-        tried_sources: response.data?.tried_sources,
-      });
-
-      const elapsedSeconds =
-        (response.thinking_elapsed_seconds ?? response.response_time_ms / 1000).toFixed(1);
-      setStatus(`Completed in ${elapsedSeconds}s`);
-
-      if (response.current_focus || tickerToChart) {
-        setTicker(response.current_focus || tickerToChart);
-      }
+      await apiClient.sendMessageStream(
+        userMsgContent,
+        // onToken - 逐字更新
+        (token) => {
+          fullContent += token;
+          updateMessage(aiMsgId, { content: fullContent, isLoading: true });
+        },
+        // onToolStart
+        (name) => {
+          setStatus(`Calling tool: ${name}...`);
+        },
+        // onToolEnd
+        () => {
+          setStatus('Generating response...');
+        },
+        // onDone
+        async () => {
+          // 检测是否需要图表
+          const chartInfo = await shouldGenerateChart(userMsgContent, null);
+          if (chartInfo.ticker && chartInfo.chartType) {
+            fullContent += `\n\n[CHART:${chartInfo.ticker}:${chartInfo.chartType}]`;
+            if (chartInfo.ticker) setTicker(chartInfo.ticker);
+          }
+          updateMessage(aiMsgId, { content: fullContent, isLoading: false });
+          setStatus('Completed');
+        },
+        // onError
+        (error) => {
+          updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
+          setStatus('Error occurred');
+        }
+      );
     } catch (error) {
-      addMessage({
-        id: uuidv4(),
-        role: 'system',
+      updateMessage(aiMsgId, {
         content: 'Network request failed. Please confirm the backend service is running.',
-        timestamp: Date.now(),
+        isLoading: false,
       });
       setStatus('Request failed');
     } finally {
       setLoading(false);
-      // 短暂展示完成状态后清理
       setTimeout(() => setStatus(null), 2000);
       setTimeout(() => inputRef.current?.focus(), 100);
     }

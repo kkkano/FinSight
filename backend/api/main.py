@@ -41,6 +41,15 @@ except ImportError as e:
 # 导入 Agent
 from backend.conversation.agent import create_agent as CreateReActAgent
 
+# 导入 MemoryService
+try:
+    from backend.services.memory import MemoryService, UserProfile
+    memory_service = MemoryService()
+    print("[Init] MemoryService initialized successfully.")
+except Exception as e:
+    print(f"[Init] Error initializing MemoryService: {e}")
+    memory_service = None
+
 # Pydantic Models
 class ChatRequest(BaseModel):
     # 至少 1 个字符，避免空查询直接进入主链路
@@ -183,6 +192,74 @@ app.add_middleware(
 
 # === API 端点 ===
 
+@app.get("/api/user/profile")
+async def get_user_profile(user_id: str = "default_user"):
+    """获取用户画像"""
+    if not memory_service:
+        return {"error": "MemoryService not initialized"}
+
+    try:
+        profile = memory_service.get_user_profile(user_id)
+        return {"success": True, "profile": profile.to_dict()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/user/profile")
+async def update_user_profile(request: dict):
+    """更新用户画像"""
+    if not memory_service:
+        return {"error": "MemoryService not initialized"}
+
+    try:
+        user_id = request.get("user_id", "default_user")
+        profile_data = request.get("profile", {})
+
+        # 确保 user_id 一致
+        profile_data["user_id"] = user_id
+
+        profile = UserProfile.from_dict(profile_data)
+        success = memory_service.update_user_profile(profile)
+
+        return {"success": success}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/user/watchlist/add")
+async def add_watchlist(request: dict):
+    """添加关注"""
+    if not memory_service:
+        return {"error": "MemoryService not initialized"}
+
+    try:
+        user_id = request.get("user_id", "default_user")
+        ticker = request.get("ticker")
+
+        if not ticker:
+            return {"success": False, "error": "Ticker is required"}
+
+        success = memory_service.add_to_watchlist(user_id, ticker)
+        return {"success": success}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/user/watchlist/remove")
+async def remove_watchlist(request: dict):
+    """取消关注"""
+    if not memory_service:
+        return {"error": "MemoryService not initialized"}
+
+    try:
+        user_id = request.get("user_id", "default_user")
+        ticker = request.get("ticker")
+
+        if not ticker:
+            return {"success": False, "error": "Ticker is required"}
+
+        success = memory_service.remove_from_watchlist(user_id, ticker)
+        return {"success": success}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/")
 def read_root():
     """
@@ -286,27 +363,66 @@ async def chat_endpoint(request: ChatRequest):
 @app.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
     """
-    流式对话接口
-    实时返回 Agent 的思考过程
+    流式对话接口 - 根据意图路由到不同处理器
+    只有 REPORT 意图才使用 LangGraph Agent 流式输出
+    CHAT 等简单意图使用快速响应
     """
     if not agent:
         raise HTTPException(status_code=500, detail="Agent not initialized")
-    
-    from backend.api.streaming import ThinkingStream
-    
-    async def generate():
-        async for chunk in ThinkingStream.stream_thinking(agent, request.query):
-            yield chunk
-    
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
+
+    import json
+
+    # 1. 先进行意图路由
+    from backend.conversation.router import Intent
+    intent, metadata, handler = agent.router.route(request.query, agent.context)
+
+    # 2. 根据意图决定处理方式
+    if intent == Intent.REPORT:
+        # 深度报告：使用 LangGraph Agent 流式输出
+        report_agent = getattr(agent, 'report_agent', None)
+        if not report_agent:
+            raise HTTPException(status_code=500, detail="Report agent not available")
+
+        async def generate_report():
+            try:
+                async for chunk in report_agent.analyze_stream(request.query):
+                    yield f"data: {chunk}\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n"
+
+        return StreamingResponse(
+            generate_report(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+        )
+    else:
+        # 其他意图：使用快速响应，模拟流式输出
+        async def generate_chat():
+            try:
+                # 调用对应的 handler
+                result = agent.chat(request.query, capture_thinking=True)
+                response_text = result.get('response', '')
+
+                # 模拟流式输出：按句子分块发送
+                import re
+                sentences = re.split(r'([。！？\n])', response_text)
+                buffer = ""
+                for i, part in enumerate(sentences):
+                    buffer += part
+                    if part in ['。', '！', '？', '\n'] or i == len(sentences) - 1:
+                        if buffer.strip():
+                            yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n"
+                            buffer = ""
+
+                yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n"
+
+        return StreamingResponse(
+            generate_chat(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+        )
 
 @app.post("/api/chart/detect")
 async def detect_chart_type(request: dict):

@@ -19,6 +19,7 @@ if PROJECT_ROOT not in sys.path:
 
 from backend.orchestration.cache import DataCache
 from backend.orchestration.validator import DataValidator, ValidationResult
+from backend.services import CircuitBreaker
 
 
 @dataclass
@@ -80,7 +81,7 @@ class ToolOrchestrator:
     - 调用统计
     """
     
-    def __init__(self, tools_module=None):
+    def __init__(self, tools_module=None, circuit_breaker: Optional[CircuitBreaker] = None):
         """
         初始化编排器
         
@@ -91,6 +92,11 @@ class ToolOrchestrator:
         self.validator = DataValidator()
         self.sources: Dict[str, List[DataSource]] = {}
         self.tools_module = tools_module
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(
+            failure_threshold=int(os.getenv("CB_FAILURE_THRESHOLD", "3")),
+            recovery_timeout=int(os.getenv("CB_RECOVERY_TIMEOUT", "120")),
+            half_open_success_threshold=int(os.getenv("CB_HALF_OPEN_SUCCESS", "1")),
+        )
         self._stats = {
             'total_requests': 0,
             'cache_hits': 0,
@@ -256,6 +262,11 @@ class ToolOrchestrator:
                 elapsed = (datetime.now() - source.last_fail).total_seconds()
                 if elapsed < source.cooldown_seconds:
                     continue
+
+            if self.circuit_breaker and not self.circuit_breaker.can_call(source.name):
+                tried_sources.append(f"{source.name}(circuit_open)")
+                continue
+
             tried_sources.append(source.name)
             self._stats['sources'].setdefault(source.name, {'calls': 0, 'success': 0, 'fail': 0})
             self._stats['sources'][source.name]['calls'] += 1
@@ -263,47 +274,60 @@ class ToolOrchestrator:
             try:
                 result = self._try_source(source, ticker, **kwargs)
                 
-                if result is not None:
-                    # 3. 验证数据
-                    validation = self.validator.validate(data_type, result)
+                if result is None:
+                    source.consecutive_failures += 1
+                    source.last_fail = datetime.now()
+                    self._stats['total_failures'] += 1
+                    self._stats['sources'][source.name]['fail'] += 1
+                    if self.circuit_breaker:
+                        self.circuit_breaker.record_failure(source.name)
+                    continue
+
+                # 3. 验证数据
+                validation = self.validator.validate(data_type, result)
+                
+                if validation.is_valid:
+                    # 4. 更新缓存
+                    cache_key = f"{data_type}:{ticker}"
+                    self.cache.set(cache_key, result, data_type=data_type)
                     
-                    if validation.is_valid:
-                        # 4. 更新缓存
-                        cache_key = f"{data_type}:{ticker}"
-                        self.cache.set(cache_key, result, data_type=data_type)
-                        
-                        # 更新统计
-                        source.last_success = datetime.now()
-                        source.consecutive_failures = 0
-                        source.total_successes += 1
-                        self._stats['sources'][source.name]['success'] += 1
-                        
-                        if i > 0:
-                            self._stats['fallback_used'] += 1
-                        
-                        duration = (time.time() - start_time) * 1000
-                        return FetchResult(
-                            success=True,
-                            data=result,
-                            source=source.name,
-                            cached=False,
-                            validation=validation,
-                            duration_ms=duration,
-                            as_of=now_iso,
-                            fallback_used=(i > 0),
-                            tried_sources=list(tried_sources),
-                            trace={
-                                'tried_sources': list(tried_sources),
-                                'duration_ms': duration,
-                                'validation': validation.to_dict() if validation else None,
-                            },
-                        )
-                    else:
-                        print(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
-                        last_error = f"Validation failed: {validation.issues}"
-                        source.consecutive_failures += 1
-                        self._stats['total_failures'] += 1
-                        self._stats['sources'][source.name]['fail'] += 1
+                    # 更新统计
+                    source.last_success = datetime.now()
+                    source.consecutive_failures = 0
+                    source.total_successes += 1
+                    self._stats['sources'][source.name]['success'] += 1
+                    if self.circuit_breaker:
+                        self.circuit_breaker.record_success(source.name)
+                    
+                    if i > 0:
+                        self._stats['fallback_used'] += 1
+                    
+                    duration = (time.time() - start_time) * 1000
+                    return FetchResult(
+                        success=True,
+                        data=result,
+                        source=source.name,
+                        cached=False,
+                        validation=validation,
+                        duration_ms=duration,
+                        as_of=now_iso,
+                        fallback_used=(i > 0),
+                        tried_sources=list(tried_sources),
+                        trace={
+                            'tried_sources': list(tried_sources),
+                            'duration_ms': duration,
+                            'validation': validation.to_dict() if validation else None,
+                        },
+                    )
+                else:
+                    print(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
+                    last_error = f"Validation failed: {validation.issues}"
+                    source.consecutive_failures += 1
+                    source.last_fail = datetime.now()
+                    self._stats['total_failures'] += 1
+                    self._stats['sources'][source.name]['fail'] += 1
+                    if self.circuit_breaker:
+                        self.circuit_breaker.record_failure(source.name)
                 
             except Exception as e:
                 source.consecutive_failures += 1
@@ -311,6 +335,8 @@ class ToolOrchestrator:
                 last_error = str(e)
                 self._stats['total_failures'] += 1
                 self._stats['sources'][source.name]['fail'] += 1
+                if self.circuit_breaker:
+                    self.circuit_breaker.record_failure(source.name)
                 print(f"[Orchestrator] {source.name} 失败: {e}")
                 continue
             
@@ -458,18 +484,24 @@ class ToolOrchestrator:
         
         source_stats = {}
         for data_type, sources in self.sources.items():
-            # 根据当前健康阈值判断是否被跳过
-            def _skip_reason(src: DataSource):
-                if src.total_calls >= self.health_min_calls and src.last_fail:
-                    fail_rate = 1.0 - (src.total_successes / src.total_calls) if src.total_calls > 0 else 0.0
-                    if fail_rate >= self.health_fail_rate_threshold:
-                        elapsed = (now_dt - src.last_fail).total_seconds()
-                        if elapsed < self.health_skip_seconds:
-                            return f"high_fail_rate:{fail_rate:.2f};cooldown:{int(self.health_skip_seconds - elapsed)}s"
-                return None
+            entries = []
+            for s in sources:
+                cb_state = self.circuit_breaker.get_state(s.name) if self.circuit_breaker else {}
+                skip_reason = None
 
-            source_stats[data_type] = [
-                {
+                if cb_state.get("state") == "OPEN":
+                    cooldown = int(cb_state.get("cooldown_remaining") or 0)
+                    skip_reason = f"circuit_open:{cooldown}s"
+                elif cb_state.get("state") == "HALF_OPEN":
+                    skip_reason = "circuit_half_open"
+                elif s.total_calls >= self.health_min_calls and s.last_fail:
+                    fail_rate = 1.0 - (s.total_successes / s.total_calls) if s.total_calls > 0 else 0.0
+                    if fail_rate >= self.health_fail_rate_threshold:
+                        elapsed = (now_dt - s.last_fail).total_seconds()
+                        if elapsed < self.health_skip_seconds:
+                            skip_reason = f"high_fail_rate:{fail_rate:.2f};cooldown:{int(self.health_skip_seconds - elapsed)}s"
+
+                entries.append({
                     'name': s.name,
                     'priority': s.priority,
                     'total_calls': s.total_calls,
@@ -480,11 +512,14 @@ class ToolOrchestrator:
                     'cooldown_remaining': max(0, s.cooldown_seconds - ((now_dt - s.last_fail).total_seconds() if s.last_fail else 0)),
                     'last_fail': s.last_fail.isoformat() if s.last_fail else None,
                     'last_success': s.last_success.isoformat() if s.last_success else None,
-                    'skip_reason': _skip_reason(s),
+                    'skip_reason': skip_reason,
                     'health_score': max(0.0, 1.0 - (1.0 - (s.total_successes / s.total_calls) if s.total_calls > 0 else 0.0)),
-                }
-                for s in sources
-            ]
+                    'circuit_state': cb_state.get("state"),
+                    'circuit_cooldown': cb_state.get("cooldown_remaining"),
+                    'circuit_can_call': cb_state.get("can_call"),
+                })
+
+            source_stats[data_type] = entries
         
         return {
             'orchestrator': self._stats,
@@ -499,6 +534,7 @@ class ToolOrchestrator:
             'cache_hits': 0,
             'fallback_used': 0,
             'total_failures': 0,
+            'sources': {},
         }
         for sources in self.sources.values():
             for source in sources:

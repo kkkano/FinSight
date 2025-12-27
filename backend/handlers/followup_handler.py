@@ -366,26 +366,40 @@ class FollowupHandler:
     def _handle_report_followup(self, action: str, text: str) -> Dict[str, Any]:
         """
         基于最近报告文本做翻译/摘要/结论/风险提炼。
-        无 LLM 时截取片段并声明来源，避免“当成新对话”。
+        使用 LLM 生成高质量响应，无 LLM 时简洁返回。
         """
-        prefix = f"基于最近报告片段（长度约 {len(text)} 字），以下内容为自动生成，供参考：\n"
-        paragraphs = [p.strip() for p in text.split('\\n') if p.strip()]
-        head = '\\n'.join(paragraphs[:6]) if paragraphs else text[:800]
+        # 如果有 LLM，使用 LLM 生成高质量响应
+        if self.llm:
+            from langchain_core.messages import HumanMessage
 
-        if action == 'translate_en':
-            resp = prefix + head
-        elif action == 'translate_zh':
-            resp = prefix + head
-        elif action == 'conclusion':
-            resp = prefix + "结论/要点提炼：\n" + head
-        elif action == 'risk':
-            resp = prefix + "风险要点提炼：\n" + head
-        else:
-            resp = prefix + "摘要：\n" + head
+            action_prompts = {
+                'translate_en': f"将以下内容翻译成英文，保持专业金融术语：\n\n{text[:2000]}",
+                'translate_zh': f"将以下内容翻译成中文，保持专业金融术语：\n\n{text[:2000]}",
+                'summary': f"用3-5个要点总结以下内容，简洁专业：\n\n{text[:2000]}",
+                'conclusion': f"提取以下内容的核心结论和投资建议：\n\n{text[:2000]}",
+                'risk': f"提取以下内容中的风险因素，用要点列出：\n\n{text[:2000]}",
+            }
+
+            prompt = action_prompts.get(action, action_prompts['summary'])
+
+            try:
+                response = self.llm.invoke([HumanMessage(content=prompt)])
+                return {
+                    'success': True,
+                    'response': response.content,
+                    'intent': 'followup',
+                    'followup_type': action,
+                }
+            except Exception as e:
+                pass  # 回退到简单处理
+
+        # 无 LLM 时简洁返回，不显示调试信息
+        paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+        head = '\n'.join(paragraphs[:4]) if paragraphs else text[:500]
 
         return {
             'success': True,
-            'response': resp,
+            'response': head,
             'intent': 'followup',
             'followup_type': action,
         }

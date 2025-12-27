@@ -134,4 +134,60 @@ export const apiClient = {
     const response = await api.get('/diagnostics/orchestrator');
     return response.data;
   },
+
+  // 流式发送消息 - SSE 逐字输出
+  async sendMessageStream(
+    query: string,
+    onToken: (token: string) => void,
+    onToolStart?: (name: string) => void,
+    onToolEnd?: () => void,
+    onDone?: () => void,
+    onError?: (error: string) => void
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No reader available');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === 'token' && data.content) {
+              onToken(data.content);
+            } else if (data.type === 'tool_start') {
+              onToolStart?.(data.name);
+            } else if (data.type === 'tool_end') {
+              onToolEnd?.();
+            } else if (data.type === 'done') {
+              onDone?.();
+            } else if (data.type === 'error') {
+              onError?.(data.message);
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        }
+      }
+    }
+  },
 };
