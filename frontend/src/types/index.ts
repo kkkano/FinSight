@@ -39,13 +39,6 @@ export interface KlineData {
   volume?: number;
 }
 
-export interface ThinkingStep {
-  stage: string;
-  message?: string;
-  result?: any;
-  timestamp: string;
-}
-
 export interface ChatResponse {
   success: boolean;
   response: string;
@@ -59,7 +52,7 @@ export interface ChatResponse {
   report?: ReportIR; // Phase 2: 深度研报数据
 }
 
-// Phase 2: Report IR Types
+// Phase 2: Report IR Types - Updated
 export type Sentiment = 'bullish' | 'bearish' | 'neutral';
 
 export interface ReportContent {
