@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReportIR, ReportSection, ReportContent, Citation, Sentiment } from '../types';
+import { ReportIR, ReportSection, ReportContent, Citation, Sentiment } from '../types/index';
 import { ChevronDown, ChevronUp, ExternalLink, BarChart2, TrendingUp, AlertTriangle } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 
