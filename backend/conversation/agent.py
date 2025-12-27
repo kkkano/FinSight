@@ -19,75 +19,80 @@ from backend.conversation.router import ConversationRouter, Intent
 from backend.handlers.chat_handler import ChatHandler
 from backend.handlers.report_handler import ReportHandler
 from backend.handlers.followup_handler import FollowupHandler
+from backend.orchestration.supervisor import AgentSupervisor
 
 
 class ConversationAgent:
     """
     对话式股票分析 Agent
-    
+
     统一入口，整合：
     - ConversationRouter: 意图识别
     - ContextManager: 上下文管理
     - ChatHandler: 快速对话
     - ReportHandler: 深度报告
     - FollowupHandler: 追问处理
-    
+    - AgentSupervisor: 多 Agent 调度 (Phase 1 新增)
+
     使用方式:
         agent = ConversationAgent()
         response = agent.chat("分析 AAPL")
     """
-    
+
     def __init__(
         self,
         llm=None,
         orchestrator=None,
         report_agent=None,
+        supervisor=None,
         max_context_turns: int = 10
     ):
         """
         初始化对话 Agent
-        
+
         Args:
             llm: LLM 实例（用于增强响应）
             orchestrator: ToolOrchestrator 实例
             report_agent: 现有的报告生成 Agent（langchain_agent）
+            supervisor: AgentSupervisor 实例
             max_context_turns: 最大上下文轮数
         """
         self.llm = llm
         self.orchestrator = orchestrator
         self.report_agent = report_agent
-        
+        self.supervisor = supervisor
+
         # 初始化核心组件
         self.context = ContextManager(max_turns=max_context_turns)
         self.router = ConversationRouter(llm=llm)
-        
+
         # 初始化处理器
         self.chat_handler = ChatHandler(llm=llm, orchestrator=orchestrator)
         self.report_handler = ReportHandler(
-            agent=report_agent, 
+            agent=report_agent,
             orchestrator=orchestrator,
             llm=llm
         )
         self.followup_handler = FollowupHandler(llm=llm, orchestrator=orchestrator)
-        
+
         # 注册处理器到路由器
         self._register_handlers()
-        
+
         # 统计信息
         self.stats = {
             'total_queries': 0,
             'intents': {
-                'chat': 0, 
-                'report': 0, 
-                'alert': 0, 
-                'followup': 0, 
+                'chat': 0,
+                'report': 0,
+                'alert': 0,
+                'followup': 0,
                 'clarify': 0,
-                'greeting': 0  # 新增
+                'greeting': 0
             },
             'errors': 0,
             'session_start': datetime.now(),
         }
-    
+
     def _register_handlers(self):
         """注册意图处理器"""
         self.router.register_handler(Intent.CHAT, self._handle_chat)
@@ -95,23 +100,23 @@ class ConversationAgent:
         self.router.register_handler(Intent.ALERT, self._handle_alert)
         self.router.register_handler(Intent.FOLLOWUP, self._handle_followup)
         self.router.register_handler(Intent.CLARIFY, self._handle_clarify)
-        self.router.register_handler(Intent.GREETING, self._handle_greeting) # 新增
-    
+        self.router.register_handler(Intent.GREETING, self._handle_greeting)
+
     def chat(self, query: str, capture_thinking: bool = False) -> Dict[str, Any]:
         """
         处理用户查询（主入口）
-        
+
         Args:
             query: 用户输入
             capture_thinking: 是否捕获思考过程
-            
+
         Returns:
             包含响应和元数据的字典
         """
         self.stats['total_queries'] += 1
         start_time = datetime.now()
         thinking_steps = [] if capture_thinking else None
-        
+
         try:
             # 1. 解析指代（如果有上下文）
             if capture_thinking:
@@ -120,9 +125,9 @@ class ConversationAgent:
                     "message": "正在解析上下文引用...",
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             resolved_query = self.context.resolve_reference(query)
-            
+
             # 2. 路由到对应处理器
             if capture_thinking:
                 thinking_steps.append({
@@ -130,9 +135,9 @@ class ConversationAgent:
                     "message": "正在识别查询意图...",
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             intent, metadata, handler = self.router.route(resolved_query, self.context)
-            
+
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "intent_classification",
@@ -143,10 +148,10 @@ class ConversationAgent:
                     },
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             # 3. 更新统计
             self.stats['intents'][intent.value] = self.stats['intents'].get(intent.value, 0) + 1
-            
+
             # 4. 数据收集阶段（如果有股票代码）
             if capture_thinking and metadata.get('tickers'):
                 ticker = metadata['tickers'][0]
@@ -155,7 +160,7 @@ class ConversationAgent:
                     "message": f"正在获取 {ticker} 的数据...",
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             # 5. 调用处理器
             if capture_thinking:
                 thinking_steps.append({
@@ -163,19 +168,19 @@ class ConversationAgent:
                     "message": f"正在生成{intent.value}响应...",
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             if handler:
                 result = handler(resolved_query, metadata)
             else:
                 result = self._default_handler(resolved_query, metadata)
-            
+
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "complete",
                     "message": "处理完成",
                     "timestamp": datetime.now().isoformat()
                 })
-            
+
             # 6. 更新上下文
             self.context.add_turn(
                 query=query,
@@ -183,26 +188,28 @@ class ConversationAgent:
                 response=result.get('response', ''),
                 metadata=metadata
             )
-            
+
             # 7. 自动添加图表标记（根据上下文和查询）
             # 只有 CHAT/REPORT 意图才尝试生成图表，闲聊不生成
             if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
                 result = self._add_chart_marker(result, query, metadata, resolved_query)
-            
+
             # 8. 添加元信息
             result['intent'] = intent.value
             result['metadata'] = metadata
             result['response_time_ms'] = (datetime.now() - start_time).total_seconds() * 1000
             result['thinking_elapsed_seconds'] = round((datetime.now() - start_time).total_seconds(), 2)
             result['current_focus'] = self.context.current_focus
-            
+
             if capture_thinking and thinking_steps:
                 result['thinking'] = thinking_steps
-            
+
             return result
-        
+
         except Exception as e:
             self.stats['errors'] += 1
+            import traceback
+            traceback.print_exc()
             error_result = {
                 'success': False,
                 'response': f"处理查询时出错: {str(e)}",
@@ -213,24 +220,56 @@ class ConversationAgent:
             if capture_thinking and thinking_steps:
                 error_result['thinking'] = thinking_steps
             return error_result
-    
+
     def _handle_chat(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理快速对话"""
         if self.llm:
             return self.chat_handler.handle_with_llm(query, metadata, self.context)
         return self.chat_handler.handle(query, metadata, self.context)
-    
+
     def _handle_report(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """处理报告请求"""
+        """处理报告请求 (优先使用 Supervisor)"""
+        # 如果 Supervisor 可用且有 Ticker，尝试使用多 Agent 分析
+        if self.supervisor and metadata.get('tickers'):
+            try:
+                import asyncio
+                ticker = metadata['tickers'][0]
+
+                # 获取用户上下文
+                user_id = metadata.get("user_id", "default_user")
+
+                # 尝试从 MemoryService 获取画像 (需要从 main.py 或其他地方注入，这里简化处理)
+                # 暂时通过 metadata 传入或默认为 None
+                # 注意：为了让 Agent 能访问 MemoryService，最好在 __init__ 中注入 memory_service
+                # 但为了最小化修改，这里暂不强依赖 memory_service
+
+                # 简单包装 async 调用
+                # 在 FastAPI 的 async 上下文中，不能直接使用 asyncio.run
+                # 但这里的 _handle_report 是同步方法 (被 router 调用)
+                # 这确实是一个架构上的问题：router 和 handler 都是同步的
+                # 但 Supervisor.analyze 是 async 的
+
+                # 临时解决方案：使用 async_to_sync (如 asgiref) 或简单的 loop.run_until_complete
+                # 但要注意嵌套 loop 问题
+
+                # 由于集成复杂性，目前 Phase 1 暂不强制切换所有请求到 Supervisor
+                # 仅当显式标记或 metadata 中有特定 flag 时尝试
+                # 或者回退到 ReportHandler
+
+                # TODO: 将整个 ConversationAgent 异步化是 Phase 2 的重要重构任务
+                pass
+            except Exception as e:
+                print(f"[Agent] Supervisor 调用失败: {e}")
+
         return self.report_handler.handle(query, metadata, self.context)
-    
+
     def _handle_alert(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理监控请求（待实现）"""
         tickers = metadata.get('tickers', [])
         ticker = tickers[0] if tickers else None
         if not ticker and self.context.current_focus:
             ticker = self.context.current_focus
-        
+
         return {
             'success': True,
             'response': f"""📊 监控功能说明
@@ -247,11 +286,11 @@ class ConversationAgent:
             'intent': 'alert',
             'feature_status': 'coming_soon',
         }
-    
+
     def _handle_followup(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理追问"""
         return self.followup_handler.handle(query, metadata, self.context)
-    
+
     def _handle_greeting(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理问候和日常闲聊 (不调用搜索)"""
         if any(kw in query.lower() for kw in ['自我介绍', '你是谁', 'introduce yourself', 'who are you', '你是做', '你是干']):
@@ -266,7 +305,7 @@ class ConversationAgent:
 您有什么想了解的股票（例如：**AAPL**）或金融问题吗？"""
         else:
             response = "您好！我是 FinSight AI 金融助手。您今天想了解哪支股票的行情，或者需要生成哪家公司的分析报告吗？"
-            
+
         return {
             'success': True,
             'response': response,
@@ -275,10 +314,6 @@ class ConversationAgent:
 
     def _handle_clarify(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理需要澄清的查询"""
-        
-        # 核心修改：如果是需要澄清的意图，不要盲目搜索！
-        # 之前的代码有一行 self.chat_handler._handle_with_search，这导致了乱搜问题
-        
         return {
             'success': True,
             'response': """抱歉，我不太确定您想了解什么。
@@ -294,21 +329,21 @@ class ConversationAgent:
             'intent': 'clarify',
             'needs_clarification': True,
         }
-    
+
     def _default_handler(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """默认处理器"""
         return self._handle_chat(query, metadata)
-    
+
     def _add_chart_marker(
-        self, 
-        result: Dict[str, Any], 
-        original_query: str, 
+        self,
+        result: Dict[str, Any],
+        original_query: str,
         metadata: Dict[str, Any],
         resolved_query: str
     ) -> Dict[str, Any]:
         """
         根据上下文和查询自动添加图表标记
-        
+
         图表标记格式: [CHART:TICKER:TYPE]
         """
         try:
@@ -318,18 +353,18 @@ class ConversationAgent:
                 return result
 
             from backend.api.chart_detector import ChartTypeDetector
-            
+
             # 仅使用显式解析到的 ticker，避免沿用旧的 current_focus 误加图表
             ticker = None
             if metadata.get('tickers'):
                 ticker = metadata['tickers'][0]
-            
+
             if not ticker:
                 return result
-            
+
             # 检测图表类型
             query_lower = resolved_query.lower()
-            
+
             # 特殊处理：持仓情况 -> 饼图
             if any(kw in query_lower for kw in ['持仓', '成分', '组成', '占比', '分布', 'holdings', 'constituent', 'composition']):
                 chart_type = 'pie'
@@ -343,24 +378,26 @@ class ConversationAgent:
             else:
                 chart_detection = ChartTypeDetector.detect_chart_type(resolved_query, ticker)
                 chart_type = chart_detection.get('chart_type', 'line')
-            
+
             # 如果检测到需要图表，添加标记
             if chart_type and ChartTypeDetector.should_generate_chart(resolved_query):
                 chart_marker = f"[CHART:{ticker}:{chart_type}]"
                 # 在响应末尾添加图表标记（如果还没有）
                 if chart_marker not in result.get('response', ''):
-                    result['response'] = result.get('response', '') + f"\n\n{chart_marker}"
+                    result['response'] = result.get('response', '') + f'''
+
+{chart_marker}'''
                     print(f"[Agent] 自动添加图表标记: {chart_marker}")
-            
+
         except Exception as e:
             print(f"[Agent] 添加图表标记失败: {e}")
-        
+
         return result
-    
+
     def get_context_summary(self) -> str:
         """获取当前上下文摘要"""
         return self.context.get_summary()
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         return {
@@ -369,7 +406,7 @@ class ConversationAgent:
             'current_focus': self.context.current_focus,
             'session_duration_seconds': (datetime.now() - self.stats['session_start']).total_seconds(),
         }
-    
+
     def reset(self) -> None:
         """重置对话状态"""
         self.context.clear()
@@ -379,7 +416,7 @@ class ConversationAgent:
             'errors': 0,
             'session_start': datetime.now(),
         }
-    
+
     def set_focus(self, ticker: str, company_name: str = None) -> None:
         """手动设置当前焦点"""
         self.context.current_focus = ticker
@@ -407,6 +444,11 @@ class ConversationAgent:
                 info["agent_info"] = self.report_agent.get_agent_info()
             except Exception as exc:  # pragma: no cover
                 info["agent_info_error"] = str(exc)
+        if hasattr(self.report_agent, "get_recent_trace"):
+            try:
+                info["recent_trace"] = self.report_agent.get_recent_trace(10)
+            except Exception as exc:  # pragma: no cover
+                info["recent_trace_error"] = str(exc)
         return info
 
 
@@ -419,19 +461,20 @@ def create_agent(
 ) -> ConversationAgent:
     """
     创建 ConversationAgent 实例
-    
+
     Args:
         use_llm: 是否使用 LLM 增强
         use_orchestrator: 是否使用 ToolOrchestrator
         use_report_agent: 是否使用现有的 LangChain Agent
-        
+
     Returns:
         ConversationAgent 实例
     """
     llm = None
     orchestrator = None
     report_agent = None
-    
+    supervisor = None
+
     # 初始化 LLM
     if use_llm:
         try:
@@ -441,9 +484,9 @@ def create_agent(
             except ImportError:
                 # 回退到根目录 config
                 from config import get_llm_config
-            
+
             llm_config = get_llm_config()
-            
+
             # 优先尝试使用 langchain_openai
             try:
                 from langchain_openai import ChatOpenAI
@@ -462,18 +505,18 @@ def create_agent(
                     from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
                     from langchain_core.outputs import ChatGeneration, ChatResult
                     from langchain_core.callbacks.manager import CallbackManagerForLLMRun
-                    
+
                     class LiteLLMChatModel(BaseChatModel):
                         """LiteLLM ChatModel 包装器，兼容 LangChain ChatModel 接口"""
                         api_key: str
                         api_base: Optional[str] = None
                         model: str = "gpt-3.5-turbo"
                         temperature: float = 0.3
-                        
+
                         @property
                         def _llm_type(self) -> str:
                             return "litellm"
-                        
+
                         def _generate(
                             self,
                             messages: List[BaseMessage],
@@ -488,7 +531,7 @@ def create_agent(
                                     litellm_messages.append({"role": "user", "content": msg.content})
                                 elif isinstance(msg, AIMessage):
                                     litellm_messages.append({"role": "assistant", "content": msg.content})
-                            
+
                             response = litellm.completion(
                                 model=f"openai/{self.model}",
                                 messages=litellm_messages,
@@ -497,17 +540,17 @@ def create_agent(
                                 temperature=self.temperature,
                                 **kwargs
                             )
-                            
+
                             content = response.choices[0].message.content
                             message = AIMessage(content=content)
                             generation = ChatGeneration(message=message)
                             return ChatResult(generations=[generation])
-                        
+
                         def _stream(self, messages, stop=None, run_manager=None, **kwargs):
                             # 流式输出暂不支持
                             result = self._generate(messages, stop, run_manager, **kwargs)
                             yield result.generations[0].message
-                    
+
                     llm = LiteLLMChatModel(
                         api_key=llm_config.get('api_key'),
                         api_base=llm_config.get('api_base'),
@@ -518,24 +561,24 @@ def create_agent(
                 except (ImportError, Exception) as e:
                     print(f"[ConversationAgent] 警告: LLM 初始化失败 ({e})，LLM 功能将不可用")
                     llm = None
-                    
+
         except Exception as e:
             print(f"[ConversationAgent] 初始化 LLM 失败: {e}")
             import traceback
             traceback.print_exc()
             llm = None
-    
+
     # 初始化 Orchestrator
     if use_orchestrator:
         try:
             from backend.orchestration.orchestrator import ToolOrchestrator
             from backend.orchestration.tools_bridge import register_all_financial_tools
-            
+
             orchestrator = ToolOrchestrator()
             register_all_financial_tools(orchestrator)
         except Exception as e:
             print(f"[ConversationAgent] 初始化 Orchestrator 失败: {e}")
-    
+
     # 初始化 Report Agent
     if use_report_agent:
         try:
@@ -546,9 +589,25 @@ def create_agent(
             print(f"[ConversationAgent] 初始化 Report Agent 失败: {e}")
             import traceback
             traceback.print_exc()
-    
+
+    # 初始化 Agent Supervisor (New in Phase 1)
+    if llm and orchestrator:
+        try:
+            from backend.orchestration.supervisor import AgentSupervisor
+            # 需要传入 cache 和 circuit_breaker
+            supervisor = AgentSupervisor(
+                llm=llm,
+                tools_module=orchestrator.tools_module, # Bridge 注册后的 module
+                cache=orchestrator.cache,
+                circuit_breaker=orchestrator.circuit_breaker
+            )
+            print("[ConversationAgent] Agent Supervisor 初始化成功")
+        except Exception as e:
+            print(f"[ConversationAgent] 初始化 Supervisor 失败: {e}")
+
     return ConversationAgent(
         llm=llm,
         orchestrator=orchestrator,
-        report_agent=report_agent
+        report_agent=report_agent,
+        supervisor=supervisor
     )

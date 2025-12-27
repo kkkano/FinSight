@@ -77,8 +77,8 @@ class ChatHandler:
                 print(f"[ChatHandler] 警告: 无法导入 tools 模块: {e}")
     
     def handle(
-        self, 
-        query: str, 
+        self,
+        query: str,
         metadata: Dict[str, Any],
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
@@ -86,11 +86,23 @@ class ChatHandler:
         处理查询
         """
         query_lower = query.lower() # 确保在 handle 开始处统一定义
-        
+
         try:
-            tickers = metadata.get('tickers', [])
-            if not tickers and context and hasattr(context, 'current_focus') and context.current_focus:
-                tickers = [context.current_focus]
+            # 1. 显式提取元数据中的 tickers (用户本次输入明确提到的)
+            explicit_tickers = metadata.get('tickers', [])
+            tickers = list(explicit_tickers)
+
+            # 2. 检查是否为泛化推荐 (无明确 ticker 且包含"推荐几只"等模式)
+            #    注意：如果用户说 "推荐几只像 AAPL 的股票"，explicit_tickers 会有 AAPL，这时不算纯泛化。
+            #    但如果用户只说 "推荐几只股票"，explicit_tickers 为空。
+            is_generic_rec = self._is_generic_recommendation_intent(query_lower)
+
+            # 3. 只有在非泛化推荐，且没有明确 ticker 时，才继承上下文
+            #    修复：如果用户问"推荐几只股票"，不要把上下文的 AAPL 强行塞进来
+            if not tickers and not is_generic_rec:
+                if context and hasattr(context, 'current_focus') and context.current_focus:
+                    tickers = [context.current_focus]
+
             primary_ticker = tickers[0] if tickers else None
 
             # 优先处理新闻意图：有 ticker 直接拉新闻；无 ticker 先用市场泛化新闻，再兜底默认指数
@@ -114,35 +126,32 @@ class ChatHandler:
             # 检查是否为对比查询
             if metadata.get('is_comparison') and len(tickers) >= 2:
                 return self._handle_comparison_query(tickers, query, metadata, context)
-            
-            # 如果没有股票代码，尝试从上下文获取
-            if not tickers and context and hasattr(context, 'current_focus') and context.current_focus:
-                tickers = [context.current_focus]
-            
+
+            # 如果没有股票代码，尝试从上下文获取 (上面已经处理过继承逻辑，这里只需判断最终 tickers)
+
             if not tickers:
                 print(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
-                
+
                 # 新闻类无 ticker 查询：默认用大盘指数
                 if self._is_news_query(query_lower):
                     default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
                     return self._handle_news_query(default_news_ticker, query, context)
-                
-                if self._is_advice_query(query_lower):
+
+                # 泛化建议查询 (命中"推荐几只"等)
+                if is_generic_rec or self._is_advice_query(query_lower):
                     print("[ChatHandler] ✅ 命中泛化建议意图（无 ticker）")
                     return self._handle_generic_recommendation(query)
-                
+
                 if self._is_chat_query(query_lower):
                     print("[ChatHandler] 🚀 意图命中: 闲聊/问候。")
                     return self._handle_chat_query(query)
-                
+
                 print("[ChatHandler] ⚠️ 意图未命中: 闲聊。回退到通用搜索。")
                 return self._handle_with_search(query, context)
-            
+
             # 获取第一个股票的信息 (如果 tickers 有内容)
             ticker = primary_ticker or (tickers[0] if tickers else None)
-            if not ticker and context and hasattr(context, 'current_focus') and context.current_focus:
-                ticker = context.current_focus
-            
+
             # 判断查询类型并获取相应数据
             if self._is_composition_query(query_lower):
                 # 成分股/持仓查询
@@ -173,8 +182,17 @@ class ChatHandler:
                 'thinking': f"Critical Error in ChatHandler: {str(e)}"
             }
     
-    # --- 意图判断 ---
-    
+    def _is_generic_recommendation_intent(self, query: str) -> bool:
+        """
+        判断是否为泛化推荐意图 (不针对特定股票)
+        例如: "推荐几只股票", "有什么好的投资机会", "最近买什么好"
+        """
+        patterns = [
+            '推荐几只', '推荐股票', '什么股票', '买什么', '哪些股票',
+            '投资机会', '值得买', '推荐一下', '有什么好', 'recommend some'
+        ]
+        return any(p in query for p in patterns)
+
     def _is_price_query(self, query: str) -> bool:
         keywords = ['价格', '股价', '多少钱', '现价', 'price', 'how much', '涨', '跌', '行情', '走势', '表现']
         return any(kw in query for kw in keywords)
@@ -782,18 +800,18 @@ Search Results: {search_result[:3000]}
         # 2. 使用 LLM 生成更自然的回复
         try:
             raw_response = basic_result.get('response', '')
-            
-            prompt = f"""你是财经助手，请基于以下“检索结果”用中文简洁回答用户。保持 2-5 句摘要，并保留所有可用链接，格式为 Markdown 可点击链接。
+
+            prompt = f"""你是专业金融助手。基于以下数据，用中文简洁回答用户问题。
 
 用户问题: {query}
-检索结果:
+数据:
 {raw_response}
 
-输出要求:
-1) 先给 2-5 句摘要，包含关键日期、事件、影响。
-2) 在摘要后追加“链接:”小节，逐条列出检索结果里出现的 URL，使用 Markdown 链接格式 `[来源或URL](URL)`，不丢失任何链接。
-3) 如果没有找到有效链接，明确说明“暂无可用链接”。
-4) 不要提到“检索结果/原文”等字样。
+要求:
+1) 直接回答，2-4句话，包含关键数字和日期
+2) 不要说"根据数据"、"检索结果"等
+3) 如果数据中有URL链接，在末尾用markdown格式列出；没有链接就不要提链接
+4) 语气专业友好
 """
             response = self.llm.invoke([HumanMessage(content=prompt)])
             

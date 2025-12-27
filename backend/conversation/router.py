@@ -399,18 +399,27 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/FOLLOWUP/GREETING/CLARIFY),
         # 2. 识别英文 Ticker
         # 匹配 1-5 位大写字母，或者是 ^ 开头的指数
         potential_tickers = re.findall(r'\b[A-Z]{1,5}\b|\^[A-Z]{3,}', query)
-        
+
         # 过滤掉常见的非 Ticker 单词
         common_words = {'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS', 'PE', 'EPS', 'MACD', 'RSI', 'KDJ'}
-        
+
+        # 已知的有效 ticker 列表（直接使用，不转换）
+        known_tickers = {'AAPL', 'GOOGL', 'GOOG', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'AMD', 'INTC',
+                         'NFLX', 'CRM', 'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 'XPEV', 'LI',
+                         'SPY', 'QQQ', 'DIA', 'IWM', 'VTI'}
+
         for ticker in potential_tickers:
             if ticker in common_words:
                 continue
-            
-            # 检查是否在已知映射中
-            if ticker in self.COMPANY_MAP:
-                real_ticker = self.COMPANY_MAP.get(ticker, ticker)
-                if real_ticker not in metadata['tickers']:
+
+            # 如果是已知的有效 ticker，直接使用（不要转换成中文！）
+            if ticker in known_tickers or ticker.startswith('^'):
+                if ticker not in metadata['tickers']:
+                    metadata['tickers'].append(ticker)
+            # 检查是否是英文公司名（如 apple -> AAPL）
+            elif ticker.lower() in self.COMPANY_MAP:
+                real_ticker = self.COMPANY_MAP.get(ticker.lower())
+                if real_ticker and real_ticker not in metadata['tickers']:
                     metadata['tickers'].append(real_ticker)
             else:
                 # 未知 ticker，假设它是有效的

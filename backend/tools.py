@@ -122,8 +122,16 @@ def search(query: str) -> str:
                 print(f"[Search] Tavily API 认证失败 ({error_type}): 请检查 TAVILY_API_KEY 是否正确")
             else:
                 print(f"[Search] Tavily 搜索失败: {error_msg}")
-        # 2. 尝试维基百科（最准确，免费）——若为新闻/头条关键词则跳过，避免背景条目
-    if WIKIPEDIA_AVAILABLE and "news" not in query.lower() and "headline" not in query.lower():
+
+    # 2. 尝试维基百科（仅用于非金融查询）
+    # 金融相关查询跳过维基百科，因为维基百科不提供实时金融数据
+    query_lower = query.lower()
+    is_financial_query = any(kw in query_lower for kw in [
+        'stock', 'price', 'market', 'trading', 'aapl', 'msft', 'googl', 'tsla', 'nvda',
+        'nasdaq', 's&p', 'dow', 'sentiment', 'news', 'headline', 'earnings', 'revenue',
+        'risk', 'trend', 'analysis', 'investment', 'portfolio', '^', '$'
+    ])
+    if WIKIPEDIA_AVAILABLE and not is_financial_query:
         try:
             wiki_result = _search_with_wikipedia(query)
             if wiki_result and len(wiki_result) > 100:
@@ -571,6 +579,137 @@ def _fetch_with_twelve_data_price(ticker: str):
         print(f"  - Twelve Data price exception: {e}")
         return None
 
+def _fetch_yahoo_api_v8(ticker: str):
+    """Yahoo Finance API v8 - 免费 JSON API，无需 API key，比爬虫更稳定"""
+    print(f"  - Attempting Yahoo Finance API v8 for {ticker}...")
+    try:
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{ticker}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        result = data.get('chart', {}).get('result', [])
+        if not result:
+            return None
+
+        meta = result[0].get('meta', {})
+        price = meta.get('regularMarketPrice')
+        prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
+
+        if not price:
+            return None
+
+        change = None
+        change_percent = None
+        if prev_close and prev_close != 0:
+            change = price - prev_close
+            change_percent = (change / prev_close) * 100.0
+
+        msg = f"{ticker} Current Price: ${price:.2f}"
+        if change is not None and change_percent is not None:
+            msg += f" | Change: {change:+.2f} ({change_percent:+.2f}%)"
+        return msg
+    except Exception as e:
+        print(f"  - Yahoo API v8 exception: {e}")
+        return None
+
+
+def _scrape_google_finance(ticker: str):
+    """Google Finance 爬虫 - 免费，无需 API key"""
+    print(f"  - Attempting Google Finance for {ticker}...")
+    try:
+        # 尝试不同交易所
+        exchanges = ['NASDAQ', 'NYSE', 'NYSEARCA', '']
+        for exchange in exchanges:
+            if exchange:
+                url = f"https://www.google.com/finance/quote/{ticker}:{exchange}"
+            else:
+                url = f"https://www.google.com/finance/quote/{ticker}"
+
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            response = requests.get(url, headers=headers, timeout=10)
+
+            if response.status_code == 200:
+                # 解析价格 - Google Finance 使用 data-last-price 属性
+                match = re.search(r'data-last-price="([0-9.]+)"', response.text)
+                if match:
+                    price = float(match.group(1))
+                    # 尝试获取变动
+                    change_match = re.search(r'data-price-change="([+-]?[0-9.]+)"', response.text)
+                    pct_match = re.search(r'data-price-change-percent="([+-]?[0-9.]+)"', response.text)
+
+                    msg = f"{ticker} Current Price: ${price:.2f}"
+                    if change_match and pct_match:
+                        change = float(change_match.group(1))
+                        pct = float(pct_match.group(1))
+                        msg += f" | Change: {change:+.2f} ({pct:+.2f}%)"
+                    return msg
+        return None
+    except Exception as e:
+        print(f"  - Google Finance exception: {e}")
+        return None
+
+
+def _scrape_cnbc(ticker: str):
+    """CNBC 爬虫 - 免费，实时性好"""
+    print(f"  - Attempting CNBC for {ticker}...")
+    try:
+        url = f"https://www.cnbc.com/quotes/{ticker}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        # CNBC 在 JSON-LD 中包含价格数据
+        match = re.search(r'"price":\s*"?([0-9.]+)"?', response.text)
+        if match:
+            price = float(match.group(1))
+            # 尝试获取变动
+            change_match = re.search(r'"priceChange":\s*"?([+-]?[0-9.]+)"?', response.text)
+            pct_match = re.search(r'"priceChangePercent":\s*"?([+-]?[0-9.]+)"?', response.text)
+
+            msg = f"{ticker} Current Price: ${price:.2f}"
+            if change_match and pct_match:
+                change = float(change_match.group(1))
+                pct = float(pct_match.group(1))
+                msg += f" | Change: {change:+.2f} ({pct:+.2f}%)"
+            return msg
+        return None
+    except Exception as e:
+        print(f"  - CNBC exception: {e}")
+        return None
+
+
+def _fetch_with_pandas_datareader(ticker: str):
+    """pandas_datareader - 免费，支持多数据源"""
+    print(f"  - Attempting pandas_datareader for {ticker}...")
+    try:
+        import pandas_datareader as pdr
+        from datetime import datetime, timedelta
+
+        end = datetime.now()
+        start = end - timedelta(days=5)
+
+        # 尝试 stooq 数据源（免费）
+        df = pdr.get_data_stooq(ticker, start, end)
+        if not df.empty:
+            price = df['Close'].iloc[0]
+            if len(df) > 1:
+                prev = df['Close'].iloc[1]
+                change = price - prev
+                pct = (change / prev) * 100
+                return f"{ticker} Current Price: ${price:.2f} | Change: {change:+.2f} ({pct:+.2f}%)"
+            return f"{ticker} Current Price: ${price:.2f}"
+        return None
+    except ImportError:
+        print(f"  - pandas_datareader not installed")
+        return None
+    except Exception as e:
+        print(f"  - pandas_datareader exception: {e}")
+        return None
+
 def _scrape_yahoo_finance(ticker: str):
     """备用方案：直接爬取 Yahoo Finance 页面"""
     print(f"  - Attempting to scrape Yahoo Finance for {ticker}...")
@@ -699,24 +838,30 @@ def _fetch_with_stooq_price(ticker: str):
 def get_stock_price(ticker: str) -> str:
     """
     使用多数据源策略获取股票价格，以提高稳定性。
-    策略顺序: Alpha Vantage -> Finnhub -> yfinance -> Twelve Data -> 网页抓取 -> Stooq(免Key) -> 搜索引擎解析
+    策略顺序: Yahoo API v8(免费) -> Google Finance(免费) -> Stooq(免费) -> CNBC(免费) -> pandas_datareader(免费) -> yfinance -> Alpha Vantage -> Finnhub -> Twelve Data -> 网页抓取 -> 搜索引擎解析
+    优化：免费稳定源优先，减少 API 限流问题
     """
     print(f"Fetching price for {ticker} with multi-source strategy...")
     is_index = ticker.startswith('^')
     if is_index:
         sources = [
+            _fetch_yahoo_api_v8,      # 免费 JSON API，优先
             _fetch_index_price,
             _fetch_with_stooq_price,
             _search_for_price
         ]
     else:
         sources = [
+            _fetch_yahoo_api_v8,      # 免费 JSON API，最稳定
+            _scrape_google_finance,   # 免费爬虫，稳定
+            _fetch_with_stooq_price,  # 免费，无限制
+            _scrape_cnbc,             # 免费爬虫，实时性好
+            _fetch_with_pandas_datareader,  # 免费包
+            _fetch_with_yfinance,     # 免费但容易限流
             _fetch_with_alpha_vantage,
-            _fetch_with_finnhub,  # 新增 Finnhub 作为高优先级源
-            _fetch_with_yfinance,
+            _fetch_with_finnhub,
             _fetch_with_twelve_data_price,
             _scrape_yahoo_finance,
-            _fetch_with_stooq_price,
             _search_for_price
         ]
     

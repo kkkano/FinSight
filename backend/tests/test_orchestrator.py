@@ -58,7 +58,7 @@ def test_orchestrator_init():
     assert orchestrator.validator is not None
     assert len(orchestrator.sources) == 0  # 未加载工具模块时为空
     
-    print("✅ 编排器初始化测试通过")
+    print("[OK] 编排器初始化测试通过")
     return True
 
 
@@ -75,7 +75,7 @@ def test_manual_source_registration():
     assert len(orchestrator.sources['price']) == 2
     assert orchestrator.sources['price'][0].name == 'mock_success'
     
-    print("✅ 手动注册数据源测试通过")
+    print("[OK] 手动注册数据源测试通过")
     return True
 
 
@@ -94,7 +94,7 @@ def test_fetch_success():
     assert 'AAPL' in result.data
     assert result.duration_ms > 0
     
-    print("✅ 成功获取数据测试通过")
+    print("[OK] 成功获取数据测试通过")
     return True
 
 
@@ -114,7 +114,7 @@ def test_fetch_with_fallback():
     stats = orchestrator.get_stats()
     assert stats['orchestrator']['fallback_used'] == 1, "应该记录一次回退"
     
-    print("✅ 失败回退测试通过")
+    print("[OK] 失败回退测试通过")
     return True
 
 
@@ -132,7 +132,7 @@ def test_fetch_all_fail():
     assert result.error is not None
     assert 'tried:' in result.source
     
-    print("✅ 所有数据源失败测试通过")
+    print("[OK] 所有数据源失败测试通过")
     return True
 
 
@@ -166,7 +166,7 @@ def test_cache_integration():
     assert result3.cached == False
     assert call_count[0] == 2
     
-    print("✅ 缓存集成测试通过")
+    print("[OK] 缓存集成测试通过")
     return True
 
 
@@ -183,7 +183,7 @@ def test_rate_limit_handling():
     assert result.success == True
     assert result.source == 'mock_success', "应该回退到成功的数据源"
     
-    print("✅ 限速处理测试通过")
+    print("[OK] 限速处理测试通过")
     return True
 
 
@@ -200,7 +200,7 @@ def test_none_result_handling():
     assert result.success == True
     assert result.source == 'mock_success', "应该跳过返回 None 的数据源"
     
-    print("✅ None 结果处理测试通过")
+    print("[OK] None 结果处理测试通过")
     return True
 
 
@@ -221,7 +221,7 @@ def test_consecutive_failures_priority():
     assert result.success == True
     assert result.source == 'reliable'
     
-    print("✅ 连续失败优先级降低测试通过")
+    print("[OK] 连续失败优先级降低测试通过")
     return True
 
 
@@ -248,7 +248,7 @@ def test_stats_tracking():
     # 检查缓存统计
     assert stats['cache']['hits'] >= 1
     
-    print("✅ 统计追踪测试通过")
+    print("[OK] 统计追踪测试通过")
     return True
 
 
@@ -272,7 +272,7 @@ def test_validation_integration():
     assert result.validation is not None
     assert result.validation.is_valid == True
     
-    print("✅ 数据验证集成测试通过")
+    print("[OK] 数据验证集成测试通过")
     return True
 
 
@@ -296,7 +296,7 @@ def test_reset_stats():
     stats = orchestrator.get_stats()
     assert stats['orchestrator']['total_requests'] == 0
     
-    print("✅ 重置统计测试通过")
+    print("[OK] 重置统计测试通过")
     return True
 
 
@@ -328,7 +328,7 @@ def run_all_tests():
             result = test_func()
             results[test_name] = result
         except Exception as e:
-            print(f"❌ {test_name} 测试失败: {e}")
+            print(f"[FAIL] {test_name} 测试失败: {e}")
             import traceback
             traceback.print_exc()
             results[test_name] = False
@@ -342,17 +342,17 @@ def run_all_tests():
     total = len(results)
     
     for test_name, result in results.items():
-        status = "✅ 通过" if result else "❌ 失败"
+        status = "[OK] 通过" if result else "[FAIL] 失败"
         print(f"  {test_name}: {status}")
     
     print()
     print(f"总计: {passed}/{total} 测试通过")
     
     if passed == total:
-        print("\n🎉 Step 1.3 ToolOrchestrator 测试全部通过！")
+        print("\n Step 1.3 ToolOrchestrator 测试全部通过！")
         return True
     else:
-        print("\n⚠️ 部分测试失败，请修复后再继续。")
+        print("\nWARNING 部分测试失败，请修复后再继续。")
         return False
 
 

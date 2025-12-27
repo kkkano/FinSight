@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Bot, User, Copy, RefreshCcw, Trash2, Download } from 'lucide-react';
+import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
@@ -285,14 +285,7 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       <ReactMarkdown
         components={{
           a: ({ href, children }) => (
-            <a
-              href={href}
-              className="text-blue-400 underline hover:text-blue-300"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {children}
-            </a>
+            <SourceLink href={href || ''} label={children} />
           ),
         }}
       >
@@ -306,6 +299,46 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
         />
       )}
     </div>
+  );
+};
+
+const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, label }) => {
+  const urlMeta = useMemo(() => {
+    try {
+      const url = new URL(href);
+      return {
+        domain: url.hostname.replace(/^www\./, ''),
+      };
+    } catch {
+      return { domain: '' };
+    }
+  }, [href]);
+
+  const stringLabel = Array.isArray(label)
+    ? label.map((node) => (typeof node === 'string' ? node : '')).join('')
+    : typeof label === 'string'
+      ? label
+      : '';
+
+  const displayText =
+    stringLabel && stringLabel !== href
+      ? stringLabel
+      : urlMeta.domain || '来源链接';
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-fin-border/70 bg-fin-bg hover:border-fin-primary/80 hover:text-fin-primary transition text-fin-text no-underline"
+      title={href}
+    >
+      {urlMeta.domain ? <Link2 size={14} /> : <ExternalLink size={14} />}
+      <span className="truncate max-w-[160px]">{displayText}</span>
+      {urlMeta.domain && (
+        <span className="text-[10px] text-fin-muted/70">({urlMeta.domain})</span>
+      )}
+    </a>
   );
 };
 

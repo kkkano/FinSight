@@ -9,14 +9,17 @@ Modern LangGraph-based financial agent for FinSight.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_openai import ChatOpenAI
@@ -28,6 +31,8 @@ from langchain_tools import FINANCIAL_TOOLS, get_tools_description
 
 load_dotenv()
 
+
+MAX_TOOL_CALLS = 8  # 硬性限制工具调用总次数
 
 CIO_SYSTEM_PROMPT = """
 You are the Chief Investment Officer for a global macro fund. Produce comprehensive,
@@ -45,6 +50,13 @@ WORKFLOW (follow in order):
 4) Add market sentiment and macro events if relevant.
 5) Use drawdown/performance tools for risk framing.
 6) When you have 4-6 concrete observations, write the final report.
+
+CRITICAL RULES - MUST FOLLOW:
+- DO NOT call the same tool more than ONCE with the same parameters.
+- If a tool returns an error (e.g., "Rate limited", "Too Many Requests"), DO NOT retry it.
+- If you already have price/news/sentiment data, DO NOT call those tools again.
+- After collecting data from 4-6 tool calls, STOP and write the report.
+- Maximum {max_tools} tool calls total per query. After that, use whatever data you have.
 
 REPORT TEMPLATE (800+ words):
 # [Investment Name] - Professional Analysis Report
@@ -72,28 +84,114 @@ RULES:
 - Always start with get_current_datetime.
 - Reference dates, numbers, and sources explicitly.
 - Do not give generic advice; every claim must be supported by tool outputs.
+- If data is unavailable due to rate limits, acknowledge it and proceed with available data.
 """
 
 
 class FinancialAnalysisCallback(BaseCallbackHandler):
     """Lightweight callback to log tool usage and steps."""
 
-    def __init__(self, verbose: bool = True) -> None:
+    def __init__(self, verbose: bool = True, capture_events: bool = True) -> None:
         self.verbose = verbose
+        self.capture_events = capture_events
+        self.reset()
+
+    def reset(self) -> None:
+        """Clear counters and buffered trace events."""
         self.step_count = 0
+        self.events: List[Dict[str, Any]] = []
+        self._tool_start: Dict[str, float] = {}
+        self._tool_names: Dict[str, str] = {}
+        self._run_start: Optional[float] = None
 
-    def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **_: Any) -> None:
+    # LangChain callback hooks -------------------------------------------------
+    def on_chain_start(self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any) -> None:  # type: ignore[override]
+        self._run_start = time.time()
+        # 防止 serialized 为 None
+        name = "chain"
+        if serialized and isinstance(serialized, dict):
+            name = serialized.get("name", "chain")
+        self._record(
+            {
+                "event": "chain_start",
+                "name": name,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+        )
+
+    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:  # type: ignore[override]
+        duration = None
+        if self._run_start is not None:
+            duration = (time.time() - self._run_start) * 1000
+        self._record(
+            {
+                "event": "chain_end",
+                "duration_ms": duration,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+        )
+
+    def on_tool_start(self, serialized: Dict[str, Any], input_str: str, run_id: Optional[str] = None, **_: Any) -> None:  # type: ignore[override]
         self.step_count += 1
+        # 防止 serialized 为 None
+        tool_name = "tool"
+        if serialized and isinstance(serialized, dict):
+            tool_name = serialized.get("name", "tool")
+        key = str(run_id or self.step_count)
+        self._tool_names[key] = tool_name
+        self._tool_start[key] = time.time()
+        preview = self._preview(input_str)
         if self.verbose:
-            name = serialized.get("name", "tool")
-            preview = input_str if len(input_str) < 160 else input_str[:157] + "..."
-            print(f"[Tool {self.step_count}] {name} | input={preview}")
+            print(f"[Tool {self.step_count}] {tool_name} | input={preview}")
+        self._record(
+            {
+                "event": "tool_start",
+                "name": tool_name,
+                "input_preview": preview,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "run_id": key,
+            }
+        )
 
-    def on_tool_end(self, output: Any, **_: Any) -> None:
+    def on_tool_end(self, output: Any, run_id: Optional[str] = None, **_: Any) -> None:  # type: ignore[override]
+        key = str(run_id or self.step_count)
+        tool_name = self._tool_names.pop(key, "tool")
+        started_at = self._tool_start.pop(key, None)
+        duration = (time.time() - started_at) * 1000 if started_at else None
+        preview = self._preview(str(output))
         if self.verbose:
-            output_str = str(output)
-            preview = output_str if len(output_str) < 200 else output_str[:197] + "..."
             print(f"[Tool {self.step_count}] result={preview}")
+        self._record(
+            {
+                "event": "tool_end",
+                "name": tool_name,
+                "duration_ms": duration,
+                "output_preview": preview,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "run_id": key,
+            }
+        )
+
+    def on_tool_error(self, error: BaseException, run_id: Optional[str] = None, **kwargs: Any) -> None:  # type: ignore[override]
+        key = str(run_id or self.step_count)
+        tool_name = self._tool_names.get(key, "tool")
+        self._record(
+            {
+                "event": "tool_error",
+                "name": tool_name,
+                "error": str(error),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "run_id": key,
+            }
+        )
+
+    # Helpers -----------------------------------------------------------------
+    def _record(self, event: Dict[str, Any]) -> None:
+        if self.capture_events:
+            self.events.append(event)
+
+    def _preview(self, text: str, limit: int = 200) -> str:
+        return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 class LangChainFinancialAgent:
@@ -104,7 +202,7 @@ class LangChainFinancialAgent:
         provider: str = "gemini_proxy",
         model: Optional[str] = None,
         verbose: bool = True,
-        max_iterations: int = 20,
+        max_iterations: int = 10,  # 降低迭代次数防止死循环
         llm: Optional[Any] = None,
         checkpointer: Optional[MemorySaver] = None,
     ) -> None:
@@ -114,6 +212,7 @@ class LangChainFinancialAgent:
         self.max_iterations = max_iterations
         self.checkpointer = checkpointer or MemorySaver()
         self.callback = FinancialAnalysisCallback(verbose=verbose)
+        self.last_trace: List[Dict[str, Any]] = []
         self.llm = llm or self._create_llm()
         self.system_prompt = self._build_system_prompt()
         self.graph = self._build_graph()
@@ -146,7 +245,11 @@ class LangChainFinancialAgent:
     def _build_system_prompt(self) -> str:
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         tools_desc = get_tools_description()
-        return CIO_SYSTEM_PROMPT.format(current_date=current_date, tools=tools_desc)
+        return CIO_SYSTEM_PROMPT.format(
+            current_date=current_date,
+            tools=tools_desc,
+            max_tools=MAX_TOOL_CALLS
+        )
 
     def _build_graph(self):
         prompt = ChatPromptTemplate.from_messages(
@@ -163,17 +266,107 @@ class LangChainFinancialAgent:
                 lambda msg: {"messages": [msg]} if not isinstance(msg, dict) else msg
             )
         )
+
+        # 工具调用追踪器
+        call_tracker: Dict[str, Any] = {
+            "count": 0,
+            "called": set(),  # 已调用的 tool+args 哈希
+            "failed": set(),  # 返回错误的工具名
+        }
+
+        def _hash_tool_call(name: str, args: dict) -> str:
+            """生成工具调用的唯一哈希"""
+            args_str = json.dumps(args, sort_keys=True, default=str)
+            return hashlib.md5(f"{name}:{args_str}".encode()).hexdigest()
+
+        def _check_tool_error(content: str) -> bool:
+            """检查工具返回是否包含错误"""
+            error_patterns = ["rate limit", "too many requests", "failed:", "error:", "exceeded", "timeout"]
+            content_lower = content.lower()
+            return any(p in content_lower for p in error_patterns)
+
+        def guarded_tools_condition(state: MessagesState) -> str:
+            """带限制的工具调用条件判断"""
+            messages = state.get("messages", [])
+            if not messages:
+                return END
+
+            last_msg = messages[-1]
+
+            # 检查上一条 ToolMessage 是否有错误，记录失败的工具
+            for msg in reversed(messages):
+                if isinstance(msg, ToolMessage):
+                    if _check_tool_error(msg.content):
+                        call_tracker["failed"].add(msg.name)
+                    break
+
+            # 检查是否有工具调用请求
+            if not isinstance(last_msg, AIMessage) or not last_msg.tool_calls:
+                return END
+
+            # 检查总调用次数
+            if call_tracker["count"] >= MAX_TOOL_CALLS:
+                if self.verbose:
+                    print(f"[Guard] 已达到最大工具调用次数 ({MAX_TOOL_CALLS})，强制结束")
+                return END
+
+            # 过滤重复和失败的工具调用
+            valid_calls = []
+            for tc in last_msg.tool_calls:
+                tool_name = tc.get("name", "")
+                tool_args = tc.get("args", {})
+                call_hash = _hash_tool_call(tool_name, tool_args)
+
+                # 跳过已失败的工具
+                if tool_name in call_tracker["failed"]:
+                    if self.verbose:
+                        print(f"[Guard] 跳过已失败的工具: {tool_name}")
+                    continue
+
+                # 跳过重复调用
+                if call_hash in call_tracker["called"]:
+                    if self.verbose:
+                        print(f"[Guard] 跳过重复调用: {tool_name}")
+                    continue
+
+                call_tracker["called"].add(call_hash)
+                call_tracker["count"] += 1
+                valid_calls.append(tc)
+
+                if call_tracker["count"] >= MAX_TOOL_CALLS:
+                    break
+
+            # 如果没有有效的工具调用，结束
+            if not valid_calls:
+                return END
+
+            # 更新 last_msg 的 tool_calls 为过滤后的列表
+            last_msg.tool_calls = valid_calls
+            return "tools"
+
+        def reset_tracker(state: MessagesState) -> MessagesState:
+            """在每次新查询时重置追踪器"""
+            call_tracker["count"] = 0
+            call_tracker["called"] = set()
+            call_tracker["failed"] = set()
+            return state
+
         workflow = StateGraph(MessagesState)
         workflow.add_node("agent", agent_node)
         workflow.add_node("tools", ToolNode(FINANCIAL_TOOLS))
         workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
             "agent",
-            tools_condition,
-            {"tools": "tools", "__end__": END},
+            guarded_tools_condition,
+            {"tools": "tools", END: END},
         )
         workflow.add_edge("tools", "agent")
         workflow.set_entry_point("agent")
+
+        # 保存 reset 函数供 analyze 调用
+        self._reset_tracker = lambda: (
+            call_tracker.update({"count": 0, "called": set(), "failed": set()})
+        )
 
         return workflow.compile(checkpointer=self.checkpointer)
 
@@ -185,7 +378,11 @@ class LangChainFinancialAgent:
     ) -> Dict[str, Any]:
         """Run the LangGraph agent on a single query."""
 
-        self.callback.step_count = 0
+        overall_start = time.time()
+        self.callback.reset()
+        # 重置工具调用追踪器
+        if hasattr(self, '_reset_tracker'):
+            self._reset_tracker()
         run_id = thread_id or f"analysis-{uuid4()}"
         config = {
             "configurable": {"thread_id": run_id},
@@ -213,6 +410,7 @@ class LangChainFinancialAgent:
 
             messages: List[BaseMessage] = final_state.get("messages", [])
             output = messages[-1].content if messages else "No output generated"
+            self.last_trace = list(self.callback.events)
 
             return {
                 "success": True,
@@ -220,14 +418,56 @@ class LangChainFinancialAgent:
                 "messages": messages,
                 "step_count": self.callback.step_count,
                 "thread_id": run_id,
+                "duration_ms": (time.time() - overall_start) * 1000,
+                "trace": self.last_trace,
             }
         except Exception as exc:
+            self.last_trace = list(self.callback.events)
             return {
                 "success": False,
                 "error": str(exc),
                 "step_count": self.callback.step_count,
                 "thread_id": run_id,
+                "duration_ms": (time.time() - overall_start) * 1000,
+                "trace": self.last_trace,
             }
+
+    async def analyze_stream(self, query: str, thread_id: Optional[str] = None):
+        """Stream LLM output token by token."""
+        from uuid import uuid4
+        import json
+
+        # 重置工具调用追踪器
+        if hasattr(self, '_reset_tracker'):
+            self._reset_tracker()
+        run_id = thread_id or f"analysis-{uuid4()}"
+        config = {
+            "configurable": {"thread_id": run_id},
+            "callbacks": [self.callback],
+            "recursion_limit": self.max_iterations,
+        }
+        initial_state = {"messages": [HumanMessage(content=query)]}
+
+        try:
+            async for event in self.graph.astream_events(
+                initial_state, config=config, version="v2"
+            ):
+                kind = event.get("event", "")
+                # LLM token streaming
+                if kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        yield json.dumps({"type": "token", "content": chunk.content}, ensure_ascii=False) + "\n"
+                # Tool call events
+                elif kind == "on_tool_start":
+                    name = event.get("name", "tool")
+                    yield json.dumps({"type": "tool_start", "name": name}, ensure_ascii=False) + "\n"
+                elif kind == "on_tool_end":
+                    yield json.dumps({"type": "tool_end"}, ensure_ascii=False) + "\n"
+
+            yield json.dumps({"type": "done"}, ensure_ascii=False) + "\n"
+        except Exception as e:
+            yield json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False) + "\n"
 
     def describe_graph(self) -> Dict[str, Any]:
         """Provide a lightweight DAG description for observability/UX without hitting LLM."""
@@ -261,6 +501,7 @@ class LangChainFinancialAgent:
             "model": self.model,
             "graph": self.describe_graph(),
             "errors": status["errors"],
+            "recent_trace": self.get_recent_trace(10),
         }
 
     def get_agent_info(self) -> Dict[str, Any]:
@@ -273,7 +514,13 @@ class LangChainFinancialAgent:
             "max_iterations": self.max_iterations,
             "tools_count": len(FINANCIAL_TOOLS),
             "tools": [tool.name for tool in FINANCIAL_TOOLS],
+            "supports_tracing": True,
         }
+
+    def get_recent_trace(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return the latest tool/chain events for diagnostics."""
+        trace = self.callback.events or self.last_trace
+        return trace[-limit:] if trace else []
 
 
 def create_financial_agent(
