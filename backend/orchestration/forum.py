@@ -21,6 +21,8 @@ class ForumHost:
 
     ## 价格 Agent: {price}
     ## 新闻 Agent: {news}
+    ## 深度搜索 Agent: {deep_search}
+    ## 宏观 Agent: {macro}
     ## 技术 Agent: {technical}
     ## 基本面 Agent: {fundamental}
 
@@ -47,7 +49,7 @@ Confidence: {output.confidence}'''
             context_parts[key] = summary_info
 
         # 补全缺失的 Agent 数据，避免 Prompt 报错
-        for key in ["price", "news", "technical", "fundamental"]:
+        for key in ["price", "news", "technical", "fundamental", "deep_search", "macro"]:
             if key not in context_parts:
                 context_parts[key] = "无数据"
 

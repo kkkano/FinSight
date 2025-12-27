@@ -3,6 +3,8 @@ from typing import Dict, List, Any, Optional
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput
 from backend.agents.price_agent import PriceAgent
 from backend.agents.news_agent import NewsAgent
+from backend.agents.deep_search_agent import DeepSearchAgent
+from backend.agents.macro_agent import MacroAgent
 from backend.orchestration.forum import ForumHost, ForumOutput
 
 class AgentSupervisor:
@@ -18,7 +20,9 @@ class AgentSupervisor:
         self.agents: Dict[str, BaseFinancialAgent] = {
             "price": PriceAgent(llm, cache, tools_module, circuit_breaker),
             "news": NewsAgent(llm, cache, tools_module, circuit_breaker),
-            # 未来添加 technical, fundamental, macro 等
+            "deep_search": DeepSearchAgent(llm, cache, tools_module, circuit_breaker),
+            "macro": MacroAgent(llm, cache, tools_module, circuit_breaker),
+            # 未来添加 technical, fundamental 等
         }
 
     async def analyze(self, query: str, ticker: str, user_profile: Optional[Any] = None) -> Dict[str, Any]:
