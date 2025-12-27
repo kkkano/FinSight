@@ -6,6 +6,7 @@ ReportHandler - 深度报告处理器
 
 import sys
 import os
+import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -181,24 +182,82 @@ class ReportHandler:
         query: str,
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
-        """使用现有 Agent 进行完整分析"""
+        """使用现有 Agent 进行完整分析 (Phase 2 Upgrade: Supervisor + Forum + ReportIR)"""
         try:
+            # 尝试导入 Supervisor (Phase 2 新组件)
+            try:
+                from backend.orchestration.supervisor import AgentSupervisor
+                from backend.services.memory import UserProfile
+                from backend.report.ir import ReportIR
+                from backend.report.validator import ReportValidator
+
+                # 初始化 Supervisor
+                # 注意：这里我们重用 self.llm 和 self.tools_module
+                # 如果没有 Supervisor 实例，我们创建一个
+                if not hasattr(self, 'supervisor') or not self.supervisor:
+                    # 获取缓存和熔断器 (如果 orchestrator 有)
+                    cache = getattr(self.orchestrator, 'cache', None)
+                    circuit_breaker = getattr(self.orchestrator, 'circuit_breaker', None)
+
+                    self.supervisor = AgentSupervisor(
+                        llm=self.llm,
+                        tools_module=self.tools_module,
+                        cache=cache,
+                        circuit_breaker=circuit_breaker
+                    )
+
+                # 准备用户画像 (从 context 获取，暂为 Mock)
+                user_profile = UserProfile(
+                    user_id="current_user",
+                    risk_tolerance="medium",
+                    investment_style="balanced"
+                )
+
+                # 执行分析 (Supervisor -> Forum -> Output)
+                analysis_result = asyncio.run(self.supervisor.analyze(query, ticker, user_profile))
+                forum_output = analysis_result.get("forum_output")
+
+                # 构建 ReportIR (简单转换，实际应由专门的 Mapper 完成)
+                report_ir = self._convert_to_report_ir(ticker, query, forum_output)
+
+                # 校验 IR
+                report_ir_dict = ReportValidator.validate_and_fix(report_ir)
+
+                return {
+                    'success': True,
+                    'response': forum_output.consensus, # 简短文本回复
+                    'data': analysis_result,
+                    'report': report_ir_dict, # 关键：返回结构化报告数据供前端渲染
+                    'intent': 'report',
+                    'method': 'supervisor_v2',
+                }
+
+            except ImportError:
+                print("[ReportHandler] Supervisor 未找到，回退到旧版 Agent")
+                # Fallback to legacy logic below
+            except Exception as e:
+                print(f"[ReportHandler] Supervisor 执行失败: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to legacy logic below
+
+            # Legacy Logic (原有的 Agent 调用)
             # 构建分析查询
             analysis_query = f"请对 {ticker} 进行深度投资分析"
             if query != analysis_query:
                 analysis_query = query  # 使用原始查询
-            
+
             # 调用 Agent
             result = self.agent.analyze(analysis_query)
-            
+
             if isinstance(result, dict):
                 output = result.get('output', '')
                 success = result.get('success', False)
-                
+
                 # 缓存分析结果到上下文
                 if context and success:
                     context.cache_data(f'report:{ticker}', output)
-                
+
                 return {
                     'success': success,
                     'response': output,
@@ -213,7 +272,7 @@ class ReportHandler:
                     'intent': 'report',
                     'method': 'agent',
                 }
-        
+
         except Exception as e:
             return {
                 'success': False,
@@ -221,6 +280,45 @@ class ReportHandler:
                 'error': str(e),
                 'intent': 'report',
             }
+
+    def _convert_to_report_ir(self, ticker: str, query: str, forum_output: Any) -> Dict[str, Any]:
+        """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
+        from datetime import datetime
+        return {
+            "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
+            "ticker": ticker,
+            "company_name": ticker, # 暂用 Ticker 代替
+            "title": f"{ticker} 深度投资价值分析",
+            "summary": forum_output.consensus,
+            "sentiment": "bullish" if "BUY" in forum_output.recommendation else "bearish" if "SELL" in forum_output.recommendation else "neutral",
+            "confidence_score": forum_output.confidence,
+            "generated_at": datetime.now().isoformat(),
+            "sections": [
+                {
+                    "title": "核心观点 (Consensus)",
+                    "order": 1,
+                    "contents": [{"type": "text", "content": forum_output.consensus}]
+                },
+                {
+                    "title": "分歧与风险 (Disagreement & Risks)",
+                    "order": 2,
+                    "contents": [
+                        {"type": "text", "content": forum_output.disagreement},
+                        {"type": "text", "content": "风险因素:
+" + "
+".join([f"- {r}" for r in forum_output.risks])}
+                    ]
+                },
+                {
+                    "title": "投资建议 (Recommendation)",
+                    "order": 3,
+                    "contents": [{"type": "text", "content": f"建议: {forum_output.recommendation}"}]
+                }
+            ],
+            "citations": [], # 暂为空，后续从 agent_outputs 提取
+            "risks": forum_output.risks,
+            "recommendation": forum_output.recommendation
+        }
     
     def _handle_with_data_collection(
         self,
