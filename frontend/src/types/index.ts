@@ -56,6 +56,45 @@ export interface ChatResponse {
   session_id: string;
   thinking?: ThinkingStep[];  // 思考过程
   data?: any;
+  report?: ReportIR; // Phase 2: 深度研报数据
+}
+
+// Phase 2: Report IR Types
+export type Sentiment = 'bullish' | 'bearish' | 'neutral';
+
+export interface ReportContent {
+  type: 'text' | 'chart' | 'table' | 'image';
+  content: any; // string for text, object for chart/table
+  metadata?: Record<string, any>;
+}
+
+export interface ReportSection {
+  title: string;
+  order: number;
+  contents: ReportContent[];
+}
+
+export interface Citation {
+  source_id: string;
+  title: string;
+  url: string;
+  snippet: string;
+  published_date?: string;
+}
+
+export interface ReportIR {
+  report_id: string;
+  ticker: string;
+  company_name: string;
+  title: string;
+  summary: string;
+  sentiment: Sentiment;
+  confidence_score: number;
+  generated_at: string;
+  sections: ReportSection[];
+  citations: Citation[];
+  risks?: string[];
+  recommendation?: string;
 }
 
 export interface KlineResponse {

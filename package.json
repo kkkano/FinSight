@@ -13,5 +13,8 @@
     "react-router-dom": "^7.9.6",
     "tailwindcss": "^4.1.17",
     "zustand": "^5.0.8"
+  },
+  "dependencies": {
+    "lucide-react": "^0.562.0"
   }
 }
