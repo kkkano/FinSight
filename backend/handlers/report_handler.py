@@ -285,11 +285,10 @@ class ReportHandler:
         """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
         from datetime import datetime
 
-        # 构建风险描述文本
-        risk_list_str = "
-".join([f"- {r}" for r in forum_output.risks])
-        risk_text = f"风险因素:
-{risk_list_str}"
+        # Use os.linesep to avoid syntax errors with literal newlines in strings
+        # This is safer than embedding newlines directly in source code
+        risk_list_str = os.linesep.join([f"- {r}" for r in forum_output.risks])
+        risk_text = f"风险因素:{os.linesep}{risk_list_str}"
 
         return {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
