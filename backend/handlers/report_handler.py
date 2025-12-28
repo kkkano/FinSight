@@ -284,6 +284,13 @@ class ReportHandler:
     def _convert_to_report_ir(self, ticker: str, query: str, forum_output: Any) -> Dict[str, Any]:
         """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
         from datetime import datetime
+
+        # 构建风险描述文本
+        risk_list_str = "
+".join([f"- {r}" for r in forum_output.risks])
+        risk_text = f"风险因素:
+{risk_list_str}"
+
         return {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
@@ -304,9 +311,7 @@ class ReportHandler:
                     "order": 2,
                     "contents": [
                         {"type": "text", "content": forum_output.disagreement},
-                        {"type": "text", "content": "风险因素:
-" + "
-".join([f"- {r}" for r in forum_output.risks])}
+                        {"type": "text", "content": risk_text}
                     ]
                 },
                 {
