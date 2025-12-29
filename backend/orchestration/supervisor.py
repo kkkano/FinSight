@@ -69,3 +69,94 @@ class AgentSupervisor:
 
     def get_agent(self, name: str) -> Optional[BaseFinancialAgent]:
         return self.agents.get(name)
+
+    async def analyze_stream(self, query: str, ticker: str, user_profile: Optional[Any] = None):
+        """
+        流式分析接口，实时报告各 Agent 状态
+        
+        Yields:
+            str: JSON 格式的事件数据
+        """
+        import json
+        
+        # 1. 通知开始
+        yield json.dumps({
+            "type": "supervisor_start",
+            "message": f"开始分析 {ticker}...",
+            "agents": list(self.agents.keys())
+        }, ensure_ascii=False)
+        
+        # 2. 并行调用各 Agent 的流式接口（如果有），否则调用同步接口
+        agent_results = {}
+        agent_errors = []
+        
+        for name, agent in self.agents.items():
+            yield json.dumps({
+                "type": "agent_start",
+                "agent": name,
+                "message": f"{name} Agent 开始分析..."
+            }, ensure_ascii=False)
+            
+            try:
+                # 优先使用流式接口
+                if hasattr(agent, 'analyze_stream'):
+                    async for chunk in agent.analyze_stream(query, ticker):
+                        # 转发 Agent 的流式输出
+                        yield chunk
+                    # 获取最终结果
+                    result = await agent.research(query, ticker)
+                else:
+                    # 回退到同步接口
+                    result = await agent.research(query, ticker)
+                    yield json.dumps({
+                        "type": "agent_done",
+                        "agent": name,
+                        "status": "success",
+                        "summary": result.summary[:100] if result.summary else ""
+                    }, ensure_ascii=False)
+                
+                agent_results[name] = result
+                
+            except Exception as e:
+                agent_errors.append(f"{name}: {str(e)}")
+                yield json.dumps({
+                    "type": "agent_error",
+                    "agent": name,
+                    "message": str(e)
+                }, ensure_ascii=False)
+        
+        # 3. Forum 综合
+        yield json.dumps({
+            "type": "forum_start",
+            "message": "正在综合各 Agent 观点..."
+        }, ensure_ascii=False)
+        
+        try:
+            forum_result = await self.forum.synthesize(agent_results, user_profile=user_profile)
+            
+            yield json.dumps({
+                "type": "forum_done",
+                "consensus": forum_result.consensus,
+                "confidence": forum_result.confidence,
+                "recommendation": forum_result.recommendation
+            }, ensure_ascii=False)
+            
+            # 4. 完成
+            yield json.dumps({
+                "type": "done",
+                "output": {
+                    "consensus": forum_result.consensus,
+                    "disagreement": forum_result.disagreement,
+                    "confidence": forum_result.confidence,
+                    "recommendation": forum_result.recommendation,
+                    "risks": forum_result.risks,
+                    "agents_used": list(agent_results.keys()),
+                    "errors": agent_errors
+                }
+            }, ensure_ascii=False)
+            
+        except Exception as e:
+            yield json.dumps({
+                "type": "error",
+                "message": f"Forum 综合失败: {str(e)}"
+            }, ensure_ascii=False)
