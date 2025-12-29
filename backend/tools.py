@@ -33,6 +33,15 @@ except ImportError:
     TAVILY_AVAILABLE = False
     print("[Warning] Tavily 搜索不可用：未安装 tavily-python")
 
+# Exa Search 支持
+try:
+    from exa_py import Exa
+    EXA_AVAILABLE = True
+except ImportError:
+    Exa = None
+    EXA_AVAILABLE = False
+    print("[Warning] Exa Search 不可用：未安装 exa-py，运行: pip install exa-py")
+
 # 维基百科支持（免费，不需要API key）
 try:
     import wikipedia
@@ -57,6 +66,7 @@ TIINGO_API_KEY = os.getenv("TIINGO_API_KEY", "").strip('"')  # Tiingo (免费额
 TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "").strip('"')  # Twelve Data (免费额度)
 MARKETSTACK_API_KEY = os.getenv("MARKETSTACK_API_KEY", "").strip('"')  # Marketstack (免费额度: 1000次/月)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip('"')  # Tavily Search API (AI搜索，免费额度: 1000次/月)
+EXA_API_KEY = os.getenv("EXA_API_KEY", "096d2363-4811-42c0-84ed-b0d312a4c77e").strip('"')  # Exa Search API
 
 # ============================================
 # API 客户端初始化
@@ -91,20 +101,47 @@ def _is_reasonable_headline(text: str, window: str = "") -> bool:
 def search(query: str) -> str:
     """
     使用多数据源策略执行网页搜索并合并结果。
-    同时使用：维基百科 + Tavily Search + DuckDuckGo，然后合并总结
-    
+    策略A：串行搜索 + 智能检测
+    优先级：Exa > Tavily > Wikipedia > DuckDuckGo
+
     Args:
         query: 搜索查询字符串
-        
+
     Returns:
         格式化的合并搜索结果
     """
     all_results = []
     sources_used = []
-    
 
-    
+    # 0. 尝试 Exa Search (语义搜索，优先级最高)
+    if EXA_API_KEY and EXA_AVAILABLE:
+        try:
+            exa_result = _search_with_exa(query)
+            if exa_result and len(exa_result) > 200:  # 确保结果足够长
+                print(f"[Search] ✅ Exa 搜索成功: {query[:50]}...")
+                # 检查信息充足性 (简单启发式)
+                # 如果是深度查询，且 Exa 返回了丰富内容，直接返回
+                if len(exa_result) > 1000:
+                    print("[Search] 🚀 Exa 结果充足，跳过其他搜索源")
+                    return f"""🔍 综合搜索结果 (来自 Exa):
+{'='*60}
+
+{exa_result}
+
+{'='*60}
+"""
+
+                all_results.append({
+                    'source': 'Exa',
+                    'content': exa_result
+                })
+                sources_used.append('Exa')
+        except Exception as e:
+            error_msg = str(e) if e else "未知错误"
+            print(f"[Search] Exa 搜索失败: {error_msg}")
+
     # 1.尝试 Tavily Search (AI搜索)
+    # 如果 Exa 失败或结果不足，尝试 Tavily
     if TAVILY_API_KEY and TAVILY_AVAILABLE:
         try:
             tavily_result = _search_with_tavily(query)
@@ -115,16 +152,18 @@ def search(query: str) -> str:
                 })
                 sources_used.append('Tavily')
                 print(f"[Search] ✅ Tavily 搜索成功: {query[:50]}...")
+
+                # 如果已有两个高质量源，停止搜索
+                if len(sources_used) >= 2:
+                    print("[Search] 🚀 已有两个高质量源，跳过后续搜索")
+                    return _merge_search_results(all_results, query)
+
         except Exception as e:
             error_msg = str(e) if e else "未知错误"
-            error_type = type(e).__name__
-            if "Forbidden" in error_type or "403" in error_msg or "401" in error_msg:
-                print(f"[Search] Tavily API 认证失败 ({error_type}): 请检查 TAVILY_API_KEY 是否正确")
-            else:
-                print(f"[Search] Tavily 搜索失败: {error_msg}")
+            # 忽略 Tavily 错误，继续尝试下一个源
+            print(f"[Search] Tavily 搜索失败: {error_msg}")
 
     # 2. 尝试维基百科（仅用于非金融查询）
-    # 金融相关查询跳过维基百科，因为维基百科不提供实时金融数据
     query_lower = query.lower()
     is_financial_query = any(kw in query_lower for kw in [
         'stock', 'price', 'market', 'trading', 'aapl', 'msft', 'googl', 'tsla', 'nvda',
@@ -143,8 +182,10 @@ def search(query: str) -> str:
                 print(f"[Search] ✅ 维基百科获取信息成功: {query[:50]}...")
         except Exception as e:
             print(f"[Search] 维基百科搜索失败: {e}")
-    # 3. 尝试 DuckDuckGo
-    if DDGS_AVAILABLE and DDGS is not None:
+
+    # 3. 尝试 DuckDuckGo (最后兜底)
+    # 如果之前所有尝试都失败，或者结果太少
+    if (not all_results) and DDGS_AVAILABLE and DDGS is not None:
         try:
             ddgs_result = _search_with_duckduckgo(query)
             if ddgs_result and len(ddgs_result) > 50:
@@ -156,13 +197,16 @@ def search(query: str) -> str:
                 print(f"[Search] ✅ DuckDuckGo 搜索成功: {query[:50]}...")
         except Exception as e:
             print(f"[Search] DuckDuckGo 搜索失败: {e}")
-    
+
     # 4. 合并所有结果
     if not all_results:
         return "Search error: 所有搜索源均失败，无法获取搜索结果。"
-    
+
     # 合并结果
     combined_result = _merge_search_results(all_results, query)
+
+    print(f"[Search] ✅ 最终使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+    return combined_result
     
     print(f"[Search] ✅ 成功使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
     return combined_result
@@ -260,8 +304,8 @@ def _merge_search_results(results: list, query: str) -> str:
     merged_parts.append(f"🔍 综合搜索结果 (来自 {len(results)} 个数据源):\n")
     merged_parts.append("=" * 60 + "\n\n")
     
-    # 按优先级排序：Wikipedia > Tavily > DuckDuckGo
-    source_priority = {'Wikipedia': 1, 'Tavily': 2, 'DuckDuckGo': 3}
+    # 按优先级排序：Exa > Wikipedia > Tavily > DuckDuckGo
+    source_priority = {'Exa': 0, 'Wikipedia': 1, 'Tavily': 2, 'DuckDuckGo': 3}
     results_sorted = sorted(results, key=lambda x: source_priority.get(x['source'], 99))
     
     for i, result in enumerate(results_sorted, 1):
@@ -393,7 +437,7 @@ URL: {best_result['url']}"""
 def _search_with_tavily(query: str) -> str:
     """
     使用 Tavily Search API 进行AI搜索
-    
+
     Tavily 是一个专门为AI应用设计的搜索API，提供：
     - 更准确的搜索结果
     - 结构化的数据格式
@@ -401,13 +445,13 @@ def _search_with_tavily(query: str) -> str:
     """
     if not TAVILY_API_KEY:
         raise Exception("Tavily API key not configured")
-    
+
     if not TAVILY_AVAILABLE or TavilyClient is None:
         raise Exception("Tavily 客户端不可用（未安装 tavily-python）")
-    
+
     try:
         client = TavilyClient(api_key=TAVILY_API_KEY)
-        
+
         # 执行搜索
         response = client.search(
             query=query,
@@ -416,14 +460,14 @@ def _search_with_tavily(query: str) -> str:
             include_answer=True,  # 包含AI生成的答案摘要
             include_raw_content=False,  # 不包含原始内容（节省token）
         )
-        
+
         # 格式化结果
         formatted = []
-        
+
         # 如果有AI生成的答案，优先显示
         if response.get('answer'):
             formatted.append(f"📊 AI摘要:\n{response['answer']}\n")
-        
+
         # 显示搜索结果
         results = response.get('results', [])
         if results:
@@ -433,7 +477,7 @@ def _search_with_tavily(query: str) -> str:
                 content = res.get('content', 'No content')
                 url = res.get('url', 'No link')
                 score = res.get('score', 0)
-                
+
                 formatted.append(
                     f"{i}. {title} (相关性: {score:.2f})\n"
                     f"   {content[:200]}...\n"
@@ -441,19 +485,76 @@ def _search_with_tavily(query: str) -> str:
                 )
         else:
             formatted.append("未找到相关搜索结果。")
-        
+
         return "\n\n".join(formatted)
-        
+
     except Exception as e:
         error_msg = str(e) if e else "未知错误"
         error_type = type(e).__name__
         print(f"[Search] Tavily API 错误 ({error_type}): {error_msg}")
-        
+
         # 如果是 API key 相关错误，给出更明确的提示
         if "api" in error_msg.lower() or "key" in error_msg.lower() or "auth" in error_msg.lower():
             print(f"[Search] 提示: 请检查 TAVILY_API_KEY 是否正确配置")
-        
+
         raise Exception(f"Tavily API 错误: {error_msg}")
+
+
+def _search_with_exa(query: str) -> str:
+    """
+    使用 Exa Search API 进行语义搜索
+
+    Exa 是一个专门为AI应用设计的语义搜索API，提供：
+    - 神经网络驱动的语义搜索
+    - 高质量的内容提取
+    - 更好的上下文理解
+    """
+    if not EXA_API_KEY:
+        raise Exception("Exa API key not configured")
+
+    if not EXA_AVAILABLE or Exa is None:
+        raise Exception("Exa 客户端不可用（未安装 exa-py）")
+
+    try:
+        exa = Exa(api_key=EXA_API_KEY)
+
+        # 执行搜索
+        response = exa.search_and_contents(
+            query=query,
+            type="neural",  # neural 或 keyword
+            num_results=10,
+            text=True,  # 包含文本内容
+            highlights=True,  # 包含高亮片段
+        )
+
+        # 格式化结果
+        formatted = []
+        formatted.append("Search Results (Exa):")
+
+        if response.results:
+            for i, res in enumerate(response.results, 1):
+                title = res.title or 'No title'
+                url = res.url or 'No link'
+
+                # 获取高亮或文本内容
+                content = ""
+                if hasattr(res, 'highlights') and res.highlights:
+                    content = " ".join(res.highlights[:2])
+                elif hasattr(res, 'text') and res.text:
+                    content = res.text[:300]
+
+                formatted.append(
+                    f"{i}. {title}\n"
+                    f"   {content}...\n"
+                    f"   {url}"
+                )
+
+            return "\n\n".join(formatted)
+        else:
+            return None
+
+    except Exception as e:
+        raise Exception(f"Exa search failed: {str(e)}")
 
 # ============================================
 # 股价获取 - 多数据源策略

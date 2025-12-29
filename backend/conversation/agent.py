@@ -261,7 +261,9 @@ class ConversationAgent:
             except Exception as e:
                 print(f"[Agent] Supervisor 调用失败: {e}")
 
-        return self.report_handler.handle(query, metadata, self.context)
+        result = self.report_handler.handle(query, metadata, self.context)
+        print(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
+        return result
 
     def _handle_alert(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理监控请求（待实现）"""

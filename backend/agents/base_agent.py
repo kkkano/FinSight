@@ -84,3 +84,99 @@ class BaseFinancialAgent:
             fallback_used=False,
             risks=[]
         )
+
+    async def analyze_stream(self, query: str, ticker: str):
+        """
+        流式分析接口，实时返回搜索结果和 LLM tokens
+        
+        Yields:
+            dict: 包含 type 和相关数据的字典
+            - type='agent_start': Agent 开始工作
+            - type='search_start': 开始搜索
+            - type='search_result': 搜索结果计数
+            - type='summary_start': 开始生成摘要
+            - type='token': LLM token
+            - type='done': 完成，包含最终输出
+        """
+        import json
+        
+        # 1. 通知 Agent 开始
+        yield json.dumps({
+            "type": "agent_start", 
+            "agent": self.AGENT_NAME,
+            "message": f"{self.AGENT_NAME} 开始分析..."
+        }, ensure_ascii=False)
+        
+        # 2. 执行搜索
+        yield json.dumps({
+            "type": "search_start",
+            "agent": self.AGENT_NAME
+        }, ensure_ascii=False)
+        
+        try:
+            results = await self._initial_search(query, ticker)
+            result_count = len(results) if isinstance(results, list) else 1
+            
+            yield json.dumps({
+                "type": "search_result",
+                "agent": self.AGENT_NAME,
+                "count": result_count
+            }, ensure_ascii=False)
+        except Exception as e:
+            yield json.dumps({
+                "type": "error",
+                "agent": self.AGENT_NAME,
+                "message": f"搜索失败: {str(e)}"
+            }, ensure_ascii=False)
+            return
+        
+        # 3. 流式生成摘要
+        yield json.dumps({
+            "type": "summary_start",
+            "agent": self.AGENT_NAME
+        }, ensure_ascii=False)
+        
+        summary_buffer = ""
+        async for token in self._stream_summary(results):
+            summary_buffer += token
+            yield json.dumps({
+                "type": "token",
+                "content": token
+            }, ensure_ascii=False)
+        
+        # 如果没有流式输出，使用同步方法
+        if not summary_buffer:
+            summary_buffer = await self._first_summary(results)
+            yield json.dumps({
+                "type": "token",
+                "content": summary_buffer
+            }, ensure_ascii=False)
+        
+        # 4. 格式化最终输出
+        output = self._format_output(summary_buffer, results)
+        
+        yield json.dumps({
+            "type": "done",
+            "agent": self.AGENT_NAME,
+            "output": {
+                "agent_name": output.agent_name,
+                "summary": output.summary,
+                "confidence": output.confidence,
+                "data_sources": output.data_sources,
+                "as_of": output.as_of
+            }
+        }, ensure_ascii=False)
+
+    async def _stream_summary(self, data: Any):
+        """
+        流式生成摘要的辅助方法
+        子类应重写此方法以实现真正的流式 LLM 输出
+        
+        默认实现：使用同步摘要方法，一次性返回
+        
+        Yields:
+            str: 摘要 token
+        """
+        # 默认实现：非流式，直接返回完整摘要
+        summary = await self._first_summary(data)
+        yield summary
