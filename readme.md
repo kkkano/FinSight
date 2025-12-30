@@ -380,10 +380,33 @@ For detailed technical design, code examples, and acceptance criteria, see full 
 
 ## 📌 Status
 
-- **Backend**: FastAPI + ConversationAgent running on new LangGraph CIO Agent
-- **Frontend**: Dark/light theme, layout mode switching, auto-expand charts, PDF export
-- **Subscriptions**: Email alerts live, supporting price change and news subscriptions
-- **Blueprint**: Multi-agent architecture upgrade plan complete, ready for implementation
+> **Last Updated**: 2025-12-30 | **Version**: 0.5.0
+
+### Current Progress
+
+| Module | Progress | Notes |
+|--------|----------|-------|
+| **Tools Layer** | ✅ 100% | Multi-source fallback, caching, circuit breaker |
+| **Agent Layer** | ✅ 80% | 4 agents done (Price/News/Macro/DeepSearch), 2 pending (Technical/Fundamental) |
+| **Orchestration** | ⚠️ 70% | Supervisor has async issues, temporarily disabled |
+| **Report Card** | ✅ 90% | Display works, lacks streaming effect |
+| **Streaming Output** | ⚠️ 30% | Simulated chunking only, not true token streaming |
+
+### Known Issues
+
+| Issue | Severity | Status | Solution |
+|-------|----------|--------|----------|
+| Supervisor `asyncio.run()` error | 🔴 High | Disabled | Need to async-ify entire call chain |
+| Streaming output is chunked only | 🟡 Medium | Pending | LLM needs `stream=True` support |
+
+### Next Steps
+
+1. **True Streaming Output** - LLM stream=True + real-time frontend rendering
+2. **Fix Supervisor Async** - Replace `asyncio.run()` with proper `await`
+3. **Frontend Card Optimization** - Align with design_concept_v2.html
+4. **Add TechnicalAgent & FundamentalAgent** - MA/RSI/MACD + PE/ROE analysis
+
+> For detailed project status and architecture diagrams, see [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 
 ---
 

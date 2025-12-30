@@ -386,14 +386,36 @@ FinSight 将从「单Agent+工具」升级为「多Agent协作+反思循环+IR�
 
 ## 📌 当前状态
 
-- **后端**：FastAPI + ConversationAgent 已运行在新的 LangGraph CIO Agent 之上
-- **前端**：支持深色 / 浅色主题、布局模式切换、图表自动展开、PDF 导出等
-- **订阅功能**：邮件提醒已上线，支持价格波动和新闻订阅
-- **蓝图**：多Agent架构升级计划已完成，准备进入实施阶段
+> **最后更新**: 2025-12-30 | **版本**: 0.5.0
 
+### 当前进度
+
+| 模块 | 进度 | 说明 |
+|------|------|------|
+| **工具层** | ✅ 100% | 多源回退、缓存、熔断器 |
+| **Agent 层** | ✅ 80% | 4 个 Agent 完成（Price/News/Macro/DeepSearch），2 个待开发（Technical/Fundamental） |
+| **协调层** | ⚠️ 70% | Supervisor 存在异步问题，已暂时禁用 |
+| **Report 卡片** | ✅ 90% | 显示正常，缺少流式效果 |
+| **流式输出** | ⚠️ 30% | 仅模拟分块，非真正 token 流式 |
+
+### 已知问题
+
+| 问题 | 严重程度 | 状态 | 解决方案 |
+|------|----------|------|----------|
+| Supervisor `asyncio.run()` 错误 | 🔴 高 | 已禁用 | 需要异步化整个调用链 |
+| 流式输出只是分块 | 🟡 中 | 待修复 | LLM 需支持 `stream=True` |
+
+### 下一步计划
+
+1. **真正的流式输出** - LLM stream=True + 前端实时渲染
+2. **修复 Supervisor 异步化** - 使用 `await` 替代 `asyncio.run()`
+3. **前端卡片美化** - 对齐 design_concept_v2.html
+4. **添加 TechnicalAgent 和 FundamentalAgent** - MA/RSI/MACD + PE/ROE 分析
+
+> 详细项目状态和架构图请参阅 [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 
 ---
 
 ## 📄 许可证
 
-MIT Licen
+MIT License
