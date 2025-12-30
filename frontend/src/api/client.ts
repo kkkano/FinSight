@@ -141,7 +141,7 @@ export const apiClient = {
     onToken: (token: string) => void,
     onToolStart?: (name: string) => void,
     onToolEnd?: () => void,
-    onDone?: () => void,
+    onDone?: (report?: any) => void,  // Phase 2: 支持 report 数据
     onError?: (error: string) => void
   ): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/chat/stream`, {
@@ -179,7 +179,7 @@ export const apiClient = {
             } else if (data.type === 'tool_end') {
               onToolEnd?.();
             } else if (data.type === 'done') {
-              onDone?.();
+              onDone?.(data.report);  // Phase 2: 传递 report 数据
             } else if (data.type === 'error') {
               onError?.(data.message);
             }

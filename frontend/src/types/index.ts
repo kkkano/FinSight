@@ -28,6 +28,7 @@ export interface Message {
   as_of?: string | null;
   fallback_used?: boolean;
   tried_sources?: string[];
+  report?: ReportIR;  // Phase 2: 深度研报数据
 }
 
 export interface KlineData {
