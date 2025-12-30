@@ -90,15 +90,16 @@ export const ChatInput: React.FC = () => {
         () => {
           setStatus('Generating response...');
         },
-        // onDone
-        async () => {
+        // onDone - Phase 2: 支持 report 数据
+        async (report?: any) => {
+          console.log('[ChatInput] onDone called, report:', report); // Debug Log
           // 检测是否需要图表
           const chartInfo = await shouldGenerateChart(userMsgContent, null);
           if (chartInfo.ticker && chartInfo.chartType) {
             fullContent += `\n\n[CHART:${chartInfo.ticker}:${chartInfo.chartType}]`;
             if (chartInfo.ticker) setTicker(chartInfo.ticker);
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: false });
+          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report });
           setStatus('Completed');
         },
         // onError

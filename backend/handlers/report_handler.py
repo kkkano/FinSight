@@ -97,54 +97,11 @@ class ReportHandler:
         
         ticker = tickers[0]
         
-        # 改进对话体验：先询问用户想要分析哪些方面
-        # 检查是否已经确认过（通过上下文判断）
-        if context:
-            # 检查最近的对话中是否有确认信息
-            # ContextManager 使用 turns 列表存储对话历史
-            recent_turns = []
-            if hasattr(context, 'turns') and context.turns:
-                recent_turns = list(context.turns)[-3:]  # 最近3轮对话
-            
-            has_confirmation = False
-            if recent_turns:
-                # 检查最近的回复中是否有确认信息，或用户是否已经回答过
-                for turn in recent_turns:
-                    turn_query = getattr(turn, 'query', '') or ''
-                    turn_response = getattr(turn, 'response', '') or ''
-                    
-                    # 检查用户回复中是否有确认词
-                    confirmation_keywords = ['好的', '可以', '开始', '确认', '是的', '行', 'ok', 'yes', '综合', '全面', '全部', '都']
-                    if any(keyword in turn_query.lower() for keyword in confirmation_keywords):
-                        has_confirmation = True
-                        break
-                    
-                    # 检查AI回复中是否已经询问过
-                    if '您希望我重点关注' in turn_response or '您希望如何继续' in turn_response:
-                        # 如果AI已经询问过，用户的下一次回复应该被视为确认
-                        has_confirmation = True
-                        break
-            
-            # 如果用户明确要求"分析"或"报告"，且没有确认过，先询问
-            query_lower = query.lower()
-            is_explicit_report_request = any(keyword in query_lower for keyword in ['分析', '报告', '评估', '研究', '深度'])
-            
-            # 如果用户回复包含数字（1-6）或明确的需求描述，视为已确认
-            has_user_preference = any(
-                keyword in query_lower for keyword in [
-                    '1', '2', '3', '4', '5', '6', '价格', '技术', '基本面', '财务', 
-                    '新闻', '风险', '策略', '综合', '全面', '全部'
-                ]
-            )
-            
-            if is_explicit_report_request and not has_confirmation and not has_user_preference:
-                return {
-                    'success': True,
-                    'response': self._generate_pre_analysis_question(ticker, query),
-                    'needs_confirmation': True,
-                    'intent': 'report',
-                    'waiting_for_confirmation': True,
-                }
+        # 注意：之前这里有一个"确认机制"，询问用户想分析哪些方面
+        # 但这个机制有问题：用户输入数字（如"6"）后，会被 LLM 路由器
+        # 识别为 FOLLOWUP 意图而非 REPORT，导致走错误的处理路径
+        # 因此直接删除，生成完整的综合分析报告
+
         
         # 优先使用现有的 Agent 进行完整分析
         if self.agent:
@@ -185,8 +142,13 @@ class ReportHandler:
         """使用现有 Agent 进行完整分析 (Phase 2 Upgrade: Supervisor + Forum + ReportIR)"""
         print(f"[ReportHandler._handle_with_agent] 开始处理 ticker={ticker}")
         try:
-            # 尝试导入 Supervisor (Phase 2 新组件)
-            try:
+            # Phase 2 Supervisor 调用 - 暂时禁用
+            # 原因：asyncio.run() 不能在 FastAPI 的事件循环中调用
+            # 真正的解决方案需要异步化整个调用链（ConversationAgent -> ReportHandler -> Supervisor）
+            # 这是 Phase 2 重构任务，目前直接使用 Legacy Logic（self.agent.analyze）
+            use_supervisor = False  # 暂时禁用
+            
+            if use_supervisor:
                 from backend.orchestration.supervisor import AgentSupervisor
                 from backend.services.memory import UserProfile
                 from backend.report.ir import ReportIR
@@ -232,15 +194,6 @@ class ReportHandler:
                     'intent': 'report',
                     'method': 'supervisor_v2',
                 }
-
-            except ImportError:
-                print("[ReportHandler] Supervisor 未找到，回退到旧版 Agent")
-                # Fallback to legacy logic below
-            except Exception as e:
-                print(f"[ReportHandler] Supervisor 执行失败: {e}")
-                import traceback
-                traceback.print_exc()
-                # Fallback to legacy logic below
 
             # Legacy Logic (原有的 Agent 调用)
             # 构建分析查询

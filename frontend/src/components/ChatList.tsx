@@ -118,6 +118,7 @@ export const ChatList: React.FC = () => {
         as_of: response.data?.as_of ?? null,
         fallback_used: response.data?.fallback_used,
         tried_sources: response.data?.tried_sources,
+        report: response.report,  // Phase 2: 深度研报数据
         isLoading: false,
       });
 
@@ -174,8 +175,8 @@ export const ChatList: React.FC = () => {
             {/* 气泡 */}
             <div className={clsx(
               "p-3 rounded-2xl text-sm leading-relaxed shadow-sm",
-              msg.role === 'user' 
-                ? "bg-fin-primary text-white rounded-tr-none" 
+              msg.role === 'user'
+                ? "bg-fin-primary text-white rounded-tr-none"
                 : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-none relative overflow-visible"
             )}>
               {msg.role === 'user' ? (
@@ -183,12 +184,19 @@ export const ChatList: React.FC = () => {
               ) : (
                 <>
                   {msg.isLoading ? (
-                    <div className="py-4 flex items-center justify-start">
-                      <LoadingDots />
-                    </div>
+                    // 加载中：如果有内容则显示流式文本，否则显示加载动画
+                    msg.content ? (
+                      <MessageWithChart content={msg.content} />
+                    ) : (
+                      <div className="py-4 flex items-center justify-start">
+                        <LoadingDots />
+                      </div>
+                    )
                   ) : msg.report ? (
+                    // 完成且有报告：显示报告卡片
                     <ReportView report={msg.report} />
                   ) : (
+                    // 完成无报告：显示普通文本
                     <MessageWithChart content={msg.content} />
                   )}
                   {msg.data_origin && (
@@ -235,7 +243,7 @@ export const ChatList: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       <div ref={messagesEndRef} />
     </div>
   );
@@ -244,7 +252,7 @@ export const ChatList: React.FC = () => {
 // 支持图表的消息组件
 const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
   const [chartData, setChartData] = useState<{ ticker: string; chartType: ChartType; summary: string } | null>(null);
-  
+
   useEffect(() => {
     // 检测图表标记 [CHART:TICKER:TYPE] - 支持所有图表类型
     const chartMatch = content.match(/\[CHART:([A-Z]+):([a-z]+)\]/);
@@ -253,10 +261,10 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       // 确保 chartType 是有效的 ChartType
       const validChartTypes: ChartType[] = ['line', 'candlestick', 'pie', 'bar', 'tree', 'area', 'scatter', 'heatmap'];
       const chartType = (validChartTypes.includes(chartTypeStr as ChartType) ? chartTypeStr : 'line') as ChartType;
-      setChartData({ 
-        ticker, 
+      setChartData({
+        ticker,
         chartType: chartType,
-        summary: '' 
+        summary: ''
       });
     }
   }, [content]);
@@ -295,7 +303,7 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
         {textContent}
       </ReactMarkdown>
       {chartData && (
-        <InlineChart 
+        <InlineChart
           ticker={chartData.ticker}
           chartType={chartData.chartType}
           onDataReady={handleChartDataReady}
