@@ -38,6 +38,23 @@ FinSight AI 是一个面向股票 / 指数的 **对话式金融研究 Agent**：
 - 单个工具内部就包含多数据源回退（yfinance / API / 抓取 / 搜索）
 - 尽量保证"有数据可用"，并在失败时给出清晰错误信息
 
+### 市场新闻来源
+- 主源：Reuters RSS + Bloomberg RSS（默认列表，支持 `BLOOMBERG_RSS_URLS` 扩展）
+- 次级：Finnhub `general_news`（48h 时效过滤）
+- 兜底：搜索 3d/7d 时效过滤 + 日期解析
+
+Bloomberg 默认源：
+
+```text
+https://feeds.bloomberg.com/markets/news.rss
+https://feeds.bloomberg.com/technology/news.rss
+https://feeds.bloomberg.com/politics/news.rss
+https://feeds.bloomberg.com/wealth/news.rss
+https://feeds.bloomberg.com/pursuits/news.rss
+https://feeds.bloomberg.com/businessweek/news.rss
+https://feeds.bloomberg.com/industries/news.rss
+```
+
 ### 思考过程可视化
 - 可选显示"思考过程"：每一步调用了什么工具、耗时多少、最终如何得出结论
 
@@ -194,6 +211,9 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 MARKETSTACK_API_KEY=...
 TAVILY_API_KEY=...
+
+# 新闻 RSS（可选，逗号分隔；默认包含 Bloomberg + Reuters）
+BLOOMBERG_RSS_URLS=
 
 # LangSmith（可选）
 LANGSMITH_API_KEY=...

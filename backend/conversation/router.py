@@ -163,17 +163,49 @@ class ConversationRouter:
         
         # 2. 规则快速匹配 (优先处理闲聊/问候，避免浪费 LLM Token 或被误判)
         quick_intent = self._quick_match(query, context_summary, last_long_response, metadata)
+        if quick_intent and quick_intent != Intent.CLARIFY:
+            return quick_intent, metadata
+
+        # 3. LLM 兜底：仅在需要澄清且包含金融上下文时尝试提升意图判断
+        if self.llm:
+            should_try_llm = (
+                quick_intent is None
+                or (
+                    quick_intent == Intent.CLARIFY
+                    and (
+                        self._contains_financial_keywords(query)
+                        or bool(metadata.get('tickers'))
+                        or bool(metadata.get('company_names'))
+                    )
+                )
+            )
+            if should_try_llm:
+                if quick_intent is None:
+                    fallback_reason = "no_rule_match"
+                else:
+                    fallback_reason = "clarify_with_financial_context"
+                print(
+                    "[Router] LLM fallback start"
+                    f" reason={fallback_reason}"
+                    f" query={query!r}"
+                    f" tickers={metadata.get('tickers', [])}"
+                    f" company_names={metadata.get('company_names', [])}"
+                )
+                try:
+                    llm_intent = self._llm_classify(query, context_summary, metadata)
+                    print(
+                        "[Router] LLM fallback result"
+                        f" reason={fallback_reason}"
+                        f" intent={llm_intent.value}"
+                        f" query={query!r}"
+                    )
+                    return llm_intent, metadata
+                except Exception as e:
+                    print(f"[Router] LLM 意图识别失败: {e}，回退到规则匹配")
+
         if quick_intent:
             return quick_intent, metadata
 
-        # 3. 优先使用 LLM 进行意图识别（更准确、更灵活）
-        if self.llm:
-            try:
-                llm_intent = self._llm_classify(query, context_summary, metadata)
-                return llm_intent, metadata
-            except Exception as e:
-                print(f"[Router] LLM 意图识别失败: {e}，回退到规则匹配")
-        
         # 4. 根据是否有股票代码决定默认意图
         if metadata.get('tickers'):
             # 有股票代码但没有明确意图关键词，默认为快速查询
@@ -242,8 +274,18 @@ class ConversationRouter:
         ]
         if any(kw in query_lower for kw in alert_keywords):
             return Intent.ALERT
+
+        # === 4. 市场新闻/热点 ===
+        market_news_terms = [
+            '热点', '新闻', '快讯', '头条', 'headline', 'breaking', 'news'
+        ]
+        market_context_terms = [
+            '市场', '股市', '财经', '金融', '大盘', '指数', '宏观', '美股', '港股', 'a股', '行业', 'market'
+        ]
+        if any(kw in query_lower for kw in market_news_terms) and any(ctx in query_lower for ctx in market_context_terms):
+            return Intent.CHAT
         
-        # === 4. 对比/比较查询 ===
+        # === 5. 对比/比较查询 ===
         comparison_keywords = ['对比', '比较', '区别', '差异', '不同', 'compare', 'vs', 'versus', 'difference', 'different']
         if any(kw in query_lower for kw in comparison_keywords):
             # 检查是否包含多个股票/指数
@@ -252,7 +294,7 @@ class ConversationRouter:
             if has_multiple:
                 return Intent.CHAT
         
-        # === 5. 追问关键词 ===
+        # === 6. 追问关键词 ===
         followup_keywords = [
             '为什么', '详细说说', '具体说说', '展开说说', '解释一下',
             '风险呢', '优势呢', '缺点呢', '继续', '接着说',
@@ -266,14 +308,16 @@ class ConversationRouter:
             if context_summary and context_summary != "无历史对话":
                 return Intent.FOLLOWUP
             else:
+                if metadata is not None:
+                    metadata["clarify_reason"] = "followup_without_context"
                 return Intent.CLARIFY  # 没有上下文时需要澄清
 
-        # 5.1 针对“上一份/翻译/总结/报告”类，若有最近长文本则直接视为跟进
+        # 6.1 针对“上一份/翻译/总结/报告”类，若有最近长文本则直接视为跟进
         followup_report_keywords = ['翻译', 'translate', '总结', '结论', '要点', '上一', '刚才', '上面', '报告', '上条', '上次']
         if last_long_response and any(kw in query_lower for kw in followup_report_keywords):
             return Intent.FOLLOWUP
         
-        # === 6. 简单价格/信息查询 (CHAT) ===
+        # === 7. 简单价格/信息查询 (CHAT) ===
         simple_query_keywords = [
             '多少钱', '股价', '现价', '价格', '收盘价', '开盘价',
             'price', 'how much', 'current', 'stock price',
@@ -283,7 +327,7 @@ class ConversationRouter:
         if any(kw in query_lower for kw in simple_query_keywords):
             return Intent.CHAT
         
-        # === 7. 模糊查询 ===
+        # === 8. 模糊查询 ===
         vague_patterns = [
             r'^它怎么样[？?]?$',
             r'^那个呢[？?]?$',
@@ -307,6 +351,7 @@ class ConversationRouter:
         financial_keywords = [
             '股票', '基金', '指数', 'etf', '价格', '走势', '分析', '报告', '投资', '行情',
             '研报', '投研', '基本面', '估值', '财报', '业绩', '市值', '营收', '利润',
+            '市场', '股市', '财经', '金融', '新闻', '热点', '快讯', '头条',
             'ticker', 'stock', 'price', 'analyze', 'report', 'market', 'finance',
             'fundamental', 'valuation', 'earnings', 'financials'
         ]

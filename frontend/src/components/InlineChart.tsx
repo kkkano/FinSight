@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { Loader2 } from 'lucide-react';
 
@@ -155,17 +155,15 @@ export const InlineChart: React.FC<InlineChartProps> = ({
 }) => {
   const [data, setData] = useState<KlineData[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const handleDataReady = useCallback(
-    (series: KlineData[], summary: string) => {
-      if (onDataReady) {
-        onDataReady(series, summary);
-      }
-    },
-    [onDataReady],
-  );
+  const onDataReadyRef = useRef(onDataReady);
+  const lastSummaryRef = useRef<string>('');
 
   useEffect(() => {
+    onDataReadyRef.current = onDataReady;
+  }, [onDataReady]);
+
+  useEffect(() => {
+    let active = true;
     const loadData = async () => {
       setLoading(true);
       try {
@@ -174,20 +172,28 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         const responseData = res.data as any;
         const kline = responseData?.data?.kline_data ?? [];
 
+        if (!active) return;
         setData(kline);
         if (kline.length) {
           const summary = generateDataSummary(ticker, kline);
-          handleDataReady(kline, summary);
+          if (summary && summary !== lastSummaryRef.current) {
+            lastSummaryRef.current = summary;
+            onDataReadyRef.current?.(kline, summary);
+          }
         }
       } catch (err) {
         console.error('Inline chart load failed:', err);
       } finally {
+        if (!active) return;
         setLoading(false);
       }
     };
 
     loadData();
-  }, [ticker, period, handleDataReady]);
+    return () => {
+      active = false;
+    };
+  }, [ticker, period]);
 
   if (loading) {
     return (

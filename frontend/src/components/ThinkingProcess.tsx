@@ -17,10 +17,10 @@ const stageLabels: Record<string, string> = {
 };
 
 const getStageIcon = (stage: string) => {
-  if (stage.includes('complete')) return '✓';
+  if (stage.includes('complete')) return 'OK';
   if (stage.includes('error')) return '!';
-  if (stage.includes('processing') || stage.includes('collection')) return '…';
-  return '→';
+  if (stage.includes('processing') || stage.includes('collection')) return '...';
+  return '>';
 };
 
 export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) => {

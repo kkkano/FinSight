@@ -1,6 +1,8 @@
 import yfinance as yf
 import json
 import requests
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta, date
 import time
@@ -8,6 +10,7 @@ import re
 import finnhub
 import pandas as pd
 import os
+from urllib.parse import urlparse
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 
@@ -542,6 +545,16 @@ def _search_with_exa(query: str) -> str:
                     content = " ".join(res.highlights[:2])
                 elif hasattr(res, 'text') and res.text:
                     content = res.text[:300]
+
+                published = (
+                    getattr(res, "published_date", None)
+                    or getattr(res, "published_at", None)
+                    or getattr(res, "date", None)
+                    or getattr(res, "created_at", None)
+                )
+                date_str = _normalize_published_date(published)
+                if date_str:
+                    content = f"{date_str} {content}".strip()
 
                 formatted.append(
                     f"{i}. {title}\n"
@@ -1231,6 +1244,284 @@ def get_company_info(ticker: str) -> str:
 # 新闻获取
 # ============================================
 
+def _domain_from_url(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+        host = parsed.netloc or ""
+        return host.replace("www.", "")
+    except Exception:
+        return ""
+
+
+def _extract_datetime_from_text(text: str, now: datetime) -> Optional[datetime]:
+    if not text:
+        return None
+    lowered = text.lower()
+
+    # Relative English (e.g., "3 hours ago", "2 days ago")
+    m = re.search(r"(\d{1,2})\s*(hours?|days?)\s+ago", lowered)
+    if m:
+        value = int(m.group(1))
+        unit = m.group(2)
+        if "hour" in unit:
+            return now - timedelta(hours=value)
+        return now - timedelta(days=value)
+
+    # Relative Chinese (e.g., "3小时前", "2天前", "10分钟前")
+    m = re.search(r"(\d{1,2})\s*(小时|天|分钟)前", text)
+    if m:
+        value = int(m.group(1))
+        unit = m.group(2)
+        if unit == "小时":
+            return now - timedelta(hours=value)
+        if unit == "分钟":
+            return now - timedelta(minutes=value)
+        return now - timedelta(days=value)
+
+    # Absolute date: YYYY-MM-DD or YYYY/MM/DD
+    m = re.search(r"(\d{4})[-/](\d{1,2})[-/](\d{1,2})", text)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+
+    # Absolute date: Month DD, YYYY
+    m = re.search(
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        try:
+            month = m.group(1).title()
+            day = int(m.group(2))
+            year = int(m.group(3))
+            month_map = {
+                "Jan": 1,
+                "Feb": 2,
+                "Mar": 3,
+                "Apr": 4,
+                "May": 5,
+                "Jun": 6,
+                "Jul": 7,
+                "Aug": 8,
+                "Sep": 9,
+                "Oct": 10,
+                "Nov": 11,
+                "Dec": 12,
+            }
+            return datetime(year, month_map[month], day)
+        except Exception:
+            return None
+
+    return None
+
+
+def _extract_datetime_from_url(url: str) -> Optional[datetime]:
+    if not url:
+        return None
+
+    # Patterns like /2025/07/23/ or 2025-07-23
+    m = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", url)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+
+    # Pattern like 20250723 (avoid matching long ids by requiring separators nearby)
+    m = re.search(r"(20\d{2})(\d{2})(\d{2})", url)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+
+    return None
+
+
+def _normalize_published_date(value: Any) -> Optional[str]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.utcfromtimestamp(value).strftime("%Y-%m-%d")
+        except Exception:
+            return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if "T" in cleaned:
+            cleaned = cleaned.split("T")[0]
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", cleaned):
+            return cleaned
+    return None
+
+
+def _extract_search_items(text: str) -> List[Dict[str, str]]:
+    items: List[Dict[str, str]] = []
+    current: Dict[str, str] | None = None
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if re.match(r"^\d+\.", stripped):
+            if current:
+                items.append(current)
+            title = re.sub(r"^\d+\.\s*", "", stripped).strip()
+            current = {"title": title, "snippet": "", "url": ""}
+            continue
+        if stripped.startswith("http"):
+            if current and not current.get("url"):
+                current["url"] = stripped
+            continue
+        if stripped and current and not current.get("snippet"):
+            current["snippet"] = stripped
+
+    if current:
+        items.append(current)
+
+    return items
+
+
+def _format_search_news_items(
+    text: str,
+    limit: int = 5,
+    max_age_days: int = 7,
+    now: Optional[datetime] = None,
+) -> tuple[list[str], bool]:
+    now = now or datetime.utcnow()
+    items = _extract_search_items(text)
+    enriched = []
+
+    for item in items:
+        candidate_text = f"{item.get('title', '')} {item.get('snippet', '')}"
+        dt = _extract_datetime_from_text(candidate_text, now)
+        if not dt and item.get("url"):
+            dt = _extract_datetime_from_url(item["url"])
+        age_days = (now - dt).days if dt else None
+        url = item.get("url", "")
+        source = _domain_from_url(url)
+        enriched.append(
+            {
+                "title": item.get("title", ""),
+                "url": url,
+                "source": source,
+                "date": dt,
+                "age_days": age_days,
+            }
+        )
+
+    recent = [
+        item
+        for item in enriched
+        if item["date"] and (now - item["date"]) <= timedelta(days=max_age_days)
+    ]
+    use_items = recent if recent else enriched
+
+    lines: List[str] = []
+    for item in use_items[:limit]:
+        date_str = item["date"].strftime("%Y-%m-%d") if item["date"] else "未知日期"
+        source = item["source"] or "source"
+        url = item["url"] or ""
+        lines.append(f"[{date_str}] {item['title']} ({source}) {url}".strip())
+
+    return lines, bool(recent)
+
+
+def _parse_rss_items(
+    xml_text: str,
+    limit: int = 5,
+    max_age_days: int = 2,
+    now: Optional[datetime] = None,
+) -> tuple[list[str], bool]:
+    now = now or datetime.utcnow()
+    lines: List[str] = []
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception:
+        return [], False
+
+    items = root.findall(".//item")
+    for item in items:
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        pub_date = (item.findtext("pubDate") or "").strip()
+        if not title or not pub_date:
+            continue
+
+        try:
+            dt = parsedate_to_datetime(pub_date)
+        except Exception:
+            dt = None
+        if not dt:
+            continue
+        if dt.tzinfo:
+            dt = dt.astimezone(tz=None).replace(tzinfo=None)
+
+        if (now - dt) > timedelta(days=max_age_days):
+            continue
+
+        source = _domain_from_url(link)
+        date_str = dt.strftime("%Y-%m-%d")
+        lines.append(f"[{date_str}] {title} ({source}) {link}".strip())
+        if len(lines) >= limit:
+            break
+
+    return lines, bool(lines)
+
+
+def _fetch_rss_headlines(
+    feed_urls: List[str],
+    limit: int = 5,
+    max_age_days: int = 2,
+) -> tuple[list[str], bool]:
+    all_lines: List[str] = []
+    for url in feed_urls:
+        try:
+            resp = requests.get(url, timeout=8)
+            if resp.status_code != 200:
+                continue
+            lines, ok = _parse_rss_items(resp.text, limit=limit, max_age_days=max_age_days)
+            if ok:
+                all_lines.extend(lines)
+        except Exception:
+            continue
+        if len(all_lines) >= limit:
+            break
+    return all_lines[:limit], bool(all_lines)
+
+
+def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple[list[str], bool]:
+    if not finnhub_client:
+        return [], False
+
+    now = datetime.utcnow()
+    try:
+        items = finnhub_client.general_news("general")
+    except Exception:
+        return [], False
+
+    lines = []
+    for item in items or []:
+        ts = item.get("datetime")
+        if not ts:
+            continue
+        try:
+            dt = datetime.utcfromtimestamp(ts)
+        except Exception:
+            continue
+        if (now - dt) > timedelta(hours=max_age_hours):
+            continue
+        title = item.get("headline") or item.get("summary") or "No title"
+        source = item.get("source") or "finnhub"
+        url = item.get("url") or ""
+        lines.append(f"[{dt.strftime('%Y-%m-%d')}] {title} ({source}) {url}".strip())
+        if len(lines) >= limit:
+            break
+    return lines, bool(lines)
+
 MARKET_INDICES = {
     "^GSPC": "S&P 500 index",
     "^IXIC": "Nasdaq Composite index", 
@@ -1349,7 +1640,9 @@ def get_company_news(ticker: str) -> str:
                         date_str = published_at.split("T")[0]
                     else:
                         date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
-                    lines.append(f"{i}. [{date_str}] {title} ({source})")
+                    url = a.get("url") or a.get("link") or ""
+                    suffix = f" {url}" if url else ""
+                    lines.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
                 if lines:
                     return f"Latest Market News ({ticker}):\n" + "\n".join(lines)
         except Exception as e:
@@ -1366,7 +1659,9 @@ def get_company_news(ticker: str) -> str:
                     publisher = article.get('publisher', 'Unknown source')
                     pub_time = article.get('providerPublishTime', 0)
                     date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
-                    news_list.append(f"{i}. [{date_str}] {title} ({publisher})")
+                    url = article.get('link') or article.get('url') or ''
+                    suffix = f" {url}" if url else ""
+                    news_list.append(f"{i}. [{date_str}] {title} ({publisher}){suffix}")
                 return f"Latest News ({ticker}):\n" + "\n".join(news_list)
         except Exception as e:
             print(f"yfinance index news error for {ticker}: {e}")
@@ -1387,7 +1682,9 @@ def get_company_news(ticker: str) -> str:
                 publisher = article.get('publisher', 'Unknown source')
                 pub_time = article.get('providerPublishTime', 0)
                 date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
-                news_list.append(f"{i}. [{date_str}] {title} ({publisher})")
+                url = article.get('link') or article.get('url') or ''
+                suffix = f" {url}" if url else ""
+                news_list.append(f"{i}. [{date_str}] {title} ({publisher}){suffix}")
             return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"yfinance news error for {ticker}: {e}")
@@ -1406,7 +1703,9 @@ def get_company_news(ticker: str) -> str:
                     source = article.get('source', 'Unknown')
                     pub_time = article.get('datetime', 0)
                     date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown'
-                    news_list.append(f"{i}. [{date_str}] {title} ({source})")
+                    url = article.get('url') or ''
+                    suffix = f" {url}" if url else ""
+                    news_list.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
                 return f"Latest News ({ticker}):\n" + "\n".join(news_list)
         except Exception as e:
             print(f"Finnhub news fetch failed: {e}")
@@ -1426,14 +1725,22 @@ def get_company_news(ticker: str) -> str:
                 date_str = article.get('time_published', '')[:8]
                 if date_str:
                     date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                news_list.append(f"{i}. [{date_str}] {title} ({source})")
+                url = article.get('url') or article.get('link') or ''
+                suffix = f" {url}" if url else ""
+                news_list.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
             return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"Alpha Vantage news fetch failed: {e}")
     
     # 方法4: 回退到公司特定搜索
     print(f"Falling back to search for {ticker} news")
-    return search(f"{ticker} company latest news stock")
+    fallback_text = search(f"{ticker} company latest news stock")
+    lines, has_recent = _format_search_news_items(fallback_text, limit=5, max_age_days=7)
+    if lines:
+        if has_recent:
+            return f"Latest News ({ticker}) - search (7d):\n" + "\n".join(lines)
+        return f"Latest News ({ticker}) - search (time unknown):\n" + "\n".join(lines)
+    return fallback_text
 
 
 def get_market_news_headlines(limit: int = 5) -> str:
@@ -1441,10 +1748,45 @@ def get_market_news_headlines(limit: int = 5) -> str:
     市场泛化新闻：不带 ticker 的情况，抓取全球/美股要闻。
     使用搜索聚合并提取编号行作为标题，否则返回简短提示。
     """
-    # 1) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先 ^GSPC，其次 ^IXIC
+    # 0) 官方 RSS（Reuters/Bloomberg），优先 48h 内
+    reuters_feeds = [
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://feeds.reuters.com/reuters/topNews",
+        "https://feeds.reuters.com/reuters/worldNews",
+        "https://feeds.reuters.com/reuters/technologyNews",
+    ]
+    bloomberg_default_feeds = [
+        "https://feeds.bloomberg.com/markets/news.rss",
+        "https://feeds.bloomberg.com/technology/news.rss",
+        "https://feeds.bloomberg.com/politics/news.rss",
+        "https://feeds.bloomberg.com/wealth/news.rss",
+        "https://feeds.bloomberg.com/pursuits/news.rss",
+        "https://feeds.bloomberg.com/businessweek/news.rss",
+        "https://feeds.bloomberg.com/industries/news.rss",
+    ]
+    bloomberg_env = os.getenv("BLOOMBERG_RSS_URLS", "").strip()
+    bloomberg_env_feeds = [u.strip() for u in bloomberg_env.split(",") if u.strip()]
+    if bloomberg_env_feeds:
+        bloomberg_feeds = bloomberg_default_feeds + [
+            u for u in bloomberg_env_feeds if u not in bloomberg_default_feeds
+        ]
+    else:
+        bloomberg_feeds = bloomberg_default_feeds
+
+    rss_feeds = reuters_feeds + bloomberg_feeds
+    rss_lines, rss_ok = _fetch_rss_headlines(rss_feeds, limit=limit, max_age_days=2)
+    if rss_ok:
+        return "最近48小时市场要闻(RSS):\n" + "\n".join(rss_lines)
+
+    # 1) Finnhub 市场新闻（48h）
+    finnhub_lines, finnhub_ok = _fetch_finnhub_market_news(limit=limit, max_age_hours=48)
+    if finnhub_ok:
+        return "最近48小时市场要闻(Finnhub):\n" + "\n".join(finnhub_lines)
+
+    # 2) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先指数与代表性ETF
     try:
         from backend.services.alert_scheduler import fetch_news_articles
-        for idx_ticker in ["^GSPC", "^IXIC"]:
+        for idx_ticker in ["^GSPC", "^IXIC", "SPY", "QQQ", "DIA", "IWM"]:
             try:
                 articles = fetch_news_articles(idx_ticker)
             except Exception as inner:
@@ -1460,13 +1802,15 @@ def get_market_news_headlines(limit: int = 5) -> str:
                         date_str = published_at.split("T")[0]
                     else:
                         date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
-                    lines.append(f"{i}. [{date_str}] {title} ({source})")
+                    url = a.get("url") or a.get("link") or ""
+                    suffix = f" {url}" if url else ""
+                    lines.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
                 if lines:
-                    return "Latest Market Headlines (48h):\n" + "\n".join(lines)
+                    return "最近48小时市场要闻:\n" + "\n".join(lines)
     except Exception as e:
         print(f"[MarketNews] fetch via alert_scheduler failed: {e}")
 
-    # 2) 搜索聚合兜底
+    # 3) 搜索聚合兜底
     queries = [
         "global stock market breaking news today",
         "US stock market headlines today",
@@ -1481,25 +1825,40 @@ def get_market_news_headlines(limit: int = 5) -> str:
             print(f"[MarketNews] search failed for '{q}': {e}")
             continue
     if not combined:
-        return "No reliable market headlines found. Please check trusted sources (Bloomberg/Reuters/WSJ)."
+        return "未能获取可靠的市场热点信息，请直接查看 Bloomberg/Reuters/WSJ 等权威来源。"
     
     text = "\n\n".join(combined)
-    lines = text.splitlines()
-    headlines = []
-    for line in lines:
-        if re.match(r'^\\d+\\.', line.strip()):
-            headlines.append(line.strip())
-            if len(headlines) >= limit:
-                break
-    if headlines:
-        return "Latest Market Headlines:\n" + "\n".join(headlines)
-    preview = text[:400] + "..." if len(text) > 400 else text
-    return (
-        "Latest Market Context (unstructured):\n"
-        f"{preview}\n"
-        "Please verify via trusted sources (Bloomberg/Reuters/WSJ)."
-    )
+    lines, has_recent = _format_search_news_items(text, limit=limit, max_age_days=3)
+    if not has_recent:
+        lines, has_recent = _format_search_news_items(text, limit=limit, max_age_days=7)
 
+    if not has_recent:
+        retry_queries = [
+            "global stock market news last 24 hours",
+            "US stock market headlines last 24 hours",
+            "market moving news past week site:reuters.com",
+        ]
+        retry_combined = []
+        for q in retry_queries:
+            try:
+                res = search(q)
+                retry_combined.append(res)
+            except Exception as e:
+                print(f"[MarketNews] retry search failed for '{q}': {e}")
+                continue
+        if retry_combined:
+            retry_text = "\n\n".join(retry_combined)
+            retry_lines, retry_recent = _format_search_news_items(retry_text, limit=limit, max_age_days=7)
+            if retry_lines and retry_recent:
+                return "最近市场热点(近7天):\n" + "\n".join(retry_lines)
+            if retry_recent:
+                lines = retry_lines
+                has_recent = True
+
+    if has_recent and lines:
+        return "最近市场热点(近7天):\n" + "\n".join(lines)
+
+    return "近7天内未检索到可靠市场热点，请直接查看 Bloomberg/Reuters/WSJ 等权威来源。"
 # ============================================
 # 其他工具函数（保持不变或稍作修改）
 # ============================================
@@ -2409,7 +2768,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             include_time = interval.endswith('h') or interval.endswith('m')
             data = []
             for index, row in hist.iterrows():
-                # ???????????
+                # Normalize timestamp for chart rows
                 if include_time and hasattr(index, 'to_pydatetime'):
                     time_str = index.to_pydatetime().strftime('%Y-%m-%d %H:%M')
                 elif hasattr(index, 'strftime'):

@@ -144,6 +144,24 @@ graph LR
 
 Each tool follows a similar pattern: try the cheapest/fastest source first, then fall back while logging failures.
 
+### Market News Sources
+
+- Primary: Reuters RSS (default) + Bloomberg RSS (default list; extend via `BLOOMBERG_RSS_URLS`).
+- Secondary: Finnhub `general_news` (48h recency filter).
+- Fallback: search with 3d/7d recency gating and date extraction.
+
+Bloomberg defaults:
+
+```text
+https://feeds.bloomberg.com/markets/news.rss
+https://feeds.bloomberg.com/technology/news.rss
+https://feeds.bloomberg.com/politics/news.rss
+https://feeds.bloomberg.com/wealth/news.rss
+https://feeds.bloomberg.com/pursuits/news.rss
+https://feeds.bloomberg.com/businessweek/news.rss
+https://feeds.bloomberg.com/industries/news.rss
+```
+
 ---
 
 ## 🛠 Available Tools
@@ -193,6 +211,9 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 MARKETSTACK_API_KEY=...
 TAVILY_API_KEY=...
+
+# News RSS (optional, comma-separated; defaults include Bloomberg + Reuters)
+BLOOMBERG_RSS_URLS=
 
 # LangSmith (optional)
 LANGSMITH_API_KEY=...

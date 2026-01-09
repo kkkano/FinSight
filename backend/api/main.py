@@ -394,7 +394,15 @@ async def chat_stream_endpoint(request: ChatRequest):
                 return agent.report_handler._generate_simple_report_ir(ticker, content)
             report_builder = _build_report
 
-        if supervisor and ticker and hasattr(supervisor, "analyze_stream"):
+        supervisor_force = _env_bool("SUPERVISOR_STREAM_FORCE", "false")
+        use_supervisor = bool(
+            supervisor
+            and ticker
+            and hasattr(supervisor, "analyze_stream")
+            and (supervisor_force or report_agent is None)
+        )
+
+        if use_supervisor:
             async def generate_report():
                 async for chunk in stream_supervisor_sse(supervisor, resolved_query, ticker, report_builder):
                     yield chunk
