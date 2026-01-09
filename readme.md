@@ -380,7 +380,7 @@ For detailed technical design, code examples, and acceptance criteria, see full 
 
 ## 📌 Status
 
-> **Last Updated**: 2025-12-30 | **Version**: 0.5.0
+> **Last Updated**: 2026-01-09 | **Version**: 0.5.2
 
 ### Current Progress
 
@@ -388,23 +388,23 @@ For detailed technical design, code examples, and acceptance criteria, see full 
 |--------|----------|-------|
 | **Tools Layer** | ✅ 100% | Multi-source fallback, caching, circuit breaker |
 | **Agent Layer** | ✅ 80% | 4 agents done (Price/News/Macro/DeepSearch), 2 pending (Technical/Fundamental) |
-| **Orchestration** | ⚠️ 70% | Supervisor has async issues, temporarily disabled |
-| **Report Card** | ✅ 90% | Display works, lacks streaming effect |
-| **Streaming Output** | ⚠️ 30% | Simulated chunking only, not true token streaming |
+| **Orchestration** | ✅ 85% | Supervisor async fixed; streaming enabled in /chat/stream |
+| **Report Card** | ✅ 95% | Report streaming works; visual polish still pending |
+| **Streaming Output** | ✅ 85% | True token streaming + reference resolution in /chat/stream |
 
 ### Known Issues
 
 | Issue | Severity | Status | Solution |
 |-------|----------|--------|----------|
-| Supervisor `asyncio.run()` error | 🔴 High | Disabled | Need to async-ify entire call chain |
-| Streaming output is chunked only | 🟡 Medium | Pending | LLM needs `stream=True` support |
+| REPORT intent edge cases (CN/no ticker) | 🟡 Medium | Monitoring | Continue tuning rules + prompt clarity |
+| RAG/Self-RAG not implemented | 🟡 Medium | Pending | Add retrieval pipeline + reflective loop |
 
 ### Next Steps
 
-1. **True Streaming Output** - LLM stream=True + real-time frontend rendering
-2. **Fix Supervisor Async** - Replace `asyncio.run()` with proper `await`
-3. **Frontend Card Optimization** - Align with design_concept_v2.html
-4. **Add TechnicalAgent & FundamentalAgent** - MA/RSI/MACD + PE/ROE analysis
+1. **Add TechnicalAgent & FundamentalAgent** - MA/RSI/MACD + PE/ROE analysis
+2. **DeepSearchAgent Real Retrieval** - PDF parsing + credible sources
+3. **Self-RAG v1** - Reflective retrieval + evidence chain
+4. **Frontend Card Optimization** - Align with design_concept_v2.html
 
 > For detailed project status and architecture diagrams, see [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 

@@ -149,6 +149,60 @@ async def stream_report_sse(
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 
 
+async def stream_supervisor_sse(
+    supervisor: Any,
+    query: str,
+    ticker: str,
+    report_builder: Optional[Callable[[str], Any]] = None,
+) -> AsyncGenerator[str, None]:
+    """Stream supervisor analysis events as SSE lines and attach a report on done."""
+    consensus_text = ""
+    consensus_emitted = False
+
+    try:
+        async for raw in supervisor.analyze_stream(query, ticker):
+            if raw is None:
+                continue
+            payload = str(raw).strip()
+            if not payload:
+                continue
+
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                data = {"type": "token", "content": payload}
+
+            event_type = data.get("type")
+            if event_type == "token":
+                token = data.get("content", "")
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            elif event_type == "forum_done":
+                consensus_text = data.get("consensus", "") or consensus_text
+                if consensus_text and not consensus_emitted:
+                    consensus_emitted = True
+                    yield f"data: {json.dumps({'type': 'token', 'content': consensus_text}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            elif event_type == "done":
+                output = data.get("output") or {}
+                if not consensus_text:
+                    consensus_text = output.get("consensus", "")
+
+                done_payload: Dict[str, Any] = {"type": "done"}
+                if output:
+                    done_payload["output"] = output
+                if report_builder and consensus_text:
+                    try:
+                        done_payload["report"] = report_builder(consensus_text)
+                    except Exception as exc:
+                        done_payload["report_error"] = str(exc)
+
+                yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+            else:
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+    except Exception as exc:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+
+
 def create_thinking_callback(stream_generator):
     """创建思考过程回调函数"""
     def on_tool_start(tool_name: str, tool_input: str):

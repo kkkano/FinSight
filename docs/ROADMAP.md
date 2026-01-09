@@ -175,10 +175,12 @@ flowchart TD
     C --> M[ContextManager.add_turn]
     M --> N[_add_chart_marker (CHAT/REPORT/FOLLOWUP)]
 
-    C2 --> E2[ConversationRouter.route]
+    C2 --> R2[ContextManager.resolve_reference]
+    R2 --> E2[ConversationRouter.route]
     E2 --> F2{Intent}
+    F2 -->|REPORT + supervisor + ticker| S0[supervisor.analyze_stream -> stream_supervisor_sse]
     F2 -->|REPORT + report_agent| S1[report_agent.analyze_stream -> stream_report_sse]
-    F2 -->|REPORT no report_agent| S1b[agent.chat -> 句子切块流式]
+    F2 -->|REPORT fallback| S1b[agent.chat -> 句子切块流式]
     F2 -->|Others| S2[agent.chat -> 句子切块流式]
 ```
 
@@ -196,7 +198,7 @@ flowchart TD
 2.3 深度报告  
 示例："分析特斯拉"  
 路径：REPORT → Supervisor（有 ticker）→ _handle_report_async → ReportIR。  
-流式：/chat/stream 若有 report_agent 且支持 analyze_stream，则真实流式。
+流式：/chat/stream 优先 Supervisor analyze_stream；无 Supervisor 时再走 report_agent。
 
 2.4 报告但无 ticker  
 示例："写一份详细分析"  
@@ -226,25 +228,25 @@ flowchart TD
 2.10 指代消解  
 示例：上一轮问 "AAPL 股价"，本轮问 "它的新闻"  
 路径：ContextManager.resolve_reference → CHAT → _handle_news_query。  
-潜在问题：/chat/stream 未走 resolve_reference。
+状态：/chat/stream 已走 resolve_reference。
 
 ### 3) 体验缺陷 / 潜在纰漏 + task-stub
 
-Issue 1: REPORT 意图对中文/模糊请求不稳定  
-- 现状：部分中文“分析/研报/报告”可能路由为 CHAT。  
-- 建议：补充中文关键词 + LLM/规则兜底，允许“分析/研报/报告 + 公司名/中文名/股票名词”触发 REPORT。
+Issue 1: REPORT 意图对中文/模糊请求不稳定（已优化）  
+- 现状：已补充“研报/投研/估值/基本面”等关键词与金融上下文判断。  
+- 建议：继续观察边界语句与误判率。
 
-Issue 2: /chat/stream 非 REPORT 为伪流式  
-- 现状：按句子切块输出，无法“逐 token”体验。  
-- 建议：为 ChatHandler 与 FollowupHandler 接入真实模型流式，统一 SSE 事件协议。
+Issue 2: /chat/stream 非 REPORT 伪流式（已修复）  
+- 现状：已接入 ChatHandler/FollowupHandler 真实 token 流式。  
+- 建议：继续统一 SSE 事件语义与错误码格式。
 
-Issue 3: /chat/stream 未接入 Supervisor  
-- 现状：多 Agent 聚合仅在 /chat 生效，流式路径无法展示子 Agent 结果。  
-- 建议：补一条 Supervisor streaming 路径或允许 /chat/stream 调用 chat_async 并输出 token。
+Issue 3: /chat/stream Supervisor 接入（已完成）  
+- 现状：REPORT 流式已优先走 Supervisor analyze_stream。  
+- 建议：后续补充指代消解与无 ticker 的澄清体验。
 
-Issue 4: /chat/stream 未做指代消解  
-- 现状：短句指代（它/这个）在流式路径失效。  
-- 建议：在 stream 入口调用 ContextManager.resolve_reference。
+Issue 4: /chat/stream 未做指代消解（已完成）  
+- 现状：/chat/stream 已调用 ContextManager.resolve_reference。  
+- 建议：补充跨轮多指代的测试覆盖。
 
 Issue 5: ALERT/订阅为占位  
 - 现状：只返回“开发中”，用户预期落空。  
@@ -265,14 +267,14 @@ Issue 6: 深度新闻工具缺口
 4.2 子 Agent 缺陷  
 - TechnicalAgent / FundamentalAgent 未落地。  
 - DeepSearch / Macro 子 Agent 输出证据不足。  
-- Supervisor 仅在 /chat 生效，/chat/stream 无法展示多 Agent 结果。
+- Supervisor 在 /chat 与 /chat/stream 均可用，流式仍缺指代消解。
 
 ### 5) 优先级更新（结合现状）
 
 P0  
-1. 真正的流式输出（/chat/stream 全意图逐 token，统一 SSE 协议）。  
-2. /chat/stream 接入 Supervisor 或提供等价的报告流式聚合路径。  
-3. REPORT 意图与无 ticker 澄清优化 + /chat/stream 指代消解。
+1. ✅ 真正的流式输出（/chat/stream 全意图逐 token，统一 SSE 协议）。  
+2. ✅ /chat/stream 接入 Supervisor 报告流式聚合路径。  
+3. ✅ REPORT 意图与无 ticker 澄清优化 + /chat/stream 指代消解。
 
 P1  
 4. TechnicalAgent + FundamentalAgent。  
@@ -289,10 +291,10 @@ P3
 
 ## 📌 结论（2026-01-09 更新）
 
-当前对话体验的核心痛点来自“流式不真 + 路由/上下文不一致 + 占位功能落空”。
-优先级应聚焦在 **真实流式 + Supervisor/上下文完整接入**，其次补齐子 Agent 与检索能力：
-- 先打通 /chat/stream 的真正 token 流与多 Agent 聚合。
-- 同步修复 REPORT 意图稳定性与无 ticker 澄清体验。
+当前对话体验的核心痛点来自“占位功能落空 + RAG/子 Agent 能力缺口”。
+优先级应聚焦在 **子 Agent 补齐 + 检索能力落地**，其次持续优化交互体验：
+- /chat/stream 已完成 token 流、Supervisor 聚合与指代消解。
+- REPORT 意图稳定性与无 ticker 澄清已优化，后续以真实用户反馈微调。
 - 中期引入 DeepSearch 真实检索与 Self-RAG，提升报告可信度与可追溯性。
 
 ---
