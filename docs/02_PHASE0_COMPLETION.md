@@ -1,6 +1,6 @@
 # FinSight 阶段0：基座强化完成报告
 
-> 📅 **更新日期**: 2025-12-27
+> 📅 **更新日期**: 2026-01-09
 > ✅ **状态**: 已完成 (100%)
 
 ---
@@ -16,6 +16,7 @@ Phase 0 的核心目标是**为多 Agent 架构打下坚实的地基**，解决�
 ### 2.1 统一工具层 (`backend/tools.py`)
 - **标准化输出**: 所有工具函数（Price, News, Search）现在返回统一的 `dict` 结构，包含 `source`, `duration_ms`, `fallback_used` 等元数据。
 - **多源回退**: 实现了 `yfinance -> finnhub -> alpha_vantage -> tavily` 的自动降级策略。
+- **市场新闻源**: Reuters RSS + Bloomberg RSS（默认列表，支持 `BLOOMBERG_RSS_URLS` 扩展）+ Finnhub `general_news` 48h；搜索回退保留 3d/7d 时效过滤。
 - **搜索兜底**: 当所有 API 都挂掉时，自动调用 Search 工具抓取网页摘要，确保"永远有回复"。
 
 ### 2.2 KV 缓存系统 (`backend/services/cache.py`)

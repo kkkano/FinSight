@@ -15,7 +15,7 @@
 ### 1.2 专家 Agent 实现 (Week 3.5)
 - [x] **BaseAgent**: 定义标准接口与 `AgentOutput` 数据类。
 - [x] **PriceAgent**: 极速行情专家，不仅查价，还能看盘口（Bid/Ask）。
-- [x] **NewsAgent**: 舆情专家，集成 **Reflection Loop**（反思循环），自动去重、验证新闻源。
+- [x] **NewsAgent**: 舆情专家，集成 **Reflection Loop**（反思循环），官方 RSS（Reuters/Bloomberg）+ Finnhub 48h 优先，自动去重、验证新闻源。
 
 ### 1.3 编排与决策 (Week 4.0)
 - [x] **Supervisor**: 实现 `AgentSupervisor` (backend/orchestration/supervisor.py) 负责调度 Agent。

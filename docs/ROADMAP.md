@@ -254,6 +254,7 @@ Issue 5: ALERT/订阅为占位
 
 Issue 6: 深度新闻工具缺口  
 - 现状：deepsearch_news 可选存在，缺失时直接降级。  
+- 补充：市场热点已接入 Reuters/Bloomberg RSS + Finnhub 48h，仍缺少深度检索与反思循环。  
 - 建议：明确实现或固定降级策略，并标记“来源/覆盖率”。
 
 ### 4) 缺失能力与子 Agent 缺陷

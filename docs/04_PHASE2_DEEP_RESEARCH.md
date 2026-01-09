@@ -29,9 +29,10 @@
 
 ### 2.1 "广撒网，精捕捞"
 1.  **Broad Search**: `Tavily` 搜索 "AAPL investment thesis 2025"。
-2.  **Filter**: 这里的 URL 哪些是权威媒体（WSJ, Bloomberg）？哪些是水文？
-3.  **Deep Read**: 对筛选出的前 3 篇文章进行全文抓取 (`Jina Reader` 或 `Firecrawl`)。
-4.  **Synthesize**: 结合长上下文窗口生成深度观点。
+2.  **Freshness Gate**: 优先采用 Reuters/Bloomberg RSS + Finnhub 48h 的新鲜信号，过期条目触发补检。
+3.  **Filter**: 这里的 URL 哪些是权威媒体（WSJ, Bloomberg）？哪些是水文？
+4.  **Deep Read**: 对筛选出的前 3 篇文章进行全文抓取 (`Jina Reader` 或 `Firecrawl`)。
+5.  **Synthesize**: 结合长上下文窗口生成深度观点。
 
 ### 2.2 宏观联动
 - 如果 `MacroAgent` 发现最近处于"加息周期"，自动调低所有成长股的评级。

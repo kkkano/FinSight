@@ -113,6 +113,7 @@ async def stream_report_sse(
 ) -> AsyncGenerator[str, None]:
     """Stream report tokens as SSE lines and optionally attach a report on done."""
     content_parts: List[str] = []
+    done_received = False
 
     try:
         async for raw in report_agent.analyze_stream(query):
@@ -134,17 +135,19 @@ async def stream_report_sse(
                     content_parts.append(token)
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             elif event_type == "done":
-                done_payload: Dict[str, Any] = {"type": "done"}
-                if report_builder:
-                    full_content = "".join(content_parts)
-                    if full_content:
-                        try:
-                            done_payload["report"] = report_builder(full_content)
-                        except Exception as exc:
-                            done_payload["report_error"] = str(exc)
-                yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+                done_received = True
             else:
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+        done_payload: Dict[str, Any] = {"type": "done"}
+        if report_builder:
+            full_content = "".join(content_parts)
+            if full_content:
+                try:
+                    done_payload["report"] = report_builder(full_content)
+                except Exception as exc:
+                    done_payload["report_error"] = str(exc)
+        if done_received or content_parts:
+            yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
     except Exception as exc:
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 

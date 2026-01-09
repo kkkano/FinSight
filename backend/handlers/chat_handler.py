@@ -96,6 +96,8 @@ class ChatHandler:
             #    注意：如果用户说 "推荐几只像 AAPL 的股票"，explicit_tickers 会有 AAPL，这时不算纯泛化。
             #    但如果用户只说 "推荐几只股票"，explicit_tickers 为空。
             is_generic_rec = self._is_generic_recommendation_intent(query_lower)
+            is_price_query = self._is_price_query(query_lower)
+            is_news_query = self._is_news_query(query_lower)
 
             # 3. 只有在非泛化推荐，且没有明确 ticker 时，才继承上下文
             #    修复：如果用户问"推荐几只股票"，不要把上下文的 AAPL 强行塞进来
@@ -106,7 +108,7 @@ class ChatHandler:
             primary_ticker = tickers[0] if tickers else None
 
             # 优先处理新闻意图：有 ticker 直接拉新闻；无 ticker 先用市场泛化新闻，再兜底默认指数
-            if self._is_news_query(query_lower):
+            if is_news_query:
                 if primary_ticker:
                     return self._handle_news_query(primary_ticker, query, context)
                 if self.tools_module and hasattr(self.tools_module, "get_market_news_headlines"):
@@ -133,7 +135,10 @@ class ChatHandler:
                 print(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
 
                 # 新闻类无 ticker 查询：默认用大盘指数
-                if self._is_news_query(query_lower):
+                if is_price_query:
+                    return self._handle_price_clarification(query)
+
+                if is_news_query:
                     default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
                     return self._handle_news_query(default_news_ticker, query, context)
 
@@ -156,13 +161,13 @@ class ChatHandler:
             if self._is_composition_query(query_lower):
                 # 成分股/持仓查询
                 return self._handle_composition_query(ticker, query, context)
+            elif is_price_query:
+                return self._handle_price_query(ticker, query, context)
+            elif is_news_query:
+                return self._handle_news_query(ticker, query, context)
             elif self._is_advice_query(query_lower):
                 # 投资建议查询
                 return self._handle_advice_query(ticker, query, context)
-            elif self._is_price_query(query_lower):
-                return self._handle_price_query(ticker, query, context)
-            elif self._is_news_query(query_lower):
-                return self._handle_news_query(ticker, query, context)
             elif self._is_info_query(query_lower):
                 return self._handle_info_query(ticker, query, context)
             else:
@@ -194,12 +199,20 @@ class ChatHandler:
         return any(p in query for p in patterns)
 
     def _is_price_query(self, query: str) -> bool:
-        keywords = ['价格', '股价', '多少钱', '现价', 'price', 'how much', '涨', '跌', '行情', '走势', '表现']
+        keywords = ['价格', '股价', '多少钱', '现价', '市价', '报价', 'price', 'how much', '涨', '跌', '行情', '走势', '表现']
         return any(kw in query for kw in keywords)
     
     def _is_news_query(self, query: str) -> bool:
-        keywords = ['新闻', '消息', 'news', '最新', '发生', '事件', '近几天', '最近', '头条', 'headline']
-        return any(kw in query for kw in keywords)
+        news_keywords = ['新闻', '消息', 'news', '头条', 'headline', '热点', '快讯', '事件', '舆情', '公告']
+        temporal_only = ['最新', '最近', '近几天', '这几天', '本周', '今天', '近一周']
+
+        if any(kw in query for kw in news_keywords):
+            return True
+
+        if any(kw in query for kw in temporal_only):
+            return not self._is_price_query(query)
+
+        return False
     
     def _is_info_query(self, query: str) -> bool:
         keywords = ['公司', '简介', 'company', 'info', '信息', '介绍', '是什么']
@@ -259,6 +272,20 @@ class ChatHandler:
             'metadata': {},
         }
         
+    def _handle_price_clarification(self, query: str) -> Dict[str, Any]:
+        """价格类查询但缺少 ticker 时的澄清提示。"""
+        response = (
+            "你想查询哪一只股票/指数的实时行情？\n"
+            "请提供股票代码或公司名称，例如：AAPL/苹果、GOOGL/谷歌、^GSPC/标普500。"
+        )
+        return {
+            'success': True,
+            'response': response,
+            'intent': 'clarify',
+            'needs_clarification': True,
+            'thinking': "Missing ticker for price query; asked for clarification.",
+        }
+
     def _handle_price_query(
         self, 
         ticker: str, 
@@ -266,6 +293,10 @@ class ChatHandler:
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
         """处理价格查询"""
+        if not ticker:
+            return self._handle_price_clarification(query)
+
+        orchestrator_error = None
         # 优先使用 Orchestrator (假设 Orchestrator 已经处理了缓存/回退逻辑)
         if self.orchestrator and hasattr(self.orchestrator, 'fetch'):
             try:
@@ -294,15 +325,10 @@ class ChatHandler:
                         'thinking': f"Fetched price via Orchestrator (Source: {result.source}, fallback_used={getattr(result, 'fallback_used', False)})"
                     }
                 elif result:
-                    return {
-                        'success': False,
-                        'response': f"无法获取 {ticker} 的价格信息: {result.error}",
-                        'error': result.error,
-                        'intent': 'chat',
-                        'thinking': f"Orchestrator failed to fetch price: {result.error}"
-                    }
+                    orchestrator_error = result.error
             except Exception as e:
                 traceback.print_exc()
+                orchestrator_error = str(e)
                 print(f"[ChatHandler] Orchestrator price fetch failed: {e}")
         
         # 回退到直接调用 tools
@@ -310,6 +336,8 @@ class ChatHandler:
             try:
                 # 假设 get_stock_price 返回字符串或字典
                 price_info = self.tools_module.get_stock_price(ticker)
+                if isinstance(price_info, str) and price_info.lower().startswith("error"):
+                    raise ValueError(price_info)
                 return {
                     'success': True,
                     'response': price_info,
@@ -319,14 +347,25 @@ class ChatHandler:
                 }
             except Exception as e:
                 traceback.print_exc()
+                fallback = self._fallback_price_from_kline(ticker)
+                if fallback:
+                    return fallback
+
+                error_msg = str(e)
+                if orchestrator_error:
+                    error_msg = f"{orchestrator_error}; {error_msg}"
                 return {
                     'success': False,
-                    'response': f"获取 {ticker} 价格时出错: {str(e)}",
-                    'error': str(e),
+                    'response': f"获取 {ticker} 价格时出错: {error_msg}",
+                    'error': error_msg,
                     'intent': 'chat',
-                    'thinking': f"Direct tool call for price failed: {str(e)}"
+                    'thinking': f"Direct tool call for price failed: {error_msg}"
                 }
         
+        fallback = self._fallback_price_from_kline(ticker)
+        if fallback:
+            return fallback
+
         return {
             'success': False,
             'response': "价格查询工具暂不可用，请检查后端配置。",
@@ -335,6 +374,33 @@ class ChatHandler:
             'thinking': "No price fetching tool available."
         }
     
+    def _fallback_price_from_kline(self, ticker: str) -> Optional[Dict[str, Any]]:
+        """价格兜底：从 K 线数据取最近收盘价。"""
+        if not self.tools_module or not hasattr(self.tools_module, 'get_stock_historical_data'):
+            return None
+
+        try:
+            kline = self.tools_module.get_stock_historical_data(ticker, period="5d", interval="1d")
+            data = kline.get("kline_data") if isinstance(kline, dict) else None
+            if not data:
+                return None
+            last = data[-1]
+            close_price = last.get("close")
+            if close_price is None:
+                return None
+            date_label = last.get("time", "recent")
+            response = f"{ticker} 最近收盘价: ${float(close_price):.2f} (日期: {date_label})"
+            return {
+                'success': True,
+                'response': response,
+                'data': {'ticker': ticker, 'raw_kline': last, 'source': 'kline'},
+                'intent': 'market_data',
+                'thinking': "Price fallback to kline data.",
+            }
+        except Exception as e:
+            print(f"[ChatHandler] Kline fallback failed for {ticker}: {e}")
+            return None
+
     def _handle_news_query(
         self, 
         ticker: str, 
@@ -770,9 +836,9 @@ Search Results: {search_result[:3000]}
     def _generate_clarification_response(self, query: str) -> str:
         """Generate clarification request"""
         responses = [
-            "请问您想了解哪支股票？请提供股票代码（如 AAPL）或公司名称。",
+            "请问您想了解哪支股票或指数？请提供股票代码或公司名称，例如 AAPL/苹果、^GSPC/标普500。",
             "我需要知道您问的是哪支股票。请告诉我股票代码或公司名称，例如 'AAPL' 或 '苹果'。",
-            "您想查询哪支股票的信息？请提供股票代码或公司名称。",
+            "您想查询哪支股票的信息？可以直接说公司名或指数名称，我会帮你匹配代码。",
         ]
         return random.choice(responses)
     
@@ -805,7 +871,7 @@ Search Results: {search_result[:3000]}
         basic_result = self.handle(query, metadata, context)
         
         # 行情类直接返回，避免 LLM 改写价格细节
-        if basic_result.get('intent') in {'price'}:
+        if basic_result.get('intent') in {'price', 'market_news', 'company_news'} or basic_result.get('needs_clarification'):
             return basic_result
         
         if not basic_result.get('success') or not self.llm or not LANGCHAIN_AVAILABLE:
@@ -842,7 +908,7 @@ Search Results: {search_result[:3000]}
         basic_result = self.handle(query, metadata, context)
 
         # 行情类直接返回，避免 LLM 改写价格细节
-        if basic_result.get('intent') in {'price'}:
+        if basic_result.get('intent') in {'price', 'market_news', 'company_news'} or basic_result.get('needs_clarification'):
             result_container.update(basic_result)
             response_text = basic_result.get('response', '')
             if response_text:

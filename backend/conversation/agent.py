@@ -235,7 +235,7 @@ class ConversationAgent:
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "reference_resolution",
-                    "message": "?????????...",
+                    "message": "正在解析上下文引用...",
                     "timestamp": datetime.now().isoformat()
                 })
 
@@ -244,7 +244,7 @@ class ConversationAgent:
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "intent_classification",
-                    "message": "????????...",
+                    "message": "正在识别查询意图...",
                     "timestamp": datetime.now().isoformat()
                 })
 
@@ -267,14 +267,14 @@ class ConversationAgent:
                 ticker = metadata['tickers'][0]
                 thinking_steps.append({
                     "stage": "data_collection",
-                    "message": f"???? {ticker} ???...",
+                    "message": f"正在获取 {ticker} 的数据...",
                     "timestamp": datetime.now().isoformat()
                 })
 
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "processing",
-                    "message": f"????{intent.value}??...",
+                    "message": f"正在生成{intent.value}响应...",
                     "timestamp": datetime.now().isoformat()
                 })
 
@@ -288,7 +288,7 @@ class ConversationAgent:
             if capture_thinking:
                 thinking_steps.append({
                     "stage": "complete",
-                    "message": "????",
+                    "message": "处理完成",
                     "timestamp": datetime.now().isoformat()
                 })
 
@@ -319,7 +319,7 @@ class ConversationAgent:
             traceback.print_exc()
             error_result = {
                 'success': False,
-                'response': f"???????: {str(e)}",
+                'response': f"处理查询时出错: {str(e)}",
                 'error': str(e),
                 'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000,
                 'thinking_elapsed_seconds': round((datetime.now() - start_time).total_seconds(), 2),
@@ -337,7 +337,12 @@ class ConversationAgent:
 
     async def _handle_report_async(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Async report path that can await AgentSupervisor."""
-        if self.supervisor and metadata.get('tickers'):
+        use_supervisor = bool(
+            self.supervisor
+            and metadata.get('tickers')
+            and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
+        )
+        if use_supervisor:
             ticker = metadata['tickers'][0]
             try:
                 analysis_result = await self.supervisor.analyze(query, ticker, user_profile=None)
@@ -366,16 +371,21 @@ class ConversationAgent:
 
     def _handle_report(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理报告请求 (优先使用 Supervisor)"""
-        if self.supervisor and metadata.get('tickers'):
+        use_supervisor = bool(
+            self.supervisor
+            and metadata.get('tickers')
+            and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
+        )
+        if use_supervisor:
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
                 try:
                     return asyncio.run(self._handle_report_async(query, metadata))
                 except Exception as e:
-                    print(f"[Agent] Supervisor ????: {e}")
+                    print(f"[Agent] Supervisor 调用失败: {e}")
             except Exception as e:
-                print(f"[Agent] Supervisor ????????: {e}")
+                print(f"[Agent] Supervisor 调用异常: {e}")
 
         result = self.report_handler.handle(query, metadata, self.context)
         print(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
@@ -432,6 +442,22 @@ class ConversationAgent:
 
     def _handle_clarify(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理需要澄清的查询"""
+        clarify_reason = metadata.get("clarify_reason")
+        if clarify_reason == "followup_without_context":
+            response = """看起来你是在追问上一条内容，但我这边没有上下文。可以告诉我你具体想追问哪只股票/指数/行业或哪条新闻吗？
+
+例如：
+1. "AAPL 为什么今天下跌？"
+2. "最近市场热点有哪些？"
+3. "解释一下刚才的结论：XXX"
+"""
+            return {
+                'success': True,
+                'response': response,
+                'intent': 'clarify',
+                'needs_clarification': True,
+            }
+
         return {
             'success': True,
             'response': """抱歉，我不太确定您想了解什么。
