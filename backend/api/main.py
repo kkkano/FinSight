@@ -6,9 +6,11 @@ import os
 import sys
 import traceback
 from datetime import datetime, timezone
+from typing import Any, Dict
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
+from backend.api.streaming import stream_report_sse
 # 将项目根目录添加到 sys.path
 # 这样可以确保 backend, config, langchain_agent 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -341,7 +343,10 @@ async def chat_endpoint(request: ChatRequest):
             query = request.query
         
         # 调用 Agent 的 chat 方法（捕获思考过程）
-        result = agent.chat(query, capture_thinking=True)
+        if hasattr(agent, "chat_async"):
+            result = await agent.chat_async(query, capture_thinking=True)
+        else:
+            result = agent.chat(query, capture_thinking=True)
         
         # 构造符合前端预期的响应格式
         return {
@@ -378,77 +383,127 @@ async def chat_stream_endpoint(request: ChatRequest):
 
     # 2. 根据意图决定处理方式
     if intent == Intent.REPORT:
-        # 深度报告：直接使用同步 agent.chat() 方法，确保 report 正确传递
-        async def generate_report():
-            try:
-                print(f"[Stream REPORT] 使用同步 agent.chat() 方法")
-                result = agent.chat(request.query, capture_thinking=True)
-                response_text = result.get('response', '')
-                report_data = result.get('report')
-                
-                print(f"[Stream REPORT] agent.chat 返回 - report 存在: {report_data is not None}")
-                if report_data:
-                    print(f"[Stream REPORT] report 字段: {list(report_data.keys())}")
-                else:
-                    print(f"[Stream REPORT] 警告: report 为 None!")
-                
-                # 分块发送响应文本（模拟流式效果）
-                import re
-                sentences = re.split(r'([。！？\n])', response_text)
-                buffer = ""
-                for i, part in enumerate(sentences):
-                    buffer += part
-                    if part in ['。', '！', '？', '\n'] or i == len(sentences) - 1:
-                        if buffer.strip():
-                            yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n\n"
-                            buffer = ""
-                
-                # 发送 done 事件（包含 report）
-                done_data = {'type': 'done'}
-                if report_data:
-                    done_data['report'] = report_data
-                    print(f"[Stream REPORT] 发送 done 事件，包含 report")
-                else:
-                    print(f"[Stream REPORT] 发送 done 事件，不包含 report")
-                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        report_agent = getattr(agent, "report_agent", None)
+        if report_agent and hasattr(report_agent, "analyze_stream"):
+            ticker = None
+            if metadata.get("tickers"):
+                ticker = metadata["tickers"][0]
+
+            report_builder = None
+            if ticker and getattr(agent, "report_handler", None) and hasattr(agent.report_handler, "_generate_simple_report_ir"):
+                def _build_report(content: str):
+                    return agent.report_handler._generate_simple_report_ir(ticker, content)
+                report_builder = _build_report
+
+            async def generate_report():
+                async for chunk in stream_report_sse(report_agent, request.query, report_builder):
+                    yield chunk
+        else:
+            # Stream fallback using the non-streaming report path.
+            async def generate_report():
+                try:
+                    print(f"[Stream REPORT] using sync agent.chat()")
+                    result = agent.chat(request.query, capture_thinking=True)
+                    response_text = result.get('response', '')
+                    report_data = result.get('report')
+
+                    print(f"[Stream REPORT] agent.chat report present: {report_data is not None}")
+                    if report_data:
+                        print(f"[Stream REPORT] report keys: {list(report_data.keys())}")
+
+                    import re
+                    sentences = re.split(r'([???\n])', response_text)
+                    buffer = ""
+                    for i, part in enumerate(sentences):
+                        buffer += part
+                        if part in ['?', '?', '?', '\n'] or i == len(sentences) - 1:
+                            if buffer.strip():
+                                yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n\n"
+                                buffer = ""
+
+                    done_data = {'type': 'done'}
+                    if report_data:
+                        done_data['report'] = report_data
+                        print(f"[Stream REPORT] done event includes report")
+                    yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(
             generate_report(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
         )
+
     else:
-        # 其他意图：使用快速响应，模拟流式输出
+        # 其他意图：优先走真实 token 流式输出
         async def generate_chat():
             try:
-                # 调用对应的 handler
-                result = agent.chat(request.query, capture_thinking=True)
-                response_text = result.get('response', '')
-                report_data = result.get('report')  # Phase 2: 获取 report 数据
+                agent.stats['total_queries'] += 1
+                agent.stats['intents'][intent.value] = agent.stats['intents'].get(intent.value, 0) + 1
 
-                # 模拟流式输出：按句子分块发送
-                import re
-                sentences = re.split(r'([。！？\n])', response_text)
-                buffer = ""
-                for i, part in enumerate(sentences):
-                    buffer += part
-                    if part in ['。', '！', '？', '\n'] or i == len(sentences) - 1:
-                        if buffer.strip():
-                            yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n"
-                            buffer = ""
+                response_text = ""
+                result: Dict[str, Any] = {}
 
-                # Phase 2: 在 done 事件中包含 report 数据
+                if intent == Intent.CHAT and hasattr(agent.chat_handler, "stream_with_llm"):
+                    result_container: Dict[str, Any] = {}
+                    async for token in agent.chat_handler.stream_with_llm(
+                        request.query, metadata, agent.context, result_container
+                    ):
+                        if token:
+                            response_text += token
+                            yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
+                    result = result_container or {'success': True, 'response': response_text, 'intent': 'chat'}
+
+                elif intent == Intent.FOLLOWUP and hasattr(agent.followup_handler, "stream_with_llm"):
+                    result_container = {}
+                    async for token in agent.followup_handler.stream_with_llm(
+                        request.query, metadata, agent.context, result_container
+                    ):
+                        if token:
+                            response_text += token
+                            yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
+                    result = result_container or {'success': True, 'response': response_text, 'intent': 'followup'}
+
+                elif handler:
+                    result = handler(request.query, metadata)
+                    response_text = result.get('response', '')
+                    if response_text:
+                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
+                else:
+                    result = agent._default_handler(request.query, metadata)
+                    response_text = result.get('response', '')
+                    if response_text:
+                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
+
+                if not result.get('response'):
+                    result['response'] = response_text
+
+                if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
+                    before = result.get('response', '')
+                    result = agent._add_chart_marker(result, request.query, metadata, request.query)
+                    after = result.get('response', '')
+                    if after.startswith(before) and after != before:
+                        suffix = after[len(before):]
+                        if suffix.strip():
+                            yield f"data: {json.dumps({'type': 'token', 'content': suffix}, ensure_ascii=False)}\n\n"
+
+                agent.context.add_turn(
+                    query=request.query,
+                    intent=intent.value,
+                    response=result.get('response', ''),
+                    metadata=metadata
+                )
+
                 done_data = {'type': 'done'}
-                if report_data:
-                    done_data['report'] = report_data
-                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n"
+                if result.get('report'):
+                    done_data['report'] = result['report']
+                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(
             generate_chat(),

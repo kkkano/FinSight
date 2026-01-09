@@ -139,6 +139,34 @@ class FollowupHandler:
         
         return 'general'  # 通用追问
     
+    def _build_llm_prompt(
+        self,
+        query: str,
+        followup_type: str,
+        current_focus: Optional[str],
+        cached_data: Dict[str, Any],
+        context: Any
+    ) -> str:
+        from backend.prompts.system_prompts import FOLLOWUP_SYSTEM_PROMPT
+
+        # 获取对话历史
+        conversation_history = self._format_conversation_history(context)
+
+        # 格式化缓存数据
+        previous_data = self._format_cached_data(cached_data)
+
+        prompt = FOLLOWUP_SYSTEM_PROMPT.format(
+            conversation_history=conversation_history,
+            current_focus=current_focus or "No specific focus",
+            previous_data=previous_data,
+            query=query
+        )
+
+        # Add specific guidance based on follow-up type
+        type_guidance = self._get_type_guidance(followup_type)
+        prompt += f"\n\nSpecific Guidance: {type_guidance}"
+        return prompt
+
     def _handle_with_llm(
         self,
         query: str,
@@ -150,24 +178,13 @@ class FollowupHandler:
     ) -> Dict[str, Any]:
         """使用 LLM 处理追问"""
         from langchain_core.messages import HumanMessage
-        from backend.prompts.system_prompts import FOLLOWUP_SYSTEM_PROMPT
-        
-        # 获取对话历史
-        conversation_history = self._format_conversation_history(context)
-        
-        # 格式化缓存数据
-        previous_data = self._format_cached_data(cached_data)
-        
-        prompt = FOLLOWUP_SYSTEM_PROMPT.format(
-            conversation_history=conversation_history,
-            current_focus=current_focus or "No specific focus",
-            previous_data=previous_data,
-            query=query
+        prompt = self._build_llm_prompt(
+            query=query,
+            followup_type=followup_type,
+            current_focus=current_focus,
+            cached_data=cached_data,
+            context=context
         )
-        
-        # Add specific guidance based on follow-up type
-        type_guidance = self._get_type_guidance(followup_type)
-        prompt += f"\n\nSpecific Guidance: {type_guidance}"
         
         try:
             response = self.llm.invoke([HumanMessage(content=prompt)])
@@ -187,6 +204,105 @@ class FollowupHandler:
                 'error': str(e),
                 'intent': 'followup',
             }
+
+    async def stream_with_llm(
+        self,
+        query: str,
+        metadata: Dict[str, Any],
+        context: Optional[Any],
+        result_container: Dict[str, Any]
+    ):
+        """Stream followup response token by token when possible."""
+        if not context or not context.history:
+            result = {
+                'success': True,
+                'response': self._no_context_response(),
+                'needs_clarification': True,
+                'intent': 'followup',
+            }
+            result_container.update(result)
+            yield result['response']
+            return
+
+        followup_type = self._classify_followup(query)
+        last_response = context.get_last_response()
+        last_long_response = getattr(context, "get_last_long_response", lambda: None)()
+        current_focus = context.current_focus
+        cached_data = context.get_all_cached_data()
+
+        if last_long_response:
+            action = self._detect_report_action(query.lower())
+            result = self._handle_report_followup(action, last_long_response)
+            result_container.update(result)
+            if result.get('response'):
+                yield result['response']
+            return
+
+        if self.llm and hasattr(self.llm, 'astream'):
+            from langchain_core.messages import HumanMessage
+            prompt = self._build_llm_prompt(
+                query=query,
+                followup_type=followup_type,
+                current_focus=current_focus,
+                cached_data=cached_data,
+                context=context
+            )
+            full_response = ""
+            try:
+                async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
+                    token = getattr(chunk, 'content', '')
+                    if token:
+                        full_response += token
+                        yield token
+
+                result = {
+                    'success': True,
+                    'response': full_response,
+                    'intent': 'followup',
+                    'followup_type': followup_type,
+                    'current_focus': current_focus,
+                }
+                result_container.update(result)
+                return
+            except Exception:
+                # Fall back to non-streaming path below.
+                pass
+
+        if self.llm:
+            try:
+                from langchain_core.messages import HumanMessage
+                prompt = self._build_llm_prompt(
+                    query=query,
+                    followup_type=followup_type,
+                    current_focus=current_focus,
+                    cached_data=cached_data,
+                    context=context
+                )
+                response = self.llm.invoke([HumanMessage(content=prompt)])
+                result = {
+                    'success': True,
+                    'response': response.content,
+                    'intent': 'followup',
+                    'followup_type': followup_type,
+                    'current_focus': current_focus,
+                }
+                result_container.update(result)
+                if result.get('response'):
+                    yield result['response']
+                return
+            except Exception:
+                pass
+
+        result = self._handle_without_llm(
+            query=query,
+            followup_type=followup_type,
+            last_response=last_response,
+            current_focus=current_focus,
+            cached_data=cached_data
+        )
+        result_container.update(result)
+        if result.get('response'):
+            yield result['response']
     
     def _handle_without_llm(
         self,

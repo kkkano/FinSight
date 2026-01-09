@@ -5,7 +5,7 @@
 用于展示 Agent 的思考过程
 """
 
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, Optional, Callable, List
 from fastapi.responses import StreamingResponse
 import json
 from datetime import datetime
@@ -104,6 +104,49 @@ class ThinkingStream:
                 "message": str(e),
                 "timestamp": datetime.now().isoformat()
             }, ensure_ascii=False) + "\n"
+
+
+async def stream_report_sse(
+    report_agent: Any,
+    query: str,
+    report_builder: Optional[Callable[[str], Any]] = None,
+) -> AsyncGenerator[str, None]:
+    """Stream report tokens as SSE lines and optionally attach a report on done."""
+    content_parts: List[str] = []
+
+    try:
+        async for raw in report_agent.analyze_stream(query):
+            if raw is None:
+                continue
+            payload = str(raw).strip()
+            if not payload:
+                continue
+
+            try:
+                data = json.loads(payload)
+            except json.JSONDecodeError:
+                data = {"type": "token", "content": payload}
+
+            event_type = data.get("type")
+            if event_type == "token":
+                token = data.get("content", "")
+                if token:
+                    content_parts.append(token)
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            elif event_type == "done":
+                done_payload: Dict[str, Any] = {"type": "done"}
+                if report_builder:
+                    full_content = "".join(content_parts)
+                    if full_content:
+                        try:
+                            done_payload["report"] = report_builder(full_content)
+                        except Exception as exc:
+                            done_payload["report_error"] = str(exc)
+                yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+            else:
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+    except Exception as exc:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
 
 
 def create_thinking_callback(stream_generator):
