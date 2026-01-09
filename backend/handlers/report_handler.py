@@ -90,7 +90,7 @@ class ReportHandler:
         if not tickers:
             return {
                 'success': True,
-                'response': self._generate_clarification_response(),
+                'response': self._generate_clarification_response(metadata),
                 'needs_clarification': True,
                 'intent': 'report',
             }
@@ -619,16 +619,24 @@ This is a simplified report. For comprehensive investment advice, please consult
 
 如果不需要特别指定，我也可以直接生成**综合全面分析报告**。您希望如何继续？"""
     
-    def _generate_clarification_response(self) -> str:
+    def _generate_clarification_response(self, metadata: Optional[Dict[str, Any]] = None) -> str:
         """生成澄清请求"""
-        return """我需要知道您想分析哪支股票。请提供：
+        metadata = metadata or {}
+        company_names = metadata.get('company_names') or []
+        hint_line = ""
+        if company_names:
+            hint_line = f"我识别到可能的公司名：{company_names[0]}。如果是它，请确认并给出股票代码。\n\n"
 
+        return f"""为了生成深度报告，请告诉我具体标的。
+
+{hint_line}你可以提供：
 1. 股票代码（如 AAPL, TSLA, NVDA）
-2. 或公司名称（如 苹果, 特斯拉, 英伟达）
+2. 公司名称（如 苹果/特斯拉/英伟达）
+3. 指数或 ETF（如 标普500/纳斯达克100/SPY）
 
-例如：
+示例：
 - "分析 AAPL"
-- "帮我分析一下特斯拉"
-- "NVDA 值得投资吗？"
+- "做一份特斯拉研报"
+- "标普500 深度分析"
 
-请告诉我您想分析的目标。"""
+请告诉我要分析的目标。"""

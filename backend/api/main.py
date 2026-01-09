@@ -10,7 +10,7 @@ from typing import Any, Dict
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from backend.api.streaming import stream_report_sse
+from backend.api.streaming import stream_report_sse, stream_supervisor_sse
 # 将项目根目录添加到 sys.path
 # 这样可以确保 backend, config, langchain_agent 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -377,33 +377,37 @@ async def chat_stream_endpoint(request: ChatRequest):
 
     import json
 
-    # 1. 先进行意图路由
+    # 1. 先进行指代消解 + 意图路由
     from backend.conversation.router import Intent
-    intent, metadata, handler = agent.router.route(request.query, agent.context)
+    resolved_query = agent.context.resolve_reference(request.query)
+    intent, metadata, handler = agent.router.route(resolved_query, agent.context)
 
     # 2. 根据意图决定处理方式
     if intent == Intent.REPORT:
         report_agent = getattr(agent, "report_agent", None)
-        if report_agent and hasattr(report_agent, "analyze_stream"):
-            ticker = None
-            if metadata.get("tickers"):
-                ticker = metadata["tickers"][0]
+        supervisor = getattr(agent, "supervisor", None)
+        ticker = metadata["tickers"][0] if metadata.get("tickers") else None
 
-            report_builder = None
-            if ticker and getattr(agent, "report_handler", None) and hasattr(agent.report_handler, "_generate_simple_report_ir"):
-                def _build_report(content: str):
-                    return agent.report_handler._generate_simple_report_ir(ticker, content)
-                report_builder = _build_report
+        report_builder = None
+        if ticker and getattr(agent, "report_handler", None) and hasattr(agent.report_handler, "_generate_simple_report_ir"):
+            def _build_report(content: str):
+                return agent.report_handler._generate_simple_report_ir(ticker, content)
+            report_builder = _build_report
 
+        if supervisor and ticker and hasattr(supervisor, "analyze_stream"):
             async def generate_report():
-                async for chunk in stream_report_sse(report_agent, request.query, report_builder):
+                async for chunk in stream_supervisor_sse(supervisor, resolved_query, ticker, report_builder):
+                    yield chunk
+        elif report_agent and hasattr(report_agent, "analyze_stream"):
+            async def generate_report():
+                async for chunk in stream_report_sse(report_agent, resolved_query, report_builder):
                     yield chunk
         else:
             # Stream fallback using the non-streaming report path.
             async def generate_report():
                 try:
                     print(f"[Stream REPORT] using sync agent.chat()")
-                    result = agent.chat(request.query, capture_thinking=True)
+                    result = agent.chat(resolved_query, capture_thinking=True)
                     response_text = result.get('response', '')
                     report_data = result.get('report')
 
@@ -451,7 +455,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                 if intent == Intent.CHAT and hasattr(agent.chat_handler, "stream_with_llm"):
                     result_container: Dict[str, Any] = {}
                     async for token in agent.chat_handler.stream_with_llm(
-                        request.query, metadata, agent.context, result_container
+                        resolved_query, metadata, agent.context, result_container
                     ):
                         if token:
                             response_text += token
@@ -461,7 +465,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                 elif intent == Intent.FOLLOWUP and hasattr(agent.followup_handler, "stream_with_llm"):
                     result_container = {}
                     async for token in agent.followup_handler.stream_with_llm(
-                        request.query, metadata, agent.context, result_container
+                        resolved_query, metadata, agent.context, result_container
                     ):
                         if token:
                             response_text += token
@@ -469,12 +473,12 @@ async def chat_stream_endpoint(request: ChatRequest):
                     result = result_container or {'success': True, 'response': response_text, 'intent': 'followup'}
 
                 elif handler:
-                    result = handler(request.query, metadata)
+                    result = handler(resolved_query, metadata)
                     response_text = result.get('response', '')
                     if response_text:
                         yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
                 else:
-                    result = agent._default_handler(request.query, metadata)
+                    result = agent._default_handler(resolved_query, metadata)
                     response_text = result.get('response', '')
                     if response_text:
                         yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
@@ -484,7 +488,7 @@ async def chat_stream_endpoint(request: ChatRequest):
 
                 if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
                     before = result.get('response', '')
-                    result = agent._add_chart_marker(result, request.query, metadata, request.query)
+                    result = agent._add_chart_marker(result, request.query, metadata, resolved_query)
                     after = result.get('response', '')
                     if after.startswith(before) and after != before:
                         suffix = after[len(before):]

@@ -162,7 +162,7 @@ class ConversationRouter:
             metadata["last_long_response"] = last_long_response
         
         # 2. 规则快速匹配 (优先处理闲聊/问候，避免浪费 LLM Token 或被误判)
-        quick_intent = self._quick_match(query, context_summary, last_long_response)
+        quick_intent = self._quick_match(query, context_summary, last_long_response, metadata)
         if quick_intent:
             return quick_intent, metadata
 
@@ -182,10 +182,17 @@ class ConversationRouter:
         # 5. 默认回退：既没有 ticker，也没有匹配到规则 -> CLARIFY
         return Intent.CLARIFY, metadata
     
-    def _quick_match(self, query: str, context_summary: str = "", last_long_response: Optional[str] = None) -> Optional[Intent]:
+    def _quick_match(
+        self,
+        query: str,
+        context_summary: str = "",
+        last_long_response: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[Intent]:
         """
         规则快速匹配
         """
+        metadata = metadata or {}
         query_lower = query.lower().strip()
         
         # === 1. 问候/闲聊 (最高优先级) ===
@@ -207,14 +214,24 @@ class ConversationRouter:
         # === 2. 报告关键词 ===
         report_keywords = [
             '分析', '报告', '详细分析', '深度分析', '全面分析', '投资分析',
+            '研报', '研究报告', '投研', '投研报告', '深度研究',
+            '基本面', '估值', '财报', '业绩', '价值分析', '投资价值',
+            '公司研究', '财务分析',
             'analyze', 'analysis', 'report', 'detailed', 'comprehensive',
+            'fundamental analysis', 'valuation', 'earnings', 'financials',
+            'worth buying', 'should i buy', 'buy or sell',
             '值得投资吗', '能买吗', '可以买吗', '要不要买',
             '值得买吗', '能投吗', '可以投吗', '要不要投',
-            'worth buying', 'should i buy', 'buy or sell',
             '怎么看', '看好吗', '前景如何', '未来走势',
         ]
         if any(kw in query_lower for kw in report_keywords):
-            return Intent.REPORT
+            has_financial_context = (
+                self._contains_financial_keywords(query_lower)
+                or bool(metadata.get('tickers'))
+                or bool(metadata.get('company_names'))
+            )
+            if has_financial_context:
+                return Intent.REPORT
         
         # === 3. 监控/提醒关键词 ===
         alert_keywords = [
@@ -286,11 +303,14 @@ class ConversationRouter:
 
     def _contains_financial_keywords(self, query: str) -> bool:
         """检查查询是否包含金融相关关键词"""
+        query_lower = query.lower()
         financial_keywords = [
-            '股票', '基金', '指数', '价格', '走势', '分析', '报告', '投资', '行情', 
-            'ticker', 'stock', 'price', 'analyze', 'report', 'market', 'finance'
+            '股票', '基金', '指数', 'etf', '价格', '走势', '分析', '报告', '投资', '行情',
+            '研报', '投研', '基本面', '估值', '财报', '业绩', '市值', '营收', '利润',
+            'ticker', 'stock', 'price', 'analyze', 'report', 'market', 'finance',
+            'fundamental', 'valuation', 'earnings', 'financials'
         ]
-        return any(kw in query for kw in financial_keywords)
+        return any(kw in query_lower for kw in financial_keywords)
     
     def _llm_classify(self, query: str, context_summary: str, metadata: Dict[str, Any] = None) -> Intent:
         """使用 LLM 进行意图分类（主要方法）"""
