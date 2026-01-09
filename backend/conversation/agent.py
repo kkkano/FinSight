@@ -6,6 +6,7 @@ ConversationAgent - 对话式 Agent 统一入口
 
 import sys
 import os
+import asyncio
 from typing import Dict, Any, Optional, Generator, List
 from datetime import datetime
 
@@ -221,45 +222,160 @@ class ConversationAgent:
                 error_result['thinking'] = thinking_steps
             return error_result
 
+
+    async def chat_async(self, query: str, capture_thinking: bool = False) -> Dict[str, Any]:
+        """
+        Async version of chat() that can await Supervisor paths.
+        """
+        self.stats['total_queries'] += 1
+        start_time = datetime.now()
+        thinking_steps = [] if capture_thinking else None
+
+        try:
+            if capture_thinking:
+                thinking_steps.append({
+                    "stage": "reference_resolution",
+                    "message": "?????????...",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            resolved_query = self.context.resolve_reference(query)
+
+            if capture_thinking:
+                thinking_steps.append({
+                    "stage": "intent_classification",
+                    "message": "????????...",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            intent, metadata, handler = self.router.route(resolved_query, self.context)
+
+            if capture_thinking:
+                thinking_steps.append({
+                    "stage": "intent_classification",
+                    "result": {
+                        "intent": intent.value,
+                        "tickers": metadata.get('tickers', []),
+                        "company_names": metadata.get('company_names', [])
+                    },
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            self.stats['intents'][intent.value] = self.stats['intents'].get(intent.value, 0) + 1
+
+            if capture_thinking and metadata.get('tickers'):
+                ticker = metadata['tickers'][0]
+                thinking_steps.append({
+                    "stage": "data_collection",
+                    "message": f"???? {ticker} ???...",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            if capture_thinking:
+                thinking_steps.append({
+                    "stage": "processing",
+                    "message": f"????{intent.value}??...",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            if intent == Intent.REPORT and self.supervisor and metadata.get('tickers'):
+                result = await self._handle_report_async(resolved_query, metadata)
+            elif handler:
+                result = await asyncio.to_thread(handler, resolved_query, metadata)
+            else:
+                result = await asyncio.to_thread(self._default_handler, resolved_query, metadata)
+
+            if capture_thinking:
+                thinking_steps.append({
+                    "stage": "complete",
+                    "message": "????",
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            self.context.add_turn(
+                query=query,
+                intent=intent.value,
+                response=result.get('response', ''),
+                metadata=metadata
+            )
+
+            if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
+                result = self._add_chart_marker(result, query, metadata, resolved_query)
+
+            result['intent'] = intent.value
+            result['metadata'] = metadata
+            result['response_time_ms'] = (datetime.now() - start_time).total_seconds() * 1000
+            result['thinking_elapsed_seconds'] = round((datetime.now() - start_time).total_seconds(), 2)
+            result['current_focus'] = self.context.current_focus
+
+            if capture_thinking and thinking_steps:
+                result['thinking'] = thinking_steps
+
+            return result
+
+        except Exception as e:
+            self.stats['errors'] += 1
+            import traceback
+            traceback.print_exc()
+            error_result = {
+                'success': False,
+                'response': f"???????: {str(e)}",
+                'error': str(e),
+                'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000,
+                'thinking_elapsed_seconds': round((datetime.now() - start_time).total_seconds(), 2),
+            }
+            if capture_thinking and thinking_steps:
+                error_result['thinking'] = thinking_steps
+            return error_result
+
     def _handle_chat(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理快速对话"""
         if self.llm:
             return self.chat_handler.handle_with_llm(query, metadata, self.context)
         return self.chat_handler.handle(query, metadata, self.context)
 
+
+    async def _handle_report_async(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Async report path that can await AgentSupervisor."""
+        if self.supervisor and metadata.get('tickers'):
+            ticker = metadata['tickers'][0]
+            try:
+                analysis_result = await self.supervisor.analyze(query, ticker, user_profile=None)
+                forum_output = analysis_result.get("forum_output")
+
+                report_ir = None
+                if forum_output and hasattr(self.report_handler, "_convert_to_report_ir"):
+                    report_ir = self.report_handler._convert_to_report_ir(ticker, query, forum_output)
+                elif forum_output and hasattr(self.report_handler, "_generate_simple_report_ir"):
+                    report_ir = self.report_handler._generate_simple_report_ir(ticker, forum_output.consensus)
+
+                response_text = forum_output.consensus if forum_output else ""
+                result = {
+                    'success': True,
+                    'response': response_text,
+                    'data': analysis_result,
+                    'method': 'supervisor',
+                }
+                if report_ir:
+                    result['report'] = report_ir
+                return result
+            except Exception as e:
+                print(f"[Agent] Supervisor async call failed: {e}")
+
+        return await asyncio.to_thread(self.report_handler.handle, query, metadata, self.context)
+
     def _handle_report(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理报告请求 (优先使用 Supervisor)"""
-        # 如果 Supervisor 可用且有 Ticker，尝试使用多 Agent 分析
         if self.supervisor and metadata.get('tickers'):
             try:
-                import asyncio
-                ticker = metadata['tickers'][0]
-
-                # 获取用户上下文
-                user_id = metadata.get("user_id", "default_user")
-
-                # 尝试从 MemoryService 获取画像 (需要从 main.py 或其他地方注入，这里简化处理)
-                # 暂时通过 metadata 传入或默认为 None
-                # 注意：为了让 Agent 能访问 MemoryService，最好在 __init__ 中注入 memory_service
-                # 但为了最小化修改，这里暂不强依赖 memory_service
-
-                # 简单包装 async 调用
-                # 在 FastAPI 的 async 上下文中，不能直接使用 asyncio.run
-                # 但这里的 _handle_report 是同步方法 (被 router 调用)
-                # 这确实是一个架构上的问题：router 和 handler 都是同步的
-                # 但 Supervisor.analyze 是 async 的
-
-                # 临时解决方案：使用 async_to_sync (如 asgiref) 或简单的 loop.run_until_complete
-                # 但要注意嵌套 loop 问题
-
-                # 由于集成复杂性，目前 Phase 1 暂不强制切换所有请求到 Supervisor
-                # 仅当显式标记或 metadata 中有特定 flag 时尝试
-                # 或者回退到 ReportHandler
-
-                # TODO: 将整个 ConversationAgent 异步化是 Phase 2 的重要重构任务
-                pass
+                asyncio.get_running_loop()
+            except RuntimeError:
+                try:
+                    return asyncio.run(self._handle_report_async(query, metadata))
+                except Exception as e:
+                    print(f"[Agent] Supervisor ????: {e}")
             except Exception as e:
-                print(f"[Agent] Supervisor 调用失败: {e}")
+                print(f"[Agent] Supervisor ????????: {e}")
 
         result = self.report_handler.handle(query, metadata, self.context)
         print(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")

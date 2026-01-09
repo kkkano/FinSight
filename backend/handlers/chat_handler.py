@@ -777,6 +777,20 @@ Search Results: {search_result[:3000]}
         return random.choice(responses)
     
     # --- LLM 增强方法（保留，但通常 handle 方法已覆盖） ---
+    def _build_llm_enhance_prompt(self, query: str, raw_response: str) -> str:
+        """Build the prompt used for LLM-enhanced chat responses."""
+        return f"""你是专业金融助手。基于以下数据，用中文简洁回答用户问题。
+
+用户问题: {query}
+数据:
+{raw_response}
+
+要求:
+1) 直接回答，2-4句话，包含关键数字和日期
+2) 不要说"根据数据"、"检索结果"等
+3) 如果数据中有URL链接，在末尾用markdown格式列出；没有链接就不要提链接
+4) 语气专业友好
+"""
 
     def handle_with_llm(
         self, 
@@ -801,18 +815,7 @@ Search Results: {search_result[:3000]}
         try:
             raw_response = basic_result.get('response', '')
 
-            prompt = f"""你是专业金融助手。基于以下数据，用中文简洁回答用户问题。
-
-用户问题: {query}
-数据:
-{raw_response}
-
-要求:
-1) 直接回答，2-4句话，包含关键数字和日期
-2) 不要说"根据数据"、"检索结果"等
-3) 如果数据中有URL链接，在末尾用markdown格式列出；没有链接就不要提链接
-4) 语气专业友好
-"""
+            prompt = self._build_llm_enhance_prompt(query, raw_response)
             response = self.llm.invoke([HumanMessage(content=prompt)])
             
             # 合并 LLM 增强后的内容，保留原有数据和意图
@@ -826,3 +829,57 @@ Search Results: {search_result[:3000]}
             traceback.print_exc()
             # LLM 增强失败，返回基础结果
             return basic_result
+
+    async def stream_with_llm(
+        self,
+        query: str,
+        metadata: Dict[str, Any],
+        context: Optional[Any],
+        result_container: Dict[str, Any]
+    ):
+        """Stream the LLM-enhanced response token by token."""
+        # 1. 先获取基础数据
+        basic_result = self.handle(query, metadata, context)
+
+        # 行情类直接返回，避免 LLM 改写价格细节
+        if basic_result.get('intent') in {'price'}:
+            result_container.update(basic_result)
+            response_text = basic_result.get('response', '')
+            if response_text:
+                yield response_text
+            return
+
+        if not basic_result.get('success') or not self.llm or not LANGCHAIN_AVAILABLE:
+            result_container.update(basic_result)
+            response_text = basic_result.get('response', '')
+            if response_text:
+                yield response_text
+            return
+
+        raw_response = basic_result.get('response', '')
+        prompt = self._build_llm_enhance_prompt(query, raw_response)
+
+        full_response = ""
+        try:
+            if hasattr(self.llm, 'astream'):
+                async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
+                    token = getattr(chunk, 'content', '')
+                    if token:
+                        full_response += token
+                        yield token
+            else:
+                response = self.llm.invoke([HumanMessage(content=prompt)])
+                full_response = getattr(response, 'content', '') or ''
+                if full_response:
+                    yield full_response
+
+            final_result = basic_result.copy()
+            final_result['response'] = full_response or raw_response
+            if full_response:
+                final_result['enhanced_by_llm'] = True
+            result_container.update(final_result)
+        except Exception:
+            traceback.print_exc()
+            result_container.update(basic_result)
+            if raw_response:
+                yield raw_response
