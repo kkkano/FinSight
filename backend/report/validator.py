@@ -4,7 +4,8 @@ Report Validator - 研报结构校验器
 确保 Agent 生成的数据符合 ReportIR 标准，防止前端渲染崩溃。
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
+from datetime import datetime
 from backend.report.ir import ReportIR, ReportSection, ReportContent, Citation, ContentType, Sentiment
 
 class ReportValidator:
@@ -13,21 +14,27 @@ class ReportValidator:
     """
 
     @staticmethod
-    def validate_and_fix(data: Dict[str, Any]) -> ReportIR:
+    def validate_and_fix(data: Dict[str, Any], as_dict: bool = True) -> Union[ReportIR, Dict[str, Any]]:
         """
-        校验字典数据并转换为 ReportIR 对象。
-        如果字段缺失，尝试填充默认值；如果结构严重错误，抛出异常。
+        校验字典数据并转换为 ReportIR 对象或字典。
+        如果字段缺失，尝试填充默认值；如果结构严重错误，返回最小可用结构。
         """
+        report = ReportValidator._build_report(data)
+        return report.to_dict() if as_dict else report
+
+    @staticmethod
+    def _build_report(data: Dict[str, Any]) -> ReportIR:
         try:
             # 1. 基础字段校验
-            report_id = str(data.get("report_id", "unknown"))
+            report_id = str(data.get("report_id", f"rpt_{int(datetime.now().timestamp())}"))
             ticker = str(data.get("ticker", "UNKNOWN"))
             company_name = str(data.get("company_name", ticker))
             title = str(data.get("title", f"{company_name} Analysis"))
             summary = str(data.get("summary", "No summary provided."))
+            generated_at = str(data.get("generated_at", datetime.now().isoformat()))
 
             # 2. 枚举校验
-            sentiment_str = data.get("sentiment", "neutral").lower()
+            sentiment_str = str(data.get("sentiment", "neutral")).lower()
             try:
                 sentiment = Sentiment(sentiment_str)
             except ValueError:
@@ -36,7 +43,7 @@ class ReportValidator:
             # 3. 数值校验
             try:
                 confidence_score = float(data.get("confidence_score", 0.5))
-                confidence_score = max(0.0, min(1.0, confidence_score)) # Clamp 0-1
+                confidence_score = max(0.0, min(1.0, confidence_score))
             except (ValueError, TypeError):
                 confidence_score = 0.5
 
@@ -51,7 +58,7 @@ class ReportValidator:
                             title=str(c.get("title", "Unknown Source")),
                             url=str(c.get("url", "#")),
                             snippet=str(c.get("snippet", "")),
-                            published_date=str(c.get("published_date", ""))
+                            published_date=str(c.get("published_date", "")),
                         ))
 
             # 5. 章节校验 (Sections)
@@ -61,6 +68,21 @@ class ReportValidator:
                 for idx, s in enumerate(raw_sections):
                     if isinstance(s, dict):
                         sections.append(ReportValidator._parse_section(s, idx))
+
+            if not sections:
+                sections = [
+                    ReportSection(
+                        title="Summary",
+                        order=1,
+                        contents=[ReportContent(type=ContentType.TEXT, content=summary)],
+                    )
+                ]
+
+            risks_raw = data.get("risks", [])
+            risks = [str(r) for r in risks_raw] if isinstance(risks_raw, list) else []
+            recommendation = data.get("recommendation")
+            if recommendation is not None:
+                recommendation = str(recommendation)
 
             return ReportIR(
                 report_id=report_id,
@@ -72,12 +94,14 @@ class ReportValidator:
                 confidence_score=confidence_score,
                 sections=sections,
                 citations=citations,
-                meta=data.get("meta", {})
+                risks=risks,
+                recommendation=recommendation,
+                generated_at=generated_at,
+                meta=data.get("meta", {}),
             )
 
         except Exception as e:
             print(f"[ReportValidator] Validation failed: {e}")
-            # 返回一个最小可用对象，避免 crash
             return ReportIR(
                 report_id="error",
                 ticker="ERROR",
@@ -87,14 +111,21 @@ class ReportValidator:
                 sentiment=Sentiment.NEUTRAL,
                 confidence_score=0.0,
                 sections=[],
-                citations=[]
+                citations=[],
+                risks=[],
+                recommendation=None,
+                generated_at=datetime.now().isoformat(),
+                meta={},
             )
 
     @staticmethod
     def _parse_section(data: Dict[str, Any], default_order: int) -> ReportSection:
         """递归解析章节"""
         title = str(data.get("title", "Untitled Section"))
-        order = data.get("order", default_order)
+        try:
+            order = int(data.get("order", default_order))
+        except (TypeError, ValueError):
+            order = default_order
 
         # 解析内容块
         raw_contents = data.get("contents", [])
@@ -111,9 +142,11 @@ class ReportValidator:
                     contents.append(ReportContent(
                         type=content_type,
                         content=c.get("content", ""),
-                        citation_refs=c.get("citation_refs", []),
-                        metadata=c.get("metadata", {})
+                        citation_refs=c.get("citation_refs", []) if isinstance(c.get("citation_refs"), list) else [],
+                        metadata=c.get("metadata", {}) if isinstance(c.get("metadata"), dict) else {},
                     ))
+        if not contents:
+            contents = [ReportContent(type=ContentType.TEXT, content="")]
 
         # 递归解析子章节
         raw_subsections = data.get("subsections", [])
