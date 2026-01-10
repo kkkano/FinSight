@@ -5,6 +5,8 @@ from backend.agents.price_agent import PriceAgent
 from backend.agents.news_agent import NewsAgent
 from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.macro_agent import MacroAgent
+from backend.agents.technical_agent import TechnicalAgent
+from backend.agents.fundamental_agent import FundamentalAgent
 from backend.orchestration.forum import ForumHost, ForumOutput
 
 class AgentSupervisor:
@@ -22,7 +24,8 @@ class AgentSupervisor:
             "news": NewsAgent(llm, cache, tools_module, circuit_breaker),
             "deep_search": DeepSearchAgent(llm, cache, tools_module, circuit_breaker),
             "macro": MacroAgent(llm, cache, tools_module, circuit_breaker),
-            # 未来添加 technical, fundamental 等
+            "technical": TechnicalAgent(llm, cache, tools_module, circuit_breaker),
+            "fundamental": FundamentalAgent(llm, cache, tools_module, circuit_breaker),
         }
 
     async def analyze(self, query: str, ticker: str, user_profile: Optional[Any] = None) -> Dict[str, Any]:

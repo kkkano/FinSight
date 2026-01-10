@@ -50,6 +50,8 @@ async def test_supervisor_integration_phase2():
     # Check if new agents are registered
     assert "deep_search" in supervisor.agents
     assert "macro" in supervisor.agents
+    assert "technical" in supervisor.agents
+    assert "fundamental" in supervisor.agents
 
     # Mock all agents research method to avoid actual calls
     for name, agent in supervisor.agents.items():
@@ -68,9 +70,11 @@ async def test_supervisor_integration_phase2():
     # Run analyze
     await supervisor.analyze("Deep analysis of NVDA", "NVDA")
 
-    # Verify DeepSearchAgent was called
+    # Verify agents were called
     supervisor.agents["deep_search"].research.assert_called()
     supervisor.agents["macro"].research.assert_called()
+    supervisor.agents["technical"].research.assert_called()
+    supervisor.agents["fundamental"].research.assert_called()
 
 if __name__ == "__main__":
     asyncio.run(test_deep_search_agent())
