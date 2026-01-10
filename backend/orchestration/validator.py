@@ -48,6 +48,7 @@ class DataValidator:
             'company_info': self._validate_company_info,
             'financials': self._validate_financials,
             'news': self._validate_news,
+            'news_sentiment': self._validate_news,
         }
         
         validator = validators.get(data_type, self._validate_generic)

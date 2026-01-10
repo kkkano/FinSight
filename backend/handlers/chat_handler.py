@@ -97,6 +97,9 @@ class ChatHandler:
             #    但如果用户只说 "推荐几只股票"，explicit_tickers 为空。
             is_generic_rec = self._is_generic_recommendation_intent(query_lower)
             is_price_query = self._is_price_query(query_lower)
+            is_economic_events_query = self._is_economic_events_query(query_lower)
+            is_news_sentiment_query = self._is_news_sentiment_query(query_lower)
+            is_sentiment_query = self._is_sentiment_query(query_lower)
             is_news_query = self._is_news_query(query_lower)
 
             # 3. 只有在非泛化推荐，且没有明确 ticker 时，才继承上下文
@@ -106,6 +109,15 @@ class ChatHandler:
                     tickers = [context.current_focus]
 
             primary_ticker = tickers[0] if tickers else None
+
+            if is_economic_events_query:
+                return self._handle_economic_events(query, context)
+
+            if is_news_sentiment_query:
+                return self._handle_news_sentiment_query(primary_ticker, query, context)
+
+            if is_sentiment_query:
+                return self._handle_sentiment_query(query, context, primary_ticker)
 
             # 优先处理新闻意图：有 ticker 直接拉新闻；无 ticker 先用市场泛化新闻，再兜底默认指数
             if is_news_query:
@@ -212,6 +224,45 @@ class ChatHandler:
         if any(kw in query for kw in temporal_only):
             return not self._is_price_query(query)
 
+        return False
+
+    def _is_sentiment_query(self, query: str) -> bool:
+        sentiment_strong = [
+            '恐惧贪婪', '恐惧', '贪婪', '恐慌', 'fear & greed', 'fear and greed',
+            'fear&greed', '情绪指标', '风险偏好', 'risk appetite'
+        ]
+        sentiment_soft = ['情绪', 'sentiment']
+        market_context = ['市场', '股市', '美股', '大盘', '指数', '投资者', 'market', 'index', 'equity']
+
+        if any(kw in query for kw in sentiment_strong):
+            return True
+
+        if any(kw in query for kw in sentiment_soft) and any(ctx in query for ctx in market_context):
+            return True
+
+        return False
+
+    def _is_economic_events_query(self, query: str) -> bool:
+        keywords = [
+            '经济日历', '宏观日历', '经济事件', '宏观事件', '经济数据', '数据公布',
+            '非农', 'cpi', 'ppi', 'gdp', 'pmi', 'fomc', '利率决议', '央行会议',
+            'economic calendar', 'economic events', 'macro events', 'macro calendar'
+        ]
+        if any(kw in query for kw in keywords):
+            return True
+        if '日历' in query and '经济' in query:
+            return True
+        return False
+
+    def _is_news_sentiment_query(self, query: str) -> bool:
+        keywords = [
+            '新闻情绪', '舆情', '舆情指数', '媒体情绪', 'news sentiment',
+            'headline sentiment', 'sentiment of news', 'media sentiment'
+        ]
+        if any(kw in query for kw in keywords):
+            return True
+        if '情绪' in query and any(kw in query for kw in ['新闻', '快讯', 'headline', 'news']):
+            return True
         return False
     
     def _is_info_query(self, query: str) -> bool:
@@ -475,6 +526,225 @@ class ChatHandler:
             'thinking': "No news fetching tool available."
         }
     
+    def _handle_sentiment_query(
+        self,
+        query: str,
+        context: Optional[Any] = None,
+        ticker: Optional[str] = None
+    ) -> Dict[str, Any]:
+        orchestrator_error = None
+        if self.orchestrator and hasattr(self.orchestrator, 'fetch'):
+            try:
+                result = self.orchestrator.fetch('sentiment', 'market')
+                if result and result.success:
+                    sentiment_text = result.data
+                    response = self._format_sentiment_response(sentiment_text, query, ticker)
+                    return {
+                        'success': True,
+                        'response': response,
+                        'data': {
+                            'raw_sentiment': sentiment_text,
+                            'source': result.source,
+                            'cached': result.cached,
+                            'as_of': result.as_of,
+                            'tried_sources': getattr(result, 'tried_sources', []),
+                        },
+                        'intent': 'market_sentiment',
+                        'thinking': "Fetched market sentiment via Orchestrator.",
+                    }
+                if result:
+                    orchestrator_error = result.error
+            except Exception as e:
+                orchestrator_error = str(e)
+                print(f"[ChatHandler] Orchestrator sentiment fetch failed: {e}")
+
+        if self.tools_module and hasattr(self.tools_module, 'get_market_sentiment'):
+            try:
+                sentiment_text = self.tools_module.get_market_sentiment()
+                response = self._format_sentiment_response(sentiment_text, query, ticker)
+                if context and hasattr(context, 'cache_data'):
+                    context.cache_data('sentiment:market', sentiment_text)
+                return {
+                    'success': True,
+                    'response': response,
+                    'data': {'raw_sentiment': sentiment_text, 'source': 'tools_module'},
+                    'intent': 'market_sentiment',
+                    'thinking': "Fetched market sentiment via tools module.",
+                }
+            except Exception as e:
+                traceback.print_exc()
+                return {
+                    'success': False,
+                    'response': f"获取市场情绪指标失败: {str(e)}",
+                    'error': str(e),
+                    'intent': 'market_sentiment',
+                    'thinking': f"Tool call for sentiment failed: {str(e)}",
+                }
+
+        response = "市场情绪指标暂不可用，如需我改为整理市场要闻请告诉我。"
+        if orchestrator_error:
+            response = f"{response} (原因: {orchestrator_error})"
+        return {
+            'success': False,
+            'response': response,
+            'error': 'tool_not_available',
+            'intent': 'market_sentiment',
+            'thinking': "No sentiment tool available.",
+        }
+
+    def _format_sentiment_response(
+        self,
+        sentiment_text: Any,
+        query: str,
+        ticker: Optional[str]
+    ) -> str:
+        base_text = str(sentiment_text)
+        query_lower = query.lower()
+        notes = []
+        if ticker:
+            notes.append(f"说明: 这是整体市场情绪，不是 {ticker} 的单票情绪。")
+        if '分布' in query or 'distribution' in query_lower:
+            notes.append("如果需要分布或历史走势，请告诉我维度或时间范围。")
+        if notes:
+            return f"{base_text}\n" + " ".join(notes)
+        return base_text
+
+    def _handle_economic_events(
+        self,
+        query: str,
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        orchestrator_error = None
+        if self.orchestrator and hasattr(self.orchestrator, 'fetch'):
+            try:
+                result = self.orchestrator.fetch('economic_events', 'macro')
+                if result and result.success:
+                    text = str(result.data)
+                    return {
+                        'success': True,
+                        'response': text,
+                        'data': {
+                            'raw_events': result.data,
+                            'source': result.source,
+                            'cached': result.cached,
+                            'as_of': result.as_of,
+                            'tried_sources': getattr(result, 'tried_sources', []),
+                        },
+                        'intent': 'economic_events',
+                        'thinking': "Fetched economic events via Orchestrator.",
+                    }
+                if result:
+                    orchestrator_error = result.error
+            except Exception as e:
+                orchestrator_error = str(e)
+                print(f"[ChatHandler] Orchestrator economic events fetch failed: {e}")
+
+        if self.tools_module and hasattr(self.tools_module, 'get_economic_events'):
+            try:
+                text = self.tools_module.get_economic_events()
+                if context and hasattr(context, 'cache_data'):
+                    context.cache_data('economic_events', text)
+                return {
+                    'success': True,
+                    'response': text,
+                    'data': {'raw_events': text, 'source': 'tools_module'},
+                    'intent': 'economic_events',
+                    'thinking': "Fetched economic events via tools module.",
+                }
+            except Exception as e:
+                traceback.print_exc()
+                return {
+                    'success': False,
+                    'response': f"获取经济日历失败: {str(e)}",
+                    'error': str(e),
+                    'intent': 'economic_events',
+                    'thinking': f"Tool call for economic events failed: {str(e)}",
+                }
+
+        response = "经济日历暂不可用，请稍后重试。"
+        if orchestrator_error:
+            response = f"{response} (原因: {orchestrator_error})"
+        return {
+            'success': False,
+            'response': response,
+            'error': 'tool_not_available',
+            'intent': 'economic_events',
+            'thinking': "No economic events tool available.",
+        }
+
+    def _handle_news_sentiment_query(
+        self,
+        ticker: Optional[str],
+        query: str,
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        if not ticker:
+            return {
+                'success': True,
+                'response': "想看哪只标的的新闻情绪？请提供股票代码或公司名称。",
+                'intent': 'clarify',
+                'needs_clarification': True,
+            }
+
+        orchestrator_error = None
+        if self.orchestrator and hasattr(self.orchestrator, 'fetch'):
+            try:
+                result = self.orchestrator.fetch('news_sentiment', ticker)
+                if result and result.success:
+                    text = str(result.data)
+                    return {
+                        'success': True,
+                        'response': text,
+                        'data': {
+                            'ticker': ticker,
+                            'raw_sentiment': result.data,
+                            'source': result.source,
+                            'cached': result.cached,
+                            'as_of': result.as_of,
+                            'tried_sources': getattr(result, 'tried_sources', []),
+                        },
+                        'intent': 'news_sentiment',
+                        'thinking': "Fetched news sentiment via Orchestrator.",
+                    }
+                if result:
+                    orchestrator_error = result.error
+            except Exception as e:
+                orchestrator_error = str(e)
+                print(f"[ChatHandler] Orchestrator news sentiment fetch failed: {e}")
+
+        if self.tools_module and hasattr(self.tools_module, 'get_news_sentiment'):
+            try:
+                text = self.tools_module.get_news_sentiment(ticker)
+                if context and hasattr(context, 'cache_data'):
+                    context.cache_data(f'news_sentiment:{ticker}', text)
+                return {
+                    'success': True,
+                    'response': text,
+                    'data': {'ticker': ticker, 'raw_sentiment': text, 'source': 'tools_module'},
+                    'intent': 'news_sentiment',
+                    'thinking': "Fetched news sentiment via tools module.",
+                }
+            except Exception as e:
+                traceback.print_exc()
+                return {
+                    'success': False,
+                    'response': f"获取 {ticker} 新闻情绪失败: {str(e)}",
+                    'error': str(e),
+                    'intent': 'news_sentiment',
+                    'thinking': f"Tool call for news sentiment failed: {str(e)}",
+                }
+
+        response = "新闻情绪工具暂不可用，请稍后重试。"
+        if orchestrator_error:
+            response = f"{response} (原因: {orchestrator_error})"
+        return {
+            'success': False,
+            'response': response,
+            'error': 'tool_not_available',
+            'intent': 'news_sentiment',
+            'thinking': "No news sentiment tool available.",
+        }
+
     def _handle_info_query(
         self, 
         ticker: str, 
@@ -871,7 +1141,7 @@ Search Results: {search_result[:3000]}
         basic_result = self.handle(query, metadata, context)
         
         # 行情类直接返回，避免 LLM 改写价格细节
-        if basic_result.get('intent') in {'price', 'market_news', 'company_news'} or basic_result.get('needs_clarification'):
+        if basic_result.get('intent') in {'price', 'market_news', 'company_news', 'market_sentiment', 'economic_events', 'news_sentiment'} or basic_result.get('needs_clarification'):
             return basic_result
         
         if not basic_result.get('success') or not self.llm or not LANGCHAIN_AVAILABLE:
@@ -908,7 +1178,7 @@ Search Results: {search_result[:3000]}
         basic_result = self.handle(query, metadata, context)
 
         # 行情类直接返回，避免 LLM 改写价格细节
-        if basic_result.get('intent') in {'price', 'market_news', 'company_news'} or basic_result.get('needs_clarification'):
+        if basic_result.get('intent') in {'price', 'market_news', 'company_news', 'market_sentiment', 'economic_events', 'news_sentiment'} or basic_result.get('needs_clarification'):
             result_container.update(basic_result)
             response_text = basic_result.get('response', '')
             if response_text:
