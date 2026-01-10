@@ -1,15 +1,22 @@
 # FinSight 阶段2：深度研报与按需调用
 
 > 📅 **计划周期**: Week 5 - Week 6
+> 📅 **更新日期**: 2026-01-10
 > 🎯 **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
 
 ---
 
+## 0. 当前状态（2026-01-10）
+
+- /chat/stream 全意图真实 token 流式输出已完成（含 REPORT done 事件 ReportIR）
+- /chat 与 /chat/stream 已接入异步 Supervisor 与指代消解
+- Phase 1 技术/基本面 Agent 已补齐，ReportIR Schema/Validator 已完成，核心待办转向 DeepSearch/Macro 与前端结构化卡片优化
+
 ## 1. 核心任务拆解
 
 ### 1.1 中间表示层 (IR)
-- [ ] **ReportIR Schema**: 定义 `backend/report/ir.py`。
-- [ ] **IR Validator**: 确保生成的 JSON 结构完整，避免前端渲染报错。
+- [x] **ReportIR Schema**: 定义 `backend/report/ir.py`。
+- [x] **IR Validator**: 确保生成的 JSON 结构完整，避免前端渲染报错。
 
 ### 1.2 按需 Agent (On-Demand Agents)
 - [ ] **DeepSearchAgent**:

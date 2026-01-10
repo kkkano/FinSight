@@ -1,6 +1,7 @@
 # FinSight 阶段1：专家 Agent 团与记忆构建
 
 > 📅 **计划周期**: Week 3 - Week 4
+> 📅 **更新日期**: 2026-01-10
 > 🎯 **核心目标**: 从"单体大模型"进化为"分工明确的专家团队"
 
 ---
@@ -48,3 +49,18 @@
 1.  **NewsAgent 独立测试**: 给定模糊查询（"苹果最近那个头显怎样"），能自动进行 2 轮以上搜索，输出包含具体参数和发售日期的报告。
 2.  **个性化测试**: 同一个问题（"现在能买英伟达吗"），对保守型用户提示"估值过高风险"，对激进型用户提示"突破买入机会"。
 3.  **并行性能**: 4 个 Agent 并行执行总耗时不超过最慢 Agent 的 1.2 倍。
+
+---
+
+## 4. 补充更新（2026-01-09）
+
+- /chat 使用 `chat_async`，Supervisor 异步链路稳定
+- /chat/stream 支持 ReportAgent 真实流式，SSE done 事件带 ReportIR
+- /chat/stream 已接入 resolve_reference，与 /chat 链路一致
+
+---
+
+## 5. 补充更新（2026-01-10）
+
+- 新增 TechnicalAgent（MA/RSI/MACD）与 FundamentalAgent（财务指标/现金流/杠杆）并接入 Supervisor
+- 新增单测覆盖 Technical/Fundamental 输出与 Supervisor 注册
