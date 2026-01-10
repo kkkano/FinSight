@@ -1,1 +1,15 @@
 .env
+
+# Python build artifacts
+__pycache__/
+*.pyc
+
+# Node dependencies
+node_modules/
+
+# Local logs
+logs/
+
+# Editor/local tooling
+.vscode/launch.json
+.antigravity/
