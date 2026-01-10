@@ -42,6 +42,7 @@ FinSight AI 是一个面向股票 / 指数的 **对话式金融研究 Agent**：
 - 主源：Reuters RSS + Bloomberg RSS（默认列表，支持 `BLOOMBERG_RSS_URLS` 扩展）
 - 次级：Finnhub `general_news`（48h 时效过滤）
 - 兜底：搜索 3d/7d 时效过滤 + 日期解析
+- 输出会按标题长度过滤，并自动打标签（如科技/军事/宏观等）
 
 Bloomberg 默认源：
 
@@ -214,6 +215,9 @@ TAVILY_API_KEY=...
 
 # 新闻 RSS（可选，逗号分隔；默认包含 Bloomberg + Reuters）
 BLOOMBERG_RSS_URLS=
+NEWS_MIN_TITLE_CHARS=10
+NEWS_MIN_TITLE_WORDS=4
+NEWS_TAG_MAX=3
 
 # LangSmith（可选）
 LANGSMITH_API_KEY=...

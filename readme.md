@@ -149,6 +149,7 @@ Each tool follows a similar pattern: try the cheapest/fastest source first, then
 - Primary: Reuters RSS (default) + Bloomberg RSS (default list; extend via `BLOOMBERG_RSS_URLS`).
 - Secondary: Finnhub `general_news` (48h recency filter).
 - Fallback: search with 3d/7d recency gating and date extraction.
+- Output is filtered by headline length and auto-tagged (e.g., Tech/Defense/Macro).
 
 Bloomberg defaults:
 
@@ -214,6 +215,9 @@ TAVILY_API_KEY=...
 
 # News RSS (optional, comma-separated; defaults include Bloomberg + Reuters)
 BLOOMBERG_RSS_URLS=
+NEWS_MIN_TITLE_CHARS=10
+NEWS_MIN_TITLE_WORDS=4
+NEWS_TAG_MAX=3
 
 # LangSmith (optional)
 LANGSMITH_API_KEY=...
