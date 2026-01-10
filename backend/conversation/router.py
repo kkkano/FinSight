@@ -26,6 +26,8 @@ class Intent(Enum):
     CHAT = "chat"          # 快速问答 (涉及金融数据)
     REPORT = "report"      # 深度报告
     ALERT = "alert"        # 监控订阅
+    ECONOMIC_EVENTS = "economic_events"  # 经济日历/宏观事件
+    NEWS_SENTIMENT = "news_sentiment"    # 新闻情绪/舆情
     CLARIFY = "clarify"    # 需要澄清/无法识别/非金融问题
     FOLLOWUP = "followup"  # 追问上文
     GREETING = "greeting"  # 问候/闲聊/自我介绍 (新增)
@@ -275,6 +277,36 @@ class ConversationRouter:
         if any(kw in query_lower for kw in alert_keywords):
             return Intent.ALERT
 
+        news_sentiment_keywords = [
+            '新闻情绪', '舆情', '舆情指数', '媒体情绪', 'news sentiment', 'headline sentiment',
+            'sentiment of news', 'media sentiment'
+        ]
+        if any(kw in query_lower for kw in news_sentiment_keywords):
+            return Intent.NEWS_SENTIMENT
+        if '情绪' in query_lower and any(kw in query_lower for kw in ['新闻', '快讯', 'headline', 'news']):
+            return Intent.NEWS_SENTIMENT
+
+        economic_event_keywords = [
+            '经济日历', '宏观日历', '经济事件', '宏观事件', '经济数据', '数据公布',
+            '非农', 'cpi', 'ppi', 'gdp', 'pmi', 'fomc', '利率决议', '央行会议',
+            'economic calendar', 'economic events', 'macro events', 'macro calendar'
+        ]
+        if any(kw in query_lower for kw in economic_event_keywords):
+            return Intent.ECONOMIC_EVENTS
+
+        sentiment_strong = [
+            '恐惧贪婪', '恐惧', '贪婪', '恐慌', 'fear & greed', 'fear and greed',
+            'fear&greed', '情绪指标', '风险偏好', 'risk appetite'
+        ]
+        sentiment_soft = ['情绪', 'sentiment']
+        sentiment_context = [
+            '市场', '股市', '美股', '大盘', '指数', '投资者', 'market', 'index', 'equity'
+        ]
+        if any(kw in query_lower for kw in sentiment_strong):
+            return Intent.CHAT
+        if any(kw in query_lower for kw in sentiment_soft) and any(ctx in query_lower for ctx in sentiment_context):
+            return Intent.CHAT
+
         # === 4. 市场新闻/热点 ===
         market_news_terms = [
             '热点', '新闻', '快讯', '头条', 'headline', 'breaking', 'news'
@@ -352,6 +384,8 @@ class ConversationRouter:
             '股票', '基金', '指数', 'etf', '价格', '走势', '分析', '报告', '投资', '行情',
             '研报', '投研', '基本面', '估值', '财报', '业绩', '市值', '营收', '利润',
             '市场', '股市', '财经', '金融', '新闻', '热点', '快讯', '头条',
+            '情绪', '恐惧', '贪婪', '恐慌', '风险偏好', 'sentiment', 'fear', 'greed', 'risk appetite',
+            '宏观', '经济日历', '经济事件', '宏观事件', '经济数据', 'fomc', 'cpi', 'ppi', 'gdp', 'pmi',
             'ticker', 'stock', 'price', 'analyze', 'report', 'market', 'finance',
             'fundamental', 'valuation', 'earnings', 'financials'
         ]
@@ -389,25 +423,31 @@ Analyze the user's intent and choose ONE from the following options:
 3. **ALERT** - Monitoring & Alerts
     - "remind me", "monitor", "watch", "drops below XXX"
 
-4. **FOLLOWUP** - Follow-up Questions
+4. **ECONOMIC_EVENTS** - Economic calendar / macro events
+    - "economic calendar", "macro events", "CPI", "FOMC", "NFP"
+
+5. **NEWS_SENTIMENT** - News sentiment / media sentiment
+    - "news sentiment", "headline sentiment", "舆情"
+
+6. **FOLLOWUP** - Follow-up Questions
     - Requires context ("why", "tell me more", "what about risks")
 
-5. **GREETING** - Greeting / Small Talk
+7. **GREETING** - Greeting / Small Talk
     - "Hello", "Hi", "Who are you", "Introduce yourself"
     - Non-financial general chat.
 
-6. **CLARIFY** - Unclear / Irrelevant
+8. **CLARIFY** - Unclear / Irrelevant
     - Queries unrelated to finance (e.g., "write a bubble sort", "weather today")
     - Missing key info (no stock ticker or context)
     - Unclear intent
 
-Respond with ONLY the intent name (CHAT/REPORT/ALERT/FOLLOWUP/GREETING/CLARIFY), nothing else."""
+Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIMENT/FOLLOWUP/GREETING/CLARIFY), nothing else."""
 
             response = self.llm.invoke([HumanMessage(content=prompt)])
             intent_str = response.content.strip().upper()
             
             # 提取意图（可能包含其他文本）
-            for intent_name in ['CHAT', 'REPORT', 'ALERT', 'FOLLOWUP', 'CLARIFY', 'GREETING']:
+            for intent_name in ['CHAT', 'REPORT', 'ALERT', 'ECONOMIC_EVENTS', 'NEWS_SENTIMENT', 'FOLLOWUP', 'CLARIFY', 'GREETING']:
                 if intent_name in intent_str:
                     intent_str = intent_name
                     break
@@ -417,6 +457,8 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/FOLLOWUP/GREETING/CLARIFY),
                 'CHAT': Intent.CHAT,
                 'REPORT': Intent.REPORT,
                 'ALERT': Intent.ALERT,
+                'ECONOMIC_EVENTS': Intent.ECONOMIC_EVENTS,
+                'NEWS_SENTIMENT': Intent.NEWS_SENTIMENT,
                 'FOLLOWUP': Intent.FOLLOWUP,
                 'CLARIFY': Intent.CLARIFY,
                 'GREETING': Intent.GREETING,

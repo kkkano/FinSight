@@ -86,6 +86,8 @@ class ConversationAgent:
                 'chat': 0,
                 'report': 0,
                 'alert': 0,
+                'economic_events': 0,
+                'news_sentiment': 0,
                 'followup': 0,
                 'clarify': 0,
                 'greeting': 0
@@ -99,6 +101,8 @@ class ConversationAgent:
         self.router.register_handler(Intent.CHAT, self._handle_chat)
         self.router.register_handler(Intent.REPORT, self._handle_report)
         self.router.register_handler(Intent.ALERT, self._handle_alert)
+        self.router.register_handler(Intent.ECONOMIC_EVENTS, self._handle_economic_events)
+        self.router.register_handler(Intent.NEWS_SENTIMENT, self._handle_news_sentiment)
         self.router.register_handler(Intent.FOLLOWUP, self._handle_followup)
         self.router.register_handler(Intent.CLARIFY, self._handle_clarify)
         self.router.register_handler(Intent.GREETING, self._handle_greeting)
@@ -415,6 +419,18 @@ class ConversationAgent:
             'feature_status': 'coming_soon',
         }
 
+    def _handle_economic_events(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """处理经济日历/宏观事件查询"""
+        return self.chat_handler._handle_economic_events(query, self.context)
+
+    def _handle_news_sentiment(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """处理新闻情绪/舆情查询"""
+        tickers = metadata.get('tickers', [])
+        ticker = tickers[0] if tickers else None
+        if not ticker and self.context.current_focus:
+            ticker = self.context.current_focus
+        return self.chat_handler._handle_news_sentiment_query(ticker, query, self.context)
+
     def _handle_followup(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理追问"""
         return self.followup_handler.handle(query, metadata, self.context)
@@ -493,7 +509,7 @@ class ConversationAgent:
         try:
             # 问候/澄清等非行情意图不自动加图表
             intent = result.get('intent') or metadata.get('intent')
-            if intent in {'greeting', 'clarify', 'followup', 'alert'}:
+            if intent in {'greeting', 'clarify', 'followup', 'alert', 'economic_events', 'news_sentiment', 'market_sentiment'}:
                 return result
 
             from backend.api.chart_detector import ChartTypeDetector
@@ -556,7 +572,16 @@ class ConversationAgent:
         self.context.clear()
         self.stats = {
             'total_queries': 0,
-            'intents': {'chat': 0, 'report': 0, 'alert': 0, 'followup': 0, 'clarify': 0, 'greeting': 0},
+            'intents': {
+                'chat': 0,
+                'report': 0,
+                'alert': 0,
+                'economic_events': 0,
+                'news_sentiment': 0,
+                'followup': 0,
+                'clarify': 0,
+                'greeting': 0,
+            },
             'errors': 0,
             'session_start': datetime.now(),
         }

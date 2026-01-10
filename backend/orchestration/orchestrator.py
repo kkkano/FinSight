@@ -406,6 +406,7 @@ class ToolOrchestrator:
             'company_info': 'get_company_info',
             'news': 'get_company_news',
             'sentiment': 'get_market_sentiment',
+            'news_sentiment': 'get_news_sentiment',
             'economic_events': 'get_economic_events',
         }
         
