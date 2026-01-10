@@ -101,6 +101,102 @@ def _is_reasonable_headline(text: str, window: str = "") -> bool:
     return True
 
 
+def _get_env_int(key: str, default: int) -> int:
+    try:
+        return int(os.getenv(key, str(default)))
+    except Exception:
+        return default
+
+
+def _contains_cjk(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text))
+
+
+def _headline_is_useful(title: str, snippet: str = "") -> bool:
+    combined = f"{title} {snippet}".strip()
+    if not combined:
+        return False
+    min_chars = _get_env_int("NEWS_MIN_TITLE_CHARS", 10)
+    min_words = _get_env_int("NEWS_MIN_TITLE_WORDS", 4)
+    if min_chars <= 0 and min_words <= 0:
+        return True
+
+    compact = re.sub(r"\s+", "", combined)
+    if _contains_cjk(combined):
+        if min_chars <= 0:
+            return True
+        return len(compact) >= min_chars
+
+    word_count = len(re.findall(r"[A-Za-z0-9]+", combined))
+    if min_words > 0 and min_chars > 0:
+        return not (word_count < min_words and len(compact) < min_chars)
+    if min_words > 0:
+        return word_count >= min_words
+    if min_chars > 0:
+        return len(compact) >= min_chars
+    return True
+
+
+NEWS_TAG_RULES = [
+    ("科技", ["tech", "technology", "software", "hardware", "cloud", "cyber", "科技", "软件", "硬件", "云", "数据中心", "互联网"]),
+    ("AI", ["ai", "artificial intelligence", "genai", "大模型", "生成式", "人工智能", "AIGC"]),
+    ("半导体", ["semiconductor", "chip", "foundry", "tsmc", "asml", "nvidia", "半导体", "芯片", "晶圆", "光刻"]),
+    ("军事", ["military", "defense", "missile", "army", "navy", "weapon", "drone", "军事", "国防", "导弹", "战机", "无人机", "武器"]),
+    ("能源", ["oil", "crude", "gas", "lng", "opec", "能源", "石油", "原油", "天然气", "煤炭", "电力"]),
+    ("宏观", ["cpi", "ppi", "gdp", "pmi", "fomc", "inflation", "jobs", "payroll", "宏观", "经济", "利率", "通胀", "就业", "非农", "央行"]),
+    ("金融", ["bank", "banking", "credit", "bond", "yield", "金融", "银行", "债券", "收益率", "信贷"]),
+    ("监管", ["regulator", "regulation", "antitrust", "sec", "doj", "监管", "反垄断", "制裁", "罚款"]),
+    ("并购", ["merger", "acquisition", "buyout", "deal", "并购", "收购", "合并", "交易", "要约"]),
+    ("财报", ["earnings", "guidance", "revenue", "profit", "业绩", "财报", "营收", "利润", "指引"]),
+    ("加密", ["crypto", "bitcoin", "ethereum", "blockchain", "加密", "比特币", "以太坊", "区块链"]),
+    ("汽车", ["ev", "electric vehicle", "automotive", "auto", "汽车", "电动车", "新能源车"]),
+    ("消费", ["consumer", "retail", "e-commerce", "消费", "零售", "电商"]),
+    ("医药", ["pharma", "biotech", "drug", "医疗", "医药", "生物", "疫苗"]),
+    ("地产", ["real estate", "property", "housing", "地产", "楼市"]),
+    ("地缘", ["geopolitical", "geopolitics", "war", "conflict", "sanction", "地缘", "冲突", "战争"]),
+    ("中国", ["china", "chinese", "中国", "大陆"]),
+    ("美国", ["united states", "u.s.", "美国", "白宫", "华盛顿"]),
+]
+
+
+def _keyword_match(text: str, keyword: str) -> bool:
+    if not keyword:
+        return False
+    kw = keyword.lower()
+    if _contains_cjk(kw):
+        return kw in text
+    if len(kw) <= 3 and kw.isalpha():
+        return re.search(rf"\b{re.escape(kw)}\b", text) is not None
+    return kw in text
+
+
+def _headline_tags(text: str) -> List[str]:
+    if not text:
+        return []
+    text_lower = text.lower()
+    max_tags = max(1, _get_env_int("NEWS_TAG_MAX", 3))
+    tags: List[str] = []
+    for tag, keywords in NEWS_TAG_RULES:
+        if any(_keyword_match(text_lower, kw) for kw in keywords):
+            tags.append(tag)
+            if len(tags) >= max_tags:
+                break
+    return tags
+
+
+def _format_headline_line(
+    date_str: str,
+    title: str,
+    source: str,
+    url: str = "",
+    snippet: str = "",
+) -> str:
+    tags = _headline_tags(f"{title} {snippet}".strip())
+    tag_text = f"【{'/'.join(tags)}】 " if tags else ""
+    suffix = f" {url}" if url else ""
+    return f"[{date_str}] {tag_text}{title} ({source}){suffix}".strip()
+
+
 def search(query: str) -> str:
     """
     使用多数据源策略执行网页搜索并合并结果。
@@ -1396,7 +1492,11 @@ def _format_search_news_items(
     enriched = []
 
     for item in items:
-        candidate_text = f"{item.get('title', '')} {item.get('snippet', '')}"
+        title = item.get("title", "")
+        snippet = item.get("snippet", "")
+        if not _headline_is_useful(title, snippet):
+            continue
+        candidate_text = f"{title} {snippet}"
         dt = _extract_datetime_from_text(candidate_text, now)
         if not dt and item.get("url"):
             dt = _extract_datetime_from_url(item["url"])
@@ -1405,7 +1505,8 @@ def _format_search_news_items(
         source = _domain_from_url(url)
         enriched.append(
             {
-                "title": item.get("title", ""),
+                "title": title,
+                "snippet": snippet,
                 "url": url,
                 "source": source,
                 "date": dt,
@@ -1425,7 +1526,15 @@ def _format_search_news_items(
         date_str = item["date"].strftime("%Y-%m-%d") if item["date"] else "未知日期"
         source = item["source"] or "source"
         url = item["url"] or ""
-        lines.append(f"[{date_str}] {item['title']} ({source}) {url}".strip())
+        lines.append(
+            _format_headline_line(
+                date_str,
+                item["title"],
+                source,
+                url,
+                item.get("snippet", ""),
+            )
+        )
 
     return lines, bool(recent)
 
@@ -1450,6 +1559,8 @@ def _parse_rss_items(
         pub_date = (item.findtext("pubDate") or "").strip()
         if not title or not pub_date:
             continue
+        if not _headline_is_useful(title, ""):
+            continue
 
         try:
             dt = parsedate_to_datetime(pub_date)
@@ -1465,7 +1576,7 @@ def _parse_rss_items(
 
         source = _domain_from_url(link)
         date_str = dt.strftime("%Y-%m-%d")
-        lines.append(f"[{date_str}] {title} ({source}) {link}".strip())
+        lines.append(_format_headline_line(date_str, title, source, link))
         if len(lines) >= limit:
             break
 
@@ -1515,9 +1626,20 @@ def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple
         if (now - dt) > timedelta(hours=max_age_hours):
             continue
         title = item.get("headline") or item.get("summary") or "No title"
+        snippet = item.get("summary") or ""
+        if not _headline_is_useful(title, snippet):
+            continue
         source = item.get("source") or "finnhub"
         url = item.get("url") or ""
-        lines.append(f"[{dt.strftime('%Y-%m-%d')}] {title} ({source}) {url}".strip())
+        lines.append(
+            _format_headline_line(
+                dt.strftime("%Y-%m-%d"),
+                title,
+                source,
+                url,
+                snippet,
+            )
+        )
         if len(lines) >= limit:
             break
     return lines, bool(lines)
@@ -1596,15 +1718,18 @@ def _get_index_news(ticker: str) -> str:
     for i, line in enumerate(lines):
         # 寻找标题模式（通常以数字开头）
         if re.match(r'^\d+\.', line.strip()):
-            title = line.strip()
+            raw_title = line.strip()
+            title = re.sub(r'^\d+\.\s*', '', raw_title).strip()
             window = ' '.join(lines[i:i+3])
             # 尝试找到日期信息
             date_match = re.search(r'(\d{1,2}\s+\w+\s+ago|\d{4}-\d{2}-\d{2}|\w+\s+\d{1,2},?\s+\d{4})', 
                                   window, re.IGNORECASE)
             if not _is_reasonable_headline(title, window):
                 continue
+            if not _headline_is_useful(title, window):
+                continue
             date_str = date_match.group(1) if date_match else 'Recent'
-            news_items.append(f"[{date_str}] {title}")
+            news_items.append(_format_headline_line(date_str, title, "search", "", window))
             
             if len(news_items) >= 5:
                 break
@@ -1632,8 +1757,11 @@ def get_company_news(ticker: str) -> str:
             articles = fetch_news_articles(ticker)
             if articles:
                 lines = []
-                for i, a in enumerate(articles[:5], 1):
+                for a in articles:
                     title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
+                    snippet = a.get("summary") or a.get("description") or ""
+                    if not _headline_is_useful(title, snippet):
+                        continue
                     source = a.get("source") or a.get("publisher") or "Unknown"
                     published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
                     if isinstance(published_at, str):
@@ -1641,8 +1769,10 @@ def get_company_news(ticker: str) -> str:
                     else:
                         date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
                     url = a.get("url") or a.get("link") or ""
-                    suffix = f" {url}" if url else ""
-                    lines.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
+                    line = _format_headline_line(date_str, title, source, url, snippet)
+                    lines.append(f"{len(lines) + 1}. {line}")
+                    if len(lines) >= 5:
+                        break
                 if lines:
                     return f"Latest Market News ({ticker}):\n" + "\n".join(lines)
         except Exception as e:
@@ -1654,15 +1784,21 @@ def get_company_news(ticker: str) -> str:
             news = stock.news
             if news:
                 news_list = []
-                for i, article in enumerate(news[:5], 1):
+                for article in news:
                     title = article.get('title', 'No title')
+                    snippet = article.get('summary') or article.get('description') or ""
+                    if not _headline_is_useful(title, snippet):
+                        continue
                     publisher = article.get('publisher', 'Unknown source')
                     pub_time = article.get('providerPublishTime', 0)
                     date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
                     url = article.get('link') or article.get('url') or ''
-                    suffix = f" {url}" if url else ""
-                    news_list.append(f"{i}. [{date_str}] {title} ({publisher}){suffix}")
-                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
+                    line = _format_headline_line(date_str, title, publisher, url, snippet)
+                    news_list.append(f"{len(news_list) + 1}. {line}")
+                    if len(news_list) >= 5:
+                        break
+                if news_list:
+                    return f"Latest News ({ticker}):\n" + "\n".join(news_list)
         except Exception as e:
             print(f"yfinance index news error for {ticker}: {e}")
 
@@ -1677,15 +1813,21 @@ def get_company_news(ticker: str) -> str:
         news = stock.news
         if news:
             news_list = []
-            for i, article in enumerate(news[:5], 1):
+            for article in news:
                 title = article.get('title', 'No title')
+                snippet = article.get('summary') or article.get('description') or ""
+                if not _headline_is_useful(title, snippet):
+                    continue
                 publisher = article.get('publisher', 'Unknown source')
                 pub_time = article.get('providerPublishTime', 0)
                 date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown date'
                 url = article.get('link') or article.get('url') or ''
-                suffix = f" {url}" if url else ""
-                news_list.append(f"{i}. [{date_str}] {title} ({publisher}){suffix}")
-            return f"Latest News ({ticker}):\n" + "\n".join(news_list)
+                line = _format_headline_line(date_str, title, publisher, url, snippet)
+                news_list.append(f"{len(news_list) + 1}. {line}")
+                if len(news_list) >= 5:
+                    break
+            if news_list:
+                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"yfinance news error for {ticker}: {e}")
 
@@ -1698,15 +1840,21 @@ def get_company_news(ticker: str) -> str:
             news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
             if news:
                 news_list = []
-                for i, article in enumerate(news[:5], 1):
+                for article in news:
                     title = article.get('headline', 'No title')
+                    snippet = article.get('summary') or ""
+                    if not _headline_is_useful(title, snippet):
+                        continue
                     source = article.get('source', 'Unknown')
                     pub_time = article.get('datetime', 0)
                     date_str = datetime.fromtimestamp(pub_time).strftime('%Y-%m-%d') if pub_time else 'Unknown'
                     url = article.get('url') or ''
-                    suffix = f" {url}" if url else ""
-                    news_list.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
-                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
+                    line = _format_headline_line(date_str, title, source, url, snippet)
+                    news_list.append(f"{len(news_list) + 1}. {line}")
+                    if len(news_list) >= 5:
+                        break
+                if news_list:
+                    return f"Latest News ({ticker}):\n" + "\n".join(news_list)
         except Exception as e:
             print(f"Finnhub news fetch failed: {e}")
 
@@ -1719,16 +1867,22 @@ def get_company_news(ticker: str) -> str:
         data = response.json()
         if 'feed' in data and data['feed']:
             news_list = []
-            for i, article in enumerate(data['feed'][:5], 1):
+            for article in data['feed']:
                 title = article.get('title', 'No title')
                 source = article.get('source', 'Unknown')
                 date_str = article.get('time_published', '')[:8]
                 if date_str:
                     date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                snippet = article.get('summary') or ""
+                if not _headline_is_useful(title, snippet):
+                    continue
                 url = article.get('url') or article.get('link') or ''
-                suffix = f" {url}" if url else ""
-                news_list.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
-            return f"Latest News ({ticker}):\n" + "\n".join(news_list)
+                line = _format_headline_line(date_str, title, source, url, snippet)
+                news_list.append(f"{len(news_list) + 1}. {line}")
+                if len(news_list) >= 5:
+                    break
+            if news_list:
+                return f"Latest News ({ticker}):\n" + "\n".join(news_list)
     except Exception as e:
         print(f"Alpha Vantage news fetch failed: {e}")
     
@@ -1741,6 +1895,82 @@ def get_company_news(ticker: str) -> str:
             return f"Latest News ({ticker}) - search (7d):\n" + "\n".join(lines)
         return f"Latest News ({ticker}) - search (time unknown):\n" + "\n".join(lines)
     return fallback_text
+
+
+def get_news_sentiment(ticker: str, limit: int = 5) -> str:
+    """
+    获取新闻情绪 (Alpha Vantage NEWS_SENTIMENT)
+    """
+    if not ticker:
+        return "News Sentiment: ticker is required."
+
+    if not ALPHA_VANTAGE_API_KEY:
+        return "News Sentiment: ALPHA_VANTAGE_API_KEY not configured."
+
+    try:
+        url = "https://www.alphavantage.co/query"
+        params = {
+            'function': 'NEWS_SENTIMENT',
+            'tickers': ticker,
+            'limit': limit,
+            'apikey': ALPHA_VANTAGE_API_KEY,
+        }
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+
+        if not data or 'feed' not in data or not data.get('feed'):
+            if isinstance(data, dict):
+                if data.get('Note'):
+                    return f"News Sentiment: rate limited ({data.get('Note')})"
+                if data.get('Information'):
+                    return f"News Sentiment: {data.get('Information')}"
+                if data.get('Error Message'):
+                    return f"News Sentiment: {data.get('Error Message')}"
+            return "News Sentiment: no data found."
+
+        def _extract_sentiment(item: Dict[str, Any], symbol: str):
+            symbol_upper = symbol.upper()
+            for ts in item.get('ticker_sentiment', []):
+                if ts.get('ticker', '').upper() == symbol_upper:
+                    return ts.get('ticker_sentiment_score'), ts.get('ticker_sentiment_label')
+            return item.get('overall_sentiment_score'), item.get('overall_sentiment_label')
+
+        lines = []
+        scores: List[float] = []
+        for i, item in enumerate(data.get('feed', [])[:limit], 1):
+            title = item.get('title', 'No title')
+            source = item.get('source', 'Unknown')
+            time_published = item.get('time_published', '')
+            date_str = time_published[:8]
+            if date_str and len(date_str) == 8:
+                date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+            else:
+                date_str = 'Unknown date'
+            url = item.get('url') or item.get('link') or ''
+            suffix = f" {url}" if url else ""
+            score, label = _extract_sentiment(item, ticker)
+            sentiment_desc = "N/A"
+            try:
+                if score is not None:
+                    score_val = float(score)
+                    scores.append(score_val)
+                    sentiment_desc = f"{label or 'Unknown'} ({score_val:.2f})"
+                elif label:
+                    sentiment_desc = label
+            except Exception:
+                if label:
+                    sentiment_desc = label
+
+            lines.append(f"{i}. [{date_str}] {title} ({source}) 情绪: {sentiment_desc}{suffix}")
+
+        avg_text = ""
+        if scores:
+            avg_score = sum(scores) / len(scores)
+            avg_text = f"\n平均情绪分数: {avg_score:.2f}"
+
+        return f"News Sentiment ({ticker}):{avg_text}\n" + "\n".join(lines)
+    except Exception as e:
+        return f"News Sentiment: fetch failed ({str(e)})"
 
 
 def get_market_news_headlines(limit: int = 5) -> str:
@@ -1774,14 +2004,14 @@ def get_market_news_headlines(limit: int = 5) -> str:
         bloomberg_feeds = bloomberg_default_feeds
 
     rss_feeds = reuters_feeds + bloomberg_feeds
-    rss_lines, rss_ok = _fetch_rss_headlines(rss_feeds, limit=limit, max_age_days=2)
+    rss_lines, rss_ok = _fetch_rss_headlines(rss_feeds, limit=limit * 2, max_age_days=2)
     if rss_ok:
-        return "最近48小时市场要闻(RSS):\n" + "\n".join(rss_lines)
+        return "最近48小时市场要闻(RSS):\n" + "\n".join(rss_lines[:limit])
 
     # 1) Finnhub 市场新闻（48h）
-    finnhub_lines, finnhub_ok = _fetch_finnhub_market_news(limit=limit, max_age_hours=48)
+    finnhub_lines, finnhub_ok = _fetch_finnhub_market_news(limit=limit * 2, max_age_hours=48)
     if finnhub_ok:
-        return "最近48小时市场要闻(Finnhub):\n" + "\n".join(finnhub_lines)
+        return "最近48小时市场要闻(Finnhub):\n" + "\n".join(finnhub_lines[:limit])
 
     # 2) 尝试用 alert_scheduler 的新闻抓取（已含48h过滤），优先指数与代表性ETF
     try:
@@ -1794,8 +2024,11 @@ def get_market_news_headlines(limit: int = 5) -> str:
                 continue
             if articles:
                 lines = []
-                for i, a in enumerate(articles[:limit], 1):
+                for a in articles:
                     title = a.get("title") or a.get("headline") or a.get("summary") or "No title"
+                    snippet = a.get("summary") or a.get("description") or ""
+                    if not _headline_is_useful(title, snippet):
+                        continue
                     source = a.get("source") or a.get("publisher") or "Unknown"
                     published_at = a.get("published_at") or a.get("datetime") or a.get("providerPublishTime") or 0
                     if isinstance(published_at, str):
@@ -1803,8 +2036,10 @@ def get_market_news_headlines(limit: int = 5) -> str:
                     else:
                         date_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else "Recent"
                     url = a.get("url") or a.get("link") or ""
-                    suffix = f" {url}" if url else ""
-                    lines.append(f"{i}. [{date_str}] {title} ({source}){suffix}")
+                    line = _format_headline_line(date_str, title, source, url, snippet)
+                    lines.append(f"{len(lines) + 1}. {line}")
+                    if len(lines) >= limit:
+                        break
                 if lines:
                     return "最近48小时市场要闻:\n" + "\n".join(lines)
     except Exception as e:
