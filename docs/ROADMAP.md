@@ -1,5 +1,6 @@
 # FinSight 开发优先级路线图
-> 📅 **制定日期**: 2025-12-30
+> 📅 **制定日期**: 2026-01-09
+> 📅 **更新日期**: 2026-01-10
 > 🎯 **目标**: 从当前状态到项目完工的最现实、最犀利的优先级排序
 
 ---
@@ -9,9 +10,9 @@
 | 阶段 | 进度 | 核心问题 |
 |------|------|----------|
 | Phase 0 (基座) | ✅ 100% | 无 |
-| Phase 1 (Agent 团) | ⚠️ 70% | Supervisor 异步问题、缺少 Technical/Fundamental Agent |
-| Phase 2 (深度研报) | ⚠️ 30% | 流式输出假的、Report 卡片需优化 |
-| Phase 3 (主动服务) | ❌ 5% | 仅有邮件订阅框架 |
+| Phase 1 (Agent 团) | ✅ 90% | DeepSearch 仍为 Mock |
+| Phase 2 (深度研报) | 🟡 40% | ReportIR/DeepSearch/Macro/卡片 UI 待落地 |
+| Phase 3 (主动服务) | 🔵 5% | 订阅/告警能力尚未落地 |
 
 ---
 
@@ -26,19 +27,19 @@
 
 ## 📋 完整优先级列表（共 24 项）
 
-### 🔴 P0 - 必须立即修复（本周）
+### 🔴 P0 - 已完成（2026-01-09）
 
 | # | 任务 | 工时 | 理由 | 阻塞项 |
 |---|------|------|------|--------|
-| **1** | **真正的流式输出** | 4-6h | 用户直接抱怨"一次性吐出来"，体验最差的一环 | 无 |
-| **2** | **修复 Supervisor asyncio 问题** | 3-4h | 阻塞多 Agent 协作，当前被迫禁用 | 依赖 #1 |
+| **1** | **真正的流式输出（已完成 2026-01-09）** | 4-6h | 用户直接抱怨"一次性吐出来"，体验最差的一环 | 无 |
+| **2** | **修复 Supervisor asyncio 问题（已完成 2026-01-09）** | 3-4h | 阻塞多 Agent 协作，当前被迫禁用 | 依赖 #1 |
 
 ### 🟠 P1 - 高优先级（1-2 周内）
 
 | # | 任务 | 工时 | 理由 | 依赖 |
 |---|------|------|------|------|
-| **3** | **TechnicalAgent 实现** | 4-5h | 技术分析是金融产品刚需（MA/RSI/MACD） | #2 |
-| **4** | **FundamentalAgent 实现** | 4-5h | 估值分析是投资决策核心（PE/PB/DCF） | #2 |
+| **3** | **TechnicalAgent 实现（已完成 2026-01-10）** | 4-5h | 技术分析是金融产品刚需（MA/RSI/MACD） | #2 |
+| **4** | **FundamentalAgent 实现（已完成 2026-01-10）** | 4-5h | 估值分析是投资决策核心（PE/PB/DCF） | #2 |
 | **5** | **前端 Report 卡片优化** | 2-3h | 对齐 design_concept_v2.html，视觉升级 | #1 |
 | **6** | **Agent 协作进度指示器** | 2h | 用户知道后台在干嘛，减少等待焦虑 | #2 |
 
@@ -46,8 +47,8 @@
 
 | # | 任务 | 工时 | 理由 | 依赖 |
 |---|------|------|------|------|
-| **7** | **ReportIR Schema 完善** | 3h | 标准化报告结构，前后端解耦 | #3, #4 |
-| **8** | **IR Validator 实现** | 2h | 防止畸形数据到前端 | #7 |
+| **7** | **ReportIR Schema 完善（已完成 2026-01-10）** | 3h | 标准化报告结构，前后端解耦 | #3, #4 |
+| **8** | **IR Validator 实现（已完成 2026-01-10）** | 2h | 防止畸形数据到前端 | #7 |
 | **9** | **NewsAgent 反思循环增强** | 3h | 自动识别信息空白并补充搜索 | #2 |
 | **10** | **DeepSearchAgent 升级** | 4h | 长文 PDF 解析能力 | #9 |
 | **11** | **MacroAgent 升级** | 3h | 集成 FRED API 获取宏观经济数据 | #2 |
@@ -81,18 +82,18 @@
 
 ```
 Week 1 ──────────────────────────────────────────────────────
-  ├─ #1 真正的流式输出 ✦ 用户体验关键
-  ├─ #2 修复 Supervisor 异步
+  ├─ #1 真正的流式输出（已完成 2026-01-09）
+  ├─ #2 修复 Supervisor 异步（已完成 2026-01-09）
   └─ #5 前端卡片优化
 
 Week 2 ──────────────────────────────────────────────────────
-  ├─ #3 TechnicalAgent
-  ├─ #4 FundamentalAgent
+  ├─ #3 TechnicalAgent（已完成 2026-01-10）
+  ├─ #4 FundamentalAgent（已完成 2026-01-10）
   └─ #6 Agent 进度指示器
 
 Week 3-4 ────────────────────────────────────────────────────
-  ├─ #7 ReportIR Schema
-  ├─ #8 IR Validator
+  ├─ #7 ReportIR Schema（已完成 2026-01-10）
+  ├─ #8 IR Validator（已完成 2026-01-10）
   ├─ #9 NewsAgent 反思循环
   └─ #10 DeepSearchAgent 升级
 
@@ -120,9 +121,9 @@ Week 9+ ────────────────────────
 
 | 优先级 | 任务 | 理由 |
 |--------|------|------|
-| **#1** | 真正的流式输出 | 解决用户直接抱怨的体验问题 |
-| **#3 + #4** | Technical + Fundamental Agent | 补全核心分析能力 |
-| **#7** | ReportIR Schema | 结构化输出，前后端稳定 |
+| **#1** | DeepSearchAgent 真实检索 + PDF | 研报可信度与可追溯性 |
+| **#2** | 前端 Report 卡片优化 | 视觉一致性与可读性 |
+| **#3** | MacroAgent 升级 | 宏观数据联动报告判断 |
 
 ---
 
@@ -266,20 +267,21 @@ Issue 6: 深度新闻工具缺口
 - 财报工具仅 yfinance，缺少多源回退与文档级检索。
 
 4.2 子 Agent 缺陷  
-- TechnicalAgent / FundamentalAgent 未落地。  
+- TechnicalAgent / FundamentalAgent 已完成（2026-01-10）。  
 - DeepSearch / Macro 子 Agent 输出证据不足。  
-- Supervisor 在 /chat 与 /chat/stream 均可用，流式仍缺指代消解。
+- Supervisor 在 /chat 与 /chat/stream 均可用，指代消解已接入。
 
 ### 5) 优先级更新（结合现状）
 
 P0  
 1. ✅ 真正的流式输出（/chat/stream 全意图逐 token，统一 SSE 协议）。  
 2. ✅ /chat/stream 接入 Supervisor 报告流式聚合路径。  
-3. ✅ REPORT 意图与无 ticker 澄清优化 + /chat/stream 指代消解。
+3. ✅ REPORT 意图与无 ticker 澄清优化 + /chat/stream 指代消解。  
+4. ✅ TechnicalAgent + FundamentalAgent（2026-01-10）。  
 
 P1  
-4. TechnicalAgent + FundamentalAgent。  
-5. DeepSearchAgent 真实检索 + PDF 解析 + 新闻深度工具。
+5. ✅ ReportIR Schema + Validator（2026-01-10）。  
+6. DeepSearchAgent 真实检索 + PDF 解析 + 新闻深度工具。
 
 P2  
 6. ReportIR Schema + Validator 稳定化。  
@@ -290,12 +292,13 @@ P3
 
 ---
 
-## 📌 结论（2026-01-09 更新）
+## 📌 结论（2026-01-10 更新）
 
-当前对话体验的核心痛点来自“占位功能落空 + RAG/子 Agent 能力缺口”。
-优先级应聚焦在 **子 Agent 补齐 + 检索能力落地**，其次持续优化交互体验：
+当前核心痛点转向“深度检索未落地 + 前端报告卡片未对齐 + 宏观联动缺失”。
+优先级应聚焦在 **DeepSearch 实检索 + UI 对齐 + MacroAgent 升级**，同时保持交互体验优化：
 - /chat/stream 已完成 token 流、Supervisor 聚合与指代消解。
-- REPORT 意图稳定性与无 ticker 澄清已优化，后续以真实用户反馈微调。
+- TechnicalAgent 与 FundamentalAgent 已补齐（2026-01-10）。
+- ReportIR Schema + Validator 已完成（2026-01-10）。
 - 中期引入 DeepSearch 真实检索与 Self-RAG，提升报告可信度与可追溯性。
 
 ---

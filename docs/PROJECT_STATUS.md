@@ -1,8 +1,15 @@
 # FinSight 项目状态总览
-> 📅 **更新日期**: 2025-12-30
-> 🎯 **版本**: 0.5.0 (Phase 1 完成, Phase 2 进行中)
+> 📅 **更新日期**: 2026-01-10
+> 🎯 **版本**: 0.5.0 (Phase 1 完成，Phase 2 进行中)
 
 ---
+
+## ✅ 2026-01-10 更新摘要
+
+- TechnicalAgent + FundamentalAgent 已实现并接入 Supervisor
+- ReportIR Schema + Validator 已完成并接入报告生成路径
+- /chat/stream 全意图真实 token 流式输出，REPORT 默认走 ReportAgent，SSE done 事件带 ReportIR
+- /chat 与 /chat/stream 均已接入异步 Supervisor 与指代消解（resolve_reference）
 
 ## 🏗️ 一、系统架构总览
 
@@ -109,9 +116,9 @@ sequenceDiagram
 | **PriceAgent** | `agents/price_agent.py` | ✅ 完成 | 实时行情、买卖盘 | 30秒 |
 | **NewsAgent** | `agents/news_agent.py` | ✅ 完成 | 新闻舆情、反思循环 | 600秒 |
 | **MacroAgent** | `agents/macro_agent.py` | ✅ 完成 | 宏观经济事件 | 1小时 |
-| **DeepSearchAgent** | `agents/deep_search_agent.py` | ✅ 完成 | 深度研究、多源搜索 | 1小时 |
-| **TechnicalAgent** | 未实现 | ❌ 待开发 | 技术指标分析 | - |
-| **FundamentalAgent** | 未实现 | ❌ 待开发 | 基本面分析 | - |
+| **DeepSearchAgent** | `agents/deep_search_agent.py` | 🟡 已实现（Mock，待真实检索） | 深度研究、多源搜索 | 1小时 |
+| **TechnicalAgent** | `agents/technical_agent.py` | ✅ 完成 | 技术指标分析 | 30分钟 |
+| **FundamentalAgent** | `agents/fundamental_agent.py` | ✅ 完成 | 基本面分析 | 24小时 |
 
 ### 2.2 关键方法
 
@@ -134,8 +141,8 @@ class BaseFinancialAgent:
 
 | 函数 | 类型 | 数据源 | 回退策略 | 状态 |
 |------|------|--------|----------|------|
-| `get_stock_price(ticker)` | 行情 | Yahoo→Google→Stooq→CNBC→Finnhub | 搜索引擎解析 | ✅ |
-| `get_news(ticker)` | 新闻 | Finnhub→Tavily | Exa搜索 | ✅ |
+| `get_stock_price(ticker)` | 行情 | yfinance→Finnhub→AlphaVantage | 搜索兜底 | ✅ |
+| `get_news(ticker)` | 新闻 | Reuters/Bloomberg RSS + Finnhub(48h) → Tavily/Exa | 3d/7d 时效过滤 + 标题长度过滤 + 标签分类 | ✅ |
 | `search(query)` | 搜索 | Exa→Tavily→Wikipedia→DuckDuckGo | 级联回退 | ✅ |
 | `get_company_info(ticker)` | 公司 | yfinance | 搜索 | ✅ |
 | `get_financial_statements(ticker)` | 财务 | yfinance | - | ✅ |
@@ -164,19 +171,19 @@ flowchart LR
 
 | 端点 | 方法 | 功能 | 状态 |
 |------|------|------|------|
-| `/chat/stream` | POST | 流式对话（主入口） | ✅ 工作中 |
-| `/chat` | POST | 同步对话 | ✅ |
-| `/api/chart/detect` | POST | 智能图表类型检测 | ✅ |
-| `/api/chart/data` | POST | 图表数据加入上下文 | ✅ |
-| `/api/price/{ticker}` | GET | 获取股价 | ✅ |
-| `/api/news/{ticker}` | GET | 获取新闻 | ✅ |
-| `/api/financials/{ticker}` | GET | 获取财务数据 | ✅ |
-| `/api/user/profile` | GET/PUT | 用户画像 | ✅ |
-| `/api/user/watchlist` | POST/DELETE | 关注列表 | ✅ |
-| `/diagnostics/langgraph` | GET | Agent 自检 | ✅ |
-| `/diagnostics/orchestrator` | GET | 编排器健康 | ✅ |
-| `/subscribe` | POST | 订阅提醒 | ✅ |
-| `/health` | GET | 健康检查 | ✅ |
+| `/chat/stream` | POST | 流式对话（主入口） | ✅ 稳定（全意图 token 流式） |
+| `/chat` | POST | 同步对话 | ✅ 稳定（异步 Supervisor） |
+| `/api/chart/detect` | POST | 智能图表类型检测 | ✅ 可用 |
+| `/api/chart/data` | POST | 图表数据加入上下文 | ✅ 可用 |
+| `/api/price/{ticker}` | GET | 获取股价 | ✅ 可用 |
+| `/api/news/{ticker}` | GET | 获取新闻 | ✅ 可用 |
+| `/api/financials/{ticker}` | GET | 获取财务数据 | ✅ 可用 |
+| `/api/user/profile` | GET/PUT | 用户画像 | ✅ 可用 |
+| `/api/user/watchlist` | POST/DELETE | 关注列表 | ✅ 可用 |
+| `/diagnostics/langgraph` | GET | Agent 自检 | ✅ 可用 |
+| `/diagnostics/orchestrator` | GET | 编排器健康 | ✅ 可用 |
+| `/subscribe` | POST | 订阅提醒 | ⚠️ 占位 |
+| `/health` | GET | 健康检查 | ✅ 可用 |
 
 ---
 
@@ -195,10 +202,13 @@ class AgentSupervisor:
     }
     
     async def analyze(query, ticker, user_profile) -> Dict
-    async def analyze_stream(query, ticker) -> AsyncGenerator  # ⚠️ 异步问题待修复
+    async def analyze_stream(query, ticker) -> AsyncGenerator  # ✅ 异步链路已修复
 ```
 
-**当前问题**: `asyncio.run()` 不能在 FastAPI 事件循环中调用，已暂时禁用 Supervisor 路径
+**当前状态**:
+- /chat 使用 `chat_async`，避免 `asyncio.run()` 在事件循环中调用
+- /chat/stream 默认走 ReportAgent 流式，支持 `SUPERVISOR_STREAM_FORCE` 强制 Supervisor
+- 同步 `agent.chat()` 在无事件循环时安全回退
 
 ### 5.2 ForumHost
 
@@ -278,9 +288,9 @@ gantt
     报告卡片修复   :done, p1-6, 2025-12-30, 1d
     
     section Phase 2
-    真正流式输出   :active, p2-1, 2025-12-30, 3d
+    真正流式输出   :done, p2-1, 2026-01-09, 1d
     卡片UI优化     :p2-2, 2026-01-02, 2d
-    Supervisor异步化:p2-3, 2026-01-04, 2d
+    Supervisor异步化:done, p2-3, 2026-01-09, 1d
 ```
 
 ### 7.2 当前状态总结
@@ -288,10 +298,10 @@ gantt
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | **工具层** | ✅ 100% | 多源回退、缓存、熔断 |
-| **Agent 层** | ✅ 80% | 4个 Agent 完成，缺 Technical/Fundamental |
-| **协调层** | ⚠️ 70% | Supervisor 存在异步问题 |
-| **Report 卡片** | ✅ 90% | 显示正常，缺少流式效果 |
-| **流式输出** | ⚠️ 30% | 仅模拟分块，非真正 token 流式 |
+| **Agent 层** | ✅ 90% | Technical/Fundamental 已补齐，DeepSearch 仍为 Mock |
+| **协调层** | ✅ 95% | Supervisor 异步与流式聚合稳定 |
+| **Report 卡片** | 🟡 85% | 结构化渲染可用，UI 待对齐设计稿 |
+| **流式输出** | ✅ 100% | /chat/stream 全意图真实 token 流式 |
 
 ---
 
@@ -301,18 +311,19 @@ gantt
 
 | 优先级 | 任务 | 预估工时 | 说明 |
 |--------|------|----------|------|
-| 🔴 高 | **真正流式输出** | 4-6h | LLM stream=True + 前端实时渲染 |
-| 🔴 高 | **修复 Supervisor 异步化** | 3-4h | 使用 `await` 替代 `asyncio.run()` |
-| 🟡 中 | **前端卡片美化** | 2-3h | 对齐 design_concept_v2.html |
+| ✅ 已完成 | **TechnicalAgent + FundamentalAgent** | - | 2026-01-10 完成 |
+| ✅ 已完成 | **ReportIR Schema + Validator** | - | 2026-01-10 完成 |
+| 🟠 中 | **前端 Report 卡片优化** | 2-3h | 对齐 design_concept_v2.html |
+| 🟠 中 | **DeepSearchAgent 真实检索 + PDF** | 4-6h | 深度资料落地 |
 | 🟡 中 | **Agent 进度指示器** | 2h | 显示各 Agent 实时状态 |
 
 ### 8.2 中期 (3-4周)
 
 | 任务 | 说明 |
 |------|------|
-| TechnicalAgent | MA/RSI/MACD 技术分析 |
-| FundamentalAgent | PE/ROE/财报分析 |
-| 反思循环增强 | 自动识别信息空白并补充搜索 |
+| DeepSearchAgent 真实检索 + PDF 解析 | 长文抓取与解析落地 |
+| MacroAgent 升级 | 集成 FRED API 宏观数据 |
+| 反思循环增强 (Self-RAG v1) | 自动识别信息空白并补充搜索 |
 | PDF 报告导出 | 生成专业 PDF 报告 |
 
 ### 8.3 长期 (Phase 3)
@@ -336,7 +347,9 @@ FinSight/
 │   │   ├── price_agent.py
 │   │   ├── news_agent.py
 │   │   ├── macro_agent.py
-│   │   └── deep_search_agent.py
+│   │   ├── deep_search_agent.py
+│   │   ├── technical_agent.py
+│   │   └── fundamental_agent.py
 │   ├── orchestration/   # 协调层
 │   │   ├── supervisor.py
 │   │   ├── forum.py
@@ -348,6 +361,9 @@ FinSight/
 │   │   ├── cache.py
 │   │   ├── circuit_breaker.py
 │   │   └── memory.py
+│   ├── report/          # ReportIR Schema + Validator
+│   │   ├── ir.py
+│   │   └── validator.py
 │   ├── api/            # API 端点
 │   │   └── main.py
 │   └── tools.py        # 工具函数 (2673行)
@@ -363,6 +379,9 @@ FinSight/
     ├── 01_ARCHITECTURE.md
     ├── 02_PHASE0_COMPLETION.md
     ├── 03_PHASE1_IMPLEMENTATION.md
+    ├── 04_PHASE2_DEEP_RESEARCH.md
+    ├── 05_RAG_ARCHITECTURE.md
+    ├── 05_PHASE3_ACTIVE_SERVICE.md
     └── feature_logs/
         └── 12.9plan.md  # 主计划文档
 ```
@@ -373,10 +392,11 @@ FinSight/
 
 | 问题 | 严重程度 | 状态 | 解决方案 |
 |------|----------|------|----------|
-| Supervisor `asyncio.run()` 错误 | 🔴 高 | 已禁用 | 需要异步化整个调用链 |
-| 流式输出只是分块 | 🟡 中 | 待修复 | LLM 需支持 stream=True |
-| 首次请求无流式效果 | 🟡 中 | 已知 | 前端逻辑需优化 |
+| DeepSearchAgent 真实检索/PDF 解析缺失 | 🟠 中 | 未开始 | Phase 2 引入抓取与解析流程 |
+| 前端 Report 卡片未对齐设计稿 | 🟠 中 | 进行中 | 对齐 design_concept_v2.html |
+| 订阅/提醒能力仍为占位 | 🟠 中 | 未完成 | AlertSystem MVP + 订阅写入 |
+| 首次请求无流式效果 | 🟡 中 | 已知 | 前端流式重连与加载逻辑优化 |
 
 ---
 
-*本文档由 Antigravity AI 自动生成，最后更新于 2025-12-30*
+*本文档由 Antigravity AI 自动生成，最后更新于 2026-01-10*
