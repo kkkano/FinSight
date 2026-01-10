@@ -60,6 +60,8 @@ class ReportIR:
 
     sections: List[ReportSection]
     citations: List[Citation]
+    risks: List[str] = field(default_factory=list)
+    recommendation: Optional[str] = None
 
     generated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     meta: Dict[str, Any] = field(default_factory=dict) # 耗时、模型版本、Agent轨迹等

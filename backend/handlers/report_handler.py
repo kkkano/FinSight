@@ -246,13 +246,14 @@ class ReportHandler:
     def _convert_to_report_ir(self, ticker: str, query: str, forum_output: Any) -> Dict[str, Any]:
         """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
         from datetime import datetime
+        from backend.report.validator import ReportValidator
 
         # Use os.linesep to avoid syntax errors with literal newlines in strings
         # This is safer than embedding newlines directly in source code
         risk_list_str = os.linesep.join([f"- {r}" for r in forum_output.risks])
         risk_text = f"风险因素:{os.linesep}{risk_list_str}"
 
-        return {
+        report = {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
             "company_name": ticker, # 暂用 Ticker 代替
@@ -285,6 +286,7 @@ class ReportHandler:
             "risks": forum_output.risks,
             "recommendation": forum_output.recommendation
         }
+        return ReportValidator.validate_and_fix(report, as_dict=True)
     
     def _handle_with_data_collection(
         self,
@@ -541,6 +543,7 @@ This is a simplified report. For comprehensive investment advice, please consult
         用于 Legacy 路径，确保前端能渲染 Report 卡片
         """
         import re
+        from backend.report.validator import ReportValidator
         
         # 尝试从内容中提取章节
         sections = []
@@ -583,7 +586,7 @@ This is a simplified report. For comprehensive investment advice, please consult
         else:
             sentiment = 'neutral'
         
-        return {
+        report = {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
             "company_name": ticker,
@@ -597,6 +600,7 @@ This is a simplified report. For comprehensive investment advice, please consult
             "risks": [],
             "recommendation": "HOLD"
         }
+        return ReportValidator.validate_and_fix(report, as_dict=True)
     
     def _generate_pre_analysis_question(self, ticker: str, original_query: str) -> str:
         """
