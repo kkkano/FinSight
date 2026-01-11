@@ -214,6 +214,14 @@ export const apiClient = {
               onDone?.(data.report, data.thinking, data);  // Phase 2: 传递 report 数据
             } else if (data.type === 'error') {
               onError?.(data.message);
+            } else if (['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)) {
+              // Agent 进度事件 - 转换为 thinking 格式
+              onThinking?.({
+                stage: data.type,
+                message: data.agent ? `${data.agent} Agent` : (data.message || ''),
+                result: { agent: data.agent, status: data.status, agents: data.agents },
+                timestamp: new Date().toISOString()
+              });
             }
           } catch (e) {
             // ignore parse errors
