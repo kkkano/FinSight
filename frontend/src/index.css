@@ -3,25 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --fin-bg: #09090b;
-  --fin-panel: #18181b;
-  --fin-border: #27272a;
-  --fin-hover: #1f2933;
-  --fin-text: #e4e4e7;
-  --fin-muted: #a1a1aa;
-  --fin-primary: #3b82f6;
-  color-scheme: dark;
+  /* Design Concept V2 - Light Mode (Default) */
+  --fin-bg: #f8fafc;
+  --fin-bg-secondary: #f1f5f9;
+  --fin-card: #ffffff;
+  --fin-panel: #ffffff;
+  --fin-border: #e2e8f0;
+  --fin-hover: #eff6ff;
+  
+  --fin-text: #1e293b;
+  --fin-text-secondary: #64748b;
+  --fin-muted: #94a3b8;
+  
+  --fin-primary: #2563eb;
+  --fin-success: #10b981;
+  --fin-danger: #ef4444;
+  --fin-warning: #f59e0b;
+  --fin-predict: #8b5cf6;
+
+  color-scheme: light;
 }
 
-:root.light {
-  --fin-bg: #f7f8fb;
-  --fin-panel: #eef1f5;
-  --fin-border: #dce0e6;
-  --fin-hover: #e6eaf2;
-  --fin-text: #1f2937;
-  --fin-muted: #5b6472;
-  --fin-primary: #2563eb;
-  color-scheme: light;
+:root.dark {
+  /* Dark Mode Overrides */
+  --fin-bg: #0f172a;
+  --fin-bg-secondary: #1e293b;
+  --fin-card: #1e293b;
+  --fin-panel: #1e293b;
+  --fin-border: #334155;
+  --fin-hover: #1e293b;
+  
+  --fin-text: #f8fafc;
+  --fin-text-secondary: #cbd5e1;
+  --fin-muted: #64748b;
+  
+  --fin-primary: #3b82f6;
+  --fin-success: #10b981;
+  --fin-danger: #ef4444;
+  --fin-warning: #f59e0b;
+  --fin-predict: #a78bfa;
+
+  color-scheme: dark;
 }
 
 body {

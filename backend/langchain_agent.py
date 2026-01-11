@@ -57,6 +57,7 @@ CRITICAL RULES - MUST FOLLOW:
 - If you already have price/news/sentiment data, DO NOT call those tools again.
 - After collecting data from 4-6 tool calls, STOP and write the report.
 - Maximum {max_tools} tool calls total per query. After that, use whatever data you have.
+- Do NOT assume a benchmark; only compare to S&P 500 if a benchmark is explicitly provided.
 
 REPORT TEMPLATE (800+ words):
 # [Investment Name] - Professional Analysis Report
@@ -205,6 +206,7 @@ class LangChainFinancialAgent:
         max_iterations: int = 10,  # 降低迭代次数防止死循环
         llm: Optional[Any] = None,
         checkpointer: Optional[MemorySaver] = None,
+        orchestrator: Optional[Any] = None,
     ) -> None:
         self.provider = provider
         self.model = model or self._resolve_model()
@@ -214,8 +216,64 @@ class LangChainFinancialAgent:
         self.callback = FinancialAnalysisCallback(verbose=verbose)
         self.last_trace: List[Dict[str, Any]] = []
         self.llm = llm or self._create_llm()
+        self.orchestrator = orchestrator
+        self.tools = self._wrap_tools(FINANCIAL_TOOLS) if orchestrator else FINANCIAL_TOOLS
         self.system_prompt = self._build_system_prompt()
         self.graph = self._build_graph()
+
+    def _wrap_tools(self, tools: List[Any]) -> List[Any]:
+        """Wrap tools to use orchestrator for stats and caching where possible."""
+        if not self.orchestrator:
+            return tools
+            
+        wrapped = []
+        # Mapping from tool name to orchestrator data type
+        type_map = {
+            "get_stock_price": "price",
+            "get_company_news": "news",
+            "get_company_info": "company_info",
+        }
+        
+        for tool in tools:
+            if tool.name in type_map:
+                data_type = type_map[tool.name]
+                
+                # Create a wrapper function that keeps the same signature
+                # Note: We rely on the fact that these tools take a 'ticker' string arg
+                def create_wrapper(original_tool, dtype):
+                    def wrapper(ticker: str) -> str:
+                        try:
+                            # Use orchestrator fetch (handles validation, fallback, CACHING, STATS)
+                            result = self.orchestrator.fetch(dtype, ticker)
+                            if result.success and result.data:
+                                # Return data as string, similar to original tool
+                                return str(result.data)
+                            else:
+                                return f"Error fetching {dtype}: {result.error}"
+                        except Exception as e:
+                            return f"Orchestrator error: {str(e)}"
+                    return wrapper
+
+                # Create new tool based on original
+                # We use the Tool constructor from langchain_core.tools if available, 
+                # or just modify the runnable if it's a StructuredTool
+                from langchain_core.tools import StructuredTool
+                
+                new_func = create_wrapper(tool, data_type)
+                
+                # Create a copy of the tool with the new function
+                # This preserves args_schema and description
+                wrapped_tool = StructuredTool.from_function(
+                    func=new_func,
+                    name=tool.name,
+                    description=tool.description,
+                    args_schema=tool.args_schema,
+                    return_direct=tool.return_direct
+                )
+                wrapped.append(wrapped_tool)
+            else:
+                wrapped.append(tool)
+        return wrapped
 
     def _resolve_model(self) -> str:
         try:
@@ -227,6 +285,27 @@ class LangChainFinancialAgent:
             return "gemini-2.5-flash"
 
     def _create_llm(self) -> ChatOpenAI:
+        # 优先从 get_llm_config 获取配置（支持 user_config.json 热加载）
+        try:
+            from backend.config import get_llm_config
+            cfg = get_llm_config(provider=self.provider)
+            api_key = cfg.get("api_key")
+            api_base = cfg.get("api_base")
+            model = cfg.get("model") or self.model
+            if api_key and api_base:
+                print(f"[LangChainAgent] Using config: model={model}, api_base={api_base}")
+                return ChatOpenAI(
+                    model=model,
+                    openai_api_key=api_key,
+                    openai_api_base=api_base,
+                    temperature=0.0,
+                    max_tokens=4000,
+                    request_timeout=120,
+                )
+        except Exception as e:
+            print(f"[LangChainAgent] Failed to load config: {e}, falling back to env vars")
+
+        # 回退到环境变量
         api_key = os.getenv("GEMINI_PROXY_API_KEY")
         api_base = os.getenv("GEMINI_PROXY_API_BASE", "https://x666.me/v1")
 
@@ -261,7 +340,7 @@ class LangChainFinancialAgent:
 
         agent_node = (
             prompt
-            | self.llm.bind_tools(FINANCIAL_TOOLS)
+            | self.llm.bind_tools(self.tools)
             | RunnableLambda(
                 lambda msg: {"messages": [msg]} if not isinstance(msg, dict) else msg
             )
@@ -353,7 +432,7 @@ class LangChainFinancialAgent:
 
         workflow = StateGraph(MessagesState)
         workflow.add_node("agent", agent_node)
-        workflow.add_node("tools", ToolNode(FINANCIAL_TOOLS))
+        workflow.add_node("tools", ToolNode(self.tools))
         workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
             "agent",
@@ -529,6 +608,7 @@ def create_financial_agent(
     verbose: bool = True,
     max_iterations: int = 20,
     llm: Optional[Any] = None,
+    orchestrator: Optional[Any] = None,
 ) -> LangChainFinancialAgent:
     """Factory wrapper to match previous interface."""
 
@@ -538,6 +618,7 @@ def create_financial_agent(
         verbose=verbose,
         max_iterations=max_iterations,
         llm=llm,
+        orchestrator=orchestrator,
     )
 
 

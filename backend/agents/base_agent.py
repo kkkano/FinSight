@@ -11,6 +11,8 @@ class EvidenceItem:
     url: Optional[str] = None
     timestamp: Optional[str] = None
     confidence: float = 1.0  # 0-1
+    title: Optional[str] = None
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class AgentOutput:
@@ -22,6 +24,7 @@ class AgentOutput:
     as_of: str
     fallback_used: bool = False
     risks: List[str] = field(default_factory=list)
+    trace: List[Dict[str, Any]] = field(default_factory=list)
 
 class BaseFinancialAgent:
     AGENT_NAME = "base"

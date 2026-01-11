@@ -1,14 +1,14 @@
 # FinSight RAG 架构升级计划 (LlamaIndex + Chroma)
 
 > 📅 **规划日期**: 2025-12-28
-> 📅 **更新日期**: 2026-01-10
+> 📅 **更新日期**: 2026-01-11
 > 🎯 **核心目标**: 引入向量数据库与 RAG 技术，突破 Context 限制，赋予 Agent "阅读长文" 和 "长期记忆" 的能力。
 
 ---
 
 ## 0. 当前状态（2026-01-10）
 
-- RAG 仍未落地，依赖 DeepSearchAgent 真实检索与 PDF 解析先行
+- RAG 仍未落地，DeepSearchAgent 真实检索 + PDF + Self-RAG 已完成，为向量化入库打底
 - 技术选型保持 LlamaIndex + Chroma，本地优先，符合隐私与轻量部署
 - 计划先做 DeepSearch 的临时向量工作台，再扩展为用户长期记忆
 
@@ -54,7 +54,7 @@
 
 ### 阶段 2.5 (穿插在当前阶段)
 - [ ] 引入 `llama-index` 和 `chromadb` 依赖。
-- [ ] 在 `DeepSearchAgent` 中实现 PDF 读取与向量化 (Mock -> Real RAG)。
+- [ ] 在 `DeepSearchAgent` 中实现向量化入库（PDF 读取已完成）。
 
 ### 阶段 3 (风控与主动服务)
 - [ ] 实现基于 Chroma 的长期记忆模块 `VectorMemoryService`。

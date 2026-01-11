@@ -63,12 +63,22 @@ class ConversationAgent:
         self.report_agent = report_agent
         self.supervisor = supervisor
 
+        # P1: 初始化子 Agent 供 ChatHandler 使用
+        self.news_agent = None
+        self.price_agent = None
+        self._init_sub_agents()
+
         # 初始化核心组件
         self.context = ContextManager(max_turns=max_context_turns)
         self.router = ConversationRouter(llm=llm)
 
-        # 初始化处理器
-        self.chat_handler = ChatHandler(llm=llm, orchestrator=orchestrator)
+        # 初始化处理器 - P1: 传递子 Agent
+        self.chat_handler = ChatHandler(
+            llm=llm,
+            orchestrator=orchestrator,
+            news_agent=self.news_agent,
+            price_agent=self.price_agent
+        )
         self.report_handler = ReportHandler(
             agent=report_agent,
             orchestrator=orchestrator,
@@ -96,6 +106,27 @@ class ConversationAgent:
             'session_start': datetime.now(),
         }
 
+    def _init_sub_agents(self):
+        """P1: 初始化子 Agent 供 ChatHandler 使用"""
+        if not self.llm or not self.orchestrator:
+            return
+
+        try:
+            from backend.agents.news_agent import NewsAgent
+            from backend.agents.price_agent import PriceAgent
+            from backend.services.circuit_breaker import CircuitBreaker
+
+            cache = getattr(self.orchestrator, 'cache', None)
+            tools_module = getattr(self.orchestrator, 'tools_module', None)
+
+            if cache and tools_module:
+                cb = CircuitBreaker()
+                self.news_agent = NewsAgent(self.llm, cache, tools_module, cb)
+                self.price_agent = PriceAgent(self.llm, cache, tools_module, cb)
+                print("[ConversationAgent] Sub-agents (NewsAgent, PriceAgent) initialized for ChatHandler")
+        except Exception as e:
+            print(f"[ConversationAgent] Failed to init sub-agents: {e}")
+
     def _register_handlers(self):
         """注册意图处理器"""
         self.router.register_handler(Intent.CHAT, self._handle_chat)
@@ -106,6 +137,106 @@ class ConversationAgent:
         self.router.register_handler(Intent.FOLLOWUP, self._handle_followup)
         self.router.register_handler(Intent.CLARIFY, self._handle_clarify)
         self.router.register_handler(Intent.GREETING, self._handle_greeting)
+
+    def _add_thinking_step(self, steps, stage: str, message: str) -> Dict[str, Any]:
+        step = {
+            "stage": stage,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        }
+        steps.append(step)
+        return step
+
+    @staticmethod
+    def _trim_text(value: Optional[str], limit: int = 200) -> Optional[str]:
+        if value is None:
+            return None
+        return value if len(value) <= limit else value[:limit] + "..."
+
+    @staticmethod
+    def _compact_dict(payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {key: value for key, value in payload.items() if value not in (None, [], {})}
+
+    def _build_collection_result(self, metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
+        data = result.get("data") or {}
+        payload = {
+            "ticker": metadata.get("tickers", [None])[0] if metadata.get("tickers") else None,
+            "data_origin": data.get("data_origin") or data.get("source"),
+            "tried_sources": data.get("tried_sources"),
+            "fallback_used": data.get("fallback_used"),
+            "as_of": data.get("as_of"),
+            "trace": data.get("trace"),
+        }
+        deep_search = data.get("deep_search") if isinstance(data, dict) else None
+        if isinstance(deep_search, dict):
+            evidence = deep_search.get("evidence") or []
+            pdf_count = sum(
+                1 for item in evidence
+                if isinstance(item, dict) and item.get("meta", {}).get("is_pdf")
+            )
+            payload["deep_search"] = self._compact_dict({
+                "summary": deep_search.get("summary"),
+                "confidence": deep_search.get("confidence"),
+                "data_sources": deep_search.get("data_sources"),
+                "evidence_count": len(evidence),
+                "pdf_count": pdf_count,
+                "evidence": evidence,
+                "trace": deep_search.get("trace"),
+            })
+
+        agent_outputs = data.get("agent_outputs") if isinstance(data, dict) else None
+        if isinstance(agent_outputs, dict):
+            agents = []
+            for name, output in agent_outputs.items():
+                try:
+                    if isinstance(output, dict):
+                        summary = output.get("summary", "")
+                        confidence = output.get("confidence")
+                        data_sources = output.get("data_sources", [])
+                        evidence = output.get("evidence") or []
+                        trace = output.get("trace", [])
+                    else:
+                        summary = getattr(output, "summary", "")
+                        confidence = getattr(output, "confidence", None)
+                        data_sources = getattr(output, "data_sources", [])
+                        evidence = getattr(output, "evidence", []) or []
+                        trace = getattr(output, "trace", [])
+                    agents.append(self._compact_dict({
+                        "agent": name,
+                        "summary": summary,
+                        "confidence": confidence,
+                        "data_sources": data_sources,
+                        "evidence_count": len(evidence),
+                        "trace": trace,
+                    }))
+                except Exception:
+                    continue
+            if agents:
+                payload["agents"] = agents
+        return self._compact_dict(payload)
+
+    def _build_processing_result(
+        self,
+        intent: Intent,
+        handler: Optional[Any],
+        result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        data = result.get("data") or {}
+        handler_name = handler.__name__ if handler else "default_handler"
+        payload = {
+            "intent": intent.value,
+            "handler": handler_name,
+            "method": result.get("method"),
+            "success": result.get("success", True),
+            "intent_detail": result.get("intent_detail"),
+            "data_origin": data.get("data_origin") or data.get("source"),
+            "tried_sources": data.get("tried_sources"),
+            "fallback_used": data.get("fallback_used"),
+            "response_preview": self._trim_text(result.get("response", "")),
+            "note": result.get("thinking"),
+            "report_present": bool(result.get("report")),
+        }
+        return self._compact_dict(payload)
 
     def chat(self, query: str, capture_thinking: bool = False) -> Dict[str, Any]:
         """
@@ -121,37 +252,53 @@ class ConversationAgent:
         self.stats['total_queries'] += 1
         start_time = datetime.now()
         thinking_steps = [] if capture_thinking else None
+        reference_step = None
+        intent_step = None
+        collection_step = None
+        processing_step = None
 
         try:
+            user_query = query
+            preprocess = self.context.preprocess_query(query)
+            prepared_query = preprocess.get("query", query)
+
             # 1. 解析指代（如果有上下文）
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "reference_resolution",
-                    "message": "正在解析上下文引用...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                reference_step = self._add_thinking_step(
+                    thinking_steps,
+                    "reference_resolution",
+                    "正在解析上下文引用..."
+                )
 
-            resolved_query = self.context.resolve_reference(query)
+            resolved_query = self.context.resolve_reference(prepared_query)
+            if capture_thinking and reference_step is not None:
+                reference_step["result"] = self._compact_dict({
+                    "original_query": user_query,
+                    "preprocessed_query": prepared_query,
+                    "resolved_query": resolved_query,
+                    "selection_reason": preprocess.get("selection_reason"),
+                    "selected_ticker": preprocess.get("selected_ticker"),
+                    "market_hint": preprocess.get("market_hint"),
+                    "current_focus": self.context.current_focus,
+                    "context_summary": self._trim_text(self.context.get_summary(), 200),
+                })
 
             # 2. 路由到对应处理器
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "intent_classification",
-                    "message": "正在识别查询意图...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                intent_step = self._add_thinking_step(
+                    thinking_steps,
+                    "intent_classification",
+                    "正在识别查询意图..."
+                )
 
             intent, metadata, handler = self.router.route(resolved_query, self.context)
 
-            if capture_thinking:
-                thinking_steps.append({
-                    "stage": "intent_classification",
-                    "result": {
-                        "intent": intent.value,
-                        "tickers": metadata.get('tickers', []),
-                        "company_names": metadata.get('company_names', [])
-                    },
-                    "timestamp": datetime.now().isoformat()
+            if capture_thinking and intent_step is not None:
+                intent_step["result"] = self._compact_dict({
+                    "intent": intent.value,
+                    "tickers": metadata.get('tickers', []),
+                    "company_names": metadata.get('company_names', []),
+                    "is_comparison": metadata.get('is_comparison'),
                 })
 
             # 3. 更新统计
@@ -160,19 +307,19 @@ class ConversationAgent:
             # 4. 数据收集阶段（如果有股票代码）
             if capture_thinking and metadata.get('tickers'):
                 ticker = metadata['tickers'][0]
-                thinking_steps.append({
-                    "stage": "data_collection",
-                    "message": f"正在获取 {ticker} 的数据...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                collection_step = self._add_thinking_step(
+                    thinking_steps,
+                    "data_collection",
+                    f"正在获取 {ticker} 的数据..."
+                )
 
             # 5. 调用处理器
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "processing",
-                    "message": f"正在生成{intent.value}响应...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                processing_step = self._add_thinking_step(
+                    thinking_steps,
+                    "processing",
+                    f"正在生成{intent.value}响应..."
+                )
 
             if handler:
                 result = handler(resolved_query, metadata)
@@ -180,15 +327,24 @@ class ConversationAgent:
                 result = self._default_handler(resolved_query, metadata)
 
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "complete",
-                    "message": "处理完成",
-                    "timestamp": datetime.now().isoformat()
+                if collection_step is not None:
+                    collection_step["result"] = self._build_collection_result(metadata, result)
+                if processing_step is not None:
+                    processing_step["result"] = self._build_processing_result(intent, handler, result)
+                complete_step = self._add_thinking_step(
+                    thinking_steps,
+                    "complete",
+                    "处理完成"
+                )
+                complete_step["result"] = self._compact_dict({
+                    "elapsed_seconds": round((datetime.now() - start_time).total_seconds(), 2),
+                    "success": result.get("success", True),
+                    "report_present": bool(result.get("report")),
                 })
 
             # 6. 更新上下文
             self.context.add_turn(
-                query=query,
+                query=user_query,
                 intent=intent.value,
                 response=result.get('response', ''),
                 metadata=metadata
@@ -197,7 +353,7 @@ class ConversationAgent:
             # 7. 自动添加图表标记（根据上下文和查询）
             # 只有 CHAT/REPORT 意图才尝试生成图表，闲聊不生成
             if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
-                result = self._add_chart_marker(result, query, metadata, resolved_query)
+                result = self._add_chart_marker(result, user_query, metadata, resolved_query)
 
             # 8. 添加元信息
             result['intent'] = intent.value
@@ -222,7 +378,13 @@ class ConversationAgent:
                 'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000,
                 'thinking_elapsed_seconds': round((datetime.now() - start_time).total_seconds(), 2),
             }
-            if capture_thinking and thinking_steps:
+            if capture_thinking and thinking_steps is not None:
+                error_step = self._add_thinking_step(
+                    thinking_steps,
+                    "error",
+                    "处理失败"
+                )
+                error_step["result"] = {"error": str(e)}
                 error_result['thinking'] = thinking_steps
             return error_result
 
@@ -234,53 +396,69 @@ class ConversationAgent:
         self.stats['total_queries'] += 1
         start_time = datetime.now()
         thinking_steps = [] if capture_thinking else None
+        reference_step = None
+        intent_step = None
+        collection_step = None
+        processing_step = None
 
         try:
-            if capture_thinking:
-                thinking_steps.append({
-                    "stage": "reference_resolution",
-                    "message": "正在解析上下文引用...",
-                    "timestamp": datetime.now().isoformat()
-                })
-
-            resolved_query = self.context.resolve_reference(query)
+            user_query = query
+            preprocess = self.context.preprocess_query(query)
+            prepared_query = preprocess.get("query", query)
 
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "intent_classification",
-                    "message": "正在识别查询意图...",
-                    "timestamp": datetime.now().isoformat()
+                reference_step = self._add_thinking_step(
+                    thinking_steps,
+                    "reference_resolution",
+                    "正在解析上下文引用..."
+                )
+
+            resolved_query = self.context.resolve_reference(prepared_query)
+            if capture_thinking and reference_step is not None:
+                reference_step["result"] = self._compact_dict({
+                    "original_query": user_query,
+                    "preprocessed_query": prepared_query,
+                    "resolved_query": resolved_query,
+                    "selection_reason": preprocess.get("selection_reason"),
+                    "selected_ticker": preprocess.get("selected_ticker"),
+                    "market_hint": preprocess.get("market_hint"),
+                    "current_focus": self.context.current_focus,
+                    "context_summary": self._trim_text(self.context.get_summary(), 200),
                 })
+
+            if capture_thinking:
+                intent_step = self._add_thinking_step(
+                    thinking_steps,
+                    "intent_classification",
+                    "正在识别查询意图..."
+                )
 
             intent, metadata, handler = self.router.route(resolved_query, self.context)
 
-            if capture_thinking:
-                thinking_steps.append({
-                    "stage": "intent_classification",
-                    "result": {
-                        "intent": intent.value,
-                        "tickers": metadata.get('tickers', []),
-                        "company_names": metadata.get('company_names', [])
-                    },
-                    "timestamp": datetime.now().isoformat()
+            if capture_thinking and intent_step is not None:
+                intent_step["result"] = self._compact_dict({
+                    "intent": intent.value,
+                    "tickers": metadata.get('tickers', []),
+                    "company_names": metadata.get('company_names', []),
+                    "is_comparison": metadata.get('is_comparison'),
                 })
 
             self.stats['intents'][intent.value] = self.stats['intents'].get(intent.value, 0) + 1
 
             if capture_thinking and metadata.get('tickers'):
                 ticker = metadata['tickers'][0]
-                thinking_steps.append({
-                    "stage": "data_collection",
-                    "message": f"正在获取 {ticker} 的数据...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                collection_step = self._add_thinking_step(
+                    thinking_steps,
+                    "data_collection",
+                    f"正在获取 {ticker} 的数据..."
+                )
 
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "processing",
-                    "message": f"正在生成{intent.value}响应...",
-                    "timestamp": datetime.now().isoformat()
-                })
+                processing_step = self._add_thinking_step(
+                    thinking_steps,
+                    "processing",
+                    f"正在生成{intent.value}响应..."
+                )
 
             if intent == Intent.REPORT and self.supervisor and metadata.get('tickers'):
                 result = await self._handle_report_async(resolved_query, metadata)
@@ -290,21 +468,30 @@ class ConversationAgent:
                 result = await asyncio.to_thread(self._default_handler, resolved_query, metadata)
 
             if capture_thinking:
-                thinking_steps.append({
-                    "stage": "complete",
-                    "message": "处理完成",
-                    "timestamp": datetime.now().isoformat()
+                if collection_step is not None:
+                    collection_step["result"] = self._build_collection_result(metadata, result)
+                if processing_step is not None:
+                    processing_step["result"] = self._build_processing_result(intent, handler, result)
+                complete_step = self._add_thinking_step(
+                    thinking_steps,
+                    "complete",
+                    "处理完成"
+                )
+                complete_step["result"] = self._compact_dict({
+                    "elapsed_seconds": round((datetime.now() - start_time).total_seconds(), 2),
+                    "success": result.get("success", True),
+                    "report_present": bool(result.get("report")),
                 })
 
             self.context.add_turn(
-                query=query,
+                query=user_query,
                 intent=intent.value,
                 response=result.get('response', ''),
                 metadata=metadata
             )
 
             if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
-                result = self._add_chart_marker(result, query, metadata, resolved_query)
+                result = self._add_chart_marker(result, user_query, metadata, resolved_query)
 
             result['intent'] = intent.value
             result['metadata'] = metadata
@@ -328,7 +515,13 @@ class ConversationAgent:
                 'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000,
                 'thinking_elapsed_seconds': round((datetime.now() - start_time).total_seconds(), 2),
             }
-            if capture_thinking and thinking_steps:
+            if capture_thinking and thinking_steps is not None:
+                error_step = self._add_thinking_step(
+                    thinking_steps,
+                    "error",
+                    "处理失败"
+                )
+                error_step["result"] = {"error": str(e)}
                 error_result['thinking'] = thinking_steps
             return error_result
 
@@ -354,7 +547,12 @@ class ConversationAgent:
 
                 report_ir = None
                 if forum_output and hasattr(self.report_handler, "_convert_to_report_ir"):
-                    report_ir = self.report_handler._convert_to_report_ir(ticker, query, forum_output)
+                    report_ir = self.report_handler._convert_to_report_ir(
+                        ticker,
+                        query,
+                        forum_output,
+                        analysis_result.get("agent_outputs"),
+                    )
                 elif forum_output and hasattr(self.report_handler, "_generate_simple_report_ir"):
                     report_ir = self.report_handler._generate_simple_report_ir(ticker, forum_output.consensus)
 
@@ -399,8 +597,11 @@ class ConversationAgent:
         """处理监控请求（待实现）"""
         tickers = metadata.get('tickers', [])
         ticker = tickers[0] if tickers else None
-        if not ticker and self.context.current_focus:
+        explicit_company = bool(metadata.get('company_names') or metadata.get('company_mentions'))
+        if not ticker and self.context.current_focus and not explicit_company:
             ticker = self.context.current_focus
+        if explicit_company and not ticker:
+            return self.chat_handler._handle_company_clarification(query, metadata)
 
         return {
             'success': True,
@@ -427,8 +628,11 @@ class ConversationAgent:
         """处理新闻情绪/舆情查询"""
         tickers = metadata.get('tickers', [])
         ticker = tickers[0] if tickers else None
-        if not ticker and self.context.current_focus:
+        explicit_company = bool(metadata.get('company_names') or metadata.get('company_mentions'))
+        if not ticker and self.context.current_focus and not explicit_company:
             ticker = self.context.current_focus
+        if explicit_company and not ticker:
+            return self.chat_handler._handle_company_clarification(query, metadata)
         return self.chat_handler._handle_news_sentiment_query(ticker, query, self.context)
 
     def _handle_followup(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -459,6 +663,8 @@ class ConversationAgent:
     def _handle_clarify(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理需要澄清的查询"""
         clarify_reason = metadata.get("clarify_reason")
+        if metadata.get('company_names') or metadata.get('company_mentions'):
+            return self.chat_handler._handle_company_clarification(query, metadata)
         if clarify_reason == "followup_without_context":
             response = """看起来你是在追问上一条内容，但我这边没有上下文。可以告诉我你具体想追问哪只股票/指数/行业或哪条新闻吗？
 

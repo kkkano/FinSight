@@ -18,6 +18,11 @@ const getInitialTheme = (): Theme => {
   return prefersDark ? 'dark' : 'light';
 };
 
+const getInitialSubscriptionEmail = (): string => {
+  if (typeof window === 'undefined') return '';
+  return window.localStorage.getItem('finsight-subscription-email') || '';
+};
+
 const applyThemeClass = (theme: Theme) => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
@@ -27,6 +32,7 @@ const applyThemeClass = (theme: Theme) => {
 
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
+const initialSubscriptionEmail = getInitialSubscriptionEmail();
 applyThemeClass(initialTheme);
 
 interface AppState {
@@ -50,6 +56,8 @@ interface AppState {
   setLayoutMode: (mode: LayoutMode) => void;
   setDraft: (text: string) => void;
   draft: string;
+  subscriptionEmail: string;
+  setSubscriptionEmail: (email: string) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -70,6 +78,7 @@ export const useStore = create<AppState>((set) => ({
   draft: '',
   theme: initialTheme,
   layoutMode: initialLayout,
+  subscriptionEmail: initialSubscriptionEmail,
 
   addMessage: (message) =>
     set((state) => ({
@@ -118,6 +127,14 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-layout', mode);
       }
       return { layoutMode: mode };
+    }),
+
+  setSubscriptionEmail: (email) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-subscription-email', email);
+      }
+      return { subscriptionEmail: email };
     }),
 
   setDraft: (text) =>

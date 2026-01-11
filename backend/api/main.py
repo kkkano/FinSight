@@ -6,7 +6,7 @@ import os
 import sys
 import traceback
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
@@ -356,7 +356,11 @@ async def chat_endpoint(request: ChatRequest):
             "current_focus": result.get('current_focus'),
             "response_time_ms": result.get('response_time_ms', 0),
             "session_id": request.session_id or "new_session",
-            "thinking": result.get('thinking', [])  # 思考过程
+            "thinking": result.get('thinking', []),  # 思考过程
+            "report": result.get('report'),
+            "data": result.get('data'),
+            "metadata": result.get('metadata'),
+            "method": result.get('method'),
         }
     except HTTPException:
         # 已经构造好的业务错误（如 400/404），直接透传
@@ -379,8 +383,87 @@ async def chat_stream_endpoint(request: ChatRequest):
 
     # 1. 先进行指代消解 + 意图路由
     from backend.conversation.router import Intent
-    resolved_query = agent.context.resolve_reference(request.query)
+    preprocess = agent.context.preprocess_query(request.query)
+    prepared_query = preprocess.get("query", request.query)
+    resolved_query = agent.context.resolve_reference(prepared_query)
     intent, metadata, handler = agent.router.route(resolved_query, agent.context)
+
+    selected_ticker = preprocess.get("selected_ticker")
+    if selected_ticker and selected_ticker not in metadata.get("tickers", []):
+        metadata.setdefault("tickers", []).insert(0, selected_ticker)
+    if preprocess.get("selection_reason"):
+        metadata["selection_reason"] = preprocess.get("selection_reason")
+    if preprocess.get("market_hint"):
+        metadata["market_hint"] = preprocess.get("market_hint")
+
+    def build_thinking_trace(result: Dict[str, Any], elapsed_seconds: float) -> List[Dict[str, Any]]:
+        steps: List[Dict[str, Any]] = []
+
+        def add_step(stage: str, message: str, payload: Optional[Dict[str, Any]] = None) -> None:
+            step = {
+                "stage": stage,
+                "message": message,
+                "timestamp": datetime.now().isoformat(),
+            }
+            if payload:
+                step["result"] = payload
+            steps.append(step)
+
+        summary = agent.context.get_summary()
+        if hasattr(agent, "_trim_text"):
+            summary = agent._trim_text(summary, 200)
+
+        add_step(
+            "reference_resolution",
+            "解析上下文引用完成",
+            {
+                "original_query": request.query,
+                "preprocessed_query": prepared_query,
+                "resolved_query": resolved_query,
+                "selected_ticker": preprocess.get("selected_ticker"),
+                "selection_reason": preprocess.get("selection_reason"),
+                "market_hint": preprocess.get("market_hint"),
+                "current_focus": agent.context.current_focus,
+                "context_summary": summary,
+            },
+        )
+        add_step(
+            "intent_classification",
+            "识别查询意图完成",
+            {
+                "intent": intent.value,
+                "tickers": metadata.get("tickers", []),
+                "company_names": metadata.get("company_names", []),
+                "is_comparison": metadata.get("is_comparison"),
+            },
+        )
+
+        if metadata.get("tickers"):
+            collection_result: Dict[str, Any] = {}
+            if hasattr(agent, "_build_collection_result"):
+                collection_result = agent._build_collection_result(metadata, result)
+            add_step(
+                "data_collection",
+                f"{metadata['tickers'][0]} 数据收集完成",
+                collection_result or {"ticker": metadata["tickers"][0]},
+            )
+
+        processing_payload: Dict[str, Any] = {}
+        if hasattr(agent, "_build_processing_result"):
+            processing_payload = agent._build_processing_result(intent, handler, result)
+        add_step("processing", "响应生成完成", processing_payload or {"intent": intent.value})
+
+        add_step(
+            "complete",
+            "处理完成",
+            {
+                "elapsed_seconds": elapsed_seconds,
+                "success": result.get("success", True),
+                "report_present": bool(result.get("report")),
+            },
+        )
+
+        return steps
 
     # 2. 根据意图决定处理方式
     if intent == Intent.REPORT:
@@ -404,20 +487,112 @@ async def chat_stream_endpoint(request: ChatRequest):
 
         if use_supervisor:
             async def generate_report():
+                start_time = datetime.now()
+                response_text = ""
                 async for chunk in stream_supervisor_sse(supervisor, resolved_query, ticker, report_builder):
+                    if chunk.startswith("data: "):
+                        payload_text = chunk[6:].strip()
+                        try:
+                            payload = json.loads(payload_text)
+                        except json.JSONDecodeError:
+                            payload = None
+                        if payload and payload.get("type") == "token":
+                            response_text += payload.get("content", "")
+                        elif payload and payload.get("type") == "done":
+                            if not payload.get("report") and report_builder and response_text:
+                                try:
+                                    payload["report"] = report_builder(response_text)
+                                except Exception:
+                                    pass
+                            result = {
+                                "success": True,
+                                "response": response_text,
+                                "report": payload.get("report"),
+                                "method": "supervisor_stream",
+                            }
+                            agent_outputs = payload.get("agent_outputs") if isinstance(payload, dict) else None
+                            if agent_outputs and isinstance(agent_outputs, dict):
+                                result["data"] = {"agent_outputs": agent_outputs}
+                                if payload.get("report") and getattr(agent, "report_handler", None):
+                                    report = payload.get("report")
+                                    citations = []
+                                    agent_traces = {}
+                                    for name, output in agent_outputs.items():
+                                        if not isinstance(output, dict):
+                                            continue
+                                        evidence = output.get("evidence") or []
+                                        if evidence:
+                                            prefix = str(name).upper()[:2] if name else "AG"
+                                            citations.extend(
+                                                agent.report_handler._build_citations_from_evidence(evidence, prefix)
+                                            )
+                                        trace = output.get("trace")
+                                        if trace:
+                                            agent_traces[name] = trace
+                                    if citations and isinstance(report, dict):
+                                        report["citations"] = citations
+                                    if agent_traces and isinstance(report, dict):
+                                        meta = report.get("meta") if isinstance(report, dict) else {}
+                                        meta = dict(meta) if isinstance(meta, dict) else {}
+                                        meta.setdefault("agent_traces", agent_traces)
+                                        report["meta"] = meta
+                                    payload["report"] = report
+                                    result["report"] = report
+                            payload["thinking"] = build_thinking_trace(
+                                result,
+                                round((datetime.now() - start_time).total_seconds(), 2),
+                            )
+                            payload['current_focus'] = agent.context.current_focus
+                            payload['intent'] = intent.value
+                            agent.context.add_turn(query=request.query, intent=intent.value, response=response_text, metadata=metadata)
+                            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                            continue
                     yield chunk
         elif report_agent and hasattr(report_agent, "analyze_stream"):
             async def generate_report():
+                start_time = datetime.now()
+                response_text = ""
                 async for chunk in stream_report_sse(report_agent, resolved_query, report_builder):
+                    if chunk.startswith("data: "):
+                        payload_text = chunk[6:].strip()
+                        try:
+                            payload = json.loads(payload_text)
+                        except json.JSONDecodeError:
+                            payload = None
+                        if payload and payload.get("type") == "token":
+                            response_text += payload.get("content", "")
+                        elif payload and payload.get("type") == "done":
+                            if not payload.get("report") and report_builder and response_text:
+                                try:
+                                    payload["report"] = report_builder(response_text)
+                                except Exception:
+                                    pass
+                            result = {
+                                "success": True,
+                                "response": response_text,
+                                "report": payload.get("report"),
+                                "method": "report_agent_stream",
+                            }
+                            payload["thinking"] = build_thinking_trace(
+                                result,
+                                round((datetime.now() - start_time).total_seconds(), 2),
+                            )
+                            payload['current_focus'] = agent.context.current_focus
+                            payload['intent'] = intent.value
+                            agent.context.add_turn(query=request.query, intent=intent.value, response=response_text, metadata=metadata)
+                            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                            continue
                     yield chunk
         else:
             # Stream fallback using the non-streaming report path.
             async def generate_report():
                 try:
+                    start_time = datetime.now()
                     print(f"[Stream REPORT] using sync agent.chat()")
                     result = agent.chat(resolved_query, capture_thinking=True)
                     response_text = result.get('response', '')
                     report_data = result.get('report')
+                    thinking_steps = result.get('thinking', [])
 
                     print(f"[Stream REPORT] agent.chat report present: {report_data is not None}")
                     if report_data:
@@ -434,9 +609,19 @@ async def chat_stream_endpoint(request: ChatRequest):
                                 buffer = ""
 
                     done_data = {'type': 'done'}
+                    done_data['current_focus'] = agent.context.current_focus
+                    done_data['intent'] = intent.value
                     if report_data:
                         done_data['report'] = report_data
                         print(f"[Stream REPORT] done event includes report")
+                    if thinking_steps:
+                        done_data['thinking'] = thinking_steps
+                    else:
+                        result['report'] = report_data
+                        done_data['thinking'] = build_thinking_trace(
+                            result,
+                            round((datetime.now() - start_time).total_seconds(), 2),
+                        )
                     yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
                 except Exception as e:
@@ -454,6 +639,7 @@ async def chat_stream_endpoint(request: ChatRequest):
         # 其他意图：优先走真实 token 流式输出
         async def generate_chat():
             try:
+                start_time = datetime.now()
                 agent.stats['total_queries'] += 1
                 agent.stats['intents'][intent.value] = agent.stats['intents'].get(intent.value, 0) + 1
 
@@ -503,16 +689,21 @@ async def chat_stream_endpoint(request: ChatRequest):
                         if suffix.strip():
                             yield f"data: {json.dumps({'type': 'token', 'content': suffix}, ensure_ascii=False)}\n\n"
 
+                done_data = {'type': 'done'}
+                done_data['current_focus'] = agent.context.current_focus
+                done_data['intent'] = intent.value
+                if result.get('report'):
+                    done_data['report'] = result['report']
+                done_data['thinking'] = build_thinking_trace(
+                    result,
+                    round((datetime.now() - start_time).total_seconds(), 2),
+                )
                 agent.context.add_turn(
                     query=request.query,
                     intent=intent.value,
                     response=result.get('response', ''),
                     metadata=metadata
                 )
-
-                done_data = {'type': 'done'}
-                if result.get('report'):
-                    done_data['report'] = result['report']
                 yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
@@ -760,11 +951,18 @@ async def get_subscriptions(email: str = None):
 @app.get("/api/config")
 async def get_config():
     """
-    获取用户配置（从本地存储或默认配置）
+    获取用户配置（从 user_config.json 读取）
     """
     try:
-        # 这里可以从文件或数据库读取用户配置
-        # 目前返回默认配置
+        import json
+        config_file = os.path.join(project_root, "user_config.json")
+
+        if os.path.exists(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                saved_config = json.load(f)
+            return {"success": True, "config": saved_config}
+
+        # 文件不存在时返回默认配置
         return {
             "success": True,
             "config": {
@@ -772,6 +970,7 @@ async def get_config():
                 "llm_model": None,
                 "llm_api_key": None,
                 "llm_api_base": None,
+                "layout_mode": "centered",
             }
         }
     except Exception as e:

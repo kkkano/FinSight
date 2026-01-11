@@ -1,0 +1,11 @@
+{
+  "user_id": "default_user",
+  "risk_tolerance": "medium",
+  "investment_style": "balanced",
+  "watchlist": [
+    "GOOGL",
+    "PDD"
+  ],
+  "preferences": {},
+  "last_active": "2026-01-12T01:01:54.497582"
+}

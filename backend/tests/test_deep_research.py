@@ -8,19 +8,70 @@ from backend.agents.base_agent import AgentOutput
 
 @pytest.mark.asyncio
 async def test_deep_search_agent():
-    mock_llm = MagicMock()
     mock_cache = MagicMock()
+    mock_cache.get.return_value = None
     mock_tools = MagicMock()
 
-    agent = DeepSearchAgent(mock_llm, mock_cache, mock_tools)
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+    agent._search_web = MagicMock(return_value=[{
+        "title": "Sample Report",
+        "url": "https://example.com/report",
+        "snippet": "Sample snippet",
+        "source": "search",
+    }])
+    agent._fetch_documents = MagicMock(return_value=[{
+        "title": "Sample Report",
+        "url": "https://example.com/report",
+        "snippet": "Sample snippet",
+        "content": "Sample content for deep search report.",
+        "source": "search",
+        "is_pdf": False,
+    }])
 
     # Test research flow
     result = await agent.research("NVDA investment thesis", "NVDA")
 
     assert isinstance(result, AgentOutput)
     assert result.agent_name == "deep_search"
-    # assert result.confidence >= 0.8  (Actual confidence depends on implementation details)
-    assert "Tavily" in result.data_sources or "Deep Web" in result.data_sources
+    assert "search" in result.data_sources
+    assert len(result.evidence) == 1
+
+@pytest.mark.asyncio
+async def test_deep_search_agent_self_rag_merges_docs():
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+
+    base_docs = [{
+        "title": "Base Doc",
+        "url": "https://example.com/base",
+        "snippet": "Base snippet",
+        "content": "Base content.",
+        "source": "tavily",
+        "is_pdf": False,
+    }]
+    extra_docs = [{
+        "title": "Gap Doc",
+        "url": "https://example.com/gap",
+        "snippet": "Gap snippet",
+        "content": "Gap content.",
+        "source": "search",
+        "is_pdf": True,
+    }]
+
+    agent._initial_search = AsyncMock(return_value=base_docs)
+    agent._identify_gaps = AsyncMock(side_effect=[["competitors"], []])
+    agent._targeted_search = AsyncMock(return_value=extra_docs)
+    agent._first_summary = AsyncMock(return_value="Initial summary")
+    agent._update_summary = AsyncMock(return_value="Updated summary")
+
+    result = await agent.research("NVDA investment thesis", "NVDA")
+
+    assert isinstance(result, AgentOutput)
+    assert result.summary == "Updated summary"
+    assert len(result.evidence) == 2
+    assert "tavily" in result.data_sources
+    assert "search" in result.data_sources
 
 @pytest.mark.asyncio
 async def test_macro_agent():

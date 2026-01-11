@@ -59,6 +59,7 @@ export type Sentiment = 'bullish' | 'bearish' | 'neutral';
 export interface ReportContent {
   type: 'text' | 'chart' | 'table' | 'image';
   content: any; // string for text, object for chart/table
+  citation_refs?: string[];
   metadata?: Record<string, any>;
 }
 

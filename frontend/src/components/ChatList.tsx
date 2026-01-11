@@ -8,7 +8,7 @@ import { ThinkingProcess } from './ThinkingProcess';
 import { ReportView } from './ReportView';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
-import type { KlineData, ChartType } from '../types/index';
+import type { KlineData, ChartType, ThinkingStep, ReportIR } from '../types/index';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 
@@ -39,9 +39,20 @@ const shouldGenerateChart = async (
 };
 
 const extractTicker = (text: string): string | null => {
-  const tickerPattern = /\b([A-Z]{1,5})\b/g;
+  const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
   const matches = text.match(tickerPattern);
-  return matches && matches.length > 0 ? matches[0] : null;
+  if (!matches) return null;
+
+  const stopwords = new Set([
+    'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
+    'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
+  ]);
+
+  for (const match of matches) {
+    const upper = match.toUpperCase();
+    if (!stopwords.has(upper)) return upper;
+  }
+  return null;
 };
 
 export const ChatList: React.FC = () => {
@@ -149,6 +160,7 @@ export const ChatList: React.FC = () => {
 
   return (
     <div
+      id="chat-scroll-container"
       ref={containerRef}
       className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6"
     >
@@ -174,10 +186,10 @@ export const ChatList: React.FC = () => {
 
             {/* 气泡 */}
             <div className={clsx(
-              "p-3 rounded-2xl text-sm leading-relaxed shadow-sm",
+              "p-4 rounded-xl text-sm leading-relaxed shadow-sm",
               msg.role === 'user'
-                ? "bg-fin-primary text-white rounded-tr-none"
-                : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-none relative overflow-visible"
+                ? "bg-fin-hover text-fin-text rounded-tr-sm"
+                : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-sm relative overflow-visible"
             )}>
               {msg.role === 'user' ? (
                 msg.content
@@ -218,6 +230,8 @@ export const ChatList: React.FC = () => {
                   <MessageActions
                     messageId={msg.id}
                     content={msg.content}
+                    thinking={msg.thinking}
+                    report={msg.report}
                     onRetry={() => handleRetry(msg.id)}
                     onDelete={() => removeMessage(msg.id)}
                   />
@@ -255,7 +269,7 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
 
   useEffect(() => {
     // 检测图表标记 [CHART:TICKER:TYPE] - 支持所有图表类型
-    const chartMatch = content.match(/\[CHART:([A-Z]+):([a-z]+)\]/);
+    const chartMatch = content.match(/\[CHART:([A-Z0-9.-]+):([a-z]+)\]/);
     if (chartMatch) {
       const [, ticker, chartTypeStr] = chartMatch;
       // 确保 chartType 是有效的 ChartType
@@ -356,9 +370,64 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
 const MessageActions: React.FC<{
   messageId: string;
   content: string;
+  thinking?: ThinkingStep[];
+  report?: ReportIR;
   onRetry: () => void;
   onDelete: () => void;
-}> = ({ content, onRetry, onDelete }) => {
+}> = ({ content, thinking, report, onRetry, onDelete }) => {
+  const buildTraceMarkdown = () => {
+    const lines: string[] = [];
+
+    if (report) {
+      lines.push(`# Report: ${report.title || report.ticker}`);
+      lines.push(`Ticker: ${report.ticker}`);
+      if (report.summary) {
+        lines.push('');
+        lines.push('## Summary');
+        lines.push(report.summary);
+      }
+    }
+
+    if (content) {
+      lines.push('');
+      lines.push('## Assistant Response');
+      lines.push(content);
+    }
+
+    if (thinking && thinking.length > 0) {
+      lines.push('');
+      lines.push('## Reasoning Trace');
+      thinking.forEach((step, idx) => {
+        lines.push('');
+        lines.push(`### ${idx + 1}. ${step.stage}`);
+        if (step.message) {
+          lines.push(step.message);
+        }
+        if (step.result) {
+          lines.push('```json');
+          lines.push(JSON.stringify(step.result, null, 2));
+          lines.push('```');
+        }
+        if (step.timestamp) {
+          lines.push(`Time: ${new Date(step.timestamp).toLocaleString()}`);
+        }
+      });
+    }
+
+    if (report?.citations?.length) {
+      lines.push('');
+      lines.push('## Sources');
+      report.citations.forEach((citation) => {
+        lines.push(`- [${citation.title || citation.source_id}](${citation.url}) (${citation.published_date || 'n/a'})`);
+        if (citation.snippet) {
+          lines.push(`  - ${citation.snippet}`);
+        }
+      });
+    }
+
+    return lines.filter((line) => line !== undefined).join('\n');
+  };
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(content);
@@ -368,11 +437,12 @@ const MessageActions: React.FC<{
   };
 
   const handleExport = () => {
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const payload = buildTraceMarkdown() || content;
+    const blob = new Blob([payload], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'message.md';
+    a.download = report?.report_id ? `trace_${report.report_id}.md` : 'message.md';
     a.click();
     URL.revokeObjectURL(url);
   };

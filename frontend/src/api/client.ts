@@ -9,7 +9,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000';
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
   },
   timeout: 120000, // 120秒超时，防止 LLM 生成长文时前端断开
 });
@@ -55,6 +55,11 @@ export const apiClient = {
     return response.data;
   },
 
+  async fetchStockPrice(ticker: string): Promise<any> {
+    const response = await api.get(`/api/stock/price/${encodeURIComponent(ticker)}`);
+    return response.data;
+  },
+
   // 将图表数据加入聊天上下文
   async addChartData(ticker: string, summary: string): Promise<any> {
     const response = await api.post('/api/chat/add-chart-data', {
@@ -87,6 +92,24 @@ export const apiClient = {
   // 保存用户配置
   async saveConfig(config: any): Promise<any> {
     const response = await api.post('/api/config', config);
+    return response.data;
+  },
+
+  // User profile / watchlist
+  async getUserProfile(user_id?: string): Promise<any> {
+    const response = await api.get('/api/user/profile', {
+      params: user_id ? { user_id } : {},
+    });
+    return response.data;
+  },
+
+  async addWatchlist(payload: { user_id?: string; ticker: string }): Promise<any> {
+    const response = await api.post('/api/user/watchlist/add', payload);
+    return response.data;
+  },
+
+  async removeWatchlist(payload: { user_id?: string; ticker: string }): Promise<any> {
+    const response = await api.post('/api/user/watchlist/remove', payload);
     return response.data;
   },
 
@@ -141,8 +164,9 @@ export const apiClient = {
     onToken: (token: string) => void,
     onToolStart?: (name: string) => void,
     onToolEnd?: () => void,
-    onDone?: (report?: any) => void,  // Phase 2: 支持 report 数据
-    onError?: (error: string) => void
+    onDone?: (report?: any, thinking?: any[], meta?: any) => void,  // Phase 2: 支持 report 数据
+    onError?: (error: string) => void,
+    onThinking?: (step: any) => void
   ): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/chat/stream`, {
       method: 'POST',
@@ -157,7 +181,7 @@ export const apiClient = {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No reader available');
 
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder('utf-8');
     let buffer = '';
 
     while (true) {
@@ -178,8 +202,10 @@ export const apiClient = {
               onToolStart?.(data.name);
             } else if (data.type === 'tool_end') {
               onToolEnd?.();
+            } else if (data.type === 'thinking') {
+              onThinking?.(data);
             } else if (data.type === 'done') {
-              onDone?.(data.report);  // Phase 2: 传递 report 数据
+              onDone?.(data.report, data.thinking, data);  // Phase 2: 传递 report 数据
             } else if (data.type === 'error') {
               onError?.(data.message);
             }
