@@ -81,6 +81,7 @@ class ConversationRouter:
         '阿里巴巴': 'BABA', '阿里': 'BABA', '京东': 'JD',
         '拼多多': 'PDD', '百度': 'BIDU', '英特尔': 'INTC',
         '蔚来': 'NIO', '小鹏': 'XPEV', '理想': 'LI',
+        '凯捷': 'CAP.PA',
         '奈飞': 'NFLX', '脸书': 'META', 'Facebook': 'META',
         # 市场指数
         '纳斯达克': '^IXIC', '纳斯达克指数': '^IXIC', '纳指': '^IXIC',
@@ -178,6 +179,7 @@ class ConversationRouter:
                         self._contains_financial_keywords(query)
                         or bool(metadata.get('tickers'))
                         or bool(metadata.get('company_names'))
+                        or bool(metadata.get('company_mentions'))
                     )
                 )
             )
@@ -263,6 +265,7 @@ class ConversationRouter:
                 self._contains_financial_keywords(query_lower)
                 or bool(metadata.get('tickers'))
                 or bool(metadata.get('company_names'))
+                or bool(metadata.get('company_mentions'))
             )
             if has_financial_context:
                 return Intent.REPORT
@@ -400,6 +403,8 @@ class ConversationRouter:
         tickers_info = ""
         if metadata and metadata.get('tickers'):
             tickers_info = f"\n识别到的股票/指数: {', '.join(metadata['tickers'])}"
+            if metadata and metadata.get('company_mentions'):
+                tickers_info += '\nCompany mentions: ' + ', '.join(metadata['company_mentions'])
         
         try:
             prompt = f"""You are a professional financial dialogue system intent classifier. Analyze the user's query intent.
@@ -479,6 +484,7 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
         metadata = {
             'tickers': [],
             'company_names': [],
+            'company_mentions': [],
             'raw_query': query,
             'is_comparison': False
         }
@@ -506,6 +512,9 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
         # 2. 识别英文 Ticker
         # 匹配 1-5 位大写字母，或者是 ^ 开头的指数
         potential_tickers = re.findall(r'\b[A-Z]{1,5}\b|\^[A-Z]{3,}', query)
+        dotted_tickers = re.findall(r'\b[A-Z]{1,5}[.-][A-Z]{1,4}\b', query)
+        if dotted_tickers:
+            potential_tickers.extend(dotted_tickers)
 
         # 过滤掉常见的非 Ticker 单词
         common_words = {'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS', 'PE', 'EPS', 'MACD', 'RSI', 'KDJ'}
@@ -550,5 +559,38 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
                  if ticker not in metadata['tickers']:
                      metadata['tickers'].append(ticker)
                      metadata['company_names'].append(name)
+
+        # 5. Detect explicit company mentions that are not resolved to tickers.
+        # This prevents accidental reuse of previous context when a new company is named.
+        company_mentions = []
+        stopwords = {
+            'news', 'headline', 'analysis', 'report', 'price', 'forecast', 'outlook', 'expectation',
+            'earnings', 'market', 'stock', 'shares', 'company', 'rating', 'recommendation', 'guidance',
+            'latest', 'today', 'ytd', 'q1', 'q2', 'q3', 'q4', 'eps', 'pe', 'roe', 'revenue', 'profit'
+        }
+        english_candidates = re.findall(r"[A-Za-z][A-Za-z&.'-]{2,}", query_original)
+        for candidate in english_candidates:
+            lower = candidate.lower()
+            if lower in stopwords:
+                continue
+            if lower in self.COMPANY_MAP:
+                continue
+            if candidate.upper() in metadata['tickers']:
+                continue
+            if any(lower == name.lower() for name in metadata['company_names']):
+                continue
+            if candidate not in company_mentions:
+                company_mentions.append(candidate)
+
+        cn_candidates = re.findall(r"([\u4e00-\u9fff]{2,6})(?:公司|集团|股份|控股)", query_original)
+        for candidate in cn_candidates:
+            if candidate in self.CN_TO_TICKER:
+                continue
+            if candidate in metadata['company_names']:
+                continue
+            if candidate not in company_mentions:
+                company_mentions.append(candidate)
+
+        metadata['company_mentions'] = company_mentions
         
         return metadata

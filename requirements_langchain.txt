@@ -18,6 +18,7 @@ yfinance==0.2.44
 finnhub-python==2.4.20
 requests==2.31.0
 beautifulsoup4==4.12.3
+pypdf==4.2.0
 
 # ============================================
 # 搜索引擎

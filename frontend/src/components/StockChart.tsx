@@ -49,32 +49,32 @@ export const StockChart: React.FC = () => {
       setLoading(true);
       setError(null);
       setIsMockData(false);
-      
+
       try {
         const { interval, period: actualPeriod } = getPeriodConfig(period);
         const res = await apiClient.fetchKline(currentTicker, actualPeriod, interval);
-        
+
         // apiClient.fetchKline 返回的是 response.data，即后端返回的完整数据
         // 后端返回格式: {ticker: string, data: {kline_data: [...] 或 error: "..."}, cached: boolean}
         console.log('[StockChart] 收到数据:', res);
-        
+
         // 检查响应结构
         if (res && res.data) {
           const responseData = res.data;
-          
+
           // 检查是否有错误
           if (responseData.error) {
             console.error('[StockChart] 后端返回错误:', responseData.error);
             setError(responseData.error);
             setData(generateMockData(currentTicker, period));
             setIsMockData(true);
-          } 
+          }
           // 检查是否有 kline_data
           else if (responseData.kline_data && Array.isArray(responseData.kline_data) && responseData.kline_data.length > 0) {
             console.log(`[StockChart] ✅ 成功获取 ${responseData.kline_data.length} 条真实数据 (来源: ${responseData.source || 'unknown'})`);
             const isIntraday = responseData.kline_data.some((item: KlineData) => (item.time || '').includes(':'));
             let processedData = responseData.kline_data;
-            
+
             // 如果是"24小时"视图，只显示最近24小时的数据
             if (period === '5d' && isIntraday) {
               const now = new Date().getTime();
@@ -88,11 +88,11 @@ export const StockChart: React.FC = () => {
                 processedData = responseData.kline_data.slice(-24); // 保留最后24个数据点
               }
             }
-            
+
             setData(processedData);
             setIsMockData(false);
             setError(null); // 清除错误
-          } 
+          }
           // 数据为空
           else {
             console.warn('[StockChart] 数据为空或格式错误:', responseData);
@@ -125,7 +125,7 @@ export const StockChart: React.FC = () => {
         <div className="p-4 bg-fin-panel rounded-full">
           <BarChart3 size={48} className="opacity-50" />
         </div>
-        <p>在左侧对话框询问股票代码 (如 "AAPL")<br/>即可在此处查看实时图表</p>
+        <p>在左侧对话框询问股票代码 (如 "AAPL")<br />即可在此处查看实时图表</p>
       </div>
     );
   }
@@ -148,9 +148,9 @@ export const StockChart: React.FC = () => {
   }
 
   // 计算涨跌百分比数据（用于折线图）
-  const calculateReturns = (data: KlineData[]): Array<{time: string, value: number}> => {
+  const calculateReturns = (data: KlineData[]): Array<{ time: string, value: number }> => {
     if (data.length === 0) return [];
-    
+
     const firstClose = data[0].close;
     return data.map(item => ({
       time: item.time,
@@ -171,7 +171,7 @@ export const StockChart: React.FC = () => {
     },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { 
+      axisPointer: {
         type: 'cross',
         lineStyle: { color: '#3b82f6', width: 1, type: 'dashed' },
         crossStyle: { color: '#3b82f6', width: 1, type: 'dashed' }
@@ -190,7 +190,7 @@ export const StockChart: React.FC = () => {
         const change = parseFloat(close) - parseFloat(open);
         const changePercent = ((change / parseFloat(open)) * 100).toFixed(2);
         const changeColor = change >= 0 ? '#22c55e' : '#ef4444';
-        
+
         // 格式化时间显示（24小时视图）
         let timeDisplay = data.axisValue;
         if (period === '5d' && data.axisValue) {
@@ -204,7 +204,7 @@ export const StockChart: React.FC = () => {
             }
           }
         }
-        
+
         return `
           <div style="padding: 4px;">
             <div style="font-weight: 600; margin-bottom: 6px; color: #f4f4f5;">${timeDisplay}</div>
@@ -250,10 +250,22 @@ export const StockChart: React.FC = () => {
         return item.time;
       }),
       axisLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { 
-        color: '#a1a1aa', 
-        rotate: period === '5d' ? 0 : 45,
-        fontSize: period === '5d' ? 10 : 12
+      axisLabel: {
+        color: '#a1a1aa',
+        fontSize: 9,
+        rotate: 0,
+        interval: 'auto',
+        hideOverlap: true,
+        formatter: (value: string) => {
+          // 简化日期显示为 MM-DD 格式
+          if (value.includes('-') && value.length > 5) {
+            const parts = value.split(' ')[0].split('-');
+            if (parts.length >= 3) {
+              return `${parts[1]}-${parts[2]}`;
+            }
+          }
+          return value;
+        }
       }
     },
     yAxis: {
@@ -323,18 +335,29 @@ export const StockChart: React.FC = () => {
         return item.time;
       }),
       axisLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { 
-        color: '#a1a1aa', 
-        rotate: period === '5d' ? 0 : 45,
-        fontSize: period === '5d' ? 10 : 12
+      axisLabel: {
+        color: '#a1a1aa',
+        fontSize: 9,
+        rotate: 0,
+        interval: 'auto',
+        hideOverlap: true,
+        formatter: (value: string) => {
+          if (value.includes('-') && value.length > 5) {
+            const parts = value.split(' ')[0].split('-');
+            if (parts.length >= 3) {
+              return `${parts[1]}-${parts[2]}`;
+            }
+          }
+          return value;
+        }
       }
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       splitLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { 
-        color: '#a1a1aa', 
+      axisLabel: {
+        color: '#a1a1aa',
         formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
       }
     },
@@ -384,11 +407,10 @@ export const StockChart: React.FC = () => {
             <button
               key={opt.value}
               onClick={() => setPeriod(opt.value)}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                period === opt.value
-                  ? 'bg-fin-primary text-white'
-                  : 'bg-fin-bg text-fin-muted hover:bg-fin-border'
-              }`}
+              className={`px-2 py-1 text-xs rounded transition-colors ${period === opt.value
+                ? 'bg-fin-primary text-white'
+                : 'bg-fin-bg text-fin-muted hover:bg-fin-border'
+                }`}
             >
               {opt.label}
             </button>
@@ -399,22 +421,20 @@ export const StockChart: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setChartType('candlestick')}
-            className={`p-1.5 rounded transition-colors ${
-              chartType === 'candlestick'
-                ? 'bg-fin-primary text-white'
-                : 'text-fin-muted hover:bg-fin-border'
-            }`}
+            className={`p-1.5 rounded transition-colors ${chartType === 'candlestick'
+              ? 'bg-fin-primary text-white'
+              : 'text-fin-muted hover:bg-fin-border'
+              }`}
             title="K线图"
           >
             <Activity size={16} />
           </button>
           <button
             onClick={() => setChartType('line')}
-            className={`p-1.5 rounded transition-colors ${
-              chartType === 'line'
-                ? 'bg-fin-primary text-white'
-                : 'text-fin-muted hover:bg-fin-border'
-            }`}
+            className={`p-1.5 rounded transition-colors ${chartType === 'line'
+              ? 'bg-fin-primary text-white'
+              : 'text-fin-muted hover:bg-fin-border'
+              }`}
             title="涨跌趋势图"
           >
             <TrendingUp size={16} />
@@ -430,8 +450,12 @@ export const StockChart: React.FC = () => {
       )}
 
       {/* 图表 */}
-      <div className="flex-1 p-4">
-        <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
+      <div className="flex-1 p-4 overflow-hidden relative">
+        <ReactECharts
+          option={option}
+          style={{ height: '100%', width: '100%', minHeight: '200px' }}
+          autoResize={true}
+        />
       </div>
     </div>
   );
@@ -442,7 +466,7 @@ const generateMockData = (_ticker: string, period: string = '1y'): KlineData[] =
   const data: KlineData[] = [];
   const today = new Date();
   const basePrice = 100;
-  
+
   // 根据周期确定数据点数量
   const periodDays: Record<string, number> = {
     '1d': 1,
@@ -455,21 +479,21 @@ const generateMockData = (_ticker: string, period: string = '1y'): KlineData[] =
     '5y': 1260,
     'max': 2520
   };
-  
+
   const days = periodDays[period] || 252;
-  
+
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
-    
+
     if (date.getDay() === 0 || date.getDay() === 6) continue;
-    
+
     const change = (Math.random() - 0.5) * 10;
     const open = basePrice + change;
     const close = open + (Math.random() - 0.5) * 5;
     const high = Math.max(open, close) + Math.random() * 3;
     const low = Math.min(open, close) - Math.random() * 3;
-    
+
     data.push({
       time: date.toISOString().split('T')[0],
       open: Math.round(open * 100) / 100,
@@ -478,6 +502,6 @@ const generateMockData = (_ticker: string, period: string = '1y'): KlineData[] =
       close: Math.round(close * 100) / 100,
     });
   }
-  
+
   return data;
 };

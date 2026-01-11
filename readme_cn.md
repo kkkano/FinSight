@@ -38,6 +38,11 @@ FinSight AI 是一个面向股票 / 指数的 **对话式金融研究 Agent**：
 - 单个工具内部就包含多数据源回退（yfinance / API / 抓取 / 搜索）
 - 尽量保证"有数据可用"，并在失败时给出清晰错误信息
 
+### DeepSearchAgent + Self-RAG
+- 真实检索（Tavily/Exa/搜索回退）+ PDF 解析
+- 反思式检索（Self-RAG）识别信息缺口并二次检索
+- 证据链接写入深度研究总结
+
 ### 市场新闻来源
 - 主源：Reuters RSS + Bloomberg RSS（默认列表，支持 `BLOOMBERG_RSS_URLS` 扩展）
 - 次级：Finnhub `general_news`（48h 时效过滤）
@@ -69,11 +74,13 @@ https://feeds.bloomberg.com/industries/news.rss
 - 顶部品牌条：FinSight 标识 + 副标题 + 主题切换 + 导出 PDF + 设置
 - 左右布局：左侧对话，右侧图表，可折叠
 - 支持深色 / 浅色主题，支持"居中布局"与"铺满宽度"两种布局模式，并可在设置中切换
+- Report 卡片支持章节导航滚动高亮、引用跳转与内嵌 ECharts 图表
 
 ### 订阅提醒
 - 支持邮件提醒：价格波动（`price_change`）、新闻（`news`），多只股票一次性订阅
 - 后台调度（APScheduler）：价格/新闻定期扫描，多源回退（yfinance → Alpha Vantage/Finnhub → Yahoo 抓取 → Stooq 兜底；新闻 yfinance → Finnhub → Alpha Vantage）
 - 前端设置弹窗可添加/取消订阅，查看最近价格/新闻提醒时间
+- Report 卡片订阅按钮使用 Settings 中保存的邮箱
 - 调度日志写入 `logs/alerts.log`，便于排查发送/限流问题
 
 ---
@@ -195,7 +202,7 @@ graph LR
   - `langgraph==1.0.4`
   - `fastapi==0.122.0`
   - `uvicorn[standard]==0.38.0`
-  - `yfinance`, `finnhub-python`, `tavily-python`, `ddgs`, `reportlab` 等
+  - `yfinance`, `finnhub-python`, `tavily-python`, `ddgs`, `pypdf`, `reportlab` 等
 
 ### 环境变量配置
 
@@ -212,6 +219,14 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 MARKETSTACK_API_KEY=...
 TAVILY_API_KEY=...
+EXA_API_KEY=...
+
+# DeepSearch（可选调参）
+DEEPSEARCH_MAX_REFLECTIONS=2
+DEEPSEARCH_MAX_RESULTS=8
+DEEPSEARCH_MAX_DOCS=4
+DEEPSEARCH_MIN_TEXT_CHARS=400
+DEEPSEARCH_MAX_TEXT_CHARS=12000
 
 # 新闻 RSS（可选，逗号分隔；默认包含 Bloomberg + Reuters）
 BLOOMBERG_RSS_URLS=
@@ -410,31 +425,32 @@ FinSight 将从「单Agent+工具」升级为「多Agent协作+反思循环+IR�
 
 ## 📌 当前状态
 
-> **最后更新**: 2025-12-30 | **版本**: 0.5.0
+> **最后更新**: 2026-01-11 | **版本**: 0.5.3
 
 ### 当前进度
 
 | 模块 | 进度 | 说明 |
 |------|------|------|
 | **工具层** | ✅ 100% | 多源回退、缓存、熔断器 |
-| **Agent 层** | ✅ 80% | 4 个 Agent 完成（Price/News/Macro/DeepSearch），2 个待开发（Technical/Fundamental） |
-| **协调层** | ⚠️ 70% | Supervisor 存在异步问题，已暂时禁用 |
-| **Report 卡片** | ✅ 90% | 显示正常，缺少流式效果 |
-| **流式输出** | ⚠️ 30% | 仅模拟分块，非真正 token 流式 |
+| **Agent 层** | ✅ 95% | Technical/Fundamental/DeepSearch 已就绪，Macro 待升级 |
+| **协调层** | ✅ 90% | Supervisor 异步与流式已接入 /chat/stream |
+| **Report 卡片** | ✅ 100% | 视觉与结构已对齐 design_concept_v2.html |
+| **流式输出** | ✅ 100% | 真正 token 流式 + 引用解析 |
 
 ### 已知问题
 
 | 问题 | 严重程度 | 状态 | 解决方案 |
 |------|----------|------|----------|
-| Supervisor `asyncio.run()` 错误 | 🔴 高 | 已禁用 | 需要异步化整个调用链 |
-| 流式输出只是分块 | 🟡 中 | 待修复 | LLM 需支持 `stream=True` |
+| REPORT 意图边界（中文/无 ticker） | 🟡 中 | 观察中 | 继续优化规则与提示词 |
+| MacroAgent 仍使用 mock 宏观数据 | 🟡 中 | 待处理 | 接入 FRED + 宏观日历 |
+| 向量 RAG 管线缺失 | 🟡 中 | 待处理 | 引入 LlamaIndex + Chroma |
 
 ### 下一步计划
 
-1. **真正的流式输出** - LLM stream=True + 前端实时渲染
-2. **修复 Supervisor 异步化** - 使用 `await` 替代 `asyncio.run()`
-3. **前端卡片美化** - 对齐 design_concept_v2.html
-4. **添加 TechnicalAgent 和 FundamentalAgent** - MA/RSI/MACD + PE/ROE 分析
+1. **MacroAgent 升级（FRED）** - 宏观数据真实化
+2. **向量 RAG 基础** - LlamaIndex + Chroma 入库
+3. **Agent 进度指示器** - 前端展示各 Agent 状态
+4. **订阅提醒 MVP** - 订阅跟踪与触发体验
 
 > 详细项目状态和架构图请参阅 [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 

@@ -10,16 +10,23 @@ export default {
       colors: {
         fin: {
           bg: 'var(--fin-bg)',
+          'bg-secondary': 'var(--fin-bg-secondary)',
+          card: 'var(--fin-card)',
           panel: 'var(--fin-panel)',
           border: 'var(--fin-border)',
           hover: 'var(--fin-hover)',
           text: 'var(--fin-text)',
+          'text-secondary': 'var(--fin-text-secondary)',
           muted: 'var(--fin-muted)',
           primary: 'var(--fin-primary)',
+          success: 'var(--fin-success)',
+          danger: 'var(--fin-danger)',
+          warning: 'var(--fin-warning)',
+          predict: 'var(--fin-predict)',
         },
         trend: {
-          up: '#ef4444',
-          down: '#22c55e',
+          up: 'var(--fin-success)',
+          down: 'var(--fin-danger)',
         }
       },
       fontFamily: {

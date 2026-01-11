@@ -1,6 +1,6 @@
 # FinSight 开发优先级路线图
 > 📅 **制定日期**: 2026-01-09
-> 📅 **更新日期**: 2026-01-10
+> 📅 **更新日期**: 2026-01-11
 > 🎯 **目标**: 从当前状态到项目完工的最现实、最犀利的优先级排序
 
 ---
@@ -10,8 +10,8 @@
 | 阶段 | 进度 | 核心问题 |
 |------|------|----------|
 | Phase 0 (基座) | ✅ 100% | 无 |
-| Phase 1 (Agent 团) | ✅ 90% | DeepSearch 仍为 Mock |
-| Phase 2 (深度研报) | 🟡 40% | ReportIR/DeepSearch/Macro/卡片 UI 待落地 |
+| Phase 1 (Agent 团) | ✅ 100% | 核心 Agents 已齐 |
+| Phase 2 (深度研报) | 🟡 75% | Macro 升级/向量 RAG/交互优化 待落地 |
 | Phase 3 (主动服务) | 🔵 5% | 订阅/告警能力尚未落地 |
 
 ---
@@ -40,7 +40,7 @@
 |---|------|------|------|------|
 | **3** | **TechnicalAgent 实现（已完成 2026-01-10）** | 4-5h | 技术分析是金融产品刚需（MA/RSI/MACD） | #2 |
 | **4** | **FundamentalAgent 实现（已完成 2026-01-10）** | 4-5h | 估值分析是投资决策核心（PE/PB/DCF） | #2 |
-| **5** | **前端 Report 卡片优化** | 2-3h | 对齐 design_concept_v2.html，视觉升级 | #1 |
+| **5** | **前端 Report 卡片优化（已完成 2026-01-11）** | - | 对齐 design_concept_v2.html，视觉升级 | #1 |
 | **6** | **Agent 协作进度指示器** | 2h | 用户知道后台在干嘛，减少等待焦虑 | #2 |
 
 ### 🟡 P2 - 中优先级（2-4 周内）
@@ -50,10 +50,10 @@
 | **7** | **ReportIR Schema 完善（已完成 2026-01-10）** | 3h | 标准化报告结构，前后端解耦 | #3, #4 |
 | **8** | **IR Validator 实现（已完成 2026-01-10）** | 2h | 防止畸形数据到前端 | #7 |
 | **9** | **NewsAgent 反思循环增强** | 3h | 自动识别信息空白并补充搜索 | #2 |
-| **10** | **DeepSearchAgent 升级** | 4h | 长文 PDF 解析能力 | #9 |
+| **10** | **DeepSearchAgent 真实检索 + PDF + Self-RAG（已完成 2026-01-11）** | - | 真实检索与反思检索落地 | #9 |
 | **11** | **MacroAgent 升级** | 3h | 集成 FRED API 获取宏观经济数据 | #2 |
-| **12** | **前端章节折叠交互** | 2h | 报告太长需要折叠 | #7 |
-| **13** | **证据链接可点击** | 1h | 增加报告可信度 | #7 |
+| **12** | **前端章节折叠/滚动高亮交互（已完成 2026-01-11）** | - | 报告太长需要折叠与定位 | #7 |
+| **13** | **证据链接可点击 + 图表渲染 + Chart 规范（已完成 2026-01-11）** | - | 引用联动与图表可视化 | #7 |
 
 ### 🟢 P3 - 低优先级（4-6 周内）
 
@@ -121,9 +121,9 @@ Week 9+ ────────────────────────
 
 | 优先级 | 任务 | 理由 |
 |--------|------|------|
-| **#1** | DeepSearchAgent 真实检索 + PDF | 研报可信度与可追溯性 |
-| **#2** | 前端 Report 卡片优化 | 视觉一致性与可读性 |
-| **#3** | MacroAgent 升级 | 宏观数据联动报告判断 |
+| **#1** | MacroAgent 升级 | 宏观数据联动报告判断 |
+| **#2** | 向量 RAG 基础 | LlamaIndex + Chroma 入库与检索 |
+| **#3** | Agent 进度指示器 | 提升等待过程的透明度 |
 
 ---
 
@@ -262,8 +262,8 @@ Issue 6: 深度新闻工具缺口
 
 4.1 缺失能力  
 - RAG/向量检索尚未落地。  
-- Self-RAG（Self-Reflective RAG）未实现。  
-- DeepSearchAgent 仍为 Mock（无真实搜索/PDF/财报阅读）。  
+- 向量 RAG（LlamaIndex + Chroma）仍未落地。  
+- MacroAgent 宏观数据仍为 Mock。  
 - 财报工具仅 yfinance，缺少多源回退与文档级检索。
 
 4.2 子 Agent 缺陷  
@@ -281,23 +281,25 @@ P0
 
 P1  
 5. ✅ ReportIR Schema + Validator（2026-01-10）。  
-6. DeepSearchAgent 真实检索 + PDF 解析 + 新闻深度工具。
+6. ✅ DeepSearchAgent 真实检索 + PDF + Self-RAG（2026-01-11）。
 
 P2  
-6. ReportIR Schema + Validator 稳定化。  
-7. Self-RAG v1（反思式检索增强）。
+6. MacroAgent 升级（FRED）。  
+7. 向量 RAG 基础（LlamaIndex + Chroma）。
 
 P3  
 8. RAG 基础架构 + 文档入库流程。
 
 ---
 
-## 📌 结论（2026-01-10 更新）
+## 📌 结论（2026-01-11 更新）
 
-当前核心痛点转向“深度检索未落地 + 前端报告卡片未对齐 + 宏观联动缺失”。
-优先级应聚焦在 **DeepSearch 实检索 + UI 对齐 + MacroAgent 升级**，同时保持交互体验优化：
+当前核心痛点转向“MacroAgent 未升级 + 向量 RAG 未落地 + 協调等待体验待优化”。
+优先级应聚焦在 **MacroAgent 升级 + 向量 RAG 基础 + Agent 进度指示器**，同时保持交互体验优化：
 - /chat/stream 已完成 token 流、Supervisor 聚合与指代消解。
 - TechnicalAgent 与 FundamentalAgent 已补齐（2026-01-10）。
+- DeepSearchAgent 真实检索 + PDF + Self-RAG 已完成（2026-01-11）。
+- 前端 Report 卡片 UI 已对齐 design_concept_v2.html（2026-01-11）。
 - ReportIR Schema + Validator 已完成（2026-01-10）。
 - 中期引入 DeepSearch 真实检索与 Self-RAG，提升报告可信度与可追溯性。
 

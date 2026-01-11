@@ -120,6 +120,7 @@ Your report MUST include ALL of the following sections:
 - Acknowledge limitations in data
 - Include disclaimer about investment risks
 - Use current date in analysis
+- Do NOT assume a benchmark; only compare to S&P 500 if a benchmark is explicitly provided in the data.
 """
 
 

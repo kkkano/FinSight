@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import type { ThinkingStep } from '../types/index';
 import { SendHorizontal } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -7,16 +8,37 @@ import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 
 const extractTicker = (text: string): string | null => {
-  const tickerPattern = /\b([A-Z]{1,5})\b/g;
+  const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
   const matches = text.match(tickerPattern);
-  return matches && matches.length > 0 ? matches[0] : null;
+  if (!matches) return null;
+
+  const stopwords = new Set([
+    'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
+    'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
+  ]);
+
+  for (const match of matches) {
+    const upper = match.toUpperCase();
+    if (!stopwords.has(upper)) return upper;
+  }
+  return null;
 };
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
-  const { addMessage, updateMessage, setLoading, isChatLoading, setTicker, setStatus, draft, setDraft } = useStore();
+  const {
+    addMessage,
+    updateMessage,
+    setLoading,
+    isChatLoading,
+    setTicker,
+    setStatus,
+    draft,
+    setDraft,
+    currentTicker,
+  } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -49,6 +71,10 @@ export const ChatInput: React.FC = () => {
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
+    const guessedTicker = extractTicker(userMsgContent);
+    if (guessedTicker) {
+      setTicker(guessedTicker);
+    }
     setInput('');
     setDraft('');
 
@@ -73,6 +99,7 @@ export const ChatInput: React.FC = () => {
     setStatus('Streaming response...');
 
     let fullContent = '';
+    let thinkingSteps: ThinkingStep[] = [];
 
     try {
       await apiClient.sendMessageStream(
@@ -91,21 +118,34 @@ export const ChatInput: React.FC = () => {
           setStatus('Generating response...');
         },
         // onDone - Phase 2: 支持 report 数据
-        async (report?: any) => {
+        async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
           console.log('[ChatInput] onDone called, report:', report); // Debug Log
+          if (thinking && thinking.length) {
+            thinkingSteps = thinking;
+          }
           // 检测是否需要图表
-          const chartInfo = await shouldGenerateChart(userMsgContent, null);
+          const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
+          if (nextFocus) {
+            setTicker(nextFocus);
+          }
+
+          const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
           if (chartInfo.ticker && chartInfo.chartType) {
             fullContent += `\n\n[CHART:${chartInfo.ticker}:${chartInfo.chartType}]`;
             if (chartInfo.ticker) setTicker(chartInfo.ticker);
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report });
-          setStatus('Completed');
+          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report, thinking: thinkingSteps });
+          setStatus(null); // 清除状态，不再显示"Streaming response"
         },
         // onError
         (error) => {
           updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
           setStatus('Error occurred');
+        },
+        // onThinking
+        (step) => {
+          thinkingSteps = [...thinkingSteps, step];
+          updateMessage(aiMsgId, { thinking: thinkingSteps });
         }
       );
     } catch (error) {
@@ -116,7 +156,7 @@ export const ChatInput: React.FC = () => {
       setStatus('Request failed');
     } finally {
       setLoading(false);
-      setTimeout(() => setStatus(null), 2000);
+      setStatus(null); // 立即清除状态
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
@@ -177,7 +217,7 @@ export const ChatInput: React.FC = () => {
           >
             示例：分析 AAPL
           </button>
-                    <button
+          <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
             onClick={() => setInput('用中文生成拼多多综合分析报告')}
             disabled={isChatLoading}

@@ -6,9 +6,10 @@ ContextManager - 对话上下文管理
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import deque
 from enum import Enum
+import re
 
 
 class MessageRole(Enum):
@@ -58,6 +59,11 @@ class ContextManager:
         self.history: deque = deque(maxlen=max_turns)
         self.current_focus: Optional[str] = None  # 当前关注的股票代码
         self.current_focus_name: Optional[str] = None  # 当前关注的公司名称
+        self.current_focus_market: Optional[str] = None
+        self.current_focus_exchange: Optional[str] = None
+        self.market_preference: Optional[str] = None
+        self.pending_clarification: Optional[Dict[str, Any]] = None
+        self.company_memory: Dict[str, Dict[str, Any]] = {}
         self.user_preferences: Dict[str, Any] = {
             'language': 'zh',  # 默认中文
             'detail_level': 'medium',  # low/medium/high
@@ -94,12 +100,20 @@ class ContextManager:
         )
         self.history.append(turn)
         
-        # 更新当前关注焦点
+        # 更新当前关注焦点 / 澄清状态
         if metadata:
-            if 'tickers' in metadata and metadata['tickers']:
-                self.current_focus = metadata['tickers'][0]
-            if 'company_name' in metadata:
-                self.current_focus_name = metadata['company_name']
+            market_hint = self._extract_market_hint(query)
+            if market_hint:
+                self.market_preference = market_hint
+
+            tickers = metadata.get('tickers') or []
+            if tickers:
+                ticker = tickers[0]
+                self._update_focus_from_ticker(ticker, metadata)
+                self._remember_companies(metadata, ticker)
+                self.pending_clarification = None
+            elif metadata.get('ticker_candidates'):
+                self._set_pending_clarification(metadata, query, intent)
         
         # 记录长文本供后续翻译/摘要
         if response and len(response) > 400:
@@ -113,6 +127,298 @@ class ContextManager:
             self.history[-1].response = response
             if tool_calls:
                 self.history[-1].tool_calls = tool_calls
+
+    def preprocess_query(self, query: str) -> Dict[str, Any]:
+        """Preprocess user query with pending clarification and memory."""
+        market_hint = self._extract_market_hint(query)
+        if market_hint:
+            self.market_preference = market_hint
+
+        resolved = self._resolve_pending_clarification(query, market_hint)
+        if resolved:
+            return resolved
+
+        updated_query = self._apply_company_memory(query, market_hint)
+        return {"query": updated_query, "market_hint": market_hint}
+
+    def _set_pending_clarification(self, metadata: Dict[str, Any], query: str, intent: str) -> None:
+        candidates = metadata.get("ticker_candidates") or []
+        if not candidates:
+            return
+        company_hint = None
+        for key in ("company_names", "company_mentions"):
+            items = metadata.get(key) or []
+            if items:
+                company_hint = items[0]
+                break
+        self.pending_clarification = {
+            "company_hint": company_hint,
+            "candidates": candidates,
+            "original_query": query,
+            "intent": intent,
+            "created_at": datetime.now(),
+        }
+
+    def _pending_expired(self, pending: Dict[str, Any], ttl_seconds: int = 600) -> bool:
+        created_at = pending.get("created_at")
+        if not isinstance(created_at, datetime):
+            return False
+        return (datetime.now() - created_at) > timedelta(seconds=ttl_seconds)
+
+    def _resolve_pending_clarification(self, query: str, market_hint: Optional[str]) -> Optional[Dict[str, Any]]:
+        pending = self.pending_clarification
+        if not pending:
+            return None
+        if self._pending_expired(pending):
+            self.pending_clarification = None
+            return None
+
+        candidates = pending.get("candidates") or []
+        if not candidates:
+            return None
+
+        matched = self._match_candidate_by_symbol(query, candidates)
+        reason = "explicit_ticker" if matched else None
+
+        if matched is None:
+            index = self._extract_selection_index(query)
+            if index is not None and 0 <= index < len(candidates):
+                matched = candidates[index]
+                reason = "index_choice"
+
+        if matched is None:
+            hint = market_hint or self.market_preference
+            if hint:
+                matched = self._match_candidate_by_market(candidates, hint)
+                if matched:
+                    reason = "market_hint"
+
+        if matched is None:
+            return None
+
+        ticker = matched.get("symbol") if isinstance(matched, dict) else str(matched)
+        if not ticker:
+            return None
+
+        base_query = pending.get("original_query") or query
+        company_hint = pending.get("company_hint")
+        if company_hint and company_hint.lower() in query.lower() and len(query) > len(base_query):
+            base_query = query
+        resolved_query = self._inject_ticker(base_query, pending.get("company_hint"), ticker)
+
+        self.pending_clarification = None
+        self._remember_company(pending.get("company_hint"), ticker, {"matches": [matched]})
+        self._update_focus_from_ticker(ticker, {"ticker_resolution": {"matches": [matched]}})
+
+        return {
+            "query": resolved_query,
+            "selected_ticker": ticker,
+            "selection_reason": reason,
+            "market_hint": market_hint,
+        }
+
+    def _match_candidate_by_symbol(self, query: str, candidates: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        query_upper = query.upper()
+        for item in candidates:
+            symbol = item.get("symbol") if isinstance(item, dict) else None
+            if symbol and symbol.upper() in query_upper:
+                return item
+        return None
+
+    def _extract_selection_index(self, query: str) -> Optional[int]:
+        query = query.strip()
+        match = re.search(r"(?:第\\s*([1-5]))|\\b([1-5])\\b", query)
+        if match:
+            value = match.group(1) or match.group(2)
+            try:
+                return int(value) - 1
+            except Exception:
+                return None
+        cn_map = {"一": 0, "二": 1, "三": 2, "四": 3, "五": 4}
+        for key, idx in cn_map.items():
+            if f"第{key}" in query or query == key:
+                return idx
+        return None
+
+    def _match_candidate_by_market(self, candidates: List[Dict[str, Any]], market: str) -> Optional[Dict[str, Any]]:
+        for item in candidates:
+            if self._candidate_matches_market(item, market):
+                return item
+        return None
+
+    def _candidate_matches_market(self, candidate: Dict[str, Any], market: str) -> bool:
+        symbol = (candidate.get("symbol") or "").upper()
+        exchange = (candidate.get("primaryExchange") or "").upper()
+        description = (candidate.get("description") or "").upper()
+        blob = f"{symbol} {exchange} {description}"
+
+        if market == "US":
+            return any(tag in blob for tag in ["NYSE", "NASDAQ", "OTC", "US", "ADR"]) or symbol.endswith(".US")
+        if market == "FR":
+            return any(tag in blob for tag in ["PAR", "EURONEXT", "PARIS"]) or symbol.endswith(".PA")
+        if market == "UK":
+            return any(tag in blob for tag in ["LSE", "LONDON"]) or symbol.endswith(".L")
+        if market == "HK":
+            return any(tag in blob for tag in ["HK", "HKEX"]) or symbol.endswith(".HK")
+        if market == "CN":
+            return any(tag in blob for tag in ["SSE", "SZSE", "SHANGHAI", "SHENZHEN"]) or symbol.endswith((".SS", ".SZ"))
+        if market == "JP":
+            return any(tag in blob for tag in ["TSE", "TOKYO"]) or symbol.endswith(".T")
+        if market == "EU":
+            return "EURONEXT" in blob or symbol.endswith(".PA")
+        return False
+
+    def _extract_market_hint(self, query: str) -> Optional[str]:
+        lowered = query.lower()
+        hint_map = {
+            "US": ["美国", "美股", "nyse", "nasdaq", "otc", "adr", "us", "u.s"],
+            "FR": ["法国", "法股", "巴黎", "euronext", "paris", ".pa"],
+            "UK": ["英国", "英股", "伦敦", "lse", "london", ".l"],
+            "HK": ["香港", "港股", "hkex", ".hk"],
+            "CN": ["中国", "a股", "沪", "深", "上证", "深证", "sse", "szse", ".ss", ".sz"],
+            "JP": ["日本", "日股", "东京", "tse", ".t"],
+            "EU": ["欧洲", "欧股", "eu", "euronext"],
+        }
+        for market, keys in hint_map.items():
+            for key in keys:
+                if key.isascii():
+                    if key in lowered:
+                        return market
+                else:
+                    if key in query:
+                        return market
+        return None
+
+    def _apply_company_memory(self, query: str, market_hint: Optional[str]) -> str:
+        if not self.company_memory:
+            return query
+        effective_hint = market_hint or self.market_preference
+        normalized_query = self._normalize_company_name(query) or ""
+        for key, info in self.company_memory.items():
+            name = info.get("name")
+            ticker = info.get("ticker")
+            if not name or not ticker:
+                continue
+            if ticker.upper() in query.upper():
+                return query
+            if effective_hint and info.get("market") and info.get("market") != effective_hint:
+                continue
+            if (name.lower() in query.lower()) or (key and key in normalized_query):
+                return self._inject_ticker(query, name, ticker)
+        return query
+
+    def _inject_ticker(self, base_query: str, company_hint: Optional[str], ticker: str) -> str:
+        if company_hint:
+            if company_hint in base_query:
+                return base_query.replace(company_hint, ticker)
+            try:
+                return re.sub(re.escape(company_hint), ticker, base_query, flags=re.IGNORECASE)
+            except Exception:
+                pass
+        if ticker.upper() not in base_query.upper():
+            return f"{ticker} {base_query}".strip()
+        return base_query
+
+    def _normalize_company_name(self, name: Optional[str]) -> Optional[str]:
+        if not name:
+            return None
+        compact = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]", "", name.strip().lower())
+        return compact or None
+
+    def _remember_companies(self, metadata: Dict[str, Any], ticker: str) -> None:
+        names = []
+        names.extend(metadata.get("company_names") or [])
+        names.extend(metadata.get("company_mentions") or [])
+        for name in names:
+            self._remember_company(name, ticker, metadata.get("ticker_resolution"))
+
+    def _remember_company(self, name: Optional[str], ticker: str, extra: Optional[Dict[str, Any]] = None) -> None:
+        key = self._normalize_company_name(name)
+        if not key:
+            return
+        exchange = None
+        market = None
+        if isinstance(extra, dict):
+            matches = extra.get("matches") or []
+            for item in matches:
+                symbol = item.get("symbol") if isinstance(item, dict) else None
+                if symbol and symbol.upper() == ticker.upper():
+                    exchange = item.get("primaryExchange") or item.get("exchange")
+                    break
+        if exchange:
+            market = self._infer_market_from_exchange(exchange)
+        if not market:
+            market = self._infer_market_from_ticker(ticker)
+        self.company_memory[key] = {
+            "name": name,
+            "ticker": ticker,
+            "market": market,
+            "exchange": exchange,
+            "updated_at": datetime.now().isoformat(),
+        }
+        if name and " " in name:
+            short_name = name.split(" ")[0]
+            short_key = self._normalize_company_name(short_name)
+            if short_key and short_key not in self.company_memory:
+                self.company_memory[short_key] = {
+                    "name": short_name,
+                    "ticker": ticker,
+                    "market": market,
+                    "exchange": exchange,
+                    "updated_at": datetime.now().isoformat(),
+                }
+
+    def _infer_market_from_exchange(self, exchange: str) -> Optional[str]:
+        ex = exchange.upper()
+        if any(tag in ex for tag in ["NYSE", "NASDAQ", "OTC", "AMEX"]):
+            return "US"
+        if any(tag in ex for tag in ["PAR", "EURONEXT", "PARIS"]):
+            return "FR"
+        if "LSE" in ex or "LONDON" in ex:
+            return "UK"
+        if "HK" in ex:
+            return "HK"
+        if "SSE" in ex or "SZSE" in ex:
+            return "CN"
+        if "TSE" in ex or "TOKYO" in ex:
+            return "JP"
+        return None
+
+    def _infer_market_from_ticker(self, ticker: str) -> Optional[str]:
+        parts = ticker.upper().split(".")
+        if len(parts) >= 2:
+            suffix = parts[-1]
+            if suffix in ("US", "NYSE", "NASDAQ", "OTC"):
+                return "US"
+            if suffix in ("PA", "PAR"):
+                return "FR"
+            if suffix in ("L", "LSE"):
+                return "UK"
+            if suffix == "HK":
+                return "HK"
+            if suffix in ("SS", "SZ"):
+                return "CN"
+            if suffix in ("T", "TSE"):
+                return "JP"
+        return None
+
+    def _update_focus_from_ticker(self, ticker: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self.current_focus = ticker
+        if metadata:
+            names = metadata.get("company_names") or metadata.get("company_mentions") or []
+            if names:
+                self.current_focus_name = names[0]
+            resolution = metadata.get("ticker_resolution")
+            if isinstance(resolution, dict):
+                for item in resolution.get("matches") or []:
+                    symbol = item.get("symbol") if isinstance(item, dict) else None
+                    if symbol and symbol.upper() == ticker.upper():
+                        self.current_focus_exchange = item.get("primaryExchange") or item.get("exchange")
+                        break
+        market = self._infer_market_from_ticker(ticker)
+        if market:
+            self.current_focus_market = market
+            self.market_preference = market
     
     def get_summary(self) -> str:
         """获取对话历史摘要（用于意图分类）"""
@@ -128,7 +434,11 @@ class ContextManager:
                 resp_preview = turn.response[:80] + '...' if len(turn.response) > 80 else turn.response
                 summary_lines.append(f"  助手: {resp_preview}")
         
-        focus_info = f"\n当前焦点: {self.current_focus}" if self.current_focus else ""
+        focus_info = ""
+        if self.current_focus:
+            focus_info += f"\n当前焦点: {self.current_focus}"
+        if self.market_preference:
+            focus_info += f"\n市场偏好: {self.market_preference}"
         return "\n".join(summary_lines) + focus_info
     
     def get_messages_for_llm(self, system_prompt: str = None) -> List[Dict[str, str]]:
@@ -209,7 +519,11 @@ class ContextManager:
         if not self.current_focus:
             return query
         
-        pronouns = ['它', '那个', '这个', '该股票', '这支股票', '那支股票', 'it', 'that', 'this stock', 'the stock']
+        pronouns = [
+            '它', '那个', '这个', '该股票', '这支股票', '那支股票', '该股', '这只', '那只',
+            '这家公司', '该公司', '那家公司', '这家', '那家',
+            'it', 'that', 'this stock', 'the stock', 'this company', 'the company'
+        ]
         
         resolved = query
         for pronoun in pronouns:
@@ -271,6 +585,11 @@ class ContextManager:
         self.history.clear()
         self.current_focus = None
         self.current_focus_name = None
+        self.current_focus_market = None
+        self.current_focus_exchange = None
+        self.market_preference = None
+        self.pending_clarification = None
+        self.company_memory.clear()
         self.accumulated_data.clear()
     
     def clear_cache(self) -> None:
@@ -283,6 +602,11 @@ class ContextManager:
             'turns': len(self.history),
             'current_focus': self.current_focus,
             'current_focus_name': self.current_focus_name,
+            'current_focus_market': self.current_focus_market,
+            'current_focus_exchange': self.current_focus_exchange,
+            'market_preference': self.market_preference,
+            'pending_clarification': bool(self.pending_clarification),
+            'company_memory_count': len(self.company_memory),
             'cached_data_keys': list(self.accumulated_data.keys()),
             'user_preferences': self.user_preferences,
             'session_duration_seconds': (datetime.now() - self.session_start).total_seconds(),

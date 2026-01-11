@@ -34,22 +34,26 @@ if PROJECT_ROOT not in sys.path:
 class ChatHandler:
     """
     快速对话处理器
-    
+
     用于处理简单问题如：股价查询、简单的市场状况、快速问答
     响应时间目标: < 10 秒
     响应长度: 2-5 句话
     """
-    
-    def __init__(self, llm=None, orchestrator=None):
+
+    def __init__(self, llm=None, orchestrator=None, news_agent=None, price_agent=None):
         """
         初始化处理器
-        
+
         Args:
             llm: LLM 实例 (例如 LangChain Runnable)
             orchestrator: ToolOrchestrator 实例
+            news_agent: NewsAgent 实例 (P1: CHAT 意图也调用子 Agent)
+            price_agent: PriceAgent 实例
         """
         self.llm = llm
         self.orchestrator = orchestrator
+        self.news_agent = news_agent
+        self.price_agent = price_agent
         self.tools_module = None
         self._init_tools()
     
@@ -91,6 +95,32 @@ class ChatHandler:
             # 1. 显式提取元数据中的 tickers (用户本次输入明确提到的)
             explicit_tickers = metadata.get('tickers', [])
             tickers = list(explicit_tickers)
+            explicit_company = bool(metadata.get('company_names') or metadata.get('company_mentions'))
+            company_hint = None
+            if explicit_company:
+                if metadata.get('company_names'):
+                    company_hint = metadata.get('company_names')[0]
+                elif metadata.get('company_mentions'):
+                    company_hint = metadata.get('company_mentions')[0]
+            resolution = None
+            # P2: 只有在没有 ticker 且有 company_mentions 时才调用在线解析
+            # 如果 Router 已经识别出 ticker（如 AAPL），就不要再调用在线解析
+            if explicit_company and not tickers and metadata.get('company_mentions'):
+                resolution = self._resolve_company_ticker(company_hint, context)
+                matches = resolution.get('matches') if isinstance(resolution, dict) else []
+                if matches:
+                    if len(matches) == 1 and matches[0].get('symbol'):
+                        tickers = [matches[0]['symbol']]
+                        metadata['tickers'] = tickers
+                        metadata['ticker_resolution'] = resolution
+                    else:
+                        selected = self._select_candidate_by_hint(query, matches, context)
+                        if selected and selected.get('symbol'):
+                            tickers = [selected['symbol']]
+                            metadata['tickers'] = tickers
+                            metadata['ticker_resolution'] = resolution
+                        else:
+                            metadata['ticker_candidates'] = matches
 
             # 2. 检查是否为泛化推荐 (无明确 ticker 且包含"推荐几只"等模式)
             #    注意：如果用户说 "推荐几只像 AAPL 的股票"，explicit_tickers 会有 AAPL，这时不算纯泛化。
@@ -101,14 +131,18 @@ class ChatHandler:
             is_news_sentiment_query = self._is_news_sentiment_query(query_lower)
             is_sentiment_query = self._is_sentiment_query(query_lower)
             is_news_query = self._is_news_query(query_lower)
+            is_financial_report_query = self._is_financial_report_query(query_lower)  # P3: 财报查询
 
             # 3. 只有在非泛化推荐，且没有明确 ticker 时，才继承上下文
             #    修复：如果用户问"推荐几只股票"，不要把上下文的 AAPL 强行塞进来
-            if not tickers and not is_generic_rec:
+            if not tickers and not is_generic_rec and not explicit_company:
                 if context and hasattr(context, 'current_focus') and context.current_focus:
                     tickers = [context.current_focus]
 
             primary_ticker = tickers[0] if tickers else None
+
+            if metadata.get('ticker_candidates') and not tickers:
+                return self._handle_company_clarification(query, metadata)
 
             if is_economic_events_query:
                 return self._handle_economic_events(query, context)
@@ -119,10 +153,16 @@ class ChatHandler:
             if is_sentiment_query:
                 return self._handle_sentiment_query(query, context, primary_ticker)
 
+            # P3: 财报查询优先使用 FundamentalAgent
+            if is_financial_report_query and primary_ticker:
+                return self._handle_financial_report_query(primary_ticker, query, context)
+
             # 优先处理新闻意图：有 ticker 直接拉新闻；无 ticker 先用市场泛化新闻，再兜底默认指数
             if is_news_query:
                 if primary_ticker:
                     return self._handle_news_query(primary_ticker, query, context)
+                if explicit_company:
+                    return self._handle_company_clarification(query, metadata)
                 if self.tools_module and hasattr(self.tools_module, "get_market_news_headlines"):
                     try:
                         news_text = self.tools_module.get_market_news_headlines()
@@ -148,9 +188,13 @@ class ChatHandler:
 
                 # 新闻类无 ticker 查询：默认用大盘指数
                 if is_price_query:
+                    if explicit_company:
+                        return self._handle_company_clarification(query, metadata)
                     return self._handle_price_clarification(query)
 
                 if is_news_query:
+                    if explicit_company:
+                        return self._handle_company_clarification(query, metadata)
                     default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
                     return self._handle_news_query(default_news_ticker, query, context)
 
@@ -275,10 +319,21 @@ class ChatHandler:
         return any(kw in query for kw in keywords)
     
     def _is_advice_query(self, query: str) -> bool:
-        keywords = ['推荐', '建议', '怎么做', '如何', '应该', '投资', '买入', '卖出', '持有', 'advice', 'recommend', 'should', 
+        keywords = ['推荐', '建议', '怎么做', '如何', '应该', '投资', '买入', '卖出', '持有', 'advice', 'recommend', 'should',
                      '定投', '策略', '操作', '接下来', '这几天', '这几个月', '怎么办', '怎么', '保持', '最近', '现在']
         return any(kw in query for kw in keywords)
-        
+
+    def _is_financial_report_query(self, query: str) -> bool:
+        """P3: 检测是否为财报/基本面查询"""
+        keywords = [
+            '财报', '财务', '年报', '季报', '业绩', '营收', '利润', '毛利', '净利',
+            '收入', '支出', '现金流', '资产负债', '利润表', '损益表',
+            'earnings', 'revenue', 'profit', 'income', 'financial', 'quarterly',
+            'annual report', 'balance sheet', 'cash flow', 'eps', 'pe', 'roe', 'roa',
+            '市盈率', '市净率', '净资产收益率', '每股收益', '估值'
+        ]
+        return any(kw in query for kw in keywords)
+
     def _is_chat_query(self, query_lower: str) -> bool:
         """判断是否为简单的闲聊或问候语"""
         greeting_keywords = ['你好', '您好', '喂', '嗨', 'hello', 'hi']
@@ -303,6 +358,84 @@ class ChatHandler:
         
     # --- 核心处理方法 ---
     
+    def _resolve_company_ticker(self, company_hint: Optional[str], context: Optional[Any]) -> Optional[Dict[str, Any]]:
+        if not company_hint:
+            return None
+        if not self.tools_module or not hasattr(self.tools_module, 'resolve_company_ticker'):
+            return None
+        cache_key = f"ticker_lookup:{company_hint.lower()}"
+        if context and hasattr(context, 'get_cached_data'):
+            cached = context.get_cached_data(cache_key, max_age_seconds=86400)
+            if cached:
+                return cached
+        try:
+            result = self.tools_module.resolve_company_ticker(company_hint)
+            if context and hasattr(context, 'cache_data'):
+                context.cache_data(cache_key, result)
+            return result
+        except Exception as e:
+            print(f"[ChatHandler] ticker lookup failed for {company_hint}: {e}")
+            return None
+
+    def _select_candidate_by_hint(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        context: Optional[Any] = None
+    ) -> Optional[Dict[str, Any]]:
+        market_hint = self._extract_market_hint(query)
+        if not market_hint and context is not None:
+            market_hint = getattr(context, "market_preference", None)
+        if not market_hint:
+            return None
+        for item in candidates:
+            if self._candidate_matches_market(item, market_hint):
+                return item
+        return None
+
+    def _extract_market_hint(self, query: str) -> Optional[str]:
+        lowered = query.lower()
+        hint_map = {
+            "US": ["美国", "美股", "nyse", "nasdaq", "otc", "adr", "us", "u.s"],
+            "FR": ["法国", "法股", "巴黎", "euronext", "paris", ".pa"],
+            "UK": ["英国", "英股", "伦敦", "lse", "london", ".l"],
+            "HK": ["香港", "港股", "hkex", ".hk"],
+            "CN": ["中国", "a股", "沪", "深", "上证", "深证", "sse", "szse", ".ss", ".sz"],
+            "JP": ["日本", "日股", "东京", "tse", ".t"],
+            "EU": ["欧洲", "欧股", "eu", "euronext"],
+        }
+        for market, keys in hint_map.items():
+            for key in keys:
+                if key.isascii():
+                    if key in lowered:
+                        return market
+                else:
+                    if key in query:
+                        return market
+        return None
+
+    def _candidate_matches_market(self, candidate: Dict[str, Any], market: str) -> bool:
+        symbol = (candidate.get("symbol") or "").upper()
+        exchange = (candidate.get("primaryExchange") or "").upper()
+        description = (candidate.get("description") or "").upper()
+        blob = f"{symbol} {exchange} {description}"
+
+        if market == "US":
+            return any(tag in blob for tag in ["NYSE", "NASDAQ", "OTC", "US", "ADR"]) or symbol.endswith(".US")
+        if market == "FR":
+            return any(tag in blob for tag in ["PAR", "EURONEXT", "PARIS"]) or symbol.endswith(".PA")
+        if market == "UK":
+            return any(tag in blob for tag in ["LSE", "LONDON"]) or symbol.endswith(".L")
+        if market == "HK":
+            return any(tag in blob for tag in ["HK", "HKEX"]) or symbol.endswith(".HK")
+        if market == "CN":
+            return any(tag in blob for tag in ["SSE", "SZSE", "SHANGHAI", "SHENZHEN"]) or symbol.endswith((".SS", ".SZ"))
+        if market == "JP":
+            return any(tag in blob for tag in ["TSE", "TOKYO"]) or symbol.endswith(".T")
+        if market == "EU":
+            return "EURONEXT" in blob or symbol.endswith(".PA")
+        return False
+
     def _handle_chat_query(self, query: str) -> Dict[str, Any]:
         """
         处理简单的闲聊和问候（例如：你好，你是谁，谢谢）。
@@ -335,6 +468,45 @@ class ChatHandler:
             'intent': 'clarify',
             'needs_clarification': True,
             'thinking': "Missing ticker for price query; asked for clarification.",
+        }
+    def _handle_company_clarification(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """公司名可识别但无法唯一解析 ticker 时的澄清提示。"""
+        company_hint = None
+        for key in ('company_names', 'company_mentions'):
+            items = metadata.get(key) if metadata else None
+            if items:
+                company_hint = items[0]
+                break
+
+        candidates = metadata.get('ticker_candidates') if metadata else None
+        if candidates:
+            lines = []
+            for item in candidates[:5]:
+                symbol = item.get('symbol') if isinstance(item, dict) else str(item)
+                desc = item.get('description') if isinstance(item, dict) else ''
+                line = '- ' + symbol
+                if desc:
+                    line += ' (' + desc + ')'
+                lines.append(line)
+            response = (
+                '我找到了多个可能的股票代码，和“' + str(company_hint) + '”相关，请确认一个：\n'
+                + '\n'.join(lines)
+                + '\n\n你也可以直接说“美股/法股/港股/英股”等市场偏好。'
+            )
+        elif company_hint:
+            response = (
+                '我识别到了公司名称“' + str(company_hint) + '”，但未能解析到唯一股票代码或交易所。\n'
+                + '请提供股票代码或市场（例如：AAPL、TSLA、CAP.PA / CAPMF）。\n'
+                + '你也可以直接说“美股/法股/港股/英股”等市场偏好。'
+            )
+        else:
+            response = self._generate_clarification_response(query)
+        return {
+            'success': True,
+            'response': response,
+            'intent': 'clarify',
+            'needs_clarification': True,
+            'thinking': 'Explicit company mention without ticker; asked for clarification.',
         }
 
     def _handle_price_query(
@@ -453,12 +625,12 @@ class ChatHandler:
             return None
 
     def _handle_news_query(
-        self, 
-        ticker: str, 
+        self,
+        ticker: str,
         query: str,
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
-        """处理新闻查询"""
+        """处理新闻查询 - P1: 优先使用 NewsAgent 的反思循环"""
         cache_key = f"deepsearch:news:{ticker}"
 
         # 先查 KV 缓存
@@ -473,6 +645,44 @@ class ChatHandler:
                     'intent': 'company_news',
                     'thinking': "News served from KV cache.",
                 }
+
+        # P1: 优先使用 NewsAgent（带反思循环）
+        if self.news_agent:
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        agent_output = pool.submit(
+                            asyncio.run, self.news_agent.research(query, ticker)
+                        ).result(timeout=30)
+                else:
+                    agent_output = asyncio.run(self.news_agent.research(query, ticker))
+
+                if agent_output and agent_output.summary:
+                    # 缓存结果
+                    if self.orchestrator and getattr(self.orchestrator, "cache", None):
+                        self.orchestrator.cache.set(cache_key, {
+                            "text": agent_output.summary,
+                            "as_of": agent_output.as_of
+                        }, data_type='news')
+                    return {
+                        'success': True,
+                        'response': agent_output.summary,
+                        'data': {
+                            'ticker': ticker,
+                            'raw_news': agent_output.summary,
+                            'evidence': [e.__dict__ for e in agent_output.evidence] if agent_output.evidence else [],
+                            'confidence': agent_output.confidence,
+                            'data_sources': agent_output.data_sources,
+                            'as_of': agent_output.as_of
+                        },
+                        'intent': 'company_news',
+                        'thinking': f"NewsAgent research completed with {len(agent_output.evidence)} evidence items.",
+                    }
+            except Exception as e:
+                print(f"[ChatHandler] NewsAgent failed for {ticker}: {e}")
 
         # 尝试 DeepSearch 聚合（高召回，含链接）
         if self.tools_module and hasattr(self.tools_module, 'deepsearch_news'):
@@ -525,7 +735,85 @@ class ChatHandler:
             'intent': 'chat',
             'thinking': "No news fetching tool available."
         }
-    
+
+    def _handle_financial_report_query(
+        self,
+        ticker: str,
+        query: str,
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """P3: 处理财报/基本面查询 - 使用 FundamentalAgent + DeepSearch"""
+        cache_key = f"fundamental:{ticker}"
+
+        # 先查 KV 缓存
+        if self.orchestrator and getattr(self.orchestrator, "cache", None):
+            cached = self.orchestrator.cache.get(cache_key)
+            if cached:
+                return {
+                    'success': True,
+                    'response': cached.get("text", str(cached)),
+                    'data': {'ticker': ticker, 'cached': True, 'as_of': cached.get('as_of')},
+                    'intent': 'financial_report',
+                    'thinking': "Financial data served from KV cache.",
+                }
+
+        # 尝试使用工具获取财务数据
+        if self.tools_module:
+            try:
+                financials = {}
+                company_info = ""
+
+                if hasattr(self.tools_module, 'get_financial_statements'):
+                    financials = self.tools_module.get_financial_statements(ticker)
+                if hasattr(self.tools_module, 'get_company_info'):
+                    company_info = self.tools_module.get_company_info(ticker)
+
+                # 格式化响应
+                response_parts = []
+                if company_info:
+                    response_parts.append(f"**{ticker} 公司概况**\n{company_info[:500]}...")
+
+                if financials and not financials.get('error'):
+                    response_parts.append(f"\n**财务数据**")
+                    if financials.get('income_statement'):
+                        response_parts.append("- 利润表数据已获取")
+                    if financials.get('balance_sheet'):
+                        response_parts.append("- 资产负债表数据已获取")
+                    if financials.get('cash_flow'):
+                        response_parts.append("- 现金流量表数据已获取")
+
+                response = "\n".join(response_parts) if response_parts else f"已获取 {ticker} 的财务数据"
+
+                # 缓存结果
+                if self.orchestrator and getattr(self.orchestrator, "cache", None):
+                    self.orchestrator.cache.set(cache_key, {
+                        "text": response,
+                        "financials": financials,
+                        "company_info": company_info,
+                    }, data_type='fundamental')
+
+                return {
+                    'success': True,
+                    'response': response,
+                    'data': {
+                        'ticker': ticker,
+                        'financials': financials,
+                        'company_info': company_info,
+                    },
+                    'intent': 'financial_report',
+                    'thinking': f"Fetched financial data for {ticker} via tools module.",
+                }
+            except Exception as e:
+                print(f"[ChatHandler] Financial report query failed for {ticker}: {e}")
+
+        return {
+            'success': False,
+            'response': f"获取 {ticker} 财务数据时出错，请稍后重试。",
+            'error': 'tool_error',
+            'intent': 'financial_report',
+            'thinking': "Financial data fetch failed."
+        }
+
     def _handle_sentiment_query(
         self,
         query: str,

@@ -38,6 +38,11 @@ The goal is to feel like talking to a **Chief Investment Officer** who can quick
 - Each tool implements multi-source fallback (yfinance → API → scraping → search)
 - Ensures "data availability" while providing clear error messages on failures
 
+### DeepSearchAgent + Self-RAG
+- Real retrieval (Tavily/Exa/search fallback) with PDF parsing
+- Self-RAG reflection loop to identify gaps and run targeted searches
+- Evidence links surfaced in deep research summaries
+
 ### Reasoning Trace
 - Optional "thinking process" view in chat UI
 - Shows intermediate steps, tool calls, and elapsed time
@@ -52,11 +57,13 @@ The goal is to feel like talking to a **Chief Investment Officer** who can quick
 - Fixed header: FinSight branding + theme toggle + PDF export + settings
 - Dual-panel layout: left for chat, right for charts (collapsible)
 - Dark/light theme support, centered vs full-width layout modes
+- Report card view with section nav, scroll highlighting, citation jumps, and embedded ECharts charts
 
 ### Alerts & Subscriptions
 - Email alerts for price changes (`price_change`) and news
 - Background schedulers (APScheduler) with multi-source fallback
 - Frontend settings modal for subscribe/unsubscribe, view last alert times
+- Report card subscribe action uses the email stored in Settings
 - Scheduler logs written to `logs/alerts.log`
 
 ---
@@ -195,7 +202,7 @@ The LangGraph CIO agent uses tools defined in `langchain_tools.py`:
   - `langgraph==1.0.4`
   - `fastapi==0.122.0`
   - `uvicorn[standard]==0.38.0`
-  - `yfinance`, `finnhub-python`, `tavily-python`, `ddgs`, `reportlab`, etc.
+  - `yfinance`, `finnhub-python`, `tavily-python`, `ddgs`, `pypdf`, `reportlab`, etc.
 
 ### Environment Variables
 
@@ -212,6 +219,14 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 MARKETSTACK_API_KEY=...
 TAVILY_API_KEY=...
+EXA_API_KEY=...
+
+# DeepSearch (optional tuning)
+DEEPSEARCH_MAX_REFLECTIONS=2
+DEEPSEARCH_MAX_RESULTS=8
+DEEPSEARCH_MAX_DOCS=4
+DEEPSEARCH_MIN_TEXT_CHARS=400
+DEEPSEARCH_MAX_TEXT_CHARS=12000
 
 # News RSS (optional, comma-separated; defaults include Bloomberg + Reuters)
 BLOOMBERG_RSS_URLS=
@@ -405,31 +420,32 @@ For detailed technical design, code examples, and acceptance criteria, see full 
 
 ## 📌 Status
 
-> **Last Updated**: 2026-01-09 | **Version**: 0.5.2
+> **Last Updated**: 2026-01-11 | **Version**: 0.5.3
 
 ### Current Progress
 
 | Module | Progress | Notes |
 |--------|----------|-------|
-| **Tools Layer** | ✅ 100% | Multi-source fallback, caching, circuit breaker |
-| **Agent Layer** | ✅ 80% | 4 agents done (Price/News/Macro/DeepSearch), 2 pending (Technical/Fundamental) |
-| **Orchestration** | ✅ 85% | Supervisor async fixed; streaming enabled in /chat/stream |
-| **Report Card** | ✅ 95% | Report streaming works; visual polish still pending |
-| **Streaming Output** | ✅ 85% | True token streaming + reference resolution in /chat/stream |
+| **Tools Layer** | ?100% | Multi-source fallback, caching, circuit breaker |
+| **Agent Layer** | ?95% | Technical/Fundamental/DeepSearch ready; Macro upgrade pending |
+| **Orchestration** | ?90% | Supervisor async fixed; streaming enabled in /chat/stream |
+| **Report Card** | ?100% | Visuals aligned with design_concept_v2.html |
+| **Streaming Output** | ?100% | True token streaming + reference resolution in /chat/stream |
 
 ### Known Issues
 
 | Issue | Severity | Status | Solution |
 |-------|----------|--------|----------|
-| REPORT intent edge cases (CN/no ticker) | 🟡 Medium | Monitoring | Continue tuning rules + prompt clarity |
-| RAG/Self-RAG not implemented | 🟡 Medium | Pending | Add retrieval pipeline + reflective loop |
+| REPORT intent edge cases (CN/no ticker) | ?? Medium | Monitoring | Continue tuning rules + prompt clarity |
+| MacroAgent uses mock macro data | ?? Medium | Pending | Integrate FRED + macro calendars |
+| Vector RAG pipeline missing | ?? Medium | Pending | Add LlamaIndex + Chroma ingestion |
 
 ### Next Steps
 
-1. **Add TechnicalAgent & FundamentalAgent** - MA/RSI/MACD + PE/ROE analysis
-2. **DeepSearchAgent Real Retrieval** - PDF parsing + credible sources
-3. **Self-RAG v1** - Reflective retrieval + evidence chain
-4. **Frontend Card Optimization** - Align with design_concept_v2.html
+1. **MacroAgent Upgrade (FRED)** - Real macro data pipeline
+2. **Vector RAG Foundation** - LlamaIndex + Chroma ingestion
+3. **Agent Progress Indicator** - show per-agent status in UI
+4. **Alert Subscription MVP** - wire alerts to actionable notifications
 
 > For detailed project status and architecture diagrams, see [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 

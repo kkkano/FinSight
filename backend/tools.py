@@ -10,7 +10,7 @@ import re
 import finnhub
 import pandas as pd
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 
@@ -70,6 +70,8 @@ TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "").strip('"')  # Twelve 
 MARKETSTACK_API_KEY = os.getenv("MARKETSTACK_API_KEY", "").strip('"')  # Marketstack (免费额度: 1000次/月)
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "").strip('"')  # Tavily Search API (AI搜索，免费额度: 1000次/月)
 EXA_API_KEY = os.getenv("EXA_API_KEY", "096d2363-4811-42c0-84ed-b0d312a4c77e").strip('"')  # Exa Search API
+OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY", "").strip('"')  # OpenFIGI (symbol lookup)
+EODHD_API_KEY = os.getenv("EODHD_API_KEY", "").strip('"')  # EODHD (symbol lookup)
 
 # ============================================
 # API 客户端初始化
@@ -192,10 +194,16 @@ def _format_headline_line(
     snippet: str = "",
 ) -> str:
     tags = _headline_tags(f"{title} {snippet}".strip())
-    tag_text = f"【{'/'.join(tags)}】 " if tags else ""
-    suffix = f" {url}" if url else ""
-    return f"[{date_str}] {tag_text}{title} ({source}){suffix}".strip()
-
+    tag_text = f"[{'/'.join(tags)}] " if tags else ""
+    clean_title = (title or "").strip() or "Untitled"
+    display_title = f"[{clean_title}]({url})" if url else clean_title
+    clean_source = (source or "").strip()
+    source_text = f"({clean_source})" if clean_source else ""
+    clean_snippet = (snippet or "").strip()
+    if len(clean_snippet) > 160:
+        clean_snippet = clean_snippet[:157] + "..."
+    snippet_text = f" - {clean_snippet}" if clean_snippet else ""
+    return f"[{date_str}] {tag_text}{display_title} {source_text}{snippet_text}".strip()
 
 def search(query: str) -> str:
     """
@@ -1340,6 +1348,135 @@ def get_company_info(ticker: str) -> str:
 # 新闻获取
 # ============================================
 
+def resolve_company_ticker(company: str, limit: int = 5) -> Dict[str, Any]:
+    """Resolve a company name to tickers using OpenFIGI/Finnhub/EODHD/search."""
+    if not company:
+        return {"query": company, "source": "none", "matches": []}
+
+    matches: List[Dict[str, Any]] = []
+    sources: List[str] = []
+    seen = set()
+
+    def _append_matches(items: List[Dict[str, Any]], source: str) -> None:
+        if not items:
+            return
+        if source not in sources:
+            sources.append(source)
+        for item in items:
+            symbol = item.get("symbol") if isinstance(item, dict) else None
+            if not symbol or symbol in seen:
+                continue
+            matches.append(item)
+            seen.add(symbol)
+            if len(matches) >= limit:
+                return
+
+    if OPENFIGI_API_KEY:
+        try:
+            _append_matches(_openfigi_symbol_lookup(company, limit), "openfigi")
+        except Exception as e:
+            print(f"OpenFIGI lookup failed for {company}: {e}")
+
+    if len(matches) < limit and finnhub_client:
+        try:
+            lookup = finnhub_client.symbol_lookup(company)
+            results = lookup.get("result", []) if isinstance(lookup, dict) else []
+            finnhub_matches = []
+            for item in results:
+                symbol = item.get("displaySymbol") or item.get("symbol")
+                if not symbol:
+                    continue
+                finnhub_matches.append({
+                    "symbol": symbol,
+                    "description": item.get("description") or "",
+                    "type": item.get("type") or "",
+                    "primaryExchange": item.get("primaryExchange") or item.get("exchange") or "",
+                    "source": "finnhub",
+                })
+            _append_matches(finnhub_matches, "finnhub")
+        except Exception as e:
+            print(f"Finnhub symbol lookup failed for {company}: {e}")
+
+    if len(matches) < limit and EODHD_API_KEY:
+        try:
+            _append_matches(_eodhd_symbol_lookup(company, limit), "eodhd")
+        except Exception as e:
+            print(f"EODHD lookup failed for {company}: {e}")
+
+    if len(matches) < limit:
+        try:
+            text = search(f"{company} ticker symbol")
+            pattern = r"\b[A-Z]{1,5}(?:[.-][A-Z]{1,4})?\b"
+            symbols = []
+            for symbol in re.findall(pattern, text or ""):
+                if symbol not in symbols:
+                    symbols.append(symbol)
+            search_matches = [
+                {"symbol": sym, "description": "", "type": "search", "primaryExchange": "", "source": "search"}
+                for sym in symbols[:limit]
+            ]
+            _append_matches(search_matches, "search")
+        except Exception as e:
+            print(f"Search fallback for ticker lookup failed: {e}")
+
+    source_label = "+".join(sources) if sources else "error"
+    return {"query": company, "source": source_label, "matches": matches[:limit]}
+
+
+def _openfigi_symbol_lookup(company: str, limit: int = 5) -> List[Dict[str, Any]]:
+    if not OPENFIGI_API_KEY:
+        return []
+    url = "https://api.openfigi.com/v3/search"
+    headers = {"X-OPENFIGI-APIKEY": OPENFIGI_API_KEY}
+    payload = {"query": company, "limit": max(limit, 5)}
+    resp = requests.post(url, headers=headers, json=payload, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    results = data.get("data", []) if isinstance(data, dict) else []
+    matches: List[Dict[str, Any]] = []
+    for item in results:
+        symbol = item.get("ticker")
+        if not symbol:
+            continue
+        exchange = item.get("exchCode") or item.get("mic") or ""
+        desc = item.get("name") or item.get("securityDescription") or ""
+        matches.append({
+            "symbol": symbol,
+            "description": desc,
+            "type": item.get("securityType") or item.get("marketSecDes") or "",
+            "primaryExchange": exchange,
+            "source": "openfigi",
+        })
+    return matches
+
+
+def _eodhd_symbol_lookup(company: str, limit: int = 5) -> List[Dict[str, Any]]:
+    if not EODHD_API_KEY:
+        return []
+    url = f"https://eodhd.com/api/search/{quote(company)}"
+    params = {"api_token": EODHD_API_KEY, "fmt": "json"}
+    resp = requests.get(url, params=params, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, list):
+        return []
+    matches: List[Dict[str, Any]] = []
+    for item in data[: max(limit, 5)]:
+        symbol = item.get("Code") or item.get("code")
+        exchange = item.get("Exchange") or item.get("exchange") or ""
+        if symbol and exchange and "." not in symbol:
+            symbol = f"{symbol}.{exchange}"
+        if not symbol:
+            continue
+        matches.append({
+            "symbol": symbol,
+            "description": item.get("Name") or item.get("name") or "",
+            "type": item.get("Type") or item.get("type") or "",
+            "primaryExchange": exchange,
+            "source": "eodhd",
+        })
+    return matches
+
 def _domain_from_url(url: str) -> str:
     try:
         parsed = urlparse(url)
@@ -1947,7 +2084,6 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
             else:
                 date_str = 'Unknown date'
             url = item.get('url') or item.get('link') or ''
-            suffix = f" {url}" if url else ""
             score, label = _extract_sentiment(item, ticker)
             sentiment_desc = "N/A"
             try:
@@ -1961,7 +2097,8 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
                 if label:
                     sentiment_desc = label
 
-            lines.append(f"{i}. [{date_str}] {title} ({source}) 情绪: {sentiment_desc}{suffix}")
+            headline = f"[{title}]({url})" if url else title
+            lines.append(f"{i}. [{date_str}] {headline} ({source}) 情绪: {sentiment_desc}")
 
         avg_text = ""
         if scores:
@@ -2157,100 +2294,191 @@ def get_economic_events() -> str:
     return search(query)
 
 def get_performance_comparison(tickers: dict) -> str:
-    """比较字典中股票代码的年初至今和1年期表现"""
-    data = {}
+    """Compare YTD and 1-Year performance for a labeled ticker map."""
+    data: Dict[str, Dict[str, str]] = {}
+    notes: List[str] = []
+    now = datetime.now()
+
+    def _calc_from_hist(hist: pd.DataFrame):
+        if hist is None or hist.empty or 'Close' not in hist.columns:
+            return None
+        hist = hist.copy()
+        try:
+            hist.index = hist.index.tz_localize(None)
+        except Exception:
+            pass
+        end_price = float(hist['Close'].iloc[-1])
+        start_of_year = datetime(now.year, 1, 1)
+        ytd_hist = hist[hist.index >= start_of_year]
+        perf_ytd = None
+        if not ytd_hist.empty:
+            start_price_ytd = float(ytd_hist['Close'].iloc[0])
+            if start_price_ytd:
+                perf_ytd = ((end_price - start_price_ytd) / start_price_ytd) * 100
+        one_year_ago = now - timedelta(days=365)
+        one_year_hist = hist[hist.index >= one_year_ago]
+        perf_1y = None
+        if not one_year_hist.empty:
+            start_price_1y = float(one_year_hist['Close'].iloc[0])
+            if start_price_1y:
+                perf_1y = ((end_price - start_price_1y) / start_price_1y) * 100
+        coverage_start = hist.index.min() if not hist.empty else None
+        return end_price, perf_ytd, perf_1y, coverage_start
+
+    def _calc_from_kline(kline_data: List[Dict[str, Any]]):
+        if not kline_data:
+            return None
+        df = pd.DataFrame(kline_data)
+        if 'time' not in df.columns or 'close' not in df.columns:
+            return None
+        df['time'] = pd.to_datetime(df['time'], errors='coerce')
+        df = df.dropna(subset=['time']).sort_values('time')
+        if df.empty:
+            return None
+        end_price = float(df['close'].iloc[-1])
+        start_of_year = datetime(now.year, 1, 1)
+        ytd_df = df[df['time'] >= start_of_year]
+        perf_ytd = None
+        if not ytd_df.empty:
+            start_price_ytd = float(ytd_df['close'].iloc[0])
+            if start_price_ytd:
+                perf_ytd = ((end_price - start_price_ytd) / start_price_ytd) * 100
+        one_year_ago = now - timedelta(days=365)
+        one_year_df = df[df['time'] >= one_year_ago]
+        perf_1y = None
+        if not one_year_df.empty:
+            start_price_1y = float(one_year_df['close'].iloc[0])
+            if start_price_1y:
+                perf_1y = ((end_price - start_price_1y) / start_price_1y) * 100
+        coverage_start = df['time'].iloc[0]
+        return end_price, perf_ytd, perf_1y, coverage_start
+
     for name, ticker in tickers.items():
-        time.sleep(1) # 避免请求过于频繁
+        time.sleep(0.3)
+        perf = None
+        fallback_used = False
+        error_note = ""
         try:
             stock = yf.Ticker(ticker)
             hist = stock.history(period="2y")
-            if hist.empty:
-                print(f"Warning: No historical data for {ticker}")
-                continue
-            
-            end_price = hist['Close'].iloc[-1]
-            
-            # YTD Performance
-            start_of_year = datetime(datetime.now().year, 1, 1)
-            ytd_hist = hist[hist.index.tz_localize(None) >= start_of_year]
-            if ytd_hist.empty:
-                perf_ytd = float('nan')
-            else:
-                start_price_ytd = ytd_hist['Close'].iloc[0]
-                perf_ytd = ((end_price - start_price_ytd) / start_price_ytd) * 100
-            
-            # 1-Year Performance
-            one_year_ago = datetime.now() - timedelta(days=365)
-            one_year_hist = hist[hist.index.tz_localize(None) >= one_year_ago]
-            if one_year_hist.empty:
-                 perf_1y = float('nan')
-            else:
-                start_price_1y = one_year_hist['Close'].iloc[0]
-                perf_1y = ((end_price - start_price_1y) / start_price_1y) * 100
-
-            data[name] = {
-                "Current": f"{end_price:,.2f}", 
-                "YTD": f"{perf_ytd:+.2f}%" if not pd.isna(perf_ytd) else "N/A", 
-                "1-Year": f"{perf_1y:+.2f}%" if not pd.isna(perf_1y) else "N/A"
-            }
+            perf = _calc_from_hist(hist)
+            if perf is None:
+                error_note = "yfinance returned empty data"
+                raise ValueError(error_note)
         except Exception as e:
-            print(f"Error processing performance for '{ticker}': {e}")
+            error_note = str(e) or error_note
+            try:
+                fallback = get_stock_historical_data(ticker, period="2y", interval="1d")
+                kline = fallback.get("kline_data") if isinstance(fallback, dict) else None
+                perf = _calc_from_kline(kline or [])
+                fallback_used = perf is not None
+                if not perf and isinstance(fallback, dict) and fallback.get("error"):
+                    error_note = fallback.get("error")
+            except Exception as fb_e:
+                error_note = f"{error_note}; fallback failed: {fb_e}"
+
+        if not perf:
             data[name] = {"Current": "N/A", "YTD": "N/A", "1-Year": "N/A"}
-    
+            notes.append(f"{name}: data unavailable ({error_note})")
+            continue
+
+        end_price, perf_ytd, perf_1y, coverage_start = perf
+        data[name] = {
+            "Current": f"{end_price:,.2f}",
+            "YTD": f"{perf_ytd:+.2f}%" if perf_ytd is not None else "N/A",
+            "1-Year": f"{perf_1y:+.2f}%" if perf_1y is not None else "N/A",
+        }
+        missing = []
+        if perf_ytd is None:
+            missing.append("YTD")
+        if perf_1y is None:
+            missing.append("1-Year")
+        if missing and coverage_start is not None:
+            notes.append(f"{name}: limited history from {coverage_start:%Y-%m-%d} (missing {', '.join(missing)})")
+        if fallback_used:
+            notes.append(f"{name}: used fallback price history")
+
     if not data:
         return "Unable to fetch performance data for any ticker."
-            
+
     header = f"{'Ticker':<25} {'Current Price':<15} {'YTD %':<12} {'1-Year %':<12}\n" + "-" * 67 + "\n"
-    rows = [f"{name:<25} {metrics['Current']:<15} {metrics['YTD']:<12} {metrics['1-Year']:<12}" for name, metrics in data.items()]
-    return "Performance Comparison:\n\n" + header + "\n".join(rows)
+    rows = [
+        f"{name:<25} {metrics['Current']:<15} {metrics['YTD']:<12} {metrics['1-Year']:<12}"
+        for name, metrics in data.items()
+    ]
+    note_text = f"\n\nNotes:\n- " + "\n- ".join(notes) if notes else ""
+    return "Performance Comparison:\n\n" + header + "\n".join(rows) + note_text
+
 
 def analyze_historical_drawdowns(ticker: str = "^IXIC") -> str:
-    """计算并报告过去20年的前3大历史回撤（已修复时区问题）"""
+    """Summarize the largest drawdowns over the available history."""
+    hist = pd.DataFrame()
+    error_note = ""
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period="20y") # 延长至20年以捕获更多事件
-        if hist.empty:
-            return f"No historical data available for {ticker}."
-        
-        # --- 关键修复：移除索引的时区信息 ---
-        hist.index = hist.index.tz_localize(None)
-            
-        hist['peak'] = hist['Close'].cummax()
-        hist['drawdown'] = (hist['Close'] - hist['peak']) / hist['peak']
-        
-        # 找到所有回撤的谷底
-        # 使用一个技巧来分组连续的回撤期
-        drawdown_groups = hist[hist['drawdown'] < 0]
-        if drawdown_groups.empty:
-            return f"No significant drawdowns found for {ticker} in the last 20 years."
-        # 找到每个回撤期内的最低点
-        troughs = drawdown_groups.loc[drawdown_groups.groupby((drawdown_groups['drawdown'] == 0).cumsum())['drawdown'].idxmin()]
-        top_3 = troughs.nsmallest(3, 'drawdown')
-        if top_3.empty:
-            return f"No significant drawdowns found for {ticker}."
-        result = [f"Top 3 Historical Drawdowns for {ticker} (last 20y):\n"]
-        for _, row in top_3.iterrows():
-            trough_date = row.name
-            # 找到这个谷底对应的峰值日期
-            peak_price = row['peak']
-            
-            # 找到回撤开始的日期（即第一次达到峰值的日期）
-            peak_date = hist[(hist.index <= trough_date) & (hist['Close'] == peak_price)].index.max()
-            
-            # 查找恢复日期（即谷底之后第一次回到峰值价格的日期）
-            recovery_df = hist[hist.index > trough_date]
-            recovery_date_series = recovery_df[recovery_df['Close'] >= peak_price].index
-            recovery_date = recovery_date_series[0] if not recovery_date_series.empty else None
-            
-            duration = (trough_date - peak_date).days
-            recovery_days = (recovery_date - trough_date).days if recovery_date else "Ongoing"
-            result.append(
-                f"- Drawdown: {row['drawdown']:.2%} (from {peak_date.strftime('%Y-%m-%d')} to {trough_date.strftime('%Y-%m-%d')})\n"
-                f"  Duration to trough: {duration} days. Recovery time: {recovery_days} days."
-            )
-        return "\n".join(result)
+        hist = stock.history(period="max")
     except Exception as e:
-        return f"Historical analysis error: {e}."
+        error_note = str(e)
+
+    if hist is None or hist.empty:
+        try:
+            fallback = get_stock_historical_data(ticker, period="max", interval="1d")
+            kline = fallback.get("kline_data") if isinstance(fallback, dict) else None
+            if kline:
+                df = pd.DataFrame(kline)
+                df['time'] = pd.to_datetime(df['time'], errors='coerce')
+                df = df.dropna(subset=['time']).sort_values('time')
+                if not df.empty:
+                    df = df.rename(columns={'close': 'Close'})
+                    hist = df.set_index('time')
+        except Exception as fb_e:
+            error_note = f"{error_note}; fallback failed: {fb_e}" if error_note else str(fb_e)
+
+    if hist is None or hist.empty or 'Close' not in hist.columns:
+        return f"No historical data available for {ticker}." + (f" ({error_note})" if error_note else "")
+
+    try:
+        hist.index = hist.index.tz_localize(None)
+    except Exception:
+        pass
+
+    start_date = hist.index.min()
+    end_date = hist.index.max()
+    coverage_years = (end_date - start_date).days / 365.25 if start_date and end_date else 0
+    coverage_text = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')} (~{coverage_years:.1f}y)"
+
+    hist = hist.copy()
+    hist['peak'] = hist['Close'].cummax()
+    hist['drawdown'] = (hist['Close'] - hist['peak']) / hist['peak']
+
+    drawdown_groups = hist[hist['drawdown'] < 0]
+    if drawdown_groups.empty:
+        return f"No significant drawdowns found for {ticker}. Coverage: {coverage_text}."
+
+    troughs = drawdown_groups.loc[drawdown_groups.groupby((drawdown_groups['drawdown'] == 0).cumsum())['drawdown'].idxmin()]
+    top_3 = troughs.nsmallest(3, 'drawdown')
+    if top_3.empty:
+        return f"No significant drawdowns found for {ticker}. Coverage: {coverage_text}."
+
+    result = [f"Top 3 Historical Drawdowns for {ticker} (coverage {coverage_text}):\n"]
+    for _, row in top_3.iterrows():
+        trough_date = row.name
+        peak_price = row['peak']
+        peak_date = hist[(hist.index <= trough_date) & (hist['Close'] == peak_price)].index.max()
+        recovery_df = hist[hist.index > trough_date]
+        recovery_date_series = recovery_df[recovery_df['Close'] >= peak_price].index
+        recovery_date = recovery_date_series[0] if not recovery_date_series.empty else None
+
+        duration = (trough_date - peak_date).days if peak_date is not None else 0
+        recovery_days = (recovery_date - trough_date).days if recovery_date is not None else "Ongoing"
+        result.append(
+            f"- Drawdown: {row['drawdown']:.2%} (from {peak_date.strftime('%Y-%m-%d')} to {trough_date.strftime('%Y-%m-%d')})\n"
+            f"  Duration to trough: {duration} days. Recovery time: {recovery_days} days."
+        )
+
+    return "\n".join(result)
+
+
 def get_current_datetime() -> str:
     """返回当前日期和时间"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")

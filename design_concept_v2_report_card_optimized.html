@@ -1,0 +1,379 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinSight Report Card (Optimized)</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #5b6472;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --accent: #6366f1;
+      --good: #10b981;
+      --warn: #f59e0b;
+      --risk: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at 20% 10%, rgba(37, 99, 235, 0.08), transparent 40%),
+        radial-gradient(circle at 90% 0%, rgba(99, 102, 241, 0.08), transparent 40%),
+        var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .report-card {
+      width: min(960px, 100%);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 24px 60px -48px rgba(15, 23, 42, 0.6);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 24px 28px;
+      background: linear-gradient(90deg, #eff6ff, #ffffff, #eef2ff);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      align-items: center;
+    }
+
+    .badge {
+      background: #e0e7ff;
+      color: #4338ca;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+    }
+
+    .ticker {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: #e2e8f0;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .title-row h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .company {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pill-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .pill.bullish { background: #dcfce7; color: #15803d; }
+    .pill.recommend { background: #fde68a; color: #92400e; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .summary {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: #ffffff;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .confidence {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .confidence .label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 86%;
+      background: linear-gradient(90deg, var(--good), var(--primary), var(--accent));
+    }
+
+    .content {
+      padding: 24px 28px;
+      background: #f8fafc;
+    }
+
+    .risk {
+      border: 1px solid #fee2e2;
+      background: #fef2f2;
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .risk h4 {
+      margin: 0 0 6px 0;
+      font-size: 12px;
+      color: var(--risk);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 14px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #f1f5f9;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .section-body {
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #475569;
+      line-height: 1.6;
+    }
+
+    .refs {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      margin-top: 20px;
+    }
+
+    .refs h4 {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .ref-item {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      transition: 0.2s;
+    }
+
+    .ref-item:hover {
+      border-color: var(--border);
+      background: #f8fafc;
+    }
+
+    .ref-title {
+      font-weight: 600;
+      font-size: 12px;
+      color: #2563eb;
+    }
+
+    .footer {
+      padding: 18px 28px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .actions button {
+      border: 1px solid var(--border);
+      background: #ffffff;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .actions button.primary {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    @media (max-width: 720px) {
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .title-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-card">
+    <div class="header">
+      <div class="meta">
+        <span class="badge">Deep Research</span>
+        <span class="ticker">NVDA</span>
+        <span>•</span>
+        <span>2026-01-11</span>
+      </div>
+      <div class="title-row">
+        <div>
+          <h1>NVIDIA Q3 Deep Dive</h1>
+          <div class="company">NVIDIA Corp · Semi / AI Infrastructure</div>
+          <div class="pill-row">
+            <span class="pill bullish">Bullish</span>
+            <span class="pill recommend">Hold</span>
+          </div>
+        </div>
+        <div style="width:44px;height:44px;border-radius:14px;background:#dbeafe;display:flex;align-items:center;justify-content:center;color:#1d4ed8;font-weight:700;">
+          ↑
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary">
+          <strong>Core view:</strong> Earnings beat remains strong, but guidance is slightly conservative.
+          Data center demand stays resilient and the Blackwell ramp is on track. Short-term volatility
+          likely, but the long-term AI cycle remains intact.
+        </div>
+        <div class="confidence">
+          <div class="label">
+            <span>AI Confidence</span>
+            <span>86%</span>
+          </div>
+          <div class="bar"><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="risk">
+        <h4>Key Risks</h4>
+        <ul>
+          <li>Valuation sensitivity to macro rates</li>
+          <li>Supply chain tightness for new GPUs</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span>1. Financial Highlights</span>
+          <span>▾</span>
+        </div>
+        <div class="section-body">
+          Revenue +150% YoY with gross margin stabilizing around 75%. EPS beat expectations
+          and free cash flow stayed strong even after higher capex.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span>2. Competitive Landscape</span>
+          <span>▾</span>
+        </div>
+        <div class="section-body">
+          CUDA lock-in remains the moat. Hyperscalers are experimenting with custom chips
+          but ramp speed still favors NVIDIA for the next 12-18 months.
+        </div>
+      </div>
+
+      <div class="refs">
+        <h4>References</h4>
+        <div class="ref-item">
+          <div>↗</div>
+          <div>
+            <div class="ref-title">NVIDIA Investor Presentation</div>
+            <div style="font-size:12px;color:#94a3b8;">Highlights from the Q3 earnings deck</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Generated by FinSight AI · Deep Research Engine</span>
+      <div class="actions">
+        <button>Export PDF</button>
+        <button>Save to Watchlist</button>
+        <button class="primary">Subscribe Alerts</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

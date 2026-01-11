@@ -73,6 +73,30 @@ class AgentSupervisor:
     def get_agent(self, name: str) -> Optional[BaseFinancialAgent]:
         return self.agents.get(name)
 
+    def _serialize_output(self, output: AgentOutput) -> Dict[str, Any]:
+        evidence_items = []
+        for ev in getattr(output, "evidence", []) or []:
+            evidence_items.append({
+                "title": getattr(ev, "title", None),
+                "text": getattr(ev, "text", ""),
+                "source": getattr(ev, "source", ""),
+                "url": getattr(ev, "url", None),
+                "timestamp": getattr(ev, "timestamp", None),
+                "confidence": getattr(ev, "confidence", None),
+                "meta": getattr(ev, "meta", {}) or {},
+            })
+        return {
+            "agent_name": getattr(output, "agent_name", ""),
+            "summary": getattr(output, "summary", ""),
+            "confidence": getattr(output, "confidence", None),
+            "data_sources": getattr(output, "data_sources", []) or [],
+            "as_of": getattr(output, "as_of", None),
+            "fallback_used": getattr(output, "fallback_used", False),
+            "risks": getattr(output, "risks", []) or [],
+            "evidence": evidence_items,
+            "trace": getattr(output, "trace", []) or [],
+        }
+
     async def analyze_stream(self, query: str, ticker: str, user_profile: Optional[Any] = None):
         """
         流式分析接口，实时报告各 Agent 状态
@@ -136,6 +160,10 @@ class AgentSupervisor:
         
         try:
             forum_result = await self.forum.synthesize(agent_results, user_profile=user_profile)
+            serialized_outputs = {
+                name: self._serialize_output(output)
+                for name, output in agent_results.items()
+            }
             
             yield json.dumps({
                 "type": "forum_done",
@@ -155,7 +183,8 @@ class AgentSupervisor:
                     "risks": forum_result.risks,
                     "agents_used": list(agent_results.keys()),
                     "errors": agent_errors
-                }
+                },
+                "agent_outputs": serialized_outputs,
             }, ensure_ascii=False)
             
         except Exception as e:

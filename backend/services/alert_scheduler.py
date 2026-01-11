@@ -87,7 +87,7 @@ class PriceChangeScheduler:
                 f"(threshold {threshold:.2f}%)."
             )
 
-            self.email_service.send_stock_alert(
+            success = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
                 alert_type="price_change",
@@ -95,6 +95,10 @@ class PriceChangeScheduler:
                 current_price=snapshot.price,
                 change_percent=snapshot.change_percent,
             )
+            # Only update last_alert_at if email was actually sent
+            if not success:
+                logger.warning("Email send failed for %s -> %s, skipping last_alert update", sub["ticker"], sub["email"])
+                continue
             self.subscription_service.update_last_alert(sub["email"], sub["ticker"])
 
             sent.append(
@@ -180,7 +184,7 @@ class NewsAlertScheduler:
                 lines.append(f"[{ts}] {art.get('title','')} ({art.get('source','')}) {art.get('url','')}")
             message = "\n".join(lines)
 
-            self.email_service.send_stock_alert(
+            success = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
                 alert_type="news",
@@ -188,6 +192,10 @@ class NewsAlertScheduler:
                 current_price=None,
                 change_percent=None,
             )
+            # Only update last_news_at if email was actually sent
+            if not success:
+                logger.warning("News email send failed for %s -> %s, skipping last_news update", sub["ticker"], sub["email"])
+                continue
             self.subscription_service.update_last_news(sub["email"], sub["ticker"])
 
             sent.append(

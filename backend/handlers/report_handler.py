@@ -64,6 +64,84 @@ class ReportHandler:
                 self.tools_module = None
                 print(f"[ReportHandler] 警告: 无法导入 tools 模块: {e}")
     
+    def _run_deepsearch(self, query: str, ticker: str):
+        """Run DeepSearchAgent synchronously and return AgentOutput (or None)."""
+        if not self.llm or not self.tools_module or not self.orchestrator:
+            return None
+        try:
+            from backend.agents.deep_search_agent import DeepSearchAgent
+
+            cache = getattr(self.orchestrator, "cache", None)
+            circuit_breaker = getattr(self.orchestrator, "circuit_breaker", None)
+            agent = DeepSearchAgent(self.llm, cache, self.tools_module, circuit_breaker)
+            print(f"[ReportHandler] DeepSearch start: {ticker}")
+            result = asyncio.run(agent.research(query, ticker))
+            print(f"[ReportHandler] DeepSearch done: evidence={len(getattr(result, 'evidence', []))}")
+            return result
+        except Exception as e:
+            print(f"[ReportHandler] DeepSearch failed: {e}")
+            return None
+
+    def _serialize_evidence(self, evidence: List[Any]) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for ev in evidence or []:
+            try:
+                items.append({
+                    "title": getattr(ev, "title", None),
+                    "text": getattr(ev, "text", ""),
+                    "source": getattr(ev, "source", ""),
+                    "url": getattr(ev, "url", None),
+                    "timestamp": getattr(ev, "timestamp", None),
+                    "confidence": getattr(ev, "confidence", None),
+                    "meta": getattr(ev, "meta", {}) or {},
+                })
+            except Exception:
+                continue
+        return items
+
+    def _serialize_agent_output(self, output: Any) -> Dict[str, Any]:
+        if not output:
+            return {}
+        return {
+            "agent_name": getattr(output, "agent_name", ""),
+            "summary": getattr(output, "summary", ""),
+            "confidence": getattr(output, "confidence", None),
+            "data_sources": getattr(output, "data_sources", []),
+            "as_of": getattr(output, "as_of", None),
+            "fallback_used": getattr(output, "fallback_used", False),
+            "risks": getattr(output, "risks", []),
+            "evidence": self._serialize_evidence(getattr(output, "evidence", [])),
+            "trace": getattr(output, "trace", []),
+        }
+
+    def _build_citations_from_evidence(self, evidence: List[Any], prefix: str) -> List[Dict[str, Any]]:
+        citations: List[Dict[str, Any]] = []
+        seen = set()
+        idx = 1
+        for ev in evidence or []:
+            if isinstance(ev, dict):
+                url = ev.get("url") or ""
+                title = ev.get("title") or ev.get("text") or "Source"
+                snippet = ev.get("text") or ""
+                published_date = ev.get("timestamp") or ""
+            else:
+                url = getattr(ev, "url", None) or ""
+                title = getattr(ev, "title", None) or getattr(ev, "text", "") or "Source"
+                snippet = getattr(ev, "text", "") or ""
+                published_date = getattr(ev, "timestamp", "") or ""
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            citations.append({
+                "source_id": f"{prefix}-{idx}",
+                "title": title[:160],
+                "url": url,
+                "snippet": snippet[:260],
+                "published_date": published_date,
+            })
+            idx += 1
+        return citations
+
     def handle(
         self, 
         query: str, 
@@ -82,11 +160,52 @@ class ReportHandler:
             响应字典，包含完整的分析报告
         """
         tickers = metadata.get('tickers', [])
-        
-        # 如果没有股票代码，尝试从上下文获取
-        if not tickers and context and context.current_focus:
+        explicit_company = bool(metadata.get('company_names') or metadata.get('company_mentions'))
+        company_hint = None
+        if explicit_company:
+            if metadata.get('company_names'):
+                company_hint = metadata.get('company_names')[0]
+            elif metadata.get('company_mentions'):
+                company_hint = metadata.get('company_mentions')[0]
+
+        if explicit_company and not tickers and company_hint:
+            if self.tools_module and hasattr(self.tools_module, 'resolve_company_ticker'):
+                try:
+                    resolution = self.tools_module.resolve_company_ticker(company_hint)
+                    matches = resolution.get('matches') if isinstance(resolution, dict) else []
+                    if matches:
+                        if len(matches) == 1 and matches[0].get('symbol'):
+                            tickers = [matches[0]['symbol']]
+                            metadata['tickers'] = tickers
+                            metadata['ticker_resolution'] = resolution
+                        else:
+                            selected = self._select_candidate_by_hint(query, matches, context)
+                            if selected and selected.get('symbol'):
+                                tickers = [selected['symbol']]
+                                metadata['tickers'] = tickers
+                                metadata['ticker_resolution'] = resolution
+                                matches = []
+                            if matches:
+                                options = []
+                                for item in matches[:5]:
+                                    symbol = item.get('symbol') if isinstance(item, dict) else str(item)
+                                    desc = item.get('description') if isinstance(item, dict) else ''
+                                    line = '- ' + symbol
+                                    if desc:
+                                        line += ' (' + desc + ')'
+                                    options.append(line)
+                                return {
+                                    'success': True,
+                                    'response': '我找到了多个可能的股票代码，和“' + str(company_hint) + '”相关，请确认一个：\n' + '\n'.join(options) + '\n\n你也可以直接说“美股/法股/港股/英股”等市场偏好。',
+                                    'needs_clarification': True,
+                                    'intent': 'report',
+                                }
+                except Exception as e:
+                    print('[ReportHandler] ticker lookup failed: ' + str(e))
+
+        if not tickers and context and context.current_focus and not explicit_company:
             tickers = [context.current_focus]
-        
+
         if not tickers:
             return {
                 'success': True,
@@ -181,7 +300,12 @@ class ReportHandler:
                 forum_output = analysis_result.get("forum_output")
 
                 # 构建 ReportIR (简单转换，实际应由专门的 Mapper 完成)
-                report_ir = self._convert_to_report_ir(ticker, query, forum_output)
+                report_ir = self._convert_to_report_ir(
+                    ticker,
+                    query,
+                    forum_output,
+                    analysis_result.get("agent_outputs"),
+                )
 
                 # 校验 IR
                 report_ir_dict = ReportValidator.validate_and_fix(report_ir)
@@ -203,6 +327,12 @@ class ReportHandler:
 
             # 调用 Agent
             result = self.agent.analyze(analysis_query)
+            deepsearch_output = self._run_deepsearch(analysis_query, ticker)
+            deepsearch_payload = self._serialize_agent_output(deepsearch_output) if deepsearch_output else {}
+            citations = (
+                self._build_citations_from_evidence(getattr(deepsearch_output, "evidence", []), "DS")
+                if deepsearch_output else []
+            )
 
             if isinstance(result, dict):
                 output = result.get('output', '')
@@ -213,23 +343,38 @@ class ReportHandler:
                     context.cache_data(f'report:{ticker}', output)
 
                 # 生成 ReportIR 供前端渲染
-                report_ir = self._generate_simple_report_ir(ticker, output)
+                report_ir = self._generate_simple_report_ir(
+                    ticker,
+                    output,
+                    citations=citations,
+                    meta={"deep_search": deepsearch_payload} if deepsearch_payload else {},
+                )
+                data_payload = result
+                if deepsearch_payload:
+                    data_payload = dict(result)
+                    data_payload["deep_search"] = deepsearch_payload
                 
                 return {
                     'success': success,
                     'response': output,
-                    'data': result,
+                    'data': data_payload,
                     'report': report_ir,  # 关键：添加 report 字段
                     'intent': 'report',
                     'method': 'agent',
                 }
             else:
                 output_str = str(result)
-                report_ir = self._generate_simple_report_ir(ticker, output_str)
+                report_ir = self._generate_simple_report_ir(
+                    ticker,
+                    output_str,
+                    citations=citations,
+                    meta={"deep_search": deepsearch_payload} if deepsearch_payload else {},
+                )
                 
                 return {
                     'success': True,
                     'response': output_str,
+                    'data': {"deep_search": deepsearch_payload} if deepsearch_payload else {},
                     'report': report_ir,  # 关键：添加 report 字段
                     'intent': 'report',
                     'method': 'agent',
@@ -243,7 +388,13 @@ class ReportHandler:
                 'intent': 'report',
             }
 
-    def _convert_to_report_ir(self, ticker: str, query: str, forum_output: Any) -> Dict[str, Any]:
+    def _convert_to_report_ir(
+        self,
+        ticker: str,
+        query: str,
+        forum_output: Any,
+        agent_outputs: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
         from datetime import datetime
         from backend.report.validator import ReportValidator
@@ -253,11 +404,21 @@ class ReportHandler:
         risk_list_str = os.linesep.join([f"- {r}" for r in forum_output.risks])
         risk_text = f"风险因素:{os.linesep}{risk_list_str}"
 
+        citations: List[Dict[str, Any]] = []
+        agent_traces: Dict[str, Any] = {}
+        if agent_outputs and isinstance(agent_outputs, dict):
+            for name, output in agent_outputs.items():
+                prefix = str(name).upper()[:2] if name else "AG"
+                citations.extend(self._build_citations_from_evidence(getattr(output, "evidence", []), prefix))
+                trace = getattr(output, "trace", None)
+                if trace:
+                    agent_traces[name] = trace
+
         report = {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
             "company_name": ticker, # 暂用 Ticker 代替
-            "title": f"{ticker} 深度投资价值分析",
+            "title": f"{ticker} Investment Analysis",
             "summary": forum_output.consensus,
             "sentiment": "bullish" if "BUY" in forum_output.recommendation else "bearish" if "SELL" in forum_output.recommendation else "neutral",
             "confidence_score": forum_output.confidence,
@@ -282,9 +443,10 @@ class ReportHandler:
                     "contents": [{"type": "text", "content": f"建议: {forum_output.recommendation}"}]
                 }
             ],
-            "citations": [], # 暂为空，后续从 agent_outputs 提取
+            "citations": citations,
             "risks": forum_output.risks,
-            "recommendation": forum_output.recommendation
+            "recommendation": forum_output.recommendation,
+            "meta": {"agent_traces": agent_traces} if agent_traces else {},
         }
         return ReportValidator.validate_and_fix(report, as_dict=True)
     
@@ -423,7 +585,26 @@ class ReportHandler:
         except Exception as e:
             print(f"[ReportHandler] 获取情绪失败: {e}")
         
-        # 5. 搜索补充信息
+        # 5. 获取表现对比 (YTD/1Y)
+        try:
+            if self.tools_module and hasattr(self.tools_module, "get_performance_comparison"):
+                benchmark = os.getenv("DEFAULT_BENCHMARK_TICKER", "").strip()
+                benchmark_label = os.getenv("DEFAULT_BENCHMARK_LABEL", "").strip() or benchmark
+                tickers_map = {ticker: ticker}
+                if benchmark and benchmark.lower() not in ("none", "off", "false", "0"):
+                    tickers_map[benchmark_label] = benchmark
+                data["performance_comparison"] = self.tools_module.get_performance_comparison(tickers_map)
+        except Exception as e:
+            print(f"[ReportHandler] 获取表现对比失败: {e}")
+
+        # 6. 历史回撤分析
+        try:
+            if self.tools_module and hasattr(self.tools_module, "analyze_historical_drawdowns"):
+                data["drawdown_analysis"] = self.tools_module.analyze_historical_drawdowns(ticker)
+        except Exception as e:
+            print(f"[ReportHandler] 历史回撤分析失败: {e}")
+
+        # 7. 搜索上下文补充
         try:
             if self.tools_module:
                 data['search_context'] = self.tools_module.search(
@@ -493,6 +674,12 @@ BEGIN REPORT:"""
         if data.get('sentiment'):
             sections.append(f"## Market Sentiment\n{data['sentiment']}")
         
+        if data.get('performance_comparison'):
+            sections.append(f"## Performance Comparison\n{data['performance_comparison']}")
+
+        if data.get('drawdown_analysis'):
+            sections.append(f"## Drawdown Analysis\n{data['drawdown_analysis']}")
+
         if data.get('search_context'):
             # 截取搜索结果的前 500 字符
             search_preview = data['search_context'][:500] + "..." if len(data['search_context']) > 500 else data['search_context']
@@ -537,7 +724,13 @@ This is a simplified report. For comprehensive investment advice, please consult
 """
         return report
     
-    def _generate_simple_report_ir(self, ticker: str, content: str) -> Dict[str, Any]:
+    def _generate_simple_report_ir(
+        self,
+        ticker: str,
+        content: str,
+        citations: Optional[List[Dict[str, Any]]] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         从纯文本生成简化的 ReportIR 结构
         用于 Legacy 路径，确保前端能渲染 Report 卡片
@@ -596,9 +789,10 @@ This is a simplified report. For comprehensive investment advice, please consult
             "confidence_score": 0.75,  # 默认置信度
             "generated_at": datetime.now().isoformat(),
             "sections": sections,
-            "citations": [],
+            "citations": citations or [],
             "risks": [],
-            "recommendation": "HOLD"
+            "recommendation": "HOLD",
+            "meta": meta or {},
         }
         return ReportValidator.validate_and_fix(report, as_dict=True)
     
@@ -644,3 +838,62 @@ This is a simplified report. For comprehensive investment advice, please consult
 - "标普500 深度分析"
 
 请告诉我要分析的目标。"""
+
+    def _select_candidate_by_hint(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        context: Optional[Any] = None
+    ) -> Optional[Dict[str, Any]]:
+        market_hint = self._extract_market_hint(query)
+        if not market_hint and context is not None:
+            market_hint = getattr(context, "market_preference", None)
+        if not market_hint:
+            return None
+        for item in candidates:
+            if self._candidate_matches_market(item, market_hint):
+                return item
+        return None
+
+    def _extract_market_hint(self, query: str) -> Optional[str]:
+        lowered = query.lower()
+        hint_map = {
+            "US": ["美国", "美股", "nyse", "nasdaq", "otc", "adr", "us", "u.s"],
+            "FR": ["法国", "法股", "巴黎", "euronext", "paris", ".pa"],
+            "UK": ["英国", "英股", "伦敦", "lse", "london", ".l"],
+            "HK": ["香港", "港股", "hkex", ".hk"],
+            "CN": ["中国", "a股", "沪", "深", "上证", "深证", "sse", "szse", ".ss", ".sz"],
+            "JP": ["日本", "日股", "东京", "tse", ".t"],
+            "EU": ["欧洲", "欧股", "eu", "euronext"],
+        }
+        for market, keys in hint_map.items():
+            for key in keys:
+                if key.isascii():
+                    if key in lowered:
+                        return market
+                else:
+                    if key in query:
+                        return market
+        return None
+
+    def _candidate_matches_market(self, candidate: Dict[str, Any], market: str) -> bool:
+        symbol = (candidate.get("symbol") or "").upper()
+        exchange = (candidate.get("primaryExchange") or "").upper()
+        description = (candidate.get("description") or "").upper()
+        blob = f"{symbol} {exchange} {description}"
+
+        if market == "US":
+            return any(tag in blob for tag in ["NYSE", "NASDAQ", "OTC", "US", "ADR"]) or symbol.endswith(".US")
+        if market == "FR":
+            return any(tag in blob for tag in ["PAR", "EURONEXT", "PARIS"]) or symbol.endswith(".PA")
+        if market == "UK":
+            return any(tag in blob for tag in ["LSE", "LONDON"]) or symbol.endswith(".L")
+        if market == "HK":
+            return any(tag in blob for tag in ["HK", "HKEX"]) or symbol.endswith(".HK")
+        if market == "CN":
+            return any(tag in blob for tag in ["SSE", "SZSE", "SHANGHAI", "SHENZHEN"]) or symbol.endswith((".SS", ".SZ"))
+        if market == "JP":
+            return any(tag in blob for tag in ["TSE", "TOKYO"]) or symbol.endswith(".T")
+        if market == "EU":
+            return "EURONEXT" in blob or symbol.endswith(".PA")
+        return False

@@ -49,7 +49,19 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
       type: 'category',
       data: returns.map((item) => item.time),
       axisLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { color: '#a1a1aa', fontSize: 10, rotate: 45 },
+      axisLabel: {
+        color: '#94a3b8',
+        fontSize: 10,
+        rotate: 0,
+        hideOverlap: true,
+        interval: 'auto',
+        formatter: (value: string) => {
+          // Try to be concise
+          if (value.includes(' ')) return value.split(' ')[1].substring(0, 5); // Time
+          if (value.includes('-')) return value.slice(5); // MM-DD
+          return value;
+        }
+      },
     },
     yAxis: {
       type: 'value',
@@ -69,18 +81,18 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
         lineStyle: { color: '#3b82f6', width: 2 },
         areaStyle: fillArea
           ? {
-              color: {
-                type: 'linear',
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [
-                  { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-                  { offset: 1, color: 'rgba(59, 130, 246, 0.05)' },
-                ],
-              },
-            }
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' },
+              ],
+            },
+          }
           : undefined,
         itemStyle: { color: '#3b82f6' },
       },
@@ -169,8 +181,8 @@ export const InlineChart: React.FC<InlineChartProps> = ({
       try {
         const interval = period === '1y' || period === '2y' ? '1d' : period === '5y' ? '1wk' : '1d';
         const res = await apiClient.fetchKline(ticker, period, interval);
-        const responseData = res.data as any;
-        const kline = responseData?.data?.kline_data ?? [];
+        const responseData = res as any;
+        const kline = responseData?.data?.kline_data ?? responseData?.kline_data ?? [];
 
         if (!active) return;
         setData(kline);

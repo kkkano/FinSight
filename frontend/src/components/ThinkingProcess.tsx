@@ -14,6 +14,7 @@ const stageLabels: Record<string, string> = {
   complete: 'Complete',
   tool_call: 'Tool call',
   llm_call: 'LLM reasoning',
+  error: 'Error',
 };
 
 const getStageIcon = (stage: string) => {
