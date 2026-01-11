@@ -7,7 +7,7 @@ class MacroAgent(BaseFinancialAgent):
     """
     MacroAgent - 宏观经济专家
     负责：
-    1. 监测宏观指标 (CPI, GDP, Interest Rates)
+    1. 监测宏观指标 (CPI, GDP, Interest Rates) - 使用 FRED API
     2. 分析美联储政策 (Fed Policy)
     3. 识别市场周期 (Cycle Identification)
     """
@@ -19,49 +19,123 @@ class MacroAgent(BaseFinancialAgent):
 
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         """
-        宏观搜索策略：
-        忽略 ticker (个股)，关注 query 中的宏观关键词
+        宏观搜索策略：使用 FRED API 获取真实宏观经济数据
         """
-        # 关键词提取 (Mock)
-        macro_keywords = ["inflation", "rate", "fed", "recession", "gdp"]
+        # 关键词提取
+        macro_keywords = ["inflation", "rate", "fed", "recession", "gdp", "cpi", "unemployment", "macro", "economy", "interest", "treasury"]
         relevant = any(k in query.lower() for k in macro_keywords)
 
-        if not relevant and not "macro" in query.lower():
-            # 如果查询不涉及宏观，返回空或通用背景
+        if not relevant and "macro" not in query.lower():
             return {"status": "skipped", "reason": "No macro intent detected"}
 
-        # 模拟获取 FRED 数据
-        return {
-            "cpi": "3.2%",
-            "fed_rate": "5.25-5.50%",
-            "gdp_growth": "2.1%",
-            "status": "success"
-        }
+        # 使用 FRED API 获取真实数据
+        try:
+            if hasattr(self.tools, 'get_fred_data'):
+                fred_data = self.tools.get_fred_data()
+                fred_data["status"] = "success"
+                return fred_data
+        except Exception as e:
+            print(f"[MacroAgent] FRED API failed: {e}")
+
+        # 回退到搜索
+        try:
+            if hasattr(self.tools, 'search'):
+                search_result = self.tools.search("current US CPI inflation rate federal funds rate unemployment")
+                return {
+                    "status": "fallback",
+                    "source": "search",
+                    "raw": search_result
+                }
+        except Exception as e:
+            print(f"[MacroAgent] Search fallback failed: {e}")
+
+        return {"status": "error", "reason": "Failed to fetch macro data"}
 
     async def _first_summary(self, data: Dict[str, Any]) -> str:
         if data.get("status") == "skipped":
             return "当前市场宏观环境相对稳定。"
 
-        return (
-            f"宏观数据更新：CPI 为 {data.get('cpi')}，美联储利率维持在 {data.get('fed_rate')}。"
-            "当前处于高利率环境末期，通胀温和回落，软着陆概率增加。"
-        )
+        if data.get("status") == "error":
+            return "无法获取宏观经济数据，请稍后重试。"
+
+        if data.get("status") == "fallback":
+            return f"宏观经济概况：{data.get('raw', '数据获取中...')[:500]}"
+
+        # 构建详细摘要
+        parts = ["📊 **美国宏观经济数据更新**\n"]
+
+        if data.get("fed_rate_formatted"):
+            parts.append(f"• **联邦基金利率**: {data['fed_rate_formatted']}")
+        if data.get("cpi_formatted"):
+            parts.append(f"• **CPI 指数**: {data['cpi_formatted']}")
+        if data.get("unemployment_formatted"):
+            parts.append(f"• **失业率**: {data['unemployment_formatted']}")
+        if data.get("gdp_growth_formatted"):
+            parts.append(f"• **GDP 增长率**: {data['gdp_growth_formatted']}")
+        if data.get("treasury_10y_formatted"):
+            parts.append(f"• **10年期国债收益率**: {data['treasury_10y_formatted']}")
+        if data.get("yield_spread_formatted"):
+            spread = data['yield_spread_formatted']
+            warning = " ⚠️ 收益率曲线倒挂" if data.get("recession_warning") else ""
+            parts.append(f"• **10Y-2Y 利差**: {spread}{warning}")
+
+        # 添加分析
+        parts.append("\n**分析**:")
+        if data.get("fed_rate") and data["fed_rate"] > 4:
+            parts.append("当前处于高利率环境，美联储维持紧缩政策。")
+        if data.get("recession_warning"):
+            parts.append("收益率曲线倒挂通常是经济衰退的先行指标，需密切关注。")
+        else:
+            parts.append("收益率曲线正常，短期内衰退风险较低。")
+
+        return "\n".join(parts)
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence = []
-        if isinstance(raw_data, dict) and raw_data.get("status") == "success":
-            evidence.append(EvidenceItem(
-                text=f"CPI: {raw_data.get('cpi')}",
-                source="FRED",
-                confidence=1.0
-            ))
+        data_sources = ["FRED"]
+        risks = []
+
+        if isinstance(raw_data, dict):
+            if raw_data.get("status") == "success":
+                # 添加各项指标作为证据
+                if raw_data.get("fed_rate"):
+                    evidence.append(EvidenceItem(
+                        text=f"Federal Funds Rate: {raw_data.get('fed_rate_formatted', raw_data['fed_rate'])}",
+                        source="FRED - FEDFUNDS",
+                        confidence=1.0
+                    ))
+                if raw_data.get("cpi"):
+                    evidence.append(EvidenceItem(
+                        text=f"CPI Index: {raw_data.get('cpi_formatted', raw_data['cpi'])}",
+                        source="FRED - CPIAUCSL",
+                        confidence=1.0
+                    ))
+                if raw_data.get("unemployment"):
+                    evidence.append(EvidenceItem(
+                        text=f"Unemployment Rate: {raw_data.get('unemployment_formatted', raw_data['unemployment'])}",
+                        source="FRED - UNRATE",
+                        confidence=1.0
+                    ))
+                if raw_data.get("recession_warning"):
+                    risks.append("收益率曲线倒挂 - 潜在衰退信号")
+
+            elif raw_data.get("source") == "estimate":
+                data_sources = ["Estimate"]
+                risks.append("使用估计值，非实时数据")
+
+            elif raw_data.get("status") == "fallback":
+                data_sources = ["Web Search"]
+                risks.append("使用搜索回退，数据可能不完整")
+
+        if not risks:
+            risks = ["政策滞后效应", "数据发布延迟"]
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
             evidence=evidence,
-            confidence=0.9, # 官方数据置信度高
-            data_sources=["FRED", "Government Reports"],
+            confidence=0.95 if evidence else 0.7,
+            data_sources=data_sources,
             as_of=datetime.now().isoformat(),
-            risks=["政策滞后效应"]
+            risks=risks
         )
