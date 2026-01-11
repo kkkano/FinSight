@@ -72,5 +72,9 @@ APScheduler==3.10.4
 reportlab==4.2.5
 pypdf==4.2.0
 
+# RAG - Vector Store & Embeddings
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
 # Wikipedia (免费，无需 API key)
 wikipedia==1.4.0
