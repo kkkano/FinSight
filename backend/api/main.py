@@ -277,10 +277,39 @@ def read_root():
 @app.get("/health")
 def health_check():
     """
-    轻量健康检查端点，便于监控/探活。
+    增强健康检查端点 - 包含子Agent状态和后端服务状态
     """
+    # 基础状态
+    status = "healthy"
+    components = {}
+
+    # 检查 Agent 状态
+    if agent:
+        components["agent"] = {"status": "ok", "available": True}
+        # 检查子 Agent
+        if hasattr(agent, "news_agent") and agent.news_agent:
+            components["news_agent"] = {"status": "ok"}
+        if hasattr(agent, "price_agent") and agent.price_agent:
+            components["price_agent"] = {"status": "ok"}
+        # 检查 Orchestrator
+        if hasattr(agent, "orchestrator") and agent.orchestrator:
+            components["orchestrator"] = {"status": "ok"}
+        # 检查 LLM
+        if hasattr(agent, "llm") and agent.llm:
+            components["llm"] = {"status": "ok"}
+    else:
+        status = "degraded"
+        components["agent"] = {"status": "error", "available": False}
+
+    # 检查 MemoryService
+    if memory_service:
+        components["memory"] = {"status": "ok"}
+    else:
+        components["memory"] = {"status": "unavailable"}
+
     return {
-        "status": "healthy",
+        "status": status,
+        "components": components,
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 

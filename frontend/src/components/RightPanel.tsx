@@ -167,12 +167,13 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
 
   const loadDiagnostics = async () => {
     try {
-      const [lg, oc] = await Promise.all([
+      const [lg, oc, health] = await Promise.all([
         apiClient.diagnosticsLanggraph(),
         apiClient.diagnosticsOrchestrator(),
+        apiClient.healthCheck(),
       ]);
       // 正确读取嵌套结构
-      setLanggraph(lg);
+      setLanggraph({ ...lg, health });
       setOrchestrator(oc);
     } catch (error) {
       setLanggraph(null);
@@ -227,12 +228,22 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
   const agentInfo = langgraph?.data?.agent_info;
   const orchestratorStats = orchestrator?.data?.orchestrator_stats;
   const sourceStats = orchestrator?.data?.by_source?.stock_price || [];
+  const healthComponents = langgraph?.health?.components || {};
 
   // 计算总请求数 (从所有数据源累加)
   const totalCalls = sourceStats.reduce((sum: number, s: any) => sum + (s.total_calls || 0), 0);
   const totalSuccesses = sourceStats.reduce((sum: number, s: any) => sum + (s.total_successes || 0), 0);
   const cacheHits = orchestratorStats?.cache_hits ?? orchestrator?.data?.cache_hits ?? 0;
   const fallbackCount = orchestratorStats?.fallback_count ?? orchestrator?.data?.fallback_count ?? 0;
+
+  // 子 Agent 状态列表
+  const subAgents = [
+    { name: 'NewsAgent', key: 'news_agent' },
+    { name: 'PriceAgent', key: 'price_agent' },
+    { name: 'Orchestrator', key: 'orchestrator' },
+    { name: 'LLM', key: 'llm' },
+    { name: 'Memory', key: 'memory' },
+  ];
 
   return (
     <div className="flex flex-col gap-3 h-full overflow-y-auto pr-1">
@@ -346,6 +357,29 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
             <span className="text-fin-muted">Tools</span>
             <span className="text-fin-text font-medium">{agentInfo?.tools_count || 0} 个</span>
           </div>
+
+          {/* 子 Agent 健康状态 */}
+          {Object.keys(healthComponents).length > 0 && (
+            <div className="pt-2 border-t border-fin-border/50">
+              <div className="text-[10px] text-fin-muted mb-1 uppercase">子 Agent 状态</div>
+              <div className="space-y-1">
+                {subAgents.map((agent) => {
+                  const comp = healthComponents[agent.key];
+                  const isOk = comp?.status === 'ok';
+                  return (
+                    <div key={agent.key} className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOk ? 'bg-fin-success' : 'bg-fin-muted'}`} />
+                        <span className="text-fin-text">{agent.name}</span>
+                      </div>
+                      <span className={isOk ? 'text-fin-success' : 'text-fin-muted'}>{isOk ? '在线' : '离线'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Stats */}
           <div className="flex items-center justify-between">
             <span className="text-fin-muted">总请求</span>
