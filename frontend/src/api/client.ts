@@ -158,6 +158,12 @@ export const apiClient = {
     return response.data;
   },
 
+  // 健康检查（含子Agent状态）
+  async healthCheck(): Promise<any> {
+    const response = await api.get('/health');
+    return response.data;
+  },
+
   // 流式发送消息 - SSE 逐字输出
   async sendMessageStream(
     query: string,
