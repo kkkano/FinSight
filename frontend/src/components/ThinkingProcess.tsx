@@ -15,13 +15,20 @@ const stageLabels: Record<string, string> = {
   tool_call: 'Tool call',
   llm_call: 'LLM reasoning',
   error: 'Error',
+  // Agent 进度事件
+  supervisor_start: '🚀 Multi-Agent analysis started',
+  agent_start: '⏳ Agent analyzing',
+  agent_done: '✅ Agent completed',
+  agent_error: '❌ Agent failed',
+  forum_start: '🔄 Synthesizing insights',
+  forum_done: '📊 Synthesis complete',
 };
 
 const getStageIcon = (stage: string) => {
-  if (stage.includes('complete')) return 'OK';
-  if (stage.includes('error')) return '!';
-  if (stage.includes('processing') || stage.includes('collection')) return '...';
-  return '>';
+  if (stage.includes('complete') || stage.includes('done')) return '✓';
+  if (stage.includes('error')) return '✗';
+  if (stage.includes('start') || stage.includes('processing') || stage.includes('collection')) return '⋯';
+  return '›';
 };
 
 export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) => {
