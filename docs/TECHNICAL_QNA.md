@@ -1,6 +1,7 @@
 # FinSight 技术实现深度问答 (Technical Q&A)
 
 > 📅 **创建日期**: 2026-01-09
+> 📅 **更新日期**: 2026-01-12
 > 🎯 **用途**: 项目技术难点自查、架构设计面试题库、核心功能实现原理记录。
 
 ---
@@ -109,20 +110,46 @@ flowchart LR
 
 ## 🔮 架构演进篇
 
-### Q5: 下一步 RAG (检索增强生成) 将如何落地？
+### Q5: RAG (检索增强生成) 是如何实现的？
 
-**A**: 目前 DeepSearchAgent 仍使用模拟数据，RAG 计划分三步走：
+**A**: RAG 基础设施已在 2026-01-12 完成，采用 **ChromaDB + Sentence Transformers** 方案：
 
-1.  **Ingestion (入库)**:
-    *   使用 `LlamaIndex` 解析 PDF 研报和长新闻。
-    *   使用 `ChromaDB` (本地向量库) 存储 Embedding 向量。
+**1. 向量存储层 (`backend/knowledge/vector_store.py`)**:
+```python
+class VectorStore:
+    """ChromaDB 单例封装"""
+    # 延迟加载，避免启动时阻塞
+    def _get_embedding_fn(self):
+        # 使用多语言模型，支持中英文
+        self._embedding_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
-2.  **Retrieval (检索)**:
-    *   **Hybrid Search**: 结合关键词搜索（精确匹配股票代码）和语义搜索（匹配“增长潜力”、“风险因素”等概念）。
-    *   **Self-RAG**: 检索后让 LLM 评估相关性，只有相关性高的片段才作为 Context 输入。
+    def add_documents(self, collection_name, documents, metadatas, ids):
+        # 向量化并存入 ChromaDB
+        embeddings = self._embed_texts(documents)
+        collection.add(documents=documents, embeddings=embeddings, ...)
 
-3.  **Generation (生成)**:
-    *   将检索到的 Top-K 片段注入到 `ReportSystemPrompt` 中，生成带有精确引用来源的深度报告。
+    def query(self, collection_name, query_text, n_results=5):
+        # 相似度检索，返回 Top-K 结果
+        return collection.query(query_embeddings=query_embedding, n_results=n_results)
+```
+
+**2. RAG 引擎层 (`backend/knowledge/rag_engine.py`)**:
+```python
+class RAGEngine:
+    def chunk_text(self, text, chunk_size=512, chunk_overlap=50):
+        # 智能切片：句子边界检测 + 重叠窗口
+        # 支持中英文句子结束符（。！？.）
+
+    def ingest_document(self, collection_name, content, metadata):
+        # 切片 -> 向量化 -> 入库
+
+    def query_with_context(self, collection_name, query, top_k=5):
+        # 检索 -> 格式化为 LLM 可用的上下文字符串
+```
+
+**3. 应用场景**:
+- **DeepSearch 临时工作台**: 长文研报切片入库，任务结束后销毁
+- **用户长期记忆**: 持久化存储用户偏好（计划中）
 
 ---
 
@@ -157,20 +184,49 @@ flowchart LR
 
 ### Q7: 子 Agent (Sub-agents) 目前存在哪些缺陷？
 
-**A**: 虽然架构设计了 6 大专家 Agent，但目前成熟度参差不齐：
+**A**: 架构设计了 6 大专家 Agent，目前大部分已实现：
 
-| Agent | 状态 | 核心缺陷 | 改进计划 |
+| Agent | 状态 | 核心能力 | 改进计划 |
 |-------|------|----------|----------|
-| **PriceAgent** | ✅ 可用 | 仅支持基础行情，缺乏这种盘口/逐笔数据 | 接入 WebSocket 实时数据流 |
-| **NewsAgent** | ✅ 可用 | 依赖外部搜索 API，去重逻辑简单 | 增加 Cross-Validation (多源交叉验证) |
-| **DeepSearchAgent** | ⚠️ **Mock** | **当前是模拟实现** (返回假数据)，无真实长文阅读能力 | 接入 `Firecrawl` 抓取 + 向量化阅读 |
-| **MacroAgent** | ⚠️ 简易 | 仅关键词搜索，未对接 FRED/WorldBank 等专业库 | 集成专业宏观数据库 API |
-| **TechnicalAgent** | ❌ **缺位** | 代码框架未实现 | 引入 `TA-Lib` 计算 MA/RSI/MACD |
-| **FundamentalAgent**| ❌ **缺位** | 代码框架未实现 | 引入 `yfinance.financials` 进行杜邦分析 |
+| **PriceAgent** | ✅ 可用 | 多源回退行情查询 | 接入 WebSocket 实时数据流 |
+| **NewsAgent** | ✅ 可用 | 反思循环 + RSS + Finnhub | 增加 Cross-Validation (多源交叉验证) |
+| **TechnicalAgent** | ✅ 可用 | MA/RSI/MACD 技术指标 | 增加更多形态识别 |
+| **FundamentalAgent** | ✅ 可用 | PE/PB/现金流/杠杆分析 | 增加 DCF 估值模型 |
+| **DeepSearchAgent** | ✅ 可用 | 真实检索 + PDF + Self-RAG | 集成 RAGEngine 向量化 |
+| **MacroAgent** | ✅ 可用 | FRED API 宏观经济数据 | 增加更多经济指标 |
+| **RiskAgent** | ❌ **待实现** | VaR 计算、仓位诊断 | Phase 3 计划 |
 
 **架构风险**:
 *   **Supervisor 瓶颈**: 目前所有子 Agent 都通过 Supervisor 串行/并行调度，如果 Supervisor 逻辑出错 (如 JSON 解析失败)，整个分析链会断裂。
 *   **Context 丢失**: 子 Agent 之间尚未实现高效的 Memory 共享（如 TechnicalAgent 应该能看到 MacroAgent 的通胀结论）。
 
 ---
-*文档将持续更新，记录项目核心技术演进。*
+
+### Q8: MacroAgent 如何获取宏观经济数据？
+
+**A**: MacroAgent 在 2026-01-12 升级为真实 FRED API 数据驱动：
+
+**数据源**: 美联储经济数据库 (FRED - Federal Reserve Economic Data)
+
+**支持的指标**:
+| 指标 | Series ID | 说明 |
+|------|-----------|------|
+| CPI 通胀率 | CPIAUCSL | 消费者价格指数 |
+| 联邦基金利率 | FEDFUNDS | 美联储基准利率 |
+| GDP 增长率 | GDP | 国内生产总值 |
+| 失业率 | UNRATE | 劳动力市场指标 |
+| 10年期国债 | GS10 | 长期利率基准 |
+| 收益率曲线 | T10Y2Y | 10Y-2Y 利差 |
+
+**特性**:
+- 自动检测收益率倒挂（recession_warning）
+- 结构化输出多条 evidence 项
+- 支持 `FRED_API_KEY` 环境变量配置
+
+```python
+# backend/tools.py
+def get_fred_data(series_id: str = None) -> Dict[str, Any]:
+    """获取 FRED 宏观经济数据"""
+    # 支持单指标或全量获取
+    # 返回格式化数据 + recession_warning 标志
+```

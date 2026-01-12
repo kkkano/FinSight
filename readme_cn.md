@@ -425,31 +425,31 @@ FinSight 将从「单Agent+工具」升级为「多Agent协作+反思循环+IR�
 
 ## 📌 当前状态
 
-> **最后更新**: 2026-01-11 | **版本**: 0.5.3
+> **最后更新**: 2026-01-12 | **版本**: 0.5.4
 
 ### 当前进度
 
 | 模块 | 进度 | 说明 |
 |------|------|------|
 | **工具层** | ✅ 100% | 多源回退、缓存、熔断器 |
-| **Agent 层** | ✅ 95% | Technical/Fundamental/DeepSearch 已就绪，Macro 待升级 |
-| **协调层** | ✅ 90% | Supervisor 异步与流式已接入 /chat/stream |
+| **Agent 层** | ✅ 100% | 6 大 Agent 已就绪 (Price/News/Tech/Fund/Deep/Macro) |
+| **协调层** | ✅ 95% | Supervisor 异步与流式已接入 |
 | **Report 卡片** | ✅ 100% | 视觉与结构已对齐 design_concept_v2.html |
 | **流式输出** | ✅ 100% | 真正 token 流式 + 引用解析 |
+| **向量 RAG** | ✅ 90% | ChromaDB + Sentence Transformers 已就绪 |
 
 ### 已知问题
 
 | 问题 | 严重程度 | 状态 | 解决方案 |
 |------|----------|------|----------|
-| REPORT 意图边界（中文/无 ticker） | 🟡 中 | 观察中 | 继续优化规则与提示词 |
-| MacroAgent 仍使用 mock 宏观数据 | 🟡 中 | 待处理 | 接入 FRED + 宏观日历 |
-| 向量 RAG 管线缺失 | 🟡 中 | 待处理 | 引入 LlamaIndex + Chroma |
+| RAG 未集成 DeepSearch | 🟡 中 | 待处理 | 将 RAGEngine 接入 DeepSearchAgent |
+| RiskAgent 未实现 | 🟡 中 | 待处理 | Phase 3 计划 |
 
 ### 下一步计划
 
-1. **MacroAgent 升级（FRED）** - 宏观数据真实化
-2. **向量 RAG 基础** - LlamaIndex + Chroma 入库
-3. **Agent 进度指示器** - 前端展示各 Agent 状态
+1. **RAG + DeepSearch 集成** - 长文研报向量化检索
+2. **用户长期记忆** - 向量化存储用户偏好
+3. **RiskAgent 实现** - VaR 计算、仓位诊断
 4. **订阅提醒 MVP** - 订阅跟踪与触发体验
 
 > 详细项目状态和架构图请参阅 [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
