@@ -1,6 +1,6 @@
 # FinSight 开发优先级路线图
 > 📅 **制定日期**: 2026-01-09
-> 📅 **更新日期**: 2026-01-12
+> 📅 **更新日期**: 2026-01-13
 > 🎯 **目标**: 从当前状态到项目完工的最现实、最犀利的优先级排序
 
 ---
@@ -11,8 +11,8 @@
 |------|------|----------|
 | Phase 0 (基座) | ✅ 100% | 无 |
 | Phase 1 (Agent 团) | ✅ 100% | 核心 Agents 已齐 |
-| Phase 2 (深度研报) | 🟡 90% | RAG 集成 DeepSearch 待落地 |
-| Phase 3 (主动服务) | 🔵 5% | 订阅/告警能力尚未落地 |
+| Phase 2 (深度研报) | ✅ 95% | NEWS 子意图、ReportIR 优化完成 |
+| Phase 3 (主动服务) | 🟡 10% | 订阅/告警基础已上线 |
 
 ---
 
@@ -299,18 +299,34 @@ P3
 
 ---
 
-## 📌 结论（2026-01-12 更新）
+## 📌 结论（2026-01-13 更新）
 
 当前核心痛点转向"RAG 集成 DeepSearch + 用户长期记忆 + RiskAgent"。
-优先级应聚焦在 **RAG 集成 DeepSearch + 用户长期记忆 + RiskAgent 实现**，同时保持交互体验优化：
+
+**最新完成 (2026-01-13)**:
+- ✅ NEWS 子意图分类（区分"获取新闻"与"分析新闻影响"）
+- ✅ ReportIR 构建优化（Forum 完整分析解析）
+- ✅ 执行摘要提取（作为报告卡片摘要）
+- ✅ 文档同步更新（README/readme_cn/PROJECT_STATUS）
+
+**之前完成**:
 - ✅ MacroAgent 升级（FRED API）已完成（2026-01-12）
 - ✅ 向量 RAG 基础架构已完成（2026-01-12）
 - ✅ Agent 进度指示器已完成（2026-01-12）
-- /chat/stream 已完成 token 流、Supervisor 聚合与指代消解。
-- TechnicalAgent 与 FundamentalAgent 已补齐（2026-01-10）。
-- DeepSearchAgent 真实检索 + PDF + Self-RAG 已完成（2026-01-11）。
-- 前端 Report 卡片 UI 已对齐 design_concept_v2.html（2026-01-11）。
-- ReportIR Schema + Validator 已完成（2026-01-10）。
+- ✅ 多轮对话上下文管理已完成（2026-01-12）
+- ✅ /chat/stream 已完成 token 流、Supervisor 聚合与指代消解。
+- ✅ TechnicalAgent 与 FundamentalAgent 已补齐（2026-01-10）。
+- ✅ DeepSearchAgent 真实检索 + PDF + Self-RAG 已完成（2026-01-11）。
+- ✅ 前端 Report 卡片 UI 已对齐 design_concept_v2.html（2026-01-11）。
+- ✅ ReportIR Schema + Validator 已完成（2026-01-10）。
+
+**下一步重点**：
+| 优先级 | 任务 | 理由 |
+|--------|------|------|
+| **#1** | RAG 集成 DeepSearch | 长文研报向量化检索 |
+| **#2** | 用户长期记忆 | 向量化存储用户偏好 |
+| **#3** | RiskAgent 实现 | VaR 计算、仓位诊断 |
+| **#4** | 移动端适配 | 响应式 UI 优化 |
 
 ---
 
