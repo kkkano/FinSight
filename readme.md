@@ -420,32 +420,32 @@ For detailed technical design, code examples, and acceptance criteria, see full 
 
 ## 📌 Status
 
-> **Last Updated**: 2026-01-11 | **Version**: 0.5.3
+> **Last Updated**: 2026-01-12 | **Version**: 0.5.4
 
 ### Current Progress
 
 | Module | Progress | Notes |
 |--------|----------|-------|
-| **Tools Layer** | ?100% | Multi-source fallback, caching, circuit breaker |
-| **Agent Layer** | ?95% | Technical/Fundamental/DeepSearch ready; Macro upgrade pending |
-| **Orchestration** | ?90% | Supervisor async fixed; streaming enabled in /chat/stream |
-| **Report Card** | ?100% | Visuals aligned with design_concept_v2.html |
-| **Streaming Output** | ?100% | True token streaming + reference resolution in /chat/stream |
+| **Tools Layer** | ✅100% | Multi-source fallback, caching, circuit breaker |
+| **Agent Layer** | ✅100% | All 6 agents ready (Price/News/Tech/Fund/Deep/Macro) |
+| **Orchestration** | ✅95% | Supervisor async fixed; streaming enabled |
+| **Report Card** | ✅100% | Visuals aligned with design_concept_v2.html |
+| **Streaming Output** | ✅100% | True token streaming + reference resolution |
+| **Vector RAG** | ✅90% | ChromaDB + Sentence Transformers ready |
 
 ### Known Issues
 
 | Issue | Severity | Status | Solution |
 |-------|----------|--------|----------|
-| REPORT intent edge cases (CN/no ticker) | ?? Medium | Monitoring | Continue tuning rules + prompt clarity |
-| MacroAgent uses mock macro data | ?? Medium | Pending | Integrate FRED + macro calendars |
-| Vector RAG pipeline missing | ?? Medium | Pending | Add LlamaIndex + Chroma ingestion |
+| RAG not integrated with DeepSearch | ⚠️ Medium | Pending | Connect RAGEngine to DeepSearchAgent |
+| RiskAgent not implemented | ⚠️ Medium | Pending | Phase 3 planned |
 
 ### Next Steps
 
-1. **MacroAgent Upgrade (FRED)** - Real macro data pipeline
-2. **Vector RAG Foundation** - LlamaIndex + Chroma ingestion
-3. **Agent Progress Indicator** - show per-agent status in UI
-4. **Alert Subscription MVP** - wire alerts to actionable notifications
+1. **RAG + DeepSearch Integration** - Use RAGEngine for long document analysis
+2. **User Long-term Memory** - Vector store for user preferences
+3. **RiskAgent Implementation** - VaR calculation, position diagnostics
+4. **Alert Subscription MVP** - Wire alerts to actionable notifications
 
 > For detailed project status and architecture diagrams, see [docs/PROJECT_STATUS.md](./docs/PROJECT_STATUS.md)
 

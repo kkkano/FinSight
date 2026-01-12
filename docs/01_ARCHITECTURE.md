@@ -1,6 +1,6 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> 📅 **更新日期**: 2026-01-10
+> 📅 **更新日期**: 2026-01-12
 > 🎯 **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 
 ---
@@ -49,6 +49,11 @@ flowchart TB
             CB[CircuitBreaker]
             Alert[AlertSystem 🆕]
         end
+
+        subgraph Knowledge["知识检索层 (Phase 2) 🆕"]
+            VS[VectorStore<br/>(ChromaDB)]
+            RAG[RAGEngine<br/>(切片+检索)]
+        end
     end
 
     %% Data Flow
@@ -60,6 +65,10 @@ flowchart TB
     SUP --> PA & NA & TA & FA & RA
     PA & NA & TA & FA & RA --> ORC
     ORC --> Cache & CB
+
+    %% RAG Flow
+    DS --> RAG
+    RAG --> VS
 
     %% Forum Mechanism
     PA & NA & TA & FA & RA --"AgentOutput"--> FH
@@ -83,6 +92,7 @@ flowchart TB
 | **TechnicalAgent** | 技术分析师 | K线形态、指标背离 (MACD/RSI) | 结合图表数据，给出买卖点位 |
 | **FundamentalAgent** | 研究员 | 财报解读、估值模型 (DCF/PE) | 处理长文本，数据来源于 10-K/10-Q |
 | **RiskAgent** 🆕 | 风控官 | 仓位管理、VaR计算、止损建议 | **个性化**，基于用户风险偏好 (Phase 3) |
+| **MacroAgent** | 宏观分析师 | 宏观经济数据、FRED API | 实时 CPI/GDP/利率/失业率 (Phase 2 升级) |
 
 ### 2.2 首席投资官 (ForumHost)
 
@@ -134,7 +144,37 @@ sequenceDiagram
 *   **动态关注**：Watchlist（自选股）、持仓成本。
 *   **交互历史**：记住用户偏好的行业（"他喜欢科技股"）。
 
-### 3.3 主动服务 (Active Service)
+### 3.3 知识检索增强 (RAG - Phase 2) 🆕
+
+系统引入向量检索增强生成（RAG）能力，支持长文档分析和知识库构建：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    RAGEngine                            │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐ │
+│  │ chunk_text  │ -> │   ingest    │ -> │   query     │ │
+│  │ (切片+边界) │    │ (向量化入库)│    │ (相似度检索)│ │
+│  └─────────────┘    └─────────────┘    └─────────────┘ │
+│                            │                            │
+│                            v                            │
+│                    ┌─────────────┐                      │
+│                    │ VectorStore │                      │
+│                    │ (ChromaDB)  │                      │
+│                    └─────────────┘                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**核心组件**：
+- **VectorStore**: ChromaDB 封装，支持持久化和临时集合
+- **RAGEngine**: 文档切片（句子边界检测）+ 向量化入库 + 相似度检索
+- **Embedding**: `paraphrase-multilingual-MiniLM-L12-v2` 多语言模型
+
+**应用场景**：
+- DeepSearchAgent 长文研报分析
+- 用户记忆持久化存储
+- 历史对话上下文检索
+
+### 3.4 主动服务 (Active Service)
 
 从 Request-Response 转变为 Event-Driven：
 
@@ -181,6 +221,9 @@ sequenceDiagram
 | **缓存** | 内存 Dict | **Redis / SQLite** (持久化 KV) |
 | **监控** | Print日志 | **LangSmith** (全链路 Tracing) |
 | **风控** | 无 | **VaR / MaxDrawdown 计算引擎** |
+| **向量存储** 🆕 | 无 | **ChromaDB** (持久化向量数据库) |
+| **Embedding** 🆕 | 无 | **Sentence Transformers** (多语言本地模型) |
+| **宏观数据** 🆕 | 无 | **FRED API** (美联储经济数据) |
 
 ---
 
