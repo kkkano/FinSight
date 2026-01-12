@@ -86,19 +86,39 @@ class PriceAgent(BaseFinancialAgent):
         return None
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
-        # PriceAgent output is special: summary is usually just the price
-        # raw_data is the dict returned by tools
+        # PriceAgent output: raw_data can be dict OR string (from tools.py)
+        # Handle both cases for compatibility
 
-        price = raw_data.get("price", "N/A")
-        currency = raw_data.get("currency", "USD")
-
-        summary_text = f"The current price of {raw_data.get('ticker', 'UNKNOWN')} is {currency} {price}."
+        if isinstance(raw_data, dict):
+            # Dict format (structured data)
+            price = raw_data.get("price", "N/A")
+            currency = raw_data.get("currency", "USD")
+            ticker = raw_data.get("ticker", "UNKNOWN")
+            source = raw_data.get("source", "yfinance")
+            as_of = raw_data.get("as_of", datetime.now().isoformat())
+            fallback_used = raw_data.get("fallback_used", False)
+            summary_text = f"The current price of {ticker} is {currency} {price}."
+            evidence_text = str(raw_data)
+        elif isinstance(raw_data, str) and raw_data:
+            # String format from tools.py (e.g., "AAPL Current Price: $150.00 | Change: +$2.00 (+1.5%)")
+            summary_text = raw_data
+            source = "yfinance"
+            as_of = datetime.now().isoformat()
+            fallback_used = False
+            evidence_text = raw_data
+        else:
+            # Fallback for empty or None
+            summary_text = summary or "价格数据获取失败"
+            source = "unknown"
+            as_of = datetime.now().isoformat()
+            fallback_used = True
+            evidence_text = str(raw_data) if raw_data else "No data"
 
         evidence = [
             EvidenceItem(
-                text=str(raw_data),
-                source=raw_data.get("source", "unknown"),
-                timestamp=raw_data.get("as_of")
+                text=evidence_text,
+                source=source,
+                timestamp=as_of
             )
         ]
 
@@ -106,8 +126,8 @@ class PriceAgent(BaseFinancialAgent):
             agent_name=self.AGENT_NAME,
             summary=summary_text,
             evidence=evidence,
-            confidence=1.0 if not raw_data.get("fallback_used") else 0.8,
-            data_sources=[raw_data.get("source", "unknown")],
-            as_of=raw_data.get("as_of", datetime.now().isoformat()),
-            fallback_used=raw_data.get("fallback_used", False)
+            confidence=0.9 if not fallback_used else 0.5,
+            data_sources=[source],
+            as_of=as_of,
+            fallback_used=fallback_used
         )

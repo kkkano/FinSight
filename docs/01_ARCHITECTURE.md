@@ -1,87 +1,176 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> 📅 **更新日期**: 2026-01-12
+> 📅 **更新日期**: 2026-01-13
 > 🎯 **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
+> 🏗️ **架构模式**: Supervisor Agent (协调者模式)
 
 ---
 
 ## 一、架构全景图 (The Big Picture)
 
-FinSight 采用 **论坛式多 Agent 协作** 架构，模仿真实的金融投研团队运作模式。
+FinSight 采用 **Supervisor Agent 协调者模式**，实现业界标准的多 Agent 协作架构。
 
 ```mermaid
 flowchart TB
     subgraph Frontend["前端 (React + TS)"]
         UI[ChatList + StockChart]
-        Profile[UserProfile 🆕]
-        Diag[DiagnosticsPanel]
+        Profile[UserProfile]
+        Settings[Settings Modal<br/>模式切换]
     end
 
     subgraph Backend["后端 (FastAPI + LangGraph)"]
-        API["/chat API"]
+        API["/chat/supervisor API"]
 
-        subgraph MemoryLayer["记忆与画像层 (Phase 1.5)"]
-            UserMem[UserContext & Memory]
-            Watch[Watchlist Monitor]
+        subgraph SupervisorLayer["协调者层 (Supervisor Agent)"]
+            IC[IntentClassifier<br/>意图分类器]
+            SA[SupervisorAgent<br/>协调者]
         end
 
-        subgraph Agents["多Agent专家团 (Phase 1)"]
+        subgraph Agents["多Agent专家团"]
             PA[PriceAgent<br/>(行情专家)]
             NA[NewsAgent<br/>(舆情专家+反思)]
             TA[TechnicalAgent<br/>(技术分析师)]
             FA[FundamentalAgent<br/>(基本面研究员)]
-            RA[RiskAgent 🆕<br/>(风控官 Phase 3)]
-        end
-
-        subgraph OnDemand["按需调用层 (Phase 2)"]
             MA[MacroAgent<br/>(宏观分析)]
             DS[DeepSearchAgent<br/>(深度研报)]
         end
 
-        subgraph Orchestration["编排与决策"]
-            SUP[Supervisor<br/>(任务分发)]
+        subgraph Forum["决策层"]
             FH[ForumHost<br/>(首席投资官/冲突消解)]
         end
 
-        subgraph Infrastructure["基础设施 (Phase 0)"]
+        subgraph Infrastructure["基础设施"]
             ORC[ToolOrchestrator]
             Cache[KV Cache]
             CB[CircuitBreaker]
-            Alert[AlertSystem 🆕]
-        end
-
-        subgraph Knowledge["知识检索层 (Phase 2) 🆕"]
-            VS[VectorStore<br/>(ChromaDB)]
-            RAG[RAGEngine<br/>(切片+检索)]
         end
     end
 
     %% Data Flow
     UI --> API
-    API --> SUP
-    SUP --> UserMem
-    UserMem --> FH
-
-    SUP --> PA & NA & TA & FA & RA
-    PA & NA & TA & FA & RA --> ORC
-    ORC --> Cache & CB
-
-    %% RAG Flow
-    DS --> RAG
-    RAG --> VS
-
-    %% Forum Mechanism
-    PA & NA & TA & FA & RA --"AgentOutput"--> FH
+    API --> IC
+    IC -->|意图分类| SA
+    SA -->|简单意图| ORC
+    SA -->|复杂意图| PA & NA & TA & FA & MA & DS
+    PA & NA & TA & FA --"AgentOutput"--> FH
     FH --"ForumOutput"--> API
-
-    %% Background Jobs
-    Alert -.-> Watch
-    Watch -.-> UI
+    ORC --> Cache & CB
 ```
 
 ---
 
-## 二、核心角色定义
+## 二、Supervisor Agent 架构 (核心创新)
+
+### 2.1 设计理念
+
+**问题**: 传统的"直接 Tool Calling"模式存在以下问题：
+
+| 场景 | 不分类（直接Tool Calling） | 先分类再处理 |
+|------|---------------------------|-------------|
+| "你好" | 调用LLM + 传工具列表 = 贵 | 规则匹配直接回复 = 免费 |
+| "分析苹果" | LLM可能选错工具 | 明确走REPORT流程 |
+| 出错排查 | 不知道哪里错了 | 知道是哪个意图的问题 |
+
+**解决方案**: 三层混合意图分类架构
+
+```
+用户输入
+    ↓
+┌─────────────────────────────────────┐
+│ 第一层：规则匹配（快速通道）          │
+│ - "你好/帮助/退出" → 直接处理         │
+│ - 多 ticker → 自动识别为对比         │
+└─────────────────────────────────────┘
+    ↓ 没匹配到
+┌─────────────────────────────────────┐
+│ 第二层：Embedding相似度 + 关键词加权  │
+│ - 计算与各意图例句的相似度            │
+│ - 关键词命中 → 加权 +0.12           │
+│ - 相似度 >= 0.75 → 直接分类          │
+└─────────────────────────────────────┘
+    ↓ 置信度不够
+┌─────────────────────────────────────┐
+│ 第三层：LLM Router（兜底）           │
+│ - 把候选意图告诉LLM                  │
+│ - LLM做最终决策                      │
+└─────────────────────────────────────┘
+```
+
+### 2.2 IntentClassifier (意图分类器)
+
+**文件**: `backend/orchestration/intent_classifier.py`
+
+**关键设计**: 关键词不是用来"匹配"的，而是用来**加权/提升置信度**
+
+```python
+def _embedding_classify(self, query, query_lower, tickers):
+    # 1. 先用 embedding 算语义相似度
+    scores = self._embedding_classifier.compute_similarity(query)
+
+    # 2. 关键词命中则加分（不是直接决定）
+    for intent, keywords in KEYWORD_BOOST.items():
+        if any(kw in query_lower for kw in keywords):
+            scores[intent] += 0.12  # 加权，不是直接选择
+
+    # 3. 选最高分，置信度不够则调用 LLM
+    ...
+```
+
+**Embedding 模型**: `paraphrase-multilingual-MiniLM-L12-v2` (支持中英文，延迟加载)
+
+**方案对比**:
+
+| 方案 | 适用场景 | 准确率 | 成本 |
+|------|---------|--------|------|
+| 关键词匹配 | 快速通道、辅助加权 | 60-70% | 免费 |
+| Embedding相似度 | 主力方案 | 80-90% | 低 |
+| 微调分类模型 | 大规模生产 | 95%+ | 训练成本高 |
+| LLM Router | 兜底、复杂场景 | 90%+ | 高 |
+
+### 2.3 SupervisorAgent (协调者)
+
+**文件**: `backend/orchestration/supervisor_agent.py`
+
+**处理策略**:
+
+| 意图 | 处理方式 | 成本 |
+|------|---------|------|
+| GREETING | 规则直接回复 | 免费 |
+| PRICE/NEWS/SENTIMENT | 直接调用工具 | 低 |
+| TECHNICAL/FUNDAMENTAL/MACRO | 单Agent | 中 |
+| REPORT | 多Agent + Forum | 高 |
+| COMPARISON | 工具 | 中 |
+| SEARCH | LLM + 搜索 | 中 |
+
+### 2.4 NEWS 子意图分类 (Sub-intent Classification) 🆕
+
+NEWS 意图进一步细分为两种子意图：
+
+| 子意图 | 触发条件 | 处理方式 | 输出 |
+|--------|---------|---------|------|
+| `fetch` | 默认 | `_handle_news()` | 新闻列表 + 链接 |
+| `analyze` | 包含分析类关键词 | `_handle_news_analysis()` | 新闻摘要 + 市场影响 + 投资启示 + 风险提示 |
+
+**分析类关键词**: 分析、影响、解读、意味、评估、趋势、预测、利好、利空...
+
+```python
+# 示例：_classify_news_subintent()
+if any(kw in query for kw in ["分析", "影响", "解读", "预测"]):
+    return "analyze"  # 走深度分析
+return "fetch"  # 走原始新闻列表
+```
+
+### 2.5 多轮对话上下文管理 🆕
+
+系统支持跨轮对话的上下文感知：
+
+- **前端传递**: 最近 6 条消息作为 `history` 参数
+- **后端提取**: `_extract_context_info()` 提取股票代码和摘要
+- **智能应用**: 各 handler 根据上下文优化响应
+
+---
+
+## 三、核心角色定义
 
 ### 2.1 专家 Agent 团队 (The Specialists)
 

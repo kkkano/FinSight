@@ -38,6 +38,7 @@ export const ChatInput: React.FC = () => {
     draft,
     setDraft,
     currentTicker,
+    chatMode,  // 获取当前聊天模式
   } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +78,13 @@ export const ChatInput: React.FC = () => {
     }
     setInput('');
     setDraft('');
+
+    // 获取当前消息列表用于构建历史（在添加新消息之前）
+    const currentMessages = useStore.getState().messages;
+    const history = currentMessages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-6)  // 最近 6 条消息（3轮对话）
+      .map(m => ({ role: m.role, content: m.content }));
 
     addMessage({
       id: uuidv4(),
@@ -146,7 +154,11 @@ export const ChatInput: React.FC = () => {
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
           updateMessage(aiMsgId, { thinking: thinkingSteps });
-        }
+        },
+        // mode - 传递当前聊天模式
+        chatMode,
+        // history - 传递对话历史用于上下文理解
+        history
       );
     } catch (error) {
       updateMessage(aiMsgId, {
@@ -205,24 +217,31 @@ export const ChatInput: React.FC = () => {
         <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('推荐几只股票')}
+            onClick={() => setInput('NVDA 最新股价和技术面分析')}
             disabled={isChatLoading}
           >
-            快速试用：推荐几只股票
+            NVDA 技术分析
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('分析 AAPL 现在能不能买')}
+            onClick={() => setInput('对比 AAPL 和 MSFT 哪个更值得投资')}
             disabled={isChatLoading}
           >
-            示例：分析 AAPL
+            AAPL vs MSFT 对比
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('用中文生成拼多多综合分析报告')}
+            onClick={() => setInput('特斯拉最近有什么重大新闻')}
             disabled={isChatLoading}
           >
-            用中文生成拼多多综合分析报告
+            特斯拉新闻
+          </button>
+          <button
+            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            onClick={() => setInput('详细分析苹果公司，生成投资报告')}
+            disabled={isChatLoading}
+          >
+            苹果深度报告
           </button>
         </div>
       </div>

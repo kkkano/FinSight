@@ -28,14 +28,15 @@ export const createCancelToken = () => {
 };
 
 export const apiClient = {
-  // 发送聊天消息
-  async sendMessage(query: string, sessionId?: string): Promise<ChatResponse> {
+  // 发送聊天消息（支持协调者/传统模式）
+  async sendMessage(query: string, sessionId?: string, mode: 'smart' | 'traditional' = 'smart'): Promise<ChatResponse> {
     try {
-      const response = await api.post<ChatResponse>('/chat', {
+      const endpoint = mode === 'smart' ? '/chat/supervisor' : '/chat';
+      const response = await api.post<ChatResponse>(endpoint, {
         query,
         session_id: sessionId
       });
-      
+
       // 兼容性处理：如果后端返回结构不一致，确保前端不白屏
       if (!response.data) {
         throw new Error("Empty response from server");
@@ -165,6 +166,7 @@ export const apiClient = {
   },
 
   // 流式发送消息 - SSE 逐字输出
+  // mode: 'smart' 使用 supervisor 架构，'traditional' 使用传统流式
   async sendMessageStream(
     query: string,
     onToken: (token: string) => void,
@@ -172,12 +174,16 @@ export const apiClient = {
     onToolEnd?: () => void,
     onDone?: (report?: any, thinking?: any[], meta?: any) => void,  // Phase 2: 支持 report 数据
     onError?: (error: string) => void,
-    onThinking?: (step: any) => void
+    onThinking?: (step: any) => void,
+    mode: 'smart' | 'traditional' = 'smart',
+    history?: Array<{role: string, content: string}>  // 新增：对话历史
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/chat/stream`, {
+    // 根据模式选择端点：smart 模式使用 supervisor/stream，traditional 使用 chat/stream
+    const endpoint = mode === 'smart' ? '/chat/supervisor/stream' : '/chat/stream';
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, history }),
     });
 
     if (!response.ok) {

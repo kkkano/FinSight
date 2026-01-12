@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
@@ -19,44 +19,123 @@ class NewsAgent(BaseFinancialAgent):
 
         results = []
 
-        # 1. Try Finnhub News
-        if self.circuit_breaker.can_call("finnhub"):
+        # 1. 使用 get_company_news 获取新闻（包含多源回退：yfinance -> finnhub -> alpha_vantage -> search）
+        if self.circuit_breaker.can_call("news_api"):
             try:
-                # Assuming tools module has this method
-                finnhub_news = getattr(self.tools, "_fetch_with_finnhub_news", None)
-                if finnhub_news:
-                    news_items = finnhub_news(ticker)
-                    if news_items:
-                        results.extend(news_items)
-                        self.circuit_breaker.record_success("finnhub")
-            except Exception:
-                self.circuit_breaker.record_failure("finnhub")
+                get_news = getattr(self.tools, "get_company_news", None)
+                if get_news:
+                    news_text = get_news(ticker)
+                    # get_company_news 返回格式化的字符串，需要解析
+                    if news_text and isinstance(news_text, str) and "No " not in news_text:
+                        # 解析新闻文本为结构化数据
+                        parsed_news = self._parse_news_text(news_text, ticker)
+                        if parsed_news:
+                            results.extend(parsed_news)
+                            self.circuit_breaker.record_success("news_api")
+            except Exception as e:
+                print(f"[NewsAgent] get_company_news failed: {e}")
+                self.circuit_breaker.record_failure("news_api")
 
-        # 2. Try Tavily Search (Fallback or Supplement)
-        if not results or len(results) < 3:
-             if self.circuit_breaker.can_call("tavily"):
+        # 2. 如果新闻不足，尝试搜索补充
+        if len(results) < 3:
+            if self.circuit_breaker.can_call("search"):
                 try:
-                    tavily_news = getattr(self.tools, "_search_company_news", None)
-                    if tavily_news:
-                         # Tavily search for news
-                         t_results = tavily_news(f"{ticker} stock news")
-                         if t_results:
-                             results.extend(t_results)
-                             self.circuit_breaker.record_success("tavily")
-                except Exception:
-                    self.circuit_breaker.record_failure("tavily")
+                    search_func = getattr(self.tools, "search", None)
+                    if search_func:
+                        search_text = search_func(f"{ticker} stock news latest")
+                        if search_text and isinstance(search_text, str):
+                            parsed_search = self._parse_search_results(search_text, ticker)
+                            if parsed_search:
+                                results.extend(parsed_search)
+                                self.circuit_breaker.record_success("search")
+                except Exception as e:
+                    print(f"[NewsAgent] search fallback failed: {e}")
+                    self.circuit_breaker.record_failure("search")
 
         # Deduplicate
-        seen_urls = set()
+        seen_titles = set()
         unique_results = []
         for item in results:
-            url = item.get("url")
-            if url and url not in seen_urls:
-                seen_urls.add(url)
+            title = item.get("headline", item.get("title", ""))
+            if title and title not in seen_titles:
+                seen_titles.add(title)
                 unique_results.append(item)
 
-        self.cache.set(cache_key, unique_results, self.CACHE_TTL)
+        if unique_results:
+            self.cache.set(cache_key, unique_results, self.CACHE_TTL)
         return unique_results
+
+    def _parse_news_text(self, news_text: str, ticker: str) -> List[Dict[str, Any]]:
+        """解析 get_company_news 返回的格式化文本为结构化数据"""
+        import re
+        results = []
+
+        # 格式示例: "1. 2025-01-13 - [Title](url) - Source [Tags]"
+        lines = news_text.split('\n')
+        for line in lines:
+            if not line.strip() or line.startswith('Latest'):
+                continue
+
+            # 提取标题和URL
+            url_match = re.search(r'\[([^\]]+)\]\(([^)]+)\)', line)
+            if url_match:
+                title = url_match.group(1)
+                url = url_match.group(2)
+            else:
+                # 没有URL格式，直接提取文本
+                title = re.sub(r'^\d+\.\s*[\d-]*\s*-?\s*', '', line).strip()
+                url = ""
+
+            # 提取日期
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', line)
+            date_str = date_match.group(1) if date_match else ""
+
+            # 提取来源
+            source_match = re.search(r'-\s+([A-Za-z0-9\s]+)\s*\[', line)
+            source = source_match.group(1).strip() if source_match else "Unknown"
+
+            if title and len(title) > 10:
+                results.append({
+                    "headline": title,
+                    "title": title,
+                    "url": url,
+                    "source": source,
+                    "datetime": date_str,
+                    "published_at": date_str,
+                    "ticker": ticker
+                })
+
+        return results
+
+    def _parse_search_results(self, search_text: str, ticker: str) -> List[Dict[str, Any]]:
+        """解析搜索结果为新闻格式"""
+        import re
+        results = []
+
+        lines = search_text.split('\n')
+        for line in lines:
+            if not line.strip():
+                continue
+
+            # 提取URL
+            url_match = re.search(r'https?://[^\s\)]+', line)
+            url = url_match.group(0) if url_match else ""
+
+            # 提取标题（去除URL和标点）
+            title = re.sub(r'https?://[^\s]+', '', line)
+            title = re.sub(r'^\d+\.\s*', '', title).strip()
+            title = title[:150] if len(title) > 150 else title
+
+            if title and len(title) > 15:
+                results.append({
+                    "headline": title,
+                    "title": title,
+                    "url": url,
+                    "source": "search",
+                    "ticker": ticker
+                })
+
+        return results[:5]  # 限制数量
 
     async def _first_summary(self, data: List[Any]) -> str:
         if not data:
@@ -81,24 +160,27 @@ class NewsAgent(BaseFinancialAgent):
         evidence = []
         sources = set()
 
-        for item in raw_data:
-            source = item.get("source", "unknown")
-            sources.add(source)
-            evidence.append(EvidenceItem(
-                text=item.get("headline", item.get("title", "")),
-                source=source,
-                url=item.get("url"),
-                timestamp=item.get("datetime", item.get("published_at"))
-            ))
+        # Handle None or non-list raw_data
+        if raw_data and isinstance(raw_data, list):
+            for item in raw_data:
+                if isinstance(item, dict):
+                    source = item.get("source", "unknown")
+                    sources.add(source)
+                    evidence.append(EvidenceItem(
+                        text=item.get("headline", item.get("title", "")),
+                        source=source,
+                        url=item.get("url"),
+                        timestamp=item.get("datetime", item.get("published_at"))
+                    ))
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
             evidence=evidence,
-            confidence=0.8 if raw_data else 0.1,
-            data_sources=list(sources),
+            confidence=0.8 if evidence else 0.1,
+            data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
-            fallback_used=False
+            fallback_used=not bool(evidence)
         )
 
     async def analyze_stream(self, query: str, ticker: str):

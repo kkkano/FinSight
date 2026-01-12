@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, constr, field_validator
 import uvicorn
 import os
 import sys
@@ -11,6 +10,13 @@ from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.streaming import stream_report_sse, stream_supervisor_sse
+from backend.api.schemas import (
+    ChatRequest, SubscriptionRequest, UnsubscribeRequest,
+    ChatResponse, SupervisorResponse, HealthResponse, RootResponse,
+    DiagnosticsResponse, UserProfileResponse, SubscriptionResponse,
+    SubscriptionListResponse, StockDataResponse, KlineResponse,
+    ConfigResponse, ChartDetectResponse, ChartDataResponse,
+)
 # 将项目根目录添加到 sys.path
 # 这样可以确保 backend, config, langchain_agent 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,48 +57,6 @@ try:
 except Exception as e:
     print(f"[Init] Error initializing MemoryService: {e}")
     memory_service = None
-
-# Pydantic Models
-class ChatRequest(BaseModel):
-    # 至少 1 个字符，避免空查询直接进入主链路
-    query: constr(min_length=1)  # type: ignore[valid-type]
-    session_id: str = None
-
-class AnalysisRequest(BaseModel):
-    query: str
-    user_id: str = "default_user"
-
-
-class SubscriptionRequest(BaseModel):
-    email: constr(min_length=3)  # type: ignore[valid-type]
-    ticker: constr(min_length=1)  # type: ignore[valid-type]
-    alert_types: list[str] | None = None
-    price_threshold: float | None = None
-
-    @field_validator("alert_types", mode="before")
-    def default_alert_types(cls, v):
-        return v or ["price_change", "news"]
-
-    @field_validator("alert_types")
-    def validate_alert_types(cls, v):
-        allowed = {"price_change", "news", "report"}
-        invalid = [x for x in v if x not in allowed]
-        if invalid:
-            raise ValueError(f"unsupported alert_types: {invalid}. allowed: {sorted(allowed)}")
-        return v
-
-    @field_validator("price_threshold")
-    def validate_price_threshold(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("price_threshold must be positive")
-        return v
-
-
-class UnsubscribeRequest(BaseModel):
-    email: constr(min_length=3)  # type: ignore[valid-type]
-    ticker: constr(min_length=1) | None = None
-
-# SubscribeRequest 已移除，改用 dict
 
 # 初始化 Agent
 try:
@@ -262,7 +226,7 @@ async def remove_watchlist(request: dict):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/")
+@app.get("/", response_model=RootResponse)
 def read_root():
     """
     根路径健康检查，附带简要说明。
@@ -286,17 +250,38 @@ def health_check():
     # 检查 Agent 状态
     if agent:
         components["agent"] = {"status": "ok", "available": True}
-        # 检查子 Agent
+
+        # 检查 LLM
+        has_llm = hasattr(agent, "llm") and agent.llm is not None
+        components["llm"] = {"status": "ok" if has_llm else "unavailable"}
+
+        # 检查 Orchestrator
+        has_orchestrator = hasattr(agent, "orchestrator") and agent.orchestrator is not None
+        components["orchestrator"] = {"status": "ok" if has_orchestrator else "unavailable"}
+
+        # 检查 Orchestrator 内部组件
+        if has_orchestrator:
+            has_cache = hasattr(agent.orchestrator, 'cache') and agent.orchestrator.cache is not None
+            has_tools = hasattr(agent.orchestrator, 'tools_module') and agent.orchestrator.tools_module is not None
+            components["cache"] = {"status": "ok" if has_cache else "unavailable"}
+            components["tools_module"] = {"status": "ok" if has_tools else "unavailable"}
+
+        # 检查子 Agent（只有 llm + orchestrator + cache + tools_module 都存在才会初始化）
         if hasattr(agent, "news_agent") and agent.news_agent:
             components["news_agent"] = {"status": "ok"}
+        else:
+            components["news_agent"] = {"status": "unavailable", "reason": "not initialized"}
+
         if hasattr(agent, "price_agent") and agent.price_agent:
             components["price_agent"] = {"status": "ok"}
-        # 检查 Orchestrator
-        if hasattr(agent, "orchestrator") and agent.orchestrator:
-            components["orchestrator"] = {"status": "ok"}
-        # 检查 LLM
-        if hasattr(agent, "llm") and agent.llm:
-            components["llm"] = {"status": "ok"}
+        else:
+            components["price_agent"] = {"status": "unavailable", "reason": "not initialized"}
+
+        # 检查 Supervisor
+        if hasattr(agent, "supervisor") and agent.supervisor:
+            components["supervisor"] = {"status": "ok"}
+        else:
+            components["supervisor"] = {"status": "unavailable"}
     else:
         status = "degraded"
         components["agent"] = {"status": "error", "available": False}
@@ -314,7 +299,7 @@ def health_check():
     }
 
 
-@app.get("/diagnostics/langgraph")
+@app.get("/diagnostics/langgraph", response_model=DiagnosticsResponse)
 def diagnostics_langgraph():
     """
     LangGraph 报告 Agent 的自检与描述。
@@ -336,7 +321,7 @@ def diagnostics_langgraph():
         raise HTTPException(status_code=500, detail=f"diagnostics failed: {exc}")
 
 
-@app.get("/diagnostics/orchestrator")
+@app.get("/diagnostics/orchestrator", response_model=DiagnosticsResponse)
 def diagnostics_orchestrator():
     """
     返回 Orchestrator 的聚合健康信息：总请求、缓存命中、回退次数、按源统计。
@@ -362,7 +347,7 @@ async def chat_endpoint(request: ChatRequest):
     """
     if not agent:
         raise HTTPException(status_code=500, detail="Agent not initialized")
-    
+
     try:
         # 检查是否请求思考过程
         include_thinking = request.query.startswith("[THINKING]") if hasattr(request, 'query') else False
@@ -370,13 +355,13 @@ async def chat_endpoint(request: ChatRequest):
             query = request.query.replace("[THINKING]", "").strip()
         else:
             query = request.query
-        
+
         # 调用 Agent 的 chat 方法（捕获思考过程）
         if hasattr(agent, "chat_async"):
             result = await agent.chat_async(query, capture_thinking=True)
         else:
             result = agent.chat(query, capture_thinking=True)
-        
+
         # 构造符合前端预期的响应格式
         return {
             "success": result.get('success', True),
@@ -397,6 +382,136 @@ async def chat_endpoint(request: ChatRequest):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat/supervisor")
+async def chat_supervisor_endpoint(request: ChatRequest):
+    """
+    协调者模式对话接口 - Supervisor Agent 架构
+    意图分类(规则+LLM) → Supervisor协调 → Worker Agents → Forum综合
+    """
+    if not agent or not agent.llm:
+        raise HTTPException(status_code=500, detail="Agent or LLM not initialized")
+
+    try:
+        from backend.orchestration.supervisor_agent import SupervisorAgent
+        from backend.conversation.router import extract_tickers
+
+        # 提取 tickers
+        tickers_result = extract_tickers(request.query)
+        # extract_tickers 返回 dict，需要提取 tickers 列表
+        tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
+
+        # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
+        tools_module = None
+        cache = None
+        circuit_breaker = None
+        if agent.orchestrator:
+            tools_module = getattr(agent.orchestrator, 'tools_module', None)
+            cache = getattr(agent.orchestrator, 'cache', None)
+            circuit_breaker = getattr(agent.orchestrator, 'circuit_breaker', None)
+        if not tools_module:
+            import backend.tools as tools_module
+
+        # 创建 Supervisor Agent
+        supervisor = SupervisorAgent(
+            llm=agent.llm,
+            tools_module=tools_module,
+            cache=cache,
+            circuit_breaker=circuit_breaker
+        )
+
+        # 执行
+        result = await supervisor.process(request.query, tickers)
+
+        return {
+            "success": result.success,
+            "response": result.response,
+            "intent": result.intent.value if result.intent else None,
+            "classification": {
+                "method": result.classification.method if result.classification else None,
+                "confidence": result.classification.confidence if result.classification else None,
+            } if result.classification else None,
+            "session_id": request.session_id or "new_session",
+        }
+
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 保留旧端点兼容
+@app.post("/chat/smart")
+async def chat_smart_endpoint(request: ChatRequest):
+    """兼容旧接口，重定向到 supervisor"""
+    return await chat_supervisor_endpoint(request)
+
+
+@app.post("/chat/supervisor/stream")
+async def chat_supervisor_stream_endpoint(request: ChatRequest):
+    """
+    协调者模式流式接口 - 实时报告意图分类和执行进度
+    支持多轮对话上下文
+    """
+    if not agent or not agent.llm:
+        raise HTTPException(status_code=500, detail="Agent or LLM not initialized")
+
+    from backend.orchestration.supervisor_agent import SupervisorAgent
+    from backend.conversation.router import extract_tickers
+
+    # 提取 tickers
+    tickers_result = extract_tickers(request.query)
+    # extract_tickers 返回 dict，需要提取 tickers 列表
+    tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
+
+    # 构建对话上下文
+    conversation_context = None
+    if request.history:
+        conversation_context = [
+            {"role": msg.role, "content": msg.content}
+            for msg in request.history[-6:]  # 最近 6 条消息（3轮对话）
+        ]
+
+    # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
+    tools_module = None
+    cache = None
+    circuit_breaker = None
+    if agent.orchestrator:
+        tools_module = getattr(agent.orchestrator, 'tools_module', None)
+        cache = getattr(agent.orchestrator, 'cache', None)
+        circuit_breaker = getattr(agent.orchestrator, 'circuit_breaker', None)
+    if not tools_module:
+        import backend.tools as tools_module
+
+    # 创建 Supervisor Agent
+    supervisor = SupervisorAgent(
+        llm=agent.llm,
+        tools_module=tools_module,
+        cache=cache,
+        circuit_breaker=circuit_breaker
+    )
+
+    async def generate():
+        async for chunk in supervisor.process_stream(request.query, tickers, conversation_context=conversation_context):
+            yield f"data: {chunk}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+# 保留旧流式端点兼容
+@app.post("/chat/smart/stream")
+async def chat_smart_stream_endpoint(request: ChatRequest):
+    """兼容旧接口，重定向到 supervisor/stream"""
+    return await chat_supervisor_stream_endpoint(request)
+
 
 @app.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
@@ -743,34 +858,48 @@ async def chat_stream_endpoint(request: ChatRequest):
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
         )
 
-@app.post("/api/chart/detect")
+@app.post("/api/chart/detect", response_model=ChartDetectResponse)
 async def detect_chart_type(request: dict):
     """
     智能检测用户查询需要的图表类型
     """
     if not ChartTypeDetector:
-        return {"success": False, "error": "Chart detector not available"}
-    
+        return {
+            "success": False,
+            "should_generate": False,
+            "chart_type": "none",
+            "data_dimension": "none",
+            "confidence": 0.0,
+            "reason": "Chart detector not available"
+        }
+
     try:
         query = request.get('query', '')
         ticker = request.get('ticker')
-        
+
         result = ChartTypeDetector.detect_chart_type(query, ticker)
         should_generate = ChartTypeDetector.should_generate_chart(query)
-        
+
         return {
             "success": True,
             "should_generate": should_generate,
-            "chart_type": result['chart_type'],
-            "data_dimension": result['data_dimension'],
-            "confidence": result['confidence'],
-            "reason": result['reason']
+            "chart_type": result.get('chart_type') or "none",
+            "data_dimension": result.get('data_dimension') or "none",
+            "confidence": result.get('confidence', 0.0) or 0.0,
+            "reason": result.get('reason') or ""
         }
     except Exception as e:
         traceback.print_exc()
-        return {"success": False, "error": str(e)}
+        return {
+            "success": False,
+            "should_generate": False,
+            "chart_type": "none",
+            "data_dimension": "none",
+            "confidence": 0.0,
+            "reason": str(e)
+        }
 
-@app.post("/api/chat/add-chart-data")
+@app.post("/api/chat/add-chart-data", response_model=ChartDataResponse)
 async def add_chart_data(request: dict):
     """
     将图表数据摘要加入聊天上下文
@@ -803,8 +932,24 @@ async def add_chart_data(request: dict):
 
 @app.get("/api/stock/price/{ticker}")
 def get_price(ticker: str):
+    """获取股票价格（带缓存，TTL=60秒）"""
     try:
+        # 尝试从缓存获取
+        if agent and agent.orchestrator:
+            cache_key = f"price:{ticker}"
+            cached_data = agent.orchestrator.cache.get(cache_key)
+            if cached_data is not None:
+                print(f"[API] 从缓存获取价格: {ticker}")
+                return {"ticker": ticker, "data": cached_data, "cached": True}
+
+        # 缓存未命中，调用工具获取
         price_info = get_stock_price(ticker)
+
+        # 存入缓存（TTL=60秒）
+        if agent and agent.orchestrator and price_info:
+            agent.orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
+            print(f"[API] 价格已缓存: {ticker}")
+
         return {"ticker": ticker, "data": price_info}
     except Exception as e:
         return {"error": str(e)}
@@ -835,7 +980,7 @@ def get_financials_summary(ticker: str):
     except Exception as e:
         return {"ticker": ticker, "error": str(e)}
 
-@app.get("/api/stock/kline/{ticker}")
+@app.get("/api/stock/kline/{ticker}", response_model=KlineResponse)
 def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
     """
     获取 K 线图数据
@@ -954,7 +1099,7 @@ async def unsubscribe_email(request: UnsubscribeRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/subscriptions")
+@app.get("/api/subscriptions", response_model=SubscriptionListResponse)
 async def get_subscriptions(email: str = None):
     """
     获取订阅列表
@@ -977,7 +1122,7 @@ async def get_subscriptions(email: str = None):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/config")
+@app.get("/api/config", response_model=ConfigResponse)
 async def get_config():
     """
     获取用户配置（从 user_config.json 读取）
