@@ -51,6 +51,11 @@ User Query → IntentClassifier (Rule + Embedding + LLM) → SupervisorAgent
 - **Agent Contribution Tracking**: See which Agent provided each insight
 - **Confidence Scoring**: AI confidence level with evidence sources
 - **Citation Links**: Click to view original sources
+- **Citation Confidence & Freshness**: Evidence includes confidence score and freshness hours
+- **Structured Fallbacks**: News/Macro fallbacks emit structured fields to keep reports stable
+- **Structured News Schema**: get_company_news returns structured items; handlers format for display
+- **Safe DeepSearch Retrieval**: SSRF guardrails and retry on document fetch
+- **Dynamic DeepSearch Queries**: query templates adapt to intent keywords
 
 ### Smart Intent Classification
 - **3-Layer Hybrid System**: Rule matching → Embedding similarity → LLM fallback
@@ -181,7 +186,7 @@ graph LR
 |------|-------------|--------------|
 | `get_stock_price` | Real-time quote with fallback | yfinance → Finnhub → Alpha Vantage → Web |
 | `get_company_info` | Company fundamentals | yfinance |
-| `get_company_news` | Latest headlines | Reuters RSS + Bloomberg RSS + Finnhub |
+| `get_company_news` | Latest headlines (structured list) | Reuters RSS + Bloomberg RSS + Finnhub |
 | `search` | Web search | Exa → Tavily → Wikipedia → DuckDuckGo |
 | `get_market_sentiment` | Fear & Greed index | CNN |
 | `get_economic_events` | Macro calendar | Exa search |
@@ -227,6 +232,12 @@ Open `http://localhost:5173` in your browser.
 ```bash
 curl http://localhost:8000/health
 # {"status": "healthy"}
+```
+
+### 4. Testing
+
+```bash
+pytest backend/tests -q
 ```
 
 ---

@@ -78,6 +78,11 @@ async def test_macro_agent():
     mock_llm = MagicMock()
     mock_cache = MagicMock()
     mock_tools = MagicMock()
+    mock_tools.get_fred_data.return_value = {
+        "fed_rate": 5.0,
+        "fed_rate_formatted": "5.0%",
+        "cpi_formatted": "3.2%",
+    }
 
     agent = MacroAgent(mock_llm, mock_cache, mock_tools)
 
@@ -88,7 +93,23 @@ async def test_macro_agent():
     assert result.agent_name == "macro"
     # Ensure evidence is collected (even if mocked)
     if result.evidence:
-        assert result.evidence[0].source == "FRED"
+        assert result.evidence[0].source.startswith("FRED")
+
+@pytest.mark.asyncio
+async def test_macro_agent_fallback_structured():
+    mock_llm = MagicMock()
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    mock_tools.get_fred_data.side_effect = Exception("FRED down")
+    mock_tools.search.return_value = "fallback text"
+
+    agent = MacroAgent(mock_llm, mock_cache, mock_tools)
+    result = await agent.research("inflation analysis", "N/A")
+
+    assert "搜索回退" in result.summary
+    assert "Web Search" in result.data_sources
+    assert result.evidence is not None
+    assert len(result.evidence) > 0
 
 @pytest.mark.asyncio
 async def test_supervisor_integration_phase2():
@@ -126,6 +147,13 @@ async def test_supervisor_integration_phase2():
     supervisor.agents["macro"].research.assert_called()
     supervisor.agents["technical"].research.assert_called()
     supervisor.agents["fundamental"].research.assert_called()
+
+
+def test_deep_search_queries_dynamic():
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    queries = agent._build_queries("valuation risk", "AAPL")
+    assert any("risk factors" in q for q in queries)
+    assert any("valuation model" in q for q in queries)
 
 if __name__ == "__main__":
     asyncio.run(test_deep_search_agent())

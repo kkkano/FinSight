@@ -9,6 +9,7 @@ so the tools can be bound to LangGraph/LCEL pipelines without extra glue code.
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+import json
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -91,7 +92,10 @@ def get_company_news(ticker: str) -> str:
     """Retrieve the latest company or index headlines, ordered by recency."""
 
     try:
-        return _get_company_news(ticker)
+        news = _get_company_news(ticker)
+        if isinstance(news, list):
+            return json.dumps(news, ensure_ascii=False)
+        return str(news)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_company_news failed: {exc}"
 

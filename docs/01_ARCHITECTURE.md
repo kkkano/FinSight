@@ -1,9 +1,15 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> 📅 **更新日期**: 2026-01-13
+> 📅 **更新日期**: 2026-01-20
 > 🎯 **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 > 🏗️ **架构模式**: Supervisor Agent (协调者模式)
 
+> 🧩 **近期同步**: ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）。
+> 🧭 **近期同步**: News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）。
+> 🧱 **近期同步**: get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）。
+> 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
+> 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
+> 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
 ---
 
 ## 一、架构全景图 (The Big Picture)
@@ -13,36 +19,36 @@ FinSight 采用 **Supervisor Agent 协调者模式**，实现业界标准的多 
 ```mermaid
 flowchart TB
     subgraph Frontend["前端 (React + TS)"]
-        UI[ChatList + StockChart]
-        Profile[UserProfile]
-        Settings[Settings Modal<br/>模式切换]
+        UI["ChatList + StockChart"]
+        Profile["UserProfile"]
+        Settings["Settings Modal<br/>模式切换"]
     end
 
     subgraph Backend["后端 (FastAPI + LangGraph)"]
         API["/chat/supervisor API"]
 
         subgraph SupervisorLayer["协调者层 (Supervisor Agent)"]
-            IC[IntentClassifier<br/>意图分类器]
-            SA[SupervisorAgent<br/>协调者]
+            IC["IntentClassifier<br/>意图分类器"]
+            SA["SupervisorAgent<br/>协调者"]
         end
 
         subgraph Agents["多Agent专家团"]
-            PA[PriceAgent<br/>(行情专家)]
-            NA[NewsAgent<br/>(舆情专家+反思)]
-            TA[TechnicalAgent<br/>(技术分析师)]
-            FA[FundamentalAgent<br/>(基本面研究员)]
-            MA[MacroAgent<br/>(宏观分析)]
-            DS[DeepSearchAgent<br/>(深度研报)]
+            PA["PriceAgent<br/>(行情专家)"]
+            NA["NewsAgent<br/>(舆情专家+反思)"]
+            TA["TechnicalAgent<br/>(技术分析师)"]
+            FA["FundamentalAgent<br/>(基本面研究员)"]
+            MA["MacroAgent<br/>(宏观分析)"]
+            DS["DeepSearchAgent<br/>(深度研报)"]
         end
 
         subgraph Forum["决策层"]
-            FH[ForumHost<br/>(首席投资官/冲突消解)]
+            FH["ForumHost<br/>(首席投资官/冲突消解)"]
         end
 
         subgraph Infrastructure["基础设施"]
-            ORC[ToolOrchestrator]
-            Cache[KV Cache]
-            CB[CircuitBreaker]
+            ORC["ToolOrchestrator"]
+            Cache["KV Cache"]
+            CB["CircuitBreaker"]
         end
     end
 
@@ -51,10 +57,24 @@ flowchart TB
     API --> IC
     IC -->|意图分类| SA
     SA -->|简单意图| ORC
-    SA -->|复杂意图| PA & NA & TA & FA & MA & DS
-    PA & NA & TA & FA --"AgentOutput"--> FH
-    FH --"ForumOutput"--> API
-    ORC --> Cache & CB
+    SA -->|复杂意图| PA
+    SA -->|复杂意图| NA
+    SA -->|复杂意图| TA
+    SA -->|复杂意图| FA
+    SA -->|复杂意图| MA
+    SA -->|复杂意图| DS
+
+    PA -->|AgentOutput| FH
+    NA -->|AgentOutput| FH
+    TA -->|AgentOutput| FH
+    FA -->|AgentOutput| FH
+    MA -->|AgentOutput| FH
+    DS -->|AgentOutput| FH
+
+    FH -->|ForumOutput| API
+    ORC --> Cache
+    ORC --> CB
+
 ```
 
 ---
@@ -292,6 +312,17 @@ sequenceDiagram
       "type": "conflict",
       "content": "技术面显示短期超买，但基本面估值仍合理",
       "agents": ["TechnicalAgent", "FundamentalAgent"]
+    }
+  ],
+  "citations": [
+    {
+      "source_id": "DS-1",
+      "title": "Apple earnings transcript",
+      "url": "https://example.com",
+      "snippet": "Management highlighted AI-driven demand...",
+      "published_date": "2026-01-20",
+      "confidence": 0.86,
+      "freshness_hours": 6.5
     }
   ],
   "actionable_advice": "建议分批建仓，回调至 200 日均线时加仓",

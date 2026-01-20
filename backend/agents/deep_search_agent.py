@@ -1,12 +1,16 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from urllib.parse import urlparse
+import ipaddress
+import socket
 import asyncio
 import json
 import os
 import re
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 try:
@@ -17,6 +21,39 @@ except ImportError:
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
+
+
+def _is_safe_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    lowered = host.lower()
+    if lowered in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return False
+    if lowered.endswith(".local") or lowered.endswith(".internal"):
+        return False
+    try:
+        ip = ipaddress.ip_address(lowered)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+        return True
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+        for info in infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return False
+    except Exception:
+        return False
+    return True
 
 
 class DeepSearchAgent(BaseFinancialAgent):
@@ -34,6 +71,24 @@ class DeepSearchAgent(BaseFinancialAgent):
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
+        self._session: Optional[requests.Session] = None
+
+    def _get_session(self) -> requests.Session:
+        if self._session:
+            return self._session
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET", "HEAD"],
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session = requests.Session()
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        self._session = session
+        return session
 
     async def research(self, query: str, ticker: str) -> AgentOutput:
         """
@@ -244,11 +299,38 @@ class DeepSearchAgent(BaseFinancialAgent):
         base = query.strip()
         if ticker and ticker not in base:
             base = f"{ticker} {base}".strip()
-        return [
-            f"{base} investment thesis pdf",
-            f"{base} earnings transcript analysis",
-            f"{base} competitive landscape risks",
-        ]
+
+        query_lower = query.lower()
+        topics: List[str] = []
+        if any(k in query_lower for k in ["risk", "downside", "bear", "风险", "利空"]):
+            topics.append("risk factors")
+        if any(k in query_lower for k in ["valuation", "估值", "multiple", "dcf", "pe"]):
+            topics.append("valuation model")
+        if any(k in query_lower for k in ["competition", "competitor", "竞争", "对手"]):
+            topics.append("competitive landscape")
+        if any(k in query_lower for k in ["earnings", "财报", "业绩", "guidance", "指引"]):
+            topics.append("earnings transcript")
+        if any(k in query_lower for k in ["industry", "sector", "产业", "行业"]):
+            topics.append("industry report")
+
+        if not topics:
+            topics = [
+                "investment thesis pdf",
+                "earnings transcript analysis",
+                "competitive landscape risks",
+            ]
+        else:
+            if "investment thesis pdf" not in topics:
+                topics.append("investment thesis pdf")
+
+        seen: set[str] = set()
+        queries: List[str] = []
+        for topic in topics:
+            if topic in seen:
+                continue
+            seen.add(topic)
+            queries.append(f"{base} {topic}".strip())
+        return queries[:3]
 
     def _search_web(self, query: str) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
@@ -363,11 +445,18 @@ class DeepSearchAgent(BaseFinancialAgent):
         url = item.get("url", "")
         if not url:
             return None
+        if not _is_safe_url(url):
+            print(f"[DeepSearch] Blocked unsafe url: {url}")
+            return None
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; FinSightBot/0.1)",
         }
         try:
-            response = requests.get(url, headers=headers, timeout=15)
+            session = self._get_session()
+            response = session.get(url, headers=headers, timeout=15, allow_redirects=True)
+            if response.url and not _is_safe_url(response.url):
+                print(f"[DeepSearch] Blocked unsafe redirect: {response.url}")
+                return None
             response.raise_for_status()
         except Exception as exc:
             print(f"[DeepSearch] Fetch failed: {exc}")

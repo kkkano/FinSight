@@ -51,6 +51,11 @@ FinSight AI 是一个**对话式、多智能体金融研究助手**，核心特�
 - **Agent 贡献追踪**：显示每个洞见来自哪个 Agent
 - **置信度评分**：AI 置信度 + 证据来源说明
 - **引用链接**：点击查看原始来源
+- **引用可信度与时效**：证据包含 confidence 与 freshness_hours 字段
+- **结构化回退**：News/Macro 回退仍输出结构化字段，保证报告稳定
+- **结构化新闻契约**：get_company_news 返回结构化列表，业务层统一格式化展示
+- **安全检索**：DeepSearch 加入 SSRF 防护与重试机制
+- **动态检索模板**：DeepSearch 根据意图关键词生成查询模板
 
 ### 智能意图分类
 - **三层混合系统**：规则匹配 → Embedding 相似度 → LLM 兜底
@@ -181,7 +186,7 @@ graph LR
 |------|------|--------|
 | `get_stock_price` | 实时报价 + 多源回退 | yfinance → Finnhub → Alpha Vantage → Web |
 | `get_company_info` | 公司基本面 | yfinance |
-| `get_company_news` | 最新新闻 | Reuters RSS + Bloomberg RSS + Finnhub |
+| `get_company_news` | 最新新闻（结构化列表） | Reuters RSS + Bloomberg RSS + Finnhub |
 | `search` | 网络搜索 | Exa → Tavily → Wikipedia → DuckDuckGo |
 | `get_market_sentiment` | 恐惧贪婪指数 | CNN |
 | `get_economic_events` | 宏观日历 | Exa 搜索 |
@@ -227,6 +232,12 @@ npm run dev
 ```bash
 curl http://localhost:8000/health
 # {"status": "healthy"}
+```
+
+### 4. 测试
+
+```bash
+pytest backend/tests -q
 ```
 
 ---

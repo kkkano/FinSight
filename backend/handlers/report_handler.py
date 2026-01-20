@@ -114,6 +114,21 @@ class ReportHandler:
             "trace": getattr(output, "trace", []),
         }
 
+    def _format_news_payload(self, news_data: Any, ticker: str) -> str:
+        if not news_data:
+            return ""
+        if isinstance(news_data, list):
+            formatter = getattr(self.tools_module, "format_news_items", None) if self.tools_module else None
+            if formatter:
+                return formatter(news_data, title=f"Latest News ({ticker})")
+            lines = []
+            for item in news_data:
+                if isinstance(item, dict):
+                    title = item.get("headline") or item.get("title") or "No title"
+                    lines.append(f"- {title}")
+            return "\n".join(lines)
+        return str(news_data)
+
     def _build_citations_from_evidence(self, evidence: List[Any], prefix: str) -> List[Dict[str, Any]]:
         citations: List[Dict[str, Any]] = []
         seen = set()
@@ -124,20 +139,34 @@ class ReportHandler:
                 title = ev.get("title") or ev.get("text") or "Source"
                 snippet = ev.get("text") or ""
                 published_date = ev.get("timestamp") or ""
+                confidence = ev.get("confidence", 0.7)
             else:
                 url = getattr(ev, "url", None) or ""
                 title = getattr(ev, "title", None) or getattr(ev, "text", "") or "Source"
                 snippet = getattr(ev, "text", "") or ""
                 published_date = getattr(ev, "timestamp", "") or ""
+                confidence = getattr(ev, "confidence", 0.7)
             if not url or url in seen:
                 continue
             seen.add(url)
+            # Calculate freshness_hours from published_date
+            freshness_hours = 24.0  # default
+            if published_date:
+                try:
+                    from datetime import datetime
+                    pub_dt = datetime.fromisoformat(published_date.replace("Z", "+00:00"))
+                    delta = datetime.now(pub_dt.tzinfo) - pub_dt if pub_dt.tzinfo else datetime.now() - pub_dt
+                    freshness_hours = max(0.0, delta.total_seconds() / 3600)
+                except Exception:
+                    pass
             citations.append({
                 "source_id": f"{prefix}-{idx}",
                 "title": title[:160],
                 "url": url,
                 "snippet": snippet[:260],
                 "published_date": published_date,
+                "confidence": float(confidence) if confidence else 0.7,
+                "freshness_hours": freshness_hours,
             })
             idx += 1
         return citations
@@ -574,7 +603,9 @@ class ReportHandler:
         # 3. 获取新闻
         try:
             if self.tools_module:
-                data['news'] = self.tools_module.get_company_news(ticker)
+                raw_news = self.tools_module.get_company_news(ticker)
+                data['news_raw'] = raw_news
+                data['news'] = self._format_news_payload(raw_news, ticker)
         except Exception as e:
             print(f"[ReportHandler] 获取新闻失败: {e}")
         

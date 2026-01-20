@@ -19,16 +19,23 @@ class NewsAgent(BaseFinancialAgent):
 
         results = []
 
-        # 1. 使用 get_company_news 获取新闻（包含多源回退：yfinance -> finnhub -> alpha_vantage -> search）
+        # 1. 使用 get_company_news 获取新闻（结构化输出，含多源回退）
         if self.circuit_breaker.can_call("news_api"):
             try:
                 get_news = getattr(self.tools, "get_company_news", None)
                 if get_news:
-                    news_text = get_news(ticker)
-                    # get_company_news 返回格式化的字符串，需要解析
-                    if news_text and isinstance(news_text, str) and "No " not in news_text:
-                        # 解析新闻文本为结构化数据
-                        parsed_news = self._parse_news_text(news_text, ticker)
+                    news_data = get_news(ticker)
+                    if isinstance(news_data, list):
+                        for item in news_data:
+                            if not isinstance(item, dict):
+                                continue
+                            item.setdefault("ticker", ticker)
+                            results.append(item)
+                        if results:
+                            self.circuit_breaker.record_success("news_api")
+                    elif news_data and isinstance(news_data, str) and "No " not in news_data:
+                        # 兼容旧格式：解析新闻文本为结构化数据
+                        parsed_news = self._parse_news_text(news_data, ticker)
                         if parsed_news:
                             results.extend(parsed_news)
                             self.circuit_breaker.record_success("news_api")
@@ -102,7 +109,8 @@ class NewsAgent(BaseFinancialAgent):
                     "source": source,
                     "datetime": date_str,
                     "published_at": date_str,
-                    "ticker": ticker
+                    "ticker": ticker,
+                    "confidence": 0.7,
                 })
 
         return results
@@ -132,7 +140,10 @@ class NewsAgent(BaseFinancialAgent):
                     "title": title,
                     "url": url,
                     "source": "search",
-                    "ticker": ticker
+                    "published_at": None,
+                    "datetime": None,
+                    "ticker": ticker,
+                    "confidence": 0.4,
                 })
 
         return results[:5]  # 限制数量
@@ -170,7 +181,8 @@ class NewsAgent(BaseFinancialAgent):
                         text=item.get("headline", item.get("title", "")),
                         source=source,
                         url=item.get("url"),
-                        timestamp=item.get("datetime", item.get("published_at"))
+                        timestamp=item.get("datetime", item.get("published_at")),
+                        confidence=item.get("confidence", 0.7),
                     ))
 
         return AgentOutput(

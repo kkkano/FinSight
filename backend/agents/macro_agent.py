@@ -37,14 +37,22 @@ class MacroAgent(BaseFinancialAgent):
         except Exception as e:
             print(f"[MacroAgent] FRED API failed: {e}")
 
-        # 回退到搜索
+        # 回退到搜索（结构化兜底）
         try:
             if hasattr(self.tools, 'search'):
                 search_result = self.tools.search("current US CPI inflation rate federal funds rate unemployment")
                 return {
                     "status": "fallback",
                     "source": "search",
-                    "raw": search_result
+                    "raw": search_result,
+                    "indicators": [
+                        {"name": "CPI", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                        {"name": "Fed Funds Rate", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                        {"name": "Unemployment", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                        {"name": "GDP Growth", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                        {"name": "10Y Treasury", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                        {"name": "10Y-2Y Spread", "value": None, "unit": "%", "as_of": None, "source": "search"},
+                    ],
                 }
         except Exception as e:
             print(f"[MacroAgent] Search fallback failed: {e}")
@@ -59,7 +67,12 @@ class MacroAgent(BaseFinancialAgent):
             return "无法获取宏观经济数据，请稍后重试。"
 
         if data.get("status") == "fallback":
-            return f"宏观经济概况：{data.get('raw', '数据获取中...')[:500]}"
+            indicators = data.get("indicators", []) if isinstance(data, dict) else []
+            names = [item.get("name") for item in indicators if isinstance(item, dict) and item.get("name")]
+            summary = "宏观数据源不可用，使用搜索回退。"
+            if names:
+                summary += f"关注指标: {'、'.join(names)}。"
+            return summary
 
         # 构建详细摘要
         parts = ["📊 **美国宏观经济数据更新**\n"]
@@ -126,15 +139,32 @@ class MacroAgent(BaseFinancialAgent):
             elif raw_data.get("status") == "fallback":
                 data_sources = ["Web Search"]
                 risks.append("使用搜索回退，数据可能不完整")
+                indicators = raw_data.get("indicators", [])
+                for item in indicators[:3]:
+                    if not isinstance(item, dict):
+                        continue
+                    name = item.get("name", "Macro indicator")
+                    evidence.append(EvidenceItem(
+                        text=f"{name}: 暂无可靠数值（搜索回退）",
+                        source="search",
+                        confidence=0.3
+                    ))
 
         if not risks:
             risks = ["政策滞后效应", "数据发布延迟"]
+
+        confidence_value = 0.95 if evidence else 0.7
+        if isinstance(raw_data, dict):
+            if raw_data.get("status") == "fallback":
+                confidence_value = 0.4
+            elif raw_data.get("status") == "error":
+                confidence_value = 0.2
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
             evidence=evidence,
-            confidence=0.95 if evidence else 0.7,
+            confidence=confidence_value,
             data_sources=data_sources,
             as_of=datetime.now().isoformat(),
             risks=risks

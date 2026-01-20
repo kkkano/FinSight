@@ -707,13 +707,24 @@ class ChatHandler:
         if self.tools_module and hasattr(self.tools_module, 'get_company_news'):
             try:
                 news_info = self.tools_module.get_company_news(ticker)
+                news_response = news_info
+                if isinstance(news_info, list):
+                    formatter = getattr(self.tools_module, "format_news_items", None)
+                    if formatter:
+                        news_response = formatter(news_info, title=f"Latest News ({ticker})")
+                    else:
+                        news_response = "\n".join(
+                            f"- {(item.get('headline') or item.get('title') or 'No title')}"
+                            for item in news_info
+                            if isinstance(item, dict)
+                        )
                 
                 if context and hasattr(context, 'cache_data'):
                     context.cache_data(f'news:{ticker}', news_info)
                 
                 return {
                     'success': True,
-                    'response': news_info,
+                    'response': news_response,
                     'data': {'ticker': ticker, 'raw_news': news_info},
                     'intent': 'company_news',
                     'thinking': "Fetched company news via tools module.",

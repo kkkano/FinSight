@@ -1,9 +1,15 @@
 # FinSight 阶段2：深度研报与按需调用
 
 > 📅 **计划周期**: Week 5 - Week 6
-> 📅 **更新日期**: 2026-01-12
+> 📅 **更新日期**: 2026-01-20
 > 🎯 **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
 
+> 🧩 **近期同步**: ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）。
+> 🧭 **近期同步**: News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）。
+> 🧱 **近期同步**: get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）。
+> 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
+> 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
+> 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
 ---
 
 ## 0. 当前状态（2026-01-11）

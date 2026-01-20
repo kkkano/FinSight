@@ -53,12 +53,40 @@ class ReportValidator:
             if isinstance(raw_citations, list):
                 for idx, c in enumerate(raw_citations):
                     if isinstance(c, dict):
+                        published_date = str(c.get("published_date", ""))
+                        confidence = c.get("confidence", 0.7)
+                        try:
+                            confidence = float(confidence)
+                        except (TypeError, ValueError):
+                            confidence = 0.7
+                        confidence = max(0.0, min(1.0, confidence))
+
+                        freshness_hours = c.get("freshness_hours")
+                        if freshness_hours is None:
+                            freshness_hours = 24.0
+                            if published_date:
+                                try:
+                                    pub_dt = datetime.fromisoformat(published_date.replace("Z", "+00:00"))
+                                    now = datetime.now(pub_dt.tzinfo) if pub_dt.tzinfo else datetime.now()
+                                    delta = now - pub_dt
+                                    freshness_hours = max(0.0, delta.total_seconds() / 3600)
+                                except Exception:
+                                    pass
+                        else:
+                            try:
+                                freshness_hours = float(freshness_hours)
+                                freshness_hours = max(0.0, freshness_hours)
+                            except (TypeError, ValueError):
+                                freshness_hours = 24.0
+
                         citations.append(Citation(
                             source_id=str(c.get("source_id", str(idx + 1))),
                             title=str(c.get("title", "Unknown Source")),
                             url=str(c.get("url", "#")),
                             snippet=str(c.get("snippet", "")),
-                            published_date=str(c.get("published_date", "")),
+                            published_date=published_date,
+                            confidence=confidence,
+                            freshness_hours=freshness_hours,
                         ))
 
             # 5. 章节校验 (Sections)

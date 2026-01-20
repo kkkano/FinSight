@@ -314,7 +314,19 @@ class SupervisorAgent:
                 )
 
             # 格式化原始新闻数据
-            base_response = str(news_data) if news_data else "暂无相关新闻"
+            if isinstance(news_data, list):
+                formatter = getattr(self.tools_module, "format_news_items", None) if self.tools_module else None
+                if formatter:
+                    title = f"Latest News ({ticker})" if ticker else "Latest News"
+                    base_response = formatter(news_data, title=title)
+                else:
+                    base_response = "\n".join(
+                        f"- {(item.get('headline') or item.get('title') or 'No title')}"
+                        for item in news_data
+                        if isinstance(item, dict)
+                    )
+            else:
+                base_response = str(news_data) if news_data else "暂无相关新闻"
 
             # 如果有上下文，在原始新闻后补充简短分析
             if context_summary and news_data:
@@ -1098,6 +1110,17 @@ class SupervisorAgent:
                     agent_status[agent_key] = {"status": "error", "error": agent_error}
 
         # 构建 citations
+        def _calc_freshness_hours(published_date: str) -> float:
+            if not published_date:
+                return 24.0
+            try:
+                pub_dt = datetime.fromisoformat(published_date.replace("Z", "+00:00"))
+                now = datetime.now(pub_dt.tzinfo) if pub_dt.tzinfo else datetime.now()
+                delta = now - pub_dt
+                return max(0.0, delta.total_seconds() / 3600)
+            except Exception:
+                return 24.0
+
         citations = []
         citation_id = 1
         for agent_name, agent_output in agent_outputs.items():
@@ -1107,13 +1130,23 @@ class SupervisorAgent:
                     url = getattr(evidence, 'url', '') or "#"
                     text = getattr(evidence, 'text', '')
                     timestamp = getattr(evidence, 'timestamp', None)
+                    published_date = safe_str(timestamp)
+                    confidence = getattr(evidence, "confidence", 0.7)
+                    try:
+                        confidence = float(confidence)
+                    except (TypeError, ValueError):
+                        confidence = 0.7
+                    confidence = max(0.0, min(1.0, confidence))
+                    freshness_hours = _calc_freshness_hours(published_date)
 
                     citations.append({
                         "source_id": f"src_{citation_id}",
                         "title": safe_str(title),
                         "url": safe_str(url),
                         "snippet": safe_str(text)[:200] if text else "",
-                        "published_date": safe_str(timestamp)
+                        "published_date": published_date,
+                        "confidence": confidence,
+                        "freshness_hours": freshness_hours,
                     })
                     citation_id += 1
 
