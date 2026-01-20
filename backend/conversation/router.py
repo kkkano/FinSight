@@ -1,126 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-ConversationRouter - 对话路由器
-负责意图识别和模式分发
+ConversationRouter - Conversation Router
+Handles intent recognition and mode dispatch
 """
 
 from enum import Enum
 from typing import Tuple, Dict, Any, Optional, List, Callable
 import re
 
-# 假设 ContextManager 在 .context 模块中。如果不在，请修改此行
+# Import shared ticker mapping
+from backend.config.ticker_mapping import (
+    COMPANY_MAP,
+    CN_TO_TICKER,
+    INDEX_ALIASES,
+    KNOWN_TICKERS,
+    COMMON_WORDS,
+    extract_tickers,
+)
+
 try:
-    # 尝试相对导入，假设 ContextManager 在同一目录下的 context.py 中
     from .context import ContextManager
 except ImportError:
-    # 如果您没有 ContextManager，可能需要定义一个空的占位符或修改 route 方法签名
     class ContextManager:
         def get_context_summary(self) -> str:
-            return "无历史对话"
+            return "No conversation history"
         def update_context(self, intent: Enum, metadata: Dict[str, Any]):
             pass
 
 
 class Intent(Enum):
-    """意图类型"""
-    CHAT = "chat"          # 快速问答 (涉及金融数据)
-    REPORT = "report"      # 深度报告
-    ALERT = "alert"        # 监控订阅
-    ECONOMIC_EVENTS = "economic_events"  # 经济日历/宏观事件
-    NEWS_SENTIMENT = "news_sentiment"    # 新闻情绪/舆情
-    CLARIFY = "clarify"    # 需要澄清/无法识别/非金融问题
-    FOLLOWUP = "followup"  # 追问上文
-    GREETING = "greeting"  # 问候/闲聊/自我介绍 (新增)
+    """Intent types"""
+    CHAT = "chat"          # Quick Q&A (financial data)
+    REPORT = "report"      # Deep analysis report
+    ALERT = "alert"        # Monitoring subscription
+    ECONOMIC_EVENTS = "economic_events"  # Economic calendar/macro events
+    NEWS_SENTIMENT = "news_sentiment"    # News sentiment
+    CLARIFY = "clarify"    # Needs clarification
+    FOLLOWUP = "followup"  # Follow-up question
+    GREETING = "greeting"  # Greeting/small talk
 
 
 class ConversationRouter:
     """
-    对话路由器
-    
-    功能：
-    - 意图识别（规则 + LLM 混合）
-    - 元数据提取（股票代码、公司名）
-    - 路由到对应处理器
+    Conversation Router
+
+    Features:
+    - Intent recognition (rule + LLM hybrid)
+    - Metadata extraction (ticker, company name)
+    - Route to corresponding handler
     """
-    
-    # 股票代码到公司名映射
-    COMPANY_MAP = {
-        # 美股科技
-        'AAPL': '苹果', 'apple': 'AAPL',
-        'GOOGL': '谷歌', 'google': 'GOOGL', 'alphabet': 'GOOGL',
-        'GOOG': '谷歌',
-        'MSFT': '微软', 'microsoft': 'MSFT',
-        'AMZN': '亚马逊', 'amazon': 'AMZN',
-        'META': 'Meta', 'facebook': 'META',
-        'TSLA': '特斯拉', 'tesla': 'TSLA',
-        'NVDA': '英伟达', 'nvidia': 'NVDA',
-        'AMD': 'AMD',
-        'INTC': '英特尔', 'intel': 'INTC',
-        'NFLX': '奈飞', 'netflix': 'NFLX',
-        'CRM': 'Salesforce', 'salesforce': 'CRM',
-        # 中概股
-        'BABA': '阿里巴巴', 'alibaba': 'BABA',
-        'JD': '京东', 'jd': 'JD',
-        'PDD': '拼多多', 'pinduoduo': 'PDD',
-        'BIDU': '百度', 'baidu': 'BIDU',
-        'NIO': '蔚来', 'nio': 'NIO',
-        'XPEV': '小鹏', 'xpeng': 'XPEV',
-        'LI': '理想', 'li auto': 'LI',
-        # ETF 和指数
-        'SPY': 'S&P 500 ETF',
-        'QQQ': 'Nasdaq 100 ETF',
-        'DIA': 'Dow Jones ETF',
-        'IWM': 'Russell 2000 ETF',
-        'VTI': 'Total Stock Market ETF',
-    }
-    
-    # 中文名到股票代码映射
-    CN_TO_TICKER = {
-        '苹果': 'AAPL', '谷歌': 'GOOGL', '微软': 'MSFT',
-        '亚马逊': 'AMZN', '特斯拉': 'TSLA', '英伟达': 'NVDA',
-        '阿里巴巴': 'BABA', '阿里': 'BABA', '京东': 'JD',
-        '拼多多': 'PDD', '百度': 'BIDU', '英特尔': 'INTC',
-        '蔚来': 'NIO', '小鹏': 'XPEV', '理想': 'LI',
-        '凯捷': 'CAP.PA',
-        '奈飞': 'NFLX', '脸书': 'META', 'Facebook': 'META',
-        # 市场指数
-        '纳斯达克': '^IXIC', '纳斯达克指数': '^IXIC', '纳指': '^IXIC',
-        '道琼斯': '^DJI', '道琼斯指数': '^DJI', '道指': '^DJI',
-        '标普500': '^GSPC', '标普': '^GSPC', 'S&P 500': '^GSPC', 'sp500': '^GSPC',
-        '罗素2000': '^RUT', 'VIX': '^VIX', '恐慌指数': '^VIX',
-        '纽交所': '^NYA', '纽交所指数': '^NYA',
-        '富时100': '^FTSE', '日经225': '^N225', '恒生指数': '^HSI',
-    }
-    
-    # 市场指数别名映射（更全面的识别）
-    INDEX_ALIASES = {
-        # 纳斯达克
-        '纳斯达克': '^IXIC', '纳斯达克指数': '^IXIC', '纳指': '^IXIC',
-        'nasdaq': '^IXIC', 'nasdaq composite': '^IXIC',
-        # 道琼斯
-        '道琼斯': '^DJI', '道琼斯指数': '^DJI', '道指': '^DJI',
-        'dow jones': '^DJI', 'dow': '^DJI',
-        # 标普500
-        '标普500': '^GSPC', '标普': '^GSPC', 'S&P 500': '^GSPC',
-        'sp500': '^GSPC', 'sp 500': '^GSPC', '标准普尔500': '^GSPC',
-        # 其他指数
-        '罗素2000': '^RUT', 'russell 2000': '^RUT',
-        'VIX': '^VIX', '恐慌指数': '^VIX', 'vix指数': '^VIX',
-        '纽交所': '^NYA', '纽交所指数': '^NYA', 'nyse': '^NYA',
-    }
-    
+
     def __init__(self, llm=None):
         """
-        初始化路由器
-        
+        Initialize router
+
         Args:
-            llm: LLM 实例，用于复杂意图分类（可选）
+            llm: LLM instance for complex intent classification (optional)
         """
         self.llm = llm
         self._handlers: Dict[Intent, Callable] = {}
-    
+
     def register_handler(self, intent: Intent, handler: Callable) -> None:
-        """注册意图处理器"""
+        """Register intent handler"""
         self._handlers[intent] = handler
     
     def route(self, query: str, context: ContextManager) -> Tuple[Intent, Dict[str, Any], Optional[Callable]]:
@@ -247,19 +188,32 @@ class ConversationRouter:
             if not self._contains_financial_keywords(query_lower):
                 return Intent.GREETING
 
-        # === 2. 报告关键词 ===
+        # === 2. 报告关键词（只有明确要求深度报告时才触发）===
+        # 注意：单独的"分析"太宽泛，移除它，只保留明确要求深度报告的关键词
         report_keywords = [
-            '分析', '报告', '详细分析', '深度分析', '全面分析', '投资分析',
-            '研报', '研究报告', '投研', '投研报告', '深度研究',
-            '基本面', '估值', '财报', '业绩', '价值分析', '投资价值',
-            '公司研究', '财务分析',
-            'analyze', 'analysis', 'report', 'detailed', 'comprehensive',
-            'fundamental analysis', 'valuation', 'earnings', 'financials',
+            '详细分析', '深度分析', '全面分析', '投资分析', '深入分析',
+            '报告', '研报', '研究报告', '投研', '投研报告', '深度研究',
+            '基本面分析', '估值分析', '财报分析', '价值分析', '投资价值',
+            '公司研究', '财务分析', '行业分析',
+            'detailed analysis', 'in-depth analysis', 'comprehensive analysis',
+            'investment analysis', 'fundamental analysis', 'valuation analysis',
+            'report', 'research report',
             'worth buying', 'should i buy', 'buy or sell',
             '值得投资吗', '能买吗', '可以买吗', '要不要买',
             '值得买吗', '能投吗', '可以投吗', '要不要投',
-            '怎么看', '看好吗', '前景如何', '未来走势',
+            '前景如何', '未来走势如何', '长期怎么看',
         ]
+        # 简单查询关键词（优先匹配为 CHAT，即使包含"分析"）
+        simple_query_indicators = [
+            '占比', '比例', '权重', '成分', '构成', '组成',
+            '多少', '几个', '哪些', '有什么', '是什么',
+            '查一下', '看一下', '帮我查', '帮我看',
+            '简单', '快速', '大概', '大致',
+        ]
+        # 如果包含简单查询指示词，优先走 CHAT
+        if any(kw in query_lower for kw in simple_query_indicators):
+            if metadata.get('tickers') or self._contains_financial_keywords(query_lower):
+                return Intent.CHAT
         if any(kw in query_lower for kw in report_keywords):
             has_financial_context = (
                 self._contains_financial_keywords(query_lower)
@@ -478,90 +432,13 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
             return Intent.CHAT
     
     def _extract_metadata(self, query: str) -> Dict[str, Any]:
-        """
-        从查询中提取元数据
-        """
-        metadata = {
-            'tickers': [],
-            'company_names': [],
-            'company_mentions': [],
-            'raw_query': query,
-            'is_comparison': False
-        }
-        
-        query_lower = query.lower()
-        query_original = query  # 保留原始查询用于中文匹配
-        
-        # 0. 检查是否为对比查询
-        comparison_keywords = ['对比', '比较', 'vs', 'versus', '区别', '差异', 'compare']
-        if any(kw in query_lower for kw in comparison_keywords):
-            metadata['is_comparison'] = True
+        """Extract metadata from query using shared ticker extraction"""
+        # Use shared extraction function
+        metadata = extract_tickers(query)
+        metadata['raw_query'] = query
 
-        # 1. 优先识别市场指数（最长匹配优先）
-        sorted_aliases = sorted(self.INDEX_ALIASES.keys(), key=len, reverse=True)
-        
-        for alias in sorted_aliases:
-            # 使用 regex 确保匹配完整词 (英文) 或 直接匹配 (中文)
-            pattern = re.compile(re.escape(alias), re.IGNORECASE)
-            if pattern.search(query_original):
-                ticker = self.INDEX_ALIASES[alias]
-                if ticker not in metadata['tickers']:
-                    metadata['tickers'].append(ticker)
-                    metadata['company_names'].append(alias)
-        
-        # 2. 识别英文 Ticker
-        # 匹配 1-5 位大写字母，或者是 ^ 开头的指数
-        potential_tickers = re.findall(r'\b[A-Z]{1,5}\b|\^[A-Z]{3,}', query)
-        dotted_tickers = re.findall(r'\b[A-Z]{1,5}[.-][A-Z]{1,4}\b', query)
-        if dotted_tickers:
-            potential_tickers.extend(dotted_tickers)
-
-        # 过滤掉常见的非 Ticker 单词
-        common_words = {'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS', 'PE', 'EPS', 'MACD', 'RSI', 'KDJ'}
-
-        # 已知的有效 ticker 列表（直接使用，不转换）
-        known_tickers = {'AAPL', 'GOOGL', 'GOOG', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'AMD', 'INTC',
-                         'NFLX', 'CRM', 'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 'XPEV', 'LI',
-                         'SPY', 'QQQ', 'DIA', 'IWM', 'VTI'}
-
-        for ticker in potential_tickers:
-            if ticker in common_words:
-                continue
-
-            # 如果是已知的有效 ticker，直接使用（不要转换成中文！）
-            if ticker in known_tickers or ticker.startswith('^'):
-                if ticker not in metadata['tickers']:
-                    metadata['tickers'].append(ticker)
-            # 检查是否是英文公司名（如 apple -> AAPL）
-            elif ticker.lower() in self.COMPANY_MAP:
-                real_ticker = self.COMPANY_MAP.get(ticker.lower())
-                if real_ticker and real_ticker not in metadata['tickers']:
-                    metadata['tickers'].append(real_ticker)
-            else:
-                # 未知 ticker，假设它是有效的
-                if ticker not in metadata['tickers']:
-                    metadata['tickers'].append(ticker)
-
-        # 3. 识别中文公司名/别名
-        sorted_cn_names = sorted(self.CN_TO_TICKER.keys(), key=len, reverse=True)
-        
-        for cn_name in sorted_cn_names:
-            if cn_name in query_original:
-                ticker = self.CN_TO_TICKER[cn_name]
-                # 避免重复添加
-                if ticker not in metadata['tickers']:
-                    metadata['tickers'].append(ticker)
-                    metadata['company_names'].append(cn_name)
-        
-        # 4. 识别英文公司名（全名）
-        for name, ticker in self.COMPANY_MAP.items():
-            if len(name) > 4 and name.lower() in query_lower:  # 忽略短词
-                 if ticker not in metadata['tickers']:
-                     metadata['tickers'].append(ticker)
-                     metadata['company_names'].append(name)
-
-        # 5. Detect explicit company mentions that are not resolved to tickers.
-        # This prevents accidental reuse of previous context when a new company is named.
+        # Detect company mentions not resolved to tickers
+        query_original = query
         company_mentions = []
         stopwords = {
             'news', 'headline', 'analysis', 'report', 'price', 'forecast', 'outlook', 'expectation',
@@ -571,9 +448,7 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
         english_candidates = re.findall(r"[A-Za-z][A-Za-z&.'-]{2,}", query_original)
         for candidate in english_candidates:
             lower = candidate.lower()
-            if lower in stopwords:
-                continue
-            if lower in self.COMPANY_MAP:
+            if lower in stopwords or lower in COMPANY_MAP:
                 continue
             if candidate.upper() in metadata['tickers']:
                 continue
@@ -584,13 +459,10 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
 
         cn_candidates = re.findall(r"([\u4e00-\u9fff]{2,6})(?:公司|集团|股份|控股)", query_original)
         for candidate in cn_candidates:
-            if candidate in self.CN_TO_TICKER:
-                continue
-            if candidate in metadata['company_names']:
+            if candidate in CN_TO_TICKER or candidate in metadata['company_names']:
                 continue
             if candidate not in company_mentions:
                 company_mentions.append(candidate)
 
         metadata['company_mentions'] = company_mentions
-        
         return metadata

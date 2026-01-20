@@ -732,8 +732,8 @@ async def chat_stream_endpoint(request: ChatRequest):
             async def generate_report():
                 try:
                     start_time = datetime.now()
-                    print(f"[Stream REPORT] using sync agent.chat()")
-                    result = agent.chat(resolved_query, capture_thinking=True)
+                    print(f"[Stream REPORT] using async agent.chat_async()")
+                    result = await agent.chat_async(resolved_query, capture_thinking=True)
                     response_text = result.get('response', '')
                     report_data = result.get('report')
                     thinking_steps = result.get('thinking', [])

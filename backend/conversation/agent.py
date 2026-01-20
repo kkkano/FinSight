@@ -108,7 +108,11 @@ class ConversationAgent:
 
     def _init_sub_agents(self):
         """P1: 初始化子 Agent 供 ChatHandler 使用"""
-        if not self.llm or not self.orchestrator:
+        if not self.llm:
+            print("[ConversationAgent] Sub-agents skipped: LLM not available")
+            return
+        if not self.orchestrator:
+            print("[ConversationAgent] Sub-agents skipped: Orchestrator not available")
             return
 
         try:
@@ -119,11 +123,29 @@ class ConversationAgent:
             cache = getattr(self.orchestrator, 'cache', None)
             tools_module = getattr(self.orchestrator, 'tools_module', None)
 
-            if cache and tools_module:
-                cb = CircuitBreaker()
+            # 使用 is None 检查，避免空缓存被误判为 falsy
+            if cache is None:
+                print("[ConversationAgent] Sub-agents skipped: cache not available")
+                return
+            if tools_module is None:
+                print("[ConversationAgent] Sub-agents skipped: tools_module not available")
+                return
+
+            cb = CircuitBreaker()
+            try:
                 self.news_agent = NewsAgent(self.llm, cache, tools_module, cb)
+                print("[ConversationAgent] NewsAgent initialized")
+            except Exception as e:
+                print(f"[ConversationAgent] NewsAgent init failed: {e}")
+
+            try:
                 self.price_agent = PriceAgent(self.llm, cache, tools_module, cb)
-                print("[ConversationAgent] Sub-agents (NewsAgent, PriceAgent) initialized for ChatHandler")
+                print("[ConversationAgent] PriceAgent initialized")
+            except Exception as e:
+                print(f"[ConversationAgent] PriceAgent init failed: {e}")
+
+        except ImportError as e:
+            print(f"[ConversationAgent] Failed to import sub-agents: {e}")
         except Exception as e:
             print(f"[ConversationAgent] Failed to init sub-agents: {e}")
 
@@ -579,15 +601,7 @@ class ConversationAgent:
             and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
         )
         if use_supervisor:
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                try:
-                    return asyncio.run(self._handle_report_async(query, metadata))
-                except Exception as e:
-                    print(f"[Agent] Supervisor 调用失败: {e}")
-            except Exception as e:
-                print(f"[Agent] Supervisor 调用异常: {e}")
+            print(f"[Agent._handle_report] Supervisor 在同步上下文中不可用，回退到 report_handler")
 
         result = self.report_handler.handle(query, metadata, self.context)
         print(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
@@ -853,12 +867,8 @@ def create_agent(
     # 初始化 LLM
     if use_llm:
         try:
-            # 尝试从 backend.config 导入
-            try:
-                from backend.config import get_llm_config
-            except ImportError:
-                # 回退到根目录 config
-                from config import get_llm_config
+            # 从 backend.llm_config 导入
+            from backend.llm_config import get_llm_config
 
             llm_config = get_llm_config()
 

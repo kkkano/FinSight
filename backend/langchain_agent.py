@@ -277,7 +277,7 @@ class LangChainFinancialAgent:
 
     def _resolve_model(self) -> str:
         try:
-            from backend.config import get_llm_config  # type: ignore
+            from backend.llm_config import get_llm_config  # type: ignore
 
             cfg = get_llm_config(provider=self.provider)
             return cfg.get("model", "gemini-2.5-flash")
@@ -287,7 +287,7 @@ class LangChainFinancialAgent:
     def _create_llm(self) -> ChatOpenAI:
         # 优先从 get_llm_config 获取配置（支持 user_config.json 热加载）
         try:
-            from backend.config import get_llm_config
+            from backend.llm_config import get_llm_config
             cfg = get_llm_config(provider=self.provider)
             api_key = cfg.get("api_key")
             api_base = cfg.get("api_base")
