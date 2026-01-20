@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 
@@ -30,7 +30,33 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick }) => {
     const [riskPreference, setRiskPreference] = useState('balanced');
     const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
     const [alertCount, setAlertCount] = useState(0);
-    const { subscriptionEmail } = useStore();
+    const [showAddInput, setShowAddInput] = useState(false);
+    const [newTicker, setNewTicker] = useState('');
+    const { subscriptionEmail, portfolioPositions } = useStore();
+
+    // 添加股票到 Watchlist
+    const handleAddTicker = async () => {
+        const ticker = newTicker.trim().toUpperCase();
+        if (!ticker) return;
+        try {
+            await apiClient.addWatchlist({ user_id: DEFAULT_USER_ID, ticker });
+            setNewTicker('');
+            setShowAddInput(false);
+            loadUserProfile();
+        } catch (e) {
+            console.error('添加失败:', e);
+        }
+    };
+
+    // 从 Watchlist 移除股票
+    const handleRemoveTicker = async (ticker: string) => {
+        try {
+            await apiClient.removeWatchlist({ user_id: DEFAULT_USER_ID, ticker });
+            setWatchlist(prev => prev.filter(item => item.symbol !== ticker));
+        } catch (e) {
+            console.error('移除失败:', e);
+        }
+    };
 
     // 加载用户画像和 Watchlist
     const loadUserProfile = async () => {
@@ -164,27 +190,70 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick }) => {
             <div className="mt-auto border-t border-fin-border pt-5">
                 <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
                     <span>实时关注 ({watchlist.length})</span>
-                    <Plus size={16} className="cursor-pointer hover:text-fin-primary" />
+                    <Plus
+                        size={16}
+                        className="cursor-pointer hover:text-fin-primary"
+                        onClick={() => setShowAddInput(!showAddInput)}
+                    />
                 </div>
+
+                {/* 添加股票输入框 */}
+                {showAddInput && (
+                    <div className="flex gap-2 mb-3">
+                        <input
+                            type="text"
+                            value={newTicker}
+                            onChange={(e) => setNewTicker(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddTicker()}
+                            placeholder="输入股票代码"
+                            className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
+                            autoFocus
+                        />
+                        <button
+                            onClick={handleAddTicker}
+                            className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
+                        >
+                            添加
+                        </button>
+                    </div>
+                )}
 
                 <div className="space-y-2">
                     {watchlist.length > 0 ? (
-                        watchlist.map((item) => (
-                            <div key={item.symbol} className="flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors">
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-fin-text text-sm">{item.symbol}</span>
-                                    <span className="text-[10px] text-fin-muted">{item.name}</span>
-                                </div>
-                                <div className="text-right">
-                                    <div className={`font-medium text-sm ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                                        {item.price || '--'}
+                        watchlist.map((item) => {
+                            const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
+                            return (
+                                <div key={item.symbol} className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors">
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-fin-text text-sm">{item.symbol}</span>
+                                        <span className="text-[10px] text-fin-muted">{item.name}</span>
+                                        {shares > 0 && (
+                                            <span className="text-[10px] text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
+                                                Holdings {shares}
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className={`text-[10px] ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                                        {item.change || '--'}
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-right">
+                                            <div className={`font-medium text-sm ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                                                {item.price || '--'}
+                                            </div>
+                                            <div className={`text-[10px] ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                                                {item.change || '--'}
+                                            </div>
+                                        </div>
+                                        <X
+                                            size={14}
+                                            className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveTicker(item.symbol);
+                                            }}
+                                        />
                                     </div>
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
                     )}

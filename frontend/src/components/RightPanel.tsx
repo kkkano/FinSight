@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import { StockChart } from './StockChart';
-import { Activity, Bell, Bookmark, RefreshCw, TrendingUp, Plus, Minus, X, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
+import { Activity, Bell, RefreshCw, TrendingUp, X, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 
 const DEFAULT_USER_ID = 'default_user';
 
@@ -47,11 +47,6 @@ const parsePriceText = (payload: any): { price?: number; change?: number; change
   return { price, change, changePct, raw: text };
 };
 
-const formatPrice = (value?: number | null) => {
-  if (value === undefined || value === null || Number.isNaN(value)) return '--';
-  return `$${value.toFixed(2)}`;
-};
-
 const formatChangePct = (value?: number | null) => {
   if (value === undefined || value === null || Number.isNaN(value)) return '--';
   const sign = value >= 0 ? '+' : '';
@@ -89,10 +84,9 @@ const Widget: React.FC<{
 };
 
 export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse }) => {
-  const { currentTicker, subscriptionEmail } = useStore();
-  const [marketQuotes, setMarketQuotes] = useState<Quote[]>([]);
+  const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition } = useStore();
+  const [, setMarketQuotes] = useState<Quote[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [watchlistInput, setWatchlistInput] = useState('');
   const [alerts, setAlerts] = useState<any[]>([]);
   const [langgraph, setLanggraph] = useState<any>(null);
   const [orchestrator, setOrchestrator] = useState<any>(null);
@@ -100,6 +94,8 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
   const [loading, setLoading] = useState(false);
   const [chartHeight, setChartHeight] = useState(250);
   const [isChartMaximized, setIsChartMaximized] = useState(false);
+  const [isPortfolioEditing, setIsPortfolioEditing] = useState(false);
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
 
   // 监听全屏状态下的 ESC 用于退出
   useEffect(() => {
@@ -109,6 +105,36 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
+
+  const startPortfolioEdit = () => {
+    const drafts = watchlist.reduce<Record<string, string>>((acc, item) => {
+      const key = item.ticker.trim().toUpperCase();
+      const shares = portfolioPositions[key];
+      acc[key] = shares ? String(shares) : '';
+      return acc;
+    }, {});
+    setPositionDrafts(drafts);
+    setIsPortfolioEditing(true);
+  };
+
+  const cancelPortfolioEdit = () => {
+    setIsPortfolioEditing(false);
+    setPositionDrafts({});
+  };
+
+  const savePortfolioEdit = () => {
+    watchlist.forEach((item) => {
+      const key = item.ticker.trim().toUpperCase();
+      const raw = positionDrafts[key];
+      const value = Number(raw);
+      if (Number.isFinite(value) && value > 0) {
+        setPortfolioPosition(key, value);
+      } else if (raw !== undefined) {
+        removePortfolioPosition(key);
+      }
+    });
+    setIsPortfolioEditing(false);
+  };
 
   const loadMarketQuotes = async () => {
     const results = await Promise.all(
@@ -194,35 +220,35 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
     return () => clearInterval(timer);
   }, [subscriptionEmail]);
 
-  const handleAddWatchlist = async () => {
-    const ticker = watchlistInput.trim().toUpperCase();
-    if (!ticker) return;
-    await apiClient.addWatchlist({ user_id: DEFAULT_USER_ID, ticker });
-    setWatchlistInput('');
-    await loadWatchlist();
-  };
-
-  const handleRemoveWatchlist = async (ticker: string) => {
-    await apiClient.removeWatchlist({ user_id: DEFAULT_USER_ID, ticker });
-    await loadWatchlist();
-  };
+  const positionRows = useMemo(() => {
+    return watchlist.map((item) => {
+      const key = item.ticker.trim().toUpperCase();
+      const shares = portfolioPositions[key] || 0;
+      const price = typeof item.price === 'number' ? item.price : undefined;
+      const change = typeof item.change === 'number' ? item.change : undefined;
+      const changePct = typeof item.changePct === 'number' ? item.changePct : undefined;
+      const value = price !== undefined ? price * shares : 0;
+      const dayChange =
+        change !== undefined
+          ? change * shares
+          : price !== undefined && changePct !== undefined
+            ? (price * shares * changePct) / 100
+            : 0;
+      return { ...item, ticker: key, shares, value, dayChange };
+    });
+  }, [watchlist, portfolioPositions]);
 
   const portfolioSummary = useMemo(() => {
-    if (watchlist.length === 0) return null;
-    const basePer = 10000;
-    const totalValue = basePer * watchlist.length;
-    const changePcts = watchlist
-      .map((item) => item.changePct)
-      .filter((value): value is number => typeof value === 'number');
-    const avgChange = changePcts.length
-      ? changePcts.reduce((sum, v) => sum + v, 0) / changePcts.length
-      : 0;
-    const dayChange = (totalValue * avgChange) / 100;
-    const topMover = [...watchlist]
+    const holdings = positionRows.filter((item) => item.shares > 0);
+    if (holdings.length === 0) return null;
+    const totalValue = holdings.reduce((sum, item) => sum + item.value, 0);
+    const dayChange = holdings.reduce((sum, item) => sum + item.dayChange, 0);
+    const avgChange = totalValue ? (dayChange / totalValue) * 100 : 0;
+    const topMover = [...holdings]
       .filter((item) => typeof item.changePct === 'number')
       .sort((a, b) => Math.abs((b.changePct || 0)) - Math.abs((a.changePct || 0)))[0];
-    return { totalValue, dayChange, avgChange, topMover };
-  }, [watchlist]);
+    return { totalValue, dayChange, avgChange, topMover, holdingsCount: holdings.length };
+  }, [positionRows]);
 
   // 从真实后端数据提取 Agent 状态
   const agentInfo = langgraph?.data?.agent_info;
@@ -283,17 +309,103 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
       </Widget>
 
       {/* 资产组合 - 可收起 */}
-      <Widget title="资产组合快照" icon={<Activity size={14} />}>
-        {portfolioSummary ? (
-          <div className="space-y-1">
-            <div className="text-xl font-bold text-fin-text">${portfolioSummary.totalValue.toLocaleString()}</div>
-            <div className={`text-sm font-medium ${portfolioSummary.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
-              {portfolioSummary.dayChange >= 0 ? '+' : ''}{portfolioSummary.dayChange.toFixed(0)} ({formatChangePct(portfolioSummary.avgChange)})
+      <Widget
+        title="资产组合快照"
+        icon={<Activity size={14} />}
+        action={
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              if (isPortfolioEditing) {
+                savePortfolioEdit();
+              } else {
+                startPortfolioEdit();
+              }
+            }}
+            className="text-[10px] px-2 py-0.5 rounded-full border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary transition-colors"
+          >
+            {isPortfolioEditing ? 'Save' : 'Edit'}
+          </button>
+        }
+      >
+        {isPortfolioEditing ? (
+          <div className="space-y-3">
+            {positionRows.length > 0 ? (
+              <div className="space-y-2">
+                {positionRows.map((item) => (
+                  <div key={item.ticker} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-fin-text">{item.ticker}</span>
+                      <span className="text-[10px] text-fin-muted">
+                        {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '--'}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={positionDrafts[item.ticker] ?? ''}
+                      onChange={(event) =>
+                        setPositionDrafts((prev) => ({
+                          ...prev,
+                          [item.ticker]: event.target.value,
+                        }))
+                      }
+                      className="w-20 px-2 py-1 rounded border border-fin-border bg-fin-bg text-fin-text text-right focus:outline-none focus:border-fin-primary"
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-fin-muted">Add watchlist tickers to set holdings.</div>
+            )}
+            <div className="flex items-center justify-between text-[10px] text-fin-muted">
+              <span>Blank or 0 removes a position.</span>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  cancelPortfolioEdit();
+                }}
+                className="text-fin-muted hover:text-fin-text"
+              >
+                Cancel
+              </button>
             </div>
-            <div className="text-[10px] text-fin-muted mt-2">模拟持仓，仅用于展示</div>
+          </div>
+        ) : portfolioSummary ? (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="text-xl font-bold text-fin-text">${portfolioSummary.totalValue.toLocaleString()}</div>
+              <div className={`text-sm font-medium ${portfolioSummary.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
+                {portfolioSummary.dayChange >= 0 ? '+' : ''}{portfolioSummary.dayChange.toFixed(2)} ({formatChangePct(portfolioSummary.avgChange)})
+              </div>
+              <div className="text-[10px] text-fin-muted">Holdings {portfolioSummary.holdingsCount}</div>
+            </div>
+            <div className="space-y-2">
+              {positionRows
+                .filter((item) => item.shares > 0)
+                .map((item) => (
+                  <div key={item.ticker} className="flex items-center justify-between text-xs">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-fin-text">{item.ticker}</span>
+                      <span className="text-[10px] text-fin-muted">
+                        {item.shares} shares{typeof item.price === 'number' ? ` @ $${item.price.toFixed(2)}` : ''}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-fin-text">${item.value.toLocaleString()}</div>
+                      <div className={`text-[10px] ${item.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
+                        {item.dayChange >= 0 ? '+' : ''}{item.dayChange.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
         ) : (
-          <div className="text-xs text-fin-muted">添加 Watchlist 后生成组合摘要</div>
+          <div className="text-xs text-fin-muted">Set holdings to generate portfolio summary.</div>
         )}
       </Widget>
 

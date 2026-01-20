@@ -1,4 +1,4 @@
-# FinSight AI – Multi-Agent Financial Intelligence Platform
+﻿# FinSight AI - Multi-Agent Financial Intelligence Platform
 
 [![LangChain](https://img.shields.io/badge/LangChain-1.1.0-green)](https://github.com/langchain-ai/langchain)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-blue)](https://github.com/langchain-ai/langgraph)
@@ -7,21 +7,21 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](./LICENSE)
 
-**[English Version](./readme.md)** | [中文文档](./readme_cn.md) | [Docs](./docs/)
+**English Version** | [Chinese Docs](./readme_cn.md) | [Docs](./docs/)
 
 ---
 
 ## Overview
 
-FinSight AI is a **conversational, multi-agent financial research assistant** that combines:
+FinSight AI is a conversational, multi-agent financial research assistant that combines:
 
-- **Supervisor Agent Architecture**: Intent classification + Worker Agent coordination + Forum synthesis
-- **6 Specialized Agents**: Price, News, Technical, Fundamental, Macro, DeepSearch
-- **FastAPI Backend** + LangChain + LangGraph for orchestration
-- **React + TypeScript + Tailwind** frontend with professional report cards
-- **Real-time Market Data** with multi-source fallback (yfinance, Finnhub, Alpha Vantage, etc.)
+- Supervisor Agent architecture: intent classification + worker agent coordination + forum synthesis
+- 6 specialized agents: Price, News, Technical, Fundamental, Macro, DeepSearch
+- FastAPI backend + LangChain + LangGraph orchestration
+- React + TypeScript + Tailwind frontend with professional report cards
+- Real-time market data with multi-source fallback (yfinance, Finnhub, Alpha Vantage, etc.)
 
-The goal is to feel like talking to a **Chief Investment Officer** who can quickly pull data, run analysis playbooks, and produce professional-grade investment reports.
+The goal is to feel like talking to a Chief Investment Officer who can quickly pull data, run analysis playbooks, and produce professional-grade investment reports.
 
 ---
 
@@ -29,77 +29,50 @@ The goal is to feel like talking to a **Chief Investment Officer** who can quick
 
 ### Multi-Agent Supervisor Architecture
 ```
-User Query → IntentClassifier (Rule + Embedding + LLM) → SupervisorAgent
-                                                              ↓
-                    ┌────────────────────────────────────────────┐
-                    │  Worker Agents (Parallel Execution)        │
-                    │  ├── PriceAgent (real-time quotes)         │
-                    │  ├── NewsAgent (news + sentiment)          │
-                    │  ├── TechnicalAgent (indicators)           │
-                    │  ├── FundamentalAgent (financials)         │
-                    │  ├── MacroAgent (economic data)            │
-                    │  └── DeepSearchAgent (web research)        │
-                    └────────────────────────────────────────────┘
-                                                              ↓
-                              ForumHost (Synthesis + Confidence Scoring)
-                                                              ↓
-                              ReportIR → Frontend ReportView Card
+User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
+                                                        |
+             +------------------------------------------+----------------------------------+
+             | Worker Agents (Parallel Execution)                                          |
+             | - PriceAgent (real-time quotes)                                              |
+             | - NewsAgent (news + sentiment)                                               |
+             | - TechnicalAgent (indicators)                                               |
+             | - FundamentalAgent (financials)                                             |
+             | - MacroAgent (economic data)                                                |
+             | - DeepSearchAgent (web research)                                            |
+             +-----------------------------------------------------------------------------+
+                                                        |
+                                   ForumHost (synthesis + confidence scoring)
+                                                        |
+                         ReportIR (citations + confidence + freshness)
+                                                        |
+                     Frontend ReportView (evidence pool + trace drill-down)
 ```
 
 ### Professional Report Generation
-- **8-Section Analysis Reports**: Executive Summary, Market Position, Fundamental Analysis, Macro & Catalysts, Risk Assessment, Investment Strategy, Scenario Analysis, Monitoring Events
-- **Agent Contribution Tracking**: See which Agent provided each insight
-- **Confidence Scoring**: AI confidence level with evidence sources
-- **Citation Links**: Click to view original sources
-- **Citation Confidence & Freshness**: Evidence includes confidence score and freshness hours
-- **Structured Fallbacks**: News/Macro fallbacks emit structured fields to keep reports stable
-- **Structured News Schema**: get_company_news returns structured items; handlers format for display
-- **Safe DeepSearch Retrieval**: SSRF guardrails and retry on document fetch
-- **Dynamic DeepSearch Queries**: query templates adapt to intent keywords
+- 8-section analysis reports: Executive Summary, Market Position, Fundamental Analysis, Macro and Catalysts, Risk Assessment, Investment Strategy, Scenario Analysis, Monitoring Events
+- Agent contribution tracking: see which agent provided each insight
+- Evidence pool with citation confidence and freshness metadata
+- ReportIR schema validation for citations (confidence and freshness)
+- Structured News and Macro fallbacks keep downstream analysis stable
+- get_company_news returns structured items; handlers format for display
+- Safe DeepSearch retrieval with SSRF guard and HTTP retry
+- Dynamic DeepSearch query templates driven by intent keywords
 
 ### Smart Intent Classification
-- **3-Layer Hybrid System**: Rule matching → Embedding similarity → LLM fallback
-- **NEWS Sub-intent**: Distinguishes "fetch news" vs "analyze news impact"
-- **Cost Efficient**: Simple queries handled by rules, no LLM cost
+- 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback
+- NEWS sub-intent: distinguishes fetch news vs analyze news impact
+- Cost efficient: simple queries handled by rules with no LLM cost
 
-### Real-time Streaming & Visualization
-- **Token-by-token Streaming**: ChatGPT-like typewriter effect
-- **Interactive K-line Charts**: Full-screen modal with multiple timeframes
-- **Agent Progress Indicators**: Real-time execution status
+### Real-time Streaming and Transparency
+- Token-by-token streaming responses
+- Interactive K-line charts with full-screen mode
+- Agent trace drill-down with expandable steps
+- Portfolio snapshot with editable holdings
 
-### Alert & Subscription System
-- **Price Alerts**: Email notifications when price changes exceed threshold
-- **News Alerts**: Daily news digest for watched stocks
-- **Background Schedulers**: APScheduler with configurable intervals
-
----
-
-## UI Screenshots
-
-### Deep Research Report Card
-*Complete 8-section investment analysis with Agent status tracking, confidence scoring, and citation links*
-
-![Deep Research Report - Full View](images/test1.png)
-
-### Report Sections & Evidence Panel
-*Expandable sections with ForumHost synthesis, chapter navigation, and source citations*
-
-![Report Sections Detail](images/test2.png)
-
-### Full-Screen K-line Chart Modal
-*Interactive candlestick chart with multiple timeframes (24h, 1M, 3M, 6M, 1Y, 2Y, 5Y, All) and OHLC tooltip*
-
-![K-line Chart Modal](images/test5.png)
-
-### Price Alert Email Notification
-*Automated email notification when stock price moves beyond configured threshold*
-
-![Price Alert Email](images/test3.png)
-
-### News Alert Email Digest
-*Daily/scheduled news digest with headlines, sources, and direct links*
-
-![News Alert Email](images/test4.png)
+### Alert and Subscription System
+- Price alerts: email notifications when price changes exceed thresholds
+- News alerts: daily news digests for watched stocks
+- Background schedulers with APScheduler
 
 ---
 
@@ -111,7 +84,9 @@ User Query → IntentClassifier (Rule + Embedding + LLM) → SupervisorAgent
 flowchart TB
     subgraph Frontend["Frontend (React + Vite)"]
         UI[Chat UI]
-        Report[ReportView Card]
+        ReportView[ReportView Card]
+        Evidence[Evidence Pool]
+        Trace[Agent Trace]
         Chart[K-line Chart]
         Settings[Settings Modal]
     end
@@ -136,9 +111,15 @@ flowchart TB
         DSA[DeepSearchAgent]
     end
 
+    subgraph ReportIR["Report and Evidence"]
+        IR[ReportIR + Validator]
+        Citations[Citations (confidence + freshness)]
+    end
+
     subgraph Services["Core Services"]
         Cache[KV Cache]
         CB[Circuit Breaker]
+        SafeFetch[Safe Fetch (SSRF Guard + Retry)]
         Memory[User Memory]
     end
 
@@ -148,10 +129,13 @@ flowchart TB
     Router --> Workers
     Workers --> PA & NA & TA & FA & MA & DSA
     PA & NA & TA & FA & MA & DSA --> Forum
-    Forum --> Report
+    Forum --> IR --> ReportView
+    IR --> Evidence
+    IR --> Trace
 
     PA & NA & TA & FA & MA & DSA --> Cache
     PA & NA & TA & FA & MA & DSA --> CB
+    DSA --> SafeFetch
 ```
 
 ### Intent Classification Flow
@@ -175,7 +159,8 @@ graph LR
     B -->|fail| C[Alpha Vantage]
     C -->|fail| D[Web Scraping]
     D -->|fail| E[Search Fallback]
-    E -->|fail| F[Graceful Error]
+    E -->|fail| F[Structured Fallback]
+    F -->|fail| G[Graceful Error]
 ```
 
 ---
@@ -184,14 +169,14 @@ graph LR
 
 | Tool | Description | Data Sources |
 |------|-------------|--------------|
-| `get_stock_price` | Real-time quote with fallback | yfinance → Finnhub → Alpha Vantage → Web |
+| `get_stock_price` | Real-time quote with fallback | yfinance -> Finnhub -> Alpha Vantage -> Web |
 | `get_company_info` | Company fundamentals | yfinance |
 | `get_company_news` | Latest headlines (structured list) | Reuters RSS + Bloomberg RSS + Finnhub |
-| `search` | Web search | Exa → Tavily → Wikipedia → DuckDuckGo |
-| `get_market_sentiment` | Fear & Greed index | CNN |
+| `search` | Web search | Exa -> Tavily -> Wikipedia -> DuckDuckGo |
+| `get_market_sentiment` | Fear and Greed index | CNN |
 | `get_economic_events` | Macro calendar | Exa search |
-| `get_financial_statements` | Income/Balance/Cash flow | yfinance |
-| `get_key_metrics` | PE, ROE, Margins | yfinance + calculated |
+| `get_financial_statements` | Income, balance, cash flow | yfinance |
+| `get_key_metrics` | PE, ROE, margins | yfinance + calculated |
 | `analyze_historical_drawdowns` | Drawdown analysis | yfinance |
 | `get_performance_comparison` | Multi-ticker comparison | yfinance |
 
@@ -281,58 +266,58 @@ ENABLE_LANGSMITH=false
 
 ```
 FinSight/
-├── backend/
-│   ├── agents/                 # Specialized Agents
-│   │   ├── base_agent.py       # BaseFinancialAgent
-│   │   ├── price_agent.py      # Real-time quotes
-│   │   ├── news_agent.py       # News + sentiment
-│   │   ├── technical_agent.py  # Technical indicators
-│   │   ├── fundamental_agent.py# Financial analysis
-│   │   ├── macro_agent.py      # Macro economics
-│   │   └── deep_search_agent.py# Web research
-│   ├── orchestration/
-│   │   ├── supervisor_agent.py # Main coordinator
-│   │   ├── intent_classifier.py# Intent classification
-│   │   └── forum.py            # Agent synthesis
-│   ├── services/
-│   │   ├── cache.py            # KV cache
-│   │   ├── circuit_breaker.py  # Fault tolerance
-│   │   └── memory.py           # User profiles
-│   ├── api/
-│   │   └── main.py             # FastAPI endpoints
-│   └── tools.py                # Financial tools
-├── frontend/
-│   └── src/
-│       ├── components/
-│       │   ├── ChatList.tsx
-│       │   ├── ChatInput.tsx
-│       │   ├── ReportView.tsx
-│       │   └── ThinkingProcess.tsx
-│       └── api/client.ts
-├── docs/
-│   ├── 01_ARCHITECTURE.md
-│   ├── PROJECT_STATUS.md
-│   ├── ROADMAP.md
-│   └── TECHNICAL_QNA.md
-└── images/                     # Screenshots
+|-- backend/
+|   |-- agents/
+|   |   |-- base_agent.py
+|   |   |-- price_agent.py
+|   |   |-- news_agent.py
+|   |   |-- technical_agent.py
+|   |   |-- fundamental_agent.py
+|   |   |-- macro_agent.py
+|   |   |-- deep_search_agent.py
+|   |-- orchestration/
+|   |   |-- supervisor_agent.py
+|   |   |-- intent_classifier.py
+|   |   |-- forum.py
+|   |-- report/
+|   |   |-- ir.py
+|   |   |-- validator.py
+|   |-- services/
+|   |   |-- cache.py
+|   |   |-- circuit_breaker.py
+|   |   |-- memory.py
+|   |-- api/
+|   |   |-- main.py
+|   |-- tools.py
+|-- frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |   |-- ReportView.tsx
+|   |   |   |-- ThinkingProcess.tsx
+|   |   |   |-- RightPanel.tsx
+|   |   |   |-- Sidebar.tsx
+|   |   |-- store/useStore.ts
+|   |   |-- api/client.ts
+|-- docs/
+|-- images/
 ```
 
 ---
 
 ## Status
 
-> **Last Updated**: 2026-01-13 | **Version**: 0.6.3
+> Last Updated: 2026-01-20 | Version: 0.6.4
 
 ### Current Progress
 
 | Module | Progress | Notes |
 |--------|----------|-------|
-| **Tools Layer** | ✅ 100% | Multi-source fallback, caching, circuit breaker |
-| **Agent Layer** | ✅ 100% | All 6 agents operational |
-| **Orchestration** | ✅ 100% | Supervisor + Forum + Streaming |
-| **Report Card** | ✅ 100% | 8-section professional reports |
-| **Intent Classification** | ✅ 100% | 3-layer hybrid + NEWS sub-intent |
-| **Alert System** | ✅ 90% | Price + News alerts working |
+| Tools Layer | 100% | Multi-source fallback, caching, circuit breaker |
+| Agent Layer | 100% | 6 agents + structured fallbacks |
+| Orchestration | 100% | Supervisor + Forum + streaming |
+| Report Card | 100% | Evidence metadata and citation validation |
+| Transparency | 90% | Trace drill-down and diagnostics |
+| Alert System | 90% | Price and news alerts |
 
 ### Known Issues
 
@@ -347,33 +332,36 @@ FinSight/
 ## Roadmap
 
 ### Completed (v0.6.x)
-- [x] Multi-Agent Supervisor Architecture
-- [x] 8-Section Professional Reports
-- [x] NEWS Sub-intent Classification
-- [x] Real-time Streaming Output
-- [x] Email Alert System
-- [x] Full-screen K-line Charts
+- [x] Multi-Agent Supervisor architecture
+- [x] 8-section professional reports
+- [x] NEWS sub-intent classification
+- [x] Evidence metadata (confidence + freshness)
+- [x] Structured News/Macro fallbacks
+- [x] DeepSearch SSRF guard and retry
+- [x] Dynamic DeepSearch query templates
+- [x] Portfolio snapshot with holdings input
+- [x] Full-screen K-line charts
 
 ### In Progress
-- [ ] RAG Integration with DeepSearch
-- [ ] User Long-term Memory (Vector Store)
+- [ ] RAG integration with DeepSearch
+- [ ] User long-term memory (vector store)
 
 ### Planned (v0.7.x)
-- [ ] RiskAgent (VaR, Position Sizing)
-- [ ] Portfolio Analysis
-- [ ] Multi-language Support
-- [ ] Mobile Responsive Design
+- [ ] RiskAgent (VaR, position sizing)
+- [ ] Portfolio analysis
+- [ ] Multi-language support
+- [ ] Mobile responsive design
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
+Contributions are welcome. Please read our contributing guidelines before submitting PRs.
 
 ### Contributors
 
-- **Human Developer** - Architecture, Frontend, Backend
-- **Claude (Anthropic)** - Code assistance, Documentation
+- Human Developer - Architecture, Frontend, Backend
+- Claude (Anthropic) - Code assistance, Documentation
 
 ---
 
@@ -386,6 +374,6 @@ MIT License - see [LICENSE](./LICENSE) for details.
 ## Acknowledgments
 
 - [LangChain](https://github.com/langchain-ai/langchain) - LLM framework
-- [LangGraph](https://github.com/langchain-ai/langgraph) - Agent orchestration
+- [LangGraph](https://github.com/langgraph-ai/langgraph) - Agent orchestration
 - [yfinance](https://github.com/ranaroussi/yfinance) - Market data
 - [ECharts](https://echarts.apache.org/) - Charting library

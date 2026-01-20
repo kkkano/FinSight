@@ -3,6 +3,8 @@ import type { Message } from '../types';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
+type ChatMode = 'smart' | 'traditional';
+type PortfolioPositions = Record<string, number>;
 
 const getInitialLayout = (): LayoutMode => {
   if (typeof window === 'undefined') return 'centered';
@@ -23,6 +25,37 @@ const getInitialSubscriptionEmail = (): string => {
   return window.localStorage.getItem('finsight-subscription-email') || '';
 };
 
+const getInitialChatMode = (): ChatMode => {
+  if (typeof window === 'undefined') return 'smart';
+  const stored = window.localStorage.getItem('finsight-chat-mode');
+  return stored === 'smart' || stored === 'traditional' ? (stored as ChatMode) : 'smart';
+};
+
+const getInitialPortfolioPositions = (): PortfolioPositions => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem('finsight-portfolio-positions');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    return Object.entries(parsed).reduce<PortfolioPositions>((acc, [ticker, shares]) => {
+      const normalized = ticker.trim().toUpperCase();
+      const value = Number(shares);
+      if (normalized && Number.isFinite(value) && value > 0) {
+        acc[normalized] = value;
+      }
+      return acc;
+    }, {});
+  } catch (error) {
+    return {};
+  }
+};
+
+const persistPortfolioPositions = (positions: PortfolioPositions) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('finsight-portfolio-positions', JSON.stringify(positions));
+};
+
 const applyThemeClass = (theme: Theme) => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
@@ -33,6 +66,8 @@ const applyThemeClass = (theme: Theme) => {
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
+const initialChatMode = getInitialChatMode();
+const initialPortfolioPositions = getInitialPortfolioPositions();
 applyThemeClass(initialTheme);
 
 interface AppState {
@@ -58,6 +93,11 @@ interface AppState {
   draft: string;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
+  chatMode: ChatMode;
+  setChatMode: (mode: ChatMode) => void;
+  portfolioPositions: PortfolioPositions;
+  setPortfolioPosition: (ticker: string, shares: number) => void;
+  removePortfolioPosition: (ticker: string) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -79,6 +119,8 @@ export const useStore = create<AppState>((set) => ({
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
+  chatMode: initialChatMode,
+  portfolioPositions: initialPortfolioPositions,
 
   addMessage: (message) =>
     set((state) => ({
@@ -135,6 +177,39 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-subscription-email', email);
       }
       return { subscriptionEmail: email };
+    }),
+
+  setChatMode: (mode) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-chat-mode', mode);
+      }
+      return { chatMode: mode };
+    }),
+
+  setPortfolioPosition: (ticker, shares) =>
+    set((state) => {
+      const key = ticker.trim().toUpperCase();
+      if (!key) return {};
+      const next = { ...state.portfolioPositions };
+      if (!Number.isFinite(shares) || shares <= 0) {
+        delete next[key];
+      } else {
+        next[key] = shares;
+      }
+      persistPortfolioPositions(next);
+      return { portfolioPositions: next };
+    }),
+
+  removePortfolioPosition: (ticker) =>
+    set((state) => {
+      const key = ticker.trim().toUpperCase();
+      if (!key) return {};
+      if (!state.portfolioPositions[key]) return {};
+      const next = { ...state.portfolioPositions };
+      delete next[key];
+      persistPortfolioPositions(next);
+      return { portfolioPositions: next };
     }),
 
   setDraft: (text) =>

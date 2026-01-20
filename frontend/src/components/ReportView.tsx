@@ -327,25 +327,49 @@ const SectionRenderer: React.FC<{
   onCitationJump: (ref: string) => void;
 }> = ({ section, isOpen, isActive, anchorPrefix, onToggle, citationMap, onCitationJump }) => {
   const sectionId = `${anchorPrefix}-section-${section.order}`;
+  const agentName = (section as any).agent_name;
+  const confidence = (section as any).confidence;
+  const dataSources = (section as any).data_sources || [];
+  const hasError = (section as any).error;
 
   return (
     <div
       id={sectionId}
       data-report-anchor={anchorPrefix}
       data-section-order={section.order}
-      className={`border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-all ${isActive ? 'ring-1 ring-blue-200 dark:ring-blue-500/40' : ''
+      className={`border ${hasError ? 'border-amber-300 dark:border-amber-700' : 'border-slate-200 dark:border-slate-700'} rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm transition-all ${isActive ? 'ring-1 ring-blue-200 dark:ring-blue-500/40' : ''
         }`}
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className={`w-full flex items-center justify-between px-4 py-3 ${hasError ? 'bg-amber-50/80 dark:bg-amber-900/20' : 'bg-slate-50/80 dark:bg-slate-800/60'} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}
       >
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-          <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center justify-center text-xs font-bold">
+        <div className="flex items-center gap-3">
+          <span className={`h-6 w-6 rounded-full ${hasError ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'} flex items-center justify-center text-xs font-bold`}>
             {section.order}
           </span>
-          <span className="text-left">{section.title}</span>
-        </h3>
+          <div className="text-left">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{section.title}</h3>
+            {/* Agent 来源标注 */}
+            {agentName && (
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {agentName}
+                </span>
+                {confidence !== undefined && confidence > 0 && (
+                  <span className="text-[10px] text-slate-400">
+                    {Math.round(confidence * 100)}% 置信度
+                  </span>
+                )}
+                {dataSources.length > 0 && (
+                  <span className="text-[10px] text-slate-400">
+                    · {dataSources.join(', ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
         {isOpen ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
       </button>
 
@@ -516,6 +540,16 @@ const EvidencePool: React.FC<{
         {citations.map((cit) => {
           const citationId = `${anchorPrefix}-citation-${cit.source_id}`;
           const isActive = activeCitation === cit.source_id;
+          const confidencePercent = typeof cit.confidence === 'number' ? Math.round(cit.confidence * 100) : null;
+          const freshnessHours = typeof cit.freshness_hours === 'number' ? Math.round(cit.freshness_hours) : null;
+          const confidenceTone =
+            confidencePercent === null
+              ? ''
+              : confidencePercent >= 80
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                : confidencePercent >= 60
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
           return (
             <div
               key={cit.source_id}
@@ -540,6 +574,20 @@ const EvidencePool: React.FC<{
                   </div>
                   {cit.published_date && (
                     <div className="text-slate-400 text-[10px] mt-1">{cit.published_date}</div>
+                  )}
+                  {(confidencePercent !== null || freshnessHours !== null) && (
+                    <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                      {confidencePercent !== null && (
+                        <span className={`px-1.5 py-0.5 rounded-full ${confidenceTone}`}>
+                          Confidence {confidencePercent}%
+                        </span>
+                      )}
+                      {freshnessHours !== null && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-200">
+                          Freshness {freshnessHours}h
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </button>
@@ -857,13 +905,88 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+        {/* Agent 执行状态面板 - 显示在 Core view 区域 */}
+        <div className="mt-5 grid gap-4 md:grid-cols-[1fr_280px]">
           <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 p-4">
-            <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-              <span className="font-semibold text-slate-900 dark:text-white">Core view:</span> {report.summary}
-            </p>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-3">
+              Agent 执行概览
+            </div>
+            {/* Agent 状态网格 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              {(report as any).agent_status && Object.entries((report as any).agent_status).map(([key, status]: [string, any]) => (
+                <div key={key} className={`px-2 py-1.5 rounded-lg text-[10px] ${status.status === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}>
+                  <div className="font-medium capitalize">{key}</div>
+                  <div className="flex items-center gap-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${status.status === 'success' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                    {status.status === 'success' ? `${Math.round(status.confidence * 100)}%` : '失败'}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* 摘要内容 - 折叠显示 */}
+            <details className="group">
+              <summary className="cursor-pointer text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+                查看综合分析摘要
+              </summary>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                {report.summary}
+              </p>
+            </details>
           </div>
           <ConfidenceMeter score={report.confidence_score} />
+        </div>
+
+        {/* 风险/催化剂/指标 - 横向更宽的布局 */}
+        <div className="mt-4 grid gap-3 grid-cols-1 md:grid-cols-3">
+          <div className="rounded-xl border border-rose-200/70 bg-rose-50/70 dark:border-rose-800/60 dark:bg-rose-900/20 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
+              <AlertTriangle size={12} className="text-rose-500" />
+              风险提示
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(report.risks || []).map((risk, idx) => (
+                <span key={idx} className="text-[11px] px-2 py-0.5 rounded-full bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
+                  {risk}
+                </span>
+              ))}
+              {(!report.risks || report.risks.length === 0) && (
+                <span className="text-[11px] text-slate-400">暂无</span>
+              )}
+            </div>
+          </div>
+          <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-800/60 dark:bg-emerald-900/20 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
+              <TrendingUp size={12} className="text-emerald-500" />
+              催化剂
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {catalystItems.map((item, idx) => (
+                <span key={idx} className="text-[11px] px-2 py-0.5 rounded-full bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300">
+                  {item.length > 30 ? item.substring(0, 30) + '...' : item}
+                </span>
+              ))}
+              {catalystItems.length === 0 && (
+                <span className="text-[11px] text-slate-400">暂无</span>
+              )}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
+              <BarChart2 size={12} />
+              核心指标
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {metricItems.map((metric) => (
+                <div key={`${metric.label}-${metric.value}`} className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">
+                  <span className="text-slate-500 dark:text-slate-400">{metric.label}:</span>{' '}
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{metric.value}</span>
+                </div>
+              ))}
+              {metricItems.length === 0 && (
+                <span className="text-[11px] text-slate-400">暂无</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {report.sections.length > 0 && (
@@ -897,68 +1020,44 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 章节目录
               </div>
               <div className="space-y-2">
-                {report.sections.map((section) => (
-                  <button
-                    key={section.order}
-                    type="button"
-                    onClick={() => handleJumpToSection(section.order)}
-                    className={`w-full text-left px-3 py-2 rounded-lg border text-[11px] transition ${activeSection === section.order
-                      ? 'border-blue-400 text-blue-600 bg-blue-50/70 dark:border-blue-500/60 dark:text-blue-200'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600'
-                      }`}
-                  >
-                    <span className="font-semibold">{section.order}.</span> {section.title}
-                  </button>
-                ))}
+                {report.sections.map((section) => {
+                  const agentName = (section as any).agent_name;
+                  const hasError = (section as any).error;
+                  return (
+                    <button
+                      key={section.order}
+                      type="button"
+                      onClick={() => handleJumpToSection(section.order)}
+                      className={`w-full text-left px-3 py-2 rounded-lg border text-[11px] transition ${activeSection === section.order
+                        ? 'border-blue-400 text-blue-600 bg-blue-50/70 dark:border-blue-500/60 dark:text-blue-200'
+                        : hasError
+                          ? 'border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-300'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                    >
+                      <div><span className="font-semibold">{section.order}.</span> {section.title}</div>
+                      {agentName && <div className="text-[9px] text-slate-400 mt-0.5">{agentName}</div>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </aside>
 
-          <div className="flex-1 min-w-0 space-y-5">
-            <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
-              <InsightCard
-                title="风险"
-                tone="risk"
-                icon={<AlertTriangle size={12} className="text-rose-500" />}
-                items={report.risks || []}
+          <div className="flex-1 min-w-0 space-y-4">
+            {/* 分析章节 */}
+            {report.sections.map((section) => (
+              <SectionRenderer
+                key={section.order}
+                section={section}
+                isOpen={!!expandedSections[section.order]}
+                isActive={activeSection === section.order}
+                anchorPrefix={anchorPrefix}
+                onToggle={() => toggleSection(section.order)}
+                citationMap={citationMap}
+                onCitationJump={handleJumpToCitation}
               />
-              <InsightCard
-                title="催化剂"
-                tone="catalyst"
-                icon={<TrendingUp size={12} className="text-emerald-500" />}
-                items={catalystItems}
-              />
-              <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">
-                  <BarChart2 size={12} />
-                  核心指标
-                </div>
-                {metricItems.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {metricItems.map((metric) => (
-                      <MetricCard key={`${metric.label}-${metric.value}`} label={metric.label} value={metric.value} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-400">暂无结构化指标</div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {report.sections.map((section) => (
-                <SectionRenderer
-                  key={section.order}
-                  section={section}
-                  isOpen={!!expandedSections[section.order]}
-                  isActive={activeSection === section.order}
-                  anchorPrefix={anchorPrefix}
-                  onToggle={() => toggleSection(section.order)}
-                  citationMap={citationMap}
-                  onCitationJump={handleJumpToCitation}
-                />
-              ))}
-            </div>
+            ))}
           </div>
 
           <aside className="hidden lg:block w-56 shrink-0">
