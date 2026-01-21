@@ -87,13 +87,13 @@ flowchart TB
         ReportView[ReportView Card]
         Evidence[Evidence Pool]
         Trace[Agent Trace]
-        Chart[K-line Chart]
-        Settings[Settings Modal]
+        Chart["K-line Chart"]
+        Settings["Settings Modal"]
     end
 
     subgraph API["FastAPI Backend"]
         Main["/chat/supervisor/stream"]
-        Classifier[IntentClassifier<br/>Rule + Embedding + LLM]
+        Classifier["IntentClassifier<br/>Rule + Embedding + LLM"]
     end
 
     subgraph Supervisor["SupervisorAgent"]
@@ -112,15 +112,15 @@ flowchart TB
     end
 
     subgraph ReportIR["Report and Evidence"]
-        IR[ReportIR + Validator]
-        Citations[Citations (confidence + freshness)]
+        IR["ReportIR + Validator"]
+        Citations["Citations (confidence + freshness)"]
     end
 
     subgraph Services["Core Services"]
-        Cache[KV Cache]
-        CB[Circuit Breaker]
-        SafeFetch[Safe Fetch (SSRF Guard + Retry)]
-        Memory[User Memory]
+        Cache["KV Cache"]
+        CB["Circuit Breaker"]
+        SafeFetch["Safe Fetch (SSRF Guard + Retry)"]
+        Memory["User Memory"]
     end
 
     UI --> Main
@@ -136,6 +136,7 @@ flowchart TB
     PA & NA & TA & FA & MA & DSA --> Cache
     PA & NA & TA & FA & MA & DSA --> CB
     DSA --> SafeFetch
+
 ```
 
 ### Intent Classification Flow
