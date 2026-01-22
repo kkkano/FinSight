@@ -1,8 +1,10 @@
 # FinSight 项目架构深度分析报告
-> Update 2026-01-22: backend/tools.py split into backend/tools/ package. Legacy line refs map to backend/_archive/tools_legacy.py.
 
+> **Update 2026-01-22**:
+> - backend/tools.py split into backend/tools/ package. Legacy line refs map to backend/_archive/tools_legacy.py.
+> - P0-Fix: 修复 forum.py 重复空方法、news_agent.py 空反思循环、DataContext 完整集成 currency/adjustment
 
-> **版本**: V1.0
+> **版本**: V1.1
 > **分析日期**: 2026-01-21
 > **分析师**: 架构审计官 + Agent 编排工程师
 > **项目版本**: 0.6.4
@@ -1006,6 +1008,16 @@ class FetchResult:
 ---
 
 ## 十、改造建议 (按 ROI 排序)
+
+### P0-Fix: 空壳修复 (已完成 ✅)
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| forum.py 重复空方法 | ✅ 已修复 | 删除第二个空的 `_detect_conflicts` 方法，保留真实冲突检测逻辑 |
+| news_agent.py 空反思循环 | ✅ 已修复 | 删除空的 `_identify_gaps` 和 `_targeted_search`，继承 base_agent.py 的 LLM 实现 |
+| DataContext 完整集成 | ✅ 已修复 | supervisor_agent.py 现在收集 `currency`、`adjustment`、`ticker` |
+
+**验证**: `pytest backend/tests/test_data_context.py backend/tests/test_budget_manager.py -v` 全部通过
 
 ### P0: 稳定性增强 (高优先级)
 
