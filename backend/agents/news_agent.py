@@ -166,17 +166,6 @@ class NewsAgent(BaseFinancialAgent):
         titles = [item.get("headline", item.get("title", "")) for item in data[:5]]
         return f"Recent news includes: {'; '.join(titles)}"
 
-    async def _identify_gaps(self, summary: str) -> List[str]:
-        # MVP: If summary is too short, maybe look for more?
-        # Real implementation: LLM check
-        return []
-
-    async def _targeted_search(self, gaps: List[str], ticker: str) -> Any:
-        return []
-
-    async def _update_summary(self, summary: str, new_data: Any) -> str:
-        return summary
-
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence = []
         sources = set()

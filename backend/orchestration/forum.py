@@ -311,7 +311,3 @@ class ForumHost:
 
         return "\n".join(sections)
 
-    def _detect_conflicts(self, outputs: Dict[str, AgentOutput]) -> List[str]:
-        # 简单的冲突检测逻辑
-        conflicts = []
-        return conflicts

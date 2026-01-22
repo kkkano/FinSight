@@ -1070,6 +1070,8 @@ class SupervisorAgent:
             context_collector.add(
                 str(agent_name),
                 as_of=getattr(agent_output, 'as_of', None),
+                currency=getattr(agent_output, 'currency', None),
+                adjustment=getattr(agent_output, 'adjustment', None),
                 ticker=ticker,
             )
         data_context = context_collector.summarize().to_dict()
