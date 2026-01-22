@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FinSight 流式支持模块
+FinSight (LEGACY: not used in production) 流式支持模块
 实现实时流式输出和用户友好的进度显示
 兼容 LangChain 1.0+ 和 LangGraph 架构
 集成 LangSmith 可观测性追踪
@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 # LangSmith 集成（可选）
 try:
-    from langsmith_integration import (
+    from backend.langsmith_integration import (
         is_enabled as langsmith_enabled,
         start_run,
         log_event,
@@ -77,7 +77,7 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
         if LANGSMITH_AVAILABLE and langsmith_enabled():
             try:
                 self._langsmith_run = start_run(
-                    name=f"FinSight: {query[:50]}",
+                    name=f"FinSight (LEGACY: not used in production): {query[:50]}",
                     query=query,
                     metadata={"start_time": self.start_time.isoformat()}
                 )
@@ -86,7 +86,7 @@ class FinancialStreamingCallbackHandler(BaseCallbackHandler):
         
         if self.show_progress:
             print(f"\n{'='*70}")
-            print(f"📈 FinSight 流式分析 - LangChain 1.0+")
+            print(f"📈 FinSight (LEGACY: not used in production) 流式分析 - LangChain 1.0+")
             print(f"{'='*70}")
             print(f"🎯 查询: {query[:100]}...")
             print(f"📅 开始时间: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -339,7 +339,7 @@ class FinancialDashboard:
     def display_dashboard(self):
         """显示仪表板"""
         print(f"\n{'='*60}")
-        print("📊 FinSight 分析仪表板")
+        print("📊 FinSight (LEGACY: not used in production) 分析仪表板")
         print(f"{'='*60}")
         
         total = self.metrics["total_analyses"]

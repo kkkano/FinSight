@@ -352,3 +352,4 @@ text = readability_extract(response.text)  # 仅保留正文
 
 [2026-01-22] Repo cleanup: removed tracked node_modules/pycache/logs, moved root docs into docs/, added langchain_agent shim. pytest run: initial import error fixed; full run timed out at ~120s.
 [2026-01-22] Minor cleanup: removed duplicate _detect_conflicts, restored NewsAgent reflection to base implementation, DataContext now collects currency/adjustment in supervisor_agent.
+[2026-01-22] Moved langchain_tools into backend/ and streaming_support into backend/legacy (tests-only); removed root shim and updated imports.

@@ -18,3 +18,8 @@
 - forum.py: removed duplicate empty `_detect_conflicts` implementation.
 - news_agent.py: removed no-op reflection overrides to fall back to base logic.
 - supervisor_agent.py: DataContext collection now includes currency/adjustment.
+
+## Follow-up (2026-01-22) - LangChain file placement
+- moved `langchain_tools.py` to `backend/langchain_tools.py` (production registry)
+- moved `streaming_support.py` to `backend/legacy/streaming_support.py` (tests-only)
+- removed root `langchain_agent.py` shim and updated imports

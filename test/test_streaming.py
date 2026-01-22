@@ -4,8 +4,8 @@
 测试流式输出功能
 """
 
-from langchain_agent import create_financial_agent
-from streaming_support import AsyncFinancialStreamer, FinancialDashboard, ProgressIndicator
+from backend.langchain_agent import create_financial_agent
+from backend.legacy.streaming_support import AsyncFinancialStreamer, FinancialDashboard, ProgressIndicator
 
 def test_basic_streaming():
     """测试基础流式输出"""

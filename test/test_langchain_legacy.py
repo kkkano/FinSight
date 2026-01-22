@@ -22,7 +22,7 @@ print("="*70)
 
 print("\n[Test 1] Import modules...")
 try:
-    from langchain_tools import (
+    from backend.langchain_tools import (
         FINANCIAL_TOOLS,
         get_tool_names,
         get_tools_description
@@ -35,7 +35,7 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    from langchain_agent import (
+    from backend.langchain_agent import (
         LangChainFinancialAgent,
         create_financial_agent
     )
@@ -59,7 +59,7 @@ test_cases = [
 for tool_name, tool_input in test_cases:
     print(f"\n   Testing tool: {tool_name}")
     try:
-        from langchain_tools import get_tool_by_name
+        from backend.langchain_tools import get_tool_by_name
         tool = get_tool_by_name(tool_name)
         
         if tool:

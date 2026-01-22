@@ -326,6 +326,9 @@ FinSight/
 |   |   |-- memory.py
 |   |-- api/
 |   |   |-- main.py
+|   |-- langchain_tools.py
+|   |-- legacy/
+|   |   |-- streaming_support.py
 |   |-- tools/
 |   |   |-- search.py
 |   |   |-- news.py

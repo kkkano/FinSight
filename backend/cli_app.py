@@ -29,7 +29,7 @@ if PROJECT_ROOT not in sys.path:
 
 # 导入组件
 try:
-    from langchain_agent import create_financial_agent, LangChainFinancialAgent
+    from backend.langchain_agent import create_financial_agent, LangChainFinancialAgent
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False

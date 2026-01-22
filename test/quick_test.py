@@ -3,7 +3,7 @@
 快速测试脚本 - 验证系统功能
 """
 
-from langchain_agent import create_financial_agent
+from backend.langchain_agent import create_financial_agent
 
 def test_agent_creation():
     """测试 Agent 创建"""

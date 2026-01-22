@@ -14,8 +14,8 @@
 - `docs/`：文档与蓝图（架构说明、数据源说明、开发日志等）。
 - `test/`：高层测试与集成测试脚本。
 - `archive/`：老版本 Agent / 工具 / 测试的归档区。
-- `langchain_tools.py`：当前使用的 LangChain 工具注册表，供 LangGraph Agent 绑定。
-- `streaming_support.py`：流式输出支持工具（已实现，后续计划更紧密集成到主流程）。
+- `backend/langchain_tools.py`：当前使用的 LangChain 工具注册表，供 LangGraph Agent 绑定。
+- `backend/legacy/streaming_support.py`: legacy streaming helper (tests-only, not used in production).
 - `.env`：环境变量配置（LLM、数据源 API key 等，不会提交到仓库）。
 - `requirements.txt`：**当前主用的 Python 依赖列表（已更新为 LangChain 1.1 + LangGraph 1.0.4 等）。**
 - `readme.md` / `readme_cn.md`：中英文项目总览说明。
@@ -55,7 +55,7 @@
   - FastAPI 应用入口：  
     - `/`：健康检查。  
     - `/chat`：主对话接口（使用 `ConversationAgent`）。  
-    - `/chat/stream`：流式对话接口（结合 `streaming_support.py`）。  
+- `backend/legacy/streaming_support.py`: legacy streaming helper (tests-only, not used in production).
     - `/api/config`：前端设置读取与保存（LLM 配置、界面布局偏好等）。  
     - `/api/export/pdf`：将对话导出为 PDF。  
     - 其它：与股票行情 / 订阅相关的辅助接口。  
@@ -259,7 +259,7 @@ python -m pytest
 
 ## 📌 版本说明
 
-- 当前项目基于 **LangChain 1.1.x + LangGraph 1.0.x**，并通过 `langchain_tools.py` + `backend/langchain_agent.py` 完成现代化的工具调用与 CIO 报告生成。  
+- 当前项目基于 **LangChain 1.1.x + LangGraph 1.0.x**，并通过 `backend/langchain_tools.py` + `backend/langchain_agent.py` 完成现代化的工具调用与 CIO 报告生成。  
 - 原始的 ReAct Agent 和早期 LangChain 版本实现仍然保存在 `archive/` 中，便于回滚和对比，但不再是默认路径。  
 - 具体的对话流程、回退策略、可用工具与未来线路图，可以参考：  
   - `readme.md` / `readme_cn.md`  

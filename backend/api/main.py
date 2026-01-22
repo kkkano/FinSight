@@ -25,7 +25,7 @@ from backend.metrics import METRICS_ENABLED, metrics_payload
 logger = logging.getLogger(__name__)
 
 # 将项目根目录添加到 sys.path
-# 这样可以确保 backend, config, langchain_agent 等模块能被找到
+# 这样可以确保 backend modules 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)

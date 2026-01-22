@@ -188,7 +188,7 @@ class TestIntegrationWithStreaming(unittest.TestCase):
     def test_import_in_streaming(self):
         """测试在 streaming_support 中的导入"""
         try:
-            from streaming_support import FinancialStreamingCallbackHandler
+            from backend.legacy.streaming_support import FinancialStreamingCallbackHandler
             handler = FinancialStreamingCallbackHandler()
             
             # 检查 LangSmith 相关属性
