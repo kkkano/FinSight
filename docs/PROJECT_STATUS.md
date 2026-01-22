@@ -1,6 +1,81 @@
 # FinSight 项目状态总览
-> 📅 **更新日期**: 2026-01-13
-> 🎯 **版本**: 0.6.3 (NEWS 子意图分类 + 文档同步)
+> 📅 **更新日期**: 2026-01-22
+> 🎯 **版本**: 0.6.6 (可靠性/可观测性补强 + 文档同步)
+
+---
+
+## ✅ 2026-01-22 更新摘要 (v0.6.6)
+
+### 可靠性与合规
+- **SSRF 防护**：统一至 DeepSearch + `fetch_url_content`
+- **HTTP 连接池**：全工具统一 Session + Retry
+- **缓存策略**：TTL 抖动 + 负缓存，减少雪崩/穿透
+- **熔断分源**：支持按源配置 failure/recovery 阈值
+
+### 架构与质量
+- **Tools package**: `backend/tools.py` split into `backend/tools/` (compat `backend.tools` re-export)
+- **Config entry**: `llm_service` now reads `backend/llm_config.py` (user_config.json > .env)
+- **ForumHost 冲突检测**：显式标注冲突并下调置信度
+- **Reflection Loop**：BaseFinancialAgent 引入 LLM Gap Detection + 补检
+- **Trace 规范化**：agent_traces 统一结构输出
+
+### 可观测性
+- **Prometheus 指标**：新增 `/metrics` 入口（可选依赖）
+- **日志**：核心模块替换 `print` 为 `logging`
+
+### 测试
+- `backend/tests/test_data_context.py`
+- `backend/tests/test_budget_manager.py`
+- `backend/tests/test_deep_search_ssrf.py`
+- `backend/tests/test_plan_executor.py`
+
+### 文档同步
+- `docs/ROADMAP.md` / `docs/PROJECT_STATUS.md` / `docs/01-05*.md`
+- `docs/QUALITY_IMPROVEMENT_OVERVIEW_V3.md` / `docs/feature_logs/*`
+- `README.md` / `readme_cn.md`
+
+---
+
+## ✅ 2026-01-21 更新摘要 (v0.6.5)
+
+### P0 执行进展（本次完成）
+- **DataContext**: 统一 as_of/currency/adjustment，并在 ReportIR/meta 输出一致性告警
+- **BudgetManager**: 限制工具调用/轮次/耗时预算，预算事件链可追溯
+- **安全与合规门禁**: API Key 鉴权 + 限流中间件 + 报告免责声明模板落地
+
+### 验收要点（本次新增）
+- **一致性**: 多源数据出现 currency/as_of 偏差时自动生成 warnings/issues
+- **预算**: tool/round/time 预算超限可复现并在 budget 快照中体现
+- **合规**: 未鉴权拒绝、限流生效、报告尾部含免责声明
+
+### 测试
+- `backend/tests/test_data_context.py`
+- `backend/tests/test_budget_manager.py`
+
+### 文档同步
+- `docs/ROADMAP.md` / `docs/PROJECT_STATUS.md` / `docs/01-05*.md` / `README.md` / `readme_cn.md` / `docs/PROJECT_ANALYSIS_V1.md`
+---
+
+
+## ✅ 2026-01-20 更新摘要 (v0.6.4)
+
+### 质量治理 P0/P1 任务拆分（已落地）
+- **P0**: PlanIR+执行状态机、证据链硬约束、数据一致性上下文、预算/超时控制、安全与合规门禁
+- **P1**: Reflection 可检验审校、ReAct 搜索收敛、结论冲突融合、可观测性与自动降级、回归评估基线
+
+### P0 实施进展（本次完成）
+- **PlanIR + Executor**: 报告路径引入计划模板与执行状态机，trace 记录 step 状态/耗时
+- **EvidencePolicy**: 引用校验 + 覆盖率统计落入 ReportValidator，低覆盖自动提示风险
+
+### 验收标准要点（用于工程验收）
+- **计划/执行**: trace 含 step 级状态与耗时，超时回退生效
+- **证据链**: 关键结论 ≥ 2 独立来源；覆盖率 ≥ 80% 否则降级
+- **一致性**: 数值字段包含 as_of/currency，矛盾自动标风险
+- **预算**: 超预算稳定降级，成本与时延可控
+- **安全**: 未鉴权拒绝、限流生效、报告含免责声明
+
+### 文档同步
+- `docs/ROADMAP.md`、`docs/PROJECT_STATUS.md`、`docs/01-05*.md` 已补充质量治理计划
 
 ---
 
@@ -127,9 +202,9 @@
 - 章节导航滚动高亮（IntersectionObserver）已接入
 - 新增 ReportIR Chart Option 规范文档（docs/REPORT_CHART_SPEC.md）
 - Reasoning trace 现已覆盖全流程步骤，并在 /chat 与 /chat/stream 返回细节
-- ???->Ticker ????????Finnhub symbol lookup + ????????????
-- ??????????????????? ticker?????????
-- DeepSearch trace/citations ???????? Markdown???????
+- 公司名->Ticker 解析：Finnhub symbol lookup + search 兜底
+- 多候选时返回澄清提示，要求确认 ticker/交易所
+- DeepSearch trace/citations 纳入 ReportIR 与 Markdown 渲染链路
 - /chat/stream 全意图真实 token 流式输出，REPORT 默认走 ReportAgent，SSE done 事件带 ReportIR
 - /chat 与 /chat/stream 均已接入异步 Supervisor 与指代消解（resolve_reference）
 - **Bug 修复**：

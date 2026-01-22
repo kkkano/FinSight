@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Phase 1 集成测试
-验证整个 Orchestration 层与真实 tools.py 的集成
+验证整个 Orchestration 层与真实 backend.tools 的集成
 """
 
 import sys
@@ -20,7 +20,7 @@ sys.path.insert(0, PROJECT_ROOT)
 def test_tools_module_import():
     """测试 tools 模块可以导入"""
     try:
-        import tools
+        from backend import tools
         
         # 检查关键函数存在
         assert hasattr(tools, 'get_stock_price')

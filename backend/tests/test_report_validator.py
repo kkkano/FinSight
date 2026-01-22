@@ -59,7 +59,8 @@ def test_report_validator_risks_recommendation():
     }
     result = ReportValidator.validate_and_fix(data, as_dict=True)
 
-    assert result["risks"] == ["Valuation risk", "Macro risk"]
+    assert "Valuation risk" in result["risks"]
+    assert "Macro risk" in result["risks"]
     assert result["recommendation"] == "BUY"
 
 
@@ -84,3 +85,64 @@ def test_report_validator_citations_fields():
     assert "freshness_hours" in citation
     assert 0.0 <= citation["confidence"] <= 1.0
     assert citation["freshness_hours"] >= 0.0
+
+
+def test_report_validator_evidence_policy_filters_invalid_refs():
+    data = {
+        "ticker": "AAPL",
+        "summary": "Summary",
+        "citations": [
+            {
+                "source_id": "src_1",
+                "title": "Example",
+                "url": "https://example.com",
+                "snippet": "Snippet",
+                "published_date": "2026-01-20T00:00:00",
+            }
+        ],
+        "sections": [
+            {
+                "title": "Summary",
+                "order": 1,
+                "contents": [
+                    {"type": "text", "content": "Hello", "citation_refs": ["src_1", "bad_ref"]},
+                ],
+            }
+        ],
+    }
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+
+    refs = result["sections"][0]["contents"][0]["citation_refs"]
+    assert refs == ["src_1"]
+    policy = result["meta"]["evidence_policy"]
+    assert "bad_ref" in policy["invalid_refs"]
+
+
+def test_report_validator_evidence_policy_flags_low_coverage():
+    data = {
+        "ticker": "AAPL",
+        "summary": "Summary",
+        "citations": [
+            {
+                "source_id": "src_1",
+                "title": "Example",
+                "url": "https://example.com",
+                "snippet": "Snippet",
+                "published_date": "2026-01-20T00:00:00",
+            }
+        ],
+        "sections": [
+            {
+                "title": "Key Findings",
+                "order": 1,
+                "contents": [
+                    {"type": "text", "content": "Block A", "citation_refs": ["src_1"]},
+                    {"type": "text", "content": "Block B", "citation_refs": []},
+                ],
+            }
+        ],
+    }
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+    policy = result["meta"]["evidence_policy"]
+    assert policy["status"] == "warning"
+    assert any("证据覆盖率" in risk for risk in result["risks"])

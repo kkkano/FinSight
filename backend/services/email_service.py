@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 邮件服务模块
 用于发送股票提醒邮件
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# -*- coding: utf-8 -*-
+
 
 import os
 import smtplib
@@ -53,7 +59,7 @@ class EmailService:
             是否发送成功
         """
         if not self.smtp_user or not self.smtp_password:
-            print("⚠️  邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
+            logger.info("⚠️  邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
             return False
         
         try:
@@ -78,11 +84,11 @@ class EmailService:
                 server.send_message(msg)
             
             # 使用纯 ASCII 日志，避免控制台编码问题
-            print(f"[EmailService] Sent email to {to_email}")
+            logger.info(f"[EmailService] Sent email to {to_email}")
             return True
             
         except Exception as e:
-            print(f"[EmailService] Failed to send email: {e}")
+            logger.info(f"[EmailService] Failed to send email: {e}")
             return False
     
     def send_stock_alert(
@@ -187,4 +193,3 @@ def get_email_service() -> EmailService:
     if _email_service is None:
         _email_service = EmailService()
     return _email_service
-

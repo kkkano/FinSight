@@ -1,0 +1,74 @@
+这是一个非常深刻且直击当前 Agent 开发痛点的问题。你指出的现象——“路由很准（能找到对的人），但干活很烂（干出的活不行）”，是目前 90% 开源 Agent 项目面临的“死海”阶段。
+
+FinSight 目前处于 L2 级（协同级），能跑通流程，但缺乏 L3 级（专家级） 的深度。所谓的“功能不够”、“说服力不足”，核心原因是：Agents 只是在做“搬运工”（Information Retrieval），而不是在做“分析师”（Insight Generation）。
+
+针对你提到的 News（新闻）、Macro（宏观）、DeepSearch（深度搜索）以及整体架构，我整理了一份深度优化方案和 roadmap。
+
+一、 核心痛点诊断与优化方向
+1. NewsAgent（新闻智能体）
+当前问题：
+信噪比低：抓取通用新闻（CNN/Google News），对金融市场影响小的噪音太多。
+缺乏时效性与关联性：只罗列标题，没有分析“这个新闻对该资产是利多还是利空”。
+来源单一：几家主流媒体，缺乏推特舆情、专业研报。
+优化方向：
+多源异构数据：接入 Financial Modeling Prep (FMP)、Polygon.io 或 Bloomberg (如有预算)，甚至 Twitter (X) Sentiment。
+引入 NLP 情感因子：不要只让 LLM 读，要先挂载一个 FinBERT 模型给新闻打分（Sentiment Score），过滤掉分数为 0（中性）的新闻。
+结构化输出：强制 Agent 输出 Impact Analysis（影响分析）、Correlated Assets（相关资产）、Sentiment（情绪方向）。
+2. MacroAgent（宏观智能体）
+当前问题：
+过于浅显：只报 GDP、CPI 几个数字。金融分析的核心是“预期差” (Expectation Gap)，而不是数字本身。
+缺乏因果推理：无法建立“美联储加息 -> 国债收益率上升 -> 科技股承压”的传导逻辑。
+优化方向：
+引入“经济日历” (Economic Calendar)：对比 Actual（实际值）vs Consensus（预测值）。只有当实际值大幅偏离预测值时，宏观 Agent 才应该报警。
+研报 RAG：建立一个向量数据库，存入最近的美联储会议纪要 (FOMC Minutes) 和投行宏观研报。Agent 回答时必须检索这些专业内容，而不是瞎编。
+3. DeepSearchAgent（深度搜索）
+当前问题：
+只是Google一下：只读取了搜索引擎返回的 snippet（摘要），没读全文。
+缺乏交叉验证：A 说涨，B 说跌，它可能只取了 A。
+优化方案 (Workflow 升级)：
+Reader 模式：搜索后，必须用 Jina Reader 或 Firecrawl 抓取 URL 的Markdown 全文。
+Fact Check 节点：在内部图中增加一个节点，专门对比不同来源的数据冲突。
+Citation (引用)：强制要求每条结论必须带 [Source URL]，否则丢弃。
+4. 整体架构（合成效果不好）
+当前问题：
+堆砌式汇报：Supervisor 只是把 6 个 Agent 的结果拼起来，变成一篇 5000 字的长文，用户看不下去。
+缺乏“主线”：没有一个核心的投资逻辑（Thesis）把宏观、基本面、技术面串起来。
+优化方向：
+辩论机制 (Debate)：让 TechnicalAgent（看多）和 MacroAgent（看空）互喷一轮，Supervisor 总结分歧点。
+动态权重：Supervisor 应该根据当前情境赋予权重。例如“财报季”权重给 FundamentalAgent，“加息周”权重给 MacroAgent。
+二、 P0-P2 To-Do List (实战路线图)
+这是一份可以直接分配给开发的 Task List。
+
+P0：数据质量与基础能力（Fix Garbage In）
+解决“巧妇难为无米之炊”，让 Agent 拿到这一行真正该看的数据。
+
+模块	任务详情	技术栈/工具建议
+All	接入专业金融 API	替换免费/通用 API。接入 FMP (Financial Modeling Prep) 或 Yahoo Finance 的深度接口（不仅仅是价格）。
+News	全文抓取能力	使用 Firecrawl 或 Jina.ai，从 URL 提取正文 Markdown，而不是仅依赖搜索摘要。
+Macro	实现“预期差”逻辑	改造 Macro 工具，使其返回 {event, actual, forecast, impact_level}。没有“预期值”的数据不仅没用，甚至是误导。
+DeepSearch	增加 Source 追踪	强制 Agent 的 Output Schema 中包含 citations 列表，每句话必须标注来源索引。
+P1：逻辑增强与合成优化（Fix Reasoning）
+解决“不仅要看到数据，还要像分析师一样思考”。
+
+模块	任务详情	架构建议
+DeepSearch	实现 Plan-and-Solve 模式	如前文所述，在 DeepSearch 内部实现 LangGraph 子图：Plan -> Search (并行) -> Read -> Synthesize。
+Synthesis	结构化报告模板	Supervisor 不再自由生成，而是填空。模板包含：核心结论 (TL;DR)、风险提示、关键催化剂、各维度详细分析。
+News	实体链接 (Entity Linking)	确保新闻能准确映射到 Ticker（股票代码）。例如提到“iPhone 销量下滑”，必须自动关联到 AAPL 并触发相关性分析。
+Price	增加相关性分析	不只看 K 线，增加 Python 工具计算该资产与 标普500/美元指数/比特币 的 Rolling Correlation (滚动相关性)。
+P2：体验与高级特性（Nice to Have）
+解决“好用”和“专业感”的问题。
+
+模块	任务详情	亮点描述
+UI/UX	流式思维链展示	在前端展示 Supervisor 的决策过程（Thinking Process），不仅仅是结果。比如展示：“正在因为 CPI 数据异常而调用 MacroAgent...”
+RAG	构建私有研报库	允许用户上传 PDF (研报)，建立向量库。Agent 回答时优先参考高盛/大摩的逻辑。
+Review	增加“红蓝对抗”	增加一个 CriticAgent，专门挑刺。在最终报告生成前，Critic 提出质疑，Supervisor 修改一次再输出。
+三、 总结建议
+FinSight 这个项目现在的瓶颈不在于“Agent 数量不够”或“Agent 嵌套不够深”，而在于单个 Agent 的“领域深度”不足。
+
+现在的 Agent 就像一个刚毕业的实习生，会用 Google，会看 Yahoo Finance。
+你需要做的是把它们培养成“分析师”：
+
+NewsAgent 必须学会看研报和 Twitter，而不只是 CNN。
+MacroAgent 必须学会看“预期差”，而不只是数字。
+DeepSearch 必须学会“由薄读厚”（抓取全文），再“由厚读薄”（提炼观点）。
+建议行动：先别急着重构 DeepSearch 的三层嵌套。先花壹周时间，把 P0 里的数据源替换掉，把 Prompt 从“总结这个网页”改成“作为资深分析师，基于这个数据分析对 [资产] 的流动性影响”。数据和 Prompt 也就是 Context 的质量提升，效果通常比改架构来得快得多。

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinSight AI - 智能金融合伙人 (设计稿)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'fin-bg': '#0a0f1a',
+            'fin-panel': '#111827',
+            'fin-border': '#1f2937',
+            'fin-primary': '#3b82f6',
+            'fin-text': '#f3f4f6',
+            'fin-muted': '#9ca3af',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: #1f2937; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="dark bg-fin-bg text-fin-text min-h-screen">
+  <div class="flex h-screen">
+    <!-- 左侧边栏 -->
+    <aside class="w-64 bg-fin-panel border-r border-fin-border flex flex-col">
+      <!-- Logo -->
+      <div class="p-4 border-b border-fin-border">
+        <h1 class="text-xl font-bold text-fin-primary">FinSight AI</h1>
+        <p class="text-xs text-fin-muted">智能金融合伙人</p>
+      </div>
+
+      <!-- 用户画像 -->
+      <div class="p-4 border-b border-fin-border">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-full bg-fin-primary/20 flex items-center justify-center">
+            <span class="text-fin-primary">👤</span>
+          </div>
+          <div>
+            <div class="font-medium">投资者</div>
+            <div class="text-xs text-fin-muted">稳健型</div>
+          </div>
+        </div>
+        <select class="w-full bg-fin-bg border border-fin-border rounded px-2 py-1 text-sm">
+          <option>保守型投资者</option>
+          <option selected>稳健型投资者</option>
+          <option>进取型投资者</option>
+        </select>
+      </div>
+
+      <!-- Watchlist -->
+      <div class="flex-1 p-4 overflow-y-auto scrollbar-thin">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-medium">关注列表</span>
+          <button class="text-fin-primary text-xs">+ 添加</button>
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between p-2 bg-fin-bg rounded">
+            <span class="font-medium">AAPL</span>
+            <div class="text-right">
+              <div class="text-sm">$178.72</div>
+              <div class="text-xs text-green-400">+1.23%</div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between p-2 bg-fin-bg rounded">
+            <span class="font-medium">NVDA</span>
+            <div class="text-right">
+              <div class="text-sm">$875.28</div>
+              <div class="text-xs text-green-400">+2.45%</div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between p-2 bg-fin-bg rounded">
+            <span class="font-medium">TSLA</span>
+            <div class="text-right">
+              <div class="text-sm">$248.50</div>
+              <div class="text-xs text-red-400">-0.87%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部设置 -->
+      <div class="p-4 border-t border-fin-border">
+        <button class="w-full flex items-center gap-2 text-sm text-fin-muted hover:text-fin-text">
+          ⚙️ 设置
+        </button>
+      </div>
+    </aside>
+
+    <!-- 主聊天区域 -->
+    <main class="flex-1 flex flex-col">
+      <!-- 聊天消息区 -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin">
+        <!-- 欢迎消息 -->
+        <div class="text-center py-8">
+          <h2 class="text-2xl font-bold mb-2">欢迎使用 FinSight AI</h2>
+          <p class="text-fin-muted">您的智能金融合伙人，随时为您提供专业分析</p>
+        </div>
+
+        <!-- 用户消息 -->
+        <div class="flex justify-end">
+          <div class="max-w-2xl bg-fin-primary/20 rounded-lg p-4">
+            <p>详细分析苹果公司，生成投资报告</p>
+          </div>
+        </div>
+
+        <!-- AI 回复 -->
+        <div class="flex justify-start">
+          <div class="max-w-3xl bg-fin-panel rounded-lg p-4 border border-fin-border">
+            <div class="prose prose-invert text-sm">
+              <h3 class="text-fin-primary">📊 苹果公司 (AAPL) 深度分析报告</h3>
+              <p><strong>综合评级：</strong> <span class="text-green-400">买入</span> | 置信度: 85%</p>
+
+              <h4>📈 技术面分析</h4>
+              <p>当前价格 $178.72，处于上升趋势。RSI(14) = 58，未超买。MACD 金叉形成，短期看涨。</p>
+
+              <h4>💰 基本面分析</h4>
+              <p>营收 $383B (YoY +2.8%)，净利润 $97B，毛利率 44.1%。PE 28.5x，略高于行业平均。</p>
+
+              <h4>📰 市场情绪</h4>
+              <p>近期新闻偏正面，Vision Pro 发布引发关注。机构持仓稳定，巴菲特继续持有。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入区域 -->
+      <div class="p-4 border-t border-fin-border">
+        <div class="flex gap-2 mb-3">
+          <button class="px-3 py-1.5 text-xs bg-fin-panel border border-fin-border rounded hover:border-fin-primary">📈 NVDA 技术分析</button>
+          <button class="px-3 py-1.5 text-xs bg-fin-panel border border-fin-border rounded hover:border-fin-primary">⚖️ AAPL vs MSFT</button>
+          <button class="px-3 py-1.5 text-xs bg-fin-panel border border-fin-border rounded hover:border-fin-primary">📰 特斯拉新闻</button>
+          <button class="px-3 py-1.5 text-xs bg-fin-panel border border-fin-border rounded hover:border-fin-primary">📊 苹果深度报告</button>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" placeholder="输入您的问题..." class="flex-1 bg-fin-bg border border-fin-border rounded-lg px-4 py-3 focus:border-fin-primary focus:outline-none">
+          <button class="px-6 py-3 bg-fin-primary text-white rounded-lg hover:bg-fin-primary/80">发送</button>
+        </div>
+        <p class="text-xs text-fin-muted text-center mt-2">AI 生成内容仅供参考，不构成投资建议</p>
+      </div>
+    </main>
+
+    <!-- 右侧 Agent Trace 面板 -->
+    <aside class="w-80 bg-fin-panel border-l border-fin-border flex flex-col">
+      <div class="p-4 border-b border-fin-border">
+        <h3 class="font-medium flex items-center gap-2">🧠 Agent Trace <span class="text-fin-muted text-xs">(4 步骤)</span></h3>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+        <!-- Step 1 -->
+        <div class="bg-fin-bg rounded-lg border border-fin-border overflow-hidden">
+          <div class="p-3 flex items-center gap-2">
+            <span class="text-green-400">🎯</span>
+            <div class="flex-1">
+              <div class="font-medium text-sm">意图识别完成</div>
+              <div class="text-xs text-fin-muted">report (深度报告)</div>
+            </div>
+            <span class="text-xs text-fin-muted">0.2s</span>
+          </div>
+          <div class="px-3 pb-3 pt-1 border-t border-fin-border/30 bg-fin-panel/50 text-xs space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-fin-muted">意图:</span>
+              <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded">report</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-fin-muted">方法:</span>
+              <span>embedding+keyword</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-fin-muted">置信度:</span>
+              <span class="text-green-400">92%</span>
+              <div class="flex-1 h-1.5 bg-fin-border rounded-full">
+                <div class="h-full bg-green-400 rounded-full" style="width:92%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="bg-fin-bg rounded-lg border border-fin-border overflow-hidden">
+          <div class="p-3 flex items-center gap-2">
+            <span class="text-blue-400">🤖</span>
+            <div class="flex-1">
+              <div class="font-medium text-sm">多Agent并行分析</div>
+              <div class="text-xs text-fin-muted">4 个专家协作</div>
+            </div>
+            <span class="text-xs text-fin-muted">3.5s</span>
+          </div>
+          <div class="px-3 pb-3 pt-1 border-t border-fin-border/30 bg-fin-panel/50 text-xs">
+            <div class="flex flex-wrap gap-1 mt-1">
+              <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded">PriceAgent</span>
+              <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded">NewsAgent</span>
+              <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">TechnicalAgent</span>
+              <span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">FundamentalAgent</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="bg-fin-bg rounded-lg border border-fin-border overflow-hidden">
+          <div class="p-3 flex items-center gap-2">
+            <span class="text-yellow-400">🔧</span>
+            <div class="flex-1">
+              <div class="font-medium text-sm">工具调用</div>
+              <div class="text-xs text-fin-muted">5 个数据源</div>
+            </div>
+            <span class="text-xs text-fin-muted">2.1s</span>
+          </div>
+          <div class="px-3 pb-3 pt-1 border-t border-fin-border/30 bg-fin-panel/50 text-xs">
+            <div class="flex flex-wrap gap-1 mt-1">
+              <span class="px-2 py-0.5 bg-fin-panel text-fin-muted rounded">get_stock_price</span>
+              <span class="px-2 py-0.5 bg-fin-panel text-fin-muted rounded">get_company_news</span>
+              <span class="px-2 py-0.5 bg-fin-panel text-fin-muted rounded">get_technical</span>
+            </div>
+            <div class="mt-2 text-fin-muted">数据源: yfinance, DuckDuckGo</div>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="bg-fin-bg rounded-lg border border-fin-border overflow-hidden">
+          <div class="p-3 flex items-center gap-2">
+            <span class="text-purple-400">✨</span>
+            <div class="flex-1">
+              <div class="font-medium text-sm">ForumHost 综合分析</div>
+              <div class="text-xs text-fin-muted">生成投资建议</div>
+            </div>
+            <span class="text-xs text-fin-muted">1.8s</span>
+          </div>
+          <div class="px-3 pb-3 pt-1 border-t border-fin-border/30 bg-fin-panel/50 text-xs">
+            <div class="text-fin-muted">推理:</div>
+            <p class="mt-1 pl-2 border-l-2 border-purple-400/30 text-fin-text/80">
+              综合技术面上升趋势、基本面稳健，给出买入评级。
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

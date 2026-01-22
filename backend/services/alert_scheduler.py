@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Minimal alert scheduling skeleton for price_change rule.
 
@@ -12,20 +10,24 @@ This keeps the logic small and testable:
 This module is intentionally framework-light so it can later be wired to
 APScheduler/Celery/async cron as needed.
 """
-
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 import time
 import os
-import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
 
 from backend.services.subscription_service import SubscriptionService
 from backend.services.email_service import EmailService
+
+logger = logging.getLogger(__name__)
+
+
+
 
 
 # A lightweight data shape for the price provider result.
@@ -281,7 +283,7 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
             related = item.get("relatedTickers") or item.get("tickers") or []
             _add_article(title, link, item.get("publisher") or item.get("source") or "", pub_dt, related)
     except Exception as e:
-        print(f"[NewsFetcher] yfinance news failed for {ticker}: {e}")
+        logger.info(f"[NewsFetcher] yfinance news failed for {ticker}: {e}")
 
     # Finnhub fallback
     if not articles:
@@ -310,7 +312,7 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
                         related = item.get("related", "").split(",") if item.get("related") else [ticker_up]
                         _add_article(title, link, source, pub_dt, related)
             except Exception as e:
-                print(f"[NewsFetcher] finnhub news failed for {ticker}: {e}")
+                logger.info(f"[NewsFetcher] finnhub news failed for {ticker}: {e}")
 
     # Alpha Vantage fallback
     if not articles:
@@ -339,7 +341,7 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
                     rel_codes = [r.get("ticker") for r in related if isinstance(r, dict) and r.get("ticker")]
                     _add_article(title, link, source, pub_dt, rel_codes or [ticker_up])
             except Exception as e:
-                print(f"[NewsFetcher] alpha vantage news failed for {ticker}: {e}")
+                logger.info(f"[NewsFetcher] alpha vantage news failed for {ticker}: {e}")
 
     return articles
 

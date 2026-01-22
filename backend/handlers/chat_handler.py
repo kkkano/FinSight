@@ -9,6 +9,7 @@ ChatHandler - 快速对话处理器
 3. 优化了 handle 方法中 query_lower 的定义，避免冗余。
 """
 
+import logging
 import sys
 import os
 import random
@@ -16,13 +17,16 @@ import traceback
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
+
 # 尝试导入 LangChain 核心模块（假设已安装）
 try:
     from langchain_core.messages import HumanMessage
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
-    print("[ChatHandler] Warning: langchain_core not found. LLM features disabled.")
+    logger.info("[ChatHandler] Warning: langchain_core not found. LLM features disabled.")
 
 
 # 添加项目根目录
@@ -62,23 +66,23 @@ class ChatHandler:
         # 优先从 orchestrator 获取 tools_module
         if self.orchestrator and hasattr(self.orchestrator, 'tools_module') and self.orchestrator.tools_module:
             self.tools_module = self.orchestrator.tools_module
-            print("[ChatHandler] 从 orchestrator 获取 tools 模块")
+            logger.info("[ChatHandler] 从 orchestrator 获取 tools 模块")
             return
         
         # 回退：直接导入
         try:
-            # 假设 tools 模块在 backend/tools.py 或项目根目录
+            # 假设 tools 模块在 backend.tools 包或项目根目录
             from backend import tools
             self.tools_module = tools
-            print("[ChatHandler] 成功从 backend.tools 导入")
+            logger.info("[ChatHandler] 成功从 backend.tools 导入")
         except ImportError:
             try:
                 import tools
                 self.tools_module = tools
-                print("[ChatHandler] 成功从 tools 导入")
+                logger.info("[ChatHandler] 成功从 tools 导入")
             except ImportError as e:
                 self.tools_module = None
-                print(f"[ChatHandler] 警告: 无法导入 tools 模块: {e}")
+                logger.info(f"[ChatHandler] 警告: 无法导入 tools 模块: {e}")
     
     def handle(
         self,
@@ -173,7 +177,7 @@ class ChatHandler:
                             'data': {'raw_news': news_text}
                         }
                     except Exception as e:
-                        print(f"[ChatHandler] market news fallback failed: {e}")
+                        logger.info(f"[ChatHandler] market news fallback failed: {e}")
                 default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
                 return self._handle_news_query(default_news_ticker, query, context)
             
@@ -184,7 +188,7 @@ class ChatHandler:
             # 如果没有股票代码，尝试从上下文获取 (上面已经处理过继承逻辑，这里只需判断最终 tickers)
 
             if not tickers:
-                print(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
+                logger.info(f"[ChatHandler] 检查闲聊/建议意图: Query='{query_lower}'")
 
                 # 新闻类无 ticker 查询：默认用大盘指数
                 if is_price_query:
@@ -200,14 +204,14 @@ class ChatHandler:
 
                 # 泛化建议查询 (命中"推荐几只"等)
                 if is_generic_rec or self._is_advice_query(query_lower):
-                    print("[ChatHandler] ✅ 命中泛化建议意图（无 ticker）")
+                    logger.info("[ChatHandler] ✅ 命中泛化建议意图（无 ticker）")
                     return self._handle_generic_recommendation(query)
 
                 if self._is_chat_query(query_lower):
-                    print("[ChatHandler] 🚀 意图命中: 闲聊/问候。")
+                    logger.info("[ChatHandler] 🚀 意图命中: 闲聊/问候。")
                     return self._handle_chat_query(query)
 
-                print("[ChatHandler] ⚠️ 意图未命中: 闲聊。回退到通用搜索。")
+                logger.info("[ChatHandler] ⚠️ 意图未命中: 闲聊。回退到通用搜索。")
                 return self._handle_with_search(query, context)
 
             # 获取第一个股票的信息 (如果 tickers 有内容)
@@ -374,7 +378,7 @@ class ChatHandler:
                 context.cache_data(cache_key, result)
             return result
         except Exception as e:
-            print(f"[ChatHandler] ticker lookup failed for {company_hint}: {e}")
+            logger.info(f"[ChatHandler] ticker lookup failed for {company_hint}: {e}")
             return None
 
     def _select_candidate_by_hint(
@@ -552,7 +556,7 @@ class ChatHandler:
             except Exception as e:
                 traceback.print_exc()
                 orchestrator_error = str(e)
-                print(f"[ChatHandler] Orchestrator price fetch failed: {e}")
+                logger.info(f"[ChatHandler] Orchestrator price fetch failed: {e}")
         
         # 回退到直接调用 tools
         if self.tools_module and hasattr(self.tools_module, 'get_stock_price'):
@@ -621,7 +625,7 @@ class ChatHandler:
                 'thinking': "Price fallback to kline data.",
             }
         except Exception as e:
-            print(f"[ChatHandler] Kline fallback failed for {ticker}: {e}")
+            logger.info(f"[ChatHandler] Kline fallback failed for {ticker}: {e}")
             return None
 
     def _handle_news_query(
@@ -682,7 +686,7 @@ class ChatHandler:
                         'thinking': f"NewsAgent research completed with {len(agent_output.evidence)} evidence items.",
                     }
             except Exception as e:
-                print(f"[ChatHandler] NewsAgent failed for {ticker}: {e}")
+                logger.info(f"[ChatHandler] NewsAgent failed for {ticker}: {e}")
 
         # 尝试 DeepSearch 聚合（高召回，含链接）
         if self.tools_module and hasattr(self.tools_module, 'deepsearch_news'):
@@ -701,7 +705,7 @@ class ChatHandler:
                     'thinking': "Fetched news via DeepSearch aggregation.",
                 }
             except Exception as e:
-                print(f"[ChatHandler] DeepSearch news failed for {ticker}: {e}")
+                logger.info(f"[ChatHandler] DeepSearch news failed for {ticker}: {e}")
 
         # 回退常规新闻工具
         if self.tools_module and hasattr(self.tools_module, 'get_company_news'):
@@ -815,7 +819,7 @@ class ChatHandler:
                     'thinking': f"Fetched financial data for {ticker} via tools module.",
                 }
             except Exception as e:
-                print(f"[ChatHandler] Financial report query failed for {ticker}: {e}")
+                logger.info(f"[ChatHandler] Financial report query failed for {ticker}: {e}")
 
         return {
             'success': False,
@@ -855,7 +859,7 @@ class ChatHandler:
                     orchestrator_error = result.error
             except Exception as e:
                 orchestrator_error = str(e)
-                print(f"[ChatHandler] Orchestrator sentiment fetch failed: {e}")
+                logger.info(f"[ChatHandler] Orchestrator sentiment fetch failed: {e}")
 
         if self.tools_module and hasattr(self.tools_module, 'get_market_sentiment'):
             try:
@@ -936,7 +940,7 @@ class ChatHandler:
                     orchestrator_error = result.error
             except Exception as e:
                 orchestrator_error = str(e)
-                print(f"[ChatHandler] Orchestrator economic events fetch failed: {e}")
+                logger.info(f"[ChatHandler] Orchestrator economic events fetch failed: {e}")
 
         if self.tools_module and hasattr(self.tools_module, 'get_economic_events'):
             try:
@@ -1009,7 +1013,7 @@ class ChatHandler:
                     orchestrator_error = result.error
             except Exception as e:
                 orchestrator_error = str(e)
-                print(f"[ChatHandler] Orchestrator news sentiment fetch failed: {e}")
+                logger.info(f"[ChatHandler] Orchestrator news sentiment fetch failed: {e}")
 
         if self.tools_module and hasattr(self.tools_module, 'get_news_sentiment'):
             try:
@@ -1202,7 +1206,7 @@ Requirements: Respond in Chinese, professional but easy to understand.
                 }
             except Exception as e:
                 traceback.print_exc()
-                print(f"[ChatHandler] LLM comparison analysis failed: {e}")
+                logger.info(f"[ChatHandler] LLM comparison analysis failed: {e}")
         
         # LLM 或 LangChain 不可用时的回退
         return {

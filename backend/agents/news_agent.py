@@ -1,13 +1,23 @@
 from typing import Any, Dict, List, Optional
+import os
+import logging
 from datetime import datetime
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
+
+logger = logging.getLogger(__name__)
 
 class NewsAgent(BaseFinancialAgent):
     AGENT_NAME = "NewsAgent"
     CACHE_TTL = 600  # 10 minutes
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
+        if circuit_breaker is None:
+            circuit_breaker = CircuitBreaker(
+                failure_threshold=int(os.getenv("NEWS_CB_FAILURE_THRESHOLD", "3")),
+                recovery_timeout=float(os.getenv("NEWS_CB_RECOVERY_TIMEOUT", "180")),
+                half_open_success_threshold=int(os.getenv("NEWS_CB_HALF_OPEN_SUCCESS", "1")),
+            )
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
 
@@ -40,7 +50,7 @@ class NewsAgent(BaseFinancialAgent):
                             results.extend(parsed_news)
                             self.circuit_breaker.record_success("news_api")
             except Exception as e:
-                print(f"[NewsAgent] get_company_news failed: {e}")
+                logger.info(f"[NewsAgent] get_company_news failed: {e}")
                 self.circuit_breaker.record_failure("news_api")
 
         # 2. 如果新闻不足，尝试搜索补充
@@ -56,7 +66,7 @@ class NewsAgent(BaseFinancialAgent):
                                 results.extend(parsed_search)
                                 self.circuit_breaker.record_success("search")
                 except Exception as e:
-                    print(f"[NewsAgent] search fallback failed: {e}")
+                    logger.info(f"[NewsAgent] search fallback failed: {e}")
                     self.circuit_breaker.record_failure("search")
 
         # Deduplicate

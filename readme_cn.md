@@ -53,10 +53,15 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 - Agent 贡献追踪：显示每个洞见来自哪个 Agent
 - 证据池：引用包含置信度与新鲜度字段
 - ReportIR 引用 schema 校验，保证字段完整
+- PlanIR + Executor：计划模板 + 执行 trace（step 级可追溯）
+- EvidencePolicy：引用校验 + 覆盖率阈值约束
 - News/Macro 回退结构化，保证下游分析稳定
 - get_company_news 输出结构化列表，统一格式展示
 - DeepSearch 加入 SSRF 防护与重试
 - DeepSearch 动态查询模板根据意图关键词生成
+- DataContext 汇总各个数据源的 as_of/currency/adjustment，自动标注不一致
+- BudgetManager 控制工具调用/轮次/耗时，预算快照随响应回传
+- 安全门禁（API Key + 限流）与免责声明模板确保合规
 
 ### 智能意图分类
 - 3 层混合系统：规则匹配 -> Embedding 相似度 -> LLM 兜底
@@ -197,6 +202,7 @@ pip install -r requirements.txt
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env 填入 API 密钥
+# 可选：前端 Settings Modal 会写入 `user_config.json`（LLM 配置优先级高于 .env）
 
 # 启动服务
 python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -258,9 +264,41 @@ NEWS_ALERT_INTERVAL_MINUTES=30
 LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT=FinSight
 ENABLE_LANGSMITH=false
+
+# 质量和门槛
+DATA_CONTEXT_MAX_SKEW_HOURS=24
+BUDGET_MAX_TOOL_CALLS=24
+BUDGET_MAX_ROUNDS=12
+BUDGET_MAX_SECONDS=120
+CHAT_HISTORY_MAX_MESSAGES=12
+CACHE_JITTER_RATIO=0.1
+CACHE_NEGATIVE_TTL=60
+PRICE_CB_FAILURE_THRESHOLD=5
+PRICE_CB_RECOVERY_TIMEOUT=60
+NEWS_CB_FAILURE_THRESHOLD=3
+NEWS_CB_RECOVERY_TIMEOUT=180
+LOG_LEVEL=INFO
+
+# 安全门禁
+API_AUTH_ENABLED=false
+API_AUTH_KEYS=
+RATE_LIMIT_ENABLED=false
+RATE_LIMIT_PER_MINUTE=120
+RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
+LLM 配置优先级：
+- `user_config.json`（如果存在，由前端保存）优先生效
+- `.env` 提供默认 provider/model/api_base/api_key
+
 ---
+
+## 可观测性
+
+- `GET /health` 基础健康检查
+- `GET /metrics` Prometheus 指标（需安装 `prometheus-client`）
+- `GET /diagnostics/orchestrator` 编排器统计
+- `GET /diagnostics/langgraph` 报告 Agent 自检
 
 ## 项目结构
 
@@ -288,7 +326,13 @@ FinSight/
 |   |   |-- memory.py
 |   |-- api/
 |   |   |-- main.py
-|   |-- tools.py
+|   |-- tools/
+|   |   |-- search.py
+|   |   |-- news.py
+|   |   |-- price.py
+|   |   |-- financial.py
+|   |   |-- macro.py
+|   |   |-- web.py
 |-- frontend/
 |   |-- src/
 |   |   |-- components/
@@ -299,6 +343,10 @@ FinSight/
 |   |   |-- store/useStore.ts
 |   |   |-- api/client.ts
 |-- docs/
+|   |-- archive/
+|   |-- plans/
+|   |-- reports/
+|   |-- design/
 |-- images/
 ```
 

@@ -4,11 +4,15 @@ ConversationAgent - 对话式 Agent 统一入口
 整合 Router、Context、Handlers 提供统一的对话接口
 """
 
+import logging
 import sys
 import os
 import asyncio
 from typing import Dict, Any, Optional, Generator, List
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
 
 # 添加项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -109,10 +113,10 @@ class ConversationAgent:
     def _init_sub_agents(self):
         """P1: 初始化子 Agent 供 ChatHandler 使用"""
         if not self.llm:
-            print("[ConversationAgent] Sub-agents skipped: LLM not available")
+            logger.info("[ConversationAgent] Sub-agents skipped: LLM not available")
             return
         if not self.orchestrator:
-            print("[ConversationAgent] Sub-agents skipped: Orchestrator not available")
+            logger.info("[ConversationAgent] Sub-agents skipped: Orchestrator not available")
             return
 
         try:
@@ -125,29 +129,29 @@ class ConversationAgent:
 
             # 使用 is None 检查，避免空缓存被误判为 falsy
             if cache is None:
-                print("[ConversationAgent] Sub-agents skipped: cache not available")
+                logger.info("[ConversationAgent] Sub-agents skipped: cache not available")
                 return
             if tools_module is None:
-                print("[ConversationAgent] Sub-agents skipped: tools_module not available")
+                logger.info("[ConversationAgent] Sub-agents skipped: tools_module not available")
                 return
 
             cb = CircuitBreaker()
             try:
                 self.news_agent = NewsAgent(self.llm, cache, tools_module, cb)
-                print("[ConversationAgent] NewsAgent initialized")
+                logger.info("[ConversationAgent] NewsAgent initialized")
             except Exception as e:
-                print(f"[ConversationAgent] NewsAgent init failed: {e}")
+                logger.info(f"[ConversationAgent] NewsAgent init failed: {e}")
 
             try:
                 self.price_agent = PriceAgent(self.llm, cache, tools_module, cb)
-                print("[ConversationAgent] PriceAgent initialized")
+                logger.info("[ConversationAgent] PriceAgent initialized")
             except Exception as e:
-                print(f"[ConversationAgent] PriceAgent init failed: {e}")
+                logger.info(f"[ConversationAgent] PriceAgent init failed: {e}")
 
         except ImportError as e:
-            print(f"[ConversationAgent] Failed to import sub-agents: {e}")
+            logger.info(f"[ConversationAgent] Failed to import sub-agents: {e}")
         except Exception as e:
-            print(f"[ConversationAgent] Failed to init sub-agents: {e}")
+            logger.info(f"[ConversationAgent] Failed to init sub-agents: {e}")
 
     def _register_handlers(self):
         """注册意图处理器"""
@@ -188,6 +192,8 @@ class ConversationAgent:
             "fallback_used": data.get("fallback_used"),
             "as_of": data.get("as_of"),
             "trace": data.get("trace"),
+            "plan": data.get("plan"),
+            "plan_trace": data.get("plan_trace"),
         }
         deep_search = data.get("deep_search") if isinstance(data, dict) else None
         if isinstance(deep_search, dict):
@@ -589,7 +595,7 @@ class ConversationAgent:
                     result['report'] = report_ir
                 return result
             except Exception as e:
-                print(f"[Agent] Supervisor async call failed: {e}")
+                logger.info(f"[Agent] Supervisor async call failed: {e}")
 
         return await asyncio.to_thread(self.report_handler.handle, query, metadata, self.context)
 
@@ -601,10 +607,10 @@ class ConversationAgent:
             and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
         )
         if use_supervisor:
-            print(f"[Agent._handle_report] Supervisor 在同步上下文中不可用，回退到 report_handler")
+            logger.info(f"[Agent._handle_report] Supervisor 在同步上下文中不可用，回退到 report_handler")
 
         result = self.report_handler.handle(query, metadata, self.context)
-        print(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
+        logger.info(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
         return result
 
     def _handle_alert(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -767,10 +773,10 @@ class ConversationAgent:
                     result['response'] = result.get('response', '') + f'''
 
 {chart_marker}'''
-                    print(f"[Agent] 自动添加图表标记: {chart_marker}")
+                    logger.info(f"[Agent] 自动添加图表标记: {chart_marker}")
 
         except Exception as e:
-            print(f"[Agent] 添加图表标记失败: {e}")
+            logger.info(f"[Agent] 添加图表标记失败: {e}")
 
         return result
 
@@ -881,7 +887,7 @@ def create_agent(
                     openai_api_key=llm_config.get('api_key'),
                     openai_api_base=llm_config.get('api_base'),
                 )
-                print("[ConversationAgent] LLM 初始化成功 (langchain_openai)")
+                logger.info("[ConversationAgent] LLM 初始化成功 (langchain_openai)")
             except ImportError:
                 # 如果 langchain_openai 不可用，尝试使用 litellm 创建兼容的 ChatModel
                 try:
@@ -942,13 +948,13 @@ def create_agent(
                         model=llm_config.get('model', 'gpt-3.5-turbo'),
                         temperature=llm_config.get('temperature', 0.3),
                     )
-                    print("[ConversationAgent] LLM 初始化成功 (litellm)")
+                    logger.info("[ConversationAgent] LLM 初始化成功 (litellm)")
                 except (ImportError, Exception) as e:
-                    print(f"[ConversationAgent] 警告: LLM 初始化失败 ({e})，LLM 功能将不可用")
+                    logger.info(f"[ConversationAgent] 警告: LLM 初始化失败 ({e})，LLM 功能将不可用")
                     llm = None
 
         except Exception as e:
-            print(f"[ConversationAgent] 初始化 LLM 失败: {e}")
+            logger.info(f"[ConversationAgent] 初始化 LLM 失败: {e}")
             import traceback
             traceback.print_exc()
             llm = None
@@ -962,16 +968,16 @@ def create_agent(
             orchestrator = ToolOrchestrator()
             register_all_financial_tools(orchestrator)
         except Exception as e:
-            print(f"[ConversationAgent] 初始化 Orchestrator 失败: {e}")
+            logger.info(f"[ConversationAgent] 初始化 Orchestrator 失败: {e}")
 
     # 初始化 Report Agent
     if use_report_agent:
         try:
             from backend.langchain_agent import create_financial_agent
             report_agent = create_financial_agent()
-            print("[ConversationAgent] Report Agent 初始化成功")
+            logger.info("[ConversationAgent] Report Agent 初始化成功")
         except Exception as e:
-            print(f"[ConversationAgent] 初始化 Report Agent 失败: {e}")
+            logger.info(f"[ConversationAgent] 初始化 Report Agent 失败: {e}")
             import traceback
             traceback.print_exc()
 
@@ -986,9 +992,9 @@ def create_agent(
                 cache=orchestrator.cache,
                 circuit_breaker=orchestrator.circuit_breaker
             )
-            print("[ConversationAgent] Agent Supervisor 初始化成功")
+            logger.info("[ConversationAgent] Agent Supervisor 初始化成功")
         except Exception as e:
-            print(f"[ConversationAgent] 初始化 Supervisor 失败: {e}")
+            logger.info(f"[ConversationAgent] 初始化 Supervisor 失败: {e}")
 
     return ConversationAgent(
         llm=llm,

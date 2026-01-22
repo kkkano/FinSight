@@ -1,4 +1,5 @@
 from typing import Any, List, Optional
+import os
 from datetime import datetime
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
@@ -12,6 +13,12 @@ class PriceAgent(BaseFinancialAgent):
     MAX_REFLECTIONS = 0  # No reflection needed for price
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
+        if circuit_breaker is None:
+            circuit_breaker = CircuitBreaker(
+                failure_threshold=int(os.getenv("PRICE_CB_FAILURE_THRESHOLD", "5")),
+                recovery_timeout=float(os.getenv("PRICE_CB_RECOVERY_TIMEOUT", "60")),
+                half_open_success_threshold=int(os.getenv("PRICE_CB_HALF_OPEN_SUCCESS", "1")),
+            )
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
 
@@ -46,7 +53,7 @@ class PriceAgent(BaseFinancialAgent):
         # Fallback to broad search if all APIs fail
         try:
              # Assuming tools module has a search fallback
-             # Note: tools.py usually has _search_for_price but it might be synchronous.
+            # Note: backend.tools usually has _search_for_price but it might be synchronous.
              # In a real async agent, we'd want this to be async or run in executor.
              # For now, we assume _fetch_from_source handles the specific tool call logic.
              fallback_result = await self._fetch_from_source("search", ticker)
@@ -62,7 +69,7 @@ class PriceAgent(BaseFinancialAgent):
         # This is a simplified mapping. In production, this might use the ToolOrchestrator directly.
         # But per design, PriceAgent logic encapsulates this.
 
-        # Note: Since the tools in tools.py are synchronous, we might need to wrap them
+        # Note: Since the tools in backend.tools are synchronous, we might need to wrap them
         # if this method is strictly async. For this phase, we'll assume direct calls are okay
         # or we wrap them in simple awaits if we had an async executor.
 
@@ -86,7 +93,7 @@ class PriceAgent(BaseFinancialAgent):
         return None
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
-        # PriceAgent output: raw_data can be dict OR string (from tools.py)
+        # PriceAgent output: raw_data can be dict OR string (from backend.tools)
         # Handle both cases for compatibility
 
         if isinstance(raw_data, dict):
@@ -100,7 +107,7 @@ class PriceAgent(BaseFinancialAgent):
             summary_text = f"The current price of {ticker} is {currency} {price}."
             evidence_text = str(raw_data)
         elif isinstance(raw_data, str) and raw_data:
-            # String format from tools.py (e.g., "AAPL Current Price: $150.00 | Change: +$2.00 (+1.5%)")
+            # String format from backend.tools (e.g., "AAPL Current Price: $150.00 | Change: +$2.00 (+1.5%)")
             summary_text = raw_data
             source = "yfinance"
             as_of = datetime.now().isoformat()

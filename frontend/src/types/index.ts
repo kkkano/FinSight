@@ -75,6 +75,8 @@ export interface Citation {
   url: string;
   snippet: string;
   published_date?: string;
+  confidence?: number;        // 来源可信度 (0.0 - 1.0)
+  freshness_hours?: number;   // 新鲜度（小时）
 }
 
 export interface ReportIR {

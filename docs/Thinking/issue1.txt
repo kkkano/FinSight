@@ -1,0 +1,188 @@
+FinSight 项目问题分析与优化 TODO List
+🔍 核心问题诊断
+问题 1：NewsAgent 数据源单薄，说服力不足
+现状分析（从 news_agent.py 代码）：
+
+<TEXT>
+当前数据源链：
+1. get_company_news (yfinance → finnhub → alpha_vantage → search)
+2. 搜索回退 (Tavily/Exa)
+问题：
+
+❌ 只依赖 1-2 个 API，经常返回相同的新闻
+❌ 没有权威财经媒体的直接接入（如 Bloomberg、Reuters 全文）
+❌ 缺乏新闻情感分析和影响力评估
+❌ 没有新闻去重和相关性排序
+问题 2：MacroAgent 过于简单
+现状分析（从 macro_agent.py 代码）：
+
+<PYTHON>
+# 当前只支持 FRED API 的 5 个指标
+- fed_rate (联邦基金利率)
+- cpi (CPI指数)
+- unemployment (失业率)
+- gdp_growth (GDP增长率)
+- treasury_10y (10年期国债)
+问题：
+
+❌ FRED API 如果失败，直接回退到搜索（质量很差）
+❌ 缺乏宏观经济事件日历（FOMC 会议、非农等）
+❌ 没有行业/板块宏观数据
+❌ 缺少全球宏观（中国 PMI、欧洲央行等）
+问题 3：DeepSearchAgent 功能单一
+现状分析：
+
+只是简单的搜索 + LLM 总结
+没有多轮迭代搜索
+缺乏信息可信度验证
+问题 4：Agent 输出质量问题
+问题表现：
+
+✅ 能正确路由到对应 Agent
+❌ 但 Agent 返回的内容"水分大"，缺乏深度
+❌ ForumHost 合成时缺乏有效的信息筛选
+📋 优化 TODO List
+P0 - 紧急（1-2 周内）
+任务	描述	预期效果
+P0-1: 增强 NewsAgent 数据源	接入 NewsAPI.org (免费层 100 req/day) + Google News RSS	新闻来源从 2 个增加到 5+ 个
+P0-2: 新闻去重和排序	基于标题相似度去重 + 时间/来源权重排序	避免重复新闻，提升质量
+P0-3: MacroAgent 增加经济日历	接入 Investing.com 经济日历 API 或爬虫	能回答"这周有什么重要经济数据"
+P0-4: Agent 输出结构化评分	每个 Agent 输出必须包含 confidence_score + evidence_quality	ForumHost 可以筛选低质量输出
+P1 - 重要（2-4 周内）
+任务	描述	预期效果
+P1-1: 新闻情感分析	使用 FinBERT 或 GPT 对新闻标题/摘要打分	报告中显示"利多/利空"标签
+P1-2: MacroAgent 多数据源	增加 World Bank API、OECD Stats、中国国家统计局	支持全球宏观分析
+P1-3: DeepSearch 迭代搜索	搜索 → 分析缺口 → 再搜索（最多 3 轮）	深度研究质量提升 50%+
+P1-4: 信息源可信度系统	给每个来源打分（Bloomberg=1.0, 小网站=0.3）	报告中标注来源可信度
+P1-5: 行业新闻分类	自动识别新闻属于哪个行业/主题	支持行业聚焦分析
+P2 - 改进（1-2 月内）
+任务	描述	预期效果
+P2-1: RAG 集成	用 ChromaDB/Pinecone 存储历史研究报告	支持"之前分析过 NVDA 吗"类查询
+P2-2: 多语言新闻	支持中文财经新闻（东方财富、同花顺）	中国股票分析质量提升
+P2-3: 事件驱动分析	检测财报日、分红日、重大事件	自动触发深度分析
+P2-4: 竞品对比分析	自动识别竞争对手并对比	报告中包含竞争格局
+P2-5: 社交媒体情绪	接入 Twitter/Reddit 情绪分析	增加散户情绪维度
+🔧 具体实现建议
+P0-1: 增强 NewsAgent 数据源
+<PYTHON>
+# backend/agents/news_agent.py 修改
+NEWS_SOURCES = [
+    {"name": "newsapi", "priority": 1, "free_tier": 100},
+    {"name": "finnhub", "priority": 2, "free_tier": 60},
+    {"name": "google_news_rss", "priority": 3, "free_tier": "unlimited"},
+    {"name": "yahoo_finance_rss", "priority": 4, "free_tier": "unlimited"},
+    {"name": "seeking_alpha_rss", "priority": 5, "free_tier": "unlimited"},
+]
+async def _initial_search(self, query: str, ticker: str):
+    all_news = []
+    
+    # 并行调用多个数据源
+    tasks = [
+        self._fetch_newsapi(ticker),
+        self._fetch_finnhub(ticker),
+        self._fetch_google_rss(ticker),
+        self._fetch_yahoo_rss(ticker),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for result in results:
+        if isinstance(result, list):
+            all_news.extend(result)
+    
+    # 去重 + 排序
+    unique_news = self._deduplicate(all_news)
+    ranked_news = self._rank_by_relevance(unique_news, ticker)
+    
+    return ranked_news[:10]  # 返回 top 10
+P0-3: MacroAgent 增加经济日历
+<PYTHON>
+# backend/tools.py 新增
+def get_economic_calendar(days_ahead: int = 7) -> List[Dict]:
+    """
+    获取未来 N 天的重要经济事件
+    数据源：investing.com 或 tradingeconomics.com
+    """
+    events = []
+    
+    # 方案 A: 使用 investing.com 非官方 API
+    # 方案 B: 爬取 tradingeconomics.com
+    # 方案 C: 使用 Exa 搜索 "economic calendar this week"
+    
+    important_events = [
+        "FOMC Meeting",
+        "Non-Farm Payrolls",
+        "CPI Release",
+        "GDP Report",
+        "Fed Chair Speech",
+    ]
+    
+    return events
+P1-1: 新闻情感分析
+<PYTHON>
+# backend/services/sentiment.py 新增
+from transformers import pipeline
+class NewsSentimentAnalyzer:
+    def __init__(self):
+        # 使用 FinBERT（金融领域微调的 BERT）
+        self.model = pipeline(
+            "sentiment-analysis",
+            model="ProsusAI/finbert"
+        )
+    
+    def analyze(self, text: str) -> Dict:
+        result = self.model(text[:512])[0]
+        return {
+            "sentiment": result["label"],  # positive/negative/neutral
+            "confidence": result["score"],
+            "impact": self._estimate_impact(result)
+        }
+    
+    def _estimate_impact(self, result):
+        # 根据情感强度估计对股价的潜在影响
+        if result["label"] == "positive" and result["score"] > 0.9:
+            return "strong_bullish"
+        elif result["label"] == "negative" and result["score"] > 0.9:
+            return "strong_bearish"
+        return "neutral"
+📊 优化效果预期
+指标	当前	优化后
+新闻来源数量	2-3 个	6-8 个
+新闻平均质量评分	0.5	0.8
+宏观数据覆盖	5 个指标	20+ 个指标
+分析报告深度	浅层汇总	多维度分析
+用户满意度	60%	85%+
+🏗️ 架构优化建议
+关于 DeepSearchAgent 拆分问题
+我的建议：暂时不拆分成 3 个子 Agent
+
+理由：
+
+当前问题是数据源不够，不是架构问题
+拆分会增加复杂度，但不会提升质量
+先把 P0/P1 做完，再考虑架构优化
+替代方案：在 DeepSearchAgent 内部使用 Workflow
+
+<PYTHON>
+class DeepSearchAgent:
+    async def run(self, query: str):
+        # Step 1: Plan (不是独立 Agent，是函数)
+        search_plan = await self._plan_search(query)
+        
+        # Step 2: Execute (并行搜索)
+        results = await asyncio.gather(*[
+            self._search(q) for q in search_plan.queries
+        ])
+        
+        # Step 3: Synthesize (LLM 总结)
+        report = await self._synthesize(results)
+        
+        return report
+📝 总结
+最核心的问题是：数据源太少 + 缺乏质量控制
+
+优先级排序：
+
+P0 任务优先：增加数据源、去重、评分
+P1 任务次之：情感分析、迭代搜索
+P2 可以慢慢做：RAG、多语言
+不建议现在拆分 Agent，先把数据质量做上去。

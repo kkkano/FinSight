@@ -29,9 +29,7 @@ class Citation:
     snippet: str            # 摘录片段
     published_date: str     # 发布日期
     confidence: float = 0.7       # 来源可信度 (0.0 - 1.0)
-    freshness_hours: float = 24.0 # 新鲜度（小时）
-    confidence: float = 0.7       # 来源可信度 (0.0 - 1.0)
-    freshness_hours: float = 24.0 # 新鲜度（小时）
+    freshness_hours: float = 24.0  # hours since published
 
 @dataclass
 class ReportContent:

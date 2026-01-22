@@ -11,6 +11,7 @@ States:
 from __future__ import annotations
 
 import time
+import os
 from dataclasses import dataclass
 from threading import RLock
 from typing import Dict, Optional, Any
@@ -45,12 +46,14 @@ class CircuitBreaker:
         failure_threshold: int = 3,
         recovery_timeout: float = 300.0,
         half_open_success_threshold: int = 1,
+        source_overrides: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> None:
         self.failure_threshold = max(1, failure_threshold)
         self.recovery_timeout = max(0.1, float(recovery_timeout))
         self.half_open_success_threshold = max(1, half_open_success_threshold)
         self._states: Dict[str, _CircuitState] = {}
         self._lock = RLock()
+        self._source_overrides = source_overrides or {}
 
     # -----------------------------
     # Public API
@@ -70,7 +73,8 @@ class CircuitBreaker:
                     state.opened_at_ts = state.last_failure_ts or now
 
                 elapsed = now - state.opened_at_ts
-                if elapsed >= self.recovery_timeout:
+                recovery_timeout = self._get_recovery_timeout(source)
+                if elapsed >= recovery_timeout:
                     # Transition to HALF_OPEN
                     state.state = HALF_OPEN
                     state.half_open_successes = 0
@@ -96,7 +100,7 @@ class CircuitBreaker:
                 state.state = OPEN
                 state.opened_at_ts = now
                 state.half_open_successes = 0
-            elif state.failures >= self.failure_threshold:
+            elif state.failures >= self._get_failure_threshold(source):
                 # Threshold reached, open circuit
                 state.state = OPEN
                 state.opened_at_ts = now
@@ -140,9 +144,10 @@ class CircuitBreaker:
             now = time.time()
 
             cooldown_remaining = 0.0
+            recovery_timeout = self._get_recovery_timeout(source)
             if state.state == OPEN and state.opened_at_ts > 0:
                 elapsed = now - state.opened_at_ts
-                cooldown_remaining = max(0.0, self.recovery_timeout - elapsed)
+                cooldown_remaining = max(0.0, recovery_timeout - elapsed)
 
             return {
                 "state": state.state,
@@ -151,15 +156,58 @@ class CircuitBreaker:
                 "opened_at_ts": state.opened_at_ts,
                 "half_open_successes": state.half_open_successes,
                 "cooldown_remaining": round(cooldown_remaining, 2),
-                "can_call": self._can_call_snapshot(state, now),
+                "failure_threshold": self._get_failure_threshold(source),
+                "recovery_timeout": recovery_timeout,
+                "can_call": self._can_call_snapshot(state, now, source),
             }
 
     # -----------------------------
     # Internal helpers
     # -----------------------------
-    def _can_call_snapshot(self, state: _CircuitState, now: float) -> bool:
+    def _can_call_snapshot(self, state: _CircuitState, now: float, source: str) -> bool:
         if state.state == OPEN:
             if state.opened_at_ts == 0.0:
                 return False
-            return (now - state.opened_at_ts) >= self.recovery_timeout
+            return (now - state.opened_at_ts) >= self._get_recovery_timeout(source)
         return True
+
+    def _normalize_source(self, source: str) -> str:
+        return "".join(ch if ch.isalnum() else "_" for ch in source.upper())
+
+    def _get_override(self, source: str, key: str) -> Optional[Any]:
+        override = self._source_overrides.get(source, {})
+        if key in override:
+            return override.get(key)
+        return None
+
+    def _get_failure_threshold(self, source: str) -> int:
+        override = self._get_override(source, "failure_threshold")
+        if override is not None:
+            try:
+                return max(1, int(override))
+            except Exception:
+                pass
+        env_key = f"CB_{self._normalize_source(source)}_FAILURE_THRESHOLD"
+        env_val = os.getenv(env_key)
+        if env_val:
+            try:
+                return max(1, int(env_val))
+            except Exception:
+                pass
+        return self.failure_threshold
+
+    def _get_recovery_timeout(self, source: str) -> float:
+        override = self._get_override(source, "recovery_timeout")
+        if override is not None:
+            try:
+                return max(0.1, float(override))
+            except Exception:
+                pass
+        env_key = f"CB_{self._normalize_source(source)}_RECOVERY_TIMEOUT"
+        env_val = os.getenv(env_key)
+        if env_val:
+            try:
+                return max(0.1, float(env_val))
+            except Exception:
+                pass
+        return self.recovery_timeout

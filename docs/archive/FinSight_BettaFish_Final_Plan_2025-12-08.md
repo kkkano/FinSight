@@ -62,5 +62,5 @@
 ## F. 立即行动（今日起）
 1) 追加短缓存与日志字段：`backend/tools.py`、`backend/langchain_agent.py`；API 透出 `data_origin/fallback_used`。  
 2) 创建 `backend/agents/` 目录与 `AgentOutput` 基类，接入 Technical/Fundamental 两个最小子 Agent；Orchestrator 并行融合。  
-3) 前端 Diagnostics 面板显示“数据来源/兜底/Agent 贡献”；文档在 `docs/Future_Blueprint_Execution_Plan_CN.md` 链接本决策稿。  
+3) 前端 Diagnostics 面板显示“数据来源/兜底/Agent 贡献”；文档在 `docs/plans/Future_Blueprint_Execution_Plan_CN.md` 链接本决策稿。  
 4) 新增 E2E 用例覆盖行情兜底与多 Agent 最小路径。  

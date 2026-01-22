@@ -6,6 +6,7 @@ ToolOrchestrator - 工具编排器
 
 import sys
 import os
+import logging
 from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -19,7 +20,16 @@ if PROJECT_ROOT not in sys.path:
 
 from backend.orchestration.cache import DataCache
 from backend.orchestration.validator import DataValidator, ValidationResult
+from backend.orchestration.data_context import DataContextCollector, extract_context_fields
 from backend.services import CircuitBreaker
+from backend.metrics import (
+    observe_orch_latency,
+    increment_cache_hit,
+    increment_fallback,
+    increment_failure,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +58,9 @@ class FetchResult:
     error: Optional[str] = None
     duration_ms: float = 0
     as_of: Optional[str] = None
+    currency: Optional[str] = None
+    adjustment: Optional[str] = None
+    data_context: Optional[Dict[str, Any]] = None
     # 新增：辅助可观测性的字段
     fallback_used: bool = False
     tried_sources: List[str] = field(default_factory=list)
@@ -63,6 +76,9 @@ class FetchResult:
             'error': self.error,
             'duration_ms': self.duration_ms,
             'as_of': self.as_of,
+            'currency': self.currency,
+            'adjustment': self.adjustment,
+            'data_context': self.data_context,
             'fallback_used': self.fallback_used,
             'tried_sources': self.tried_sources,
             'trace': self.trace,
@@ -86,7 +102,7 @@ class ToolOrchestrator:
         初始化编排器
         
         Args:
-            tools_module: 工具模块（如 tools.py），如果不提供则延迟加载
+            tools_module: 工具模块（如 backend.tools），如果不提供则延迟加载
         """
         self.cache = DataCache()
         self.validator = DataValidator()
@@ -144,7 +160,7 @@ class ToolOrchestrator:
             val = getattr(self.tools_module, key_attr, "") if self.tools_module else ""
             return bool(val)
         
-        # 从 tools.py 中获取各个数据获取函数
+        # 从 backend.tools 中获取各个数据获取函数
         # 注意：这里使用 getattr 安全获取，避免模块中不存在某函数时报错
         
         # 股价数据源
@@ -169,6 +185,27 @@ class ToolOrchestrator:
         self.tools_module = tools_module
         self._init_sources()
     
+    def _build_data_context(
+        self,
+        source: str,
+        data: Any,
+        as_of: Optional[str],
+        ticker: Optional[str] = None,
+    ) -> tuple[Optional[str], Optional[str], Optional[str], Dict[str, Any]]:
+        resolved_as_of, currency, adjustment = extract_context_fields(data, ticker=ticker)
+        if not resolved_as_of:
+            resolved_as_of = as_of
+        collector = DataContextCollector()
+        collector.add(
+            source,
+            data=data,
+            as_of=resolved_as_of,
+            currency=currency,
+            adjustment=adjustment,
+            ticker=ticker,
+        )
+        return resolved_as_of, currency, adjustment, collector.summarize().to_dict()
+
     def fetch(
         self, 
         data_type: str, 
@@ -198,9 +235,17 @@ class ToolOrchestrator:
             cached_data = self.cache.get(cache_key)
             if cached_data is not None:
                 self._stats['cache_hits'] += 1
+                increment_cache_hit(data_type)
                 # cache created_at not stored directly; approximate with current time
                 cached_as_of = now_iso
+                cached_as_of, currency, adjustment, data_context = self._build_data_context(
+                    "cache",
+                    cached_data,
+                    cached_as_of,
+                    ticker=ticker,
+                )
                 duration = (time.time() - start_time) * 1000
+                observe_orch_latency(data_type, duration)
                 return FetchResult(
                     success=True,
                     data=cached_data,
@@ -208,6 +253,9 @@ class ToolOrchestrator:
                     cached=True,
                     duration_ms=duration,
                     as_of=cached_as_of,
+                    currency=currency,
+                    adjustment=adjustment,
+                    data_context=data_context,
                     fallback_used=False,
                     tried_sources=['cache'],
                     trace={
@@ -281,6 +329,7 @@ class ToolOrchestrator:
                     self._stats['sources'][source.name]['fail'] += 1
                     if self.circuit_breaker:
                         self.circuit_breaker.record_failure(source.name)
+                    increment_failure(data_type, source.name)
                     continue
 
                 # 3. 验证数据
@@ -301,8 +350,16 @@ class ToolOrchestrator:
                     
                     if i > 0:
                         self._stats['fallback_used'] += 1
+                        increment_fallback(data_type)
                     
+                    resolved_as_of, currency, adjustment, data_context = self._build_data_context(
+                        source.name,
+                        result,
+                        now_iso,
+                        ticker=ticker,
+                    )
                     duration = (time.time() - start_time) * 1000
+                    observe_orch_latency(data_type, duration)
                     return FetchResult(
                         success=True,
                         data=result,
@@ -310,7 +367,10 @@ class ToolOrchestrator:
                         cached=False,
                         validation=validation,
                         duration_ms=duration,
-                        as_of=now_iso,
+                        as_of=resolved_as_of,
+                        currency=currency,
+                        adjustment=adjustment,
+                        data_context=data_context,
                         fallback_used=(i > 0),
                         tried_sources=list(tried_sources),
                         trace={
@@ -320,7 +380,7 @@ class ToolOrchestrator:
                         },
                     )
                 else:
-                    print(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
+                    logger.info(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
                     last_error = f"Validation failed: {validation.issues}"
                     source.consecutive_failures += 1
                     source.last_fail = datetime.now()
@@ -328,6 +388,7 @@ class ToolOrchestrator:
                     self._stats['sources'][source.name]['fail'] += 1
                     if self.circuit_breaker:
                         self.circuit_breaker.record_failure(source.name)
+                    increment_failure(data_type, source.name)
                 
             except Exception as e:
                 source.consecutive_failures += 1
@@ -337,19 +398,33 @@ class ToolOrchestrator:
                 self._stats['sources'][source.name]['fail'] += 1
                 if self.circuit_breaker:
                     self.circuit_breaker.record_failure(source.name)
-                print(f"[Orchestrator] {source.name} 失败: {e}")
+                increment_failure(data_type, source.name)
+                logger.info(f"[Orchestrator] {source.name} 失败: {e}")
                 continue
             
             # 短暂延迟，避免请求过快
             time.sleep(0.3)
         duration = (time.time() - start_time) * 1000
+        observe_orch_latency(data_type, duration)
         
+        cache_key = f"{data_type}:{ticker}"
+        if self._should_negative_cache(last_error):
+            negative_ttl = int(os.getenv("CACHE_NEGATIVE_TTL", "60"))
+            self.cache.set_negative(
+                cache_key,
+                reason=f"{data_type} not found: {last_error}",
+                ttl=negative_ttl,
+            )
+
         return FetchResult(
             success=False,
             error=f"所有数据源均失败: {last_error}",
             source=f"tried: {', '.join(tried_sources)}",
             duration_ms=duration,
             as_of=now_iso,
+            currency=None,
+            adjustment=None,
+            data_context=None,
             fallback_used=(len(tried_sources) > 1),
             tried_sources=list(tried_sources),
             trace={
@@ -358,7 +433,22 @@ class ToolOrchestrator:
                 'error': last_error,
             },
         )
-    
+
+    def _should_negative_cache(self, error: Optional[str]) -> bool:
+        if not error:
+            return False
+        lower = error.lower()
+        tokens = [
+            "not found",
+            "invalid",
+            "unknown",
+            "no data",
+            "no results",
+            "symbol",
+            "404",
+        ]
+        return any(token in lower for token in tokens)
+
     def _try_source(self, source: DataSource, ticker: str, **kwargs) -> Optional[Any]:
         """尝试单个数据源"""
         source.total_calls += 1
@@ -374,7 +464,7 @@ class ToolOrchestrator:
                 # 字符串结果检查错误标记
                 if "Error" in result or "error" in result.lower():
                     if "rate limit" in result.lower() or "too many requests" in result.lower():
-                        print(f"[Orchestrator] {source.name} 被限速")
+                        logger.info(f"[Orchestrator] {source.name} rate limited")
                     return None
             
             return result
@@ -383,24 +473,31 @@ class ToolOrchestrator:
             raise e
     
     def _fallback_direct_call(
-        self, 
-        data_type: str, 
-        ticker: str, 
+        self,
+        data_type: str,
+        ticker: str,
         start_time: float
     ) -> FetchResult:
-        """直接调用工具模块函数（无数据源配置时的回退）"""
+        """
+        Direct tool fallback when no data sources are configured.
+        """
+        fallback_as_of = datetime.utcnow().isoformat() + "Z"
         if not self.tools_module:
+            duration = (time.time() - start_time) * 1000
+            observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
-                error="工具模块未加载",
-                duration_ms=(time.time() - start_time) * 1000,
-                as_of=datetime.utcnow().isoformat() + "Z",
+                error="tools_module_not_loaded",
+                duration_ms=duration,
+                as_of=fallback_as_of,
+                currency=None,
+                adjustment=None,
+                data_context=None,
                 fallback_used=False,
                 tried_sources=[],
                 trace={'error': 'tools_module_not_loaded'},
             )
-        
-        # 数据类型到函数的映射
+
         func_map = {
             'price': 'get_stock_price',
             'company_info': 'get_company_info',
@@ -409,46 +506,61 @@ class ToolOrchestrator:
             'news_sentiment': 'get_news_sentiment',
             'economic_events': 'get_economic_events',
         }
-        
+
         func_name = func_map.get(data_type)
         if not func_name:
+            duration = (time.time() - start_time) * 1000
+            observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
-                error=f"未知的数据类型: {data_type}",
-                duration_ms=(time.time() - start_time) * 1000,
-                as_of=datetime.utcnow().isoformat() + "Z",
+                error=f"unknown_data_type:{data_type}",
+                duration_ms=duration,
+                as_of=fallback_as_of,
+                currency=None,
+                adjustment=None,
+                data_context=None,
                 fallback_used=False,
                 tried_sources=[],
                 trace={'error': 'unknown_data_type', 'data_type': data_type},
             )
-        
+
         func = getattr(self.tools_module, func_name, None)
         if not func:
+            duration = (time.time() - start_time) * 1000
+            observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
-                error=f"工具函数不存在: {func_name}",
-                duration_ms=(time.time() - start_time) * 1000,
-                as_of=datetime.utcnow().isoformat() + "Z",
+                error=f"tool_function_not_found:{func_name}",
+                duration_ms=duration,
+                as_of=fallback_as_of,
+                currency=None,
+                adjustment=None,
+                data_context=None,
                 fallback_used=False,
                 tried_sources=[],
                 trace={'error': 'func_not_found', 'func_name': func_name},
             )
-        
+
         try:
             if data_type in ['sentiment', 'economic_events']:
                 result = func()
             else:
                 result = func(ticker)
-            
-            # 验证
+
             validation = self.validator.validate(data_type, result)
-            
-            # 缓存
+
             if validation.is_valid:
                 cache_key = f"{data_type}:{ticker}"
                 self.cache.set(cache_key, result, data_type=data_type)
-            
+
+            resolved_as_of, currency, adjustment, data_context = self._build_data_context(
+                f"direct:{func_name}",
+                result,
+                fallback_as_of,
+                ticker=ticker,
+            )
             duration = (time.time() - start_time) * 1000
+            observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=validation.is_valid,
                 data=result,
@@ -456,7 +568,10 @@ class ToolOrchestrator:
                 cached=False,
                 validation=validation,
                 duration_ms=duration,
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=resolved_as_of,
+                currency=currency,
+                adjustment=adjustment,
+                data_context=data_context,
                 fallback_used=False,
                 tried_sources=[f"direct:{func_name}"],
                 trace={
@@ -465,19 +580,24 @@ class ToolOrchestrator:
                     'validation': validation.to_dict() if validation else None,
                 },
             )
-            
+
         except Exception as e:
+            duration = (time.time() - start_time) * 1000
+            observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
                 error=str(e),
                 source=f"direct:{func_name}",
-                duration_ms=(time.time() - start_time) * 1000,
-                as_of=datetime.utcnow().isoformat() + "Z",
+                duration_ms=duration,
+                as_of=fallback_as_of,
+                currency=None,
+                adjustment=None,
+                data_context=None,
                 fallback_used=False,
                 tried_sources=[f"direct:{func_name}"],
                 trace={'error': str(e), 'tried_sources': [f"direct:{func_name}"]},
             )
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         cache_stats = self.cache.get_stats()

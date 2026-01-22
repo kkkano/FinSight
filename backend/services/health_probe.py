@@ -1,18 +1,21 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Health probe for data sources.
 
 - Pings selected tickers with force_refresh to update source stats.
 - Uses ToolOrchestrator (global instance) and prints a lightweight summary.
 """
-
 from __future__ import annotations
 
+import logging
 import os
 from typing import Iterable, List
 
 from backend.orchestration.tools_bridge import get_global_orchestrator
+
+logger = logging.getLogger(__name__)
+
+
+
 
 
 def _parse_tickers(env_value: str | None) -> List[str]:
@@ -36,9 +39,9 @@ def run_health_probe_cycle(tickers: Iterable[str] | None = None) -> None:
 
     ok = sum(1 for r in results if r[1])
     fail = len(results) - ok
-    print(f"[HealthProbe] run completed: total={len(results)} ok={ok} fail={fail}")
+    logger.info(f"[HealthProbe] run completed: total={len(results)} ok={ok} fail={fail}")
     for t, success, source, err in results:
         if success:
-            print(f"[HealthProbe] {t}: ok via {source}")
+            logger.info(f"[HealthProbe] {t}: ok via {source}")
         else:
-            print(f"[HealthProbe] {t}: fail via {source} error={err}")
+            logger.info(f"[HealthProbe] {t}: fail via {source} error={err}")

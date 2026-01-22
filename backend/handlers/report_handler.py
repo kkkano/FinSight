@@ -6,9 +6,13 @@ ReportHandler - 深度报告处理器
 
 import sys
 import os
+import logging
 import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from backend.orchestration.data_context import DataContextCollector
+
+logger = logging.getLogger(__name__)
 
 # 添加项目根目录
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -47,22 +51,22 @@ class ReportHandler:
         # 优先从 orchestrator 获取 tools_module
         if self.orchestrator and self.orchestrator.tools_module:
             self.tools_module = self.orchestrator.tools_module
-            print("[ReportHandler] 从 orchestrator 获取 tools 模块")
+            logger.info("[ReportHandler] 从 orchestrator 获取 tools 模块")
             return
         
         # 回退：直接导入
         try:
             from backend import tools
             self.tools_module = tools
-            print("[ReportHandler] 成功从 backend.tools 导入")
+            logger.info("[ReportHandler] 成功从 backend.tools 导入")
         except ImportError:
             try:
                 import tools
                 self.tools_module = tools
-                print("[ReportHandler] 成功从 tools 导入")
+                logger.info("[ReportHandler] 成功从 tools 导入")
             except ImportError as e:
                 self.tools_module = None
-                print(f"[ReportHandler] 警告: 无法导入 tools 模块: {e}")
+                logger.info(f"[ReportHandler] 警告: 无法导入 tools 模块: {e}")
     
     def _run_deepsearch(self, query: str, ticker: str):
         """Run DeepSearchAgent synchronously and return AgentOutput (or None)."""
@@ -74,12 +78,12 @@ class ReportHandler:
             cache = getattr(self.orchestrator, "cache", None)
             circuit_breaker = getattr(self.orchestrator, "circuit_breaker", None)
             agent = DeepSearchAgent(self.llm, cache, self.tools_module, circuit_breaker)
-            print(f"[ReportHandler] DeepSearch start: {ticker}")
+            logger.info(f"[ReportHandler] DeepSearch start: {ticker}")
             result = asyncio.run(agent.research(query, ticker))
-            print(f"[ReportHandler] DeepSearch done: evidence={len(getattr(result, 'evidence', []))}")
+            logger.info(f"[ReportHandler] DeepSearch done: evidence={len(getattr(result, 'evidence', []))}")
             return result
         except Exception as e:
-            print(f"[ReportHandler] DeepSearch failed: {e}")
+            logger.info(f"[ReportHandler] DeepSearch failed: {e}")
             return None
 
     def _serialize_evidence(self, evidence: List[Any]) -> List[Dict[str, Any]]:
@@ -230,7 +234,7 @@ class ReportHandler:
                                     'intent': 'report',
                                 }
                 except Exception as e:
-                    print('[ReportHandler] ticker lookup failed: ' + str(e))
+                    logger.info('[ReportHandler] ticker lookup failed: ' + str(e))
 
         if not tickers and context and context.current_focus and not explicit_company:
             tickers = [context.current_focus]
@@ -256,7 +260,7 @@ class ReportHandler:
             try:
                 return self._handle_with_agent(ticker, query, context)
             except Exception as e:
-                print(f"[ReportHandler] Agent 处理失败，回退到数据收集模式: {e}")
+                logger.info(f"[ReportHandler] Agent 处理失败，回退到数据收集模式: {e}")
                 # 继续执行回退逻辑
         
         # 如果没有 Agent 或 Agent 失败，使用数据收集 + LLM 生成
@@ -264,7 +268,7 @@ class ReportHandler:
             try:
                 return self._handle_with_data_collection(ticker, query, context)
             except Exception as e:
-                print(f"[ReportHandler] LLM 数据收集模式失败: {e}")
+                logger.info(f"[ReportHandler] LLM 数据收集模式失败: {e}")
                 # 继续执行最终回退逻辑
         
         # 最终回退：使用 orchestrator 或 tools_module 直接收集数据，生成简化报告
@@ -272,7 +276,7 @@ class ReportHandler:
             try:
                 return self._handle_with_basic_data_collection(ticker, query, context)
             except Exception as e:
-                print(f"[ReportHandler] 基础数据收集失败: {e}")
+                logger.info(f"[ReportHandler] 基础数据收集失败: {e}")
         
         return {
             'success': False,
@@ -288,7 +292,7 @@ class ReportHandler:
         context: Optional[Any] = None
     ) -> Dict[str, Any]:
         """使用现有 Agent 进行完整分析 (Phase 2 Upgrade: Supervisor + Forum + ReportIR)"""
-        print(f"[ReportHandler._handle_with_agent] 开始处理 ticker={ticker}")
+        logger.info(f"[ReportHandler._handle_with_agent] 开始处理 ticker={ticker}")
         try:
             # Phase 2 Supervisor 调用 - 暂时禁用
             # 原因：asyncio.run() 不能在 FastAPI 的事件循环中调用
@@ -427,6 +431,8 @@ class ReportHandler:
         """将 ForumOutput 转换为 ReportIR 字典 (Helper)"""
         from datetime import datetime
         from backend.report.validator import ReportValidator
+        from backend.orchestration.data_context import DataContextCollector
+        from backend.orchestration.trace import normalize_trace
 
         # Use os.linesep to avoid syntax errors with literal newlines in strings
         # This is safer than embedding newlines directly in source code
@@ -435,14 +441,21 @@ class ReportHandler:
 
         citations: List[Dict[str, Any]] = []
         agent_traces: Dict[str, Any] = {}
+        context_collector = DataContextCollector()
         if agent_outputs and isinstance(agent_outputs, dict):
             for name, output in agent_outputs.items():
                 prefix = str(name).upper()[:2] if name else "AG"
                 citations.extend(self._build_citations_from_evidence(getattr(output, "evidence", []), prefix))
                 trace = getattr(output, "trace", None)
                 if trace:
-                    agent_traces[name] = trace
+                    agent_traces[name] = normalize_trace(trace, name)
+                context_collector.add(
+                    str(name or "agent"),
+                    as_of=getattr(output, "as_of", None),
+                    ticker=ticker,
+                )
 
+        data_context = context_collector.summarize().to_dict()
         report = {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
@@ -475,7 +488,10 @@ class ReportHandler:
             "citations": citations,
             "risks": forum_output.risks,
             "recommendation": forum_output.recommendation,
-            "meta": {"agent_traces": agent_traces} if agent_traces else {},
+            "meta": {
+                "agent_traces": agent_traces,
+                "data_context": data_context,
+            } if (agent_traces or agent_outputs) else {"data_context": data_context},
         }
         return ReportValidator.validate_and_fix(report, as_dict=True)
     
@@ -506,7 +522,11 @@ class ReportHandler:
                 context.cache_data(f'report:{ticker}', report)
             
             # 4. 生成 ReportIR 供前端渲染
-            report_ir = self._generate_simple_report_ir(ticker, report)
+            report_ir = self._generate_simple_report_ir(
+                ticker,
+                report,
+                meta={"data_context": collected_data.get("data_context")},
+            )
             
             return {
                 'success': True,
@@ -555,7 +575,11 @@ class ReportHandler:
                 context.cache_data(f'report:{ticker}', report)
             
             # 4. 生成 ReportIR 供前端渲染
-            report_ir = self._generate_simple_report_ir(ticker, report)
+            report_ir = self._generate_simple_report_ir(
+                ticker,
+                report,
+                meta={"data_context": collected_data.get("data_context")},
+            )
             
             return {
                 'success': True,
@@ -580,6 +604,7 @@ class ReportHandler:
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),
         }
+        context_collector = DataContextCollector()
         
         # 1. 获取价格
         try:
@@ -588,17 +613,25 @@ class ReportHandler:
                 if result.success:
                     data['price'] = result.data
                     data['price_source'] = result.source
+                    context_collector.add(
+                        "price",
+                        data=result.data,
+                        as_of=getattr(result, "as_of", None),
+                        ticker=ticker,
+                    )
             elif self.tools_module:
-                data['price'] = self.tools_module.get_stock_price(ticker)
+                price_payload = self.tools_module.get_stock_price(ticker)
+                data['price'] = price_payload
+                context_collector.add("price", data=price_payload, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 获取价格失败: {e}")
+            logger.info(f"[ReportHandler] 获取价格失败: {e}")
         
         # 2. 获取公司信息
         try:
             if self.tools_module:
                 data['company_info'] = self.tools_module.get_company_info(ticker)
         except Exception as e:
-            print(f"[ReportHandler] 获取公司信息失败: {e}")
+            logger.info(f"[ReportHandler] 获取公司信息失败: {e}")
         
         # 3. 获取新闻
         try:
@@ -606,15 +639,18 @@ class ReportHandler:
                 raw_news = self.tools_module.get_company_news(ticker)
                 data['news_raw'] = raw_news
                 data['news'] = self._format_news_payload(raw_news, ticker)
+                context_collector.add("news", data=raw_news, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 获取新闻失败: {e}")
+            logger.info(f"[ReportHandler] 获取新闻失败: {e}")
         
         # 4. 获取市场情绪
         try:
             if self.tools_module:
-                data['sentiment'] = self.tools_module.get_market_sentiment()
+                sentiment_payload = self.tools_module.get_market_sentiment()
+                data['sentiment'] = sentiment_payload
+                context_collector.add("sentiment", data=sentiment_payload, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 获取情绪失败: {e}")
+            logger.info(f"[ReportHandler] 获取情绪失败: {e}")
         
         # 5. 获取表现对比 (YTD/1Y)
         try:
@@ -624,26 +660,35 @@ class ReportHandler:
                 tickers_map = {ticker: ticker}
                 if benchmark and benchmark.lower() not in ("none", "off", "false", "0"):
                     tickers_map[benchmark_label] = benchmark
-                data["performance_comparison"] = self.tools_module.get_performance_comparison(tickers_map)
+                perf_payload = self.tools_module.get_performance_comparison(tickers_map)
+                data["performance_comparison"] = perf_payload
+                context_collector.add("performance", data=perf_payload, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 获取表现对比失败: {e}")
+            logger.info(f"[ReportHandler] 获取表现对比失败: {e}")
 
         # 6. 历史回撤分析
         try:
             if self.tools_module and hasattr(self.tools_module, "analyze_historical_drawdowns"):
-                data["drawdown_analysis"] = self.tools_module.analyze_historical_drawdowns(ticker)
+                drawdown_payload = self.tools_module.analyze_historical_drawdowns(ticker)
+                data["drawdown_analysis"] = drawdown_payload
+                context_collector.add("drawdown", data=drawdown_payload, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 历史回撤分析失败: {e}")
+            logger.info(f"[ReportHandler] 历史回撤分析失败: {e}")
 
         # 7. 搜索上下文补充
         try:
             if self.tools_module:
-                data['search_context'] = self.tools_module.search(
+                search_payload = self.tools_module.search(
                     f"{ticker} stock analysis latest news {datetime.now().strftime('%B %Y')}"
                 )
+
+                data['search_context'] = search_payload
+
+                context_collector.add("search", data=search_payload, ticker=ticker)
         except Exception as e:
-            print(f"[ReportHandler] 搜索失败: {e}")
+            logger.info(f"[ReportHandler] 搜索失败: {e}")
         
+        data["data_context"] = context_collector.summarize().to_dict()
         return data
     
     def _generate_report_with_llm(
@@ -690,21 +735,21 @@ BEGIN REPORT:"""
             return self._generate_fallback_report(ticker, data)
     
     def _format_data_for_llm(self, data: Dict[str, Any]) -> str:
-        """格式化数据供 LLM 使用"""
+        """Format collected data for the LLM prompt."""
         sections = []
-        
+
         if data.get('price'):
             sections.append(f"## Price Data\n{data['price']}")
-        
+
         if data.get('company_info'):
             sections.append(f"## Company Information\n{data['company_info']}")
-        
+
         if data.get('news'):
             sections.append(f"## Recent News\n{data['news']}")
-        
+
         if data.get('sentiment'):
             sections.append(f"## Market Sentiment\n{data['sentiment']}")
-        
+
         if data.get('performance_comparison'):
             sections.append(f"## Performance Comparison\n{data['performance_comparison']}")
 
@@ -712,16 +757,17 @@ BEGIN REPORT:"""
             sections.append(f"## Drawdown Analysis\n{data['drawdown_analysis']}")
 
         if data.get('search_context'):
-            # 截取搜索结果的前 500 字符
+            # Limit search preview to 500 chars.
             search_preview = data['search_context'][:500] + "..." if len(data['search_context']) > 500 else data['search_context']
             sections.append(f"## Additional Context\n{search_preview}")
-        
+
         return "\n\n".join(sections)
-    
+
     def _generate_fallback_report(self, ticker: str, data: Dict[str, Any]) -> str:
-        """生成简化的备用报告"""
+        """Generate a simplified fallback report."""
+        from backend.report.disclaimer import DISCLAIMER_TITLE, DISCLAIMER_TEXT
         current_date = datetime.now().strftime("%Y-%m-%d")
-        
+
         report = f"""# {ticker} - Investment Analysis Report
 *Report Date: {current_date}*
 
@@ -736,25 +782,25 @@ This is a simplified analysis report for {ticker}. Due to technical limitations,
             report += f"{data['price']}\n\n"
         else:
             report += "Price data unavailable.\n\n"
-        
+
         if data.get('company_info'):
             report += f"## COMPANY PROFILE\n\n{data['company_info']}\n\n"
-        
+
         if data.get('news'):
             report += f"## RECENT NEWS\n\n{data['news']}\n\n"
-        
+
         if data.get('sentiment'):
             report += f"## MARKET SENTIMENT\n\n{data['sentiment']}\n\n"
-        
-        report += """## DISCLAIMER
 
-This is a simplified report. For comprehensive investment advice, please consult a qualified financial advisor.
+        report += f"""## {DISCLAIMER_TITLE}
+
+{DISCLAIMER_TEXT}
 
 ---
 *Generated by FinSight AI*
 """
         return report
-    
+
     def _generate_simple_report_ir(
         self,
         ticker: str,
@@ -763,19 +809,19 @@ This is a simplified report. For comprehensive investment advice, please consult
         meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        从纯文本生成简化的 ReportIR 结构
-        用于 Legacy 路径，确保前端能渲染 Report 卡片
+        Build a minimal ReportIR from legacy markdown report content.
         """
         import re
         from backend.report.validator import ReportValidator
-        
-        # 尝试从内容中提取章节
+        from backend.report.disclaimer import build_disclaimer_section, DISCLAIMER_TEXT
+
+        # Collect sections from markdown.
         sections = []
-        
-        # 匹配 Markdown 标题 (## 或 ###)
+
+        # Split Markdown headings (## / ###).
         section_pattern = r'^#{2,3}\s+(.+?)$'
         parts = re.split(section_pattern, content, flags=re.MULTILINE)
-        
+
         order = 1
         for i in range(1, len(parts), 2):
             if i + 1 < len(parts):
@@ -788,45 +834,49 @@ This is a simplified report. For comprehensive investment advice, please consult
                         "contents": [{"type": "text", "content": body}]
                     })
                     order += 1
-        
-        # 如果没有解析到章节，将整个内容作为摘要
+
+        # If no sections detected, fallback to a single section.
         if not sections:
             sections = [{
-                "title": "分析摘要",
+                "title": "Overview",
                 "order": 1,
-                "contents": [{"type": "text", "content": content[:2000]}]  # 限制长度
+                "contents": [{"type": "text", "content": content[:2000]}]
             }]
-        
-        # 尝试提取摘要（第一段或前 200 字）
+            order = 2
+
+        disclaimer_section = build_disclaimer_section(order)
+        sections.append(disclaimer_section)
+
+        # Extract summary from the first paragraph (200 chars).
         first_para = content.split('\n\n')[0] if '\n\n' in content else content[:200]
         summary = first_para[:300] + "..." if len(first_para) > 300 else first_para
-        
-        # 推断情绪
+
+        # Infer sentiment from content.
         content_lower = content.lower()
-        if any(kw in content_lower for kw in ['bullish', '看涨', '买入', 'buy', '增持', '强烈推荐']):
+        if any(kw in content_lower for kw in ['bullish', '看涨', '利好', 'buy', '买入', '增持', '上涨', '强势']):
             sentiment = 'bullish'
-        elif any(kw in content_lower for kw in ['bearish', '看跌', '卖出', 'sell', '减持', '谨慎']):
+        elif any(kw in content_lower for kw in ['bearish', '看跌', '利空', 'sell', '卖出', '减持', '下跌', '弱势']):
             sentiment = 'bearish'
         else:
             sentiment = 'neutral'
-        
+
         report = {
             "report_id": f"rpt_{ticker}_{int(datetime.now().timestamp())}",
             "ticker": ticker,
             "company_name": ticker,
-            "title": f"{ticker} 深度投资分析报告",
+            "title": f"{ticker} 投资分析报告",
             "summary": summary,
             "sentiment": sentiment,
-            "confidence_score": 0.75,  # 默认置信度
+            "confidence_score": 0.75,  # Default confidence
             "generated_at": datetime.now().isoformat(),
             "sections": sections,
             "citations": citations or [],
             "risks": [],
             "recommendation": "HOLD",
-            "meta": meta or {},
+            "meta": {**(meta or {}), "disclaimer": DISCLAIMER_TEXT},
         }
         return ReportValidator.validate_and_fix(report, as_dict=True)
-    
+
     def _generate_pre_analysis_question(self, ticker: str, original_query: str) -> str:
         """
         生成分析前的确认问题，改进对话体验

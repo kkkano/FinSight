@@ -1,12 +1,15 @@
-from fastapi import FastAPI, HTTPException
+import logging
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import sys
 import traceback
+import time
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse, Response
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.streaming import stream_report_sse, stream_supervisor_sse
@@ -17,6 +20,10 @@ from backend.api.schemas import (
     SubscriptionListResponse, StockDataResponse, KlineResponse,
     ConfigResponse, ChartDetectResponse, ChartDataResponse,
 )
+from backend.metrics import METRICS_ENABLED, metrics_payload
+
+logger = logging.getLogger(__name__)
+
 # 将项目根目录添加到 sys.path
 # 这样可以确保 backend, config, langchain_agent 等模块能被找到
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,24 +33,32 @@ if project_root not in sys.path:
 # Load env once for scheduler/SMTP configs, etc.
 load_dotenv()
 
+# Logging (avoid duplicate handlers in reload)
+if not logging.getLogger().handlers:
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
 # 尝试导入核心工具
 try:
     from backend.tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
-    print("[Init] Core tools imported successfully.")
+    logger.info("[Init] Core tools imported successfully.")
 except ImportError as e:
     # 如果 backend.tools 失败，尝试从根目录 tools 导入（兼容旧结构）
     try:
         from tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
-        print("[Init] Core tools imported from root successfully.")
+        logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
-        print(f"❌ Error importing tools: {e2}")
+        logger.info(f"❌ Error importing tools: {e2}")
 
 # 导入图表检测器
 try:
     from backend.api.chart_detector import ChartTypeDetector
-    print("[Init] Chart detector imported successfully.")
+    logger.info("[Init] Chart detector imported successfully.")
 except ImportError as e:
-    print(f"❌ Error importing chart detector: {e}")
+    logger.info(f"❌ Error importing chart detector: {e}")
     ChartTypeDetector = None
 
 # 导入 Agent
@@ -53,9 +68,9 @@ from backend.conversation.agent import create_agent as CreateReActAgent
 try:
     from backend.services.memory import MemoryService, UserProfile
     memory_service = MemoryService()
-    print("[Init] MemoryService initialized successfully.")
+    logger.info("[Init] MemoryService initialized successfully.")
 except Exception as e:
-    print(f"[Init] Error initializing MemoryService: {e}")
+    logger.info(f"[Init] Error initializing MemoryService: {e}")
     memory_service = None
 
 # 初始化 Agent
@@ -66,9 +81,9 @@ try:
         use_orchestrator=True,
         use_report_agent=True
     )
-    print("[Init] ReAct Agent initialized successfully.")
+    logger.info("[Init] ReAct Agent initialized successfully.")
 except Exception as e:
-    print(f"[Init] Error initializing ReAct Agent: {e}")
+    logger.info(f"[Init] Error initializing ReAct Agent: {e}")
     traceback.print_exc()
     agent = None
 
@@ -77,11 +92,79 @@ _schedulers = []
 def _env_bool(key: str, default: str = "false") -> bool:
     return os.getenv(key, default).lower() in ("true", "1", "yes", "on")
 
+
+def _env_int(key: str, default: int) -> int:
+    try:
+        return int(os.getenv(key, default))
+    except Exception:
+        return default
+
+
+def _parse_api_keys() -> set[str]:
+    raw = os.getenv("API_AUTH_KEYS") or os.getenv("API_AUTH_KEY") or ""
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _extract_api_key(request: Request) -> Optional[str]:
+    header_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
+    if header_key:
+        return header_key.strip()
+    auth = request.headers.get("Authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip()
+    return None
+
+
+def _is_allowlisted_path(path: str) -> bool:
+    allow_prefixes = ("/", "/docs", "/openapi.json", "/redoc", "/health")
+    return path in allow_prefixes or path.startswith(("/docs", "/redoc"))
+
+
+class SimpleRateLimiter:
+    def __init__(self, limit_per_window: int, window_seconds: int, enabled: bool = True):
+        self.enabled = enabled
+        self.limit = max(1, int(limit_per_window))
+        self.window_seconds = max(1, int(window_seconds))
+        self._buckets: Dict[str, deque[float]] = {}
+        self._last_cleanup = time.time()
+
+    def _cleanup(self, now: float) -> None:
+        if now - self._last_cleanup < self.window_seconds:
+            return
+        self._last_cleanup = now
+        stale_keys = [
+            key for key, bucket in self._buckets.items()
+            if not bucket or (now - bucket[-1] >= self.window_seconds)
+        ]
+        for key in stale_keys:
+            self._buckets.pop(key, None)
+
+    @classmethod
+    def from_env(cls) -> "SimpleRateLimiter":
+        enabled = _env_bool("RATE_LIMIT_ENABLED", "false")
+        limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+        window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+        return cls(limit_per_window=limit, window_seconds=window_seconds, enabled=enabled)
+
+    def allow(self, key: str) -> tuple[bool, Optional[int]]:
+        now = time.time()
+        self._cleanup(now)
+        bucket = self._buckets.setdefault(key, deque())
+        while bucket and now - bucket[0] >= self.window_seconds:
+            bucket.popleft()
+        if len(bucket) >= self.limit:
+            retry_after = int(self.window_seconds - (now - bucket[0])) if bucket else self.window_seconds
+            return False, max(1, retry_after)
+        bucket.append(now)
+        return True, None
+
+
+_rate_limiter = SimpleRateLimiter.from_env()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    FastAPI lifespan handler to start/stop price_change scheduler.
-    """
+    """FastAPI lifespan handler to start/stop price_change scheduler."""
+
     from backend.services.alert_scheduler import run_price_change_cycle
     from backend.services.scheduler_runner import start_price_change_scheduler
 
@@ -96,7 +179,7 @@ async def lifespan(app: FastAPI):
         if sched:
             _schedulers.append(sched)
     else:
-        print("[Scheduler] PRICE_ALERT_SCHEDULER_ENABLED is false; skip start.")
+        logger.info("[Scheduler] PRICE_ALERT_SCHEDULER_ENABLED is false; skip start.")
 
     # News scheduler
     from backend.services.alert_scheduler import run_news_alert_cycle
@@ -111,7 +194,7 @@ async def lifespan(app: FastAPI):
         if sched:
             _schedulers.append(sched)
     else:
-        print("[Scheduler] NEWS_ALERT_SCHEDULER_ENABLED is false; skip start.")
+        logger.info("[Scheduler] NEWS_ALERT_SCHEDULER_ENABLED is false; skip start.")
 
     # Health probe scheduler (optional)
     from backend.services.health_probe import run_health_probe_cycle
@@ -126,7 +209,7 @@ async def lifespan(app: FastAPI):
         if sched:
             _schedulers.append(sched)
     else:
-        print("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
+        logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
 
     try:
         yield
@@ -135,9 +218,9 @@ async def lifespan(app: FastAPI):
             for sched in _schedulers:
                 sched.shutdown(wait=False)
             if _schedulers:
-                print("[Scheduler] all schedulers stopped.")
+                logger.info("[Scheduler] all schedulers stopped.")
         except Exception as e:
-            print(f"[Scheduler] shutdown error: {e}")
+            logger.info(f"[Scheduler] shutdown error: {e}")
 
 # 初始化 FastAPI
 app = FastAPI(
@@ -155,6 +238,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_gate(request: Request, call_next):
+    if _is_allowlisted_path(request.url.path):
+        return await call_next(request)
+
+    api_key = None
+    if _env_bool("API_AUTH_ENABLED", "false"):
+        keys = _parse_api_keys()
+        if not keys:
+            return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})
+        api_key = _extract_api_key(request)
+        if not api_key or api_key not in keys:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    if _rate_limiter.enabled:
+        client_id = api_key or (request.client.host if request.client else "anonymous")
+        allowed, retry_after = _rate_limiter.allow(client_id)
+        if not allowed:
+            headers = {"Retry-After": str(retry_after)}
+            return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}, headers=headers)
+
+    return await call_next(request)
 
 # === API 端点 ===
 
@@ -297,6 +404,15 @@ def health_check():
         "components": components,
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+@app.get("/metrics")
+def metrics_endpoint():
+    """Prometheus metrics endpoint (optional)."""
+    if not METRICS_ENABLED:
+        raise HTTPException(status_code=404, detail="metrics disabled")
+    payload, content_type = metrics_payload()
+    return Response(content=payload, media_type=content_type)
 
 
 @app.get("/diagnostics/langgraph", response_model=DiagnosticsResponse)
@@ -467,9 +583,10 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     # 构建对话上下文
     conversation_context = None
     if request.history:
+        max_history = _env_int("CHAT_HISTORY_MAX_MESSAGES", 12)
         conversation_context = [
             {"role": msg.role, "content": msg.content}
-            for msg in request.history[-6:]  # 最近 6 条消息（3轮对话）
+            for msg in request.history[-max_history:]
         ]
 
     # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
@@ -657,6 +774,12 @@ async def chat_stream_endpoint(request: ChatRequest):
                             agent_outputs = payload.get("agent_outputs") if isinstance(payload, dict) else None
                             if agent_outputs and isinstance(agent_outputs, dict):
                                 result["data"] = {"agent_outputs": agent_outputs}
+                                plan_data = payload.get("plan")
+                                plan_trace = payload.get("plan_trace")
+                                if plan_data:
+                                    result["data"]["plan"] = plan_data
+                                if plan_trace:
+                                    result["data"]["plan_trace"] = plan_trace
                                 if payload.get("report") and getattr(agent, "report_handler", None):
                                     report = payload.get("report")
                                     citations = []
@@ -680,6 +803,12 @@ async def chat_stream_endpoint(request: ChatRequest):
                                         meta = dict(meta) if isinstance(meta, dict) else {}
                                         meta.setdefault("agent_traces", agent_traces)
                                         report["meta"] = meta
+                                    if isinstance(report, dict):
+                                        try:
+                                            from backend.report.validator import ReportValidator
+                                            report = ReportValidator.validate_and_fix(report, as_dict=True)
+                                        except Exception:
+                                            pass
                                     payload["report"] = report
                                     result["report"] = report
                             payload["thinking"] = build_thinking_trace(
@@ -732,22 +861,22 @@ async def chat_stream_endpoint(request: ChatRequest):
             async def generate_report():
                 try:
                     start_time = datetime.now()
-                    print(f"[Stream REPORT] using async agent.chat_async()")
+                    logger.info(f"[Stream REPORT] using async agent.chat_async()")
                     result = await agent.chat_async(resolved_query, capture_thinking=True)
                     response_text = result.get('response', '')
                     report_data = result.get('report')
                     thinking_steps = result.get('thinking', [])
 
-                    print(f"[Stream REPORT] agent.chat report present: {report_data is not None}")
+                    logger.info(f"[Stream REPORT] agent.chat report present: {report_data is not None}")
                     if report_data:
-                        print(f"[Stream REPORT] report keys: {list(report_data.keys())}")
+                        logger.info(f"[Stream REPORT] report keys: {list(report_data.keys())}")
 
                     import re
-                    sentences = re.split(r'([???\n])', response_text)
+                    sentences = re.split(r'([。！？.!?\n])', response_text)
                     buffer = ""
                     for i, part in enumerate(sentences):
                         buffer += part
-                        if part in ['?', '?', '?', '\n'] or i == len(sentences) - 1:
+                        if part in ['。', '！', '？', '.', '!', '?', '\n'] or i == len(sentences) - 1:
                             if buffer.strip():
                                 yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n\n"
                                 buffer = ""
@@ -757,7 +886,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                     done_data['intent'] = intent.value
                     if report_data:
                         done_data['report'] = report_data
-                        print(f"[Stream REPORT] done event includes report")
+                        logger.info(f"[Stream REPORT] done event includes report")
                     if thinking_steps:
                         done_data['thinking'] = thinking_steps
                     else:
@@ -939,7 +1068,7 @@ def get_price(ticker: str):
             cache_key = f"price:{ticker}"
             cached_data = agent.orchestrator.cache.get(cache_key)
             if cached_data is not None:
-                print(f"[API] 从缓存获取价格: {ticker}")
+                logger.info(f"[API] 从缓存获取价格: {ticker}")
                 return {"ticker": ticker, "data": cached_data, "cached": True}
 
         # 缓存未命中，调用工具获取
@@ -948,7 +1077,7 @@ def get_price(ticker: str):
         # 存入缓存（TTL=60秒）
         if agent and agent.orchestrator and price_info:
             agent.orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
-            print(f"[API] 价格已缓存: {ticker}")
+            logger.info(f"[API] 价格已缓存: {ticker}")
 
         return {"ticker": ticker, "data": price_info}
     except Exception as e:
@@ -997,7 +1126,7 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
             cache_key = f"kline:{ticker}:{period}:{interval}"
             cached_data = agent.orchestrator.cache.get(cache_key)
             if cached_data is not None:
-                print(f"[API] 从缓存获取 K 线数据: {ticker} ({period}, {interval})")
+                logger.info(f"[API] 从缓存获取 K 线数据: {ticker} ({period}, {interval})")
                 return {"ticker": ticker, "data": cached_data, "cached": True}
         
         # 如果缓存中没有，获取新数据
@@ -1007,7 +1136,7 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         if "error" not in kline_data and agent and agent.orchestrator:
             cache_key = f"kline:{ticker}:{period}:{interval}"
             agent.orchestrator.cache.set(cache_key, kline_data, ttl=3600)  # 1小时缓存
-            print(f"[API] K 线数据已缓存: {ticker} ({period}, {interval})")
+            logger.info(f"[API] K 线数据已缓存: {ticker} ({period}, {interval})")
         
         # 确保返回格式符合前端期望：{ticker, data: {kline_data: [...] 或 error: "..."}}
         return {
@@ -1163,7 +1292,7 @@ async def save_config(request: dict):
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(request, f, indent=2, ensure_ascii=False)
         
-        print(f"[Config] 用户配置已保存到 {config_file}")
+        logger.info(f"[Config] 用户配置已保存到 {config_file}")
         
         return {"success": True, "message": "配置已保存"}
     except Exception as e:

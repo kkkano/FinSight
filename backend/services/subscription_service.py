@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 订阅管理服务
 管理用户的股票订阅和提醒
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# -*- coding: utf-8 -*-
+
 
 import json
 import os
@@ -30,7 +36,7 @@ class SubscriptionService:
                 with open(self.subscriptions_file, 'r', encoding='utf-8') as f:
                     self.subscriptions = json.load(f)
             except Exception as e:
-                print(f"⚠️  加载订阅数据失败: {e}")
+                logger.info(f"⚠️  加载订阅数据失败: {e}")
                 self.subscriptions = {}
         else:
             self.subscriptions = {}
@@ -41,7 +47,7 @@ class SubscriptionService:
             with open(self.subscriptions_file, 'w', encoding='utf-8') as f:
                 json.dump(self.subscriptions, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"❌ 保存订阅数据失败: {e}")
+            logger.info(f"❌ 保存订阅数据失败: {e}")
     
     def subscribe(
         self,
@@ -93,7 +99,7 @@ class SubscriptionService:
         self.subscriptions[email].append(subscription)
         self._save_subscriptions()
         
-        print(f"✅ 用户 {email} 已订阅 {ticker}")
+        logger.info(f"✅ 用户 {email} 已订阅 {ticker}")
         return True
     
     def unsubscribe(self, email: str, ticker: Optional[str] = None) -> bool:
@@ -125,7 +131,7 @@ class SubscriptionService:
                 del self.subscriptions[email]
         
         self._save_subscriptions()
-        print(f"✅ 用户 {email} 已取消订阅 {ticker or '所有股票'}")
+        logger.info(f"✅ 用户 {email} 已取消订阅 {ticker or '所有股票'}")
         return True
     
     def get_subscriptions(self, email: Optional[str] = None) -> List[Dict]:
@@ -192,4 +198,3 @@ def get_subscription_service() -> SubscriptionService:
     if _subscription_service is None:
         _subscription_service = SubscriptionService()
     return _subscription_service
-

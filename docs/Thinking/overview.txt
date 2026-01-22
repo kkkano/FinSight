@@ -1,0 +1,353 @@
+# QUALITY_IMPROVEMENT_OVERVIEW
+
+> 角色：Quality Assurance Architect
+>
+> 目标：定位 FinSight 现有质量瓶颈与架构缺陷，提出可验证、可落地的改进路线（优先使用免费层 API），并给出前端展示层的可信度增强策略。
+>
+> 范围：后端核心 Agent（News/Macro/DeepSearch）与前端报告展示。
+
+---
+
+## 0. 执行摘要（Executive Summary）
+当前系统能够正确选择子 Agent，但“说服力不足”的根因集中在三类：
+1. **证据链稀疏**：搜索/抓取结果与报告引用的“可验证性”弱，来源多但缺少明确权重与可信度说明。
+2. **结构化能力不足**：新闻与宏观数据在回退路径上以“自由文本”方式处理，导致分析层无法稳定抽取关键指标。
+3. **流程可维护性与可靠性不足**：关键路径存在硬编码密钥、不可达代码、无重试与可观测性薄弱等问题，长期会放大质量波动。
+
+这些问题不会影响“能跑”，但会显著削弱“可信、可复核”。下面给出证据、改进对比与执行计划。
+
+---
+
+## 1. 核心流程分析（Mermaid Visualization）
+
+### 1.1 Current Workflow（当前现状）
+```mermaid
+flowchart TD
+  U[User Query] --> S[Supervisor / Orchestration]
+  S --> A1[NewsAgent]
+  S --> A2[MacroAgent]
+  S --> A3[DeepSearchAgent]
+  A1 --> T1[tools.get_company_news → string parse]
+  A1 --> T2[tools.search → text fallback]
+  A2 --> T3[get_fred_data → US-only]
+  A2 --> T4[search fallback → raw text]
+  A3 --> T5[Tavily/Exa/search]
+  A3 --> T6[requests.get + HTML/PDF extract]
+  A1 --> R[Report Builder]
+  A2 --> R
+  A3 --> R
+  R --> FE[Frontend ReportView]
+  FE --> V[Evidence Pool (citations list)]
+```
+
+### 1.2 Optimized Workflow（优化后建议）
+```mermaid
+flowchart TD
+  U[User Query] --> S[Supervisor / Orchestration]
+  S --> A1[NewsAgent]
+  S --> A2[MacroAgent]
+  S --> A3[DeepSearchAgent]
+
+  A1 --> N1[Structured News Sources]
+  N1 --> N2[Unified Schema + Quality Scoring]
+  A1 --> N3[Recency + Source Credibility Filter]
+
+  A2 --> M1[Multi-Region Macro Sources]
+  M1 --> M2[Structured Indicators + Series Metadata]
+
+  A3 --> D1[Plan → Execute → Synthesize (Subgraph)]
+  D1 --> D2[Retrieval with Retry + Readability]
+  D2 --> D3[Evidence Weighting + Citation Mapping]
+
+  A1 --> R[Report Builder]
+  A2 --> R
+  A3 --> R
+  R --> FE[Frontend ReportView]
+  FE --> V[Evidence Pool + Source Quality + Freshness]
+  FE --> C[Confidence & Verification Panel]
+```
+
+---
+
+## 2. 问题诊断与证据（Diagnosis & Evidence）
+
+> 说明：每项问题都引用具体文件路径与行号范围，并附代码证据。
+
+### 2.1 问题清单（表格）
+
+| 模块 | 问题 | 影响 | 证据（文件与行号） | 说明 |
+|---|---|---|---|---|
+| Search 工具 | 硬编码 `EXA_API_KEY` 默认值 | 安全风险、环境隔离失效 | [backend/tools.py](backend/tools.py#L64-L72) | 代码内写死默认 Key，容易误用或泄露。
+| Search 工具 | 不可达代码（重复 `return`） | 降低可维护性与可读性 | [backend/tools.py](backend/tools.py#L312-L321) | 逻辑结束后仍有打印和返回，属于死代码。
+| NewsAgent | 解析依赖字符串格式 | 结构化不稳定、易丢字段 | [backend/agents/news_agent.py](backend/agents/news_agent.py#L14-L103) | `get_company_news` 返回字符串再正则解析，容易被源格式变化击穿。
+| NewsAgent | 回退搜索未做来源/时效/可信度筛选 | 可信度下降 | [backend/agents/news_agent.py](backend/agents/news_agent.py#L34-L63) | 仅基于 `search` 文本补充，缺少来源权重与时间过滤。
+| MacroAgent | 仅 FRED + 英文关键词 | 覆盖面窄（偏美） | [backend/agents/macro_agent.py](backend/agents/macro_agent.py#L20-L52) | 关键词仅英文，数据源主要是美国宏观数据。
+| MacroAgent | 回退为“文本搜索”且无结构化 | 报告稳定性差 | [backend/agents/macro_agent.py](backend/agents/macro_agent.py#L40-L62) | fallback 直接把全文拼接进摘要。
+| DeepSearch | 查询模板固定 | 多样性不足，难以适配行业差异 | [backend/agents/deep_search_agent.py](backend/agents/deep_search_agent.py#L243-L252) | 3 条固定 query，缺少动态查询规划。
+| DeepSearch | 抓取缺少重试/可读性提取 | 证据质量波动 | [backend/agents/deep_search_agent.py](backend/agents/deep_search_agent.py#L351-L415) | `requests.get` 无重试，HTML提取为整页文本，噪声多。
+| Frontend | 证据池仅展示来源列表 | 可验证性弱 | [frontend/src/components/ReportView.tsx](frontend/src/components/ReportView.tsx#L488-L552) | 仅列出来源域名与摘要，未展示来源质量/可信度/发布时间排序。
+
+### 2.2 关键证据片段（代码示例）
+
+**证据 A：硬编码 API Key（安全与环境隔离问题）**
+来源：[backend/tools.py](backend/tools.py#L64-L72)
+```python
+EXA_API_KEY = os.getenv("EXA_API_KEY", "096d2363-4811-42c0-84ed-b0d312a4c77e").strip('"')  # Exa Search API
+```
+
+**证据 B：不可达代码（维护负担）**
+来源：[backend/tools.py](backend/tools.py#L312-L321)
+```python
+print(f"[Search] ✅ 最终使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+return combined_result
+
+print(f"[Search] ✅ 成功使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+return combined_result
+```
+
+**证据 C：新闻解析依赖字符串格式（脆弱）**
+来源：[backend/agents/news_agent.py](backend/agents/news_agent.py#L68-L103)
+```python
+# 格式示例: "1. 2025-01-13 - [Title](url) - Source [Tags]"
+lines = news_text.split('\n')
+# ...正则解析 title/url/date/source
+```
+
+**证据 D：宏观回退为文本搜索（难结构化）**
+来源：[backend/agents/macro_agent.py](backend/agents/macro_agent.py#L40-L62)
+```python
+search_result = self.tools.search("current US CPI inflation rate federal funds rate unemployment")
+return {
+  "status": "fallback",
+  "source": "search",
+  "raw": search_result
+}
+```
+
+**证据 E：深搜抓取缺少可读性提取与重试**
+来源：[backend/agents/deep_search_agent.py](backend/agents/deep_search_agent.py#L351-L415)
+```python
+response = requests.get(url, headers=headers, timeout=15)
+# ...
+text = self._extract_html_text(response.text)
+```
+
+**证据 F：前端证据池未展示来源可信度**
+来源：[frontend/src/components/ReportView.tsx](frontend/src/components/ReportView.tsx#L488-L552)
+```tsx
+{sourceSummary.map((item) => (
+  <span key={item.domain}>
+    {item.domain} · {item.count}
+  </span>
+))}
+```
+
+---
+
+## 3. 改进方案对比（Before & After）
+
+> 注：以下代码为“可落地的重构示例”，旨在展示重构方向。
+
+### 3.1 Search 工具：消除不可达代码 & 规范返回
+
+**Before（现状）**
+来源：[backend/tools.py](backend/tools.py#L312-L321)
+```python
+print(f"[Search] ✅ 最终使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+return combined_result
+
+print(f"[Search] ✅ 成功使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+return combined_result
+```
+
+**After（建议）**
+```python
+print(f"[Search] ✅ 最终使用 {len(sources_used)} 个搜索源: {', '.join(sources_used)}")
+return combined_result
+```
+
+**Rationale**：删除死代码，降低维护成本；避免误导日志与重复返回。符合“最小可行逻辑”的清晰度原则。
+
+---
+
+### 3.2 NewsAgent：结构化新闻结果（避免字符串解析）
+
+**Before（现状）**
+来源：[backend/agents/news_agent.py](backend/agents/news_agent.py#L68-L103)
+```python
+# 解析 get_company_news 返回的格式化文本为结构化数据
+lines = news_text.split('\n')
+# 正则提取 title/url/date/source
+```
+
+**After（建议）**
+```python
+# tools.get_company_news() 直接返回结构化列表
+news_items = get_news(ticker)  # List[dict]
+for item in news_items:
+    results.append({
+        "headline": item["headline"],
+        "url": item.get("url"),
+        "source": item.get("source"),
+        "published_at": item.get("published_at"),
+        "confidence": item.get("confidence", 0.7),
+    })
+```
+
+**Rationale**：结构化输入可直接用于排序、去重与前端展示，避免正则解析丢字段。设计模式上属于“数据契约（Schema）”优先，提升可测试性。
+
+---
+
+### 3.3 DeepSearch：增加重试与可读性提取
+
+**Before（现状）**
+来源：[backend/agents/deep_search_agent.py](backend/agents/deep_search_agent.py#L351-L415)
+```python
+response = requests.get(url, headers=headers, timeout=15)
+text = self._extract_html_text(response.text)
+```
+
+**After（建议）**
+```python
+session = requests.Session()
+adapter = HTTPAdapter(max_retries=Retry(total=3, backoff_factor=0.5))
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+response = session.get(url, headers=headers, timeout=(5, 15))
+text = readability_extract(response.text)  # 仅保留正文
+```
+
+**Rationale**：提升抓取成功率和正文质量，降低噪声比例，增强证据链可信度。
+
+---
+
+### 3.4 前端 Evidence：补足可信度与时效提示
+
+**Before（现状）**
+来源：[frontend/src/components/ReportView.tsx](frontend/src/components/ReportView.tsx#L488-L552)
+```tsx
+{sourceSummary.map((item) => (
+  <span key={item.domain}>{item.domain} · {item.count}</span>
+))}
+```
+
+**After（建议）**
+```tsx
+{sourceSummary.map((item) => (
+  <span key={item.domain}>
+    {item.domain} · {item.count}
+    <span className="ml-1 text-[10px]">可信度{item.avgScore}%</span>
+  </span>
+))}
+```
+
+**Rationale**：把“来源”升级为“来源可信度 + 新鲜度”的综合提示，让用户感知证据质量，不只看到数量。
+
+---
+
+## 4. 引用与权威背书（References）
+
+**搜索与数据源（免费层优先）**
+- FRED API 官方文档：https://fred.stlouisfed.org/docs/api/fred/
+- SEC EDGAR（免费披露文档）：https://www.sec.gov/edgar/sec-api-documentation
+- GDELT 2.1（全球事件/新闻开放数据）：https://www.gdeltproject.org/
+- World Bank Open Data：https://data.worldbank.org/
+- ECB Statistical Data Warehouse：https://sdw.ecb.europa.eu/
+- IMF Data（开放数据入口）：https://www.imf.org/en/Data
+
+**检索与摘要能力（官方文档）**
+- Tavily API Docs：https://docs.tavily.com/
+- Exa API Docs：https://docs.exa.ai/
+- LangChain Docs：https://python.langchain.com/docs/
+- LangGraph Docs：https://langchain-ai.github.io/langgraph/
+
+**网络抓取可靠性**
+- Requests 官方文档：https://requests.readthedocs.io/
+- urllib3 Retry 机制：https://urllib3.readthedocs.io/en/latest/reference/urllib3.util.html#urllib3.util.retry.Retry
+
+**UI/数据透明度（可信度提示）**
+- Google Search Quality Guidelines（信息可信度原则）：https://developers.google.com/search/docs/appearance/page-experience
+
+---
+
+## 5. 执行计划（Action Plan）
+
+### 5.1 优先级 TODO List（表格 + 列表）
+
+| 优先级 | 任务 | 目标 | 验收标准 |
+|---|---|---|---|
+| P0 | 移除硬编码密钥 | 安全合规 | 仅从环境变量读取，CI 检查不再出现明文 Key |
+| P0 | 修复不可达代码 | 降低维护成本 | 静态扫描无死代码提示 |
+| P0 | 新闻结构化返回 | 提升可用性 | `NewsAgent` 不再使用正则解析；字段完整率 ≥ 95% |
+| P0 | DeepSearch 抓取重试 + 正文抽取 | 提升证据质量 | 抓取失败率 < 10%，正文噪声减少 |
+| P1 | 宏观多区域数据源 | 扩展覆盖 | 新增至少 2 个非美宏观数据源 |
+| P1 | 证据可信度展示 | 前端可解释性 | 报告页显示来源可信度与时间戳 |
+| P2 | 自适应查询规划 | 提升深搜质量 | `DeepSearchAgent` 生成动态 queries |
+| P2 | 证据评分模型 | 可信度排序 | 引用按可信度排序，低可信提示 |
+
+#### TODO（列表版本）
+**P0（必须立即修复）**
+- 移除硬编码 API Key 并加入配置验证（证据：[backend/tools.py](backend/tools.py#L64-L72)）
+- 清理 `search()` 中不可达代码（证据：[backend/tools.py](backend/tools.py#L312-L321)）
+- `NewsAgent` 直接消费结构化新闻列表（证据：[backend/agents/news_agent.py](backend/agents/news_agent.py#L68-L103)）
+- `DeepSearchAgent` 加入抓取重试 + 正文抽取（证据：[backend/agents/deep_search_agent.py](backend/agents/deep_search_agent.py#L351-L415)）
+
+**P1（近期优化）**
+- 增强宏观数据覆盖范围（加入 ECB/IMF/WorldBank 等免费层源）
+- 前端 Evidence Panel 增加来源可信度、发布时间与排序逻辑（证据：[frontend/src/components/ReportView.tsx](frontend/src/components/ReportView.tsx#L488-L552)）
+
+**P2（中期演进）**
+- `DeepSearchAgent` 引入 Plan → Execute → Synthesize 子流程（Subgraph）
+- 引入统一证据评分模型（来源可信度 + 新鲜度 + 交叉验证）
+
+### 5.2 验证策略（Testing & Verification）
+
+**单元测试**
+- `test_data_sources.py`：验证新增数据源 API 响应结构一致性。
+- 新增 `test_news_schema.py`：确保 `NewsAgent` 返回结构稳定字段。
+
+**集成测试**
+- `test_report_handler.py`：验证证据池能展示可信度字段与排序。
+- `test_tavily_search.py`：验证检索结果在失败时回退逻辑依旧可用。
+
+**质量指标**
+- 报告引用覆盖率（每段文本引用覆盖率 ≥ 70%）
+- 证据时效性（24h 内新闻引用占比 ≥ 60%）
+- 源可信度结构化字段（覆盖率 ≥ 90%）
+
+---
+
+## 6. 为什么这些建议成立（Reasoning & Evidence）
+
+1. **“可信度”是报告解释性的核心**：目前仅展示“来源数量”，但用户并不能判断信息质量。添加可信度、发布时间与来源权重，可以直接提高用户对结论的信任感（见 Evidence Pool 组件）。
+2. **结构化输入是高质量分析的基础**：新闻和宏观数据回退为自由文本，会导致分析模块无法稳定抽取指标，从而削弱“可复核性”。
+3. **抓取可靠性决定深搜质量**：无重试与低质量正文提取会造成“随机质量波动”。引入重试与正文提取器是行业通用实践（见 Requests/urllib3 文档）。
+
+---
+
+## 7. 建议的免费层数据源组合（对齐预算要求）
+
+- **新闻**：GDELT + 公告 RSS + SEC EDGAR（免费）
+- **宏观**：FRED + ECB SDW + World Bank（免费）
+- **市场数据**：FRED（利率、债券）、Stooq（免费行情，需遵守授权）
+
+---
+
+## 8. 结论
+
+当前项目的主要价值在于多 Agent 编排能力已成熟；下一阶段应聚焦 **证据链质量** 与 **结构化数据稳定性**。若按本报告的 P0/P1/P2 路线执行，可在不显著增加成本的前提下显著提升“可信度与说服力”。
+
+---
+
+## 9. 本次补强思考（2026-01-22）
+
+1. **可信度展示必须可量化**：仅列来源数量无法建立信任，需叠加 confidence/freshness 与冲突标注。
+2. **基础设施先行**：连接池/缓存/熔断的细节直接决定系统稳定性，先补齐再谈新功能。
+3. **可观测性是迭代前提**：metrics + 规范化 trace 能让优化从“感觉”变为“证据”。
+
+## 2026-01-22 Tools/Config/Logging sync
+- tools.py -> backend/tools/ package (compat re-exports)
+- llm_service config unified via llm_config (user_config.json > .env)
+- core backend print -> logging
+
+[2026-01-22] Repo cleanup: removed tracked node_modules/pycache/logs, moved root docs into docs/, added langchain_agent shim. pytest run: initial import error fixed; full run timed out at ~120s.

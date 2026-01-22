@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Modern LangGraph-based financial agent for FinSight.
 
@@ -6,9 +6,9 @@ Modern LangGraph-based financial agent for FinSight.
 - Binds typed LangChain tools for reliable tool-calling
 - Keeps a lightweight in-memory checkpoint so threads can be resumed
 """
-
 from __future__ import annotations
 
+import logging
 import hashlib
 import json
 import os
@@ -28,6 +28,11 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from langchain_tools import FINANCIAL_TOOLS, get_tools_description
+
+logger = logging.getLogger(__name__)
+
+
+
 
 load_dotenv()
 
@@ -143,7 +148,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
         self._tool_start[key] = time.time()
         preview = self._preview(input_str)
         if self.verbose:
-            print(f"[Tool {self.step_count}] {tool_name} | input={preview}")
+            logger.info(f"[Tool {self.step_count}] {tool_name} | input={preview}")
         self._record(
             {
                 "event": "tool_start",
@@ -161,7 +166,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
         duration = (time.time() - started_at) * 1000 if started_at else None
         preview = self._preview(str(output))
         if self.verbose:
-            print(f"[Tool {self.step_count}] result={preview}")
+            logger.info(f"[Tool {self.step_count}] result={preview}")
         self._record(
             {
                 "event": "tool_end",
@@ -293,7 +298,7 @@ class LangChainFinancialAgent:
             api_base = cfg.get("api_base")
             model = cfg.get("model") or self.model
             if api_key and api_base:
-                print(f"[LangChainAgent] Using config: model={model}, api_base={api_base}")
+                logger.info(f"[LangChainAgent] Using config: model={model}, api_base={api_base}")
                 return ChatOpenAI(
                     model=model,
                     openai_api_key=api_key,
@@ -303,7 +308,7 @@ class LangChainFinancialAgent:
                     request_timeout=120,
                 )
         except Exception as e:
-            print(f"[LangChainAgent] Failed to load config: {e}, falling back to env vars")
+            logger.info(f"[LangChainAgent] Failed to load config: {e}, falling back to env vars")
 
         # 回退到环境变量
         api_key = os.getenv("GEMINI_PROXY_API_KEY")
@@ -386,7 +391,7 @@ class LangChainFinancialAgent:
             # 检查总调用次数
             if call_tracker["count"] >= MAX_TOOL_CALLS:
                 if self.verbose:
-                    print(f"[Guard] 已达到最大工具调用次数 ({MAX_TOOL_CALLS})，强制结束")
+                    logger.info(f"[Guard] 已达到最大工具调用次数 ({MAX_TOOL_CALLS})，强制结束")
                 return END
 
             # 过滤重复和失败的工具调用
@@ -399,13 +404,13 @@ class LangChainFinancialAgent:
                 # 跳过已失败的工具
                 if tool_name in call_tracker["failed"]:
                     if self.verbose:
-                        print(f"[Guard] 跳过已失败的工具: {tool_name}")
+                        logger.info(f"[Guard] 跳过已失败的工具: {tool_name}")
                     continue
 
                 # 跳过重复调用
                 if call_hash in call_tracker["called"]:
                     if self.verbose:
-                        print(f"[Guard] 跳过重复调用: {tool_name}")
+                        logger.info(f"[Guard] 跳过重复调用: {tool_name}")
                     continue
 
                 call_tracker["called"].add(call_hash)
@@ -483,7 +488,7 @@ class LangChainFinancialAgent:
                         messages = update.get("messages", [])
                         if messages:
                             last = messages[-1]
-                            print(f"[Stream] {getattr(last, 'type', 'msg')}: {getattr(last, 'content', '')[:160]}")
+                            logger.info(f"[Stream] {getattr(last, 'type', 'msg')}: {getattr(last, 'content', '')[:160]}")
             else:
                 final_state = self.graph.invoke(initial_state, config=config)
 

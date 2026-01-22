@@ -1,0 +1,59 @@
+我将深入剖析 FinSight (及类似金融Agent项目) 目前存在的 "有动作无效果" 的核心痛点。你感觉到的 "说服力不足"、"过于简单" 是目前大多数开源 Agent 的通病——它们只是做了 "信息搬运工"，而没有做 "信息分析师"。
+
+以下是对该项目的深度诊断、问题剖析以及 P0-P2 的进化路线图。
+
+1. 核心病灶诊断：为什么现在的 Agent 很 "弱"？
+你提到的 News 和 Macro 两个典型问题，本质上是 "Context Window（上下文）" 和 "Reasoning Depth（推理深度）" 的缺失。
+
+📉 A. News Agent (新闻能力) 的缺陷
+信息源单一且充满噪音：
+现状：目前大概率是调用 Tavily 或 Google Search API 搜一下 "Apple stock news"，然后扔给 LLM 总结。
+问题：搜出来的大多是 SEO 垃圾文、产品发布会传闻，缺乏高信源（如 Bloomberg, WSJ, Reuters 终端级快讯）。
+缺失维度：没有 "去重"（通过不同媒体报道同一件事来验证真实性）、没有 "时间加权"（昨天的旧闻对股价没意义）、没有 "情绪量化"。
+缺乏 "Second-Order Thinking" (二阶思维)：
+Agent 只会说："苹果发布了新耳机"。
+专业的 Agent 应该说："苹果发布新耳机 -> 此前市场预期销量低 -> 实际定价低于预期 -> 此时利好股价"。目前的 Agent 只有第一层。
+📉 B. Macro Agent (宏观能力) 的缺陷
+数据孤岛，缺乏 "Benchmark" (基准)：
+现状：输出 "美国 10 月 CPI 为 3.2%"。这本身没有意义。
+痛点：缺乏 "Consensus (市场预期)" 对比。3.2% 是高于预期还是低于预期？这是金融市场的核心。
+缺乏传导逻辑：Agent 没有展示 "CPI 数据 -> 对美债收益率的影响 -> 对成长股估值的压制" 这一逻辑链条。
+2. 项目优化总览：从 "搬运工" 进化为 "分析师"
+要解决这个问题，不需要无限增加子 Agent，而是要增强单个 Agent 内部的 Workflow (工作流) 和 Data Pipeline (数据管道)。
+
+❌ 当前模式 (浅层)
+Parse error on line 2:
+...r --> NewsAgent --> [API: Search] --> LL
+-----------------------^
+Expecting 'AMP', 'COLON', 'PIPE', 'TESTSTR', 'DOWN', 'DEFAULT', 'NUM', 'COMMA', 'NODE_STRING', 'BRKT', 'MINUS', 'MULT', 'UNICODE_TEXT', got 'SQS'
+结果：像是一份廉价的早报摘抄。
+
+✅ 优化模式 (深层 - 增加子图)
+Parse error on line 4:
+...      NewsAgent --> [Step1: 多源聚合 (API + 
+-----------------------^
+Expecting 'AMP', 'COLON', 'PIPE', 'TESTSTR', 'DOWN', 'DEFAULT', 'NUM', 'COMMA', 'NODE_STRING', 'BRKT', 'MINUS', 'MULT', 'UNICODE_TEXT', got 'SQS'
+3. P0/P1/P2 To-Do List (行动指南)
+这份列表按 "ROI (投入产出比)" 排序。P0 是必须马上改的，P1 是提升质量的关键，P2 是锦上添花。
+
+🚨 P0: 数据源与上下文增强 (先解决 "Garbage In")
+目标：让 Agent 看到的数据必须是专业的，而不是百度的搜索结果。
+
+[Macro] 引入 "预期差" (Surprise Data)
+Action: 替换简单的 Macro API。使用 Teconomics 或 FMP (Financial Modeling Prep) 的 Economic Calendar 接口。
+Logic: 必须获取 Actual (实际值), Estimates (预测值), Prior (前值)。Agent 必须计算 Δ = Actual - Estimates。
+[News] 建立 "信源白名单" (Source Filtering)
+Action: 在 Search Tool 中强制添加 site: 过滤。
+Code: query += " site:reuters.com OR site:bloomberg.com OR site:wsj.com OR site:cnbc.com"。只允许它看这几个网站，强制提升逼格。
+[News] 上下文注入 (RAG)
+Action: Agent 在评论一条新闻时，必须检索过去 3 个月的同类新闻。避免把"炒冷饭"当利好。
+🚀 P1: 推理深度与工作流改造 (解决 "看起来很傻")
+目标：让 Agent 学会像分析师一样思考，而不只是总结员。
+
+[DeepSearch] 实现 "Reflexion" (反思机制)
+Action: 在 DeepSearchAgent 中增加一个 Self-Correction 节点。
+Prompt: "你生成了一份报告。请作为一名资深做空机构分析师，找出这份报告中论据不足、数据过时的地方，列出 3 个批判点，然后重新搜索改进。"
+[Macro] 增加 "相关性分析" 工具
+Action: 给 MacroAgent 一个计算器工具。
+Task: 当查询 CPI 时，自动调取同期的 SPY (标普500) 和 TLT (美债) 走势，计算相关系数。输出报告时必须附带："历史上类似 CPI 数据公布后，大盘平均跌幅为..."。
+[UI/UX] 结构化引用 *

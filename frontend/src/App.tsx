@@ -3,7 +3,7 @@ import { ChatList } from './components/ChatList';
 import Sidebar from './components/Sidebar';
 import { ChatInput } from './components/ChatInput';
 import { SettingsModal } from './components/SettingsModal';
-import { Settings, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { apiClient } from './api/client';
 import { RightPanel } from './components/RightPanel';
@@ -31,7 +31,7 @@ function App() {
   const [marketQuotes, setMarketQuotes] = useState<MarketQuote[]>(
     MARKET_INDICES.map(m => ({ label: m.label, flag: m.flag, loading: true }))
   );
-  const { currentTicker, messages, theme, setTheme, layoutMode } = useStore();
+  const { currentTicker, theme, setTheme } = useStore();
 
   // 加载市场指数数据
   const loadMarketQuotes = async () => {

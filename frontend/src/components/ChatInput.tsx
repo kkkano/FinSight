@@ -25,6 +25,7 @@ const extractTicker = (text: string): string | null => {
 };
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
+const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
@@ -83,7 +84,7 @@ export const ChatInput: React.FC = () => {
     const currentMessages = useStore.getState().messages;
     const history = currentMessages
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-6)  // 最近 6 条消息（3轮对话）
+      .slice(-DEFAULT_HISTORY_LIMIT)  // 最近 N 条消息（可配置）
       .map(m => ({ role: m.role, content: m.content }));
 
     addMessage({

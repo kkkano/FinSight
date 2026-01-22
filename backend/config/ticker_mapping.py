@@ -103,6 +103,18 @@ COMMON_WORDS = {
 }
 
 
+def is_probably_ticker(ticker: str) -> bool:
+    if not ticker:
+        return False
+    if ticker in COMMON_WORDS:
+        return False
+    if ticker.startswith("^"):
+        return True
+    if len(ticker) > 8:
+        return False
+    return bool(re.match(r"^[A-Z0-9]{1,6}([.-][A-Z0-9]{1,4})?$", ticker))
+
+
 def extract_tickers(query: str) -> Dict[str, Any]:
     """
     Extract tickers and company names from query
@@ -144,7 +156,7 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     potential_tickers = [t.upper() for t in potential_tickers]
 
     for ticker in potential_tickers:
-        if ticker in COMMON_WORDS:
+        if not is_probably_ticker(ticker):
             continue
         if ticker in KNOWN_TICKERS or ticker.startswith('^'):
             if ticker not in metadata['tickers']:

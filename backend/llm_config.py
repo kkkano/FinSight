@@ -1,6 +1,13 @@
+"""Load user config from user_config.json (hot reload on each call)"""
+
+import logging
 import os
 import json
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+
+
 
 # Load all environment variables from .env
 load_dotenv()
@@ -10,13 +17,13 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 USER_CONFIG_PATH = os.path.join(PROJECT_ROOT, "user_config.json")
 
 def _load_user_config() -> dict:
-    """Load user config from user_config.json (hot reload on each call)"""
+    
     if os.path.exists(USER_CONFIG_PATH):
         try:
             with open(USER_CONFIG_PATH, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[Config] Failed to load user_config.json: {e}")
+            logger.info(f"[Config] Failed to load user_config.json: {e}")
     return {}
 
 def _normalize_api_base(api_base: str) -> str:
@@ -99,7 +106,7 @@ def get_llm_config(provider: str = "gemini_proxy", model: str = None) -> dict:
         user_model = user_config.get("llm_model") or model or "gpt-4o"
         # 规范化 API base URL，避免 LangChain 重复拼接 /chat/completions
         normalized_base = _normalize_api_base(user_config["llm_api_base"])
-        print(f"[Config] Using user_config.json: provider={user_provider}, model={user_model}, api_base={normalized_base}")
+        logger.info(f"[Config] Using user_config.json: provider={user_provider}, model={user_model}, api_base={normalized_base}")
         return {
             "api_key": user_config["llm_api_key"],
             "api_base": normalized_base,
@@ -112,7 +119,7 @@ def get_llm_config(provider: str = "gemini_proxy", model: str = None) -> dict:
     config = LLM_CONFIGS.get(provider)
 
     if not config:
-        print(f"[Config] 警告: 提供商 '{provider}' 不存在，使用默认 'gemini_proxy'")
+        logger.info(f"[Config] 警告: 提供商 '{provider}' 不存在，使用默认 'gemini_proxy'")
         config = LLM_CONFIGS.get("gemini_proxy", {})
 
     if not model:

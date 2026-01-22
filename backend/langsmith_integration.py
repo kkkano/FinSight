@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 FinSight LangSmith 集成模块
 提供运行追踪、事件记录和可观测性功能
 支持异步上报，不阻塞主分析流程
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# -*- coding: utf-8 -*-
+
 
 import os
 import time
@@ -92,8 +98,8 @@ def init_langsmith(
     endpoint = endpoint or LANGSMITH_ENDPOINT
     
     if not api_key:
-        print("⚠️  LangSmith: 未配置 API Key，追踪功能已禁用")
-        print("   设置环境变量 LANGSMITH_API_KEY 启用追踪")
+        logger.info("⚠️  LangSmith: 未配置 API Key，追踪功能已禁用")
+        logger.info("   设置环境变量 LANGSMITH_API_KEY 启用追踪")
         return False
     
     try:
@@ -118,19 +124,19 @@ def init_langsmith(
         atexit.register(_cleanup)
         
         _initialized = True
-        print(f"✅ LangSmith 初始化成功")
-        print(f"   项目: {project}")
-        print(f"   端点: {endpoint}")
+        logger.info(f"✅ LangSmith 初始化成功")
+        logger.info(f"   项目: {project}")
+        logger.info(f"   端点: {endpoint}")
         
         return True
         
     except ImportError:
-        print("⚠️  LangSmith: langsmith 包未安装")
-        print("   运行: pip install langsmith")
+        logger.info("⚠️  LangSmith: langsmith 包未安装")
+        logger.info("   运行: pip install langsmith")
         return False
         
     except Exception as e:
-        print(f"⚠️  LangSmith 初始化失败: {e}")
+        logger.info(f"⚠️  LangSmith 初始化失败: {e}")
         return False
 
 

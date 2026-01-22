@@ -4,9 +4,14 @@ Report Validator - 研报结构校验器
 确保 Agent 生成的数据符合 ReportIR 标准，防止前端渲染崩溃。
 """
 
+import logging
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 from backend.report.ir import ReportIR, ReportSection, ReportContent, Citation, ContentType, Sentiment
+from backend.report.evidence_policy import EvidencePolicy
+
+logger = logging.getLogger(__name__)
+
 
 class ReportValidator:
     """
@@ -20,6 +25,7 @@ class ReportValidator:
         如果字段缺失，尝试填充默认值；如果结构严重错误，返回最小可用结构。
         """
         report = ReportValidator._build_report(data)
+        EvidencePolicy.apply(report)
         return report.to_dict() if as_dict else report
 
     @staticmethod
@@ -112,6 +118,10 @@ class ReportValidator:
             if recommendation is not None:
                 recommendation = str(recommendation)
 
+            meta = data.get("meta", {})
+            if not isinstance(meta, dict):
+                meta = {}
+
             return ReportIR(
                 report_id=report_id,
                 ticker=ticker,
@@ -125,11 +135,11 @@ class ReportValidator:
                 risks=risks,
                 recommendation=recommendation,
                 generated_at=generated_at,
-                meta=data.get("meta", {}),
+                meta=meta,
             )
 
         except Exception as e:
-            print(f"[ReportValidator] Validation failed: {e}")
+            logger.info(f"[ReportValidator] Validation failed: {e}")
             return ReportIR(
                 report_id="error",
                 ticker="ERROR",

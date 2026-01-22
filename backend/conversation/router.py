@@ -4,9 +4,13 @@ ConversationRouter - Conversation Router
 Handles intent recognition and mode dispatch
 """
 
+import logging
 from enum import Enum
 from typing import Tuple, Dict, Any, Optional, List, Callable
 import re
+
+logger = logging.getLogger(__name__)
+
 
 # Import shared ticker mapping
 from backend.config.ticker_mapping import (
@@ -129,7 +133,7 @@ class ConversationRouter:
                     fallback_reason = "no_rule_match"
                 else:
                     fallback_reason = "clarify_with_financial_context"
-                print(
+                logger.info(
                     "[Router] LLM fallback start"
                     f" reason={fallback_reason}"
                     f" query={query!r}"
@@ -138,7 +142,7 @@ class ConversationRouter:
                 )
                 try:
                     llm_intent = self._llm_classify(query, context_summary, metadata)
-                    print(
+                    logger.info(
                         "[Router] LLM fallback result"
                         f" reason={fallback_reason}"
                         f" intent={llm_intent.value}"
@@ -146,7 +150,7 @@ class ConversationRouter:
                     )
                     return llm_intent, metadata
                 except Exception as e:
-                    print(f"[Router] LLM 意图识别失败: {e}，回退到规则匹配")
+                    logger.info(f"[Router] LLM 意图识别失败: {e}，回退到规则匹配")
 
         if quick_intent:
             return quick_intent, metadata
@@ -424,11 +428,11 @@ Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIM
             }
             
             result = intent_map.get(intent_str, Intent.CLARIFY) # 默认回退到 CLARIFY
-            print(f"[Router] LLM 意图识别: {query[:50]}... -> {result.value}")
+            logger.info(f"[Router] LLM 意图识别: {query[:50]}... -> {result.value}")
             return result
             
         except Exception as e:
-            print(f"[Router] LLM 分类失败: {e}")
+            logger.info(f"[Router] LLM 分类失败: {e}")
             return Intent.CHAT
     
     def _extract_metadata(self, query: str) -> Dict[str, Any]:

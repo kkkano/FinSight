@@ -3,12 +3,17 @@
 # Python build artifacts
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
 
 # Node dependencies
 node_modules/
 
 # Local logs
 logs/
+*.log
 
 # Editor/local tooling
 .vscode/launch.json

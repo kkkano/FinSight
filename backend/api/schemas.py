@@ -19,7 +19,7 @@ class ChatRequest(BaseModel):
     """聊天请求"""
     query: str = Field(..., min_length=1, description="用户查询内容")
     session_id: Optional[str] = Field(None, description="会话ID")
-    history: Optional[list[ChatMessage]] = Field(None, description="对话历史(最近N轮)")
+    history: Optional[list[ChatMessage]] = Field(None, description="对话历史(后端按 CHAT_HISTORY_MAX_MESSAGES 截断)")
 
     model_config = {"extra": "ignore"}
 

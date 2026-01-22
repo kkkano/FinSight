@@ -1,12 +1,10 @@
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
-from urllib.parse import urlparse
-import ipaddress
-import socket
 import asyncio
 import json
 import os
 import re
+import logging
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -20,40 +18,10 @@ except ImportError:
 
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.security.ssrf import is_safe_url
 from backend.services.circuit_breaker import CircuitBreaker
 
-
-def _is_safe_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in ("http", "https"):
-        return False
-    host = parsed.hostname
-    if not host:
-        return False
-    lowered = host.lower()
-    if lowered in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
-        return False
-    if lowered.endswith(".local") or lowered.endswith(".internal"):
-        return False
-    try:
-        ip = ipaddress.ip_address(lowered)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            return False
-        return True
-    except ValueError:
-        pass
-    try:
-        infos = socket.getaddrinfo(host, None)
-        for info in infos:
-            ip = ipaddress.ip_address(info[4][0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-                return False
-    except Exception:
-        return False
-    return True
+logger = logging.getLogger(__name__)
 
 
 class DeepSearchAgent(BaseFinancialAgent):
@@ -96,7 +64,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         """
         trace: List[Dict[str, Any]] = []
         queries = self._build_queries(query, ticker)
-        print(f"[DeepSearch] queries: {queries}")
+        logger.info(f"[DeepSearch] queries: {queries}")
 
         results = await self._initial_search(query, ticker, queries=queries)
         summary = await self._first_summary(results)
@@ -154,7 +122,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         queries = queries or self._build_queries(query, ticker)
         results: List[Dict[str, Any]] = []
         for q in queries:
-            print(f"[DeepSearch] search: {q}")
+            logger.info(f"[DeepSearch] search: {q}")
             results.extend(self._search_web(q))
             if len(results) >= self.MAX_RESULTS:
                 break
@@ -164,7 +132,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         if docs:
             sources = sorted({doc.get("source", "web") for doc in docs if isinstance(doc, dict)})
             pdf_count = sum(1 for doc in docs if doc.get("is_pdf"))
-            print(f"[DeepSearch] fetched docs={len(docs)} pdfs={pdf_count} sources={sources}")
+            logger.info(f"[DeepSearch] fetched docs={len(docs)} pdfs={pdf_count} sources={sources}")
         if docs:
             self.cache.set(cache_key, docs, ttl=self.CACHE_TTL)
         return docs
@@ -293,7 +261,7 @@ class DeepSearchAgent(BaseFinancialAgent):
             title = doc.get("title") or "Untitled"
             url = doc.get("url") or ""
             is_pdf = doc.get("is_pdf", False)
-            print(f"[DeepSearch] {label} doc {idx}: {title} | {url} | pdf={is_pdf}")
+            logger.info(f"[DeepSearch] {label} doc {idx}: {title} | {url} | pdf={is_pdf}")
 
     def _build_queries(self, query: str, ticker: str) -> List[str]:
         base = query.strip()
@@ -361,7 +329,7 @@ class DeepSearchAgent(BaseFinancialAgent):
                         "score": item.get("score"),
                     })
             except Exception as exc:
-                print(f"[DeepSearch] Tavily search failed: {exc}")
+                logger.info(f"[DeepSearch] Tavily search failed: {exc}")
 
         if not results and exa_key and exa_available:
             try:
@@ -389,14 +357,14 @@ class DeepSearchAgent(BaseFinancialAgent):
                         "published_date": getattr(item, "published_date", None),
                     })
             except Exception as exc:
-                print(f"[DeepSearch] Exa search failed: {exc}")
+                logger.info(f"[DeepSearch] Exa search failed: {exc}")
 
         if not results and self.tools and hasattr(self.tools, "search"):
             try:
                 raw = self.tools.search(query)
                 results = self._parse_search_text(raw)
             except Exception as exc:
-                print(f"[DeepSearch] Search fallback failed: {exc}")
+                logger.info(f"[DeepSearch] Search fallback failed: {exc}")
 
         return results
 
@@ -445,8 +413,8 @@ class DeepSearchAgent(BaseFinancialAgent):
         url = item.get("url", "")
         if not url:
             return None
-        if not _is_safe_url(url):
-            print(f"[DeepSearch] Blocked unsafe url: {url}")
+        if not is_safe_url(url):
+            logger.info(f"[DeepSearch] Blocked unsafe url: {url}")
             return None
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; FinSightBot/0.1)",
@@ -454,12 +422,12 @@ class DeepSearchAgent(BaseFinancialAgent):
         try:
             session = self._get_session()
             response = session.get(url, headers=headers, timeout=15, allow_redirects=True)
-            if response.url and not _is_safe_url(response.url):
-                print(f"[DeepSearch] Blocked unsafe redirect: {response.url}")
+            if response.url and not is_safe_url(response.url):
+                logger.info(f"[DeepSearch] Blocked unsafe redirect: {response.url}")
                 return None
             response.raise_for_status()
         except Exception as exc:
-            print(f"[DeepSearch] Fetch failed: {exc}")
+            logger.info(f"[DeepSearch] Fetch failed: {exc}")
             return None
 
         content_type = response.headers.get("Content-Type", "").lower()
@@ -495,7 +463,7 @@ class DeepSearchAgent(BaseFinancialAgent):
                 pages.append(page.extract_text() or "")
             return "\n".join(pages)
         except Exception as exc:
-            print(f"[DeepSearch] PDF parse failed: {exc}")
+            logger.info(f"[DeepSearch] PDF parse failed: {exc}")
             return ""
 
     def _extract_html_text(self, html: str) -> str:
@@ -560,7 +528,7 @@ class DeepSearchAgent(BaseFinancialAgent):
                 response = await asyncio.to_thread(self.llm.invoke, [message])
             return getattr(response, "content", "") if response is not None else ""
         except Exception as exc:
-            print(f"[DeepSearch] LLM call failed: {exc}")
+            logger.info(f"[DeepSearch] LLM call failed: {exc}")
             return ""
 
     def _extract_json(self, text: str) -> Dict[str, Any]:

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 APScheduler runner for price_change sweep.
 
@@ -7,14 +5,19 @@ Design:
 - Keep it framework-agnostic; main.py can call start_price_change_scheduler on startup.
 - Accept injected run_fn for testability.
 """
-
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+
+logger = logging.getLogger(__name__)
+
+
+
 
 
 def start_price_change_scheduler(
@@ -32,7 +35,7 @@ def start_price_change_scheduler(
         enabled: toggle; if False, returns None.
     """
     if not enabled:
-        print("[Scheduler] price_change scheduler disabled (env).")
+        logger.info("[Scheduler] price_change scheduler disabled (env).")
         return None
 
     scheduler = BackgroundScheduler()
@@ -45,5 +48,5 @@ def start_price_change_scheduler(
         next_run_time=datetime.now(timezone.utc),  # fire once immediately
     )
     scheduler.start()
-    print(f"[Scheduler] price_change scheduler started: every {interval_minutes} min.")
+    logger.info(f"[Scheduler] price_change scheduler started: every {interval_minutes} min.")
     return scheduler

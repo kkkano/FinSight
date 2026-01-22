@@ -2,8 +2,13 @@
 智能图表类型检测器
 根据用户问题自动识别需要生成的图表类型
 """
+
+import logging
 from typing import Dict, List, Tuple, Optional
 import re
+
+logger = logging.getLogger(__name__)
+
 
 
 class ChartTypeDetector:
@@ -153,10 +158,9 @@ if __name__ == "__main__":
     
     for query in test_queries:
         result = detector.detect_chart_type(query)
-        print(f"查询: {query}")
-        print(f"  图表类型: {result['chart_type']}")
-        print(f"  数据维度: {result['data_dimension']}")
-        print(f"  置信度: {result['confidence']:.2f}")
-        print(f"  原因: {result['reason']}")
-        print()
-
+        logger.info(f"查询: {query}")
+        logger.info(f"  图表类型: {result['chart_type']}")
+        logger.info(f"  数据维度: {result['data_dimension']}")
+        logger.info(f"  置信度: {result['confidence']:.2f}")
+        logger.info(f"  原因: {result['reason']}")
+        logger.info("")

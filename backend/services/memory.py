@@ -4,11 +4,15 @@ Memory Service - 用户记忆与画像管理
 负责持久化用户偏好、投资风格、历史关注等长期记忆
 """
 
+import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import os
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class UserProfile:
@@ -64,7 +68,7 @@ class MemoryService:
                     data = json.load(f)
                 return UserProfile.from_dict(data)
             except Exception as e:
-                print(f"[MemoryService] Error loading profile for {user_id}: {e}")
+                logger.info(f"[MemoryService] Error loading profile for {user_id}: {e}")
                 return UserProfile(user_id=user_id)
         else:
             return UserProfile(user_id=user_id)
@@ -78,7 +82,7 @@ class MemoryService:
                 json.dump(profile.to_dict(), f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
-            print(f"[MemoryService] Error saving profile for {profile.user_id}: {e}")
+            logger.info(f"[MemoryService] Error saving profile for {profile.user_id}: {e}")
             return False
 
     def add_to_watchlist(self, user_id: str, ticker: str) -> bool:

@@ -8,6 +8,8 @@ from typing import Any, Optional, Dict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import threading
+import os
+import random
 
 
 @dataclass
@@ -17,6 +19,8 @@ class CacheEntry:
     created_at: datetime
     ttl_seconds: int
     hits: int = 0
+    is_negative: bool = False
+    reason: Optional[str] = None
     
     def is_expired(self) -> bool:
         """检查是否过期"""
@@ -42,14 +46,20 @@ class DataCache:
         'sentiment': 3600,     # 情绪指数：1小时
         'default': 300,        # 默认：5分钟
     }
-    
+    NEGATIVE_TTL = 60  # 负缓存默认 60 秒
+
     def __init__(self):
         self._cache: Dict[str, CacheEntry] = {}
         self._lock = threading.RLock()
         self._stats = {
             'hits': 0,
             'misses': 0,
+            'negative_hits': 0,
         }
+        try:
+            self._jitter_ratio = float(os.getenv("CACHE_JITTER_RATIO", "0.1"))
+        except Exception:
+            self._jitter_ratio = 0.1
     
     def get(self, key: str) -> Optional[Any]:
         """
@@ -77,9 +87,19 @@ class DataCache:
             # 命中
             entry.hits += 1
             self._stats['hits'] += 1
+            if entry.is_negative:
+                self._stats['negative_hits'] += 1
             return entry.data
     
-    def set(self, key: str, data: Any, ttl: Optional[int] = None, data_type: str = 'default') -> None:
+    def set(
+        self,
+        key: str,
+        data: Any,
+        ttl: Optional[int] = None,
+        data_type: str = 'default',
+        is_negative: bool = False,
+        reason: Optional[str] = None,
+    ) -> None:
         """
         设置缓存数据
         
@@ -91,13 +111,25 @@ class DataCache:
         """
         if ttl is None:
             ttl = self.DEFAULT_TTL.get(data_type, self.DEFAULT_TTL['default'])
+        if self._jitter_ratio and ttl:
+            jitter = int(ttl * self._jitter_ratio)
+            if jitter > 0:
+                ttl = max(1, ttl + random.randint(-jitter, jitter))
         
         with self._lock:
             self._cache[key] = CacheEntry(
                 data=data,
                 created_at=datetime.now(),
-                ttl_seconds=ttl
+                ttl_seconds=ttl,
+                is_negative=is_negative,
+                reason=reason,
             )
+
+    def set_negative(self, key: str, reason: str, ttl: Optional[int] = None) -> None:
+        """设置负缓存，避免缓存穿透。"""
+        ttl = ttl if ttl is not None else self.NEGATIVE_TTL
+        data = {"error": reason, "_negative_cache": True}
+        self.set(key, data, ttl=ttl, data_type="default", is_negative=True, reason=reason)
     
     def delete(self, key: str) -> bool:
         """删除缓存"""

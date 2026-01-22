@@ -34,6 +34,8 @@ class BaseFinancialAgent:
         self.llm = llm
         self.cache = cache
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
+        self._current_query: Optional[str] = None
+        self._current_ticker: Optional[str] = None
 
     async def research(self, query: str, ticker: str) -> AgentOutput:
         """
@@ -43,6 +45,8 @@ class BaseFinancialAgent:
         3. Reflection loop (optional, implemented by subclasses)
         4. Format output
         """
+        self._current_query = query
+        self._current_ticker = ticker
         # 1. 初始搜索
         results = await self._initial_search(query, ticker)
         summary = await self._first_summary(results)
@@ -65,15 +69,67 @@ class BaseFinancialAgent:
         return str(data)
 
     async def _identify_gaps(self, summary: str) -> List[str]:
-        # Default no gaps
-        return []
+        """Use LLM to identify missing information for the current query."""
+        if not self.llm:
+            return []
+        query = self._current_query or ""
+        ticker = self._current_ticker or ""
+        prompt = (
+            "你是资深金融分析师，正在审阅一段初步摘要。\n"
+            "请找出可能缺失的关键点，并给出可直接用于搜索的查询短语。\n"
+            "要求：\n"
+            "1) 输出 1-4 条，尽量短。\n"
+            "2) 每行一条，不要解释。\n"
+            f"问题: {query}\n"
+            f"股票: {ticker}\n"
+            f"摘要: {summary}\n"
+        )
+        try:
+            from langchain_core.messages import HumanMessage
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            text = response.content if hasattr(response, "content") else str(response)
+        except Exception:
+            return []
+
+        gaps: List[str] = []
+        for line in str(text).splitlines():
+            cleaned = line.strip().lstrip("-*0123456789. ").strip()
+            if cleaned:
+                gaps.append(cleaned)
+        return gaps[:4]
 
     async def _targeted_search(self, gaps: List[str], ticker: str) -> Any:
-        # Default no new data
-        return None
+        tools = getattr(self, "tools", None)
+        search_func = getattr(tools, "search", None) if tools else None
+        if not gaps or not search_func:
+            return None
+        results = []
+        for gap in gaps[:3]:
+            try:
+                query = f"{ticker} {gap}".strip()
+                results.append(search_func(query))
+            except Exception:
+                continue
+        return results
 
     async def _update_summary(self, summary: str, new_data: Any) -> str:
-        return summary
+        if not new_data or not self.llm:
+            return summary
+        prompt = (
+            "请在不编造数据的前提下，结合新增信息更新摘要。\n"
+            "要求：\n"
+            "1) 保持摘要简洁。\n"
+            "2) 明确标注新增信息带来的变化。\n"
+            f"原摘要: {summary}\n"
+            f"新增信息: {new_data}\n"
+        )
+        try:
+            from langchain_core.messages import HumanMessage
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            updated = response.content if hasattr(response, "content") else str(response)
+            return updated.strip() or summary
+        except Exception:
+            return summary
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         # Basic implementation, override for more specific formatting

@@ -1,20 +1,28 @@
+import logging
 import litellm
-from config import LLM_CONFIGS
+from backend.llm_config import LLM_CONFIGS
+
+logger = logging.getLogger(__name__)
+
+
 
 def call_llm(provider: str, model: str, messages: list, **kwargs):
     """
+    
     A flexible function to call any configured LLM provider.
+    
     """
-    print(f"\n--- Calling Provider: {provider}, Model: {model} ---")
+    
+    logger.info(f"\n--- Calling Provider: {provider}, Model: {model} ---")
 
     config = LLM_CONFIGS.get(provider)
     if not config:
-        print(f"Error: Provider '{provider}' not found in LLM_CONFIGS.")
+        logger.info(f"Error: Provider '{provider}' not found in LLM_CONFIGS.")
         return
 
     api_key = config.get("api_key")
     if not api_key:
-        print(f"Error: API key for '{provider}' not found. Please check your .env file for the correct environment variable.")
+        logger.info(f"Error: API key for '{provider}' not found. Please check your .env file for the correct environment variable.")
         return
 
     # LiteLLM can intelligently handle different providers.
@@ -30,13 +38,13 @@ def call_llm(provider: str, model: str, messages: list, **kwargs):
         
         if response and response.choices:
             content = response.choices[0].message.content
-            print("Model Response:")
-            print(content)
+            logger.info("Model Response:")
+            logger.info(content)
             return content
         else:
-            print("Error: Received an empty response from the API.")
+            logger.info("Error: Received an empty response from the API.")
             return None
 
     except Exception as e:
-        print(f"An error occurred during the call to {provider}: {e}")
+        logger.info(f"An error occurred during the call to {provider}: {e}")
         return None

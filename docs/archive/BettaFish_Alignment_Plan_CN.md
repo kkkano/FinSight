@@ -13,7 +13,7 @@
 
 ---
 
-## 2. FinSight 现状主要短板（基于 docs/Future_Blueprint_Execution_Plan_CN.md 与代码）
+## 2. FinSight 现状主要短板（基于 docs/plans/Future_Blueprint_Execution_Plan_CN.md 与代码）
 - 单 CIO Agent + 工具层，缺少**显式子 Agent 分工与冲突消解**；LangGraph 可视化/诊断薄弱。
 - **缓存与搜索兜底不足**：行情/新闻限流频繁；KV 仅规划未落地，DeepSearch 触发与过期策略欠缺。
 - **长文/IR 缺位**：报告直出长文，无中间表示，前端难以结构化展示或复用历史研究。
@@ -77,7 +77,7 @@ Shared:
 ---
 
 ## 7. 文档与验收建议
-- 文档分层：`Future_Blueprint_Execution_Plan_CN.md` 继续记录阶段目标；本文件作为“对齐 BettaFish 的实施手册”；在 README 补充“一页式状态”链接。
+- 文档分层：`docs/plans/Future_Blueprint_Execution_Plan_CN.md` 继续记录阶段目标；本文件作为“对齐 BettaFish 的实施手册”；在 README 补充“一页式状态”链接。
 - 阶段 A 验收：工具失败不 500；Diagnostics 可见 data_origin/fallback_used；搜索兜底可用；KV 命中率/过期重搜可观察。
 - 阶段 B 验收：典型查询触发 ≥2 个子 Agent；输出包含分维度结论与链接；IR 校验通过率 >95%；端到端用例覆盖多 Agent 与兜底。
 

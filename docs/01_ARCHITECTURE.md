@@ -1,15 +1,25 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> 📅 **更新日期**: 2026-01-20
-> 🎯 **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
-> 🏗️ **架构模式**: Supervisor Agent (协调者模式)
+> **更新日期**: 2026-01-22
+> **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
+> **架构模式**: Supervisor Agent (协调者模式)
+>
+> **近期同步**:
+> - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
+> - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
+> - get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）
+> - SSRF 防护扩展至 DeepSearch + fetch_url_content（P1-2）
+> - pytest 收集 backend/tests + test/（不再标记 legacy）
+> - PlanIR + Executor 与 EvidencePolicy 落地（计划模板/执行 trace/引用校验）
+> - DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
+> - BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
+> - SecurityGate：鉴权 + 限流 + 免责声明模板落地（P0-29）
+> - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
+> - Trace 规范化输出 + /metrics 可观测性入口
 
-> 🧩 **近期同步**: ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）。
-> 🧭 **近期同步**: News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）。
-> 🧱 **近期同步**: get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）。
-> 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
-> 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
-> 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
+> - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
+> - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
+> - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
 ## 一、架构全景图 (The Big Picture)
@@ -49,6 +59,10 @@ flowchart TB
             ORC["ToolOrchestrator"]
             Cache["KV Cache"]
             CB["CircuitBreaker"]
+            DC["DataContext"]
+            BM["BudgetManager"]
+            SG["SecurityGate"]
+            MET["Metrics/Logging"]
         end
     end
 
@@ -74,6 +88,11 @@ flowchart TB
     FH -->|ForumOutput| API
     ORC --> Cache
     ORC --> CB
+    ORC --> DC
+    SA --> BM
+    API --> SG
+    ORC --> MET
+    API --> MET
 
 ```
 

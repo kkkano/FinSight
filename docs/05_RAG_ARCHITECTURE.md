@@ -10,6 +10,10 @@
 > 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
 > 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
 > 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
+> ✅ **近期同步**: PlanIR + Executor 与 EvidencePolicy 已落地（计划模板/执行 trace/引用校验/覆盖率统计）。
+> ✅ **近期同步**: DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
+> ✅ **近期同步**: BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
+> ✅ **近期同步**: API 鉴权 + 限流 + 免责声明模板落地，确保合规门禁（P0-29）
 ---
 
 ## 0. 当前状态（2026-01-12）✅ 基础设施已完成

@@ -53,10 +53,15 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Agent contribution tracking: see which agent provided each insight
 - Evidence pool with citation confidence and freshness metadata
 - ReportIR schema validation for citations (confidence and freshness)
+- PlanIR + Executor for step-level planning and execution trace
+- EvidencePolicy enforces citation validity and coverage thresholds
 - Structured News and Macro fallbacks keep downstream analysis stable
 - get_company_news returns structured items; handlers format for display
 - Safe DeepSearch retrieval with SSRF guard and HTTP retry
 - Dynamic DeepSearch query templates driven by intent keywords
+- DataContext summaries capture per-source as_of/currency/adjustment and flag inconsistencies
+- BudgetManager enforces max tools / rounds / time with budget snapshots in responses
+- Security gate (API Key + rate limiting) and footer disclaimer template ensure compliance
 
 ### Smart Intent Classification
 - 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback
@@ -197,6 +202,7 @@ pip install -r requirements.txt
 # Configure environment
 cp .env.example .env
 # Edit .env with your API keys
+# Optional: frontend Settings Modal writes `user_config.json` (overrides .env for LLM)
 
 # Start server
 python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -258,9 +264,41 @@ NEWS_ALERT_INTERVAL_MINUTES=30
 LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT=FinSight
 ENABLE_LANGSMITH=false
+
+# Quality & Guardrails
+DATA_CONTEXT_MAX_SKEW_HOURS=24
+BUDGET_MAX_TOOL_CALLS=24
+BUDGET_MAX_ROUNDS=12
+BUDGET_MAX_SECONDS=120
+CHAT_HISTORY_MAX_MESSAGES=12
+CACHE_JITTER_RATIO=0.1
+CACHE_NEGATIVE_TTL=60
+PRICE_CB_FAILURE_THRESHOLD=5
+PRICE_CB_RECOVERY_TIMEOUT=60
+NEWS_CB_FAILURE_THRESHOLD=3
+NEWS_CB_RECOVERY_TIMEOUT=180
+LOG_LEVEL=INFO
+
+# Security Gate
+API_AUTH_ENABLED=false
+API_AUTH_KEYS=
+RATE_LIMIT_ENABLED=false
+RATE_LIMIT_PER_MINUTE=120
+RATE_LIMIT_WINDOW_SECONDS=60
 ```
 
+LLM config precedence:
+- `user_config.json` (if present, saved from UI) overrides `.env`
+- `.env` provides default provider/model/api_base/api_key
+
 ---
+
+## Observability
+
+- `GET /health` basic health check
+- `GET /metrics` Prometheus metrics (requires `prometheus-client`)
+- `GET /diagnostics/orchestrator` orchestrator stats
+- `GET /diagnostics/langgraph` report agent diagnostics
 
 ## Project Structure
 
@@ -288,7 +326,13 @@ FinSight/
 |   |   |-- memory.py
 |   |-- api/
 |   |   |-- main.py
-|   |-- tools.py
+|   |-- tools/
+|   |   |-- search.py
+|   |   |-- news.py
+|   |   |-- price.py
+|   |   |-- financial.py
+|   |   |-- macro.py
+|   |   |-- web.py
 |-- frontend/
 |   |-- src/
 |   |   |-- components/
@@ -299,6 +343,10 @@ FinSight/
 |   |   |-- store/useStore.ts
 |   |   |-- api/client.ts
 |-- docs/
+|   |-- archive/
+|   |-- plans/
+|   |-- reports/
+|   |-- design/
 |-- images/
 ```
 

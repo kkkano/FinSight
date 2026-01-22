@@ -4,13 +4,18 @@ SupervisorAgent - Supervisor Pattern
 Mature multi-Agent architecture: Intent Classification → Supervisor Coordination → Worker Agents → Forum Synthesis
 """
 
+import logging
 import asyncio
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
 from backend.orchestration.intent_classifier import IntentClassifier, Intent, ClassificationResult
+from backend.orchestration.budget import BudgetManager, BudgetedTools, BudgetExceededError
 from backend.orchestration.forum import ForumHost
 from backend.agents.base_agent import AgentOutput
+
+logger = logging.getLogger(__name__)
+
 
 
 @dataclass
@@ -23,6 +28,7 @@ class SupervisorResult:
     forum_output: Any = None
     classification: ClassificationResult = None
     errors: List[str] = None
+    budget: Optional[Dict[str, Any]] = None
 
 
 # Greeting response templates (Chinese output for users)
@@ -64,6 +70,9 @@ class SupervisorAgent:
         # Forum host
         self.forum = ForumHost(llm)
 
+        # Budget per request (set during process/process_stream)
+        self._budget: Optional[BudgetManager] = None
+
         # Worker Agents (lazy initialization)
         self._agents = None
 
@@ -88,6 +97,20 @@ class SupervisorAgent:
             }
         return self._agents
 
+    def _set_budget(self, budget: Optional[BudgetManager]) -> None:
+        self._budget = budget
+
+    def _consume_round(self, label: str) -> None:
+        if not self._budget:
+            return
+        self._budget.consume_round(label)
+
+    def _result(self, *args, **kwargs) -> SupervisorResult:
+        result = SupervisorResult(*args, **kwargs)
+        if self._budget:
+            result.budget = self._budget.snapshot()
+        return result
+
     async def process(self, query: str, tickers: List[str] = None, user_profile: Any = None, context_summary: str = None, context_ticker: str = None) -> SupervisorResult:
         """
         Process user query
@@ -106,9 +129,15 @@ class SupervisorAgent:
         if context_ticker and not tickers:
             tickers = [context_ticker]
 
+        budget = BudgetManager.from_env()
+        self._set_budget(budget)
+        if self.tools_module and not isinstance(self.tools_module, BudgetedTools):
+            self.tools_module = BudgetedTools(self.tools_module, budget)
+        self._agents = None
+
         # 1. Intent classification (带上下文)
         classification = self.classifier.classify(query, tickers, context_summary=context_summary)
-        print(f"[Supervisor] Intent: {classification.intent.value} (method: {classification.method}, confidence: {classification.confidence})")
+        logger.info(f"[Supervisor] Intent: {classification.intent.value} (method: {classification.method}, confidence: {classification.confidence})")
 
         # 2. Route based on intent
         intent = classification.intent
@@ -118,7 +147,7 @@ class SupervisorAgent:
             return self._handle_greeting(query, classification)
 
         if intent == Intent.OFF_TOPIC:
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=intent,
                 response="抱歉，我是金融助手，只能回答金融相关的问题。请问有什么股票或市场方面的问题吗？",
@@ -126,7 +155,7 @@ class SupervisorAgent:
             )
 
         if intent == Intent.CLARIFY:
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=intent,
                 response="请问您想了解哪只股票？可以告诉我股票代码或公司名称。",
@@ -177,12 +206,12 @@ class SupervisorAgent:
     def _handle_greeting(self, query: str, classification: ClassificationResult) -> SupervisorResult:
         """Handle greeting - rule-based direct response, free"""
         query_lower = query.lower()
-        if any(kw in query_lower for kw in ['帮助', 'help', '能做什么', '你是谁']):
+        if any(kw in query_lower for kw in ["help", "support", "what can you do", "who are you", "帮助", "你是谁", "你能做什么"]):
             response = GREETING_RESPONSES["help"]
         else:
             response = GREETING_RESPONSES["default"]
 
-        return SupervisorResult(
+        return self._result(
             success=True,
             intent=Intent.GREETING,
             response=response,
@@ -192,7 +221,7 @@ class SupervisorAgent:
     async def _handle_price(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle price query - lightweight tool, with context awareness"""
         if not ticker:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.PRICE,
                 response="请提供股票代码，例如：AAPL 价格",
@@ -200,11 +229,12 @@ class SupervisorAgent:
             )
 
         try:
+            self._consume_round("tool:price")
             # Direct tool call, no Agent
             price_data = self.tools_module.get_stock_price(ticker)
 
             if isinstance(price_data, dict) and price_data.get("error"):
-                return SupervisorResult(
+                return self._result(
                     success=False,
                     intent=Intent.PRICE,
                     response=f"获取 {ticker} 价格失败：{price_data.get('error')}",
@@ -237,23 +267,31 @@ class SupervisorAgent:
 
 请用1-2句话回复，结合上下文（如之前讨论的话题）给出相关解读。如果上下文不相关，就直接返回价格信息。"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-                    return SupervisorResult(
+                    return self._result(
                         success=True,
                         intent=Intent.PRICE,
                         response=response.content if hasattr(response, 'content') else str(response),
                         classification=classification
                     )
                 except Exception as e:
-                    print(f"[Supervisor] Price context enhancement failed: {e}")
+                    logger.info(f"[Supervisor] Price context enhancement failed: {e}")
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.PRICE,
                 response=base_response,
                 classification=classification
             )
+        except BudgetExceededError as e:
+            return self._result(
+                success=False,
+                intent=Intent.PRICE,
+                response=f"budget exceeded: {e}",
+                classification=classification,
+                errors=[str(e)]
+            )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.PRICE,
                 response=f"获取价格时出错: {e}",
@@ -300,13 +338,14 @@ class SupervisorAgent:
     async def _handle_news(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle news query - 显示原始新闻，有上下文时补充分析"""
         try:
+            self._consume_round("tool:news")
             if ticker:
                 news_data = self.tools_module.get_company_news(ticker)
             else:
                 news_data = self.tools_module.search(query)
 
             if isinstance(news_data, dict) and news_data.get("error"):
-                return SupervisorResult(
+                return self._result(
                     success=False,
                     intent=Intent.NEWS,
                     response=f"获取新闻失败：{news_data.get('error')}",
@@ -346,16 +385,16 @@ class SupervisorAgent:
                     # 先显示新闻，再显示上下文分析
                     base_response = f"{base_response}\n\n{context_analysis}"
                 except Exception as e:
-                    print(f"[Supervisor] News context enhancement failed: {e}")
+                    logger.info(f"[Supervisor] News context enhancement failed: {e}")
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.NEWS,
                 response=base_response,
                 classification=classification
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.NEWS,
                 response=f"获取新闻时出错: {e}",
@@ -387,6 +426,7 @@ class SupervisorAgent:
             SupervisorResult: 包含深度新闻分析的结果
         """
         try:
+            self._consume_round("tool:news_analysis")
             from langchain_core.messages import HumanMessage
 
             # 1. 先获取原始新闻数据
@@ -396,7 +436,7 @@ class SupervisorAgent:
                 news_data = self.tools_module.search(query)
 
             if isinstance(news_data, dict) and news_data.get("error"):
-                return SupervisorResult(
+                return self._result(
                     success=False,
                     intent=Intent.NEWS,
                     response=f"获取新闻失败：{news_data.get('error')}",
@@ -406,7 +446,7 @@ class SupervisorAgent:
             news_text = str(news_data) if news_data else ""
 
             if not news_text or news_text == "暂无相关新闻":
-                return SupervisorResult(
+                return self._result(
                     success=True,
                     intent=Intent.NEWS,
                     response="暂无相关新闻可供分析",
@@ -458,7 +498,7 @@ class SupervisorAgent:
 
 {analysis_content}"""
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.NEWS,
                 response=final_response,
@@ -466,7 +506,7 @@ class SupervisorAgent:
             )
 
         except Exception as e:
-            print(f"[Supervisor] News analysis failed: {e}")
+            logger.info(f"[Supervisor] News analysis failed: {e}")
             # Fallback: 返回原始新闻
             return await self._handle_news(query, ticker, classification, context_summary)
 
@@ -477,12 +517,13 @@ class SupervisorAgent:
         """
         try:
             # 1. 获取基础市场情绪数据
+            self._consume_round("tool:sentiment")
             sentiment_data = self.tools_module.get_market_sentiment()
             base_sentiment = str(sentiment_data) if sentiment_data else "暂无市场情绪数据"
 
             # 2. 如果没有上下文，直接返回基础情绪
             if not context_summary and not ticker:
-                return SupervisorResult(
+                return self._result(
                     success=True,
                     intent=Intent.SENTIMENT,
                     response=base_sentiment,
@@ -496,11 +537,12 @@ class SupervisorAgent:
                 try:
                     news_agent = self.agents.get("news")
                     if news_agent:
+                        self._consume_round("agent:news")
                         news_output = await news_agent.research(f"{ticker} news sentiment", ticker)
                         if news_output and news_output.summary:
                             news_content = f"\n\n【{ticker} 相关新闻】\n{news_output.summary}"
                 except Exception as e:
-                    print(f"[Supervisor] News fetch for sentiment failed: {e}")
+                    logger.info(f"[Supervisor] News fetch for sentiment failed: {e}")
 
             # 4. 构建 Prompt 让 LLM 综合分析
             prompt = f"""请根据以下信息分析市场情绪：
@@ -522,14 +564,14 @@ class SupervisorAgent:
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             analysis = response.content if hasattr(response, 'content') else str(response)
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.SENTIMENT,
                 response=analysis,
                 classification=classification
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.SENTIMENT,
                 response=f"获取市场情绪时出错: {e}",
@@ -540,7 +582,7 @@ class SupervisorAgent:
     async def _handle_single_agent(self, agent_name: str, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle single Agent query with context awareness"""
         if not ticker:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=classification.intent,
                 response=f"请提供股票代码进行{agent_name}分析",
@@ -550,7 +592,7 @@ class SupervisorAgent:
         try:
             agent = self.agents.get(agent_name)
             if not agent:
-                return SupervisorResult(
+                return self._result(
                     success=False,
                     intent=classification.intent,
                     response=f"Agent {agent_name} 不可用",
@@ -562,6 +604,7 @@ class SupervisorAgent:
             if context_summary:
                 enhanced_query = f"{query}\n\n【参考上下文】\n{context_summary}"
 
+            self._consume_round(f"agent:{agent_name}")
             output = await agent.research(enhanced_query, ticker)
             base_response = output.summary if output else "分析完成，但无结果"
 
@@ -584,9 +627,9 @@ class SupervisorAgent:
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     base_response = response.content if hasattr(response, 'content') else str(response)
                 except Exception as e:
-                    print(f"[Supervisor] {agent_name} context enhancement failed: {e}")
+                    logger.info(f"[Supervisor] {agent_name} context enhancement failed: {e}")
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=classification.intent,
                 response=base_response,
@@ -594,7 +637,7 @@ class SupervisorAgent:
                 classification=classification
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=classification.intent,
                 response=f"{agent_name} 分析出错: {e}",
@@ -605,7 +648,7 @@ class SupervisorAgent:
     async def _handle_report(self, query: str, ticker: str, user_profile: Any, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle deep report - multi-Agent collaboration with context awareness"""
         if not ticker:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.REPORT,
                 response="请提供股票代码进行深度分析，例如：详细分析 AAPL",
@@ -625,7 +668,7 @@ class SupervisorAgent:
                 # 判断上下文是否与当前 ticker 相关
                 if context_tickers and ticker.upper() not in [t.upper() for t in context_tickers]:
                     # 上下文中有其他 ticker，但没有当前 ticker - 忽略上下文
-                    print(f"[Supervisor] 忽略不相关上下文 (context tickers: {context_tickers}, current: {ticker})")
+                    logger.info(f"[Supervisor] 忽略不相关上下文 (context tickers: {context_tickers}, current: {ticker})")
                     relevant_context = None
                 else:
                     relevant_context = context_summary
@@ -635,29 +678,25 @@ class SupervisorAgent:
             if relevant_context:
                 enhanced_query = f"{query}\n\n【参考上下文】\n{relevant_context}"
 
-            # Parallel call multiple Agents
-            agent_names = ["price", "news", "technical", "fundamental"]
-            tasks = [self.agents[name].research(enhanced_query, ticker) for name in agent_names]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Plan-driven execution with retries/dependencies
+            from backend.orchestration.plan import PlanBuilder, PlanExecutor
 
-            # Collect results
-            valid_outputs = {}
-            errors = []
-            for name, result in zip(agent_names, results):
-                if isinstance(result, Exception):
-                    errors.append(f"{name}: {result}")
-                    print(f"[Supervisor] Agent {name} failed: {result}")
-                else:
-                    valid_outputs[name] = result
-
-            # Forum synthesis - pass relevant_context for better synthesis
-            forum_result = await self.forum.synthesize(
-                valid_outputs,
+            agent_names = list(self.agents.keys())
+            plan = PlanBuilder.build_report_plan(enhanced_query, ticker, agent_names)
+            executor = PlanExecutor(self.agents, self.forum, budget=self._budget)
+            execution = await executor.execute(
+                plan,
+                enhanced_query,
+                ticker,
                 user_profile=user_profile,
-                context_summary=relevant_context  # 只传相关上下文
+                context_summary=relevant_context,
             )
 
-            return SupervisorResult(
+            valid_outputs = execution.get("agent_outputs", {})
+            errors = execution.get("errors", [])
+            forum_result = execution.get("forum_output")
+
+            return self._result(
                 success=True,
                 intent=Intent.REPORT,
                 response=forum_result.consensus if forum_result else "报告生成完成",
@@ -667,7 +706,7 @@ class SupervisorAgent:
                 errors=errors if errors else None
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.REPORT,
                 response=f"生成报告时出错: {e}",
@@ -678,7 +717,7 @@ class SupervisorAgent:
     async def _handle_comparison(self, query: str, tickers: List[str], classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle comparison analysis with context awareness"""
         if len(tickers) < 2:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.COMPARISON,
                 response="请提供至少两个股票代码进行对比，例如：对比 AAPL 和 MSFT",
@@ -686,6 +725,7 @@ class SupervisorAgent:
             )
 
         try:
+            self._consume_round("tool:comparison")
             comparison_data = self.tools_module.get_performance_comparison(tickers)
             base_response = str(comparison_data) if comparison_data else "对比完成，但无数据"
 
@@ -706,23 +746,23 @@ class SupervisorAgent:
 
 请用2-3句话总结对比结果，如果上下文中有相关话题（如投资偏好、之前讨论的股票），将其融入分析。"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-                    return SupervisorResult(
+                    return self._result(
                         success=True,
                         intent=Intent.COMPARISON,
                         response=response.content if hasattr(response, 'content') else str(response),
                         classification=classification
                     )
                 except Exception as e:
-                    print(f"[Supervisor] Comparison context enhancement failed: {e}")
+                    logger.info(f"[Supervisor] Comparison context enhancement failed: {e}")
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.COMPARISON,
                 response=base_response,
                 classification=classification
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.COMPARISON,
                 response=f"对比分析出错: {e}",
@@ -733,6 +773,7 @@ class SupervisorAgent:
     async def _handle_search(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Fallback search with context awareness"""
         try:
+            self._consume_round("tool:search")
             search_result = self.tools_module.search(query)
 
             # Use LLM to synthesize search results with context
@@ -756,14 +797,14 @@ class SupervisorAgent:
 
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
 
-            return SupervisorResult(
+            return self._result(
                 success=True,
                 intent=Intent.SEARCH,
                 response=response.content if hasattr(response, 'content') else str(response),
                 classification=classification
             )
         except Exception as e:
-            return SupervisorResult(
+            return self._result(
                 success=False,
                 intent=Intent.SEARCH,
                 response=f"搜索出错: {e}",
@@ -824,7 +865,7 @@ class SupervisorAgent:
                     if summary:
                         url_summaries.append(f"[链接内容摘要] {summary}")
                 except Exception as e:
-                    print(f"[Supervisor] URL fetch failed: {url}, error: {e}")
+                    logger.info(f"[Supervisor] URL fetch failed: {url}, error: {e}")
 
         # 合并上下文
         if url_summaries:
@@ -858,7 +899,7 @@ class SupervisorAgent:
                 if result:
                     return str(result)[:300]
         except Exception as e:
-            print(f"[Supervisor] URL summarize failed: {e}")
+            logger.info(f"[Supervisor] URL summarize failed: {e}")
 
         return None
 
@@ -879,6 +920,11 @@ class SupervisorAgent:
         """
         import json
         from datetime import datetime
+        budget = BudgetManager.from_env()
+        self._set_budget(budget)
+        if self.tools_module and not isinstance(self.tools_module, BudgetedTools):
+            self.tools_module = BudgetedTools(self.tools_module, budget)
+        self._agents = None
 
         thinking_steps = []  # 收集思考步骤
 
@@ -969,6 +1015,7 @@ class SupervisorAgent:
                 "current_focus": first_ticker,
                 "thinking": thinking_steps,  # 前端期望在 done 事件中收到 thinking 数组
                 "errors": result.errors,
+                "budget": result.budget,
                 "report": report_data  # Phase 2: 深度研报数据
             }, ensure_ascii=False)
 
@@ -996,6 +1043,8 @@ class SupervisorAgent:
             dict: ReportIR 格式的报告数据
         """
         from datetime import datetime
+        from backend.orchestration.data_context import DataContextCollector
+        from backend.report.disclaimer import build_disclaimer_section, DISCLAIMER_TEXT
         import uuid
         import re
 
@@ -1015,6 +1064,15 @@ class SupervisorAgent:
         forum_output = result.forum_output
         agent_outputs = result.agent_outputs or {}
         errors_list = result.errors or []
+
+        context_collector = DataContextCollector()
+        for agent_name, agent_output in agent_outputs.items():
+            context_collector.add(
+                str(agent_name),
+                as_of=getattr(agent_output, 'as_of', None),
+                ticker=ticker,
+            )
+        data_context = context_collector.summarize().to_dict()
 
         # 构建 sections - 优先从 Forum 完整分析解析
         sections = []
@@ -1093,6 +1151,10 @@ class SupervisorAgent:
                     section_order += 1
 
         # 构建 agent 状态追踪
+        disclaimer_section = build_disclaimer_section(section_order)
+        sections.append(disclaimer_section)
+        section_order += 1
+
         agent_status = {}
         for agent_key in ["price", "news", "technical", "fundamental", "macro", "deep_search"]:
             if agent_key in agent_outputs and agent_outputs[agent_key]:
@@ -1189,7 +1251,11 @@ class SupervisorAgent:
             "risks": risks,
             "recommendation": safe_str(getattr(forum_output, 'recommendation', 'HOLD')) if forum_output else "HOLD",
             "agent_status": agent_status,
-            "errors": errors_list if errors_list else None
+            "errors": errors_list if errors_list else None,
+            "meta": {
+                "data_context": data_context,
+                "disclaimer": DISCLAIMER_TEXT,
+            },
         }
 
         return report_ir

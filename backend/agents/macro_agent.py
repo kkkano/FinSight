@@ -1,16 +1,24 @@
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
 
+logger = logging.getLogger(__name__)
+
+
+
 class MacroAgent(BaseFinancialAgent):
     """
+    
     MacroAgent - 宏观经济专家
     负责：
     1. 监测宏观指标 (CPI, GDP, Interest Rates) - 使用 FRED API
     2. 分析美联储政策 (Fed Policy)
     3. 识别市场周期 (Cycle Identification)
+    
     """
+    
     AGENT_NAME = "macro"
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
@@ -35,7 +43,7 @@ class MacroAgent(BaseFinancialAgent):
                 fred_data["status"] = "success"
                 return fred_data
         except Exception as e:
-            print(f"[MacroAgent] FRED API failed: {e}")
+            logger.info(f"[MacroAgent] FRED API failed: {e}")
 
         # 回退到搜索（结构化兜底）
         try:
@@ -55,7 +63,7 @@ class MacroAgent(BaseFinancialAgent):
                     ],
                 }
         except Exception as e:
-            print(f"[MacroAgent] Search fallback failed: {e}")
+            logger.info(f"[MacroAgent] Search fallback failed: {e}")
 
         return {"status": "error", "reason": "Failed to fetch macro data"}
 

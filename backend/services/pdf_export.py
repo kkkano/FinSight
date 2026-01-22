@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 PDF 导出服务
 用于导出对话记录和图表到 PDF
 """
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# -*- coding: utf-8 -*-
+
 
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -22,7 +28,7 @@ try:
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
-    print("⚠️  reportlab 未安装，PDF 导出功能将不可用。运行: pip install reportlab")
+    logger.info("⚠️  reportlab 未安装，PDF 导出功能将不可用。运行: pip install reportlab")
 
 
 class PDFExportService:
@@ -77,22 +83,22 @@ class PDFExportService:
                             pdfmetrics.registerFont(TTFont('ChineseFont', font_path, subfontIndex=0))
                         else:
                             pdfmetrics.registerFont(TTFont('ChineseFont', font_path))
-                        print(f"[PDF] 成功注册中文字体: {font_path}")
+                        logger.info(f"[PDF] 成功注册中文字体: {font_path}")
                         font_registered = True
                         break
                     except Exception as e:
-                        print(f"[PDF] 注册字体失败 {font_path}: {e}")
+                        logger.info(f"[PDF] 注册字体失败 {font_path}: {e}")
                         continue
             
             if not font_registered:
-                print("[PDF] 警告: 未找到中文字体，PDF 中的中文可能显示为方块")
+                logger.info("[PDF] 警告: 未找到中文字体，PDF 中的中文可能显示为方块")
                 # 使用默认字体（可能不支持中文）
                 self.chinese_font = 'Helvetica'
             else:
                 self.chinese_font = 'ChineseFont'
                 
         except Exception as e:
-            print(f"[PDF] 字体注册过程出错: {e}")
+            logger.info(f"[PDF] 字体注册过程出错: {e}")
             self.chinese_font = 'Helvetica'  # 回退到默认字体
     
     def _setup_custom_styles(self):
@@ -331,4 +337,3 @@ def get_pdf_service() -> Optional[PDFExportService]:
     if not REPORTLAB_AVAILABLE:
         return None
     return PDFExportService()
-

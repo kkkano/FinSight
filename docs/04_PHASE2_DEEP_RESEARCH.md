@@ -1,15 +1,25 @@
 # FinSight 阶段2：深度研报与按需调用
 
-> 📅 **计划周期**: Week 5 - Week 6
-> 📅 **更新日期**: 2026-01-20
-> 🎯 **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
+> **计划周期**: Week 5 - Week 6
+> **更新日期**: 2026-01-22
+> **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
+>
+> **近期同步**:
+> - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
+> - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
+> - get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）
+> - SSRF 防护扩展至 DeepSearch + fetch_url_content（P1-2）
+> - pytest 收集 backend/tests + test/（不再标记 legacy）
+> - PlanIR + Executor 与 EvidencePolicy 落地（计划模板/执行 trace/引用校验）
+> - DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
+> - BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
+> - SecurityGate：鉴权 + 限流 + 免责声明模板落地（P0-29）
+> - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
+> - Trace 规范化输出 + /metrics 可观测性入口
 
-> 🧩 **近期同步**: ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）。
-> 🧭 **近期同步**: News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）。
-> 🧱 **近期同步**: get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）。
-> 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
-> 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
-> 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
+> - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
+> - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
+> - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
 ## 0. 当前状态（2026-01-11）
@@ -29,7 +39,7 @@
 - [x] **DeepSearchAgent**:
     - **触发**: 当 NewsAgent 信息量不足 (<3 条) 或用户明确要求"深度分析"时。
     - **能力**: 真实检索 + PDF 解析，支持 Self-RAG 反思检索与二次补检。
-- [x] **MacroAgent**: ✅ 已完成 (2026-01-12)
+- [x] **MacroAgent**: 已完成 (2026-01-12)
     - **触发**: 提问涉及"美联储"、"加息"、"通胀"等宏观词汇。
     - **能力**: 调用 FRED API 获取实时经济数据（CPI、联邦基金利率、GDP、失业率、10年期国债、收益率曲线）。
     - **特性**: 自动检测衰退预警信号（收益率倒挂）。

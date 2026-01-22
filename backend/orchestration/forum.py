@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+import logging
 from backend.agents.base_agent import AgentOutput
 
 @dataclass
@@ -11,6 +12,13 @@ class ForumOutput:
     risks: List[str]
 
 class ForumHost:
+    BULLISH_KEYWORDS = (
+        "bullish", "buy", "看涨", "利好", "上涨", "增持", "买入", "强势", "上行",
+    )
+    BEARISH_KEYWORDS = (
+        "bearish", "sell", "看跌", "利空", "下跌", "减持", "卖出", "弱势", "下行",
+    )
+
     SYNTHESIS_PROMPT = """你是 FinSight AI 首席金融分析师，负责整合多位专业 Agent 的分析结果，生成机构级投资研究报告。
 
 【用户画像】
@@ -39,6 +47,11 @@ class ForumHost:
 
 ## 宏观分析 (MacroAgent)
 {macro}
+
+---
+
+## 冲突检测
+{conflict_notes}
 
 ---
 
@@ -112,8 +125,47 @@ class ForumHost:
 
     def __init__(self, llm):
         self.llm = llm
+        self.logger = logging.getLogger(__name__)
 
-    async def synthesize(self, outputs: Dict[str, AgentOutput], user_profile: Optional[Any] = None, context_summary: str = None) -> ForumOutput:
+    def _infer_sentiment(self, text: str) -> str:
+        text_lower = (text or "").lower()
+        bullish_hit = any(kw in text_lower for kw in self.BULLISH_KEYWORDS)
+        bearish_hit = any(kw in text_lower for kw in self.BEARISH_KEYWORDS)
+        if bullish_hit and bearish_hit:
+            return "mixed"
+        if bullish_hit:
+            return "bullish"
+        if bearish_hit:
+            return "bearish"
+        return "neutral"
+
+    def _detect_conflicts(self, outputs: Dict[str, AgentOutput]) -> List[str]:
+        conflicts: List[str] = []
+        sentiments: Dict[str, str] = {}
+        for name, output in outputs.items():
+            summary = getattr(output, "summary", "") if output else ""
+            if not summary:
+                continue
+            sentiments[name] = self._infer_sentiment(summary)
+
+        bullish_agents = [name for name, s in sentiments.items() if s == "bullish"]
+        bearish_agents = [name for name, s in sentiments.items() if s == "bearish"]
+        mixed_agents = [name for name, s in sentiments.items() if s == "mixed"]
+
+        if bullish_agents and bearish_agents:
+            conflicts.append(
+                f"情绪冲突：{', '.join(bullish_agents)}偏多 vs {', '.join(bearish_agents)}偏空"
+            )
+        if mixed_agents:
+            conflicts.append(f"混合情绪：{', '.join(mixed_agents)}存在正反结论并存")
+        return conflicts
+
+    async def synthesize(
+        self,
+        outputs: Dict[str, AgentOutput],
+        user_profile: Optional[Any] = None,
+        context_summary: str = None,
+    ) -> ForumOutput:
         # 1. 提取各 Agent 的摘要
         context_parts = {}
         for name, output in outputs.items():
@@ -145,7 +197,11 @@ class ForumHost:
             elif risk_tolerance in ("high", "aggressive"):
                 user_instruction = "用户风险偏好高。可重点关注高增长机会，但也需提示波动风险。"
 
-        # 3. 构建 Prompt 并调用 LLM
+        # 3. 冲突检测与 Prompt 构建
+        conflicts = self._detect_conflicts(outputs)
+        conflict_notes = "；".join(conflicts) if conflicts else "无明显冲突"
+        conflict_penalty = 0.1 * len(conflicts)
+
         context_info = context_summary if context_summary else "无"
 
         prompt = self.SYNTHESIS_PROMPT.format(
@@ -153,6 +209,7 @@ class ForumHost:
             investment_style=investment_style,
             user_instruction=user_instruction,
             context_info=context_info,
+            conflict_notes=conflict_notes,
             **context_parts
         )
 
@@ -162,7 +219,7 @@ class ForumHost:
             consensus = response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             # 如果 LLM 调用失败，使用简单的规则合成
-            print(f"[Forum] LLM synthesis failed: {e}, using fallback")
+            self.logger.warning("[Forum] LLM synthesis failed: %s, using fallback", e)
             consensus = self._fallback_synthesis(context_parts)
 
         # 4. 计算加权置信度
@@ -173,13 +230,15 @@ class ForumHost:
                 total_conf += out.confidence
                 count += 1
         avg_conf = total_conf / count if count > 0 else 0.5
+        avg_conf = max(0.1, avg_conf - conflict_penalty)
 
         return ForumOutput(
             consensus=consensus,
-            disagreement="",
+            disagreement=conflict_notes if conflict_penalty > 0 else "",
             confidence=avg_conf,
             recommendation="HOLD",
             risks=["市场波动风险", "数据延迟风险"]
+            + (["结论存在冲突，请谨慎判断"] if conflict_penalty > 0 else [])
         )
 
     def _fallback_synthesis(self, context_parts: Dict[str, str]) -> str:

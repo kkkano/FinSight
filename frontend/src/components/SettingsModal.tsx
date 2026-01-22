@@ -30,7 +30,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const { theme, setTheme, subscriptionEmail, setSubscriptionEmail, setLayoutMode } = useStore();
+  const { theme, setTheme, subscriptionEmail, setSubscriptionEmail, setLayoutMode, chatMode, setChatMode } = useStore();
 
   // Subscription State
   const [subs, setSubs] = useState<Subscription[]>([]);
@@ -183,10 +183,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   const handleUnsubscribe = async (email: string, ticker?: string) => {
     setSubsLoading(true);
+    setSubsError(null);
     try {
-      await apiClient.unsubscribe({ email, ticker });
-      await loadSubscriptions();
+      const res = await apiClient.unsubscribe({ email, ticker });
+      if (res?.success) {
+        // 直接从本地状态移除，避免 email 不一致导致刷新失败
+        setSubs(prev => prev.filter(s => !(s.email === email && s.ticker === ticker)));
+      } else {
+        setSubsError(res?.detail || '取消订阅失败');
+      }
     } catch (e) {
+      console.error('取消订阅失败:', e);
       setSubsError('取消订阅失败');
     } finally {
       setSubsLoading(false);
@@ -410,6 +417,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <span className="text-fin-text">铺满宽度</span>
               </label>
             </div>
+          </section>
+
+          {/* 聊天模式 */}
+          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+            <h3 className="text-sm font-medium text-fin-text mb-3">聊天模式</h3>
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="chatMode"
+                  checked={chatMode === 'smart'}
+                  onChange={() => setChatMode('smart')}
+                  className="accent-fin-primary"
+                />
+                <span className="text-fin-text">协调者模式</span>
+                <span className="text-[10px] text-fin-muted">(Supervisor Agent)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="chatMode"
+                  checked={chatMode === 'traditional'}
+                  onChange={() => setChatMode('traditional')}
+                  className="accent-fin-primary"
+                />
+                <span className="text-fin-text">传统模式</span>
+                <span className="text-[10px] text-fin-muted">(规则路由)</span>
+              </label>
+            </div>
+            <p className="text-[10px] text-fin-muted mt-2">
+              协调者模式：意图分类(规则+LLM) → Supervisor协调 → Worker Agents → Forum综合
+            </p>
           </section>
 
           {/* 外观 */}

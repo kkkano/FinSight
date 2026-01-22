@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 Tools Bridge - 工具桥接模块
-连接 ToolOrchestrator 和现有的 tools.py
+连接 ToolOrchestrator 和现有的 backend.tools
 """
 
+import logging
 import sys
 import os
 import importlib
+
+logger = logging.getLogger(__name__)
+
 
 # 添加项目根目录到路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,16 +25,16 @@ def _import_tools_module():
     try:
         # 尝试从 backend.tools 导入 (新结构)
         from backend import tools
-        print("[Bridge] 成功从 backend.tools 导入")
+        logger.info("[Bridge] 成功从 backend.tools 导入")
         return tools
     except ImportError:
         try:
             # 尝试从根目录 tools 导入 (旧结构)
             import tools
-            print("[Bridge] 成功从 tools 导入")
+            logger.info("[Bridge] 成功从 tools 导入")
             return tools
         except ImportError as e:
-            print(f"[Bridge] 警告: 无法导入 tools 模块: {e}")
+            logger.info(f"[Bridge] 警告: 无法导入 tools 模块: {e}")
             return None
 
 
@@ -56,7 +60,7 @@ def register_all_financial_tools(orchestrator: ToolOrchestrator) -> None:
     tools_module = _import_tools_module()
     
     if not tools_module:
-        print("[Bridge] 工具模块未加载，跳过注册")
+        logger.info("[Bridge] 工具模块未加载，跳过注册")
         return
     
     # 保存 tools 模块引用
@@ -111,7 +115,7 @@ def register_all_financial_tools(orchestrator: ToolOrchestrator) -> None:
             DataSource('default', get_info_func, 1, 30)
         )
     
-    print(f"[Bridge] 已注册 {len(orchestrator.sources.get('price', []))} 个价格数据源")
+    logger.info(f"[Bridge] 已注册 {len(orchestrator.sources.get('price', []))} 个价格数据源")
 
 
 def get_stock_price_with_fallback(ticker: str, force_refresh: bool = False) -> str:

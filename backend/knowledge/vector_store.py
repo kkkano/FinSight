@@ -2,9 +2,14 @@
 VectorStore - ChromaDB 向量数据库封装
 支持临时集合（DeepSearch 工作台）和持久化集合（用户记忆）
 """
+
+import logging
 import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
 
 # ChromaDB 延迟导入
 _chromadb = None
@@ -17,7 +22,7 @@ def _get_chromadb():
             import chromadb
             _chromadb = chromadb
         except ImportError:
-            print("[VectorStore] chromadb not installed, run: pip install chromadb")
+            logger.info("[VectorStore] chromadb not installed, run: pip install chromadb")
     return _chromadb
 
 def _get_embedding_model():
@@ -27,7 +32,7 @@ def _get_embedding_model():
             from sentence_transformers import SentenceTransformer
             _SentenceTransformer = SentenceTransformer
         except ImportError:
-            print("[VectorStore] sentence-transformers not installed")
+            logger.info("[VectorStore] sentence-transformers not installed")
     return _SentenceTransformer
 
 
@@ -62,7 +67,7 @@ class VectorStore:
         """初始化 ChromaDB 客户端"""
         chromadb = _get_chromadb()
         if chromadb is None:
-            print("[VectorStore] ChromaDB not available")
+            logger.info("[VectorStore] ChromaDB not available")
             return
 
         try:
@@ -71,15 +76,15 @@ class VectorStore:
 
             # 使用持久化客户端
             self._client = chromadb.PersistentClient(path=self.persist_path)
-            print(f"[VectorStore] Initialized with path: {self.persist_path}")
+            logger.info(f"[VectorStore] Initialized with path: {self.persist_path}")
         except Exception as e:
-            print(f"[VectorStore] Failed to init client: {e}")
+            logger.info(f"[VectorStore] Failed to init client: {e}")
             # 回退到内存模式
             try:
                 self._client = chromadb.Client()
-                print("[VectorStore] Using in-memory mode")
+                logger.info("[VectorStore] Using in-memory mode")
             except Exception as e2:
-                print(f"[VectorStore] Failed to init in-memory client: {e2}")
+                logger.info(f"[VectorStore] Failed to init in-memory client: {e2}")
 
     def _get_embedding_fn(self):
         """获取 embedding 函数"""
@@ -89,9 +94,9 @@ class VectorStore:
                 try:
                     # 使用轻量级多语言模型
                     self._embedding_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-                    print("[VectorStore] Loaded embedding model: paraphrase-multilingual-MiniLM-L12-v2")
+                    logger.info("[VectorStore] Loaded embedding model: paraphrase-multilingual-MiniLM-L12-v2")
                 except Exception as e:
-                    print(f"[VectorStore] Failed to load embedding model: {e}")
+                    logger.info(f"[VectorStore] Failed to load embedding model: {e}")
         return self._embedding_model
 
     def _embed_texts(self, texts: List[str]) -> List[List[float]]:
@@ -104,7 +109,7 @@ class VectorStore:
             embeddings = model.encode(texts, convert_to_numpy=True)
             return embeddings.tolist()
         except Exception as e:
-            print(f"[VectorStore] Embedding failed: {e}")
+            logger.info(f"[VectorStore] Embedding failed: {e}")
             return None
 
     def get_or_create_collection(self, name: str, ephemeral: bool = False) -> Any:
@@ -123,7 +128,7 @@ class VectorStore:
             self._collections[name] = collection
             return collection
         except Exception as e:
-            print(f"[VectorStore] Failed to create collection {name}: {e}")
+            logger.info(f"[VectorStore] Failed to create collection {name}: {e}")
             return None
 
     def add_documents(
@@ -161,10 +166,10 @@ class VectorStore:
                     ids=ids
                 )
 
-            print(f"[VectorStore] Added {len(documents)} docs to {collection_name}")
+            logger.info(f"[VectorStore] Added {len(documents)} docs to {collection_name}")
             return True
         except Exception as e:
-            print(f"[VectorStore] Failed to add documents: {e}")
+            logger.info(f"[VectorStore] Failed to add documents: {e}")
             return False
 
     def query(
@@ -213,7 +218,7 @@ class VectorStore:
 
             return formatted
         except Exception as e:
-            print(f"[VectorStore] Query failed: {e}")
+            logger.info(f"[VectorStore] Query failed: {e}")
             return []
 
     def delete_collection(self, name: str) -> bool:
@@ -225,10 +230,10 @@ class VectorStore:
             self._client.delete_collection(name)
             if name in self._collections:
                 del self._collections[name]
-            print(f"[VectorStore] Deleted collection: {name}")
+            logger.info(f"[VectorStore] Deleted collection: {name}")
             return True
         except Exception as e:
-            print(f"[VectorStore] Failed to delete collection {name}: {e}")
+            logger.info(f"[VectorStore] Failed to delete collection {name}: {e}")
             return False
 
     def list_collections(self) -> List[str]:
@@ -238,5 +243,5 @@ class VectorStore:
         try:
             return [c.name for c in self._client.list_collections()]
         except Exception as e:
-            print(f"[VectorStore] Failed to list collections: {e}")
+            logger.info(f"[VectorStore] Failed to list collections: {e}")
             return []
