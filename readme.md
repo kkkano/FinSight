@@ -94,10 +94,10 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 ```mermaid
 flowchart TB
     subgraph Frontend["Frontend (React + Vite)"]
-        UI["Chat UI"]
-        ReportView["ReportView Card"]
-        Evidence["Evidence Pool"]
-        Trace["Agent Trace"]
+        UI[Chat UI]
+        ReportView[ReportView Card]
+        Evidence[Evidence Pool]
+        Trace[Agent Trace]
         Chart["K-line Chart"]
         Settings["Settings Modal"]
     end
