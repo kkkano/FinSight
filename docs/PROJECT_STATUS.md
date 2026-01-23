@@ -299,8 +299,8 @@ sequenceDiagram
     participant F as 前端
     participant API as /chat/stream
     participant R as Router
-    participant H as ReportHandler
-    participant A as Agent
+    participant S as Supervisor/Forum
+    participant A as Agents (Price/News/etc)
     participant T as Tools
 
     U->>F: 输入 "分析 AAPL"
@@ -308,8 +308,8 @@ sequenceDiagram
     API->>R: classify_intent()
     R-->>API: Intent.REPORT, {ticker: AAPL}
     
-    API->>H: handle(query, metadata)
-    H->>A: agent.analyze()
+    API->>S: process_stream(query, ticker)
+    S->>A: agents.research() (Parallel)
     
     loop 工具调用
         A->>T: get_stock_price()
@@ -318,10 +318,12 @@ sequenceDiagram
         T-->>A: {news_items}
     end
     
-    A-->>H: {response, report_ir}
-    H-->>API: {success, response, report}
+    A-->>S: AgentOutput (Summary + Data)
+    S->>S: ForumHost.synthesize()
+    note right of S: Prompt-based Report Generation
+    S-->>API: {type: done, report: ReportIR}
     
-    API-->>F: SSE: token chunks
+    API-->>F: SSE: token chunks (Thinking...)
     API-->>F: SSE: {type: done, report: ReportIR}
     F->>F: 渲染 ReportView 卡片
 ```

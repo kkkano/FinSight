@@ -6,12 +6,15 @@ PlanIR + Executor
 
 from __future__ import annotations
 
+from functools import partial
 import asyncio
 import time
 import uuid
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable, Awaitable
 from backend.orchestration.budget import BudgetExceededError, BudgetManager
 
 
@@ -26,7 +29,7 @@ class PlanStep:
     step_type: str  # agent/forum
     agent_name: Optional[str] = None
     depends_on: List[str] = field(default_factory=list)
-    timeout_seconds: int = 30
+    timeout_seconds: Optional[int] = 30
     max_retries: int = 1
     status: str = "pending"
     started_at: Optional[str] = None
@@ -73,18 +76,38 @@ class PlanIR:
 
 class PlanBuilder:
     AGENT_ORDER = ["price", "news", "technical", "fundamental", "macro", "deep_search"]
-    DEFAULT_TIMEOUTS = {
-        "price": 8,
-        "news": 18,
-        "technical": 18,
-        "fundamental": 20,
-        "macro": 18,
-        "deep_search": 45,
-        "forum": 25,
-    }
+
+    @classmethod
+    def _get_timeouts(cls) -> Dict[str, Optional[int]]:
+        # Default fallback (if config fails or missing)
+        timeouts = {
+            "price": None,
+            "news": None,
+            "technical": None,
+            "fundamental": None,
+            "macro": None,
+            "deep_search": None,
+            "forum": None,
+        }
+        
+        try:
+            # backend/orchestration/plan.py -> backend/orchestration -> backend -> root
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            config_path = os.path.join(root_dir, "user_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    user_timeouts = data.get("agent_timeouts", {})
+                    if user_timeouts:
+                        timeouts.update(user_timeouts)
+        except Exception:
+            pass
+            
+        return timeouts
 
     @classmethod
     def build_report_plan(cls, query: str, ticker: str, agent_names: List[str]) -> PlanIR:
+        timeouts = cls._get_timeouts()
         steps: List[PlanStep] = []
         for agent_name in cls.AGENT_ORDER:
             if agent_name not in agent_names:
@@ -98,7 +121,7 @@ class PlanBuilder:
                     title=f"Collect {agent_name} signals",
                     step_type="agent",
                     agent_name=agent_name,
-                    timeout_seconds=cls.DEFAULT_TIMEOUTS.get(agent_name, 20),
+                    timeout_seconds=timeouts.get(agent_name, None),
                     depends_on=depends_on,
                 )
             )
@@ -110,7 +133,7 @@ class PlanBuilder:
                     title="Synthesize forum consensus",
                     step_type="forum",
                     depends_on=[step.step_id for step in steps],
-                    timeout_seconds=cls.DEFAULT_TIMEOUTS.get("forum", 20),
+                    timeout_seconds=timeouts.get("forum", None),
                 )
             )
 
@@ -133,19 +156,36 @@ class PlanExecutor:
             return
         self.budget.consume_round(label)
 
-    def _record_event(self, trace: List[Dict[str, Any]], step: PlanStep, event: str) -> None:
-        trace.append(
-            {
-                "event": event,
-                "step_id": step.step_id,
-                "step_type": step.step_type,
-                "agent_name": step.agent_name,
-                "status": step.status,
-                "timestamp": _now_iso(),
-                "duration_ms": step.duration_ms,
-                "error": step.error,
-            }
-        )
+    def _emit_event(
+        self,
+        on_event: Optional[Callable[[Dict[str, Any]], None]],
+        trace: List[Dict[str, Any]],
+        step: PlanStep,
+        event_type: str,
+        details: Optional[Dict[str, Any]] = None
+    ) -> None:
+        # 1. Add to internal trace
+        record = {
+            "step_id": step.step_id,
+            "agent": step.agent_name,
+            "event": event_type,
+            "status": step.status,
+            "timestamp": _now_iso(),
+            "details": details or {}
+        }
+        trace.append(record)
+        
+        # 2. Emit to external listener
+        if on_event:
+            try:
+                if asyncio.iscoroutinefunction(on_event):
+                    # We can't await here easily if this is a sync method called from async context without awaiting,
+                    # but caller should usually pass a sync wrapper or we assume sync for simplicity.
+                    # Or we just schedule it? No, keep it simple.
+                    pass 
+                on_event(record)
+            except Exception:
+                pass
 
     def _build_peer_context(self, agent_outputs: Dict[str, Any]) -> str:
         if not agent_outputs:
@@ -158,6 +198,26 @@ class PlanExecutor:
             parts.append(f"{name}: {summary[:300]}")
         return "\n".join(parts)
 
+    def _emit_agent_event(self, parent_on_event: Callable, step: PlanStep, event_data: Dict[str, Any]):
+        """Callback to pass to agents to report their internal events"""
+        if not parent_on_event:
+            return
+        
+        # event_data format expected: {"event": "type", "details": {...}, "timestamp": ...}
+        # We wrap it to match PlanExecutor trace event format
+        record = {
+            "step_id": step.step_id,
+            "agent": step.agent_name,
+            "event": event_data.get("event", "agent_internal"),
+            "status": step.status,
+            "timestamp": event_data.get("timestamp", _now_iso()),
+            "details": event_data.get("details", {})
+        }
+        try:
+            parent_on_event(record)
+        except Exception:
+            pass
+
     async def _run_agent_step(
         self,
         step: PlanStep,
@@ -165,17 +225,18 @@ class PlanExecutor:
         ticker: str,
         trace: List[Dict[str, Any]],
         peer_context: Optional[str] = None,
+        on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Any:
         agent = self.agents.get(step.agent_name)
         if agent is None:
             step.status = "failed"
             step.error = f"agent_not_found:{step.agent_name}"
-            self._record_event(trace, step, "step_error")
+            self._emit_event(on_event, trace, step, "step_error", {"error": step.error})
             raise RuntimeError(step.error)
 
         step.status = "running"
         step.started_at = _now_iso()
-        self._record_event(trace, step, "step_start")
+        self._emit_event(on_event, trace, step, "step_start")
         start_time = time.perf_counter()
 
         attempt = 0
@@ -183,12 +244,23 @@ class PlanExecutor:
         if peer_context:
             query_payload = f"{query}\n\n[Peer signals]\n{peer_context}"
 
+        # Prepare callback bridge
+        agent_callback = partial(self._emit_agent_event, on_event, step) if on_event else None
+
         try:
             while True:
                 try:
                     self._consume_round(f"agent:{step.agent_name}")
+                    
+                    # Call agent with on_event if supported, otherwise fallback
+                    try:
+                        research_coro = agent.research(query_payload, ticker, on_event=agent_callback)
+                    except TypeError:
+                        # Fallback for agents that don't support on_event yet
+                        research_coro = agent.research(query_payload, ticker)
+
                     result = await asyncio.wait_for(
-                        agent.research(query_payload, ticker),
+                        research_coro,
                         timeout=step.timeout_seconds,
                     )
                     step.status = "completed"
@@ -207,15 +279,15 @@ class PlanExecutor:
                     step.status = "failed"
                     raise RuntimeError(step.error)
 
-                self._record_event(trace, step, "step_retry")
+                self._emit_event(on_event, trace, step, "step_retry", {"attempt": attempt, "error": step.error})
                 await asyncio.sleep(0.6 * attempt)
         finally:
             step.finished_at = _now_iso()
             step.duration_ms = int((time.perf_counter() - start_time) * 1000)
             if step.status == "completed":
-                self._record_event(trace, step, "step_done")
+                self._emit_event(on_event, trace, step, "step_done")
             else:
-                self._record_event(trace, step, "step_error")
+                self._emit_event(on_event, trace, step, "step_error", {"error": step.error})
 
     async def _run_forum_step(
         self,
@@ -224,18 +296,19 @@ class PlanExecutor:
         user_profile: Optional[Any],
         trace: List[Dict[str, Any]],
         context_summary: Optional[str] = None,
+        on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Any:
         try:
             self._consume_round("forum")
         except BudgetExceededError as exc:
             step.status = "failed"
             step.error = str(exc)
-            self._record_event(trace, step, "step_error")
+            self._emit_event(on_event, trace, step, "step_error", {"error": str(exc)})
             raise
 
         step.status = "running"
         step.started_at = _now_iso()
-        self._record_event(trace, step, "step_start")
+        self._emit_event(on_event, trace, step, "step_start")
         start_time = time.perf_counter()
 
         try:
@@ -265,9 +338,9 @@ class PlanExecutor:
             step.finished_at = _now_iso()
             step.duration_ms = int((time.perf_counter() - start_time) * 1000)
             if step.status == "completed":
-                self._record_event(trace, step, "step_done")
+                self._emit_event(on_event, trace, step, "step_done")
             else:
-                self._record_event(trace, step, "step_error")
+                self._emit_event(on_event, trace, step, "step_error", {"error": step.error})
 
     async def execute(
         self,
@@ -276,6 +349,7 @@ class PlanExecutor:
         ticker: str,
         user_profile: Optional[Any] = None,
         context_summary: Optional[str] = None,
+        on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Dict[str, Any]:
         trace: List[Dict[str, Any]] = []
         agent_outputs: Dict[str, Any] = {}
@@ -295,7 +369,7 @@ class PlanExecutor:
                 if any(dep in failed for dep in step.depends_on):
                     step.status = "skipped"
                     step.error = "dependency_failed"
-                    self._record_event(trace, step, "step_skipped")
+                    self._emit_event(on_event, trace, step, "step_skipped", {"reason": "dependency_failed"})
                     failed.add(step_id)
                     pending.pop(step_id, None)
                     continue
@@ -306,7 +380,7 @@ class PlanExecutor:
             peer_context = self._build_peer_context(agent_outputs)
             for step in ready_steps:
                 running[step.step_id] = asyncio.create_task(
-                    self._run_agent_step(step, query, ticker, trace, peer_context=peer_context)
+                    self._run_agent_step(step, query, ticker, trace, peer_context=peer_context, on_event=on_event)
                 )
 
             if not running:
@@ -341,6 +415,7 @@ class PlanExecutor:
                     user_profile,
                     trace,
                     context_summary=context_summary,
+                    on_event=on_event,
                 )
             except Exception as exc:
                 errors.append(str(exc))

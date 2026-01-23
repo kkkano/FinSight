@@ -1,0 +1,195 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-01-22T00:00:00Z",
+  "description": "FinSight 回归测试基准集 - 固定数据源，不依赖外网",
+  "cases": [
+    {
+      "id": "TC-001",
+      "name": "问候-基础",
+      "category": "intent",
+      "input": {"query": "你好", "tickers": []},
+      "expected": {"intent": "greeting", "success": true, "response_contains": ["您好", "FinSight"]}
+    },
+    {
+      "id": "TC-002",
+      "name": "问候-帮助",
+      "category": "intent",
+      "input": {"query": "你能做什么", "tickers": []},
+      "expected": {"intent": "greeting", "success": true, "response_contains": ["查询", "分析"]}
+    },
+    {
+      "id": "TC-003",
+      "name": "价格查询-基础",
+      "category": "price",
+      "input": {"query": "AAPL 价格", "tickers": ["AAPL"]},
+      "expected": {"intent": "price", "success": true, "response_contains": ["AAPL", "$"], "confidence_min": 0.7}
+    },
+    {
+      "id": "TC-004",
+      "name": "价格查询-中文公司名",
+      "category": "price",
+      "input": {"query": "苹果股价多少", "tickers": ["AAPL"]},
+      "expected": {"intent": "price", "success": true, "response_contains": ["$"]}
+    },
+    {
+      "id": "TC-005",
+      "name": "价格查询-无效ticker",
+      "category": "edge_case",
+      "input": {"query": "INVALID123 价格", "tickers": ["INVALID123"]},
+      "expected": {"intent": "price", "success": false}
+    },
+    {
+      "id": "TC-006",
+      "name": "新闻查询-基础",
+      "category": "news",
+      "input": {"query": "TSLA 新闻", "tickers": ["TSLA"]},
+      "expected": {"intent": "news", "success": true, "response_contains": ["新闻", "Tesla"]}
+    },
+    {
+      "id": "TC-007",
+      "name": "新闻分析-深度",
+      "category": "news",
+      "input": {"query": "分析特斯拉最近新闻的影响", "tickers": ["TSLA"]},
+      "expected": {"intent": "news", "success": true, "response_contains": ["分析", "影响"]}
+    },
+    {
+      "id": "TC-008",
+      "name": "情绪查询",
+      "category": "intent",
+      "input": {"query": "市场情绪怎么样", "tickers": []},
+      "expected": {"intent": "sentiment", "success": true}
+    },
+    {
+      "id": "TC-009",
+      "name": "技术分析",
+      "category": "intent",
+      "input": {"query": "AAPL 技术分析", "tickers": ["AAPL"]},
+      "expected": {"intent": "technical", "success": true}
+    },
+    {
+      "id": "TC-010",
+      "name": "基本面分析",
+      "category": "intent",
+      "input": {"query": "MSFT 基本面怎么样", "tickers": ["MSFT"]},
+      "expected": {"intent": "fundamental", "success": true}
+    },
+    {
+      "id": "TC-011",
+      "name": "宏观分析",
+      "category": "intent",
+      "input": {"query": "宏观经济形势", "tickers": []},
+      "expected": {"intent": "macro", "success": true}
+    },
+    {
+      "id": "TC-012",
+      "name": "深度报告-完整结构",
+      "category": "report",
+      "input": {"query": "详细分析 AAPL", "tickers": ["AAPL"]},
+      "expected": {
+        "intent": "report",
+        "success": true,
+        "sections": ["执行摘要", "市场", "基本面", "风险"],
+        "min_citations": 2,
+        "confidence_min": 0.5
+      },
+      "timeout_ms": 30000
+    },
+    {
+      "id": "TC-013",
+      "name": "深度报告-中文请求",
+      "category": "report",
+      "input": {"query": "给我一份苹果公司的投资报告", "tickers": ["AAPL"]},
+      "expected": {
+        "intent": "report",
+        "success": true,
+        "min_citations": 1
+      },
+      "timeout_ms": 30000
+    },
+    {
+      "id": "TC-014",
+      "name": "对比分析-双股票",
+      "category": "comparison",
+      "input": {"query": "对比 AAPL 和 MSFT", "tickers": ["AAPL", "MSFT"]},
+      "expected": {"intent": "comparison", "success": true, "response_contains": ["AAPL", "MSFT"]}
+    },
+    {
+      "id": "TC-015",
+      "name": "对比分析-多股票",
+      "category": "comparison",
+      "input": {"query": "比较 AAPL MSFT GOOGL 表现", "tickers": ["AAPL", "MSFT", "GOOGL"]},
+      "expected": {"intent": "comparison", "success": true}
+    },
+    {
+      "id": "TC-016",
+      "name": "澄清-无ticker",
+      "category": "edge_case",
+      "input": {"query": "分析一下", "tickers": []},
+      "expected": {"intent": "clarify", "success": true, "response_contains": ["股票"]}
+    },
+    {
+      "id": "TC-017",
+      "name": "离题-非金融",
+      "category": "edge_case",
+      "input": {"query": "今天天气怎么样", "tickers": []},
+      "expected": {"intent": "off_topic", "success": true, "response_contains": ["金融"]}
+    },
+    {
+      "id": "TC-018",
+      "name": "搜索-通用查询",
+      "category": "intent",
+      "input": {"query": "美联储最新政策", "tickers": []},
+      "expected": {"intent": "search", "success": true}
+    },
+    {
+      "id": "TC-019",
+      "name": "上下文-价格带上下文",
+      "category": "price",
+      "input": {"query": "现在多少钱", "tickers": ["AAPL"], "context_summary": "之前讨论了苹果公司"},
+      "expected": {"intent": "price", "success": true}
+    },
+    {
+      "id": "TC-020",
+      "name": "边界-空输入",
+      "category": "edge_case",
+      "input": {"query": "", "tickers": []},
+      "expected": {"intent": "clarify", "success": true}
+    },
+    {
+      "id": "TC-021",
+      "name": "边界-超长输入",
+      "category": "edge_case",
+      "input": {"query": "请帮我分析一下这只股票的各种指标包括技术面基本面宏观面新闻面情绪面以及未来走势预测和风险评估还有投资建议", "tickers": ["AAPL"]},
+      "expected": {"intent": "report", "success": true}
+    },
+    {
+      "id": "TC-022",
+      "name": "报告-无ticker应澄清",
+      "category": "edge_case",
+      "input": {"query": "写一份详细分析报告", "tickers": []},
+      "expected": {"intent": "report", "success": true}
+    },
+    {
+      "id": "TC-023",
+      "name": "价格-多ticker取第一个",
+      "category": "price",
+      "input": {"query": "AAPL 和 MSFT 价格", "tickers": ["AAPL", "MSFT"]},
+      "expected": {"intent": "comparison", "success": true}
+    },
+    {
+      "id": "TC-024",
+      "name": "新闻-无结果处理",
+      "category": "news",
+      "input": {"query": "UNKNOWN999 新闻", "tickers": ["UNKNOWN999"]},
+      "expected": {"intent": "news", "success": true}
+    },
+    {
+      "id": "TC-025",
+      "name": "报告-部分Agent失败",
+      "category": "report",
+      "input": {"query": "分析 FAIL_PARTIAL", "tickers": ["FAIL_PARTIAL"]},
+      "expected": {"intent": "report", "success": true},
+      "timeout_ms": 30000
+    }
+  ]
+}

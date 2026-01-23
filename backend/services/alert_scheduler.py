@@ -67,6 +67,8 @@ class PriceChangeScheduler:
         checked = 0
 
         for sub in subscriptions:
+            if sub.get("disabled"):
+                continue
             alert_types = sub.get("alert_types") or []
             if "price_change" not in alert_types:
                 continue
@@ -89,6 +91,16 @@ class PriceChangeScheduler:
                 f"(threshold {threshold:.2f}%)."
             )
 
+            if not self.subscription_service.is_valid_email(sub.get("email", "")):
+                self.subscription_service.record_alert_attempt(
+                    sub["email"],
+                    sub["ticker"],
+                    success=False,
+                    error="invalid_email",
+                    disable=True,
+                )
+                continue
+
             success = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
@@ -100,8 +112,14 @@ class PriceChangeScheduler:
             # Only update last_alert_at if email was actually sent
             if not success:
                 logger.warning("Email send failed for %s -> %s, skipping last_alert update", sub["ticker"], sub["email"])
+                self.subscription_service.record_alert_attempt(
+                    sub["email"],
+                    sub["ticker"],
+                    success=False,
+                    error="send_failed",
+                )
                 continue
-            self.subscription_service.update_last_alert(sub["email"], sub["ticker"])
+            self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
 
             sent.append(
                 {
@@ -144,6 +162,8 @@ class NewsAlertScheduler:
         checked = 0
 
         for sub in subs:
+            if sub.get("disabled"):
+                continue
             alert_types = sub.get("alert_types") or []
             if "news" not in alert_types:
                 continue

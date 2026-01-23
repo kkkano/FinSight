@@ -218,6 +218,21 @@ class ConversationRouter:
         if any(kw in query_lower for kw in simple_query_indicators):
             if metadata.get('tickers') or self._contains_financial_keywords(query_lower):
                 return Intent.CHAT
+        # === 2.1 明确分析请求（含"分析"/analyze/analysis），且具备金融上下文 ===
+        analysis_keywords = [
+            '分析', 'analyze', 'analysis', 'research', '研报', '研究'
+        ]
+        if any(kw in query_lower for kw in analysis_keywords):
+            has_financial_context = (
+                self._contains_financial_keywords(query_lower)
+                or bool(metadata.get('tickers'))
+                or bool(metadata.get('company_names'))
+                or bool(metadata.get('company_mentions'))
+            )
+            if has_financial_context and (
+                metadata.get('tickers') or metadata.get('company_names') or metadata.get('company_mentions')
+            ):
+                return Intent.REPORT
         if any(kw in query_lower for kw in report_keywords):
             has_financial_context = (
                 self._contains_financial_keywords(query_lower)

@@ -209,13 +209,22 @@ export const apiClient = {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.type === 'token' && data.content) {
+              // 立即调用 onToken，确保流式效果
               onToken(data.content);
             } else if (data.type === 'tool_start') {
               onToolStart?.(data.name);
             } else if (data.type === 'tool_end') {
               onToolEnd?.();
             } else if (data.type === 'thinking') {
-              onThinking?.(data);
+              // 从 thinking 事件中提取 ThinkingStep 格式的数据
+              // 后端发送 {type: "thinking", stage: "...", message: "...", result: {...}, timestamp: "..."}
+              const step = {
+                stage: data.stage || 'unknown',
+                message: data.message,
+                result: data.result,
+                timestamp: data.timestamp || new Date().toISOString()
+              };
+              onThinking?.(step);
             } else if (data.type === 'done') {
               onDone?.(data.report, data.thinking, data);  // Phase 2: 传递 report 数据
             } else if (data.type === 'error') {

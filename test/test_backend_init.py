@@ -32,18 +32,18 @@ try:
     print(f"   - agent.llm: {agent.llm is not None}")
     print(f"   - agent.orchestrator: {agent.orchestrator is not None}")
     print(f"   - agent.report_agent: {agent.report_agent is not None}")
+    print(f"   - agent.supervisor: {agent.supervisor is not None}")
     
-    # 检查 ReportHandler 状态
-    print("\n2. 检查 ReportHandler 状态...")
-    rh = agent.report_handler
-    print(f"   - report_handler.agent: {rh.agent is not None}")
-    print(f"   - report_handler.orchestrator: {rh.orchestrator is not None}")
-    print(f"   - report_handler.llm: {rh.llm is not None}")
-    print(f"   - report_handler.tools_module: {rh.tools_module is not None}")
+    # 检查 ChatHandler 状态
+    print("\n2. 检查 ChatHandler 状态...")
+    ch = agent.chat_handler
+    print(f"   - chat_handler.llm: {ch.llm is not None}")
+    print(f"   - chat_handler.orchestrator: {ch.orchestrator is not None}")
+    print(f"   - chat_handler.tools_module: {ch.tools_module is not None}")
     
     # 检查 LLM 类型
-    if rh.llm:
-        print(f"   - LLM 类型: {type(rh.llm).__name__}")
+    if ch.llm:
+        print(f"   - LLM 类型: {type(ch.llm).__name__}")
     
     # 测试报告生成
     print("\n3. 测试报告生成...")

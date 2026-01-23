@@ -11,7 +11,12 @@
       "created_at": "2026-01-11T22:28:37.002636",
       "updated_at": "2026-01-11T22:28:37.002643",
       "last_alert_at": "2026-01-11T23:42:48.656264",
-      "last_news_at": "2026-01-11T22:38:26.576332"
+      "last_news_at": "2026-01-11T22:38:26.576332",
+      "last_alert_attempt_at": "2026-01-24T00:25:40.578058",
+      "alert_failures": 3,
+      "last_alert_error": "send_failed",
+      "last_alert_error_at": "2026-01-24T00:25:40.578058",
+      "disabled": true
     },
     {
       "email": "657394554@qq.com",
@@ -24,7 +29,12 @@
       "created_at": "2026-01-11T23:59:24.747071",
       "updated_at": "2026-01-11T23:59:24.747077",
       "last_alert_at": null,
-      "last_news_at": null
+      "last_news_at": null,
+      "last_alert_attempt_at": "2026-01-24T00:25:45.986362",
+      "alert_failures": 3,
+      "last_alert_error": "send_failed",
+      "last_alert_error_at": "2026-01-24T00:25:45.986362",
+      "disabled": true
     }
   ]
 }

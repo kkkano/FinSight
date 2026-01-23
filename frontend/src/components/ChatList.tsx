@@ -114,7 +114,9 @@ export const ChatList: React.FC = () => {
       const chartInfo = await shouldGenerateChart(query, response.current_focus ?? null);
       const tickerToChart = chartInfo.ticker || null;
 
-      let responseContent = response.response;
+      let responseContent = typeof response.response === 'string'
+        ? response.response
+        : JSON.stringify(response.response, null, 2);
       if (tickerToChart && chartInfo.chartType) {
         responseContent += `\n\n[CHART:${tickerToChart}:${chartInfo.chartType}]`;
       }

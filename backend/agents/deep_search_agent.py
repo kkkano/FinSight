@@ -1,10 +1,11 @@
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Callable
 from datetime import datetime
 import asyncio
 import json
 import os
 import re
 import logging
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -18,6 +19,8 @@ except ImportError:
 
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.agents.search_convergence import SearchConvergence
+from backend.orchestration.trace_schema import create_trace_event
 from backend.security.ssrf import is_safe_url
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -58,53 +61,102 @@ class DeepSearchAgent(BaseFinancialAgent):
         self._session = session
         return session
 
-    async def research(self, query: str, ticker: str) -> AgentOutput:
+    async def research(self, query: str, ticker: str, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> AgentOutput:
         """
         Override to merge reflection docs into evidence for Self-RAG.
+        Uses SearchConvergence for info gain scoring and stop conditions.
         """
         trace: List[Dict[str, Any]] = []
         queries = self._build_queries(query, ticker)
         logger.info(f"[DeepSearch] queries: {queries}")
 
+        def _log_event(event_type: str, details: Dict[str, Any]):
+            event = self._trace_step(event_type, details)
+            trace.append(event)
+            if on_event:
+                try:
+                    on_event({
+                        "event": "agent_execution",
+                        "agent": self.AGENT_NAME,
+                        "details": {"type": event_type, **details},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                except Exception:
+                    pass
+
+        def _notify(msg: str):
+            if on_event:
+                try:
+                    on_event({
+                        "event": "agent_action",
+                        "agent": self.AGENT_NAME,
+                        "details": {"message": msg},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                except Exception:
+                    pass
+
+        # Initialize convergence controller
+        convergence = SearchConvergence()
+
+        _notify(f"开始初始搜索 (Queries: {len(queries)})...")
         results = await self._initial_search(query, ticker, queries=queries)
+        
+        _notify(f"正在生成初步摘要...")
         summary = await self._first_summary(results)
 
-        trace.append(self._trace_step(
-            stage="initial_search",
-            payload=self._build_trace_payload(queries, results),
-        ))
+        # Process initial results through convergence
+        unique_results, init_metrics = convergence.process_round(results, "")
+        _log_event("initial_search", {
+                **self._build_trace_payload(queries, results),
+                "convergence": {
+                    "round": init_metrics.round_num,
+                    "info_gain": init_metrics.info_gain,
+                    "unique_docs": init_metrics.unique_docs_count
+                }
+            })
         self._log_documents(results, "initial")
-        trace.append(self._trace_step(
-            stage="summary",
-            payload={"summary_preview": self._trim_text(summary, 400)},
-        ))
+        _log_event("summary", {"summary_preview": self._trim_text(summary, 400)})
 
-        all_docs: List[Dict[str, Any]] = list(results) if isinstance(results, list) else []
+        all_docs: List[Dict[str, Any]] = list(unique_results) if isinstance(unique_results, list) else []
 
-        for _ in range(self.MAX_REFLECTIONS):
+        for i in range(self.MAX_REFLECTIONS):
+            _notify(f"正在分析信息缺口 (Round {i+1})...")
             gaps = await self._identify_gaps(summary)
-            trace.append(self._trace_step(
-                stage="self_rag_gap_detection",
-                payload={"needs_more": bool(gaps), "queries": gaps},
-            ))
+            _log_event("self_rag_gap_detection", {"needs_more": bool(gaps), "queries": gaps})
             if not gaps:
                 break
+            
+            _notify(f"执行针对性搜索 (Gaps: {len(gaps)})...")
             new_data = await self._targeted_search(gaps, ticker)
             if isinstance(new_data, list) and new_data:
-                all_docs.extend(new_data)
-                trace.append(self._trace_step(
-                    stage="targeted_search",
-                    payload=self._build_trace_payload(gaps, new_data),
-                ))
-                self._log_documents(new_data, "targeted")
-            summary = await self._update_summary(summary, new_data)
-            trace.append(self._trace_step(
-                stage="summary_update",
-                payload={"summary_preview": self._trim_text(summary, 400)},
-            ))
+                # Process through convergence for dedup and gain scoring
+                unique_new, metrics = convergence.process_round(new_data, summary)
+                _log_event("targeted_search", {
+                        **self._build_trace_payload(gaps, new_data),
+                        "convergence": {
+                            "round": metrics.round_num,
+                            "info_gain": metrics.info_gain,
+                            "unique_docs": metrics.unique_docs_count,
+                            "should_stop": metrics.should_stop,
+                            "reason": metrics.reason
+                        }
+                    })
+                self._log_documents(unique_new, "targeted")
+                all_docs.extend(unique_new)
 
-        if all_docs:
-            all_docs = self._dedupe_results(all_docs)
+                # Check convergence stop condition
+                if metrics.should_stop:
+                    logger.info(f"[DeepSearch] Convergence stop: {metrics.reason}")
+                    break
+            
+            _notify(f"更新摘要整合新信息...")
+            summary = await self._update_summary(summary, new_data)
+            _log_event("summary_update", {"summary_preview": self._trim_text(summary, 400)})
+
+        # Add final convergence stats to trace
+        _log_event("convergence_final", convergence.get_stats())
+
         output = self._format_output(summary, all_docs or results, trace=trace)
         return output
 
@@ -144,12 +196,37 @@ class DeepSearchAgent(BaseFinancialAgent):
         if not self.llm:
             return []
 
-        prompt = (
-            "You are a Self-RAG controller for financial deep research.\n"
-            "Given the current summary, decide if more retrieval is needed.\n"
-            "Return JSON only: {\"needs_more\": true/false, \"queries\": [\"query1\", \"query2\"]}\n\n"
-            f"Summary:\n{summary}\n"
-        )
+        prompt = f"""<role>金融深度研究Self-RAG控制器</role>
+
+<task>评估当前摘要的信息完整性，决定是否需要补充检索</task>
+
+<current_summary>
+{summary}
+</current_summary>
+
+<evaluation_criteria>
+需要补充检索的情况（needs_more=true）：
+- 关键财务数据缺失（营收、利润、估值指标）
+- 风险因素分析不完整
+- 竞争格局描述模糊
+- 缺乏时效性信息（最新财报、公告）
+- 论点缺乏数据支撑
+
+信息充足的情况（needs_more=false）：
+- 核心投资逻辑清晰
+- 关键数据点完整
+- 风险与机会均有覆盖
+</evaluation_criteria>
+
+<output_format>
+仅返回JSON，禁止任何解释或前言：
+{{"needs_more": true/false, "queries": ["具体检索词1", "具体检索词2"]}}
+
+queries要求：
+- 最多3个，每个需具体明确
+- 使用中英文混合检索词提高召回
+- 聚焦摘要中明确缺失的信息点
+</output_format>"""
         raw = await self._call_llm(prompt)
         payload = self._extract_json(raw)
         if not payload or not isinstance(payload, dict):
@@ -224,11 +301,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         )
 
     def _trace_step(self, stage: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "stage": stage,
-            "timestamp": datetime.now().isoformat(),
-            "data": payload,
-        }
+        return create_trace_event(stage, agent=self.AGENT_NAME, **payload)
 
     def _build_trace_payload(self, queries: List[str], docs: List[Dict[str, Any]]) -> Dict[str, Any]:
         items = []
@@ -506,15 +579,39 @@ class DeepSearchAgent(BaseFinancialAgent):
             titles = ", ".join([doc.get("title", "") for doc in docs[:3]])
             return f"Deep research sources found: {titles}."
 
-        prompt_parts = [
-            "You are a financial research analyst. Summarize the sources into a concise deep research memo.",
-            "Include 3-5 key insights and cite sources using [1], [2] style.",
-            "Call out any missing info explicitly.",
-        ]
-        if previous_summary:
-            prompt_parts.append(f"Previous summary:\n{previous_summary}")
-        prompt_parts.append(f"Sources:\n{bundle}")
-        prompt = "\n\n".join(prompt_parts)
+        prev_section = f"\n<previous_summary>\n{previous_summary}\n</previous_summary>" if previous_summary else ""
+        prompt = f"""<role>资深金融研究分析师</role>
+
+<task>基于检索源撰写深度研究备忘录</task>
+{prev_section}
+<sources>
+{bundle}
+</sources>
+
+<requirements>
+- 语言：简体中文
+- 提炼3-5条核心洞察，每条需有数据支撑
+- 引用格式：[1]、[2]（对应源编号）
+- 忽略内容过短或无关的源
+- 明确标注信息缺口（如有）
+</requirements>
+
+<output_format>
+## 核心发现
+[带编号的要点列表，每条含数据引用]
+
+## 风险提示
+[关键风险因素]
+
+## 信息缺口
+[尚需补充的信息，无则写"暂无"]
+</output_format>
+
+<constraints>
+- 禁止开场白、寒暄、总结性陈述
+- 直接输出结构化内容
+- 专业商务语气
+</constraints>"""
 
         result = await self._call_llm(prompt)
         return result.strip() if result else "Summary unavailable."

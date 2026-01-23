@@ -24,6 +24,7 @@ class MacroAgent(BaseFinancialAgent):
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
+        self._last_convergence = None
 
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         """
@@ -41,6 +42,7 @@ class MacroAgent(BaseFinancialAgent):
             if hasattr(self.tools, 'get_fred_data'):
                 fred_data = self.tools.get_fred_data()
                 fred_data["status"] = "success"
+                self._last_convergence = None
                 return fred_data
         except Exception as e:
             logger.info(f"[MacroAgent] FRED API failed: {e}")
@@ -49,6 +51,19 @@ class MacroAgent(BaseFinancialAgent):
         try:
             if hasattr(self.tools, 'search'):
                 search_result = self.tools.search("current US CPI inflation rate federal funds rate unemployment")
+                try:
+                    from dataclasses import asdict
+                    from backend.agents.search_convergence import SearchConvergence
+                    sc = SearchConvergence()
+                    docs = [{
+                        "url": "",
+                        "content": str(search_result)[:2000],
+                        "source": "search",
+                    }]
+                    _, metrics = sc.process_round(docs, previous_summary="")
+                    self._last_convergence = asdict(metrics)
+                except Exception:
+                    self._last_convergence = None
                 return {
                     "status": "fallback",
                     "source": "search",
@@ -168,6 +183,18 @@ class MacroAgent(BaseFinancialAgent):
             elif raw_data.get("status") == "error":
                 confidence_value = 0.2
 
+        trace = []
+        if self._last_convergence:
+            try:
+                from backend.orchestration.trace_schema import create_trace_event
+                trace.append(create_trace_event(
+                    "convergence_check",
+                    agent=self.AGENT_NAME,
+                    **self._last_convergence,
+                ))
+            except Exception:
+                pass
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -175,5 +202,6 @@ class MacroAgent(BaseFinancialAgent):
             confidence=confidence_value,
             data_sources=data_sources,
             as_of=datetime.now().isoformat(),
-            risks=risks
+            risks=risks,
+            trace=trace,
         )

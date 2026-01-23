@@ -209,9 +209,9 @@ class AgentSupervisor:
             "message": "正在综合各 Agent 观点..."
         }, ensure_ascii=False)
         
+        forum_result = None
         try:
             forum_step = next((s for s in plan.steps if s.step_type == "forum"), None)
-            forum_result = None
             if forum_step is not None:
                 forum_step.status = "running"
                 forum_step.started_at = datetime.now().isoformat()
@@ -228,38 +228,52 @@ class AgentSupervisor:
                 _record_plan_event(forum_step, "step_done", duration_ms=forum_step.duration_ms)
             else:
                 forum_result = await self.forum.synthesize(agent_results, user_profile=user_profile)
-            serialized_outputs = {
-                name: self._serialize_output(output)
-                for name, output in agent_results.items()
-            }
-            
-            yield json.dumps({
-                "type": "forum_done",
-                "consensus": forum_result.consensus,
-                "confidence": forum_result.confidence,
-                "recommendation": forum_result.recommendation
-            }, ensure_ascii=False)
-            
-            # 4. 完成
-            yield json.dumps({
-                "type": "done",
-                "output": {
-                    "consensus": forum_result.consensus,
-                    "disagreement": forum_result.disagreement,
-                    "confidence": forum_result.confidence,
-                    "recommendation": forum_result.recommendation,
-                    "risks": forum_result.risks,
-                    "agents_used": list(agent_results.keys()),
-                    "errors": agent_errors,
-                    "budget": budget.snapshot()
-                },
-                "agent_outputs": serialized_outputs,
-                "plan": plan.to_dict(),
-                "plan_trace": plan_trace,
-            }, ensure_ascii=False)
-            
         except Exception as e:
-            yield json.dumps({
-                "type": "error",
-                "message": f"Forum 综合失败: {str(e)}"
-            }, ensure_ascii=False)
+            # Forum 失败时创建一个 fallback ForumOutput
+            import logging
+            logging.getLogger(__name__).warning(f"[Supervisor] Forum synthesis failed: {e}, using fallback")
+            from backend.orchestration.forum import ForumOutput
+            # 收集 agent summaries 作为 fallback consensus
+            summaries = []
+            for name, output in agent_results.items():
+                if output and hasattr(output, 'summary') and output.summary:
+                    summaries.append(f"**{name}**: {output.summary[:200]}")
+            fallback_consensus = "\n\n".join(summaries) if summaries else f"分析数据收集完成，但综合分析暂时不可用。错误: {str(e)}"
+            forum_result = ForumOutput(
+                consensus=fallback_consensus,
+                disagreement="",
+                confidence=0.5,
+                recommendation="HOLD",
+                risks=["综合分析暂时不可用", str(e)[:100]]
+            )
+            agent_errors.append(f"forum: {str(e)}")
+
+        serialized_outputs = {
+            name: self._serialize_output(output)
+            for name, output in agent_results.items()
+        }
+        
+        yield json.dumps({
+            "type": "forum_done",
+            "consensus": forum_result.consensus,
+            "confidence": forum_result.confidence,
+            "recommendation": forum_result.recommendation
+        }, ensure_ascii=False)
+        
+        # 4. 完成
+        yield json.dumps({
+            "type": "done",
+            "output": {
+                "consensus": forum_result.consensus,
+                "disagreement": forum_result.disagreement,
+                "confidence": forum_result.confidence,
+                "recommendation": forum_result.recommendation,
+                "risks": forum_result.risks,
+                "agents_used": list(agent_results.keys()),
+                "errors": agent_errors,
+                "budget": budget.snapshot()
+            },
+            "agent_outputs": serialized_outputs,
+            "plan": plan.to_dict(),
+            "plan_trace": plan_trace,
+        }, ensure_ascii=False)

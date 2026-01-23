@@ -53,6 +53,7 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 - Agent 贡献追踪：显示每个洞见来自哪个 Agent
 - 证据池：引用包含置信度与新鲜度字段
 - ReportIR 引用 schema 校验，保证字段完整
+- ReportSection 保留章节级置信度/来源 Agent/数据源
 - PlanIR + Executor：计划模板 + 执行 trace（step 级可追溯）
 - EvidencePolicy：引用校验 + 覆盖率阈值约束
 - News/Macro 回退结构化，保证下游分析稳定
@@ -62,11 +63,16 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 - DataContext 汇总各个数据源的 as_of/currency/adjustment，自动标注不一致
 - BudgetManager 控制工具调用/轮次/耗时，预算快照随响应回传
 - 安全门禁（API Key + 限流）与免责声明模板确保合规
+- SearchConvergence 模块：信息增益评分 + 内容去重 + 停止条件
+- TraceEvent Schema v1：统一事件格式（event_type/duration/metadata）
+- Supervisor 流式输出统一 normalize 到 trace v1
+- 回归测试框架：25 条基准用例 + 自动对比报告
 
 ### 智能意图分类
 - 3 层混合系统：规则匹配 -> Embedding 相似度 -> LLM 兜底
 - NEWS 子意图区分“拉取新闻”和“分析新闻影响”
 - 成本优化：简单请求优先走规则
+- 报告意图覆盖“分析/Analyze”，有 ticker 时无需 LLM
 
 ### 实时可视化与透明度
 - 流式输出（逐字呈现）
@@ -357,7 +363,7 @@ FinSight/
 
 ## 当前状态
 
-> 最后更新: 2026-01-20 | 版本: 0.6.4
+> 最后更新: 2026-01-23 | 版本: 0.6.5
 
 ### 完成进度
 

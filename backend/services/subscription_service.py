@@ -16,9 +16,12 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from pathlib import Path
+import re
 
 # 订阅数据存储文件
 SUBSCRIPTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "subscriptions.json"
+ALERT_FAILURE_LIMIT = int(os.getenv("ALERT_FAILURE_LIMIT", "3"))
+EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
 class SubscriptionService:
@@ -70,6 +73,10 @@ class SubscriptionService:
         """
         if alert_types is None:
             alert_types = ["price_change", "news"]
+
+        if not self.is_valid_email(email):
+            logger.info(f"❌ Invalid email address: {email}")
+            return False
         
         if email not in self.subscriptions:
             self.subscriptions[email] = []
@@ -94,6 +101,11 @@ class SubscriptionService:
             "updated_at": datetime.now().isoformat(),
             "last_alert_at": None,
             "last_news_at": None,
+            "last_alert_attempt_at": None,
+            "last_alert_error": None,
+            "last_alert_error_at": None,
+            "alert_failures": 0,
+            "disabled": False,
         }
         
         self.subscriptions[email].append(subscription)
@@ -101,6 +113,12 @@ class SubscriptionService:
         
         logger.info(f"✅ 用户 {email} 已订阅 {ticker}")
         return True
+
+    def is_valid_email(self, email: str) -> bool:
+        """Basic email format validation."""
+        if not email or "@" not in email:
+            return False
+        return bool(EMAIL_REGEX.match(email))
     
     def unsubscribe(self, email: str, ticker: Optional[str] = None) -> bool:
         """
@@ -176,6 +194,28 @@ class SubscriptionService:
             for sub in self.subscriptions[email]:
                 if sub['ticker'] == ticker:
                     sub['last_alert_at'] = datetime.now().isoformat()
+                    self._save_subscriptions()
+                    break
+
+    def record_alert_attempt(self, email: str, ticker: str, success: bool, error: Optional[str] = None, disable: bool = False):
+        """Record alert delivery attempt and optionally disable subscription."""
+        if email in self.subscriptions:
+            for sub in self.subscriptions[email]:
+                if sub['ticker'] == ticker:
+                    now = datetime.now().isoformat()
+                    sub['last_alert_attempt_at'] = now
+                    if success:
+                        sub['last_alert_at'] = now
+                        sub['alert_failures'] = 0
+                        sub['last_alert_error'] = None
+                        sub['last_alert_error_at'] = None
+                        sub['disabled'] = False
+                    else:
+                        sub['alert_failures'] = int(sub.get('alert_failures', 0)) + 1
+                        sub['last_alert_error'] = error
+                        sub['last_alert_error_at'] = now
+                        if disable or sub['alert_failures'] >= ALERT_FAILURE_LIMIT:
+                            sub['disabled'] = True
                     self._save_subscriptions()
                     break
 

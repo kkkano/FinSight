@@ -5,11 +5,9 @@ Handlers 模块
 """
 
 from backend.handlers.chat_handler import ChatHandler
-from backend.handlers.report_handler import ReportHandler
 from backend.handlers.followup_handler import FollowupHandler
 
 __all__ = [
     'ChatHandler',
-    'ReportHandler',
     'FollowupHandler',
 ]

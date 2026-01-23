@@ -732,11 +732,8 @@ async def chat_stream_endpoint(request: ChatRequest):
         supervisor = getattr(agent, "supervisor", None)
         ticker = metadata["tickers"][0] if metadata.get("tickers") else None
 
+        # NOTE: report_builder 现在不再依赖 report_handler，报告 IR 由 streaming.py 内部处理
         report_builder = None
-        if ticker and getattr(agent, "report_handler", None) and hasattr(agent.report_handler, "_generate_simple_report_ir"):
-            def _build_report(content: str):
-                return agent.report_handler._generate_simple_report_ir(ticker, content)
-            report_builder = _build_report
 
         supervisor_force = _env_bool("SUPERVISOR_STREAM_FORCE", "false")
         use_supervisor = bool(
@@ -780,7 +777,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                                     result["data"]["plan"] = plan_data
                                 if plan_trace:
                                     result["data"]["plan_trace"] = plan_trace
-                                if payload.get("report") and getattr(agent, "report_handler", None):
+                                if payload.get("report"):
                                     report = payload.get("report")
                                     citations = []
                                     agent_traces = {}
@@ -790,9 +787,16 @@ async def chat_stream_endpoint(request: ChatRequest):
                                         evidence = output.get("evidence") or []
                                         if evidence:
                                             prefix = str(name).upper()[:2] if name else "AG"
-                                            citations.extend(
-                                                agent.report_handler._build_citations_from_evidence(evidence, prefix)
-                                            )
+                                            # 内联构建 citations，不再依赖 report_handler
+                                            for idx, ev in enumerate(evidence):
+                                                citation = {
+                                                    "id": f"{prefix}{idx + 1}",
+                                                    "source": ev.get("source", "Unknown"),
+                                                    "url": ev.get("url", ""),
+                                                    "title": ev.get("title", ev.get("source", "")),
+                                                    "snippet": ev.get("snippet", ev.get("content", ""))[:200],
+                                                }
+                                                citations.append(citation)
                                         trace = output.get("trace")
                                         if trace:
                                             agent_traces[name] = trace
@@ -1164,6 +1168,8 @@ async def subscribe_email(request: SubscriptionRequest):
         from backend.services.subscription_service import get_subscription_service
 
         subscription_service = get_subscription_service()
+        if not subscription_service.is_valid_email(request.email):
+            raise HTTPException(status_code=400, detail="无效的邮箱地址")
         success = subscription_service.subscribe(
             email=request.email,
             ticker=request.ticker,

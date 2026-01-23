@@ -50,6 +50,31 @@ def test_report_validator_sections_and_types():
     assert isinstance(section["contents"][0]["citation_refs"], list)
 
 
+def test_report_validator_section_metadata():
+    data = {
+        "ticker": "META",
+        "summary": "Summary",
+        "sections": [
+            {
+                "title": "Section 1",
+                "order": 1,
+                "confidence": 0.82,
+                "agent_name": "NewsAgent",
+                "data_sources": ["news", "search"],
+                "contents": [
+                    {"type": "text", "content": "Hello"},
+                ],
+            }
+        ],
+    }
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+
+    section = result["sections"][0]
+    assert section["confidence"] == 0.82
+    assert section["agent_name"] == "NewsAgent"
+    assert section["data_sources"] == ["news", "search"]
+
+
 def test_report_validator_risks_recommendation():
     data = {
         "ticker": "NVDA",

@@ -7,7 +7,7 @@
 > **近期同步**:
 > - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
 > - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
-> - get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）
+> - get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）
 > - SSRF 防护扩展至 DeepSearch + fetch_url_content（P1-2）
 > - pytest 收集 backend/tests + test/（不再标记 legacy）
 > - PlanIR + Executor 与 EvidencePolicy 落地（计划模板/执行 trace/引用校验）

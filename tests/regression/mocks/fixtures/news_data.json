@@ -1,0 +1,24 @@
+{
+  "AAPL": [
+    {"headline": "Apple announces new AI features for iPhone", "source": "Reuters", "url": "https://example.com/1", "datetime": "2026-01-22", "confidence": 0.9},
+    {"headline": "Apple stock rises on strong earnings outlook", "source": "Bloomberg", "url": "https://example.com/2", "datetime": "2026-01-21", "confidence": 0.85},
+    {"headline": "Apple expands services revenue to record high", "source": "CNBC", "url": "https://example.com/3", "datetime": "2026-01-20", "confidence": 0.8}
+  ],
+  "MSFT": [
+    {"headline": "Microsoft Azure growth exceeds expectations", "source": "Reuters", "url": "https://example.com/4", "datetime": "2026-01-22", "confidence": 0.9},
+    {"headline": "Microsoft Copilot adoption accelerates in enterprise", "source": "TechCrunch", "url": "https://example.com/5", "datetime": "2026-01-21", "confidence": 0.85}
+  ],
+  "TSLA": [
+    {"headline": "Tesla delivers record number of vehicles in Q4", "source": "Reuters", "url": "https://example.com/6", "datetime": "2026-01-22", "confidence": 0.9},
+    {"headline": "Tesla FSD update shows significant improvements", "source": "Electrek", "url": "https://example.com/7", "datetime": "2026-01-21", "confidence": 0.8},
+    {"headline": "Tesla stock volatile amid market uncertainty", "source": "Bloomberg", "url": "https://example.com/8", "datetime": "2026-01-20", "confidence": 0.75}
+  ],
+  "GOOGL": [
+    {"headline": "Google Cloud revenue growth accelerates", "source": "Reuters", "url": "https://example.com/9", "datetime": "2026-01-22", "confidence": 0.9},
+    {"headline": "Alphabet announces new AI research breakthroughs", "source": "TechCrunch", "url": "https://example.com/10", "datetime": "2026-01-21", "confidence": 0.85}
+  ],
+  "FAIL_PARTIAL": [
+    {"headline": "Test news for partial failure simulation", "source": "Test", "url": "https://example.com/test", "datetime": "2026-01-22", "confidence": 0.5}
+  ],
+  "UNKNOWN999": []
+}

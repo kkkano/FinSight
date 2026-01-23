@@ -48,6 +48,9 @@ class ReportSection:
     subsections: List['ReportSection'] = field(default_factory=list)
     is_collapsible: bool = True
     default_collapsed: bool = False
+    confidence: Optional[float] = None
+    agent_name: Optional[str] = None
+    data_sources: List[str] = field(default_factory=list)
 
 @dataclass
 class ReportIR:

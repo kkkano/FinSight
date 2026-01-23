@@ -1,0 +1,15 @@
+{
+  "fear_greed_index": 55,
+  "fear_greed_label": "Neutral",
+  "market_mood": "cautiously optimistic",
+  "vix": 18.5,
+  "put_call_ratio": 0.85,
+  "market_breadth": "positive",
+  "sector_sentiment": {
+    "technology": "bullish",
+    "healthcare": "neutral",
+    "financials": "slightly bullish",
+    "energy": "bearish",
+    "consumer": "neutral"
+  }
+}

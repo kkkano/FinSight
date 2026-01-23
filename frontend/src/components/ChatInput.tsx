@@ -115,7 +115,10 @@ export const ChatInput: React.FC = () => {
         userMsgContent,
         // onToken - 逐字更新
         (token) => {
-          fullContent += token;
+          const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
+          if (safeToken) {
+            fullContent += safeToken;
+          }
           updateMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
         // onToolStart
@@ -129,8 +132,29 @@ export const ChatInput: React.FC = () => {
         // onDone - Phase 2: 支持 report 数据
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
           console.log('[ChatInput] onDone called, report:', report); // Debug Log
+          // 合并实时收集的 thinking 和 done 事件中的 thinking
+          // 如果 done 事件中有 thinking，优先使用（通常是完整版），但也保留之前的实时步骤
           if (thinking && thinking.length) {
-            thinkingSteps = thinking;
+            // 如果 done 事件中的 thinking 已包含完整流程，直接使用
+            // 否则合并两者（去重）
+            const existingStages = new Set(thinkingSteps.map(s => `${s.stage}-${s.message}`));
+            const newSteps = thinking.filter(s => !existingStages.has(`${s.stage}-${s.message}`));
+            if (newSteps.length > 0 && thinkingSteps.length > 0) {
+              // 合并：保留实时步骤 + 添加新步骤
+              thinkingSteps = [...thinkingSteps, ...newSteps];
+            } else if (thinking.length >= thinkingSteps.length) {
+              // done 事件中的更完整，直接使用
+              thinkingSteps = thinking;
+            }
+            // else: 保留现有的 thinkingSteps
+          }
+          if (!fullContent || fullContent.trim() === '' || fullContent.trim() === '[object Object]') {
+            const fallback = typeof meta?.response === 'string'
+              ? meta.response
+              : (report?.summary || '');
+            if (fallback) {
+              fullContent = fallback;
+            }
           }
           // 检测是否需要图表
           const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;

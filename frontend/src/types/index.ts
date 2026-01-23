@@ -67,6 +67,12 @@ export interface ReportSection {
   title: string;
   order: number;
   contents: ReportContent[];
+  confidence?: number;
+  agent_name?: string;
+  data_sources?: string[];
+  subsections?: ReportSection[];
+  is_collapsible?: boolean;
+  default_collapsed?: boolean;
 }
 
 export interface Citation {
@@ -88,10 +94,19 @@ export interface ReportIR {
   sentiment: Sentiment;
   confidence_score: number;
   generated_at: string;
+  // Forum 整合的完整报告文本（≥2000字）
+  synthesis_report?: string;
   sections: ReportSection[];
   citations: Citation[];
   risks?: string[];
   recommendation?: string;
+  // Phase 2 扩展字段
+  meta?: {
+    agent_traces?: Record<string, any>;
+    data_context?: Record<string, any>;
+    [key: string]: any;
+  };
+  agent_status?: Record<string, { status: string; confidence?: number; error?: string }>;
 }
 
 export interface KlineResponse {

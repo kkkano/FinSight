@@ -53,6 +53,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Agent contribution tracking: see which agent provided each insight
 - Evidence pool with citation confidence and freshness metadata
 - ReportIR schema validation for citations (confidence and freshness)
+- ReportSection carries section-level confidence/agent attribution/data sources
 - PlanIR + Executor for step-level planning and execution trace
 - EvidencePolicy enforces citation validity and coverage thresholds
 - Structured News and Macro fallbacks keep downstream analysis stable
@@ -62,11 +63,16 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - DataContext summaries capture per-source as_of/currency/adjustment and flag inconsistencies
 - BudgetManager enforces max tools / rounds / time with budget snapshots in responses
 - Security gate (API Key + rate limiting) and footer disclaimer template ensure compliance
+- SearchConvergence module for info gain scoring, content deduplication, and stop conditions
+- TraceEvent Schema v1 with versioned event format (event_type/duration/metadata)
+- Supervisor stream normalizes trace output to v1 for all agent outputs and plan traces
+- Regression testing framework with 25 baseline cases and automated comparison reports
 
 ### Smart Intent Classification
 - 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback
 - NEWS sub-intent: distinguishes fetch news vs analyze news impact
 - Cost efficient: simple queries handled by rules with no LLM cost
+- Report intent rules cover “analyze/分析” with ticker context (no LLM required)
 
 ### Real-time Streaming and Transparency
 - Token-by-token streaming responses
@@ -88,44 +94,44 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 ```mermaid
 flowchart TB
     subgraph Frontend["Frontend (React + Vite)"]
-        UI[Chat UI]
-        ReportView[ReportView Card]
-        Evidence[Evidence Pool]
-        Trace[Agent Trace]
-        Chart[K-line Chart]
-        Settings[Settings Modal]
+        UI["Chat UI"]
+        ReportView["ReportView Card"]
+        Evidence["Evidence Pool"]
+        Trace["Agent Trace"]
+        Chart["K-line Chart"]
+        Settings["Settings Modal"]
     end
 
     subgraph API["FastAPI Backend"]
         Main["/chat/supervisor/stream"]
-        Classifier[IntentClassifier<br/>Rule + Embedding + LLM]
+        Classifier["IntentClassifier<br/>Rule + Embedding + LLM"]
     end
 
     subgraph Supervisor["SupervisorAgent"]
-        Router[Intent Router]
-        Workers[Worker Agents]
-        Forum[ForumHost]
+        Router["Intent Router"]
+        Workers["Worker Agents"]
+        Forum["ForumHost"]
     end
 
     subgraph Agents["Specialized Agents"]
-        PA[PriceAgent]
-        NA[NewsAgent]
-        TA[TechnicalAgent]
-        FA[FundamentalAgent]
-        MA[MacroAgent]
-        DSA[DeepSearchAgent]
+        PA["PriceAgent"]
+        NA["NewsAgent"]
+        TA["TechnicalAgent"]
+        FA["FundamentalAgent"]
+        MA["MacroAgent"]
+        DSA["DeepSearchAgent"]
     end
 
     subgraph ReportIR["Report and Evidence"]
-        IR[ReportIR + Validator]
-        Citations[Citations (confidence + freshness)]
+        IR["ReportIR + Validator"]
+        Citations["Citations (confidence + freshness)"]
     end
 
     subgraph Services["Core Services"]
-        Cache[KV Cache]
-        CB[Circuit Breaker]
-        SafeFetch[Safe Fetch (SSRF Guard + Retry)]
-        Memory[User Memory]
+        Cache["KV Cache"]
+        CB["Circuit Breaker"]
+        SafeFetch["Safe Fetch (SSRF Guard + Retry)"]
+        Memory["User Memory"]
     end
 
     UI --> Main
@@ -141,6 +147,7 @@ flowchart TB
     PA & NA & TA & FA & MA & DSA --> Cache
     PA & NA & TA & FA & MA & DSA --> CB
     DSA --> SafeFetch
+
 ```
 
 ### Intent Classification Flow
@@ -357,7 +364,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-01-20 | Version: 0.6.4
+> Last Updated: 2026-01-23 | Version: 0.6.5
 
 ### Current Progress
 

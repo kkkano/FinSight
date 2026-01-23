@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinSight - AI Financial Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    :root {
+      --fin-primary: #3b82f6;
+      --fin-success: #10b981;
+      --fin-warning: #f59e0b;
+      --fin-danger: #ef4444;
+      --fin-dark: #0f172a;
+      --fin-panel: #1e293b;
+    }
+    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+    .glow-green { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .pulse-dot {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .scroll-smooth { scroll-behavior: smooth; }
+    .nav-item:hover { background: rgba(59, 130, 246, 0.1); }
+    .nav-item.active { background: rgba(59, 130, 246, 0.2); border-left: 3px solid #3b82f6; }
+  </style>
+</head>
+<body class="text-slate-200 scroll-smooth">
+  <!-- 页面内容将在后续步骤中添加 -->
+  <div id="app" class="flex min-h-screen">
+    <!-- 侧边栏导航 -->
+    <aside id="sidebar" class="w-64 bg-slate-900/95 border-r border-slate-700/50 flex flex-col">
+      <!-- Logo区域 -->
+      <div class="p-6 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold gradient-text">FinSight</h1>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">AI Financial Intelligence</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 导航菜单 -->
+      <nav class="flex-1 p-4 space-y-1">
+        <a href="#dashboard" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-200 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+          </svg>
+          Dashboard
+        </a>
+        <a href="#reports" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Deep Research
+        </a>
+        <a href="#financials" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Financials
+        </a>
+        <a href="#watchlist" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+          </svg>
+          Watchlist
+        </a>
+        <a href="#alerts" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          Alerts
+          <span class="ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">3</span>
+        </a>
+      </nav>
+
+      <!-- 底部用户信息 -->
+      <div class="p-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-sm font-bold text-white">
+            U
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-slate-200 truncate">User</p>
+            <p class="text-[11px] text-slate-500">Pro Plan</p>
+          </div>
+          <button class="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区域 -->
+    <main id="main-content" class="flex-1 overflow-auto">
+      <!-- 顶部导航栏 -->
+      <header class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700/50 px-6 py-4">
+        <div class="flex items-center justify-between">
+          <!-- 搜索框 -->
+          <div class="flex-1 max-w-2xl">
+            <div class="relative">
+              <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <input type="text" placeholder="搜索股票、分析报告... (例如: AAPL, 苹果财报分析)"
+                class="w-full pl-12 pr-4 py-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all">
+              <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                <kbd class="px-2 py-1 text-[10px] bg-slate-700 rounded text-slate-400">⌘K</kbd>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧操作区 -->
+          <div class="flex items-center gap-4 ml-6">
+            <!-- 系统状态指示器 -->
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+              <span class="w-2 h-2 bg-emerald-500 rounded-full pulse-dot"></span>
+              <span class="text-xs text-emerald-400">All Agents Online</span>
+            </div>
+
+            <!-- 通知按钮 -->
+            <button class="relative p-2 hover:bg-slate-800 rounded-lg transition-colors">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+              </svg>
+              <span class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center">3</span>
+            </button>
+
+            <!-- 主题切换 -->
+            <button class="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- 页面内容区域 -->
+      <div id="page-content" class="p-6 space-y-6">
+        <!-- 欢迎区域 -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-white">Good Morning, User</h2>
+            <p class="text-slate-400 text-sm mt-1">Here's your financial intelligence overview for today</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-slate-500">Last updated</p>
+            <p class="text-sm text-slate-300">Jan 22, 2026 · 10:30 AM</p>
+          </div>
+        </div>
+
+        <!-- 市场概览卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- S&P 500 -->
+          <div class="glass-card rounded-xl p-4 hover:glow-green transition-all cursor-pointer">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-slate-400 uppercase tracking-wider">S&P 500</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/20 text-emerald-400">+1.2%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">4,892.45</div>
+            <div class="flex items-center gap-1 mt-1">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+              </svg>
+              <span class="text-sm text-emerald-400">+58.23</span>
+            </div>
+          </div>
+
+          <!-- NASDAQ -->
+          <div class="glass-card rounded-xl p-4 hover:glow-green transition-all cursor-pointer">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-slate-400 uppercase tracking-wider">NASDAQ</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/20 text-emerald-400">+1.8%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">15,628.95</div>
+            <div class="flex items-center gap-1 mt-1">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+              </svg>
+              <span class="text-sm text-emerald-400">+276.54</span>
+            </div>
+          </div>
+
+          <!-- DOW -->
+          <div class="glass-card rounded-xl p-4 hover:glow-blue transition-all cursor-pointer">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-slate-400 uppercase tracking-wider">DOW JONES</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400">-0.3%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">38,456.12</div>
+            <div class="flex items-center gap-1 mt-1">
+              <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+              </svg>
+              <span class="text-sm text-red-400">-115.34</span>
+            </div>
+          </div>
+
+          <!-- VIX -->
+          <div class="glass-card rounded-xl p-4 hover:glow-blue transition-all cursor-pointer">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs text-slate-400 uppercase tracking-wider">VIX</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-400">Low</span>
+            </div>
+            <div class="text-2xl font-bold text-white">14.28</div>
+            <div class="text-xs text-slate-500 mt-1">Fear & Greed: Neutral</div>
+          </div>
+        </div>
+
+        <!-- 主要内容区域：左侧AI对话 + 右侧Watchlist -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- AI 对话区域 -->
+          <div class="lg:col-span-2 glass-card rounded-xl overflow-hidden flex flex-col" style="height: 500px;">
+            <!-- 对话头部 -->
+            <div class="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="text-sm font-semibold text-white">FinSight AI Assistant</h3>
+                  <p class="text-[10px] text-slate-400">Powered by Multi-Agent System</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-1 rounded-full text-[10px] bg-blue-500/20 text-blue-400">Deep Research Mode</span>
+              </div>
+            </div>
+
+            <!-- 对话内容 -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+              <!-- 用户消息 -->
+              <div class="flex justify-end">
+                <div class="max-w-[80%] bg-blue-600 rounded-2xl rounded-tr-sm px-4 py-2">
+                  <p class="text-sm text-white">分析一下苹果公司(AAPL)的最新财报和投资价值</p>
+                </div>
+              </div>
+
+              <!-- AI 思考过程 -->
+              <div class="flex gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                </div>
+                <div class="flex-1 space-y-2">
+                  <!-- Agent 执行状态 -->
+                  <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/50">
+                    <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Agent Execution Pipeline</div>
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <span class="text-xs text-slate-300">PriceAgent</span>
+                        <span class="text-[10px] text-emerald-400">$178.52 (+1.2%)</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <span class="text-xs text-slate-300">NewsAgent</span>
+                        <span class="text-[10px] text-slate-400">12 sources analyzed</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </span>
+                        <span class="text-xs text-slate-300">FundamentalAgent</span>
+                        <span class="text-[10px] text-slate-400">Q4 2025 data</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+                          <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                        </span>
+                        <span class="text-xs text-slate-300">DeepSearchAgent</span>
+                        <span class="text-[10px] text-blue-400">Searching...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="p-4 border-t border-slate-700/50">
+              <div class="flex items-center gap-3">
+                <input type="text" placeholder="Ask about any stock, market trend, or financial analysis..."
+                  class="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50">
+                <button class="p-3 bg-blue-600 hover:bg-blue-500 rounded-xl transition-colors">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Watchlist 区域 -->
+          <div class="glass-card rounded-xl p-4" style="height: 500px;">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white">My Watchlist</h3>
+              <button class="text-xs text-blue-400 hover:text-blue-300">+ Add</button>
+            </div>
+            <div class="space-y-3 overflow-y-auto" style="max-height: 420px;">
+              <!-- Stock Item -->
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold text-white">AAPL</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Apple Inc.</p>
+                      <p class="text-[10px] text-slate-400">Technology</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$178.52</p>
+                    <p class="text-[10px] text-emerald-400">+1.24%</p>
+                  </div>
+                </div>
+                <div class="h-10 bg-slate-700/30 rounded" id="sparkline-aapl"></div>
+              </div>
+
+              <!-- Stock Item -->
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold text-white">MSFT</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Microsoft</p>
+                      <p class="text-[10px] text-slate-400">Technology</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$378.91</p>
+                    <p class="text-[10px] text-emerald-400">+0.85%</p>
+                  </div>
+                </div>
+                <div class="h-10 bg-slate-700/30 rounded"></div>
+              </div>
+
+              <!-- Stock Item -->
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold text-white">NVDA</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">NVIDIA</p>
+                      <p class="text-[10px] text-slate-400">Semiconductors</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$495.22</p>
+                    <p class="text-[10px] text-emerald-400">+2.31%</p>
+                  </div>
+                </div>
+                <div class="h-10 bg-slate-700/30 rounded"></div>
+              </div>
+
+              <!-- Stock Item -->
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold text-white">TSLA</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Tesla</p>
+                      <p class="text-[10px] text-slate-400">Automotive</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$248.50</p>
+                    <p class="text-[10px] text-red-400">-0.92%</p>
+                  </div>
+                </div>
+                <div class="h-10 bg-slate-700/30 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 财报分析区域 -->
+        <div class="glass-card rounded-xl p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Financial Analysis - AAPL</h3>
+                <p class="text-xs text-slate-400">Q4 2025 Earnings Report</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 font-medium">Beat Estimates</span>
+              <button class="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 财务指标网格 -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-800/40 rounded-xl p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Revenue</div>
+              <div class="text-xl font-bold text-white">$119.6B</div>
+              <div class="flex items-center gap-1 mt-1">
+                <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                <span class="text-xs text-emerald-400">+6.1% YoY</span>
+              </div>
+            </div>
+            <div class="bg-slate-800/40 rounded-xl p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">EPS</div>
+              <div class="text-xl font-bold text-white">$2.18</div>
+              <div class="flex items-center gap-1 mt-1">
+                <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                <span class="text-xs text-emerald-400">Beat by $0.05</span>
+              </div>
+            </div>
+            <div class="bg-slate-800/40 rounded-xl p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Gross Margin</div>
+              <div class="text-xl font-bold text-white">46.2%</div>
+              <div class="flex items-center gap-1 mt-1">
+                <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                <span class="text-xs text-emerald-400">+1.2pp</span>
+              </div>
+            </div>
+            <div class="bg-slate-800/40 rounded-xl p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-1">Free Cash Flow</div>
+              <div class="text-xl font-bold text-white">$28.3B</div>
+              <div class="flex items-center gap-1 mt-1">
+                <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                </svg>
+                <span class="text-xs text-emerald-400">+8.5% YoY</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表区域 -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 收入趋势图 -->
+            <div class="bg-slate-800/30 rounded-xl p-4">
+              <div class="text-sm font-medium text-slate-300 mb-4">Revenue Trend (Quarterly)</div>
+              <div id="revenue-chart" style="height: 200px;"></div>
+            </div>
+            <!-- 业务分布图 -->
+            <div class="bg-slate-800/30 rounded-xl p-4">
+              <div class="text-sm font-medium text-slate-300 mb-4">Revenue by Segment</div>
+              <div id="segment-chart" style="height: 200px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deep Research 报告卡片 -->
+        <div class="glass-card rounded-xl p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-white">Deep Research Report</h3>
+                <p class="text-xs text-slate-400">AI-Generated Investment Analysis</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 font-medium">BULLISH</span>
+              <span class="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 font-medium">85% Confidence</span>
+            </div>
+          </div>
+
+          <!-- AI 置信度分解组件 -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <!-- 总体置信度 -->
+            <div class="bg-slate-800/40 rounded-xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs text-slate-400 uppercase tracking-wider">AI Confidence</span>
+                <span class="text-lg font-bold text-white">85%</span>
+              </div>
+              <div class="h-3 rounded-full bg-slate-700 overflow-hidden mb-2">
+                <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-blue-500 to-indigo-500" style="width: 85%;"></div>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">高置信度</span>
+                <span class="text-[10px] text-slate-500">综合6个Agent分析</span>
+              </div>
+            </div>
+
+            <!-- 置信度来源分解 -->
+            <div class="lg:col-span-2 bg-slate-800/40 rounded-xl p-4">
+              <div class="text-xs text-slate-400 uppercase tracking-wider mb-3">Confidence Breakdown by Agent</div>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-blue-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">PriceAgent</div>
+                    <div class="text-sm font-medium text-white">92%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-green-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">NewsAgent</div>
+                    <div class="text-sm font-medium text-white">88%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-purple-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">TechnicalAgent</div>
+                    <div class="text-sm font-medium text-white">85%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-orange-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">FundamentalAgent</div>
+                    <div class="text-sm font-medium text-white">90%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-cyan-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">MacroAgent</div>
+                    <div class="text-sm font-medium text-white">78%</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-1 h-8 rounded-full bg-pink-500"></div>
+                  <div>
+                    <div class="text-[10px] text-slate-400">DeepSearchAgent</div>
+                    <div class="text-sm font-medium text-white">82%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 报告摘要 -->
+          <div class="bg-slate-800/40 rounded-xl p-4 mb-6">
+            <div class="text-xs text-slate-400 uppercase tracking-wider mb-2">Executive Summary</div>
+            <p class="text-sm text-slate-200 leading-relaxed">
+              Apple Inc. (AAPL) demonstrates strong fundamentals with Q4 2025 revenue beating estimates by 3.2%.
+              Services segment continues to show robust growth (+18% YoY), offsetting slower iPhone sales in China.
+              AI integration in iOS 19 positions the company well for the next growth cycle.
+              Recommend BUY with a 12-month price target of $210.
+            </p>
+          </div>
+
+          <!-- 报告章节 -->
+          <div class="space-y-3">
+            <!-- 章节1 -->
+            <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+              <button class="w-full flex items-center justify-between px-4 py-3 bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
+                  <span class="text-sm font-medium text-white">Price Analysis</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">PriceAgent</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 章节2 -->
+            <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+              <button class="w-full flex items-center justify-between px-4 py-3 bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 rounded-full bg-green-500/20 text-green-400 flex items-center justify-center text-xs font-bold">2</span>
+                  <span class="text-sm font-medium text-white">News Sentiment</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">NewsAgent</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 章节3 -->
+            <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+              <button class="w-full flex items-center justify-between px-4 py-3 bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold">3</span>
+                  <span class="text-sm font-medium text-white">Technical Indicators</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">TechnicalAgent</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 章节4 -->
+            <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+              <button class="w-full flex items-center justify-between px-4 py-3 bg-slate-800/40 hover:bg-slate-800/60 transition-colors">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-xs font-bold">4</span>
+                  <span class="text-sm font-medium text-white">Fundamental Analysis</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">FundamentalAgent</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 证据池 -->
+          <div class="mt-6 bg-slate-800/30 rounded-xl p-4">
+            <div class="text-xs text-slate-400 uppercase tracking-wider mb-3">Evidence Pool (12 Sources)</div>
+            <div class="flex flex-wrap gap-2">
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">reuters.com · 3</span>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">bloomberg.com · 2</span>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">sec.gov · 2</span>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">wsj.com · 2</span>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">ft.com · 2</span>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-slate-700/60 text-slate-300">yahoo.com · 1</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 新闻动态区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- 最新新闻 -->
+          <div class="glass-card rounded-xl p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white">Latest News</h3>
+              <span class="text-xs text-blue-400 cursor-pointer hover:text-blue-300">View All</span>
+            </div>
+            <div class="space-y-3">
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-start gap-3">
+                  <div class="w-2 h-2 mt-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                  <div>
+                    <p class="text-sm text-slate-200 font-medium">Apple announces record Q4 earnings, beats Wall Street estimates</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="text-[10px] text-slate-400">Reuters</span>
+                      <span class="text-[10px] text-slate-500">2 hours ago</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-start gap-3">
+                  <div class="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                  <div>
+                    <p class="text-sm text-slate-200 font-medium">Fed signals potential rate cuts in 2026 amid cooling inflation</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="text-[10px] text-slate-400">Bloomberg</span>
+                      <span class="text-[10px] text-slate-500">4 hours ago</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-start gap-3">
+                  <div class="w-2 h-2 mt-2 rounded-full bg-amber-500 flex-shrink-0"></div>
+                  <div>
+                    <p class="text-sm text-slate-200 font-medium">NVIDIA unveils next-gen AI chips, stock surges 5%</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="text-[10px] text-slate-400">WSJ</span>
+                      <span class="text-[10px] text-slate-500">6 hours ago</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 宏观经济指标 -->
+          <div class="glass-card rounded-xl p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white">Macro Indicators</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-300">FRED Data</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="p-3 bg-slate-800/40 rounded-lg">
+                <div class="text-[10px] text-slate-400 uppercase">Fed Funds Rate</div>
+                <div class="text-lg font-bold text-white mt-1">4.50%</div>
+                <div class="text-[10px] text-slate-500">Target Range</div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg">
+                <div class="text-[10px] text-slate-400 uppercase">CPI YoY</div>
+                <div class="text-lg font-bold text-white mt-1">2.8%</div>
+                <div class="flex items-center gap-1">
+                  <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                  </svg>
+                  <span class="text-[10px] text-emerald-400">-0.3%</span>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg">
+                <div class="text-[10px] text-slate-400 uppercase">10Y Treasury</div>
+                <div class="text-lg font-bold text-white mt-1">4.12%</div>
+                <div class="flex items-center gap-1">
+                  <svg class="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                  </svg>
+                  <span class="text-[10px] text-red-400">+0.05%</span>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg">
+                <div class="text-[10px] text-slate-400 uppercase">Unemployment</div>
+                <div class="text-lg font-bold text-white mt-1">3.7%</div>
+                <div class="text-[10px] text-slate-500">Dec 2025</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="mt-8 pt-6 border-t border-slate-700/50">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <div class="flex items-center gap-4">
+              <span>© 2026 FinSight AI</span>
+              <span>·</span>
+              <span>Powered by Multi-Agent System</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <a href="#" class="hover:text-slate-300">Privacy</a>
+              <a href="#" class="hover:text-slate-300">Terms</a>
+              <a href="#" class="hover:text-slate-300">API Docs</a>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- ECharts 图表初始化脚本 -->
+  <script>
+    // 收入趋势图
+    const revenueChart = echarts.init(document.getElementById('revenue-chart'));
+    revenueChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: ['Q1 24', 'Q2 24', 'Q3 24', 'Q4 24', 'Q1 25', 'Q2 25', 'Q3 25', 'Q4 25'],
+        axisLine: { lineStyle: { color: '#475569' } },
+        axisLabel: { color: '#94a3b8', fontSize: 10 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#475569' } },
+        axisLabel: { color: '#94a3b8', fontSize: 10, formatter: '${value}B' },
+        splitLine: { lineStyle: { color: '#334155' } }
+      },
+      series: [{
+        data: [90.8, 85.8, 89.5, 119.6, 94.8, 88.3, 94.9, 119.6],
+        type: 'bar',
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#3b82f6' },
+            { offset: 1, color: '#1e40af' }
+          ]),
+          borderRadius: [4, 4, 0, 0]
+        }
+      }]
+    });
+
+    // 业务分布图
+    const segmentChart = echarts.init(document.getElementById('segment-chart'));
+    segmentChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: ${c}B ({d}%)' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 6, borderColor: '#1e293b', borderWidth: 2 },
+        label: { show: true, color: '#94a3b8', fontSize: 10 },
+        data: [
+          { value: 69.7, name: 'iPhone', itemStyle: { color: '#3b82f6' } },
+          { value: 24.2, name: 'Services', itemStyle: { color: '#10b981' } },
+          { value: 9.7, name: 'Mac', itemStyle: { color: '#8b5cf6' } },
+          { value: 9.4, name: 'iPad', itemStyle: { color: '#f59e0b' } },
+          { value: 6.6, name: 'Wearables', itemStyle: { color: '#ef4444' } }
+        ]
+      }]
+    });
+
+    // 响应式调整
+    window.addEventListener('resize', () => {
+      revenueChart.resize();
+      segmentChart.resize();
+    });
+  </script>
+</body>
+</html>

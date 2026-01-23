@@ -158,7 +158,12 @@ async def stream_supervisor_sse(
     ticker: str,
     report_builder: Optional[Callable[[str], Any]] = None,
 ) -> AsyncGenerator[str, None]:
+    import asyncio
     """Stream supervisor analysis events as SSE lines and attach a report on done."""
+    import logging
+    from backend.orchestration.trace import normalize_trace
+    logger = logging.getLogger(__name__)
+    
     consensus_text = ""
     consensus_emitted = False
 
@@ -183,21 +188,54 @@ async def stream_supervisor_sse(
                 consensus_text = data.get("consensus", "") or consensus_text
                 if consensus_text and not consensus_emitted:
                     consensus_emitted = True
-                    yield f"data: {json.dumps({'type': 'token', 'content': consensus_text}, ensure_ascii=False)}\n\n"
+                    # 分块流式发送 consensus_text，添加异步延迟增强流式效果
+                    chunk_size = 50
+                    for i in range(0, len(consensus_text), chunk_size):
+                        chunk = consensus_text[i:i + chunk_size]
+                        yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
+                        # 添加小延迟，让前端有时间渲染每个 chunk
+                        import asyncio
+                        await asyncio.sleep(0.02)
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             elif event_type == "done":
                 output = data.get("output") or {}
                 if not consensus_text:
                     consensus_text = output.get("consensus", "")
+                
+                logger.info(f"[stream_supervisor_sse] done event - consensus_text length: {len(consensus_text)}, report_builder: {report_builder is not None}")
 
                 done_payload: Dict[str, Any] = {"type": "done"}
                 if output:
                     done_payload["output"] = output
+                # 传递 agent_outputs, plan, plan_trace 以便前端/main.py 使用
+                if data.get("agent_outputs"):
+                    normalized_outputs: Dict[str, Any] = {}
+                    for name, output in data["agent_outputs"].items():
+                        if isinstance(output, dict):
+                            trace = output.get("trace")
+                            if trace:
+                                output["trace"] = normalize_trace(
+                                    trace,
+                                    agent_name=output.get("agent_name") or name
+                                )
+                        normalized_outputs[name] = output
+                    done_payload["agent_outputs"] = normalized_outputs
+                if data.get("plan"):
+                    done_payload["plan"] = data["plan"]
+                if data.get("plan_trace"):
+                    done_payload["plan_trace"] = normalize_trace(
+                        data["plan_trace"],
+                        agent_name="plan"
+                    )
                 if report_builder and consensus_text:
                     try:
                         done_payload["report"] = report_builder(consensus_text)
+                        logger.info(f"[stream_supervisor_sse] report built successfully, keys: {list(done_payload['report'].keys()) if isinstance(done_payload['report'], dict) else 'not dict'}")
                     except Exception as exc:
+                        logger.error(f"[stream_supervisor_sse] report_builder failed: {exc}")
                         done_payload["report_error"] = str(exc)
+                elif not consensus_text:
+                    logger.warning(f"[stream_supervisor_sse] consensus_text is empty, cannot build report")
 
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
             else:

@@ -164,6 +164,19 @@ class ReportValidator:
             order = int(data.get("order", default_order))
         except (TypeError, ValueError):
             order = default_order
+        confidence = data.get("confidence", None)
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+                confidence = max(0.0, min(1.0, confidence))
+            except (TypeError, ValueError):
+                confidence = None
+        agent_name = data.get("agent_name")
+        if agent_name is not None:
+            agent_name = str(agent_name)
+        data_sources = data.get("data_sources", [])
+        if not isinstance(data_sources, list):
+            data_sources = []
 
         # 解析内容块
         raw_contents = data.get("contents", [])
@@ -200,5 +213,8 @@ class ReportValidator:
             contents=contents,
             subsections=subsections,
             is_collapsible=data.get("is_collapsible", True),
-            default_collapsed=data.get("default_collapsed", False)
+            default_collapsed=data.get("default_collapsed", False),
+            confidence=confidence,
+            agent_name=agent_name,
+            data_sources=data_sources,
         )

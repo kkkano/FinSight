@@ -1,0 +1,622 @@
+{
+  "run_id": "reg-20260122-230020",
+  "timestamp": "2026-01-22T23:00:20.561189",
+  "duration_seconds": 0.3621981143951416,
+  "total": 25,
+  "passed": 5,
+  "failed": 20,
+  "skipped": 0,
+  "pass_rate": 0.2,
+  "metrics": {
+    "intent_accuracy": 0.2,
+    "avg_duration_ms": 14.472217559814453,
+    "p95_duration_ms": 0.9510517120361328,
+    "total_citations": 0,
+    "avg_structure_coverage": 0.0
+  },
+  "cases": [
+    {
+      "case_id": "TC-001",
+      "name": "问候-基础",
+      "category": "intent",
+      "passed": true,
+      "duration_ms": 0.29850006103515625,
+      "intent_match": true,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": []
+    },
+    {
+      "case_id": "TC-002",
+      "name": "问候-帮助",
+      "category": "intent",
+      "passed": true,
+      "duration_ms": 0.1659393310546875,
+      "intent_match": true,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": []
+    },
+    {
+      "case_id": "TC-003",
+      "name": "价格查询-基础",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 344.90489959716797,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Response missing keyword: 'AAPL'",
+        "Response missing keyword: '$'"
+      ]
+    },
+    {
+      "case_id": "TC-004",
+      "name": "价格查询-中文公司名",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.9057521820068359,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Response missing keyword: '$'"
+      ]
+    },
+    {
+      "case_id": "TC-005",
+      "name": "价格查询-无效ticker",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.8330345153808594,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Success mismatch: expected False, got True"
+      ]
+    },
+    {
+      "case_id": "TC-006",
+      "name": "新闻查询-基础",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.7810592651367188,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'",
+        "Response missing keyword: '新闻'",
+        "Response missing keyword: 'Tesla'"
+      ]
+    },
+    {
+      "case_id": "TC-007",
+      "name": "新闻分析-深度",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.8409023284912109,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'",
+        "Response missing keyword: '分析'",
+        "Response missing keyword: '影响'"
+      ]
+    },
+    {
+      "case_id": "TC-008",
+      "name": "情绪查询",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.7879734039306641,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'sentiment', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-009",
+      "name": "技术分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.8716583251953125,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'technical', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-010",
+      "name": "基本面分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.7650852203369141,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'fundamental', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-011",
+      "name": "宏观分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.9427070617675781,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'macro', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-012",
+      "name": "深度报告-完整结构",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.7109642028808594,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'",
+        "Structure coverage 0% < 80%: missing ['执行摘要', '市场', '基本面', '风险']",
+        "Citation count 0 < required 2"
+      ]
+    },
+    {
+      "case_id": "TC-013",
+      "name": "深度报告-中文请求",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.8945465087890625,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'",
+        "Citation count 0 < required 1"
+      ]
+    },
+    {
+      "case_id": "TC-014",
+      "name": "对比分析-双股票",
+      "category": "comparison",
+      "passed": true,
+      "duration_ms": 0.0476837158203125,
+      "intent_match": true,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": []
+    },
+    {
+      "case_id": "TC-015",
+      "name": "对比分析-多股票",
+      "category": "comparison",
+      "passed": true,
+      "duration_ms": 0.026464462280273438,
+      "intent_match": true,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": []
+    },
+    {
+      "case_id": "TC-016",
+      "name": "澄清-无ticker",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.7147789001464844,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'clarify', got 'search'",
+        "Response missing keyword: '股票'"
+      ]
+    },
+    {
+      "case_id": "TC-017",
+      "name": "离题-非金融",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.9510517120361328,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'off_topic', got 'search'",
+        "Response missing keyword: '金融'"
+      ]
+    },
+    {
+      "case_id": "TC-018",
+      "name": "搜索-通用查询",
+      "category": "intent",
+      "passed": true,
+      "duration_ms": 0.8265972137451172,
+      "intent_match": true,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": []
+    },
+    {
+      "case_id": "TC-019",
+      "name": "上下文-价格带上下文",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.7464885711669922,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-020",
+      "name": "边界-空输入",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.80108642578125,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'clarify', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-021",
+      "name": "边界-超长输入",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.7512569427490234,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-022",
+      "name": "报告-无ticker应澄清",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.9036064147949219,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-023",
+      "name": "价格-多ticker取第一个",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.7722377777099609,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'comparison', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-024",
+      "name": "新闻-无结果处理",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.8130073547363281,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-025",
+      "name": "报告-部分Agent失败",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.7481575012207031,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    }
+  ],
+  "failures": [
+    {
+      "case_id": "TC-003",
+      "name": "价格查询-基础",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 344.90489959716797,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Response missing keyword: 'AAPL'",
+        "Response missing keyword: '$'"
+      ]
+    },
+    {
+      "case_id": "TC-004",
+      "name": "价格查询-中文公司名",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.9057521820068359,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Response missing keyword: '$'"
+      ]
+    },
+    {
+      "case_id": "TC-005",
+      "name": "价格查询-无效ticker",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.8330345153808594,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'",
+        "Success mismatch: expected False, got True"
+      ]
+    },
+    {
+      "case_id": "TC-006",
+      "name": "新闻查询-基础",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.7810592651367188,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'",
+        "Response missing keyword: '新闻'",
+        "Response missing keyword: 'Tesla'"
+      ]
+    },
+    {
+      "case_id": "TC-007",
+      "name": "新闻分析-深度",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.8409023284912109,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'",
+        "Response missing keyword: '分析'",
+        "Response missing keyword: '影响'"
+      ]
+    },
+    {
+      "case_id": "TC-008",
+      "name": "情绪查询",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.7879734039306641,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'sentiment', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-009",
+      "name": "技术分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.8716583251953125,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'technical', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-010",
+      "name": "基本面分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.7650852203369141,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'fundamental', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-011",
+      "name": "宏观分析",
+      "category": "intent",
+      "passed": false,
+      "duration_ms": 0.9427070617675781,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'macro', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-012",
+      "name": "深度报告-完整结构",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.7109642028808594,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'",
+        "Structure coverage 0% < 80%: missing ['执行摘要', '市场', '基本面', '风险']",
+        "Citation count 0 < required 2"
+      ]
+    },
+    {
+      "case_id": "TC-013",
+      "name": "深度报告-中文请求",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.8945465087890625,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'",
+        "Citation count 0 < required 1"
+      ]
+    },
+    {
+      "case_id": "TC-016",
+      "name": "澄清-无ticker",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.7147789001464844,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'clarify', got 'search'",
+        "Response missing keyword: '股票'"
+      ]
+    },
+    {
+      "case_id": "TC-017",
+      "name": "离题-非金融",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.9510517120361328,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'off_topic', got 'search'",
+        "Response missing keyword: '金融'"
+      ]
+    },
+    {
+      "case_id": "TC-019",
+      "name": "上下文-价格带上下文",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.7464885711669922,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'price', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-020",
+      "name": "边界-空输入",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.80108642578125,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'clarify', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-021",
+      "name": "边界-超长输入",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.7512569427490234,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-022",
+      "name": "报告-无ticker应澄清",
+      "category": "edge_case",
+      "passed": false,
+      "duration_ms": 0.9036064147949219,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-023",
+      "name": "价格-多ticker取第一个",
+      "category": "price",
+      "passed": false,
+      "duration_ms": 0.7722377777099609,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'comparison', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-024",
+      "name": "新闻-无结果处理",
+      "category": "news",
+      "passed": false,
+      "duration_ms": 0.8130073547363281,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'news', got 'search'"
+      ]
+    },
+    {
+      "case_id": "TC-025",
+      "name": "报告-部分Agent失败",
+      "category": "report",
+      "passed": false,
+      "duration_ms": 0.7481575012207031,
+      "intent_match": false,
+      "structure_coverage": 0.0,
+      "citation_count": 0,
+      "errors": [
+        "Intent mismatch: expected 'report', got 'search'"
+      ]
+    }
+  ]
+}

@@ -101,41 +101,13 @@ def test_chat_handler():
         return False
 
 
-def test_report_handler():
-    """测试 ReportHandler"""
-    print("\n" + "=" * 70)
-    print("测试 4: ReportHandler 初始化")
-    print("=" * 70)
-    
-    try:
-        from backend.handlers.report_handler import ReportHandler
-        from backend.orchestration.orchestrator import ToolOrchestrator
-        from backend.orchestration.tools_bridge import register_all_financial_tools
-        
-        orchestrator = ToolOrchestrator()
-        register_all_financial_tools(orchestrator)
-        
-        handler = ReportHandler(orchestrator=orchestrator)
-        
-        print("✅ ReportHandler 初始化成功")
-        
-        if handler.tools_module:
-            print("✅ tools_module 已设置")
-        else:
-            print("❌ tools_module 未设置")
-        
-        return True
-    except Exception as e:
-        print(f"❌ 初始化失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+# NOTE: test_report_handler 已移除，ReportHandler 已废弃
 
 
 def test_agent_creation():
     """测试 Agent 创建"""
     print("\n" + "=" * 70)
-    print("测试 5: ConversationAgent 创建")
+    print("测试 4: ConversationAgent 创建")
     print("=" * 70)
     
     try:
@@ -154,11 +126,6 @@ def test_agent_creation():
             print("✅ orchestrator 已设置")
         else:
             print("❌ orchestrator 未设置")
-        
-        if agent.report_handler.tools_module:
-            print("✅ ReportHandler.tools_module 已设置")
-        else:
-            print("❌ ReportHandler.tools_module 未设置")
         
         if agent.chat_handler.tools_module:
             print("✅ ChatHandler.tools_module 已设置")
@@ -200,7 +167,7 @@ if __name__ == "__main__":
     results.append(("tools 导入", test_tools_import()))
     results.append(("Orchestrator", test_orchestrator()))
     results.append(("ChatHandler", test_chat_handler()))
-    results.append(("ReportHandler", test_report_handler()))
+    # NOTE: ReportHandler 已废弃
     results.append(("Agent 创建", test_agent_creation()))
     results.append(("LangChain Agent", test_langchain_agent()))
     

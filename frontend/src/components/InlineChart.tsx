@@ -56,10 +56,17 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
         hideOverlap: true,
         interval: 'auto',
         formatter: (value: string) => {
-          // Try to be concise
-          if (value.includes(' ')) return value.split(' ')[1].substring(0, 5); // Time
-          if (value.includes('-')) return value.slice(5); // MM-DD
-          return value;
+          // 优先显示日期部分（MM-DD），而非时间
+          if (!value) return '';
+          // 如果包含空格（如 "2024-01-15 00:00:00"），取日期部分
+          const datePart = value.includes(' ') ? value.split(' ')[0] : value;
+          // 如果是 YYYY-MM-DD 格式，返回 MM-DD
+          if (datePart.includes('-') && datePart.length >= 10) {
+            return datePart.slice(5); // MM-DD
+          }
+          // 如果是短日期格式，直接返回
+          if (datePart.includes('-')) return datePart.slice(5);
+          return datePart;
         }
       },
     },

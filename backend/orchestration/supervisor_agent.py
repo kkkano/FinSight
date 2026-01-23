@@ -6,7 +6,7 @@ Mature multi-Agent architecture: Intent Classification → Supervisor Coordinati
 
 import logging
 import asyncio
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 
 from backend.orchestration.intent_classifier import IntentClassifier, Intent, ClassificationResult
@@ -111,7 +111,7 @@ class SupervisorAgent:
             result.budget = self._budget.snapshot()
         return result
 
-    async def process(self, query: str, tickers: List[str] = None, user_profile: Any = None, context_summary: str = None, context_ticker: str = None) -> SupervisorResult:
+    async def process(self, query: str, tickers: List[str] = None, user_profile: Any = None, context_summary: str = None, context_ticker: str = None, on_event: Callable = None) -> SupervisorResult:
         """
         Process user query
 
@@ -195,7 +195,7 @@ class SupervisorAgent:
 
         # Complex intents - multi-Agent collaboration
         if intent == Intent.REPORT:
-            return await self._handle_report(query, ticker, user_profile, classification, context_summary)
+            return await self._handle_report(query, ticker, user_profile, classification, context_summary, on_event=on_event)
 
         if intent == Intent.COMPARISON:
             return await self._handle_comparison(query, tickers_list, classification, context_summary)
@@ -254,18 +254,21 @@ class SupervisorAgent:
             if context_summary:
                 try:
                     from langchain_core.messages import HumanMessage
-                    prompt = f"""用户询问股票价格，请结合上下文给出简洁回复。
+                    prompt = f"""<role>金融数据分析师</role>
+<task>结合上下文解读股票价格</task>
 
-【价格数据】
-{base_response}
+<data>
+价格: {base_response}
+上下文: {context_summary}
+问题: {query}
+</data>
 
-【对话上下文】
-{context_summary}
-
-【用户问题】
-{query}
-
-请用1-2句话回复，结合上下文（如之前讨论的话题）给出相关解读。如果上下文不相关，就直接返回价格信息。"""
+<rules>
+- 禁止开场白（不要说"好的"、"当然"、"我来"等）
+- 直接输出分析内容
+- 1-2句话，简洁专业
+- 上下文无关时仅返回价格数据
+</rules>"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     return self._result(
                         success=True,
@@ -371,15 +374,21 @@ class SupervisorAgent:
             if context_summary and news_data:
                 try:
                     from langchain_core.messages import HumanMessage
-                    prompt = f"""基于以下新闻和对话上下文，用1-2句话补充说明新闻与上下文话题的关联性。
+                    prompt = f"""<role>金融新闻分析师</role>
+<task>分析新闻与对话上下文的关联性</task>
 
-【新闻数据】
-{base_response[:1500]}
+<news>{base_response[:1500]}</news>
+<context>{context_summary}</context>
 
-【对话上下文】
-{context_summary}
+<output_format>
+💡 **上下文关联**: [1-2句关联分析]
+</output_format>
 
-请只输出简短的关联分析（不要重复新闻内容），格式：\n\n💡 **上下文关联**: [分析内容]"""
+<rules>
+- 禁止开场白，直接输出格式内容
+- 不重复新闻内容
+- 仅分析关联性
+</rules>"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     context_analysis = response.content if hasattr(response, 'content') else str(response)
                     # 先显示新闻，再显示上下文分析
@@ -454,35 +463,36 @@ class SupervisorAgent:
                 )
 
             # 2. 使用 LLM 进行深度新闻分析
-            analysis_prompt = f"""你是专业的金融新闻分析师，请对以下新闻进行深度分析。
+            analysis_prompt = f"""<role>资深金融新闻分析师</role>
+<task>深度分析新闻影响</task>
 
-## 新闻数据
-{news_text[:3000]}
+<news>{news_text[:3000]}</news>
+<query>{query}</query>
+{f"<context>{context_summary}</context>" if context_summary else ""}
 
-## 用户问题
-{query}
-
-{"## 对话上下文" + chr(10) + context_summary if context_summary else ""}
-
-## 分析要求
-请从以下维度进行专业分析：
-
+<output_structure>
 ### 📰 新闻摘要
-简要总结主要新闻事件（2-3句话）
+[2-3句核心事件总结]
 
-### 📊 市场影响分析
-- **短期影响**：对股价/市场的即时影响预判
-- **中长期影响**：潜在的持续性影响
+### 📊 市场影响
+- **短期**: [即时影响预判]
+- **中长期**: [持续性影响]
 
 ### 🎯 投资启示
-- 这些新闻对投资者意味着什么？
-- 需要关注的后续发展
+- [对投资者的意义]
+- [后续关注点]
 
 ### ⚠️ 风险提示
-- 新闻中隐含的风险因素
-- 需要警惕的不确定性
+- [隐含风险因素]
+- [不确定性警示]
+</output_structure>
 
-请提供专业、客观、有洞察力的分析，避免空泛的表述。"""
+<rules>
+- 禁止开场白（不要说"好的"、"我来分析"等）
+- 直接按结构输出分析
+- 观点具体，避免空泛表述
+- 数据支撑，专业客观
+</rules>"""
 
             response = await self.llm.ainvoke([HumanMessage(content=analysis_prompt)])
             analysis_content = response.content if hasattr(response, 'content') else str(response)
@@ -545,20 +555,20 @@ class SupervisorAgent:
                     logger.info(f"[Supervisor] News fetch for sentiment failed: {e}")
 
             # 4. 构建 Prompt 让 LLM 综合分析
-            prompt = f"""请根据以下信息分析市场情绪：
+            prompt = f"""<role>市场情绪分析师</role>
+<task>综合分析市场情绪</task>
 
-【基础市场情绪】
-{base_sentiment}
-{news_content}
+<sentiment_data>{base_sentiment}</sentiment_data>
+{f"<news>{news_content}</news>" if news_content else ""}
+<context>{context_summary or '无'}</context>
+<query>{query}</query>
 
-【对话上下文】
-{context_summary or '无'}
-
-【用户问题】
-{query}
-
-请综合以上信息，用2-3句话分析当前市场情绪，特别关注上下文中提到的股票或话题。
-如果上下文中有具体股票（如 TSLA、EV 等），请针对该股票/行业进行情绪分析。"""
+<rules>
+- 禁止开场白，直接输出分析
+- 2-3句话，简洁专业
+- 优先分析上下文中提到的股票/行业
+- 明确情绪倾向（看涨/看跌/中性）
+</rules>"""
 
             from langchain_core.messages import HumanMessage
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
@@ -612,18 +622,19 @@ class SupervisorAgent:
             if context_summary and output and output.summary:
                 try:
                     from langchain_core.messages import HumanMessage
-                    prompt = f"""用户询问{agent_name}分析，请结合上下文优化回复。
+                    prompt = f"""<role>{agent_name}分析专家</role>
+<task>结合上下文优化分析回复</task>
 
-【分析结果】
-{output.summary[:1500]}
+<analysis>{output.summary[:1500]}</analysis>
+<context>{context_summary}</context>
+<query>{query}</query>
 
-【对话上下文】
-{context_summary}
-
-【用户问题】
-{query}
-
-请基于分析结果回复，如果上下文中有相关话题，将其融入回答。保持专业简洁。"""
+<rules>
+- 禁止开场白（不要说"好的"、"根据分析"等）
+- 直接输出优化后的分析内容
+- 融入上下文相关话题
+- 保持专业简洁
+</rules>"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     base_response = response.content if hasattr(response, 'content') else str(response)
                 except Exception as e:
@@ -645,7 +656,7 @@ class SupervisorAgent:
                 errors=[str(e)]
             )
 
-    async def _handle_report(self, query: str, ticker: str, user_profile: Any, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
+    async def _handle_report(self, query: str, ticker: str, user_profile: Any, classification: ClassificationResult, context_summary: str = None, on_event: Callable = None) -> SupervisorResult:
         """Handle deep report - multi-Agent collaboration with context awareness"""
         if not ticker:
             return self._result(
@@ -690,11 +701,56 @@ class SupervisorAgent:
                 ticker,
                 user_profile=user_profile,
                 context_summary=relevant_context,
+                on_event=on_event,
             )
 
             valid_outputs = execution.get("agent_outputs", {})
             errors = execution.get("errors", [])
             forum_result = execution.get("forum_output")
+
+            if forum_result is None:
+                # Forum 失败时构造兜底综合报告，避免前端缺失整合报告/证据池
+                try:
+                    from backend.orchestration.forum import ForumOutput
+                    context_parts = {}
+                    for name, output in valid_outputs.items():
+                        key = str(name).lower().replace("agent", "")
+                        if output and hasattr(output, "summary"):
+                            summary_info = f"摘要: {output.summary}\n置信度: {getattr(output, 'confidence', 0.6):.0%}"
+                            ev_list = getattr(output, "evidence", []) or []
+                            if ev_list:
+                                summary_info += f"\n证据数量: {len(ev_list)}"
+                        else:
+                            summary_info = "无数据"
+                        context_parts[key] = summary_info
+
+                    for key in ["price", "news", "technical", "fundamental", "deep_search", "macro"]:
+                        context_parts.setdefault(key, "无数据")
+
+                    if hasattr(self.forum, "_fallback_synthesis"):
+                        fallback_consensus = self.forum._fallback_synthesis(context_parts)
+                    else:
+                        summaries = []
+                        for name, output in valid_outputs.items():
+                            if output and hasattr(output, "summary") and output.summary:
+                                summaries.append(f"**{name}**: {str(output.summary)[:400]}")
+                        fallback_consensus = "\n\n".join(summaries) if summaries else "综合分析暂时不可用。"
+
+                    conf_values = [getattr(out, "confidence", 0.6) for out in valid_outputs.values() if out]
+                    avg_conf = sum(conf_values) / len(conf_values) if conf_values else 0.6
+
+                    forum_result = ForumOutput(
+                        consensus=fallback_consensus,
+                        disagreement="",
+                        confidence=avg_conf,
+                        recommendation="HOLD",
+                        risks=["综合分析暂时不可用", "已使用简化合成"]
+                    )
+                    errors = list(errors) if errors else []
+                    errors.append("forum: fallback_synthesis_used")
+                    logger.warning("[Supervisor] forum_output is None, using fallback synthesis")
+                except Exception as exc:
+                    logger.warning(f"[Supervisor] fallback synthesis failed: {exc}")
 
             return self._result(
                 success=True,
@@ -733,18 +789,19 @@ class SupervisorAgent:
             if context_summary and comparison_data:
                 try:
                     from langchain_core.messages import HumanMessage
-                    prompt = f"""用户进行股票对比分析，请结合上下文给出解读。
+                    prompt = f"""<role>股票对比分析师</role>
+<task>解读股票对比结果</task>
 
-【对比数据】
-{base_response[:2000]}
+<comparison>{base_response[:2000]}</comparison>
+<context>{context_summary}</context>
+<query>{query}</query>
 
-【对话上下文】
-{context_summary}
-
-【用户问题】
-{query}
-
-请用2-3句话总结对比结果，如果上下文中有相关话题（如投资偏好、之前讨论的股票），将其融入分析。"""
+<rules>
+- 禁止开场白，直接输出对比解读
+- 2-3句话总结核心差异
+- 融入上下文（投资偏好、历史讨论）
+- 给出明确的对比结论
+</rules>"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     return self._result(
                         success=True,
@@ -779,21 +836,20 @@ class SupervisorAgent:
             # Use LLM to synthesize search results with context
             from langchain_core.messages import HumanMessage
 
-            context_section = ""
-            if context_summary:
-                context_section = f"""
-【对话上下文】
-{context_summary}
+            prompt = f"""<role>金融信息检索专家</role>
+<task>综合搜索结果回答问题</task>
 
-请结合上下文中的话题回答问题。"""
+<query>{query}</query>
+<search_results>{search_result}</search_results>
+{f"<context>{context_summary}</context>" if context_summary else ""}
 
-            prompt = f"""用户问题: {query}
-
-搜索结果:
-{search_result}
-{context_section}
-
-请基于搜索结果给出简洁的回答（2-4句话），使用中文回复。"""
+<rules>
+- 禁止开场白，直接回答问题
+- 2-4句话，简洁准确
+- 基于搜索结果，不编造信息
+- 中文回复
+{f"- 结合上下文话题" if context_summary else ""}
+</rules>"""
 
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
 
@@ -972,19 +1028,83 @@ class SupervisorAgent:
             thinking_steps.append(step3)
             yield json.dumps({"type": "thinking", **step3}, ensure_ascii=False)
 
-            # 传递上下文信息给 process 方法
-            result = await self.process(query, tickers, user_profile, context_summary=context_summary, context_ticker=context_ticker)
+            # 使用 asyncio.Queue 实现流式事件监听
+            event_queue = asyncio.Queue()
+            
+            def event_listener(event):
+                try:
+                    event_queue.put_nowait(event)
+                except Exception:
+                    pass
+
+            # 异步执行 process，同时监听事件
+            process_task = asyncio.create_task(
+                self.process(query, tickers, user_profile, context_summary=context_summary, context_ticker=context_ticker, on_event=event_listener)
+            )
+            
+            # 循环等待任务完成，同时处理事件
+            while not process_task.done():
+                try:
+                    # 等待事件，0.05秒超时检查任务状态
+                    event = await asyncio.wait_for(event_queue.get(), timeout=0.05)
+                    
+                    # 将内部事件转换为前端 thinking 格式
+                    evt_type = event.get("event")
+                    agent_name = event.get("agent", "System")
+                    step_id = event.get("step_id", "unknown")
+                    timestamp = event.get("timestamp")
+                    
+                    msg = None
+                    if evt_type == "step_start":
+                        msg = f"正在执行: {agent_name or step_id}..."
+                    elif evt_type == "step_done":
+                        msg = f"完成: {agent_name or step_id}"
+                    elif evt_type == "step_error":
+                        msg = f"出错: {agent_name or step_id} ({event.get('details', {}).get('error')})"
+                    elif evt_type == "step_retry":
+                         msg = f"重试: {agent_name or step_id} (次数: {event.get('details', {}).get('attempt')})"
+                    elif evt_type == "agent_action":
+                        msg = event.get('details', {}).get('message')
+                    elif evt_type == "agent_execution":
+                        details = event.get('details', {})
+                        sub_type = details.get('type')
+                        if sub_type == 'search_result':
+                             msg = f"{agent_name}: 搜索到 {details.get('result_count')} 条结果"
+                        elif sub_type == 'reflection_gap':
+                             msg = f"{agent_name}: 发现信息缺失，补充搜索..."
+                        elif sub_type == 'convergence_final':
+                             # Too detailed, skip
+                             pass
+
+                    if msg:
+                        t_step = {
+                            "stage": f"{step_id}_{evt_type}",
+                            "message": msg,
+                            "timestamp": timestamp
+                        }
+                        thinking_steps.append(t_step)
+                        yield json.dumps({"type": "thinking", **t_step}, ensure_ascii=False)
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.error(f"[process_stream] Event loop error: {e}")
+            
+            # 获取结果
+            result = await process_task
 
             # 4. 发送响应内容（作为 token 流式输出）
             if result.response:
                 response_text = result.response
-                chunk_size = 20  # 每次发送的字符数
+                chunk_size = 12  # 优化分块大小，平衡流式效果和性能
                 for i in range(0, len(response_text), chunk_size):
                     chunk = response_text[i:i + chunk_size]
                     yield json.dumps({
                         "type": "token",
                         "content": chunk
                     }, ensure_ascii=False)
+                    # 添加小延迟，让前端有时间渲染每个 chunk
+                    await asyncio.sleep(0.015)
 
             # 5. 发送完成事件
             first_ticker = None
@@ -1002,18 +1122,46 @@ class SupervisorAgent:
             }
             thinking_steps.append(step_done)
 
-            # 构建 report 数据（如果是 REPORT 意图且有 forum_output）
+            # 构建 report 数据（如果是 REPORT 意图）
             report_data = None
-            if result.intent == Intent.REPORT and result.forum_output:
-                # 从 forum_output 构建 ReportIR 格式
-                report_data = self._build_report_ir(result, first_ticker, classification)
+            if result.intent == Intent.REPORT:
+                if result.forum_output:
+                    # 从 forum_output 构建完整的 ReportIR 格式
+                    report_data = self._build_report_ir(result, first_ticker, classification)
+                elif result.response and first_ticker:
+                    # forum_output 为空但有响应文本，生成简化报告
+                    logger.warning(f"[process_stream] forum_output is None, building fallback report from response")
+                    report_data = self._build_fallback_report(result, first_ticker, classification)
+
+            # 构建 agent_traces 用于前端展示详细的 Agent 思考流程
+            agent_traces = {}
+            if result.agent_outputs:
+                for agent_name, agent_output in result.agent_outputs.items():
+                    trace = getattr(agent_output, 'trace', None)
+                    if trace:
+                        agent_traces[agent_name] = trace
+                    # 添加 Agent 执行步骤到 thinking_steps
+                    agent_step = {
+                        "stage": f"agent_{agent_name}",
+                        "message": f"{agent_name} 分析完成",
+                        "timestamp": datetime.now().isoformat(),
+                        "result": {
+                            "agent": agent_name,
+                            "confidence": getattr(agent_output, 'confidence', 0),
+                            "summary": (getattr(agent_output, 'summary', '') or '')[:200],
+                            "trace": trace or []
+                        }
+                    }
+                    thinking_steps.insert(-1, agent_step)  # 插入到 complete 步骤之前
 
             yield json.dumps({
                 "type": "done",
                 "success": result.success,
                 "intent": result.intent.value,
                 "current_focus": first_ticker,
+                "response": str(result.response) if result.response is not None else "",
                 "thinking": thinking_steps,  # 前端期望在 done 事件中收到 thinking 数组
+                "agent_traces": agent_traces,  # 新增：完整的 Agent trace
                 "errors": result.errors,
                 "budget": result.budget,
                 "report": report_data  # Phase 2: 深度研报数据
@@ -1080,8 +1228,9 @@ class SupervisorAgent:
         sections = []
         section_order = 1
 
-        # 尝试解析 Forum 的 8 节分析
-        forum_sections = self._parse_forum_sections(result.response) if result.response else []
+        # 优先使用 forum_output.consensus（原始 Forum 输出），而非可能被修改的 result.response
+        forum_text = getattr(forum_output, 'consensus', None) or result.response
+        forum_sections = self._parse_forum_sections(forum_text) if forum_text else []
 
         if forum_sections:
             # 使用 Forum 解析出的章节
@@ -1187,15 +1336,29 @@ class SupervisorAgent:
 
         citations = []
         citation_id = 1
+
+        # Debug: 记录每个 Agent 的 evidence 数量
         for agent_name, agent_output in agent_outputs.items():
-            if hasattr(agent_output, 'evidence') and agent_output.evidence:
-                for evidence in agent_output.evidence[:3]:
-                    title = getattr(evidence, 'title', None) or getattr(evidence, 'source', f"{agent_name} 来源")
-                    url = getattr(evidence, 'url', '') or "#"
-                    text = getattr(evidence, 'text', '')
-                    timestamp = getattr(evidence, 'timestamp', None)
+            evidence_list = getattr(agent_output, 'evidence', None)
+            logger.info(f"[_build_report_ir] {agent_name}: evidence_list type={type(evidence_list)}, length={len(evidence_list) if evidence_list else 0}")
+            if evidence_list:
+                # 增加每个 Agent 的 evidence 数量限制到 5 条
+                for evidence in evidence_list[:5]:
+                    # 更健壮的属性提取
+                    if isinstance(evidence, dict):
+                        title = evidence.get('title') or evidence.get('source', f"{agent_name} 来源")
+                        url = evidence.get('url', '') or "#"
+                        text = evidence.get('text', '')
+                        timestamp = evidence.get('timestamp')
+                        confidence = evidence.get('confidence', 0.7)
+                    else:
+                        title = getattr(evidence, 'title', None) or getattr(evidence, 'source', f"{agent_name} 来源")
+                        url = getattr(evidence, 'url', '') or "#"
+                        text = getattr(evidence, 'text', '')
+                        timestamp = getattr(evidence, 'timestamp', None)
+                        confidence = getattr(evidence, "confidence", 0.7)
+
                     published_date = safe_str(timestamp)
-                    confidence = getattr(evidence, "confidence", 0.7)
                     try:
                         confidence = float(confidence)
                     except (TypeError, ValueError):
@@ -1203,7 +1366,13 @@ class SupervisorAgent:
                     confidence = max(0.0, min(1.0, confidence))
                     freshness_hours = _calc_freshness_hours(published_date)
 
-                    citations.append({
+                    # 确保 title 和 text 不为空
+                    if not title or title == "#":
+                        title = f"{agent_name} Evidence {citation_id}"
+                    if not text:
+                        text = "No description available"
+
+                    citation = {
                         "source_id": f"src_{citation_id}",
                         "title": safe_str(title),
                         "url": safe_str(url),
@@ -1211,8 +1380,13 @@ class SupervisorAgent:
                         "published_date": published_date,
                         "confidence": confidence,
                         "freshness_hours": freshness_hours,
-                    })
+                    }
+                    citations.append(citation)
+                    logger.info(f"[_build_report_ir] Added citation {citation_id} from {agent_name}: {citation['title'][:50]}")
                     citation_id += 1
+
+        # Debug log
+        logger.info(f"[_build_report_ir] Built {len(citations)} citations from {len(agent_outputs)} agents")
 
         # 确定情绪
         sentiment = "neutral"
@@ -1243,11 +1417,13 @@ class SupervisorAgent:
             "report_id": f"report_{uuid.uuid4().hex[:8]}",
             "ticker": safe_str(ticker) or "UNKNOWN",
             "company_name": safe_str(ticker) or "未知公司",
-            "title": f"{ticker} 深度分析报告" if ticker else "深度分析报告",
+            "title": f"{ticker} 分析报告" if ticker else "深度分析报告",
             "summary": summary,
             "sentiment": sentiment,
             "confidence_score": float(getattr(forum_output, 'confidence', 0.7)) if forum_output else 0.7,
             "generated_at": datetime.now().isoformat(),
+            # 保存 Forum 的完整原始文本（整合报告）
+            "synthesis_report": forum_text if forum_text else None,
             "sections": sections,
             "citations": citations,
             "risks": risks,
@@ -1265,12 +1441,7 @@ class SupervisorAgent:
     def _parse_forum_sections(self, forum_text: str) -> list:
         """
         解析 Forum 的 8 节分析文本为结构化章节
-
-        Args:
-            forum_text: Forum 生成的完整分析文本
-
-        Returns:
-            list: 章节列表 [{"title": "...", "content": "..."}]
+        支持多种标题格式：### 1. / ## 1. / **1.** 等
         """
         import re
 
@@ -1279,22 +1450,28 @@ class SupervisorAgent:
 
         sections = []
 
-        # 匹配标题模式: ### 1. 📊 执行摘要 或 ### 1. 执行摘要
-        section_pattern = r'###\s*(\d+)\.\s*([^\n]+)\n([\s\S]*?)(?=###\s*\d+\.|$)'
-        matches = re.findall(section_pattern, forum_text)
+        # 尝试多种标题模式
+        patterns = [
+            r'###\s*(\d+)\.\s*([^\n]+)\n([\s\S]*?)(?=###\s*\d+\.|$)',  # ### 1. 标题
+            r'##\s*(\d+)\.\s*([^\n]+)\n([\s\S]*?)(?=##\s*\d+\.|$)',    # ## 1. 标题
+            r'\*\*(\d+)\.\s*([^\*]+)\*\*\s*\n([\s\S]*?)(?=\*\*\d+\.|$)',  # **1. 标题**
+        ]
 
-        for match in matches:
-            order, title, content = match
-            # 清理标题中的 emoji 和多余空格
-            clean_title = re.sub(r'[📊📈💰🌍⚠️🎯📐📅]\s*', '', title).strip()
-            # 清理内容
-            clean_content = content.strip()
+        for pattern in patterns:
+            matches = re.findall(pattern, forum_text)
+            if matches:
+                for match in matches:
+                    order, title, content = match
+                    # 清理标题中的 emoji 和多余空格
+                    clean_title = re.sub(r'[📊📈💰🌍⚠️🎯📐📅🔍💡📉🏢]\s*', '', title).strip()
+                    clean_content = content.strip()
 
-            if clean_title and clean_content:
-                sections.append({
-                    "title": clean_title,
-                    "content": clean_content
-                })
+                    if clean_title and clean_content:
+                        sections.append({
+                            "title": clean_title,
+                            "content": clean_content
+                        })
+                break  # 找到匹配的模式后停止
 
         return sections
 
@@ -1330,3 +1507,123 @@ class SupervisorAgent:
 
         # 如果没找到特定格式，返回前 500 字符
         return forum_text[:500]
+
+    def _build_fallback_report(self, result: SupervisorResult, ticker: str, classification: ClassificationResult) -> dict:
+        """
+        构建后备报告（当 forum_output 为空时）
+        
+        Args:
+            result: SupervisorResult
+            ticker: 股票代码
+            classification: 意图分类结果
+            
+        Returns:
+            dict: 简化的 ReportIR 格式报告
+        """
+        from datetime import datetime
+        import uuid
+        
+        response_text = str(result.response) if result.response else "报告生成中..."
+        
+        # 从 agent_outputs 构建 sections
+        sections = []
+        section_order = 1
+        agent_outputs = result.agent_outputs or {}
+        
+        for agent_name, agent_output in agent_outputs.items():
+            if hasattr(agent_output, 'summary') and agent_output.summary:
+                sections.append({
+                    "title": f"{agent_name.capitalize()} 分析",
+                    "order": section_order,
+                    "agent_name": agent_name,
+                    "confidence": getattr(agent_output, 'confidence', 0.5),
+                    "contents": [{
+                        "type": "text",
+                        "content": str(agent_output.summary)[:1000]
+                    }]
+                })
+                section_order += 1
+        
+        # 如果没有 agent 输出，使用 response 作为内容
+        if not sections and response_text:
+            sections.append({
+                "title": "分析摘要",
+                "order": 1,
+                "agent_name": "Supervisor",
+                "confidence": 0.7,
+                "contents": [{
+                    "type": "text",
+                    "content": response_text
+                }]
+            })
+        
+        # 构建 citations（证据池）
+        citations = []
+        citation_id = 1
+        for agent_name, agent_output in agent_outputs.items():
+            evidence_list = getattr(agent_output, 'evidence', None) if agent_output else None
+            if not evidence_list:
+                continue
+            for evidence in evidence_list[:5]:
+                if isinstance(evidence, dict):
+                    title = evidence.get('title') or evidence.get('source', f"{agent_name} 来源")
+                    url = evidence.get('url', '') or "#"
+                    text = evidence.get('text', '')
+                    timestamp = evidence.get('timestamp')
+                    confidence = evidence.get('confidence', 0.7)
+                else:
+                    title = getattr(evidence, 'title', None) or getattr(evidence, 'source', f"{agent_name} 来源")
+                    url = getattr(evidence, 'url', '') or "#"
+                    text = getattr(evidence, 'text', '')
+                    timestamp = getattr(evidence, 'timestamp', None)
+                    confidence = getattr(evidence, 'confidence', 0.7)
+
+                if not title:
+                    title = f"{agent_name} Evidence {citation_id}"
+                citation = {
+                    "source_id": f"src_{citation_id}",
+                    "title": str(title),
+                    "url": str(url),
+                    "snippet": str(text)[:200] if text else "",
+                    "published_date": str(timestamp) if timestamp else "",
+                    "confidence": float(confidence) if confidence is not None else 0.7,
+                    "freshness_hours": 24.0,
+                }
+                citations.append(citation)
+                citation_id += 1
+
+        # 构建 agent_status
+        agent_status = {}
+        for agent_name in ["price", "news", "technical", "fundamental", "macro", "deep_search"]:
+            if agent_name in agent_outputs:
+                agent_output = agent_outputs[agent_name]
+                agent_status[agent_name] = {
+                    "status": "success",
+                    "confidence": getattr(agent_output, 'confidence', 0.5)
+                }
+            elif result.errors:
+                for err in result.errors:
+                    if err.startswith(f"{agent_name}:"):
+                        agent_status[agent_name] = {"status": "error", "error": err}
+                        break
+        
+        return {
+            "report_id": f"fallback_{uuid.uuid4().hex[:8]}",
+            "ticker": ticker or "UNKNOWN",
+            "company_name": ticker or "未知公司",
+            "title": f"{ticker} 分析报告" if ticker else "分析报告",
+            "summary": response_text[:500] if response_text else "分析完成",
+            "sentiment": "neutral",
+            "confidence_score": 0.6,
+            "generated_at": datetime.now().isoformat(),
+            "synthesis_report": response_text,
+            "sections": sections,
+            "citations": citations,
+            "risks": ["数据可能不完整"],
+            "recommendation": "HOLD",
+            "agent_status": agent_status,
+            "meta": {
+                "is_fallback": True,
+                "errors": result.errors
+            }
+        }

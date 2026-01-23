@@ -1,0 +1,60 @@
+{
+  "AAPL": {
+    "price": 185.50,
+    "change_percent": 1.25,
+    "volume": 45000000,
+    "high": 186.20,
+    "low": 183.80,
+    "open": 184.00,
+    "previous_close": 183.20,
+    "market_cap": 2850000000000,
+    "pe_ratio": 28.5,
+    "52_week_high": 199.62,
+    "52_week_low": 164.08
+  },
+  "MSFT": {
+    "price": 378.90,
+    "change_percent": 0.85,
+    "volume": 22000000,
+    "high": 380.50,
+    "low": 376.20,
+    "open": 377.00,
+    "previous_close": 375.70,
+    "market_cap": 2810000000000,
+    "pe_ratio": 35.2,
+    "52_week_high": 420.82,
+    "52_week_low": 309.45
+  },
+  "TSLA": {
+    "price": 248.50,
+    "change_percent": -2.15,
+    "volume": 98000000,
+    "high": 255.80,
+    "low": 246.20,
+    "open": 254.00,
+    "previous_close": 253.96,
+    "market_cap": 790000000000,
+    "pe_ratio": 72.8,
+    "52_week_high": 299.29,
+    "52_week_low": 138.80
+  },
+  "GOOGL": {
+    "price": 142.65,
+    "change_percent": 0.45,
+    "volume": 18000000,
+    "high": 143.50,
+    "low": 141.80,
+    "open": 142.00,
+    "previous_close": 142.01,
+    "market_cap": 1780000000000,
+    "pe_ratio": 24.1,
+    "52_week_high": 153.78,
+    "52_week_low": 115.83
+  },
+  "FAIL_PARTIAL": {
+    "price": 100.00,
+    "change_percent": 0.0,
+    "volume": 1000000,
+    "error_simulation": "partial_failure"
+  }
+}

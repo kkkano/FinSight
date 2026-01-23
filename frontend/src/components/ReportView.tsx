@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { ReportIR, ReportSection, ReportContent, Citation, Sentiment } from '../types/index';
 import { ChevronDown, ChevronUp, ExternalLink, BarChart2, TrendingUp, AlertTriangle, Maximize2, X } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
@@ -389,7 +390,9 @@ const SectionRenderer: React.FC<{
               return (
                 <div key={idx} className="text-sm text-slate-700 dark:text-slate-200">
                   {content.type === 'text' && (
-                    <p className="leading-relaxed whitespace-pre-wrap">{content.content}</p>
+                    <div className="leading-relaxed prose prose-sm prose-slate dark:prose-invert max-w-none">
+                      <ReactMarkdown>{String(content.content || '')}</ReactMarkdown>
+                    </div>
                   )}
 
                   {content.type === 'chart' && (
@@ -601,9 +604,10 @@ const EvidencePool: React.FC<{
 
 export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const { subscriptionEmail } = useStore();
-  const [expandedSections, setExpandedSections] = useState<Record<number, boolean>>(
-    report.sections.reduce((acc, sec) => ({ ...acc, [sec.order]: true }), {})
-  );
+  const [expandedSections, setExpandedSections] = useState<Record<string | number, boolean>>({
+    ...report.sections.reduce((acc, sec) => ({ ...acc, [sec.order]: true }), {}),
+    synthesis: false // 默认折叠综合报告
+  });
   const [activeSection, setActiveSection] = useState<number | null>(null);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
   const [watchlisted, setWatchlisted] = useState(false);
@@ -848,18 +852,92 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
             {/* 章节内容 */}
             <div className="space-y-4">
-              {report.sections.map((section) => (
-                <SectionRenderer
-                  key={section.order}
-                  section={section}
-                  isOpen={!!expandedSections[section.order]}
-                  isActive={activeSection === section.order}
-                  anchorPrefix={anchorPrefix}
-                  onToggle={() => toggleSection(section.order)}
-                  citationMap={citationMap}
-                  onCitationJump={handleJumpToCitation}
-                />
-              ))}
+              {/* 整合分析报告（Forum 生成的完整报告）*/}
+              {/* 整合分析报告（Forum 生成的完整报告）*/}
+              {(report as any).synthesis_report && (
+                <div className="rounded-xl border border-blue-200/80 dark:border-blue-700/60 bg-white/90 dark:bg-slate-900/70 overflow-hidden">
+                  <div className="px-5 py-3 border-b border-blue-200/60 dark:border-blue-700/40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                    <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                      <span className="text-base">📋</span>
+                      综合研究报告
+                      <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
+                        {((report as any).synthesis_report || '').length} 字
+                      </span>
+                      {/* 展开/收起按钮 - 仅在全屏模式也提供 */}
+                      <button
+                        onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: !prev.synthesis }))}
+                        className="ml-2 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                      >
+                        {expandedSections['synthesis'] ? <ChevronUp size={14} className="text-blue-600" /> : <ChevronDown size={14} className="text-blue-600" />}
+                      </button>
+                    </h3>
+                  </div>
+
+                  <div className="relative">
+                    <div
+                      className={`p-5 transition-all duration-300 ease-in-out ${expandedSections['synthesis'] ? '' : 'max-h-[300px] overflow-hidden'}`}
+                    >
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
+                        <ReactMarkdown>{(report as any).synthesis_report}</ReactMarkdown>
+                      </div>
+                    </div>
+
+                    {/* 渐变遮罩和按钮 */}
+                    {!expandedSections['synthesis'] && (
+                      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-4">
+                        <button
+                          onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: true }))}
+                          className="px-4 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-300 rounded-full text-xs font-semibold shadow-sm border border-blue-100 dark:border-blue-800/50 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                        >
+                          <ChevronDown size={14} />
+                          展开完整报告
+                        </button>
+                      </div>
+                    )}
+                    {/* 收起按钮 - 仅在展开时底部显示 */}
+                    {expandedSections['synthesis'] && (
+                      <div className="flex justify-center pb-4 pt-2 border-t border-slate-100 dark:border-slate-800/50 mt-2">
+                        <button
+                          onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: false }))}
+                          className="text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
+                        >
+                          <ChevronUp size={12} />
+                          收起报告
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Agent 分析详情（可折叠） */}
+              {report.sections.length > 0 && (
+                <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
+                  <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
+                    <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Agent 分析详情
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-auto">
+                      {report.sections.length} 个数据源
+                    </span>
+                  </summary>
+                  <div className="p-4 pt-0 space-y-3">
+                    {report.sections.map((section) => (
+                      <SectionRenderer
+                        key={section.order}
+                        section={section}
+                        isOpen={!!expandedSections[section.order]}
+                        isActive={activeSection === section.order}
+                        anchorPrefix={anchorPrefix}
+                        onToggle={() => toggleSection(section.order)}
+                        citationMap={citationMap}
+                        onCitationJump={handleJumpToCitation}
+                      />
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
           </div>
         </div>
@@ -1045,19 +1123,92 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           </aside>
 
           <div className="flex-1 min-w-0 space-y-4">
-            {/* 分析章节 */}
-            {report.sections.map((section) => (
-              <SectionRenderer
-                key={section.order}
-                section={section}
-                isOpen={!!expandedSections[section.order]}
-                isActive={activeSection === section.order}
-                anchorPrefix={anchorPrefix}
-                onToggle={() => toggleSection(section.order)}
-                citationMap={citationMap}
-                onCitationJump={handleJumpToCitation}
-              />
-            ))}
+            {/* 整合分析报告（Forum 生成的完整报告）*/}
+            {/* 整合分析报告（Forum 生成的完整报告）*/}
+            {(report as any).synthesis_report && (
+              <div className="rounded-xl border border-blue-200/80 dark:border-blue-700/60 bg-white/90 dark:bg-slate-900/70 overflow-hidden">
+                <div className="px-5 py-3 border-b border-blue-200/60 dark:border-blue-700/40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                  <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                    <span className="text-base">📋</span>
+                    综合研究报告
+                    <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
+                      {((report as any).synthesis_report || '').length} 字
+                    </span>
+                    {/* 展开/收起按钮 */}
+                    <button
+                      onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: !prev.synthesis }))}
+                      className="ml-2 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                    >
+                      {expandedSections['synthesis'] ? <ChevronUp size={14} className="text-blue-600" /> : <ChevronDown size={14} className="text-blue-600" />}
+                    </button>
+                  </h3>
+                </div>
+
+                <div className="relative">
+                  <div
+                    className={`p-5 transition-all duration-300 ease-in-out ${expandedSections['synthesis'] ? '' : 'max-h-[300px] overflow-hidden'}`}
+                  >
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
+                      <ReactMarkdown>{(report as any).synthesis_report}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* 渐变遮罩和按钮 */}
+                  {!expandedSections['synthesis'] && (
+                    <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-4">
+                      <button
+                        onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: true }))}
+                        className="px-4 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-300 rounded-full text-xs font-semibold shadow-sm border border-blue-100 dark:border-blue-800/50 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+                      >
+                        <ChevronDown size={14} />
+                        展开完整报告
+                      </button>
+                    </div>
+                  )}
+                  {/* 收起按钮 - 仅在展开时底部显示 */}
+                  {expandedSections['synthesis'] && (
+                    <div className="flex justify-center pb-4 pt-2 border-t border-slate-100 dark:border-slate-800/50 mt-2">
+                      <button
+                        onClick={() => setExpandedSections(prev => ({ ...prev, synthesis: false }))}
+                        className="text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
+                      >
+                        <ChevronUp size={12} />
+                        收起报告
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Agent 分析详情（可折叠） */}
+            {report.sections.length > 0 && (
+              <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
+                <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
+                  <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Agent 分析详情
+                  </span>
+                  <span className="text-[10px] text-slate-400 ml-auto">
+                    {report.sections.length} 个数据源
+                  </span>
+                </summary>
+                <div className="p-4 pt-0 space-y-3">
+                  {report.sections.map((section) => (
+                    <SectionRenderer
+                      key={section.order}
+                      section={section}
+                      isOpen={!!expandedSections[section.order]}
+                      isActive={activeSection === section.order}
+                      anchorPrefix={anchorPrefix}
+                      onToggle={() => toggleSection(section.order)}
+                      citationMap={citationMap}
+                      onCitationJump={handleJumpToCitation}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
 
           <aside className="hidden lg:block w-56 shrink-0">

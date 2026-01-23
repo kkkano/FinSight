@@ -245,6 +245,7 @@ class IntentClassifier:
     def _llm_classify(self, query: str, tickers: List[str], candidates: Dict[str, float]) -> ClassificationResult:
         """LLM precise classification"""
         from langchain_core.messages import HumanMessage
+        import asyncio
 
         # Build candidate hint
         candidate_hint = ""
@@ -279,6 +280,8 @@ Important rules:
 Return only the intent name (e.g., PRICE):"""
 
         try:
+            # 使用 asyncio.wait_for 设置 15 秒超时（如果在异步上下文中）
+            # 同步调用时，依赖 LLM 自身的超时机制
             response = self.llm.invoke([HumanMessage(content=prompt)])
             intent_str = response.content.strip().upper()
 

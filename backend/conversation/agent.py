@@ -22,7 +22,6 @@ if PROJECT_ROOT not in sys.path:
 from backend.conversation.context import ContextManager
 from backend.conversation.router import ConversationRouter, Intent
 from backend.handlers.chat_handler import ChatHandler
-from backend.handlers.report_handler import ReportHandler
 from backend.handlers.followup_handler import FollowupHandler
 from backend.orchestration.supervisor import AgentSupervisor
 
@@ -83,11 +82,7 @@ class ConversationAgent:
             news_agent=self.news_agent,
             price_agent=self.price_agent
         )
-        self.report_handler = ReportHandler(
-            agent=report_agent,
-            orchestrator=orchestrator,
-            llm=llm
-        )
+        # NOTE: ReportHandler 已废弃，报告生成统一走 Supervisor → Forum 流程
         self.followup_handler = FollowupHandler(llm=llm, orchestrator=orchestrator)
 
         # 注册处理器到路由器
@@ -561,57 +556,71 @@ class ConversationAgent:
 
 
     async def _handle_report_async(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Async report path that can await AgentSupervisor."""
-        use_supervisor = bool(
-            self.supervisor
-            and metadata.get('tickers')
-            and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
-        )
-        if use_supervisor:
-            ticker = metadata['tickers'][0]
-            try:
-                analysis_result = await self.supervisor.analyze(query, ticker, user_profile=None)
-                forum_output = analysis_result.get("forum_output")
+        """Async report path - 统一走 Supervisor → Forum 流程"""
+        if not self.supervisor:
+            return {
+                'success': False,
+                'response': '报告生成服务不可用，请检查 Supervisor 配置。',
+                'intent': 'report',
+            }
+        
+        tickers = metadata.get('tickers', [])
+        if not tickers:
+            return {
+                'success': False,
+                'response': '请指定要分析的股票代码，例如：分析 AAPL',
+                'intent': 'report',
+            }
+        
+        ticker = tickers[0]
+        try:
+            analysis_result = await self.supervisor.analyze(query, ticker, user_profile=None)
+            forum_output = analysis_result.get("forum_output")
 
-                report_ir = None
-                if forum_output and hasattr(self.report_handler, "_convert_to_report_ir"):
-                    report_ir = self.report_handler._convert_to_report_ir(
-                        ticker,
-                        query,
-                        forum_output,
-                        analysis_result.get("agent_outputs"),
-                    )
-                elif forum_output and hasattr(self.report_handler, "_generate_simple_report_ir"):
-                    report_ir = self.report_handler._generate_simple_report_ir(ticker, forum_output.consensus)
-
-                response_text = forum_output.consensus if forum_output else ""
-                result = {
-                    'success': True,
-                    'response': response_text,
-                    'data': analysis_result,
-                    'method': 'supervisor',
-                }
-                if report_ir:
-                    result['report'] = report_ir
-                return result
-            except Exception as e:
-                logger.info(f"[Agent] Supervisor async call failed: {e}")
-
-        return await asyncio.to_thread(self.report_handler.handle, query, metadata, self.context)
+            response_text = forum_output.consensus if forum_output else ""
+            result = {
+                'success': True,
+                'response': response_text,
+                'data': analysis_result,
+                'method': 'supervisor',
+            }
+            return result
+        except Exception as e:
+            logger.error(f"[Agent] Supervisor async call failed: {e}")
+            return {
+                'success': False,
+                'response': f'报告生成失败: {str(e)}',
+                'intent': 'report',
+            }
 
     def _handle_report(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """处理报告请求 (优先使用 Supervisor)"""
-        use_supervisor = bool(
-            self.supervisor
-            and metadata.get('tickers')
-            and (self.report_agent is None or os.getenv("SUPERVISOR_REPORT_FORCE", "false").lower() in ("true", "1", "yes", "on"))
-        )
-        if use_supervisor:
-            logger.info(f"[Agent._handle_report] Supervisor 在同步上下文中不可用，回退到 report_handler")
-
-        result = self.report_handler.handle(query, metadata, self.context)
-        logger.info(f"[Agent._handle_report] report_handler 返回 - report 存在: {'report' in result}, 字段: {list(result.keys())}")
-        return result
+        """处理报告请求 - 统一走 Supervisor 流程"""
+        if not self.supervisor:
+            return {
+                'success': False,
+                'response': '报告生成服务不可用，请检查 Supervisor 配置。',
+                'intent': 'report',
+            }
+        
+        tickers = metadata.get('tickers', [])
+        if not tickers:
+            return {
+                'success': False,
+                'response': '请指定要分析的股票代码，例如：分析 AAPL',
+                'intent': 'report',
+            }
+        
+        # 尝试异步执行
+        try:
+            asyncio.get_running_loop()
+            logger.info(f"[Agent._handle_report] 已有事件循环，无法同步调用 Supervisor")
+            return {
+                'success': False,
+                'response': '请使用流式接口 /api/chat 生成报告',
+                'intent': 'report',
+            }
+        except RuntimeError:
+            return asyncio.run(self._handle_report_async(query, metadata))
 
     def _handle_alert(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理监控请求（待实现）"""

@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
 import asyncio
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.orchestration.trace_schema import create_trace_event
 
 @dataclass
 class EvidenceItem:
@@ -37,7 +38,7 @@ class BaseFinancialAgent:
         self._current_query: Optional[str] = None
         self._current_ticker: Optional[str] = None
 
-    async def research(self, query: str, ticker: str) -> AgentOutput:
+    async def research(self, query: str, ticker: str, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> AgentOutput:
         """
         Standard research flow:
         1. Initial search
@@ -47,19 +48,83 @@ class BaseFinancialAgent:
         """
         self._current_query = query
         self._current_ticker = ticker
+        trace: List[Dict[str, Any]] = []
+        
+        def _log_event(event_type: str, details: Dict[str, Any]):
+            trace.append(create_trace_event(event_type, agent=self.AGENT_NAME, **details))
+            if on_event:
+                # Bridge internal trace events to external listener
+                try:
+                    on_event({
+                        "event": "agent_execution",
+                        "agent": self.AGENT_NAME,
+                        "details": {"type": event_type, **details},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                except Exception:
+                    pass
+
+        _log_event("agent_start", {"query": query, "ticker": ticker})
+
         # 1. 初始搜索
+        if on_event:
+            try:
+                on_event({
+                    "event": "agent_action", 
+                    "agent": self.AGENT_NAME, 
+                    "details": {"message": f"正在搜索: {query[:30]}..."}
+                })
+            except: pass
+            
         results = await self._initial_search(query, ticker)
+        result_count = None
+        try:
+            result_count = len(results)  # type: ignore[arg-type]
+        except Exception:
+            result_count = None
+            
+        _log_event("search_result", {"result_count": result_count, "result_type": type(results).__name__})
+
         summary = await self._first_summary(results)
+        if summary:
+            _log_event("summary_init", {
+                "summary_preview": str(summary)[:200],
+                "summary_length": len(str(summary)),
+            })
 
         # 2. 反思循环 (默认空实现，由子类覆盖)
         for i in range(self.MAX_REFLECTIONS):
             gaps = await self._identify_gaps(summary)
             if not gaps:
                 break
-            new_data = await self._targeted_search(gaps, ticker)
-            summary = await self._update_summary(summary, new_data)
+            
+            if on_event:
+                try: on_event({"event": "agent_action", "agent": self.AGENT_NAME, "details": {"message": f"发现信息缺口，进行第 {i+1} 轮补充搜索..."}})
+                except: pass
 
-        return self._format_output(summary, results)
+            _log_event("reflection_gap", {"round": i + 1, "gaps": gaps})
+            new_data = await self._targeted_search(gaps, ticker)
+            
+            _log_event("reflection_search", {
+                "round": i + 1,
+                "new_data_preview": str(new_data)[:300] if new_data is not None else "",
+            })
+            summary = await self._update_summary(summary, new_data)
+            if summary:
+                _log_event("summary_update", {
+                    "round": i + 1,
+                    "summary_preview": str(summary)[:200],
+                    "summary_length": len(str(summary)),
+                })
+
+        output = self._format_output(summary, results)
+        _log_event("agent_end", {
+            "confidence": getattr(output, "confidence", None),
+            "evidence_count": len(getattr(output, "evidence", []) or []),
+        })
+        existing_trace = getattr(output, "trace", None) or []
+        output.trace = trace + existing_trace
+        return output
 
     async def _initial_search(self, query: str, ticker: str) -> Any:
         raise NotImplementedError
@@ -74,16 +139,28 @@ class BaseFinancialAgent:
             return []
         query = self._current_query or ""
         ticker = self._current_ticker or ""
-        prompt = (
-            "你是资深金融分析师，正在审阅一段初步摘要。\n"
-            "请找出可能缺失的关键点，并给出可直接用于搜索的查询短语。\n"
-            "要求：\n"
-            "1) 输出 1-4 条，尽量短。\n"
-            "2) 每行一条，不要解释。\n"
-            f"问题: {query}\n"
-            f"股票: {ticker}\n"
-            f"摘要: {summary}\n"
-        )
+        prompt = f"""<role>金融分析师-信息缺口检测器</role>
+
+<task>识别摘要中缺失的关键信息，输出可搜索的查询短语</task>
+
+<input>
+<query>{query}</query>
+<ticker>{ticker}</ticker>
+<summary>{summary}</summary>
+</input>
+
+<rules>
+- 仅输出1-4条搜索短语，每行一条
+- 短语需具体、可搜索，包含股票代码或公司名
+- 聚焦：财务数据、风险因素、行业对比、近期事件
+- 若信息完整，输出：无缺口
+</rules>
+
+<constraints>
+- 禁止：开场白、解释、编号、标点符号
+- 禁止：重复摘要已有信息
+- 直接输出短语，无需任何前缀
+</constraints>"""
         try:
             from langchain_core.messages import HumanMessage
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
@@ -99,6 +176,9 @@ class BaseFinancialAgent:
         return gaps[:4]
 
     async def _targeted_search(self, gaps: List[str], ticker: str) -> Any:
+        import logging
+        logger = logging.getLogger(__name__)
+
         tools = getattr(self, "tools", None)
         search_func = getattr(tools, "search", None) if tools else None
         if not gaps or not search_func:
@@ -107,22 +187,43 @@ class BaseFinancialAgent:
         for gap in gaps[:3]:
             try:
                 query = f"{ticker} {gap}".strip()
-                results.append(search_func(query))
-            except Exception:
+                result = search_func(query)
+                if result and isinstance(result, str) and len(result) > 50:
+                    results.append(result)
+                    logger.info(f"[BaseAgent] Targeted search success: {query[:50]}... ({len(result)} chars)")
+                else:
+                    logger.warning(f"[BaseAgent] Targeted search returned empty/invalid result for: {query}")
+            except Exception as e:
+                logger.error(f"[BaseAgent] Targeted search failed for '{query}': {e}")
                 continue
-        return results
+        return "\n\n---\n\n".join(results) if results else None
 
     async def _update_summary(self, summary: str, new_data: Any) -> str:
         if not new_data or not self.llm:
             return summary
-        prompt = (
-            "请在不编造数据的前提下，结合新增信息更新摘要。\n"
-            "要求：\n"
-            "1) 保持摘要简洁。\n"
-            "2) 明确标注新增信息带来的变化。\n"
-            f"原摘要: {summary}\n"
-            f"新增信息: {new_data}\n"
-        )
+        prompt = f"""<role>金融分析师-信息整合专家</role>
+
+<task>将新信息整合到现有摘要中</task>
+
+<current_summary>
+{summary}
+</current_summary>
+
+<new_information>
+{new_data}
+</new_information>
+
+<requirements>
+- 直接输出整合后的摘要内容，禁止任何标题、前缀、开场白
+- 保持简洁，不超过原摘要1.5倍长度
+- 仅整合有价值的新信息，无价值则返回原摘要
+- 禁止编造数据
+- 禁止输出"更新后的摘要"、"整合后的内容"等元信息
+</requirements>
+
+<output_format>
+直接输出摘要正文，无需任何格式标记
+</output_format>"""
         try:
             from langchain_core.messages import HumanMessage
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])

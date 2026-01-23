@@ -20,6 +20,7 @@ class NewsAgent(BaseFinancialAgent):
             )
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
+        self._last_convergence = None
 
     async def _initial_search(self, query: str, ticker: str) -> List[Any]:
         cache_key = f"{ticker}:news:24h"
@@ -69,7 +70,7 @@ class NewsAgent(BaseFinancialAgent):
                     logger.info(f"[NewsAgent] search fallback failed: {e}")
                     self.circuit_breaker.record_failure("search")
 
-        # Deduplicate
+        # Deduplicate (title-level)
         seen_titles = set()
         unique_results = []
         for item in results:
@@ -77,6 +78,25 @@ class NewsAgent(BaseFinancialAgent):
             if title and title not in seen_titles:
                 seen_titles.add(title)
                 unique_results.append(item)
+
+        # Apply search convergence (content-level dedupe + info gain)
+        try:
+            from dataclasses import asdict
+            from backend.agents.search_convergence import SearchConvergence
+            sc = SearchConvergence()
+            docs = []
+            for item in unique_results:
+                docs.append({
+                    "url": item.get("url", ""),
+                    "content": item.get("headline", item.get("title", "")),
+                    "source": item.get("source", "news"),
+                    "_item": item,
+                })
+            filtered_docs, metrics = sc.process_round(docs, previous_summary="")
+            self._last_convergence = asdict(metrics)
+            unique_results = [doc.get("_item") for doc in filtered_docs if doc.get("_item")]
+        except Exception:
+            self._last_convergence = None
 
         if unique_results:
             self.cache.set(cache_key, unique_results, self.CACHE_TTL)
@@ -184,6 +204,18 @@ class NewsAgent(BaseFinancialAgent):
                         confidence=item.get("confidence", 0.7),
                     ))
 
+        trace = []
+        if self._last_convergence:
+            try:
+                from backend.orchestration.trace_schema import create_trace_event
+                trace.append(create_trace_event(
+                    "convergence_check",
+                    agent=self.AGENT_NAME,
+                    **self._last_convergence,
+                ))
+            except Exception:
+                pass
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -191,7 +223,8 @@ class NewsAgent(BaseFinancialAgent):
             confidence=0.8 if evidence else 0.1,
             data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
-            fallback_used=not bool(evidence)
+            fallback_used=not bool(evidence),
+            trace=trace,
         )
 
     async def analyze_stream(self, query: str, ticker: str):

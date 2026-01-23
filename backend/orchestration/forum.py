@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import logging
 from backend.agents.base_agent import AgentOutput
+from backend.prompts.system_prompts import FORUM_SYNTHESIS_PROMPT
 
 @dataclass
 class ForumOutput:
@@ -18,110 +19,6 @@ class ForumHost:
     BEARISH_KEYWORDS = (
         "bearish", "sell", "看跌", "利空", "下跌", "减持", "卖出", "弱势", "下行",
     )
-
-    SYNTHESIS_PROMPT = """你是 FinSight AI 首席金融分析师，负责整合多位专业 Agent 的分析结果，生成机构级投资研究报告。
-
-【用户画像】
-风险偏好: {risk_tolerance}
-投资风格: {investment_style}
-{user_instruction}
-
-【对话上下文】
-{context_info}
-
-【各Agent分析结果】
-## 价格分析 (PriceAgent)
-{price}
-
-## 新闻分析 (NewsAgent)
-{news}
-
-## 技术分析 (TechnicalAgent)
-{technical}
-
-## 基本面分析 (FundamentalAgent)
-{fundamental}
-
-## 深度搜索 (DeepSearchAgent)
-{deep_search}
-
-## 宏观分析 (MacroAgent)
-{macro}
-
----
-
-## 冲突检测
-{conflict_notes}
-
----
-
-## 报告输出要求
-
-请根据以上多源数据，生成一份**专业深度研究报告**，必须包含以下全部章节：
-
-### 1. 📊 执行摘要 (EXECUTIVE SUMMARY)
-- **投资评级**: BUY / HOLD / SELL（根据用户风险偏好调整表述）
-- **目标价位**: 基于技术面和基本面综合判断（如数据不足则注明）
-- **风险等级**: 低/中/高
-- **核心观点**: 2-3句话概括投资逻辑
-
-### 2. 📈 当前市场表现 (MARKET POSITION)
-- 最新价格与涨跌幅
-- 52周高低点对比
-- 成交量分析
-- 关键支撑/阻力位
-
-### 3. 💰 基本面分析 (FUNDAMENTAL ANALYSIS)
-- 关键估值指标（P/E、P/S、EV/EBITDA 等，如有）
-- 营收/利润趋势
-- 竞争格局与护城河
-- 增长驱动因素
-
-### 4. 🌍 宏观环境与催化剂 (MACRO & CATALYSTS)
-- 行业发展趋势
-- 近期重要事件（财报、产品发布、政策等）
-- 监管环境变化
-- 宏观经济影响
-
-### 5. ⚠️ 风险评估 (RISK ASSESSMENT)
-- 公司特定风险
-- 市场系统性风险
-- 行业风险
-- 风险缓释建议
-
-### 6. 🎯 投资策略 (INVESTMENT STRATEGY)
-- 建议入场点位
-- 仓位管理建议（根据用户风险偏好）
-- 止损位设置
-- 投资时间周期
-
-### 7. 📐 情景分析 (SCENARIO ANALYSIS)
-- **乐观情景**: 上行目标及触发条件
-- **悲观情景**: 下行风险及触发条件
-- **基准情景**: 最可能的走势
-
-### 8. 📅 关注事件 (MONITORING EVENTS)
-- 需关注的关键日期
-- 需跟踪的核心指标
-- 建议设置的预警条件
-
----
-
-## 质量标准
-- 报告需**至少800字**，内容充实详尽
-- 必须包含**具体数据**和**来源引用**
-- 所有建议必须有**理由支撑**
-- 明确区分**事实**与**观点**
-- 保持**专业客观**的分析立场
-
-## 重要提醒
-- 如某 Agent 数据缺失，在对应章节注明"数据暂不可用"
-- 根据用户风险偏好调整建议语气（保守用户强调风险，激进用户可提及机会）
-- 如对话上下文有相关话题，将其自然融入分析
-- 请用**中文**输出，保持专业但易于理解
-
----
-请开始生成完整的深度研究报告："""
 
     def __init__(self, llm):
         self.llm = llm
@@ -204,7 +101,7 @@ class ForumHost:
 
         context_info = context_summary if context_summary else "无"
 
-        prompt = self.SYNTHESIS_PROMPT.format(
+        prompt = FORUM_SYNTHESIS_PROMPT.format(
             risk_tolerance=risk_tolerance,
             investment_style=investment_style,
             user_instruction=user_instruction,

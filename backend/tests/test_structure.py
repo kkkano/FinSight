@@ -89,14 +89,13 @@ def test_conversation_module():
 def test_handlers_module():
     """测试 handlers 模块"""
     try:
-        from backend.handlers import ChatHandler, ReportHandler, FollowupHandler
+        from backend.handlers import ChatHandler, FollowupHandler
         
         # 测试实例化
         chat_handler = ChatHandler()
         assert chat_handler is not None
         
-        report_handler = ReportHandler()
-        assert report_handler is not None
+        # NOTE: ReportHandler 已废弃，移除测试
         
         followup_handler = FollowupHandler()
         assert followup_handler is not None
@@ -112,22 +111,17 @@ def test_prompts_module():
     """测试 prompts 模块"""
     try:
         from backend.prompts import (
-            CHAT_SYSTEM_PROMPT,
-            REPORT_SYSTEM_PROMPT,
-            ALERT_SYSTEM_PROMPT,
-            CLASSIFICATION_PROMPT,
+            FORUM_SYNTHESIS_PROMPT,
+            FOLLOWUP_SYSTEM_PROMPT,
         )
         
         # 验证提示词不为空
-        assert len(CHAT_SYSTEM_PROMPT) > 100
-        assert len(REPORT_SYSTEM_PROMPT) > 100
-        assert len(ALERT_SYSTEM_PROMPT) > 100
-        assert len(CLASSIFICATION_PROMPT) > 100
+        assert len(FORUM_SYNTHESIS_PROMPT) > 100
+        assert len(FOLLOWUP_SYSTEM_PROMPT) > 100
         
         # 验证包含关键占位符
-        assert "{query}" in CLASSIFICATION_PROMPT
-        assert "{current_date}" in CHAT_SYSTEM_PROMPT
-        assert "{tools}" in REPORT_SYSTEM_PROMPT
+        assert "{query}" in FOLLOWUP_SYSTEM_PROMPT
+        assert "{risk_tolerance}" in FORUM_SYNTHESIS_PROMPT
         
         print("✅ prompts 模块测试通过")
         return True
