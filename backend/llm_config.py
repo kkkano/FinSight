@@ -139,3 +139,44 @@ def get_llm_config(provider: str = "gemini_proxy", model: str = None) -> dict:
         "temperature": 0.3,
         "provider": provider,
     }
+
+
+def create_llm(provider: str = "gemini_proxy", model: str = None, temperature: float = 0.3, max_tokens: int = 65536, request_timeout: int = 600):
+    """
+    统一的 LLM 工厂函数（提取自 langchain_agent.py 和 conversation/agent.py）
+
+    历史背景：
+    - 之前 langchain_agent.py 和 conversation/agent.py 都有各自的 LLM 初始化代码
+    - 为了避免代码重复，提取到这个统一的工厂函数
+
+    Args:
+        provider: LLM 提供商名称，默认为 "gemini_proxy"
+        model: 模型名称，如果不提供则从配置中获取
+        temperature: 温度参数，默认 0.3
+        max_tokens: 最大 token 数，默认 4000
+        request_timeout: 请求超时时间（秒），默认 600（10分钟，支持长报告生成）
+
+    Returns:
+        ChatOpenAI 实例
+    """
+    from langchain_openai import ChatOpenAI
+
+    # 获取配置
+    cfg = get_llm_config(provider=provider, model=model)
+    api_key = cfg.get("api_key")
+    api_base = cfg.get("api_base")
+    model_name = cfg.get("model")
+
+    if not api_key:
+        raise ValueError(f"API key not found for provider '{provider}'")
+
+    logger.info(f"[LLM Factory] Creating LLM: model={model_name}, api_base={api_base}, timeout={request_timeout}s")
+
+    return ChatOpenAI(
+        model=model_name,
+        openai_api_key=api_key,
+        openai_api_base=api_base,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        request_timeout=request_timeout,
+    )

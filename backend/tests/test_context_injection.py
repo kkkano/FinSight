@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from backend.services.memory import UserProfile
 from backend.orchestration.forum import ForumHost, ForumOutput, AgentOutput
-from backend.orchestration.supervisor import AgentSupervisor
+from backend.orchestration.supervisor_agent import SupervisorAgent
 
 @pytest.mark.asyncio
 async def test_forum_host_context_injection():

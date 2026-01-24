@@ -7,23 +7,32 @@ import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 
-const extractTicker = (text: string): string | null => {
+const extractTickers = (text: string): string[] => {
   const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
   const matches = text.match(tickerPattern);
-  if (!matches) return null;
+  if (!matches) return [];
 
   const stopwords = new Set([
     'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
     'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
   ]);
 
+  const seen = new Set<string>();
+  const tickers: string[] = [];
   for (const match of matches) {
     const upper = match.toUpperCase();
-    if (!stopwords.has(upper)) return upper;
+    if (!stopwords.has(upper) && !seen.has(upper)) {
+      seen.add(upper);
+      tickers.push(upper);
+    }
   }
-  return null;
+  return tickers;
 };
 
+const extractTicker = (text: string): string | null => {
+  const tickers = extractTickers(text);
+  return tickers.length ? tickers[0] : null;
+};
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
@@ -162,12 +171,31 @@ export const ChatInput: React.FC = () => {
             setTicker(nextFocus);
           }
 
+          const evidencePool = meta?.evidence_pool ?? meta?.data?.evidence_pool;
+
           const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
-          if (chartInfo.ticker && chartInfo.chartType) {
-            fullContent += `\n\n[CHART:${chartInfo.ticker}:${chartInfo.chartType}]`;
-            if (chartInfo.ticker) setTicker(chartInfo.ticker);
+          const markerRegex = /\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g;
+          const existingTickers = new Set(
+            Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1])
+          );
+          const tickers = extractTickers(userMsgContent);
+          const forceMulti = tickers.length > 1;
+          if (chartInfo.chartType || forceMulti) {
+            const targetTickers = tickers.length ? tickers : (chartInfo.ticker ? [chartInfo.ticker] : []);
+            const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
+            if (missingTickers.length > 0) {
+              const chartType = forceMulti ? "line" : (chartInfo.chartType || "line");
+              missingTickers.forEach((ticker) => {
+                fullContent += `
+
+[CHART:${ticker}:${chartType}]`;
+              });
+              if (targetTickers.length === 1) {
+                setTicker(targetTickers[0]);
+              }
+            }
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report, thinking: thinkingSteps });
+          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report, thinking: thinkingSteps, evidence_pool: evidencePool });
           setStatus(null); // 清除状态，不再显示"Streaming response"
         },
         // onError

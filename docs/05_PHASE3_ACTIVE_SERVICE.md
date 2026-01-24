@@ -22,6 +22,13 @@
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
+## 0.1 Recent Updates (2026-01-24)
+
+- Evidence pool now surfaces for external data usage (chat/report)
+- News pipeline adds summary + relevance filtering to avoid noise
+- Multi-ticker comparison auto renders multiple charts
+- Need-Agent Gate decision is traceable in UI
+
 ## 0. 当前状态（2026-01-10）
 
 - AlertSystem/RiskAgent 仍为规划阶段，/subscribe 端点为占位实现

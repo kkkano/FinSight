@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.macro_agent import MacroAgent
-from backend.orchestration.supervisor import AgentSupervisor
+from backend.orchestration.supervisor_agent import SupervisorAgent
 from backend.agents.base_agent import AgentOutput
 
 @pytest.mark.asyncio

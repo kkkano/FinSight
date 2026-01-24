@@ -41,9 +41,9 @@ class BudgetManager:
 
     @classmethod
     def from_env(cls) -> "BudgetManager":
-        max_tool_calls = _env_int("BUDGET_MAX_TOOL_CALLS", 24)
+        max_tool_calls = _env_int("BUDGET_MAX_TOOL_CALLS", 50)  # 增加以支持 deep_search 多次搜索
         max_rounds = _env_int("BUDGET_MAX_ROUNDS", 12)
-        max_seconds = _env_float("BUDGET_MAX_SECONDS", 120.0)
+        max_seconds = _env_float("BUDGET_MAX_SECONDS", 600.0)  # 10分钟，支持复杂报告生成
         return cls(
             max_tool_calls=max_tool_calls if max_tool_calls > 0 else None,
             max_rounds=max_rounds if max_rounds > 0 else None,

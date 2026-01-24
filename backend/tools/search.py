@@ -114,10 +114,15 @@ def search(query: str) -> str:
 
     # 2. 尝试维基百科（仅用于非金融查询）
     query_lower = query.lower()
-    is_financial_query = any(kw in query_lower for kw in [
+    has_ticker = bool(re.search(r"\$?[A-Z]{1,5}(?:\.[A-Z]{1,2})?\b", query))
+    is_financial_query = has_ticker or any(kw in query_lower for kw in [
         'stock', 'price', 'market', 'trading', 'aapl', 'msft', 'googl', 'tsla', 'nvda',
         'nasdaq', 's&p', 'dow', 'sentiment', 'news', 'headline', 'earnings', 'revenue',
-        'risk', 'trend', 'analysis', 'investment', 'portfolio', '^', '$'
+        'risk', 'trend', 'analysis', 'investment', 'portfolio', '^', '$',
+        # Chinese finance/news keywords
+        '股票', '股价', '股市', '行情', '财报', '业绩', '营收', '利润', '市值', '投资', '基金',
+        'etf', '债券', '汇率', '期货', '期权', '指数', '宏观', '经济', '通胀', '利率', '美联储',
+        '央行', '新闻', '资讯', '消息', '头条', '快讯', '公告', '财讯'
     ])
     if WIKIPEDIA_AVAILABLE and not is_financial_query:
         try:

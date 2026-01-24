@@ -22,6 +22,14 @@
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
+## 0.1 Recent Updates (2026-01-24)
+
+- Evidence pool exposed for chat/report to make research traceable
+- News output adds short “overall summary” and relevance filtering
+- Search fallback avoids Wikipedia for finance; RSS/Finnhub preferred
+- Multi-ticker comparison auto-renders multiple charts
+- NEWS intent fast-path reduces misclassification to generic search
+
 ## 0. 当前状态（2026-01-11）
 
 - /chat/stream 全意图真实 token 流式输出已完成（含 REPORT done 事件 ReportIR）

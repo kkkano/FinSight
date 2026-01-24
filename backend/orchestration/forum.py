@@ -112,11 +112,25 @@ class ForumHost:
 
         try:
             from langchain_core.messages import HumanMessage
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-            consensus = response.content if hasattr(response, 'content') else str(response)
+            
+            # 在 LLM 调用前获取速率限制令牌
+            from backend.services.rate_limiter import acquire_llm_token
+            token_acquired = await acquire_llm_token(timeout=120.0)
+            if not token_acquired:
+                self.logger.warning("[Forum] Rate limit timeout, using fallback synthesis")
+                consensus = self._fallback_synthesis(context_parts)
+            else:
+                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+                consensus = response.content if hasattr(response, 'content') else str(response)
         except Exception as e:
             # 如果 LLM 调用失败，使用简单的规则合成
-            self.logger.warning("[Forum] LLM synthesis failed: %s, using fallback", e)
+            import traceback
+            self.logger.error("[Forum] LLM synthesis failed!")
+            self.logger.error("[Forum] Exception type: %s", type(e).__name__)
+            self.logger.error("[Forum] Exception message: %s", str(e))
+            self.logger.error("[Forum] Prompt length: %d chars, LLM type: %s", len(prompt), type(self.llm).__name__)
+            self.logger.error("[Forum] Prompt preview (first 500 chars): %s", prompt[:500])
+            self.logger.error("[Forum] Full traceback:\n%s", traceback.format_exc())
             consensus = self._fallback_synthesis(context_parts)
 
         # 4. 计算加权置信度

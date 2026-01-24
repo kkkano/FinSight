@@ -161,6 +161,17 @@ class IntentClassifier:
                     reasoning="Matched greeting pattern"
                 )
 
+        # News keyword fast-path
+        news_keywords = KEYWORD_BOOST.get(Intent.NEWS, [])
+        if any(kw in query_lower for kw in news_keywords):
+            return ClassificationResult(
+                intent=Intent.NEWS,
+                confidence=0.9,
+                tickers=tickers,
+                method="rule",
+                reasoning="Matched news keywords"
+            )
+
         # Multi-ticker comparison / 多股票比较
         # 修复：仅当有明确比较关键词时才触发 comparison 意图
         comparison_keywords = ['对比', '比较', 'vs', 'versus', '区别', '差异', 'compare', '哪个好', '选哪个']

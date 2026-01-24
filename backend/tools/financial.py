@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
@@ -7,7 +8,7 @@ from urllib.parse import quote
 import requests
 import yfinance as yf
 
-from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY
+from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
 from .http import _http_get, _http_post
 
 logger = logging.getLogger(__name__)

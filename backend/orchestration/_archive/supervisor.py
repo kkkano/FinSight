@@ -1,3 +1,24 @@
+# -*- coding: utf-8 -*-
+"""
+[LEGACY] AgentSupervisor - 旧版 Supervisor 实现
+==================================================
+
+⚠️ 历史代码警告 (2026-01-24):
+- 此模块为旧版轻量级 Supervisor 实现
+- 新版完整实现请使用: backend/orchestration/supervisor_agent.py (SupervisorAgent)
+- 此模块仍被 ConversationAgent 使用，暂时保留
+- 未来计划: 迁移到 SupervisorAgent 后归档到 _archive/
+
+功能对比:
+- AgentSupervisor (本文件): 轻量级，仅支持报告生成
+- SupervisorAgent (supervisor_agent.py): 完整实现，支持意图分类、多种处理器、流式输出
+
+依赖此模块的文件:
+- backend/conversation/agent.py
+- backend/tests/test_context_injection.py
+- backend/tests/test_deep_research.py
+"""
+
 import asyncio
 import time
 from datetime import datetime

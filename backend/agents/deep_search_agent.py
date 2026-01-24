@@ -590,21 +590,24 @@ queries要求：
 
 <requirements>
 - 语言：简体中文
-- 提炼3-5条核心洞察，每条需有数据支撑
+- 输出4-6条核心洞察（事实+影响），每条需有数据或来源支撑
 - 引用格式：[1]、[2]（对应源编号）
-- 忽略内容过短或无关的源
+- 标注1-2条不确定性/风险点
 - 明确标注信息缺口（如有）
 </requirements>
 
 <output_format>
 ## 核心发现
-[带编号的要点列表，每条含数据引用]
+[编号要点列表，每条含数据引用与一句影响判断]
+
+## 影响与解读
+[2-3句综合解读，强调对标的/行业的潜在影响]
 
 ## 风险提示
 [关键风险因素]
 
 ## 信息缺口
-[尚需补充的信息，无则写"暂无"]
+[尚需补充的信息，无则写“暂无”]
 </output_format>
 
 <constraints>
@@ -618,6 +621,12 @@ queries要求：
 
     async def _call_llm(self, prompt: str) -> str:
         try:
+            # 获取速率限制令牌
+            from backend.services.rate_limiter import acquire_llm_token
+            if not await acquire_llm_token(timeout=60.0):
+                logger.warning("[DeepSearch] Rate limit timeout, skipping LLM call")
+                return ""
+            
             message = HumanMessage(content=prompt)
             if hasattr(self.llm, "ainvoke"):
                 response = await self.llm.ainvoke([message])

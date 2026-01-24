@@ -25,6 +25,18 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 
 ---
 
+## 界面截图
+
+![对比与分析 1](./images/new1.png)
+![对比与分析 2](./images/new2.png)
+![报告卡片 1](./images/report1.png)
+![报告卡片 2](./images/report2.png)
+![报告卡片 3](./images/report3.png)
+![报告卡片 4](./images/report4.png)
+![报告卡片 5](./images/report5.png)
+
+---
+
 ## 核心特点
 
 ### 多智能体 Supervisor 架构
@@ -57,6 +69,7 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 - PlanIR + Executor：计划模板 + 执行 trace（step 级可追溯）
 - EvidencePolicy：引用校验 + 覆盖率阈值约束
 - News/Macro 回退结构化，保证下游分析稳定
+- News/Report 增加“总览/结论”摘要，避免信息堆叠
 - get_company_news 输出结构化列表，统一格式展示
 - DeepSearch 加入 SSRF 防护与重试
 - DeepSearch 动态查询模板根据意图关键词生成
@@ -71,14 +84,19 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 ### 智能意图分类
 - 3 层混合系统：规则匹配 -> Embedding 相似度 -> LLM 兜底
 - NEWS 子意图区分“拉取新闻”和“分析新闻影响”
+- NEWS 关键词快速通道，避免误判为通用搜索
 - 成本优化：简单请求优先走规则
 - 报告意图覆盖“分析/Analyze”，有 ticker 时无需 LLM
+- 可靠性优先 Agent 闸门：CHAT 可按时效/决策/证据需求升级到 Supervisor
 
 ### 实时可视化与透明度
 - 流式输出（逐字呈现）
 - 交互式 K 线图（支持全屏）
+- 多 ticker 对比自动渲染多图
 - Agent Trace 分层展开，可逐步查看工具调用
 - 资产组合快照 + 持仓编辑
+- Trace 中可见 Agent 闸门决策（是否调用 Agent）
+- 调用了 Agent/工具时展示证据池
 
 ### 订阅提醒系统
 - 价格提醒：达到阈值自动邮件通知
@@ -96,19 +114,22 @@ flowchart TB
     subgraph Frontend["前端 (React + Vite)"]
         UI[Chat UI]
         ReportView[ReportView 卡片]
-        Evidence[证据池]
+        Evidence[证据池（chat/report）]
         Trace[Agent Trace]
         Chart[K线图]
         Settings[设置面板]
     end
 
     subgraph API["FastAPI 后端"]
-        Main["/chat/supervisor/stream"]
+        Stream["/chat/stream"]
+        Router["ConversationRouter"]
+        Gate["Need-Agent Gate<br/>可靠性优先"]
+        ChatHandler["ChatHandler"]
         Classifier[IntentClassifier<br/>规则 + Embedding + LLM]
     end
 
     subgraph Supervisor["SupervisorAgent"]
-        Router[意图路由]
+        SupRouter[意图路由]
         Workers[Worker Agents]
         Forum[ForumHost]
     end
@@ -134,15 +155,20 @@ flowchart TB
         Memory[用户记忆]
     end
 
-    UI --> Main
-    Main --> Classifier
-    Classifier --> Router
-    Router --> Workers
+    UI --> Stream
+    Stream --> Router
+    Router --> Gate
+    Gate -->|快速路径| ChatHandler
+    Gate -->|需要 Agent| Classifier
+    Classifier --> SupRouter
+    SupRouter --> Workers
     Workers --> PA & NA & TA & FA & MA & DSA
     PA & NA & TA & FA & MA & DSA --> Forum
     Forum --> IR --> ReportView
     IR --> Evidence
+    Workers --> Evidence
     IR --> Trace
+    Stream --> Evidence
 
     PA & NA & TA & FA & MA & DSA --> Cache
     PA & NA & TA & FA & MA & DSA --> CB
@@ -156,9 +182,11 @@ flowchart LR
     Input[用户请求] --> Rule[规则匹配<br/>免费]
     Rule -->|命中| Direct[直接响应]
     Rule -->|未命中| Embed[Embedding + 关键词<br/>低成本]
-    Embed -->|高置信度| Agent[路由到 Agent]
+    Embed -->|高置信度| Gate[Need-Agent 闸门]
     Embed -->|低置信度| LLM[LLM 分类<br/>付费]
-    LLM --> Agent
+    LLM --> Gate
+    Gate -->|快速路径| Chat[ChatHandler]
+    Gate -->|需要 Agent| Agent[SupervisorAgent]
 ```
 
 ### 数据回退策略
@@ -183,7 +211,7 @@ graph LR
 | `get_stock_price` | 实时报价 + 多源回退 | yfinance -> Finnhub -> Alpha Vantage -> Web |
 | `get_company_info` | 公司基本面 | yfinance |
 | `get_company_news` | 最新新闻（结构化列表） | Reuters RSS + Bloomberg RSS + Finnhub |
-| `search` | 网络搜索 | Exa -> Tavily -> Wikipedia -> DuckDuckGo |
+| `search` | 网络搜索 | Exa -> Tavily -> DuckDuckGo（Wikipedia 仅用于非金融查询） |
 | `get_market_sentiment` | 恐惧与贪婪指数 | CNN |
 | `get_economic_events` | 宏观日历 | Exa search |
 | `get_financial_statements` | 三大财务报表 | yfinance |
@@ -252,6 +280,8 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 TAVILY_API_KEY=...
 EXA_API_KEY=...
+FRED_API_KEY=...
+BLOOMBERG_RSS_URLS=...
 
 # 邮件提醒
 SMTP_SERVER=smtp.gmail.com
@@ -273,9 +303,9 @@ ENABLE_LANGSMITH=false
 
 # 质量和门槛
 DATA_CONTEXT_MAX_SKEW_HOURS=24
-BUDGET_MAX_TOOL_CALLS=24
+BUDGET_MAX_TOOL_CALLS=50
 BUDGET_MAX_ROUNDS=12
-BUDGET_MAX_SECONDS=120
+BUDGET_MAX_SECONDS=600
 CHAT_HISTORY_MAX_MESSAGES=12
 CACHE_JITTER_RATIO=0.1
 CACHE_NEGATIVE_TTL=60
@@ -363,7 +393,7 @@ FinSight/
 
 ## 当前状态
 
-> 最后更新: 2026-01-23 | 版本: 0.6.5
+> 最后更新: 2026-01-24 | 版本: 0.6.6
 
 ### 完成进度
 

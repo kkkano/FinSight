@@ -101,7 +101,7 @@ class PriceChangeScheduler:
                 )
                 continue
 
-            success = self.email_service.send_stock_alert(
+            result = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
                 alert_type="price_change",
@@ -109,14 +109,21 @@ class PriceChangeScheduler:
                 current_price=snapshot.price,
                 change_percent=snapshot.change_percent,
             )
+            # Handle tuple return (success, error_type, error_msg)
+            if isinstance(result, tuple):
+                success, error_type, error_msg = result
+            else:
+                success, error_type, error_msg = result, 'unknown', None
+
             # Only update last_alert_at if email was actually sent
             if not success:
-                logger.warning("Email send failed for %s -> %s, skipping last_alert update", sub["ticker"], sub["email"])
+                logger.warning("Email send failed for %s -> %s: %s (%s)", sub["ticker"], sub["email"], error_msg, error_type)
                 self.subscription_service.record_alert_attempt(
                     sub["email"],
                     sub["ticker"],
                     success=False,
-                    error="send_failed",
+                    error=error_msg or "send_failed",
+                    is_transient_error=(error_type == 'transient')
                 )
                 continue
             self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
@@ -130,6 +137,7 @@ class PriceChangeScheduler:
                     "message": message,
                 }
             )
+
 
         logger.info(
             "price_change run completed: checked=%s, sent=%s",
@@ -206,7 +214,7 @@ class NewsAlertScheduler:
                 lines.append(f"[{ts}] {art.get('title','')} ({art.get('source','')}) {art.get('url','')}")
             message = "\n".join(lines)
 
-            success = self.email_service.send_stock_alert(
+            result = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
                 alert_type="news",
@@ -214,9 +222,22 @@ class NewsAlertScheduler:
                 current_price=None,
                 change_percent=None,
             )
+            
+            if isinstance(result, tuple):
+                success, error_type, error_msg = result
+            else:
+                success, error_type, error_msg = result, 'unknown', None
+
             # Only update last_news_at if email was actually sent
             if not success:
-                logger.warning("News email send failed for %s -> %s, skipping last_news update", sub["ticker"], sub["email"])
+                logger.warning("News email send failed for %s -> %s: %s", sub["ticker"], sub["email"], error_msg)
+                self.subscription_service.record_alert_attempt(
+                    sub["email"],
+                    sub["ticker"],
+                    success=False,
+                    error=error_msg or "send_failed",
+                    is_transient_error=(error_type == 'transient')
+                )
                 continue
             self.subscription_service.update_last_news(sub["email"], sub["ticker"])
 

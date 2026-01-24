@@ -104,7 +104,21 @@ class PriceAgent(BaseFinancialAgent):
             source = raw_data.get("source", "yfinance")
             as_of = raw_data.get("as_of", datetime.now().isoformat())
             fallback_used = raw_data.get("fallback_used", False)
+            change = raw_data.get("change")
+            change_percent = raw_data.get("change_percent")
+            if change is None:
+                change = raw_data.get("change_abs")
+            if change_percent is None:
+                change_percent = raw_data.get("change_pct")
+            if change_percent is not None:
+                try:
+                    change_percent = float(change_percent)
+                except Exception:
+                    change_percent = None
             summary_text = f"The current price of {ticker} is {currency} {price}."
+            if change_percent is not None:
+                direction = "up" if change_percent >= 0 else "down"
+                summary_text += f" Day change {change_percent:+.2f}% ({direction})."
             evidence_text = str(raw_data)
         elif isinstance(raw_data, str) and raw_data:
             # String format from backend.tools (e.g., "AAPL Current Price: $150.00 | Change: +$2.00 (+1.5%)")
@@ -113,6 +127,16 @@ class PriceAgent(BaseFinancialAgent):
             as_of = datetime.now().isoformat()
             fallback_used = False
             evidence_text = raw_data
+            # Try to extract % change for a richer summary
+            try:
+                import re
+                match = re.search(r"Change:\s*\$[+-]?[0-9.]+\s*\(\s*([+-]?[0-9.]+)%\s*\)", raw_data)
+                if match:
+                    pct = float(match.group(1))
+                    direction = "up" if pct >= 0 else "down"
+                    summary_text = f"{raw_data}. Day change {pct:+.2f}% ({direction})."
+            except Exception:
+                pass
         else:
             # Fallback for empty or None
             summary_text = summary or "价格数据获取失败"

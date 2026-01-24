@@ -1,6 +1,6 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> **更新日期**: 2026-01-22
+> **更新日期**: 2026-01-24
 > **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 > **架构模式**: Supervisor Agent (协调者模式)
 >
@@ -16,6 +16,11 @@
 > - SecurityGate：鉴权 + 限流 + 免责声明模板落地（P0-29）
 > - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
 > - Trace 规范化输出 + /metrics 可观测性入口
+> - 新增 Need-Agent Gate：可靠性优先路由 + Trace 记录是否调用 Agent
+> - Evidence Pool：外部数据/工具调用时返回证据池并在前端展示
+> - News/Report 输出加入“总览/结论”摘要，防止堆叠信息
+> - 多 ticker 对比自动补齐图表标记（多图或合图）
+> - 金融类搜索禁止 Wikipedia 兜底，避免无关内容
 
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
@@ -30,12 +35,16 @@ FinSight 采用 **Supervisor Agent 协调者模式**，实现业界标准的多 
 flowchart TB
     subgraph Frontend["前端 (React + TS)"]
         UI["ChatList + StockChart"]
+        EP["Evidence Pool"]
         Profile["UserProfile"]
         Settings["Settings Modal<br/>模式切换"]
     end
 
     subgraph Backend["后端 (FastAPI + LangGraph)"]
-        API["/chat/supervisor API"]
+        API["/chat/stream API"]
+        CR["ConversationRouter<br/>对话路由"]
+        Gate["Need-Agent Gate<br/>可靠性优先"]
+        CH["ChatHandler<br/>快速响应"]
 
         subgraph SupervisorLayer["协调者层 (Supervisor Agent)"]
             IC["IntentClassifier<br/>意图分类器"]
@@ -68,7 +77,10 @@ flowchart TB
 
     %% Data Flow
     UI --> API
-    API --> IC
+    API --> CR
+    CR --> Gate
+    Gate -->|快速路径| CH
+    Gate -->|需要Agent| IC
     IC -->|意图分类| SA
     SA -->|简单意图| ORC
     SA -->|复杂意图| PA
@@ -86,6 +98,8 @@ flowchart TB
     DS -->|AgentOutput| FH
 
     FH -->|ForumOutput| API
+    SA -->|evidence_pool| API
+    API --> EP
     ORC --> Cache
     ORC --> CB
     ORC --> DC
@@ -95,6 +109,31 @@ flowchart TB
     API --> MET
 
 ```
+
+---
+
+## 1.1 Need-Agent Gate（可靠性优先闸门）
+
+在对话模式下新增 **Need-Agent Gate**，用于决定“是否升级到 Supervisor 多 Agent”：
+
+- **硬触发**：时效词 / 决策词 / 对比 / 财务指标 / 新闻情绪 / 宏观事件  
+- **软触发**：低置信度、ticker 不清晰、多 ticker  
+- **目标**：可靠性优先，宁可多调用，也不漏调用  
+- **可解释性**：Trace 中明确记录“是否调用 Agent + 触发原因 + 置信度”
+
+## 1.2 Evidence Pool 与 Trace 可追溯
+
+当调用工具/外部数据源时，系统返回 **evidence_pool**（证据池）并在前端展示：
+
+- **内容**：来源、URL、时间戳、置信度、简短摘要
+- **原则**：凡涉及外部数据或推断，必须附证据池；纯对话不强制
+- **展示**：Chat 与 Report 均可展示证据池，避免“无源结论”
+- **回传**：Supervisor 与工具输出统一透传到 SSE done 与 /chat 响应
+
+## 1.3 News / Report “总览”输出
+
+- **News**：默认输出“要点 + 简短总览 + 风险提示”，避免堆叠无关内容
+- **Report**：总览放在开头，后续分章节展开，并标注引用与新鲜度
 
 ---
 

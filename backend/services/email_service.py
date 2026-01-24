@@ -45,7 +45,7 @@ class EmailService:
         subject: str,
         html_content: str,
         text_content: Optional[str] = None
-    ) -> bool:
+    ) -> tuple[bool, str, Optional[str]]:
         """
         发送邮件
         
@@ -56,11 +56,12 @@ class EmailService:
             text_content: 纯文本内容（可选）
             
         Returns:
-            是否发送成功
+            (success, error_type, error_message)
+            error_type: 'none', 'transient', 'permanent'
         """
         if not self.smtp_user or not self.smtp_password:
-            logger.info("⚠️  邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
-            return False
+            logger.warning("⚠️  邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
+            return False, 'permanent', "SMTP credentials missing"
         
         try:
             # 创建邮件
@@ -78,18 +79,31 @@ class EmailService:
             msg.attach(part2)
             
             # 发送邮件
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            # 使用 shorter timeout防止长时间阻塞
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
                 server.starttls()
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
             
             # 使用纯 ASCII 日志，避免控制台编码问题
             logger.info(f"[EmailService] Sent email to {to_email}")
-            return True
+            return True, 'none', None
+            
+        except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, 
+                TimeoutError, ConnectionError) as e:
+            logger.error(f"[EmailService] Transient network error for {to_email}: {e}")
+            return False, 'transient', str(e)
+            
+        except (smtplib.SMTPAuthenticationError, smtplib.SMTPRecipientsRefused,
+                smtplib.SMTPSenderRefused, smtplib.SMTPDataError) as e:
+            logger.error(f"[EmailService] Permanent SMTP error for {to_email}: {e}")
+            return False, 'permanent', str(e)
             
         except Exception as e:
-            logger.info(f"[EmailService] Failed to send email: {e}")
-            return False
+            logger.error(f"[EmailService] Unexpected error for {to_email}: {e}")
+            # Treat unknown exceptions as transient to be safe, or permanent? 
+            # Usually unknown could be anything. Let's assume transient for safety unless obvious.
+            return False, 'transient', str(e)
     
     def send_stock_alert(
         self,
@@ -112,7 +126,7 @@ class EmailService:
             change_percent: 涨跌幅
             
         Returns:
-            是否发送成功
+            (success, error_type, error_message)
         """
         # 根据提醒类型生成主题
         if alert_type == "price_change":

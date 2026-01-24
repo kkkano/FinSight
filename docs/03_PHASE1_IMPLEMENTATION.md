@@ -22,6 +22,14 @@
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
+## 0.1 Recent Updates (2026-01-24)
+
+- Need-Agent Gate upgrades CHAT to Supervisor based on reliability triggers
+- Agent Trace includes whether agents/tools were invoked (and why)
+- Evidence pool is attached to chat/report outputs for external data usage
+- Multi-ticker comparison now renders multi charts automatically
+- News responses add an overall summary + relevance filtering
+
 ## 1. 核心任务拆解
 
 ### 1.1 基础设施补全 (Week 3.0)

@@ -792,9 +792,9 @@ class FetchResult:
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | `DATA_CONTEXT_MAX_SKEW_HOURS` | 24 | 允许的 as_of 最大时间偏差（小时），过大触发 warning |
-| `BUDGET_MAX_TOOL_CALLS` | 24 | 单次请求最多允许调用工具次数 |
+| `BUDGET_MAX_TOOL_CALLS` | 50 | 单次请求最多允许调用工具次数（支持 DeepSearch 多次搜索） |
 | `BUDGET_MAX_ROUNDS` | 12 | 单次请求最多允许执行 agent/forum 轮次 |
-| `BUDGET_MAX_SECONDS` | 120 | 单次请求最大耗时（秒），超限抛出 BudgetExceededError |
+| `BUDGET_MAX_SECONDS` | 600 | 单次请求最大耗时（秒，10分钟），超限抛出 BudgetExceededError |
 
 ### 8.8 安全与限流
 

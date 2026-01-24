@@ -25,6 +25,18 @@ The goal is to feel like talking to a Chief Investment Officer who can quickly p
 
 ---
 
+## Screenshots
+
+![Chat Comparison 1](./images/new1.png)
+![Chat Comparison 2](./images/new2.png)
+![Report Card 1](./images/report1.png)
+![Report Card 2](./images/report2.png)
+![Report Card 3](./images/report3.png)
+![Report Card 4](./images/report4.png)
+![Report Card 5](./images/report5.png)
+
+---
+
 ## Key Features
 
 ### Multi-Agent Supervisor Architecture
@@ -57,6 +69,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - PlanIR + Executor for step-level planning and execution trace
 - EvidencePolicy enforces citation validity and coverage thresholds
 - Structured News and Macro fallbacks keep downstream analysis stable
+- News/Report responses include a short overall summary for clarity
 - get_company_news returns structured items; handlers format for display
 - Safe DeepSearch retrieval with SSRF guard and HTTP retry
 - Dynamic DeepSearch query templates driven by intent keywords
@@ -71,14 +84,19 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 ### Smart Intent Classification
 - 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback
 - NEWS sub-intent: distinguishes fetch news vs analyze news impact
+- NEWS keyword fast-path reduces misclassification to generic search
 - Cost efficient: simple queries handled by rules with no LLM cost
 - Report intent rules cover “analyze/分析” with ticker context (no LLM required)
+- Reliability-first Agent Gate: CHAT can escalate to Supervisor based on timeliness/decision/evidence needs
 
 ### Real-time Streaming and Transparency
 - Token-by-token streaming responses
 - Interactive K-line charts with full-screen mode
+- Multi-ticker comparisons auto-render multiple charts
 - Agent trace drill-down with expandable steps
 - Portfolio snapshot with editable holdings
+- Agent Gate decisions are visible in trace (used agent vs fast path)
+- Evidence pool is shown when tools/agents are invoked
 
 ### Alert and Subscription System
 - Price alerts: email notifications when price changes exceed thresholds
@@ -103,12 +121,15 @@ flowchart TB
     end
 
     subgraph API["FastAPI Backend"]
-        Main["/chat/supervisor/stream"]
+        Stream["/chat/stream"]
+        Router["ConversationRouter"]
+        Gate["Need-Agent Gate<br/>Reliability-first"]
+        ChatHandler["ChatHandler"]
         Classifier["IntentClassifier<br/>Rule + Embedding + LLM"]
     end
 
     subgraph Supervisor["SupervisorAgent"]
-        Router["Intent Router"]
+        SupRouter["Intent Router"]
         Workers["Worker Agents"]
         Forum["ForumHost"]
     end
@@ -134,15 +155,19 @@ flowchart TB
         Memory["User Memory"]
     end
 
-    UI --> Main
-    Main --> Classifier
-    Classifier --> Router
-    Router --> Workers
+    UI --> Stream
+    Stream --> Router
+    Router --> Gate
+    Gate -->|fast path| ChatHandler
+    Gate -->|needs agent| Classifier
+    Classifier --> SupRouter
+    SupRouter --> Workers
     Workers --> PA & NA & TA & FA & MA & DSA
     PA & NA & TA & FA & MA & DSA --> Forum
     Forum --> IR --> ReportView
     IR --> Evidence
     IR --> Trace
+    Stream --> Evidence
 
     PA & NA & TA & FA & MA & DSA --> Cache
     PA & NA & TA & FA & MA & DSA --> CB
@@ -157,9 +182,11 @@ flowchart LR
     Input[User Query] --> Rule[Rule Matching<br/>FREE]
     Rule -->|Match| Direct[Direct Response]
     Rule -->|No Match| Embed[Embedding + Keywords<br/>LOW COST]
-    Embed -->|High Confidence| Agent[Route to Agent]
+    Embed -->|High Confidence| Gate[Need-Agent Gate]
     Embed -->|Low Confidence| LLM[LLM Classification<br/>PAID]
-    LLM --> Agent
+    LLM --> Gate
+    Gate -->|Fast Path| Chat[ChatHandler]
+    Gate -->|Needs Agent| Agent[SupervisorAgent]
 ```
 
 ### Data Fallback Strategy
@@ -184,7 +211,7 @@ graph LR
 | `get_stock_price` | Real-time quote with fallback | yfinance -> Finnhub -> Alpha Vantage -> Web |
 | `get_company_info` | Company fundamentals | yfinance |
 | `get_company_news` | Latest headlines (structured list) | Reuters RSS + Bloomberg RSS + Finnhub |
-| `search` | Web search | Exa -> Tavily -> Wikipedia -> DuckDuckGo |
+| `search` | Web search | Exa -> Tavily -> DuckDuckGo (Wikipedia only for non-finance queries) |
 | `get_market_sentiment` | Fear and Greed index | CNN |
 | `get_economic_events` | Macro calendar | Exa search |
 | `get_financial_statements` | Income, balance, cash flow | yfinance |
@@ -253,6 +280,8 @@ FINNHUB_API_KEY=...
 TIINGO_API_KEY=...
 TAVILY_API_KEY=...
 EXA_API_KEY=...
+FRED_API_KEY=...
+BLOOMBERG_RSS_URLS=...
 
 # Email Alerts
 SMTP_SERVER=smtp.gmail.com
@@ -274,9 +303,9 @@ ENABLE_LANGSMITH=false
 
 # Quality & Guardrails
 DATA_CONTEXT_MAX_SKEW_HOURS=24
-BUDGET_MAX_TOOL_CALLS=24
+BUDGET_MAX_TOOL_CALLS=50
 BUDGET_MAX_ROUNDS=12
-BUDGET_MAX_SECONDS=120
+BUDGET_MAX_SECONDS=600
 CHAT_HISTORY_MAX_MESSAGES=12
 CACHE_JITTER_RATIO=0.1
 CACHE_NEGATIVE_TTL=60
@@ -364,7 +393,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-01-23 | Version: 0.6.5
+> Last Updated: 2026-01-24 | Version: 0.6.6
 
 ### Current Progress
 

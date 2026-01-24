@@ -88,6 +88,11 @@ class SubscriptionService:
                 sub['alert_types'] = alert_types
                 sub['price_threshold'] = price_threshold
                 sub['updated_at'] = datetime.now().isoformat()
+                # 重新启用并清理失败状态
+                sub['disabled'] = False
+                sub['alert_failures'] = 0
+                sub['last_alert_error'] = None
+                sub['last_alert_error_at'] = None
                 self._save_subscriptions()
                 return True
         
@@ -197,7 +202,7 @@ class SubscriptionService:
                     self._save_subscriptions()
                     break
 
-    def record_alert_attempt(self, email: str, ticker: str, success: bool, error: Optional[str] = None, disable: bool = False):
+    def record_alert_attempt(self, email: str, ticker: str, success: bool, error: Optional[str] = None, disable: bool = False, is_transient_error: bool = False):
         """Record alert delivery attempt and optionally disable subscription."""
         if email in self.subscriptions:
             for sub in self.subscriptions[email]:
@@ -211,11 +216,17 @@ class SubscriptionService:
                         sub['last_alert_error_at'] = None
                         sub['disabled'] = False
                     else:
-                        sub['alert_failures'] = int(sub.get('alert_failures', 0)) + 1
+                        if not is_transient_error:
+                            sub['alert_failures'] = int(sub.get('alert_failures', 0)) + 1
+                        
                         sub['last_alert_error'] = error
                         sub['last_alert_error_at'] = now
-                        if disable or sub['alert_failures'] >= ALERT_FAILURE_LIMIT:
+                        
+                        # Only disable if explicitly requested OR failure limit reached (for non-transient errors)
+                        should_disable = disable or (not is_transient_error and sub['alert_failures'] >= ALERT_FAILURE_LIMIT)
+                        if should_disable:
                             sub['disabled'] = True
+                            
                     self._save_subscriptions()
                     break
 

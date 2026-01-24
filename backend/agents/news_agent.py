@@ -399,11 +399,15 @@ class NewsAgent(BaseFinancialAgent):
         if self.llm and hasattr(self.llm, 'astream'):
             try:
                 from langchain_core.messages import HumanMessage
-                prompt = f"""请用简洁的中文总结以下新闻要点，不超过100字：
+                prompt = f"""你是资深金融新闻分析师。请用中文输出**更完整**的新闻摘要（120-200字），要求：
+- 3-5条要点，覆盖事实+影响
+- 明确提到1-2个潜在风险或不确定性
+- 不要复述标题原文，尽量提炼
 
+新闻列表：
 {chr(10).join(news_list)}
 
-总结："""
+输出："""
                 async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
                     if hasattr(chunk, 'content') and chunk.content:
                         yield chunk.content

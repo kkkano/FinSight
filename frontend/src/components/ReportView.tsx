@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { normalizeMarkdown } from '../utils/markdown';
 import type { ReportIR, ReportSection, ReportContent, Citation, Sentiment } from '../types/index';
 import { ChevronDown, ChevronUp, ExternalLink, BarChart2, TrendingUp, AlertTriangle, Maximize2, X } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
@@ -107,6 +109,84 @@ const buildSourceSummary = (citations: Citation[]) => {
     .map(([domain, count]) => ({ domain, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
+};
+
+const classifyReportError = (error: string) => {
+  const raw = String(error || '').trim();
+  const lower = raw.toLowerCase();
+
+  if (lower.includes('invalid api key') || lower.includes('invalid_api_key') || lower.includes('api key') || lower.includes('apikey') || lower.includes('unauthorized') || lower.includes('forbidden') || lower.includes('authentication') || lower.includes('permission denied') || lower.includes('401') || lower.includes('403')) {
+    return { label: '鉴权失败', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200' };
+  }
+  if (lower.includes('insufficient_quota') || lower.includes('quota') || lower.includes('billing')) {
+    return { label: '额度不足', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200' };
+  }
+  if (lower.includes('timeout')) {
+    return { label: '超时', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' };
+  }
+  if (lower.includes('rate limit') || lower.includes('rate limited') || lower.includes('429')) {
+    return { label: '限流', tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200' };
+  }
+  if (lower.includes('connection') || lower.includes('network') || lower.includes('dns') || lower.includes('econn') || lower.includes('ssl') || lower.includes('certificate') || lower.includes('enotfound') || lower.includes('refused') || lower.includes('reset by peer') || lower.includes('socket') || lower.includes('network unreachable')) {
+    return { label: '网络异常', tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' };
+  }
+  if (lower.includes('refuse') || lower.includes('rejected') || lower.includes('policy') || lower.includes('policy violation') || lower.includes('content policy') || lower.includes('content_policy') || lower.includes('safety') || lower.includes('safety system') || lower.includes('moderation') || lower.includes('content filter') || lower.includes('blocked')) {
+    return { label: '模型拒答', tone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200' };
+  }
+  if (lower.includes('service unavailable') || lower.includes('502') || lower.includes('503') || lower.includes('bad gateway') || lower.includes('server error')) {
+    return { label: '服务不可用', tone: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200' };
+  }
+  if (lower.includes('not defined') || lower.includes('unavailable') || lower.includes('unreachable')) {
+    return { label: '数据源异常', tone: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200' };
+  }
+  return { label: '警告', tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200' };
+};
+
+const formatReportError = (error: string) => {
+  const raw = String(error || '').trim();
+  if (!raw) return raw;
+
+  const lower = raw.toLowerCase();
+  const replacements: Array<[string, string]> = [
+    ['fallback_synthesis_used', '已启用兜底合成'],
+    ['timeout', '超时'],
+    ['rate limit', '限流'],
+    ['rate limited', '限流'],
+  ];
+
+  const prefixMap: Record<string, string> = {
+    price: 'PriceAgent',
+    news: 'NewsAgent',
+    technical: 'TechnicalAgent',
+    fundamental: 'FundamentalAgent',
+    macro: 'MacroAgent',
+    deep_search: 'DeepSearchAgent',
+    forum: 'Forum',
+    orchestrator: 'Orchestrator',
+  };
+
+  let output = raw;
+  for (const [from, to] of replacements) {
+    if (output.toLowerCase().includes(from)) {
+      output = output.replace(new RegExp(from, 'ig'), to);
+    }
+  }
+
+  const parts = output.split(':');
+  if (parts.length > 1) {
+    const prefix = parts.shift()?.trim() || '';
+    const detail = parts.join(':').trim();
+    const mapped = prefixMap[prefix] || prefixMap[prefix.toLowerCase()];
+    if (mapped) {
+      return detail ? `${mapped} ${detail}` : mapped;
+    }
+  }
+
+  if (lower.includes('finnhub_client') && lower.includes('not defined')) {
+    return '数据源 Finnhub 初始化失败（finnhub_client 未定义）';
+  }
+
+  return output;
 };
 
 const pickSectionByKeywords = (sections: ReportSection[], keywords: string[]) =>
@@ -218,6 +298,8 @@ const buildReportMessages = (report: ReportIR) => {
     },
   ];
 };
+
+const markdownPlugins = [remarkGfm];
 
 const safeJsonParse = (value: string) => {
   try {
@@ -332,6 +414,7 @@ const SectionRenderer: React.FC<{
   const confidence = (section as any).confidence;
   const dataSources = (section as any).data_sources || [];
   const hasError = (section as any).error;
+  const status = (section as any).status;
 
   return (
     <div
@@ -357,6 +440,11 @@ const SectionRenderer: React.FC<{
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                   {agentName}
                 </span>
+                {status === 'not_run' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                    未运行
+                  </span>
+                )}
                 {confidence !== undefined && confidence > 0 && (
                   <span className="text-[10px] text-slate-400">
                     {Math.round(confidence * 100)}% 置信度
@@ -391,7 +479,7 @@ const SectionRenderer: React.FC<{
                 <div key={idx} className="text-sm text-slate-700 dark:text-slate-200">
                   {content.type === 'text' && (
                     <div className="leading-relaxed prose prose-sm prose-slate dark:prose-invert max-w-none">
-                      <ReactMarkdown>{String(content.content || '')}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(String(content.content || ''))}</ReactMarkdown>
                     </div>
                   )}
 
@@ -519,11 +607,13 @@ const EvidencePool: React.FC<{
   activeCitation: string | null;
   onSelect: (ref: string) => void;
   onJump: (ref: string) => void;
-}> = ({ citations, sourceSummary, anchorPrefix, activeCitation, onSelect, onJump }) => {
+  frameless?: boolean;
+  className?: string;
+}> = ({ citations, sourceSummary, anchorPrefix, activeCitation, onSelect, onJump, frameless = false, className = '' }) => {
   if (!citations || citations.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60 p-4 space-y-3">
+    <div className={`${frameless ? '' : 'rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60'} p-4 space-y-3 ${className}`}>
       <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">
         证据池
       </div>
@@ -629,6 +719,62 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const catalystItems = useMemo(() => extractCatalystItems(report.sections), [report.sections]);
   const metricItems = useMemo(() => extractMetrics(report.sections), [report.sections]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
+  const agentDetailSections = useMemo(() => {
+    const metaSummaries = (report.meta as any)?.agent_summaries;
+    if (Array.isArray(metaSummaries) && metaSummaries.length > 0) {
+      return metaSummaries.map((item: any, idx: number) => ({
+        title: item.title || item.agent_name || item.agent || `Agent ${idx + 1}`,
+        order: idx + 1,
+        agent_name: item.agent_name || item.agent || item.name,
+        confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
+        data_sources: Array.isArray(item.data_sources) ? item.data_sources : [],
+        error: Boolean(item.error),
+        status: item.status,
+        contents: [
+          {
+            type: 'text',
+            content: item.summary || (item.error_message ? `⚠️ ${item.error_message}` : item.status === 'not_run' ? '未运行（本轮未触发或无匹配意图）' : '暂无输出'),
+          },
+        ],
+      }));
+    }
+
+    return report.sections.filter((section: any) => section.agent_name && section.agent_name !== 'ForumHost');
+  }, [report]);
+  const reportErrors = (report as any).errors ?? report.meta?.errors ?? (report.meta as any)?.report_error;
+  const normalizedErrors = Array.isArray(reportErrors)
+    ? reportErrors.filter(Boolean)
+    : typeof reportErrors === 'string'
+      ? [reportErrors]
+      : [];
+  const formattedErrors = normalizedErrors.map((err) => formatReportError(String(err)));
+  const classifiedErrors = formattedErrors.map((err) => ({
+    text: err,
+    ...(classifyReportError(err)),
+  }));
+  const isFallback = Boolean((report as any).meta?.is_fallback);
+  const warningText = isFallback
+    ? '本次为兜底报告：综合生成失败或数据不完整，内容可能偏摘要/拼接。'
+    : normalizedErrors.length > 0
+      ? '报告生成时出现部分错误：'
+      : '';
+  const shouldShowWarning = Boolean(warningText || formattedErrors.length > 0);
+  const warningNode = shouldShowWarning ? (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/80 text-amber-700 px-4 py-3 text-xs dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200">
+      <div className="font-semibold">⚠️ 报告提示</div>
+      {warningText && <div className="mt-1">{warningText}</div>}
+      {formattedErrors.length > 0 && (
+        <ul className="mt-2 list-disc list-inside space-y-1">
+          {classifiedErrors.map((err, idx) => (
+            <li key={`${err.text}-${idx}`} className="flex items-start gap-2">
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${err.tone}`}>{err.label}</span>
+              <span className="flex-1">{err.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  ) : null;
 
   useEffect(() => {
     let mounted = true;
@@ -714,6 +860,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
     return () => observer.disconnect();
   }, [anchorPrefix]);
+
+  useEffect(() => {
+    if (isFullscreen) {
+      setExpandedSections((prev) => ({ ...prev, synthesis: true }));
+    }
+  }, [isFullscreen]);
 
   const pushStatus = (tone: 'success' | 'error' | 'info', text: string) => {
     setActionMessage({ tone, text });
@@ -843,11 +995,27 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 <SentimentBadge sentiment={report.sentiment} confidence={report.confidence_score} />
                 {report.recommendation && <RecommendationBadge recommendation={report.recommendation} />}
               </div>
-              <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-                  <span className="font-semibold">Core view:</span> {report.summary}
-                </p>
-              </div>
+                <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
+                    核心观点
+                  </div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
+                    <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(report.summary)}</ReactMarkdown>
+                  </div>
+                  {sourceSummary.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                      {sourceSummary.map((item) => (
+                        <span
+                          key={item.domain}
+                          className="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 text-slate-500 dark:text-slate-300"
+                        >
+                          {item.domain} · {item.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              {warningNode && <div className="mt-4">{warningNode}</div>}
             </div>
 
             {/* 章节内容 */}
@@ -878,7 +1046,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                       className={`p-5 transition-all duration-300 ease-in-out ${expandedSections['synthesis'] ? '' : 'max-h-[300px] overflow-hidden'}`}
                     >
                       <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
-                        <ReactMarkdown>{(report as any).synthesis_report}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown((report as any).synthesis_report)}</ReactMarkdown>
                       </div>
                     </div>
 
@@ -911,7 +1079,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               )}
 
               {/* Agent 分析详情（可折叠） */}
-              {report.sections.length > 0 && (
+              {agentDetailSections.length > 0 ? (
                 <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
                   <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
                     <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
@@ -919,15 +1087,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                       Agent 分析详情
                     </span>
                     <span className="text-[10px] text-slate-400 ml-auto">
-                      {report.sections.length} 个数据源
+                      {agentDetailSections.length} 个数据源
                     </span>
                   </summary>
                   <div className="p-4 pt-0 space-y-3">
-                    {report.sections.map((section) => (
+                    {agentDetailSections.map((section) => (
                       <SectionRenderer
-                        key={section.order}
-                        section={section}
-                        isOpen={!!expandedSections[section.order]}
+                        key={`${section.order}-${section.title}`}
+                        section={section as ReportSection}
+                        isOpen={expandedSections[section.order] ?? true}
                         isActive={activeSection === section.order}
                         anchorPrefix={anchorPrefix}
                         onToggle={() => toggleSection(section.order)}
@@ -935,6 +1103,36 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                         onCitationJump={handleJumpToCitation}
                       />
                     ))}
+                  </div>
+                </details>
+              ) : (
+                <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
+                  <div className="px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200/70 dark:border-slate-700/60">
+                    Agent 分析详情
+                  </div>
+                  <div className="px-5 py-4 text-xs text-slate-400">暂无 agent 分析</div>
+                </div>
+              )}
+
+              {report.citations && report.citations.length > 0 && (
+                <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden" open>
+                  <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
+                    <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">证据池</span>
+                    <span className="text-[10px] text-slate-400 ml-auto">
+                      {report.citations.length} 条来源
+                    </span>
+                  </summary>
+                  <div className="p-4 pt-0">
+                    <EvidencePool
+                      citations={report.citations}
+                      sourceSummary={sourceSummary}
+                      anchorPrefix={anchorPrefix}
+                      activeCitation={activeCitation}
+                      onSelect={setActiveCitation}
+                      onJump={handleJumpToCitation}
+                      frameless
+                    />
                   </div>
                 </details>
               )}
@@ -983,6 +1181,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           </div>
         </div>
 
+        <div className="mt-4 rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
+            核心观点
+          </div>
+          <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
+            <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(report.summary)}</ReactMarkdown>
+          </div>
+          {sourceSummary.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+              {sourceSummary.map((item) => (
+                <span
+                  key={item.domain}
+                  className="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 dark:text-slate-300"
+                >
+                  {item.domain} · {item.count}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        {warningNode && <div className="mt-4">{warningNode}</div>}
+
         {/* Agent 执行状态面板 - 显示在 Core view 区域 */}
         <div className="mt-5 grid gap-4 md:grid-cols-[1fr_280px]">
           <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 p-4">
@@ -1002,17 +1222,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               ))}
             </div>
             {/* 摘要内容 - 折叠显示 */}
-            <details className="group">
-              <summary className="cursor-pointer text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
-                查看综合分析摘要
-              </summary>
-              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-                {report.summary}
-              </p>
-            </details>
           </div>
           <ConfidenceMeter score={report.confidence_score} />
         </div>
+
+        {warningNode && <div className="mt-4">{warningNode}</div>}
 
         {/* 风险/催化剂/指标 - 横向更宽的布局 */}
         <div className="mt-4 grid gap-3 grid-cols-1 md:grid-cols-3">
@@ -1149,7 +1363,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     className={`p-5 transition-all duration-300 ease-in-out ${expandedSections['synthesis'] ? '' : 'max-h-[300px] overflow-hidden'}`}
                   >
                     <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
-                      <ReactMarkdown>{(report as any).synthesis_report}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown((report as any).synthesis_report)}</ReactMarkdown>
                     </div>
                   </div>
 
@@ -1182,7 +1396,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
             )}
 
             {/* Agent 分析详情（可折叠） */}
-            {report.sections.length > 0 && (
+            {agentDetailSections.length > 0 ? (
               <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
                 <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
                   <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
@@ -1190,15 +1404,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     Agent 分析详情
                   </span>
                   <span className="text-[10px] text-slate-400 ml-auto">
-                    {report.sections.length} 个数据源
+                    {agentDetailSections.length} 个数据源
                   </span>
                 </summary>
                 <div className="p-4 pt-0 space-y-3">
-                  {report.sections.map((section) => (
+                  {agentDetailSections.map((section) => (
                     <SectionRenderer
-                      key={section.order}
-                      section={section}
-                      isOpen={!!expandedSections[section.order]}
+                      key={`${section.order}-${section.title}`}
+                      section={section as ReportSection}
+                      isOpen={expandedSections[section.order] ?? true}
                       isActive={activeSection === section.order}
                       anchorPrefix={anchorPrefix}
                       onToggle={() => toggleSection(section.order)}
@@ -1208,32 +1422,38 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                   ))}
                 </div>
               </details>
+            ) : (
+              <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
+                <div className="px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200/70 dark:border-slate-700/60">
+                  Agent 分析详情
+                </div>
+                <div className="px-5 py-4 text-xs text-slate-400">暂无 agent 分析</div>
+              </div>
+            )}
+
+            {report.citations && report.citations.length > 0 && (
+              <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden" open>
+                <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
+                  <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">证据池</span>
+                  <span className="text-[10px] text-slate-400 ml-auto">
+                    {report.citations.length} 条来源
+                  </span>
+                </summary>
+                <div className="p-4 pt-0">
+                  <EvidencePool
+                    citations={report.citations}
+                    sourceSummary={sourceSummary}
+                    anchorPrefix={anchorPrefix}
+                    activeCitation={activeCitation}
+                    onSelect={setActiveCitation}
+                    onJump={handleJumpToCitation}
+                    frameless
+                  />
+                </div>
+              </details>
             )}
           </div>
-
-          <aside className="hidden lg:block w-56 shrink-0">
-            <div className="sticky top-6 space-y-3">
-              <EvidencePool
-                citations={report.citations}
-                sourceSummary={sourceSummary}
-                anchorPrefix={anchorPrefix}
-                activeCitation={activeCitation}
-                onSelect={setActiveCitation}
-                onJump={handleJumpToCitation}
-              />
-            </div>
-          </aside>
-        </div>
-
-        <div className="mt-6 lg:hidden">
-          <EvidencePool
-            citations={report.citations}
-            sourceSummary={sourceSummary}
-            anchorPrefix={anchorPrefix}
-            activeCitation={activeCitation}
-            onSelect={setActiveCitation}
-            onJump={handleJumpToCitation}
-          />
         </div>
       </div>
 

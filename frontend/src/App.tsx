@@ -3,7 +3,7 @@ import { ChatList } from './components/ChatList';
 import Sidebar from './components/Sidebar';
 import { ChatInput } from './components/ChatInput';
 import { SettingsModal } from './components/SettingsModal';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, ChevronLeft } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { apiClient } from './api/client';
 import { RightPanel } from './components/RightPanel';
@@ -83,6 +83,14 @@ function App() {
     }
   }, [currentTicker]);
 
+  const toggleRightPanel = () => {
+    setIsChartPanelExpanded((prev) => {
+      const next = !prev;
+      setUserCollapsed(!next);
+      return next;
+    });
+  };
+
   const formatChangePct = (value?: number) => {
     if (value === undefined || Number.isNaN(value)) return null;
     const sign = value >= 0 ? '+' : '';
@@ -140,8 +148,20 @@ function App() {
 
           {/* Right: Auxiliary Panel (Visualization & Context) */}
           <div className={`w-[380px] flex flex-col gap-4 transition-all duration-300 ${isChartPanelExpanded ? '' : '-mr-[380px] hidden'}`}>
-            <RightPanel onCollapse={() => setIsChartPanelExpanded(!isChartPanelExpanded)} />
+            <RightPanel onCollapse={toggleRightPanel} />
           </div>
+          {!isChartPanelExpanded && (
+            <button
+              onClick={() => {
+                setIsChartPanelExpanded(true);
+                setUserCollapsed(false);
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm"
+              title="展开右侧面板"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
         </div>
       </div>
 

@@ -298,6 +298,10 @@ class PlanExecutor:
         context_summary: Optional[str] = None,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Any:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("[PlanExecutor._run_forum_step] Entered, agent_outputs count: %d", len(agent_outputs) if agent_outputs else 0)
+        
         try:
             self._consume_round("forum")
         except BudgetExceededError as exc:
@@ -315,7 +319,10 @@ class PlanExecutor:
             if not agent_outputs:
                 step.status = "skipped"
                 step.error = "no_agent_outputs"
+                logger.warning("[PlanExecutor._run_forum_step] No agent outputs, skipping forum step")
                 return None
+            
+            logger.info("[PlanExecutor._run_forum_step] Calling forum.synthesize with timeout=%s", step.timeout_seconds)
             result = await asyncio.wait_for(
                 self.forum.synthesize(
                     agent_outputs,
@@ -324,15 +331,20 @@ class PlanExecutor:
                 ),
                 timeout=step.timeout_seconds,
             )
+            logger.info("[PlanExecutor._run_forum_step] forum.synthesize completed, result type: %s", type(result).__name__ if result else "None")
             step.status = "completed"
             return result
         except asyncio.TimeoutError as exc:
             step.status = "failed"
             step.error = f"timeout:{step.timeout_seconds}s"
+            logger.error("[PlanExecutor._run_forum_step] Timeout after %s seconds", step.timeout_seconds)
             raise RuntimeError(step.error) from exc
         except Exception as exc:  # pragma: no cover - defensive
+            import traceback
             step.status = "failed"
             step.error = str(exc)
+            logger.error("[PlanExecutor._run_forum_step] Exception: %s: %s", type(exc).__name__, str(exc))
+            logger.error("[PlanExecutor._run_forum_step] Traceback:\n%s", traceback.format_exc())
             raise
         finally:
             step.finished_at = _now_iso()
@@ -341,6 +353,7 @@ class PlanExecutor:
                 self._emit_event(on_event, trace, step, "step_done")
             else:
                 self._emit_event(on_event, trace, step, "step_error", {"error": step.error})
+
 
     async def execute(
         self,
@@ -370,6 +383,8 @@ class PlanExecutor:
                     step.status = "skipped"
                     step.error = "dependency_failed"
                     self._emit_event(on_event, trace, step, "step_skipped", {"reason": "dependency_failed"})
+                    if step.agent_name:
+                        errors.append(f"{step.agent_name}:dependency_failed")
                     failed.add(step_id)
                     pending.pop(step_id, None)
                     continue
@@ -402,7 +417,10 @@ class PlanExecutor:
                         agent_outputs[step.agent_name] = result
                     completed.add(step_id)
                 except Exception as exc:
-                    errors.append(str(exc))
+                    if step.agent_name:
+                        errors.append(f"{step.agent_name}:{exc}")
+                    else:
+                        errors.append(str(exc))
                     failed.add(step_id)
                 running.pop(step_id, None)
 
@@ -418,6 +436,13 @@ class PlanExecutor:
                     on_event=on_event,
                 )
             except Exception as exc:
+                import logging
+                import traceback
+                logger = logging.getLogger(__name__)
+                logger.error("[PlanExecutor] Forum step failed!")
+                logger.error("[PlanExecutor] Exception type: %s", type(exc).__name__)
+                logger.error("[PlanExecutor] Exception message: %s", str(exc))
+                logger.error("[PlanExecutor] Full traceback:\n%s", traceback.format_exc())
                 errors.append(str(exc))
 
         return {

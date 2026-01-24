@@ -105,6 +105,80 @@ class SupervisorAgent:
             return
         self._budget.consume_round(label)
 
+    def _select_agents_for_query(self, query: str) -> List[str]:
+        """Select relevant agents based on query signals."""
+        query_lower = query.lower()
+        selected: List[str] = []
+
+        if any(kw in query_lower for kw in ["新闻", "快讯", "消息", "news", "headline", "舆情"]):
+            selected.append("news")
+        if any(kw in query_lower for kw in ["技术", "走势", "形态", "macd", "rsi", "kdj", "technical", "indicator"]):
+            selected.append("technical")
+        if any(kw in query_lower for kw in ["财报", "营收", "利润", "估值", "市盈率", "pe", "eps", "roe", "fundamental", "valuation"]):
+            selected.append("fundamental")
+        if any(kw in query_lower for kw in ["宏观", "cpi", "gdp", "利率", "通胀", "macro", "fomc"]):
+            selected.append("macro")
+        if any(kw in query_lower for kw in ["价格", "股价", "行情", "price", "quote", "表现"]):
+            selected.append("price")
+
+        if not selected:
+            selected = ["price", "fundamental", "technical", "news"]
+
+        # Ensure unique order preservation
+        seen = set()
+        ordered = []
+        for name in selected:
+            if name not in seen:
+                ordered.append(name)
+                seen.add(name)
+        return ordered
+
+    def _collect_evidence_pool(self, agent_outputs: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        pool: List[Dict[str, Any]] = []
+        if not isinstance(agent_outputs, dict):
+            return pool
+        seen = set()
+        for agent_name, output in agent_outputs.items():
+            if isinstance(output, dict):
+                evidence_list = output.get("evidence") or []
+            else:
+                evidence_list = getattr(output, "evidence", []) or []
+            for ev in evidence_list:
+                if isinstance(ev, dict):
+                    title = ev.get("title") or ev.get("headline") or ev.get("source") or agent_name
+                    snippet = ev.get("snippet") or ev.get("text") or ev.get("content") or ""
+                    url = ev.get("url") or ""
+                    source = ev.get("source") or agent_name
+                    timestamp = ev.get("timestamp") or ev.get("published_at") or ev.get("datetime")
+                    confidence = ev.get("confidence")
+                else:
+                    title = getattr(ev, "title", None) or getattr(ev, "source", None) or agent_name
+                    snippet = getattr(ev, "text", None) or ""
+                    url = getattr(ev, "url", "") or ""
+                    source = getattr(ev, "source", None) or agent_name
+                    timestamp = getattr(ev, "timestamp", None)
+                    confidence = getattr(ev, "confidence", None)
+                if isinstance(snippet, str):
+                    snippet = snippet.strip()
+                else:
+                    snippet = str(snippet)
+                if snippet and len(snippet) > 240:
+                    snippet = snippet[:240] + "..."
+                key = f"{url}|{title}|{snippet[:80]}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                pool.append({
+                    "title": title,
+                    "url": url,
+                    "snippet": snippet,
+                    "source": source,
+                    "published_date": timestamp,
+                    "confidence": confidence,
+                    "agent": agent_name,
+                })
+        return pool
+
     def _result(self, *args, **kwargs) -> SupervisorResult:
         result = SupervisorResult(*args, **kwargs)
         if self._budget:
@@ -341,6 +415,24 @@ class SupervisorAgent:
     async def _handle_news(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle news query - 显示原始新闻，有上下文时补充分析"""
         try:
+            # Prefer NewsAgent for reliability when ticker is available
+            if ticker:
+                news_agent = self.agents.get("news")
+                if news_agent:
+                    try:
+                        self._consume_round("agent:news")
+                        output = await news_agent.research(query, ticker)
+                        if output and output.summary:
+                            return self._result(
+                                success=True,
+                                intent=Intent.NEWS,
+                                response=output.summary,
+                                agent_outputs={"news": output},
+                                classification=classification
+                            )
+                    except Exception as e:
+                        logger.info(f"[Supervisor] NewsAgent failed: {e}")
+
             self._consume_round("tool:news")
             if ticker:
                 news_data = self.tools_module.get_company_news(ticker)
@@ -369,6 +461,9 @@ class SupervisorAgent:
                     )
             else:
                 base_response = str(news_data) if news_data else "暂无相关新闻"
+
+            if isinstance(base_response, str) and ("Connection error" in base_response or "Search error" in base_response):
+                base_response = "新闻源连接失败，请稍后重试。"
 
             # 如果有上下文，在原始新闻后补充简短分析
             if context_summary and news_data:
@@ -406,7 +501,7 @@ class SupervisorAgent:
             return self._result(
                 success=False,
                 intent=Intent.NEWS,
-                response=f"获取新闻时出错: {e}",
+                response="新闻源连接失败，请稍后重试。",
                 classification=classification,
                 errors=[str(e)]
             )
@@ -785,29 +880,76 @@ class SupervisorAgent:
             comparison_data = self.tools_module.get_performance_comparison(tickers)
             base_response = str(comparison_data) if comparison_data else "对比完成，但无数据"
 
+            selected_agents = self._select_agents_for_query(query)
+            agent_outputs: Dict[str, Any] = {}
+            errors: List[str] = []
+
+            async def run_agent(agent_name: str, ticker: str):
+                agent = self.agents.get(agent_name)
+                if not agent:
+                    return agent_name, ticker, None, f"Agent {agent_name} 不可用"
+                enhanced_query = query
+                if context_summary:
+                    enhanced_query = f"{query}\n\n【参考上下文】\n{context_summary}"
+                try:
+                    self._consume_round(f"agent:{agent_name}")
+                    output = await agent.research(enhanced_query, ticker)
+                    return agent_name, ticker, output, None
+                except Exception as exc:
+                    return agent_name, ticker, None, str(exc)
+
+            tasks = []
+            for ticker in tickers:
+                for agent_name in selected_agents:
+                    tasks.append(run_agent(agent_name, ticker))
+            if tasks:
+                results = await asyncio.gather(*tasks)
+                for agent_name, ticker, output, err in results:
+                    key = f"{agent_name}_{ticker}"
+                    if output:
+                        agent_outputs[key] = output
+                    if err:
+                        errors.append(f"{key}: {err}")
+
             # If context exists, enhance with LLM
-            if context_summary and comparison_data:
+            if self.llm and (comparison_data or agent_outputs):
                 try:
                     from langchain_core.messages import HumanMessage
+                    summaries = []
+                    for ticker in tickers:
+                        ticker_summaries = []
+                        for agent_name in selected_agents:
+                            key = f"{agent_name}_{ticker}"
+                            output = agent_outputs.get(key)
+                            if output and getattr(output, "summary", None):
+                                ticker_summaries.append(f"{agent_name}: {str(output.summary)[:400]}")
+                        if ticker_summaries:
+                            summaries.append(f"{ticker}:\n- " + "\n- ".join(ticker_summaries))
+                    summaries_text = "\n\n".join(summaries) if summaries else "无额外 Agent 分析摘要"
+
                     prompt = f"""<role>股票对比分析师</role>
 <task>解读股票对比结果</task>
 
 <comparison>{base_response[:2000]}</comparison>
-<context>{context_summary}</context>
+<agent_summaries>{summaries_text[:2500]}</agent_summaries>
+<context>{context_summary or '无'}</context>
 <query>{query}</query>
 
 <rules>
 - 禁止开场白，直接输出对比解读
-- 2-3句话总结核心差异
+- 3-5句话总结核心差异
 - 融入上下文（投资偏好、历史讨论）
 - 给出明确的对比结论
+- 如某维度无数据，明确说明
 </rules>"""
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
                     return self._result(
                         success=True,
                         intent=Intent.COMPARISON,
                         response=response.content if hasattr(response, 'content') else str(response),
-                        classification=classification
+                        agent_outputs=agent_outputs or None,
+                        classification=classification,
+                        errors=errors if errors else None
                     )
                 except Exception as e:
                     logger.info(f"[Supervisor] Comparison context enhancement failed: {e}")
@@ -816,7 +958,9 @@ class SupervisorAgent:
                 success=True,
                 intent=Intent.COMPARISON,
                 response=base_response,
-                classification=classification
+                agent_outputs=agent_outputs or None,
+                classification=classification,
+                errors=errors if errors else None
             )
         except Exception as e:
             return self._result(
@@ -959,7 +1103,14 @@ class SupervisorAgent:
 
         return None
 
-    async def process_stream(self, query: str, tickers: List[str] = None, user_profile: Any = None, conversation_context: List[Dict] = None):
+    async def process_stream(
+        self,
+        query: str,
+        tickers: List[str] = None,
+        user_profile: Any = None,
+        conversation_context: List[Dict] = None,
+        agent_gate: Optional[Dict[str, Any]] = None,
+    ):
         """
         Streaming process - real-time progress reporting
         格式与前端 sendMessageStream 期望的格式兼容
@@ -1018,6 +1169,16 @@ class SupervisorAgent:
             }
             thinking_steps.append(step2)
             yield json.dumps({"type": "thinking", **step2}, ensure_ascii=False)
+
+            if agent_gate:
+                step_gate = {
+                    "stage": "agent_gate",
+                    "message": "评估是否需要调用多Agent",
+                    "result": agent_gate,
+                    "timestamp": datetime.now().isoformat()
+                }
+                thinking_steps.append(step_gate)
+                yield json.dumps({"type": "thinking", **step_gate}, ensure_ascii=False)
 
             # 3. 执行对应处理器
             step3 = {
@@ -1153,6 +1314,19 @@ class SupervisorAgent:
                         }
                     }
                     thinking_steps.insert(-1, agent_step)  # 插入到 complete 步骤之前
+                if agent_traces:
+                    base_agents = []
+                    for name in agent_traces.keys():
+                        base = str(name).split("_")[0]
+                        if base not in base_agents:
+                            base_agents.append(base)
+                    select_step = {
+                        "stage": "agent_selected",
+                        "message": "已选择专家Agent",
+                        "timestamp": datetime.now().isoformat(),
+                        "result": {"agents": base_agents, "agent_keys": list(agent_traces.keys())}
+                    }
+                    thinking_steps.insert(-1, select_step)
 
             yield json.dumps({
                 "type": "done",
@@ -1212,6 +1386,20 @@ class SupervisorAgent:
         forum_output = result.forum_output
         agent_outputs = result.agent_outputs or {}
         errors_list = result.errors or []
+        agent_sections = {
+            "price": {"title": "价格分析", "agent": "PriceAgent"},
+            "news": {"title": "新闻分析", "agent": "NewsAgent"},
+            "technical": {"title": "技术分析", "agent": "TechnicalAgent"},
+            "fundamental": {"title": "基本面分析", "agent": "FundamentalAgent"},
+            "macro": {"title": "宏观分析", "agent": "MacroAgent"},
+            "deep_search": {"title": "深度搜索", "agent": "DeepSearchAgent"},
+        }
+
+        def _agent_error(agent_key: str) -> Optional[str]:
+            for err in errors_list:
+                if isinstance(err, str) and err.startswith(f"{agent_key}:"):
+                    return err.split(":", 1)[1].strip() if ":" in err else err
+            return None
 
         context_collector = DataContextCollector()
         for agent_name, agent_output in agent_outputs.items():
@@ -1249,25 +1437,12 @@ class SupervisorAgent:
                 section_order += 1
         else:
             # Fallback: 从各 Agent 输出构建章节
-            agent_sections = {
-                "price": {"title": "价格分析", "agent": "PriceAgent"},
-                "news": {"title": "新闻分析", "agent": "NewsAgent"},
-                "technical": {"title": "技术分析", "agent": "TechnicalAgent"},
-                "fundamental": {"title": "基本面分析", "agent": "FundamentalAgent"},
-                "macro": {"title": "宏观分析", "agent": "MacroAgent"},
-                "deep_search": {"title": "深度搜索", "agent": "DeepSearchAgent"}
-            }
-
             for agent_key, section_info in agent_sections.items():
                 section_title = section_info["title"]
                 agent_display_name = section_info["agent"]
 
                 # 检查是否有这个 agent 的错误
-                agent_error = None
-                for err in errors_list:
-                    if err.startswith(f"{agent_key}:"):
-                        agent_error = err.split(":", 1)[1].strip() if ":" in err else err
-                        break
+                agent_error = _agent_error(agent_key)
 
                 if agent_key in agent_outputs and agent_outputs[agent_key]:
                     agent_output = agent_outputs[agent_key]
@@ -1314,13 +1489,36 @@ class SupervisorAgent:
                 agent_status[agent_key] = {"status": "success", "confidence": confidence}
             else:
                 # 检查是否有错误
-                agent_error = None
-                for err in errors_list:
-                    if err.startswith(f"{agent_key}:"):
-                        agent_error = err.split(":", 1)[1].strip() if ":" in err else err
-                        break
+                agent_error = _agent_error(agent_key)
                 if agent_error:
                     agent_status[agent_key] = {"status": "error", "error": agent_error}
+
+        agent_summaries = []
+        for agent_key, section_info in agent_sections.items():
+            agent_output = agent_outputs.get(agent_key)
+            agent_error = _agent_error(agent_key)
+            if agent_output:
+                status = "success"
+            elif agent_error:
+                status = "error"
+            else:
+                status = "not_run"
+            summary = None
+            if agent_output and getattr(agent_output, "summary", None):
+                summary = safe_str(agent_output.summary)
+            elif status == "not_run":
+                summary = "未运行（本轮未触发或无匹配意图）"
+            agent_summaries.append({
+                "agent": agent_key,
+                "agent_name": section_info["agent"],
+                "title": section_info["title"],
+                "summary": summary,
+                "confidence": float(getattr(agent_output, "confidence", 0.0)) if agent_output else 0.0,
+                "data_sources": getattr(agent_output, "data_sources", []) if agent_output else [],
+                "status": status,
+                "error": bool(agent_error),
+                "error_message": agent_error,
+            })
 
         # 构建 citations
         def _calc_freshness_hours(published_date: str) -> float:
@@ -1433,6 +1631,7 @@ class SupervisorAgent:
             "meta": {
                 "data_context": data_context,
                 "disclaimer": DISCLAIMER_TEXT,
+                "agent_summaries": agent_summaries,
             },
         }
 
@@ -1508,6 +1707,35 @@ class SupervisorAgent:
         # 如果没找到特定格式，返回前 500 字符
         return forum_text[:500]
 
+    async def analyze(self, query: str, ticker: str, user_profile: Optional[Any] = None) -> Dict[str, Any]:
+        """
+        兼容旧版 AgentSupervisor 的 analyze() 方法
+
+        Args:
+            query: 用户查询
+            ticker: 股票代码（单个）
+            user_profile: 用户画像
+
+        Returns:
+            Dict with keys: forum_output, agent_outputs, errors, plan, trace, budget
+        """
+        # 调用新版 process 方法
+        result = await self.process(
+            query=query,
+            tickers=[ticker] if ticker else None,
+            user_profile=user_profile
+        )
+
+        # 转换为旧格式
+        return {
+            "forum_output": result.forum_output,
+            "agent_outputs": result.agent_outputs or {},
+            "errors": result.errors or [],
+            "plan": None,  # 旧版有 plan，新版没有，返回 None
+            "trace": [],   # 旧版有 trace，新版没有，返回空列表
+            "budget": result.budget,
+        }
+
     def _build_fallback_report(self, result: SupervisorResult, ticker: str, classification: ClassificationResult) -> dict:
         """
         构建后备报告（当 forum_output 为空时）
@@ -1529,6 +1757,20 @@ class SupervisorAgent:
         sections = []
         section_order = 1
         agent_outputs = result.agent_outputs or {}
+        agent_sections = {
+            "price": {"title": "价格分析", "agent": "PriceAgent"},
+            "news": {"title": "新闻分析", "agent": "NewsAgent"},
+            "technical": {"title": "技术分析", "agent": "TechnicalAgent"},
+            "fundamental": {"title": "基本面分析", "agent": "FundamentalAgent"},
+            "macro": {"title": "宏观分析", "agent": "MacroAgent"},
+            "deep_search": {"title": "深度搜索", "agent": "DeepSearchAgent"},
+        }
+
+        def _agent_error(agent_key: str) -> Optional[str]:
+            for err in result.errors or []:
+                if isinstance(err, str) and err.startswith(f"{agent_key}:"):
+                    return err.split(":", 1)[1].strip() if ":" in err else err
+            return None
         
         for agent_name, agent_output in agent_outputs.items():
             if hasattr(agent_output, 'summary') and agent_output.summary:
@@ -1555,6 +1797,33 @@ class SupervisorAgent:
                     "type": "text",
                     "content": response_text
                 }]
+            })
+
+        agent_summaries = []
+        for agent_key, section_info in agent_sections.items():
+            agent_output = agent_outputs.get(agent_key)
+            agent_error = _agent_error(agent_key)
+            if agent_output:
+                status = "success"
+            elif agent_error:
+                status = "error"
+            else:
+                status = "not_run"
+            summary = None
+            if agent_output and getattr(agent_output, 'summary', None):
+                summary = str(agent_output.summary)
+            elif status == "not_run":
+                summary = "未运行（本轮未触发或无匹配意图）"
+            agent_summaries.append({
+                "agent": agent_key,
+                "agent_name": section_info["agent"],
+                "title": section_info["title"],
+                "summary": summary,
+                "confidence": float(getattr(agent_output, "confidence", 0.0)) if agent_output else 0.0,
+                "data_sources": getattr(agent_output, "data_sources", []) if agent_output else [],
+                "status": status,
+                "error": bool(agent_error),
+                "error_message": agent_error,
             })
         
         # 构建 citations（证据池）
@@ -1601,11 +1870,10 @@ class SupervisorAgent:
                     "status": "success",
                     "confidence": getattr(agent_output, 'confidence', 0.5)
                 }
-            elif result.errors:
-                for err in result.errors:
-                    if err.startswith(f"{agent_name}:"):
-                        agent_status[agent_name] = {"status": "error", "error": err}
-                        break
+            else:
+                agent_error = _agent_error(agent_name)
+                if agent_error:
+                    agent_status[agent_name] = {"status": "error", "error": agent_error}
         
         return {
             "report_id": f"fallback_{uuid.uuid4().hex[:8]}",
@@ -1624,6 +1892,7 @@ class SupervisorAgent:
             "agent_status": agent_status,
             "meta": {
                 "is_fallback": True,
-                "errors": result.errors
+                "errors": result.errors,
+                "agent_summaries": agent_summaries
             }
         }

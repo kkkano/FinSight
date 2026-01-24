@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-01-24
+
+### Reliability-First Agent Gate
+
+- Added Need-Agent Gate to upgrade CHAT to Supervisor based on timeliness/decision/evidence signals.
+- Agent trace now records gate decision and whether Agent/Supervisor was used.
+- Streaming path respects the same gate to keep trace consistent.
+
+### Transparency + Multi-Ticker Fixes
+
+- Evidence pool exposed for chat responses when agents/tools run (UI chips).
+- Multi-ticker chart markers + rendering; comparisons can show multiple charts.
+- Financial/news search blocks Wikipedia to avoid off-topic results.
+
+### Comparison + News Reliability
+
+- Ensure multi-ticker markers are appended even when one chart already exists.
+- Fix RSS news pipeline crash (missing import) and revalidate RSS path.
+- Document evidence pool + summary rules across chat/report flows.
+
+
 ## 📅 2025-11-30
 
 ### 🚀 项目启动
@@ -597,4 +618,3 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 ---
 
 *最后更新: 2025-11-30*
-

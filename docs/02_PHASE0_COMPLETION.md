@@ -21,6 +21,14 @@
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
+## 0.1 Recent Updates (2026-01-24)
+
+- Need-Agent Gate decision is now visible in trace, including reason + confidence
+- Evidence pool is returned for tool/agent outputs and shown in UI
+- News retrieval prioritizes RSS → Finnhub → Search (financial queries skip Wikipedia)
+- Multi-ticker comparisons auto-render multiple charts (markers auto-filled)
+- News/Report responses include a short “overall summary” to avoid info spam
+
 ## 1. 目标回顾
 
 Phase 0 的核心目标是**为多 Agent 架构打下坚实的地基**，解决早期版本中"工具不稳定"、"响应慢"、"无法观测"的三大痛点。

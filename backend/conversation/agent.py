@@ -8,6 +8,7 @@ import logging
 import sys
 import os
 import asyncio
+from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, Generator, List
 from datetime import datetime
 
@@ -23,7 +24,47 @@ from backend.conversation.context import ContextManager
 from backend.conversation.router import ConversationRouter, Intent
 from backend.handlers.chat_handler import ChatHandler
 from backend.handlers.followup_handler import FollowupHandler
-from backend.orchestration.supervisor import AgentSupervisor
+from backend.orchestration.supervisor_agent import SupervisorAgent
+from backend.orchestration.intent_classifier import IntentClassifier, Intent as AgentIntent
+
+
+@dataclass
+class AgentGateDecision:
+    """Decision record for reliability-first agent gating."""
+    need_agent: bool = False
+    should_use_supervisor: bool = False
+    used_supervisor: Optional[bool] = None
+    agent_path: Optional[str] = None
+    policy: str = "reliability_first"
+    router_intent: Optional[str] = None
+    hard_triggers: List[str] = field(default_factory=list)
+    soft_triggers: List[str] = field(default_factory=list)
+    exclusion_reason: Optional[str] = None
+    classifier_intent: Optional[str] = None
+    classifier_confidence: Optional[float] = None
+    classifier_method: Optional[str] = None
+    classifier_reasoning: Optional[str] = None
+    evidence_required: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload = {
+            "policy": self.policy,
+            "router_intent": self.router_intent,
+            "need_agent": self.need_agent,
+            "should_use_supervisor": self.should_use_supervisor,
+            "used_agent": self.used_supervisor,
+            "agent_path": self.agent_path,
+            "decision": self.agent_path or ("supervisor" if self.used_supervisor else "chat_handler"),
+            "hard_triggers": self.hard_triggers,
+            "soft_triggers": self.soft_triggers,
+            "exclusion_reason": self.exclusion_reason,
+            "classifier_intent": self.classifier_intent,
+            "classifier_confidence": self.classifier_confidence,
+            "classifier_method": self.classifier_method,
+            "classifier_reasoning": self.classifier_reasoning,
+            "evidence_required": self.evidence_required,
+        }
+        return {k: v for k, v in payload.items() if v not in (None, [], {})}
 
 
 class ConversationAgent:
@@ -36,7 +77,7 @@ class ConversationAgent:
     - ChatHandler: 快速对话
     - ReportHandler: 深度报告
     - FollowupHandler: 追问处理
-    - AgentSupervisor: 多 Agent 调度 (Phase 1 新增)
+    - SupervisorAgent: 多 Agent 调度 (Phase 1 新增)
 
     使用方式:
         agent = ConversationAgent()
@@ -58,7 +99,7 @@ class ConversationAgent:
             llm: LLM 实例（用于增强响应）
             orchestrator: ToolOrchestrator 实例
             report_agent: 现有的报告生成 Agent（langchain_agent）
-            supervisor: AgentSupervisor 实例
+            supervisor: SupervisorAgent 实例
             max_context_turns: 最大上下文轮数
         """
         self.llm = llm
@@ -104,6 +145,7 @@ class ConversationAgent:
             'errors': 0,
             'session_start': datetime.now(),
         }
+        self._agent_intent_classifier: Optional[IntentClassifier] = None
 
     def _init_sub_agents(self):
         """P1: 初始化子 Agent 供 ChatHandler 使用"""
@@ -178,6 +220,212 @@ class ConversationAgent:
     def _compact_dict(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {key: value for key, value in payload.items() if value not in (None, [], {})}
 
+    def _get_agent_intent_classifier(self) -> IntentClassifier:
+        if self._agent_intent_classifier is None:
+            self._agent_intent_classifier = IntentClassifier(self.llm)
+        return self._agent_intent_classifier
+
+    def _serialize_agent_outputs(self, agent_outputs: Any) -> Any:
+        if not isinstance(agent_outputs, dict):
+            return agent_outputs
+        serialized = {}
+        for name, output in agent_outputs.items():
+            if isinstance(output, dict):
+                serialized[name] = output
+                continue
+            serialized[name] = {
+                "summary": getattr(output, "summary", ""),
+                "confidence": getattr(output, "confidence", None),
+                "data_sources": getattr(output, "data_sources", None),
+                "evidence": getattr(output, "evidence", None),
+                "trace": getattr(output, "trace", None),
+            }
+        return serialized
+
+    def _evaluate_agent_gate(
+        self,
+        query: str,
+        intent: Intent,
+        metadata: Dict[str, Any],
+    ) -> AgentGateDecision:
+        decision = AgentGateDecision(router_intent=intent.value if intent else None)
+
+        # Hard exclusions
+        if intent in {Intent.GREETING, Intent.CLARIFY}:
+            decision.exclusion_reason = f"router_{intent.value}"
+            return decision
+        if intent == Intent.ALERT:
+            decision.exclusion_reason = "alert_flow"
+            return decision
+
+        if not self.supervisor:
+            decision.exclusion_reason = "supervisor_unavailable"
+            return decision
+
+        query_lower = query.lower()
+        tickers = metadata.get("tickers", []) if isinstance(metadata, dict) else []
+
+        time_keywords = [
+            "现在", "最新", "今天", "本周", "近期", "最近", "实时",
+            "current", "latest", "today", "this week", "recent",
+        ]
+        decision_keywords = [
+            "推荐", "买", "卖", "值不值得", "值得", "应该", "前景", "风险",
+            "原因", "为什么", "逻辑", "预测", "建议", "怎么做", "买入", "卖出", "持有",
+            "recommend", "should i", "worth", "risk", "why", "reason", "forecast",
+        ]
+        comparison_keywords = [
+            "对比", "比较", "vs", "versus", "哪个好", "哪个更好", "选哪个",
+            "difference", "compare",
+        ]
+        analysis_keywords = [
+            "分析", "研报", "报告", "深度", "研究", "analysis", "report", "research",
+        ]
+        financial_keywords = [
+            "财报", "营收", "利润", "现金流", "资产负债", "估值", "pe", "eps", "roe",
+            "roa", "市盈率", "市净率", "基本面", "earnings", "revenue", "profit",
+            "cash flow", "valuation",
+        ]
+        news_keywords = ["新闻", "快讯", "消息", "头条", "news", "headline", "热点", "公告", "事件"]
+        sentiment_keywords = ["情绪", "恐惧", "贪婪", "舆情", "sentiment", "fear", "greed", "media sentiment"]
+        macro_keywords = [
+            "宏观", "cpi", "ppi", "gdp", "fomc", "利率", "非农", "就业", "通胀",
+            "macro", "economic calendar", "economic events", "央行",
+        ]
+
+        has_financial_context = bool(tickers) or any(
+            kw in query_lower for kw in (financial_keywords + news_keywords + sentiment_keywords + macro_keywords)
+        )
+
+        if any(kw in query_lower for kw in time_keywords):
+            decision.hard_triggers.append("timeliness")
+        if any(kw in query_lower for kw in decision_keywords):
+            decision.hard_triggers.append("decision")
+        if metadata.get("is_comparison") or any(kw in query_lower for kw in comparison_keywords):
+            decision.hard_triggers.append("comparison")
+        if any(kw in query_lower for kw in financial_keywords):
+            decision.hard_triggers.append("fundamental")
+        if any(kw in query_lower for kw in news_keywords):
+            decision.hard_triggers.append("news")
+        if any(kw in query_lower for kw in sentiment_keywords):
+            decision.hard_triggers.append("sentiment")
+        if any(kw in query_lower for kw in macro_keywords):
+            decision.hard_triggers.append("macro")
+        if has_financial_context and any(kw in query_lower for kw in analysis_keywords):
+            decision.hard_triggers.append("analysis")
+
+        classifier = self._get_agent_intent_classifier()
+        classification = classifier.classify(query, tickers, context_summary=self.context.get_summary())
+        decision.classifier_intent = classification.intent.value
+        decision.classifier_confidence = classification.confidence
+        decision.classifier_method = classification.method
+        decision.classifier_reasoning = classification.reasoning
+
+        if classification.confidence < 0.70:
+            decision.soft_triggers.append("low_confidence")
+        if len(tickers) >= 2 and "comparison" not in decision.hard_triggers:
+            decision.soft_triggers.append("multi_ticker")
+        if tickers and not decision.hard_triggers and classification.intent in {
+            AgentIntent.SEARCH, AgentIntent.CLARIFY, AgentIntent.OFF_TOPIC
+        }:
+            decision.soft_triggers.append("ticker_unclear")
+        if classification.intent in {
+            AgentIntent.REPORT, AgentIntent.COMPARISON, AgentIntent.FUNDAMENTAL,
+            AgentIntent.TECHNICAL, AgentIntent.MACRO, AgentIntent.NEWS, AgentIntent.SENTIMENT
+        } and classification.confidence >= 0.70:
+            decision.soft_triggers.append("classifier_requires_agent")
+
+        decision.need_agent = bool(decision.hard_triggers or decision.soft_triggers)
+        decision.evidence_required = decision.need_agent
+        decision.should_use_supervisor = decision.need_agent
+
+        return decision
+
+    def evaluate_agent_gate(
+        self,
+        query: str,
+        intent: Intent,
+        metadata: Dict[str, Any],
+    ) -> AgentGateDecision:
+        """Public wrapper for agent gate evaluation."""
+        return self._evaluate_agent_gate(query, intent, metadata)
+
+    def _convert_supervisor_result(self, result: Any) -> Dict[str, Any]:
+        classification = getattr(result, "classification", None)
+        classification_payload = None
+        if classification:
+            classification_payload = {
+                "intent": classification.intent.value,
+                "confidence": classification.confidence,
+                "method": classification.method,
+                "reasoning": classification.reasoning,
+                "scores": classification.scores,
+                "tickers": classification.tickers,
+            }
+        data = {
+            "agent_outputs": self._serialize_agent_outputs(getattr(result, "agent_outputs", None)),
+            "classification": classification_payload,
+            "errors": getattr(result, "errors", None),
+            "budget": getattr(result, "budget", None),
+        }
+        response_text = str(result.response) if getattr(result, "response", None) is not None else ""
+        return {
+            "success": bool(getattr(result, "success", True)),
+            "response": response_text,
+            "data": self._compact_dict(data),
+            "method": "supervisor",
+            "agent_used": True,
+            "agent_path": "supervisor",
+            "agent_intent": getattr(result, "intent", None).value if getattr(result, "intent", None) else None,
+        }
+
+    async def _run_supervisor_process_async(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.supervisor:
+            return {
+                "success": False,
+                "response": "Supervisor 不可用，已回退到快速回答。",
+                "intent": "chat",
+                "agent_used": False,
+                "agent_path": "chat_handler",
+            }
+        tickers = metadata.get("tickers", []) if isinstance(metadata, dict) else []
+        result = await self.supervisor.process(
+            query=query,
+            tickers=tickers,
+            context_summary=self.context.get_summary(),
+            context_ticker=self.context.current_focus,
+        )
+        return self._convert_supervisor_result(result)
+
+    def _run_supervisor_process(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.supervisor:
+            return {
+                "success": False,
+                "response": "Supervisor 不可用，已回退到快速回答。",
+                "intent": "chat",
+                "agent_used": False,
+                "agent_path": "chat_handler",
+            }
+        tickers = metadata.get("tickers", []) if isinstance(metadata, dict) else []
+        try:
+            asyncio.get_running_loop()
+            logger.info("[AgentGate] 已有事件循环，无法同步调用 Supervisor")
+            return {
+                "success": False,
+                "response": "Supervisor 仅支持异步调用，请使用流式接口。",
+                "intent": "chat",
+                "agent_used": False,
+                "agent_path": "chat_handler",
+            }
+        except RuntimeError:
+            result = asyncio.run(self.supervisor.process(
+                query=query,
+                tickers=tickers,
+                context_summary=self.context.get_summary(),
+                context_ticker=self.context.current_focus,
+            ))
+            return self._convert_supervisor_result(result)
+
     def _build_collection_result(self, metadata: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
         data = result.get("data") or {}
         payload = {
@@ -245,12 +493,18 @@ class ConversationAgent:
         result: Dict[str, Any],
     ) -> Dict[str, Any]:
         data = result.get("data") or {}
-        handler_name = handler.__name__ if handler else "default_handler"
+        if handler:
+            handler_name = handler.__name__
+        else:
+            handler_name = "supervisor" if result.get("agent_path") == "supervisor" else "default_handler"
         payload = {
             "intent": intent.value,
             "handler": handler_name,
             "method": result.get("method"),
             "success": result.get("success", True),
+            "agent_used": result.get("agent_used"),
+            "agent_path": result.get("agent_path"),
+            "agent_intent": result.get("agent_intent"),
             "intent_detail": result.get("intent_detail"),
             "data_origin": data.get("data_origin") or data.get("source"),
             "tried_sources": data.get("tried_sources"),
@@ -277,6 +531,7 @@ class ConversationAgent:
         thinking_steps = [] if capture_thinking else None
         reference_step = None
         intent_step = None
+        gate_step = None
         collection_step = None
         processing_step = None
 
@@ -324,6 +579,23 @@ class ConversationAgent:
                     "is_comparison": metadata.get('is_comparison'),
                 })
 
+            # 2.1 Agent gate (reliability-first)
+            if capture_thinking:
+                gate_step = self._add_thinking_step(
+                    thinking_steps,
+                    "agent_gate",
+                    "评估是否需要调用多Agent..."
+                )
+            gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
+            use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
+            gate_decision.used_supervisor = bool(
+                use_supervisor or (intent == Intent.REPORT and self.supervisor)
+            )
+            gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
+            metadata["agent_gate"] = gate_decision.to_dict()
+            if capture_thinking and gate_step is not None:
+                gate_step["result"] = self._compact_dict(gate_decision.to_dict())
+
             # 3. 更新统计
             self.stats['intents'][intent.value] = self.stats['intents'].get(intent.value, 0) + 1
 
@@ -344,16 +616,30 @@ class ConversationAgent:
                     f"正在生成{intent.value}响应..."
                 )
 
-            if handler:
+            handler_used = handler
+            if intent == Intent.REPORT and self.supervisor:
+                result = self._handle_report(resolved_query, metadata)
+                handler_used = None
+            elif use_supervisor:
+                result = self._run_supervisor_process(resolved_query, metadata)
+                handler_used = None
+            elif handler:
                 result = handler(resolved_query, metadata)
             else:
                 result = self._default_handler(resolved_query, metadata)
+
+            if isinstance(result, dict):
+                result.setdefault("agent_used", bool(use_supervisor or (intent == Intent.REPORT and self.supervisor)))
+                result.setdefault("agent_path", "supervisor" if result.get("agent_used") else "chat_handler")
+                if result.get("agent_used") and not result.get("agent_intent"):
+                    result["agent_intent"] = "report" if intent == Intent.REPORT else None
+                result["agent_gate"] = metadata.get("agent_gate")
 
             if capture_thinking:
                 if collection_step is not None:
                     collection_step["result"] = self._build_collection_result(metadata, result)
                 if processing_step is not None:
-                    processing_step["result"] = self._build_processing_result(intent, handler, result)
+                    processing_step["result"] = self._build_processing_result(intent, handler_used, result)
                 complete_step = self._add_thinking_step(
                     thinking_steps,
                     "complete",
@@ -421,6 +707,7 @@ class ConversationAgent:
         thinking_steps = [] if capture_thinking else None
         reference_step = None
         intent_step = None
+        gate_step = None
         collection_step = None
         processing_step = None
 
@@ -466,6 +753,23 @@ class ConversationAgent:
                     "is_comparison": metadata.get('is_comparison'),
                 })
 
+            # Agent gate (reliability-first)
+            if capture_thinking:
+                gate_step = self._add_thinking_step(
+                    thinking_steps,
+                    "agent_gate",
+                    "评估是否需要调用多Agent..."
+                )
+            gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
+            use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
+            gate_decision.used_supervisor = bool(
+                use_supervisor or (intent == Intent.REPORT and self.supervisor)
+            )
+            gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
+            metadata["agent_gate"] = gate_decision.to_dict()
+            if capture_thinking and gate_step is not None:
+                gate_step["result"] = self._compact_dict(gate_decision.to_dict())
+
             self.stats['intents'][intent.value] = self.stats['intents'].get(intent.value, 0) + 1
 
             if capture_thinking and metadata.get('tickers'):
@@ -483,18 +787,30 @@ class ConversationAgent:
                     f"正在生成{intent.value}响应..."
                 )
 
+            handler_used = handler
             if intent == Intent.REPORT and self.supervisor and metadata.get('tickers'):
                 result = await self._handle_report_async(resolved_query, metadata)
+                handler_used = None
+            elif use_supervisor:
+                result = await self._run_supervisor_process_async(resolved_query, metadata)
+                handler_used = None
             elif handler:
                 result = await asyncio.to_thread(handler, resolved_query, metadata)
             else:
                 result = await asyncio.to_thread(self._default_handler, resolved_query, metadata)
 
+            if isinstance(result, dict):
+                result.setdefault("agent_used", bool(use_supervisor or (intent == Intent.REPORT and self.supervisor)))
+                result.setdefault("agent_path", "supervisor" if result.get("agent_used") else "chat_handler")
+                if result.get("agent_used") and not result.get("agent_intent"):
+                    result["agent_intent"] = "report" if intent == Intent.REPORT else None
+                result["agent_gate"] = metadata.get("agent_gate")
+
             if capture_thinking:
                 if collection_step is not None:
                     collection_step["result"] = self._build_collection_result(metadata, result)
                 if processing_step is not None:
-                    processing_step["result"] = self._build_processing_result(intent, handler, result)
+                    processing_step["result"] = self._build_processing_result(intent, handler_used, result)
                 complete_step = self._add_thinking_step(
                     thinking_steps,
                     "complete",
@@ -879,89 +1195,17 @@ def create_agent(
     report_agent = None
     supervisor = None
 
-    # 初始化 LLM
+    # 初始化 LLM（使用统一的工厂函数，历史遗留代码已提取到 llm_config.py）
     if use_llm:
         try:
-            # 从 backend.llm_config 导入
-            from backend.llm_config import get_llm_config
-
-            llm_config = get_llm_config()
-
-            # 优先尝试使用 langchain_openai
-            try:
-                from langchain_openai import ChatOpenAI
-                llm = ChatOpenAI(
-                    model=llm_config.get('model', 'gpt-3.5-turbo'),
-                    temperature=llm_config.get('temperature', 0.3),
-                    openai_api_key=llm_config.get('api_key'),
-                    openai_api_base=llm_config.get('api_base'),
-                )
-                logger.info("[ConversationAgent] LLM 初始化成功 (langchain_openai)")
-            except ImportError:
-                # 如果 langchain_openai 不可用，尝试使用 litellm 创建兼容的 ChatModel
-                try:
-                    import litellm
-                    from langchain_core.language_models.chat_models import BaseChatModel
-                    from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-                    from langchain_core.outputs import ChatGeneration, ChatResult
-                    from langchain_core.callbacks.manager import CallbackManagerForLLMRun
-
-                    class LiteLLMChatModel(BaseChatModel):
-                        """LiteLLM ChatModel 包装器，兼容 LangChain ChatModel 接口"""
-                        api_key: str
-                        api_base: Optional[str] = None
-                        model: str = "gpt-3.5-turbo"
-                        temperature: float = 0.3
-
-                        @property
-                        def _llm_type(self) -> str:
-                            return "litellm"
-
-                        def _generate(
-                            self,
-                            messages: List[BaseMessage],
-                            stop: Optional[List[str]] = None,
-                            run_manager: Optional[CallbackManagerForLLMRun] = None,
-                            **kwargs: Any,
-                        ) -> ChatResult:
-                            # 转换 LangChain messages 为 litellm 格式
-                            litellm_messages = []
-                            for msg in messages:
-                                if isinstance(msg, HumanMessage):
-                                    litellm_messages.append({"role": "user", "content": msg.content})
-                                elif isinstance(msg, AIMessage):
-                                    litellm_messages.append({"role": "assistant", "content": msg.content})
-
-                            response = litellm.completion(
-                                model=f"openai/{self.model}",
-                                messages=litellm_messages,
-                                api_key=self.api_key,
-                                api_base=self.api_base,
-                                temperature=self.temperature,
-                                **kwargs
-                            )
-
-                            content = response.choices[0].message.content
-                            message = AIMessage(content=content)
-                            generation = ChatGeneration(message=message)
-                            return ChatResult(generations=[generation])
-
-                        def _stream(self, messages, stop=None, run_manager=None, **kwargs):
-                            # 流式输出暂不支持
-                            result = self._generate(messages, stop, run_manager, **kwargs)
-                            yield result.generations[0].message
-
-                    llm = LiteLLMChatModel(
-                        api_key=llm_config.get('api_key'),
-                        api_base=llm_config.get('api_base'),
-                        model=llm_config.get('model', 'gpt-3.5-turbo'),
-                        temperature=llm_config.get('temperature', 0.3),
-                    )
-                    logger.info("[ConversationAgent] LLM 初始化成功 (litellm)")
-                except (ImportError, Exception) as e:
-                    logger.info(f"[ConversationAgent] 警告: LLM 初始化失败 ({e})，LLM 功能将不可用")
-                    llm = None
-
+            from backend.llm_config import create_llm
+            llm = create_llm(
+                provider="gemini_proxy",
+                temperature=0.3,
+                max_tokens=4000,
+                request_timeout=300,
+            )
+            logger.info("[ConversationAgent] LLM 初始化成功")
         except Exception as e:
             logger.info(f"[ConversationAgent] 初始化 LLM 失败: {e}")
             import traceback
@@ -993,9 +1237,9 @@ def create_agent(
     # 初始化 Agent Supervisor (New in Phase 1)
     if llm and orchestrator:
         try:
-            from backend.orchestration.supervisor import AgentSupervisor
+            from backend.orchestration.supervisor_agent import SupervisorAgent
             # 需要传入 cache 和 circuit_breaker
-            supervisor = AgentSupervisor(
+            supervisor = SupervisorAgent(
                 llm=llm,
                 tools_module=orchestrator.tools_module, # Bridge 注册后的 module
                 cache=orchestrator.cache,

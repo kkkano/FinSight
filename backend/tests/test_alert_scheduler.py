@@ -41,7 +41,7 @@ class FakeEmailService:
         message: str,
         current_price=None,
         change_percent=None,
-    ) -> bool:
+    ) -> tuple[bool, str, str | None]:
         self.sent.append(
             {
                 "to_email": to_email,
@@ -52,7 +52,7 @@ class FakeEmailService:
                 "change_percent": change_percent,
             }
         )
-        return True
+        return True, "none", None
 
 
 def test_price_change_scheduler_triggers_when_threshold_met(subscription_service_tmp):

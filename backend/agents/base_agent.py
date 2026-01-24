@@ -163,6 +163,12 @@ class BaseFinancialAgent:
 </constraints>"""
         try:
             from langchain_core.messages import HumanMessage
+            from backend.services.rate_limiter import acquire_llm_token
+            
+            # 获取速率限制令牌
+            if not await acquire_llm_token(timeout=60.0):
+                return []  # 限流超时，跳过此步骤
+            
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             text = response.content if hasattr(response, "content") else str(response)
         except Exception:
@@ -226,6 +232,12 @@ class BaseFinancialAgent:
 </output_format>"""
         try:
             from langchain_core.messages import HumanMessage
+            from backend.services.rate_limiter import acquire_llm_token
+            
+            # 获取速率限制令牌
+            if not await acquire_llm_token(timeout=60.0):
+                return summary  # 限流超时，返回原摘要
+            
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             updated = response.content if hasattr(response, "content") else str(response)
             return updated.strip() or summary

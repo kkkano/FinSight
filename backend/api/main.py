@@ -63,6 +63,7 @@ except ImportError as e:
 
 # 导入 Agent
 from backend.conversation.agent import create_agent as CreateReActAgent
+from backend.llm_config import create_llm  # 导入 create_llm 以支持热加载
 
 # 导入 MemoryService
 try:
@@ -506,10 +507,20 @@ async def chat_supervisor_endpoint(request: ChatRequest):
     协调者模式对话接口 - Supervisor Agent 架构
     意图分类(规则+LLM) → Supervisor协调 → Worker Agents → Forum综合
     """
-    if not agent or not agent.llm:
-        raise HTTPException(status_code=500, detail="Agent or LLM not initialized")
+    if not agent:
+        raise HTTPException(status_code=500, detail="Agent not initialized")
 
     try:
+        # 动态创建 LLM 以支持配置热加载
+        try:
+            current_llm = create_llm()
+        except Exception as e:
+            logger.error(f"Failed to create LLM: {e}")
+            current_llm = agent.llm  # 回退到全局 LLM
+            
+        if not current_llm:
+             raise HTTPException(status_code=500, detail="LLM not initialized")
+
         from backend.orchestration.supervisor_agent import SupervisorAgent
         from backend.conversation.router import extract_tickers
 
@@ -530,8 +541,9 @@ async def chat_supervisor_endpoint(request: ChatRequest):
             import backend.tools as tools_module
 
         # 创建 Supervisor Agent
+        # 创建 Supervisor Agent
         supervisor = SupervisorAgent(
-            llm=agent.llm,
+            llm=current_llm,
             tools_module=tools_module,
             cache=cache,
             circuit_breaker=circuit_breaker
@@ -569,25 +581,65 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     协调者模式流式接口 - 实时报告意图分类和执行进度
     支持多轮对话上下文
     """
-    if not agent or not agent.llm:
-        raise HTTPException(status_code=500, detail="Agent or LLM not initialized")
+    if not agent:
+        raise HTTPException(status_code=500, detail="Agent not initialized")
+        
+    # 动态创建 LLM 以支持配置热加载
+    try:
+        current_llm = create_llm()
+    except Exception as e:
+        logger.error(f"Failed to create LLM: {e}")
+        current_llm = agent.llm  # 回退到全局 LLM
+        
+    if not current_llm:
+         raise HTTPException(status_code=500, detail="LLM not initialized")
 
     from backend.orchestration.supervisor_agent import SupervisorAgent
     from backend.conversation.router import extract_tickers
 
+    preprocess = agent.context.preprocess_query(request.query)
+    prepared_query = preprocess.get("query", request.query)
+    resolved_query = agent.context.resolve_reference(prepared_query)
+
     # 提取 tickers
-    tickers_result = extract_tickers(request.query)
+    tickers_result = extract_tickers(resolved_query)
     # extract_tickers 返回 dict，需要提取 tickers 列表
     tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
 
+    intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
+    selected_ticker = preprocess.get("selected_ticker")
+    if selected_ticker and selected_ticker not in metadata.get("tickers", []):
+        metadata.setdefault("tickers", []).insert(0, selected_ticker)
+    if preprocess.get("selection_reason"):
+        metadata["selection_reason"] = preprocess.get("selection_reason")
+    if preprocess.get("market_hint"):
+        metadata["market_hint"] = preprocess.get("market_hint")
+    if metadata.get("tickers"):
+        tickers = metadata["tickers"]
+
+    agent_gate = None
+    if hasattr(agent, "evaluate_agent_gate"):
+        agent_gate = agent.evaluate_agent_gate(resolved_query, intent, metadata)
+        # Supervisor endpoint always uses agent; override if needed
+        if agent_gate.exclusion_reason == "supervisor_unavailable":
+            agent_gate.exclusion_reason = None
+            agent_gate.need_agent = True
+            agent_gate.should_use_supervisor = True
+        agent_gate.used_supervisor = True
+        agent_gate.agent_path = "supervisor"
+        if hasattr(agent_gate, "to_dict"):
+            metadata["agent_gate"] = agent_gate.to_dict()
+
     # 构建对话上下文
+    # 注意：对于报告生成，不依赖历史上下文，只依赖当前问题
+    # 这样可以避免闲聊消息（如打招呼）污染报告内容
     conversation_context = None
-    if request.history:
-        max_history = _env_int("CHAT_HISTORY_MAX_MESSAGES", 12)
-        conversation_context = [
-            {"role": msg.role, "content": msg.content}
-            for msg in request.history[-max_history:]
-        ]
+    # if request.history:
+    #     max_history = _env_int("CHAT_HISTORY_MAX_MESSAGES", 12)
+    #     conversation_context = [
+    #         {"role": msg.role, "content": msg.content}
+    #         for msg in request.history[-max_history:]
+    #     ]
 
     # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
     tools_module = None
@@ -601,15 +653,21 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
         import backend.tools as tools_module
 
     # 创建 Supervisor Agent
+    # 创建 Supervisor Agent
     supervisor = SupervisorAgent(
-        llm=agent.llm,
+        llm=current_llm,
         tools_module=tools_module,
         cache=cache,
         circuit_breaker=circuit_breaker
     )
 
     async def generate():
-        async for chunk in supervisor.process_stream(request.query, tickers, conversation_context=conversation_context):
+        async for chunk in supervisor.process_stream(
+            resolved_query,
+            tickers,
+            conversation_context=conversation_context,
+            agent_gate=metadata.get("agent_gate"),
+        ):
             yield f"data: {chunk}\n\n"
 
     return StreamingResponse(
@@ -657,7 +715,13 @@ async def chat_stream_endpoint(request: ChatRequest):
     if preprocess.get("market_hint"):
         metadata["market_hint"] = preprocess.get("market_hint")
 
-    def build_thinking_trace(result: Dict[str, Any], elapsed_seconds: float) -> List[Dict[str, Any]]:
+    agent_gate = None
+    if hasattr(agent, "evaluate_agent_gate"):
+        agent_gate = agent.evaluate_agent_gate(resolved_query, intent, metadata)
+        if hasattr(agent_gate, "to_dict"):
+            metadata["agent_gate"] = agent_gate.to_dict()
+
+    def build_thinking_trace(result: Dict[str, Any], elapsed_seconds: float, agent_gate: Any = None) -> List[Dict[str, Any]]:
         steps: List[Dict[str, Any]] = []
 
         def add_step(stage: str, message: str, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -698,6 +762,16 @@ async def chat_stream_endpoint(request: ChatRequest):
                 "is_comparison": metadata.get("is_comparison"),
             },
         )
+
+        if agent_gate:
+            gate_payload = agent_gate
+            if hasattr(agent_gate, "to_dict"):
+                gate_payload = agent_gate.to_dict()
+            add_step(
+                "agent_gate",
+                "评估是否需要调用多Agent",
+                gate_payload,
+            )
 
         if metadata.get("tickers"):
             collection_result: Dict[str, Any] = {}
@@ -742,6 +816,17 @@ async def chat_stream_endpoint(request: ChatRequest):
             and hasattr(supervisor, "analyze_stream")
             and (supervisor_force or report_agent is None)
         )
+
+        if agent_gate:
+            agent_gate.used_supervisor = bool(use_supervisor or report_agent)
+            if use_supervisor:
+                agent_gate.agent_path = "supervisor"
+            elif report_agent:
+                agent_gate.agent_path = "report_agent"
+            else:
+                agent_gate.agent_path = "chat_handler"
+            if hasattr(agent_gate, "to_dict"):
+                metadata["agent_gate"] = agent_gate.to_dict()
 
         if use_supervisor:
             async def generate_report():
@@ -818,6 +903,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                             payload["thinking"] = build_thinking_trace(
                                 result,
                                 round((datetime.now() - start_time).total_seconds(), 2),
+                                agent_gate,
                             )
                             payload['current_focus'] = agent.context.current_focus
                             payload['intent'] = intent.value
@@ -853,6 +939,7 @@ async def chat_stream_endpoint(request: ChatRequest):
                             payload["thinking"] = build_thinking_trace(
                                 result,
                                 round((datetime.now() - start_time).total_seconds(), 2),
+                                agent_gate,
                             )
                             payload['current_focus'] = agent.context.current_focus
                             payload['intent'] = intent.value
@@ -895,10 +982,11 @@ async def chat_stream_endpoint(request: ChatRequest):
                         done_data['thinking'] = thinking_steps
                     else:
                         result['report'] = report_data
-                        done_data['thinking'] = build_thinking_trace(
-                            result,
-                            round((datetime.now() - start_time).total_seconds(), 2),
-                        )
+                    done_data['thinking'] = build_thinking_trace(
+                        result,
+                        round((datetime.now() - start_time).total_seconds(), 2),
+                        agent_gate,
+                    )
                     yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
 
                 except Exception as e:
@@ -923,7 +1011,32 @@ async def chat_stream_endpoint(request: ChatRequest):
                 response_text = ""
                 result: Dict[str, Any] = {}
 
-                if intent == Intent.CHAT and hasattr(agent.chat_handler, "stream_with_llm"):
+                use_supervisor = bool(
+                    agent_gate
+                    and getattr(agent_gate, "should_use_supervisor", False)
+                    and intent != Intent.REPORT
+                    and getattr(agent, "supervisor", None)
+                )
+                if agent_gate:
+                    agent_gate.used_supervisor = use_supervisor
+                    agent_gate.agent_path = "supervisor" if use_supervisor else "chat_handler"
+                    if hasattr(agent_gate, "to_dict"):
+                        metadata["agent_gate"] = agent_gate.to_dict()
+
+                if use_supervisor:
+                    supervisor_result = await agent.supervisor.process(
+                        query=resolved_query,
+                        tickers=metadata.get("tickers", []),
+                        context_summary=agent.context.get_summary(),
+                        context_ticker=agent.context.current_focus,
+                    )
+                    result = agent._convert_supervisor_result(supervisor_result)
+                    result["agent_gate"] = metadata.get("agent_gate")
+                    response_text = result.get("response", "")
+                    if response_text:
+                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
+
+                elif intent == Intent.CHAT and hasattr(agent.chat_handler, "stream_with_llm"):
                     result_container: Dict[str, Any] = {}
                     async for token in agent.chat_handler.stream_with_llm(
                         resolved_query, metadata, agent.context, result_container
@@ -956,6 +1069,11 @@ async def chat_stream_endpoint(request: ChatRequest):
 
                 if not result.get('response'):
                     result['response'] = response_text
+
+                if isinstance(result, dict) and "agent_used" not in result:
+                    result["agent_used"] = bool(use_supervisor)
+                    result["agent_path"] = "supervisor" if use_supervisor else "chat_handler"
+                    result["agent_gate"] = metadata.get("agent_gate")
 
                 if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
                     before = result.get('response', '')

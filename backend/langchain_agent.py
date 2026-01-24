@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Modern LangGraph-based financial agent for FinSight.
+[MIXED] LangGraph-based Financial Agent
+========================================
 
+⚠️ 历史代码说明 (2026-01-24):
+- 此模块包含 LangGraph 实现的金融 Agent，仍在使用中
+- 主要被 ConversationAgent 调用 (conversation/agent.py:986)
+- 与 SupervisorAgent 的关系：
+  - SupervisorAgent (supervisor_agent.py): 完整的意图分类 + 多 Agent 协调
+  - LangChainFinancialAgent (本文件): LangGraph 工具调用 Agent
+- 两者可以共存，服务不同场景
+
+功能说明:
 - Uses MessagesState + ToolNode from langgraph
 - Binds typed LangChain tools for reliable tool-calling
 - Keeps a lightweight in-memory checkpoint so threads can be resumed
@@ -290,40 +301,14 @@ class LangChainFinancialAgent:
             return "gemini-2.5-flash"
 
     def _create_llm(self) -> ChatOpenAI:
-        # 优先从 get_llm_config 获取配置（支持 user_config.json 热加载）
-        try:
-            from backend.llm_config import get_llm_config
-            cfg = get_llm_config(provider=self.provider)
-            api_key = cfg.get("api_key")
-            api_base = cfg.get("api_base")
-            model = cfg.get("model") or self.model
-            if api_key and api_base:
-                logger.info(f"[LangChainAgent] Using config: model={model}, api_base={api_base}")
-                return ChatOpenAI(
-                    model=model,
-                    openai_api_key=api_key,
-                    openai_api_base=api_base,
-                    temperature=0.0,
-                    max_tokens=4000,
-                    request_timeout=120,
-                )
-        except Exception as e:
-            logger.info(f"[LangChainAgent] Failed to load config: {e}, falling back to env vars")
-
-        # 回退到环境变量
-        api_key = os.getenv("GEMINI_PROXY_API_KEY")
-        api_base = os.getenv("GEMINI_PROXY_API_BASE", "https://x666.me/v1")
-
-        if not api_key:
-            raise ValueError("GEMINI_PROXY_API_KEY is missing; set it in .env")
-
-        return ChatOpenAI(
+        # 使用统一的 LLM 工厂函数（历史遗留代码已提取到 llm_config.py）
+        from backend.llm_config import create_llm
+        return create_llm(
+            provider=self.provider,
             model=self.model,
-            openai_api_key=api_key,
-            openai_api_base=api_base,
             temperature=0.0,
             max_tokens=4000,
-            request_timeout=120,
+            request_timeout=300,
         )
 
     def _build_system_prompt(self) -> str:

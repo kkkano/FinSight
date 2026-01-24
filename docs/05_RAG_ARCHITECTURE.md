@@ -16,6 +16,14 @@
 > ✅ **近期同步**: API 鉴权 + 限流 + 免责声明模板落地，确保合规门禁（P0-29）
 ---
 
+## 0.1 Recent Updates (2026-01-24)
+
+- Evidence pool is returned for research outputs to make RAG evidence traceable
+- News outputs include summary + relevance filtering
+- Multi-ticker comparison auto renders multi charts
+- Need-Agent Gate decisions visible in trace (fast path vs agent path)
+
+
 ## 0. 当前状态（2026-01-12）✅ 基础设施已完成
 
 - **VectorStore** (`backend/knowledge/vector_store.py`): ChromaDB 封装已完成

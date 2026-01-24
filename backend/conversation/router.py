@@ -2,6 +2,18 @@
 """
 ConversationRouter - Conversation Router
 Handles intent recognition and mode dispatch
+
+⚠️ 架构说明 (2026-01-24):
+本模块定义的 Intent 枚举与 backend/config/keywords.py 中的 Intent 是**不同的**：
+
+| 模块 | Intent 用途 | 使用者 |
+|------|-------------|--------|
+| router.py (本文件) | 对话路由级别意图 (CHAT/REPORT/ALERT等) | ConversationRouter, ConversationAgent |
+| keywords.py | 细粒度意图分类 (PRICE/NEWS/TECHNICAL等) | IntentClassifier, SupervisorAgent |
+
+两者服务于不同的架构层次，不应合并：
+- ConversationRouter: 决定走哪个 Handler (ChatHandler/ReportHandler等)
+- IntentClassifier: 决定调用哪些专家 Agent (PriceAgent/NewsAgent等)
 """
 
 import logging
@@ -33,7 +45,13 @@ except ImportError:
 
 
 class Intent(Enum):
-    """Intent types"""
+    """
+    对话路由级别的意图类型
+
+    注意：这与 backend/config/keywords.py 中的 Intent 不同！
+    - 本 Intent: 用于决定走哪个 Handler
+    - keywords.Intent: 用于决定调用哪些专家 Agent
+    """
     CHAT = "chat"          # Quick Q&A (financial data)
     REPORT = "report"      # Deep analysis report
     ALERT = "alert"        # Monitoring subscription

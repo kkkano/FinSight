@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
+import { normalizeMarkdown } from '../utils/markdown';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
@@ -8,7 +10,7 @@ import { ThinkingProcess } from './ThinkingProcess';
 import { ReportView } from './ReportView';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
-import type { KlineData, ChartType, ThinkingStep, ReportIR } from '../types/index';
+import type { KlineData, ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 
@@ -38,21 +40,31 @@ const shouldGenerateChart = async (
   return { ticker, chartType: 'line' };
 };
 
-const extractTicker = (text: string): string | null => {
+const extractTickers = (text: string): string[] => {
   const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
   const matches = text.match(tickerPattern);
-  if (!matches) return null;
+  if (!matches) return [];
 
   const stopwords = new Set([
     'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
     'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
   ]);
 
+  const seen = new Set<string>();
+  const tickers: string[] = [];
   for (const match of matches) {
     const upper = match.toUpperCase();
-    if (!stopwords.has(upper)) return upper;
+    if (!stopwords.has(upper) && !seen.has(upper)) {
+      seen.add(upper);
+      tickers.push(upper);
+    }
   }
-  return null;
+  return tickers;
+};
+
+const extractTicker = (text: string): string | null => {
+  const tickers = extractTickers(text);
+  return tickers.length ? tickers[0] : null;
 };
 
 export const ChatList: React.FC = () => {
@@ -113,13 +125,30 @@ export const ChatList: React.FC = () => {
 
       const chartInfo = await shouldGenerateChart(query, response.current_focus ?? null);
       const tickerToChart = chartInfo.ticker || null;
+      const evidencePool = (response as any).evidence_pool ?? response.data?.evidence_pool;
 
       let responseContent = typeof response.response === 'string'
         ? response.response
         : JSON.stringify(response.response, null, 2);
-      if (tickerToChart && chartInfo.chartType) {
-        responseContent += `\n\n[CHART:${tickerToChart}:${chartInfo.chartType}]`;
+      const markerRegex = /\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g;
+      const existingTickers = new Set(
+        Array.from(responseContent.matchAll(markerRegex)).map((match) => match[1])
+      );
+      const tickers = extractTickers(query);
+      const forceMulti = tickers.length > 1;
+      if (chartInfo.chartType || forceMulti) {
+        const targetTickers = tickers.length ? tickers : (tickerToChart ? [tickerToChart] : []);
+        const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
+        if (missingTickers.length > 0) {
+          const chartType = forceMulti ? 'line' : (chartInfo.chartType || 'line');
+          missingTickers.forEach((ticker) => {
+            responseContent += `
+
+[CHART:${ticker}:${chartType}]`;
+          });
+        }
       }
+
 
       updateMessage(messageId, {
         content: responseContent,
@@ -131,6 +160,7 @@ export const ChatList: React.FC = () => {
         as_of: response.data?.as_of ?? null,
         fallback_used: response.data?.fallback_used,
         tried_sources: response.data?.tried_sources,
+        evidence_pool: evidencePool,
         report: response.report,  // Phase 2: 深度研报数据
         isLoading: false,
       });
@@ -213,6 +243,26 @@ export const ChatList: React.FC = () => {
                     // 完成无报告：显示普通文本
                     <MessageWithChart content={msg.content} />
                   )}
+                  {msg.evidence_pool && msg.evidence_pool.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
+                      <div className="text-[11px] text-fin-muted mb-2">Evidence ({msg.evidence_pool.length})</div>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.evidence_pool.map((ev: EvidenceItem, idx: number) => {
+                          const label = ev.title || ev.source || ev.url || `Source ${idx + 1}`;
+                          if (ev.url) {
+                            return (
+                              <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />
+                            );
+                          }
+                          return (
+                            <span key={`ev-${idx}`} className="px-2 py-1 rounded-full border border-fin-border/70 bg-fin-panel text-[11px] text-fin-text">
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {msg.data_origin && (
                     <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
@@ -267,64 +317,65 @@ export const ChatList: React.FC = () => {
 
 // 支持图表的消息组件
 const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
-  const [chartData, setChartData] = useState<{ ticker: string; chartType: ChartType; summary: string } | null>(null);
+  const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
 
   useEffect(() => {
-    // 检测图表标记 [CHART:TICKER:TYPE] - 支持所有图表类型
-    const chartMatch = content.match(/\[CHART:([A-Z0-9.-]+):([a-z]+)\]/);
-    if (chartMatch) {
-      const [, ticker, chartTypeStr] = chartMatch;
-      // 确保 chartType 是有效的 ChartType
-      const validChartTypes: ChartType[] = ['line', 'candlestick', 'pie', 'bar', 'tree', 'area', 'scatter', 'heatmap'];
-      const chartType = (validChartTypes.includes(chartTypeStr as ChartType) ? chartTypeStr : 'line') as ChartType;
-      setChartData({
-        ticker,
-        chartType: chartType,
-        summary: ''
-      });
+    const matches = Array.from(content.matchAll(/\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g));
+    if (matches.length === 0) {
+      setChartData([]);
+      return;
     }
+    const validChartTypes: ChartType[] = ['line', 'candlestick', 'pie', 'bar', 'tree', 'area', 'scatter', 'heatmap'];
+    const seen = new Set<string>();
+    const nextData: Array<{ ticker: string; chartType: ChartType; summary: string }> = [];
+    matches.forEach((match) => {
+      const ticker = match[1];
+      const chartTypeStr = match[2];
+      const chartType = (validChartTypes.includes(chartTypeStr as ChartType) ? chartTypeStr : 'line') as ChartType;
+      const key = `${ticker}-${chartType}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      nextData.push({ ticker, chartType, summary: '' });
+    });
+    setChartData(nextData);
   }, [content]);
 
-  // 处理图表数据就绪回调，将数据摘要加入消息内容
-  const handleChartDataReady = (_data: KlineData[], summary: string) => {
-    if (chartData) {
-      setChartData({ ...chartData, summary });
-      // 将数据摘要发送到后端，加入聊天历史
-      sendChartDataToBackend(chartData.ticker, summary);
-    }
+  const handleChartDataReady = (ticker: string, summary: string) => {
+    setChartData((prev) => prev.map((item) => (item.ticker === ticker ? { ...item, summary } : item)));
+    sendChartDataToBackend(ticker, summary);
   };
 
-  // 发送图表数据到后端，加入聊天历史
   const sendChartDataToBackend = async (ticker: string, summary: string) => {
     try {
       await apiClient.addChartData(ticker, summary);
-      console.log(`[图表数据] ${ticker} 数据摘要已加入聊天上下文，可供AI分析`);
+      console.log(`[ChartData] ${ticker} summary injected into context`);
     } catch (err) {
-      console.error('发送图表数据失败:', err);
+      console.error('Chart data upload failed:', err);
     }
   };
 
-  // 移除图表标记后的纯文本内容
   const textContent = content.replace(/\[CHART:[^\]]+\]/g, '');
 
   return (
     <div className="prose prose-invert prose-sm max-w-none">
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
           a: ({ href, children }) => (
             <SourceLink href={href || ''} label={children} />
           ),
         }}
       >
-        {textContent}
+        {normalizeMarkdown(textContent)}
       </ReactMarkdown>
-      {chartData && (
+      {chartData.map((chart) => (
         <InlineChart
-          ticker={chartData.ticker}
-          chartType={chartData.chartType}
-          onDataReady={handleChartDataReady}
+          key={`${chart.ticker}-${chart.chartType}`}
+          ticker={chart.ticker}
+          chartType={chart.chartType}
+          onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
-      )}
+      ))}
     </div>
   );
 };

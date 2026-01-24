@@ -52,7 +52,17 @@ class TechnicalAgent(BaseFinancialAgent):
             ),
             f"Trend: {indicators['trend']}.",
         ]
-        return " ".join(parts)
+        interpretation = []
+        if indicators.get("rsi_state") == "overbought":
+            interpretation.append("RSI进入超买区，短期回撤风险上升。")
+        elif indicators.get("rsi_state") == "oversold":
+            interpretation.append("RSI进入超卖区，存在技术性反弹空间。")
+        if indicators.get("trend") == "uptrend":
+            interpretation.append("均线呈多头排列，趋势偏强。")
+        elif indicators.get("trend") == "downtrend":
+            interpretation.append("均线呈空头排列，趋势偏弱。")
+
+        return " ".join(parts + interpretation)
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence: List[EvidenceItem] = []
