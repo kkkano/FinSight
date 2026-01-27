@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinSight - 智能金融分析助手</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">📊</span>
+                <h1>FinSight</h1>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-item active" data-page="analyze">
+                    <span class="nav-icon">🔍</span>
+                    <span>智能分析</span>
+                </a>
+                <a href="#" class="nav-item" data-page="history">
+                    <span class="nav-icon">📋</span>
+                    <span>分析历史</span>
+                </a>
+                <a href="#" class="nav-item" data-page="metrics">
+                    <span class="nav-icon">📈</span>
+                    <span>系统监控</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-badge" id="apiStatus">
+                    <span class="status-dot"></span>
+                    <span>检测中...</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main">
+            <!-- 分析页面 -->
+            <div class="page active" id="page-analyze">
+                <header class="page-header">
+                    <h2>智能金融分析</h2>
+                    <p>输入你的问题，FinSight 将为你提供专业的金融分析报告</p>
+                </header>
+
+                <!-- 快捷查询 -->
+                <div class="quick-queries">
+                    <button class="chip" data-query="分析苹果(AAPL)股票的最新表现">AAPL 分析</button>
+                    <button class="chip" data-query="查看特斯拉(TSLA)最新新闻">TSLA 新闻</button>
+                    <button class="chip" data-query="当前市场恐慌与贪婪指数">市场情绪</button>
+                    <button class="chip" data-query="本周重要经济事件">经济日历</button>
+                    <button class="chip" data-query="比较 AAPL 和 MSFT 的近期表现">资产对比</button>
+                    <button class="chip" data-query="分析英伟达(NVDA)的投资价值">NVDA 深度</button>
+                </div>
+
+                <!-- 查询表单 -->
+                <div class="query-form">
+                    <div class="input-group">
+                        <textarea id="queryInput" placeholder="输入金融分析问题，例如：分析苹果股票的最新表现..." rows="3"></textarea>
+                        <div class="form-controls">
+                            <div class="mode-selector">
+                                <label class="mode-option">
+                                    <input type="radio" name="mode" value="summary" checked>
+                                    <span class="mode-label">
+                                        <strong>摘要模式</strong>
+                                        <small>300-500字快速分析</small>
+                                    </span>
+                                </label>
+                                <label class="mode-option">
+                                    <input type="radio" name="mode" value="deep">
+                                    <span class="mode-label">
+                                        <strong>深度模式</strong>
+                                        <small>800+字详细报告</small>
+                                    </span>
+                                </label>
+                            </div>
+                            <button class="btn-primary" id="analyzeBtn" onclick="submitQuery()">
+                                <span class="btn-text">开始分析</span>
+                                <span class="btn-loading" style="display:none;">
+                                    <span class="spinner"></span>分析中...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 结果区域 -->
+                <div id="resultArea" class="result-area" style="display:none;">
+                    <div class="result-header">
+                        <h3 id="resultTitle">分析结果</h3>
+                        <div class="result-meta">
+                            <span id="resultIntent" class="badge"></span>
+                            <span id="resultMode" class="badge badge-outline"></span>
+                            <span id="resultTime" class="text-muted"></span>
+                        </div>
+                    </div>
+                    <div class="result-content" id="resultContent"></div>
+                    <div class="result-data" id="resultData" style="display:none;">
+                        <h4>原始数据</h4>
+                        <pre id="resultDataPre"></pre>
+                    </div>
+                </div>
+
+                <!-- 错误区域 -->
+                <div id="errorArea" class="error-area" style="display:none;">
+                    <div class="error-icon">⚠️</div>
+                    <h3 id="errorTitle">分析出错</h3>
+                    <p id="errorMessage"></p>
+                    <button class="btn-secondary" onclick="clearError()">关闭</button>
+                </div>
+            </div>
+
+            <!-- 历史页面 -->
+            <div class="page" id="page-history">
+                <header class="page-header">
+                    <h2>分析历史</h2>
+                    <p>查看之前的分析记录</p>
+                </header>
+                <div id="historyList" class="history-list">
+                    <div class="empty-state">
+                        <span class="empty-icon">📭</span>
+                        <p>暂无分析记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 监控页面 -->
+            <div class="page" id="page-metrics">
+                <header class="page-header">
+                    <h2>系统监控</h2>
+                    <p>实时查看系统运行状态和性能指标</p>
+                </header>
+                <div class="metrics-grid" id="metricsGrid">
+                    <div class="metric-card">
+                        <div class="metric-icon">🖥️</div>
+                        <div class="metric-info">
+                            <span class="metric-label">API 状态</span>
+                            <span class="metric-value" id="metricApiStatus">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">💾</div>
+                        <div class="metric-info">
+                            <span class="metric-label">缓存命中率</span>
+                            <span class="metric-value" id="metricCacheHit">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-info">
+                            <span class="metric-label">限流状态</span>
+                            <span class="metric-value" id="metricRateLimit">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">💰</div>
+                        <div class="metric-info">
+                            <span class="metric-label">API 成本</span>
+                            <span class="metric-value" id="metricCost">--</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-secondary" onclick="refreshMetrics()">刷新指标</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,162 +1,293 @@
-# FinSight: AI驱动的股票分析代理
+# FinSight: AI 驱动的智能金融分析平台
 
-[English Version](./readme.md) | [中文版](./readme_cn.md)
-[example](./example.md)
-## 核心理念
+[English Version](./readme.md) | [中文版](./readme_cn.md) | [示例](./example.md)
 
-FinSight 是一个基于大型语言模型 (LLM) 的智能代理，用于进行实时的股票和市场分析。它采用 **ReAct (推理 + 行动)** 框架，通过自主调用 `yfinance`、网络搜索等工具来收集数据，并最终合成结构化的分析报告。
+## 🎯 项目概览
 
-- **适用场景**：快速获取对股票、指数或市场趋势的综合概述，例如“分析 NVDA 股票”或“纳斯达克最近表现如何？”。
-- **核心优势**：具备自主推理能力，能获取实时数据，并采用模块化工具设计。通过 LiteLLM 代理，可轻松切换 Gemini、OpenAI 等不同模型。
-- **安装简单**：只需克隆仓库、创建虚拟环境、安装依赖并设置 API 密钥，即可通过命令行界面 (CLI) 运行。
-- **局限性**：分析依赖于公开的免费 API，数据可能有轻微延迟；项目不提供实时交易功能。
+FinSight 是一个基于 **Clean/Hexagonal Architecture**（六边形架构）构建的智能金融分析平台。它由大语言模型（LLM）驱动，集成多个金融数据源，提供 **RESTful API** 和 **Web 前端界面**，能够自主理解用户意图、收集数据并生成结构化的专业分析报告。
+
+### 核心特性
+
+- **🔍 智能意图识别**：LLM + 规则引擎双重意图解析，准确理解用户查询
+- **📊 多源数据集成**：yfinance 实时行情、DuckDuckGo 新闻搜索、CNN Fear & Greed Index
+- **🏗️ 专业架构**：Clean/Hexagonal Architecture，SOLID 原则，清晰的分层设计
+- **🌐 Web 界面**：简洁专业的前端分析界面，支持快捷查询与历史记录
+- **📈 双模式分析**：摘要模式（300-500字）和深度模式（800+字）
+- **⚡ 性能优化**：LRU 缓存、令牌桶限流、API 成本追踪
+- **🛡️ 安全防护**：安全头中间件、输入验证、XSS/SQL 注入防护
+- **📝 完整测试**：150+ 单元测试 + 集成测试，覆盖所有核心模块
+
+### 使用场景
+
+- **股票分析**：价格查询、技术分析、深度研究报告
+- **市场情绪**：CNN 恐慌与贪婪指数实时监测
+- **资产对比**：多资产收益率对比分析
+- **经济日历**：FOMC、CPI 等重要经济事件追踪
+- **新闻聚合**：个股相关新闻自动汇总
 
 ---
 
-## 工作原理 (ReAct 框架)
+## 🚀 快速开始
 
-FinSight 通过模拟金融分析师的思考过程来工作。它遵循一个“思考 -> 行动 -> 观察”的循环，直到收集到足够的信息来回答用户的问题。
+### 前置要求
 
-```mermaid
-graph TD
-    A[用户查询<br>例如 分析纳斯达克] --> B[LLM 思考<br>下一步需要什么信息]
-    B --> C[LLM 行动<br>生成工具调用JSON]
-    C --> D[执行工具<br>例如 get_performance_comparison]
-    D --> E[观察结果<br>将工具返回的数据输入模型]
-    E --> F{信息是否足够？}
-    F -- 否 --> B
-    F -- 是 --> G[生成最终答案<br>综合分析 + 免责声明]
-    G --> H[输出给用户]
+- Python 3.10+
+- Gemini API Key（或其他 LLM API Key）
+- 稳定的网络连接
+
+### 安装步骤
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/kkkano/FinSight-main.git
+cd FinSight-main
+
+# 2. 创建虚拟环境
+python -m venv .venv
+
+# Windows
+.\.venv\Scripts\activate
+# Linux/macOS
+source .venv/bin/activate
+
+# 3. 安装依赖
+pip install -r requirements.txt
+
+# 4. 配置环境变量
+# 在根目录创建 .env 文件
+echo 'GEMINI_PROXY_API_KEY="your_api_key"' > .env
+```
+
+### 启动方式
+
+#### 方式一：Web API 服务（推荐）
+
+```bash
+# 启动 FastAPI 服务
+python -m uvicorn finsight.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 访问
+# Web 界面：http://localhost:8000/
+# API 文档：http://localhost:8000/docs
+# ReDoc：  http://localhost:8000/redoc
+```
+
+#### 方式二：命令行模式
+
+```bash
+python main.py
+```
+
+### API 使用示例
+
+```python
+import requests
+
+# 摘要分析
+response = requests.post(
+    "http://localhost:8000/api/v1/analyze",
+    json={"query": "分析苹果股票", "mode": "summary"}
+)
+print(response.json()["report"])
+
+# 深度分析
+response = requests.post(
+    "http://localhost:8000/api/v1/analyze",
+    json={"query": "比较 AAPL 和 MSFT 的投资价值", "mode": "deep"}
+)
+print(response.json()["report"])
 ```
 
 ---
 
-## 快速入门
+## 🏗️ 系统架构
 
-1.  **克隆仓库**：
-    ```bash
-    git clone https://github.com/kkkano/FinSight-main.git
-    cd FinSight-main
-    ```
+### 六边形架构（Clean Architecture）
 
-2.  **创建并激活虚拟环境**：
-    *   **Linux/macOS**:
-        ```bash
-        python3 -m venv .venv && source .venv/bin/activate
-        ```
-    *   **Windows**:
-        ```bash
-        python -m venv .venv && .\.venv\Scripts\activate
-        pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-        ```
-
-3.  **安装依赖**：
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **配置 API 密钥**：
-    在项目根目录创建一个名为 `.env` 的文件，并添加你的 API 密钥：
-    ```env
-    GEMINI_PROXY_API_KEY="your_gemini_api_key_here"
-    ```
-
-5.  **运行代理**：
-    ```bash
-    python main.py
-    ```
-    启动后，根据提示输入你的查询（例如“分析 AAPL”），或输入“exit”退出程序。
-
----
-
-## 执行案例：分析“纳斯达克”
-
-以下是 FinSight 处理用户查询“纳斯达克”时的完整思考和执行过程。
-
-**用户输入:**
 ```
-> 纳斯达克
+finsight/
+├── domain/              # 领域层 - 核心业务模型
+│   ├── models.py        #   数据模型（StockPrice, NewsItem, etc.）
+│   └── ports.py         #   端口接口（抽象依赖）
+│
+├── adapters/            # 适配器层 - 外部服务集成
+│   ├── yfinance_adapter.py  #   Yahoo Finance 数据
+│   ├── search_adapter.py    #   DuckDuckGo 搜索
+│   ├── cnn_adapter.py       #   CNN 情绪指数
+│   └── llm_adapter.py       #   LLM 调用
+│
+├── use_cases/           # 用例层 - 业务逻辑
+│   ├── get_stock_price.py
+│   ├── analyze_stock.py
+│   ├── get_market_sentiment.py
+│   └── compare_assets.py
+│
+├── orchestrator/        # 编排层 - 流程控制
+│   ├── router.py        #   意图路由
+│   ├── orchestrator.py  #   请求编排
+│   └── report_writer.py #   报告生成
+│
+├── api/                 # API 层 - HTTP 接口
+│   ├── main.py          #   FastAPI 应用入口
+│   ├── routes/          #   路由（分析/健康/监控）
+│   ├── schemas.py       #   请求/响应模型
+│   └── dependencies.py  #   依赖注入
+│
+├── infrastructure/      # 基础设施层
+│   ├── logging.py       #   结构化日志
+│   ├── metrics.py       #   指标收集
+│   ├── errors.py        #   错误处理/重试
+│   ├── cache.py         #   LRU 缓存
+│   ├── rate_limiter.py  #   限流器
+│   ├── cost_tracker.py  #   成本追踪
+│   └── security.py      #   安全中间件
+│
+└── web/                 # Web 前端
+    ├── templates/       #   HTML 页面
+    └── static/          #   CSS/JS 静态资源
+```
+
+### 数据流
+
+```
+用户请求 → FastAPI → 意图识别 → 路由分发 → 用例执行 → 适配器调用 → 数据聚合 → 报告生成 → 响应
+```
+
+### 核心设计原则
+
+| 原则 | 实践 |
+|------|------|
+| **SOLID** | 单一职责、依赖倒置、接口隔离 |
+| **DRY** | 通用适配器抽象、共享基础设施 |
+| **端口-适配器** | 领域层不依赖外部实现 |
+| **依赖注入** | ServiceContainer 统一管理 |
+
+---
+
+## 📊 API 端点
+
+### 分析接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/analyze` | 智能分析（主接口） |
+| POST | `/api/v1/clarify` | 意图澄清 |
+
+### 健康检查
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康状态 |
+| GET | `/ready` | 就绪检查 |
+| GET | `/live` | 存活检查 |
+
+### 系统监控
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/metrics/system` | 系统指标 |
+| GET | `/api/v1/metrics/cache` | 缓存统计 |
+| GET | `/api/v1/metrics/rate-limits` | 限流统计 |
+| GET | `/api/v1/metrics/costs` | 成本统计 |
+| GET | `/api/v1/metrics/all` | 全部指标 |
+
+---
+
+## 🧪 测试
+
+```bash
+# 运行全部单元测试
+python -m pytest tests/unit -v
+
+# 运行集成测试
+python -m pytest tests/integration -v
+
+# 运行特定模块测试
+python -m pytest tests/unit/test_models.py -v
+python -m pytest tests/unit/test_orchestrator.py -v
+python -m pytest tests/unit/test_infrastructure.py -v
+python -m pytest tests/unit/test_performance.py -v
+python -m pytest tests/unit/test_security.py -v
+```
+
+### 测试覆盖
+
+| 模块 | 测试数 | 说明 |
+|------|--------|------|
+| 领域模型 | 22 | 数据模型、枚举、验证 |
+| 基础设施 | 33 | 日志、指标、错误处理 |
+| 编排器 | 22 | 路由、用例编排 |
+| 性能 | 30 | 缓存、限流、成本 |
+| 安全 | 29 | 中间件、输入验证 |
+| 集成 | 21 | API 端点、端到端 |
+| **总计** | **157+** | |
+
+---
+
+## ⚙️ 配置
+
+### 环境变量
+
+```env
+# LLM API 密钥
+GEMINI_PROXY_API_KEY="your_gemini_api_key"
+OPENAI_API_KEY="your_openai_key"         # 可选
+
+# 服务配置
+FINSIGHT_HOST="0.0.0.0"
+FINSIGHT_PORT=8000
+FINSIGHT_DEBUG=true
+
+# LLM 设置
+LLM_PROVIDER="gemini_proxy"
+LLM_MODEL="gemini-2.5-flash-preview-05-20"
+```
+
+### LLM 模型切换
+
+FinSight 通过 LiteLLM 支持多种模型：
+
+```python
+# Gemini（默认）
+LLM_PROVIDER="gemini_proxy"
+LLM_MODEL="gemini-2.5-flash-preview-05-20"
+
+# OpenAI
+LLM_PROVIDER="openai"
+LLM_MODEL="gpt-4"
+
+# Claude
+LLM_PROVIDER="anthropic"
+LLM_MODEL="claude-3-opus-20240229"
 ```
 
 ---
 
-#### 步骤 1: 获取当前日期
+## 📝 更新日志
 
--   **思考**: 我需要获取当前日期和时间，以确保分析具有时效性。
--   **行动**: 调用 `get_current_datetime` 工具。
--   **结果**: `2025-10-12 20:09:11`
+### v2.0.0 (2026-01-28) - 架构重构
+- ✅ 全面重构为 Clean/Hexagonal Architecture
+- ✅ 新增 FastAPI RESTful API 服务
+- ✅ 新增 Web 前端界面（智能分析、历史记录、系统监控）
+- ✅ 新增智能意图识别引擎（LLM + 规则双引擎）
+- ✅ 新增 LRU 缓存系统（可配置策略和 TTL）
+- ✅ 新增令牌桶 + 滑动窗口限流器
+- ✅ 新增 API 成本追踪与预算告警
+- ✅ 新增安全头中间件和输入验证
+- ✅ 新增结构化日志和指标收集系统
+- ✅ 新增错误处理和自动重试机制
+- ✅ 新增 157+ 单元测试和集成测试
+- ✅ 完整的 API 文档（Swagger/ReDoc）
 
-*此步骤确保所有后续数据分析都基于最新的时间点。*
+### v1.2.0 (2025-10-19)
+- ✅ 修复 CNN Fear & Greed Index 抓取
+- ✅ 优化经济事件搜索
 
----
-
-#### 步骤 2: 搜索纳斯达克概述
-
--   **思考**: 我已经有了当前日期。现在我需要了解纳斯达克综合指数的基本信息。
--   **行动**: 调用 `search` 工具，查询 `"Nasdaq composite index overview"`。
--   **结果**:
-    > 搜索结果:
-    > 1.  **Wikipedia Nasdaq Composite**: 纳斯达克综合指数（代码 ^IXIC）是一个股票市场指数，包括纳斯达克股票交易所上市的几乎所有股票...
-
-*此步骤确认了分析对象（^IXIC）及其定义，为后续的数据获取奠定基础。*
-
----
-
-#### 步骤 3: 与其他指数进行性能比较
-
--   **思考**: 为了更好地评估纳斯达克的表现，我应该将其与其它主要市场指数进行比较。
--   **行动**: 调用 `get_performance_comparison` 工具，比较 `^IXIC` (纳斯达克), `^GSPC` (标普500), 和 `^DJI` (道琼斯)。
--   **结果**:
-
-| 指数 | 当前值 | 年初至今 (YTD) | 1年回报 |
-| :--- | :--- | :--- | :--- |
-| **Nasdaq Composite** | **22204.43** | **+15.16%** | **+21.05%** |
-| S&P 500 | 6552.51 | +11.65% | +12.68% |
-| Dow Jones Indu. | 34890.12 | +7.28% | +6.10% |
-
-*数据显示，纳斯达克在 YTD 和 1 年回报上均显著优于标普500和道琼斯，反映了科技板块的强劲势头。*
+### v1.0.0 (2025-10-01)
+- ✅ 基础 ReAct 框架和 9 个核心工具
 
 ---
 
-#### 步骤 4: 分析历史回撤
+## ⚠️ 免责声明
 
--   **思考**: 强劲的增长通常伴随着高波动性。我需要分析纳斯达克的历史回撤来揭示其风险特征。
--   **行动**: 调用 `analyze_historical_drawdowns` 工具，分析 `^IXIC`。
--   **结果**:
-    > **^IXIC 的前3大历史回撤:**
-    > 1.  **2000年崩盘 (互联网泡沫)**: 最大回撤 **-77.93%** | 恢复期: 5518天 (约15.1年)
-    > 2.  **1973年崩盘 (石油危机)**: 最大回撤 **-59.90%** | 恢复期: 2063天 (约5.6年)
-    > 3.  **2021年崩盘 (利率上升)**: 最大回撤 **-36.40%** | 恢复期: 829天 (约2.3年)
-
-*历史数据明确显示了纳斯达克的高风险特征，尤其是在市场泡沫破裂时，可能需要极长的时间来恢复。*
-
----
-
-#### 步骤 5: 生成最终分析报告
-
--   **思考**: 我已经收集了关于纳斯达克的定义、近期表现、与同行的比较以及历史风险。现在我可以生成一份全面的分析报告了。
--   **最终答案**:
-
-    > 纳斯达克综合指数 (^IXIC) 是一个以科技和成长型公司为主导的市场指数。
-    >
-    > **近期表现 (截至 2025年10月12日):**
-    > 它的表现非常强劲，年初至今增长了 **+15.16%**，过去一年增长了 **+21.05%**，显著优于标普500和道琼斯工业平均指数。这表明市场对科技和创新领域的投资热情高涨。
-    >
-    > **历史风险:**
-    > 然而，高回报伴随着高风险。历史数据显示，纳斯达克在市场危机中波动剧烈。最著名的例子是2000年的互联网泡沫破裂，当时指数暴跌近 **78%**，并花费了超过15年的时间才完全恢复。
-    >
-    > **总结:**
-    > 纳斯达克目前处于强劲的上升趋势中，但投资者必须警惕其固有的高波动性。历史经验提醒我们，在追逐高增长的同时，风险管理至关重要。
-    >
-    > *免责声明: 本分析不构成任何投资建议。*
-
----
-
-## 项目结构
-
--   `agent.py`: 核心 ReAct 循环，负责解析 LLM 的思考与行动。
--   `tools.py`: 所有金融工具的定义（如 `get_stock_price`）。
--   `llm_service.py`: 封装对 LiteLLM 代理的调用。
--   `main.py`: 项目的命令行入口。
--   `requirements.txt`: 项目依赖列表。
--   `.env`: 存储 API 密钥。
+> FinSight 提供的分析仅供参考，**不构成投资建议**。所有投资决策应咨询专业财务顾问。历史表现不代表未来收益。作者不对使用本工具产生的任何损失负责。
