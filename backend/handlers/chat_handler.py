@@ -247,6 +247,49 @@ class ChatHandler:
                 'thinking': f"Critical Error in ChatHandler: {str(e)}"
             }
     
+    def handle_schema_tool(
+        self,
+        tool_name: str,
+        args: Dict[str, Any],
+        query: str,
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Handle schema-selected tool calls without heuristic intent detection."""
+        tool = (tool_name or "").strip()
+        args = args or {}
+        ticker = args.get("ticker")
+        tickers = args.get("tickers") if isinstance(args.get("tickers"), list) else []
+        limit = args.get("limit")
+        search_query = args.get("query") or query
+
+        if tool == "get_price":
+            result = self._handle_price_query(ticker, query, context)
+        elif tool == "get_news":
+            result = self._handle_news_query(ticker, query, context)
+        elif tool == "compare_stocks":
+            metadata = {"tickers": tickers, "is_comparison": True}
+            result = self._handle_comparison_query(tickers, query, metadata, context)
+        elif tool == "get_market_sentiment":
+            result = self._handle_sentiment_query(query, context, ticker)
+        elif tool == "get_economic_events":
+            result = self._handle_economic_events(query, context)
+        elif tool == "get_news_sentiment":
+            result = self._handle_news_sentiment_query(ticker, query, context)
+        elif tool == "search":
+            result = self._handle_with_search(search_query, context)
+        elif tool == "greeting":
+            result = self._handle_chat_query(query)
+        else:
+            result = self._handle_with_search(search_query, context)
+
+        if isinstance(result, dict):
+            result.setdefault("method", "schema_router")
+            if limit is not None:
+                data = result.get("data") or {}
+                data["limit"] = limit
+                result["data"] = data
+        return result
+
     def _is_generic_recommendation_intent(self, query: str) -> bool:
         """
         判断是否为泛化推荐意图 (不针对特定股票)

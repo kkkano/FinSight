@@ -88,6 +88,8 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Cost efficient: simple queries handled by rules with no LLM cost
 - Report intent rules cover “analyze/分析” with ticker context (no LLM required)
 - Reliability-first Agent Gate: CHAT can escalate to Supervisor based on timeliness/decision/evidence needs
+- SchemaToolRouter (optional): one-shot tool selection + Pydantic validation + template-based ClarifyTool
+- Pending tool state stores missing slots for multi-turn clarification (USE_SCHEMA_ROUTER)
 
 ### Real-time Streaming and Transparency
 - Token-by-token streaming responses
@@ -123,6 +125,8 @@ flowchart TB
     subgraph API["FastAPI Backend"]
         Stream["/chat/stream"]
         Router["ConversationRouter"]
+        SchemaRouter["SchemaToolRouter<br/>LLM tool + schema check"]
+        Clarify["ClarifyTool<br/>Template questions"]
         Gate["Need-Agent Gate<br/>Reliability-first"]
         ChatHandler["ChatHandler"]
         Classifier["IntentClassifier<br/>Rule + Embedding + LLM"]
@@ -157,7 +161,11 @@ flowchart TB
 
     UI --> Stream
     Stream --> Router
-    Router --> Gate
+    Router --> SchemaRouter
+    SchemaRouter -->|clarify| Clarify
+    Clarify --> ChatHandler
+    SchemaRouter -->|execute| ChatHandler
+    SchemaRouter -->|fallback| Gate
     Gate -->|fast path| ChatHandler
     Gate -->|needs agent| Classifier
     Classifier --> SupRouter
@@ -179,7 +187,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    Input[User Query] --> Rule[Rule Matching<br/>FREE]
+    Input[User Query] --> Schema[SchemaToolRouter<br/>USE_SCHEMA_ROUTER]
+    Schema -->|Clarify| Clarify[ClarifyTool]
+    Schema -->|Execute| Chat[ChatHandler]
+    Schema -->|No Match| Rule[Rule Matching<br/>FREE]
     Rule -->|Match| Direct[Direct Response]
     Rule -->|No Match| Embed[Embedding + Keywords<br/>LOW COST]
     Embed -->|High Confidence| Gate[Need-Agent Gate]
@@ -302,6 +313,7 @@ LANGSMITH_PROJECT=FinSight
 ENABLE_LANGSMITH=false
 
 # Quality & Guardrails
+USE_SCHEMA_ROUTER=false
 DATA_CONTEXT_MAX_SKEW_HOURS=24
 BUDGET_MAX_TOOL_CALLS=50
 BUDGET_MAX_ROUNDS=12
@@ -393,7 +405,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-01-24 | Version: 0.6.6
+> Last Updated: 2026-01-28 | Version: 0.6.7
 
 ### Current Progress
 

@@ -63,6 +63,7 @@ class ContextManager:
         self.current_focus_exchange: Optional[str] = None
         self.market_preference: Optional[str] = None
         self.pending_clarification: Optional[Dict[str, Any]] = None
+        self.pending_tool_call: Optional[Dict[str, Any]] = None
         self.company_memory: Dict[str, Dict[str, Any]] = {}
         self.user_preferences: Dict[str, Any] = {
             'language': 'zh',  # 默认中文
@@ -140,6 +141,14 @@ class ContextManager:
 
         updated_query = self._apply_company_memory(query, market_hint)
         return {"query": updated_query, "market_hint": market_hint}
+
+    def set_pending_tool_call(self, payload: Optional[Dict[str, Any]]) -> None:
+        """Store pending schema-tool clarification state."""
+        self.pending_tool_call = payload
+
+    def clear_pending_tool_call(self) -> None:
+        """Clear pending schema-tool clarification state."""
+        self.pending_tool_call = None
 
     def _set_pending_clarification(self, metadata: Dict[str, Any], query: str, intent: str) -> None:
         candidates = metadata.get("ticker_candidates") or []
@@ -589,6 +598,7 @@ class ContextManager:
         self.current_focus_exchange = None
         self.market_preference = None
         self.pending_clarification = None
+        self.pending_tool_call = None
         self.company_memory.clear()
         self.accumulated_data.clear()
     
@@ -606,6 +616,7 @@ class ContextManager:
             'current_focus_exchange': self.current_focus_exchange,
             'market_preference': self.market_preference,
             'pending_clarification': bool(self.pending_clarification),
+            'pending_tool_call': bool(self.pending_tool_call),
             'company_memory_count': len(self.company_memory),
             'cached_data_keys': list(self.accumulated_data.keys()),
             'user_preferences': self.user_preferences,

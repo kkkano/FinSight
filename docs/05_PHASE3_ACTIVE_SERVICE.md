@@ -1,7 +1,7 @@
 # FinSight 阶段3：主动服务与风控体系
 
 > **计划周期**: Week 7 - Week 8
-> **更新日期**: 2026-01-22
+> **更新日期**: 2026-01-28
 > **核心目标**: 实现"全天候监控"与"风险管理"，完成智能合伙人拼图
 >
 > **近期同步**:
@@ -20,9 +20,10 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 ---
 
-## 0.1 Recent Updates (2026-01-24)
+## 0.1 Recent Updates (2026-01-28)
 
 - Evidence pool now surfaces for external data usage (chat/report)
 - News pipeline adds summary + relevance filtering to avoid noise

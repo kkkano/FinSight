@@ -88,6 +88,8 @@ FinSight AI 是一个对话式多智能体金融研究助手，核心能力包�
 - 成本优化：简单请求优先走规则
 - 报告意图覆盖“分析/Analyze”，有 ticker 时无需 LLM
 - 可靠性优先 Agent 闸门：CHAT 可按时效/决策/证据需求升级到 Supervisor
+- SchemaToolRouter（可选）：一次 LLM 选工具 + Pydantic 校验 + 模板化追问
+- 多轮补槽：pending tool 状态记忆缺失参数（USE_SCHEMA_ROUTER）
 
 ### 实时可视化与透明度
 - 流式输出（逐字呈现）
@@ -123,6 +125,8 @@ flowchart TB
     subgraph API["FastAPI 后端"]
         Stream["/chat/stream"]
         Router["ConversationRouter"]
+        SchemaRouter["SchemaToolRouter<br/>LLM 工具 + Schema 校验"]
+        Clarify["ClarifyTool<br/>模板化追问"]
         Gate["Need-Agent Gate<br/>可靠性优先"]
         ChatHandler["ChatHandler"]
         Classifier[IntentClassifier<br/>规则 + Embedding + LLM]
@@ -157,7 +161,11 @@ flowchart TB
 
     UI --> Stream
     Stream --> Router
-    Router --> Gate
+    Router --> SchemaRouter
+    SchemaRouter -->|clarify| Clarify
+    Clarify --> ChatHandler
+    SchemaRouter -->|execute| ChatHandler
+    SchemaRouter -->|fallback| Gate
     Gate -->|快速路径| ChatHandler
     Gate -->|需要 Agent| Classifier
     Classifier --> SupRouter
@@ -179,7 +187,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    Input[用户请求] --> Rule[规则匹配<br/>免费]
+    Input[用户请求] --> Schema[SchemaToolRouter<br/>USE_SCHEMA_ROUTER]
+    Schema -->|Clarify| Clarify[ClarifyTool]
+    Schema -->|Execute| Chat[ChatHandler]
+    Schema -->|未匹配| Rule[规则匹配<br/>免费]
     Rule -->|命中| Direct[直接响应]
     Rule -->|未命中| Embed[Embedding + 关键词<br/>低成本]
     Embed -->|高置信度| Gate[Need-Agent 闸门]
@@ -302,6 +313,7 @@ LANGSMITH_PROJECT=FinSight
 ENABLE_LANGSMITH=false
 
 # 质量和门槛
+USE_SCHEMA_ROUTER=false
 DATA_CONTEXT_MAX_SKEW_HOURS=24
 BUDGET_MAX_TOOL_CALLS=50
 BUDGET_MAX_ROUNDS=12
@@ -393,7 +405,7 @@ FinSight/
 
 ## 当前状态
 
-> 最后更新: 2026-01-24 | 版本: 0.6.6
+> 最后更新: 2026-01-28 | 版本: 0.6.7
 
 ### 完成进度
 

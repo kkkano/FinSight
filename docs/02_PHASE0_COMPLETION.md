@@ -1,6 +1,6 @@
 # FinSight 阶段0：基座强化完成报告
 
-> **更新日期**: 2026-01-22
+> **更新日期**: 2026-01-28
 > **状态**: 已完成 (100%)
 >
 > **近期同步**:
@@ -19,9 +19,10 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 ---
 
-## 0.1 Recent Updates (2026-01-24)
+## 0.1 Recent Updates (2026-01-28)
 
 - Need-Agent Gate decision is now visible in trace, including reason + confidence
 - Evidence pool is returned for tool/agent outputs and shown in UI

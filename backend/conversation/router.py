@@ -17,6 +17,7 @@ Handles intent recognition and mode dispatch
 """
 
 import logging
+import os
 from enum import Enum
 from typing import Tuple, Dict, Any, Optional, List, Callable
 import re
@@ -81,6 +82,44 @@ class ConversationRouter:
         """
         self.llm = llm
         self._handlers: Dict[Intent, Callable] = {}
+        self._schema_router = None
+        self._init_schema_router()
+
+    def _schema_enabled(self) -> bool:
+        value = os.getenv("USE_SCHEMA_ROUTER", "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
+    def _init_schema_router(self) -> None:
+        if not self._schema_enabled():
+            self._schema_router = None
+            return
+        try:
+            from backend.conversation.schema_router import SchemaToolRouter
+            self._schema_router = SchemaToolRouter(self.llm)
+        except Exception as exc:
+            logger.info(f"[Router] SchemaToolRouter init failed: {exc}")
+            self._schema_router = None
+
+    def _get_schema_router(self):
+        if self._schema_enabled() and self._schema_router is None:
+            self._init_schema_router()
+        if not self._schema_enabled():
+            return None
+        return self._schema_router
+
+    @staticmethod
+    def _map_schema_intent(intent: str) -> Intent:
+        mapping = {
+            "chat": Intent.CHAT,
+            "report": Intent.REPORT,
+            "alert": Intent.ALERT,
+            "economic_events": Intent.ECONOMIC_EVENTS,
+            "news_sentiment": Intent.NEWS_SENTIMENT,
+            "clarify": Intent.CLARIFY,
+            "followup": Intent.FOLLOWUP,
+            "greeting": Intent.GREETING,
+        }
+        return mapping.get(intent, Intent.CLARIFY)
 
     def register_handler(self, intent: Intent, handler: Callable) -> None:
         """Register intent handler"""
@@ -102,6 +141,18 @@ class ConversationRouter:
         # 1. 获取上下文摘要 (用于 FOLLOWUP/CHAT 的意图判断)
         context_summary = context.get_summary()
         last_long = context.get_last_long_response()
+
+        schema_router = self._get_schema_router()
+        if schema_router:
+            schema_result = schema_router.route_query(query, context)
+            if schema_result:
+                base_metadata = self._extract_metadata(query)
+                metadata = {**base_metadata, **schema_result.metadata}
+                if "tickers" in schema_result.metadata:
+                    metadata["tickers"] = schema_result.metadata["tickers"]
+                intent = self._map_schema_intent(schema_result.intent)
+                handler = self._handlers.get(intent)
+                return intent, metadata, handler
 
         # 2. 识别意图和提取元数据
         intent, metadata = self.classify_intent(query, context_summary, last_long)

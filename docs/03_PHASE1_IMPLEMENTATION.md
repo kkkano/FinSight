@@ -1,7 +1,7 @@
 # FinSight 阶段1：专家 Agent 团与记忆构建
 
 > **计划周期**: Week 3 - Week 4
-> **更新日期**: 2026-01-22
+> **更新日期**: 2026-01-28
 > **核心目标**: 从"单体大模型"进化为"分工明确的专家团队"
 >
 > **近期同步**:
@@ -20,9 +20,10 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 ---
 
-## 0.1 Recent Updates (2026-01-24)
+## 0.1 Recent Updates (2026-01-28)
 
 - Need-Agent Gate upgrades CHAT to Supervisor based on reliability triggers
 - Agent Trace includes whether agents/tools were invoked (and why)

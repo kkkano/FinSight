@@ -1,6 +1,6 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> **更新日期**: 2026-01-24
+> **更新日期**: 2026-01-28
 > **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 > **架构模式**: Supervisor Agent (协调者模式)
 >
@@ -17,6 +17,7 @@
 > - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
 > - Trace 规范化输出 + /metrics 可观测性入口
 > - 新增 Need-Agent Gate：可靠性优先路由 + Trace 记录是否调用 Agent
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 > - Evidence Pool：外部数据/工具调用时返回证据池并在前端展示
 > - News/Report 输出加入“总览/结论”摘要，防止堆叠信息
 > - 多 ticker 对比自动补齐图表标记（多图或合图）
@@ -43,6 +44,8 @@ flowchart TB
     subgraph Backend["后端 (FastAPI + LangGraph)"]
         API["/chat/stream API"]
         CR["ConversationRouter<br/>对话路由"]
+        SchemaRouter["SchemaToolRouter<br/>LLM tool + Schema 校验"]
+        Clarify["ClarifyTool<br/>模板追问"]
         Gate["Need-Agent Gate<br/>可靠性优先"]
         CH["ChatHandler<br/>快速响应"]
 
@@ -78,7 +81,11 @@ flowchart TB
     %% Data Flow
     UI --> API
     API --> CR
-    CR --> Gate
+    CR --> SchemaRouter
+    SchemaRouter -->|clarify| Clarify
+    Clarify --> CH
+    SchemaRouter -->|execute| CH
+    SchemaRouter -->|fallback| Gate
     Gate -->|快速路径| CH
     Gate -->|需要Agent| IC
     IC -->|意图分类| SA

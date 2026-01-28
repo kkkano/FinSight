@@ -571,12 +571,23 @@ class ConversationAgent:
 
             intent, metadata, handler = self.router.route(resolved_query, self.context)
 
+            schema_action = metadata.get("schema_action")
+            schema_tool_name = metadata.get("schema_tool_name")
+            schema_args = metadata.get("schema_args") or {}
+            schema_direct = bool(
+                schema_action == "execute"
+                and schema_tool_name
+                and schema_tool_name != "analyze_stock"
+            )
+
             if capture_thinking and intent_step is not None:
                 intent_step["result"] = self._compact_dict({
                     "intent": intent.value,
                     "tickers": metadata.get('tickers', []),
                     "company_names": metadata.get('company_names', []),
                     "is_comparison": metadata.get('is_comparison'),
+                    "schema_action": metadata.get('schema_action'),
+                    "schema_tool_name": metadata.get('schema_tool_name'),
                 })
 
             # 2.1 Agent gate (reliability-first)
@@ -586,12 +597,22 @@ class ConversationAgent:
                     "agent_gate",
                     "评估是否需要调用多Agent..."
                 )
-            gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
-            use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
-            gate_decision.used_supervisor = bool(
-                use_supervisor or (intent == Intent.REPORT and self.supervisor)
-            )
-            gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
+            if schema_direct:
+                gate_decision = AgentGateDecision(router_intent=intent.value if intent else None)
+                gate_decision.policy = "schema_router"
+                gate_decision.exclusion_reason = "schema_direct_tool"
+                gate_decision.need_agent = False
+                gate_decision.should_use_supervisor = False
+                gate_decision.used_supervisor = False
+                gate_decision.agent_path = "chat_handler"
+                use_supervisor = False
+            else:
+                gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
+                use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
+                gate_decision.used_supervisor = bool(
+                    use_supervisor or (intent == Intent.REPORT and self.supervisor)
+                )
+                gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
             metadata["agent_gate"] = gate_decision.to_dict()
             if capture_thinking and gate_step is not None:
                 gate_step["result"] = self._compact_dict(gate_decision.to_dict())
@@ -617,7 +638,12 @@ class ConversationAgent:
                 )
 
             handler_used = handler
-            if intent == Intent.REPORT and self.supervisor:
+            if schema_direct:
+                result = self.chat_handler.handle_schema_tool(
+                    schema_tool_name, schema_args, resolved_query, self.context
+                )
+                handler_used = self.chat_handler.handle_schema_tool
+            elif intent == Intent.REPORT and self.supervisor:
                 result = self._handle_report(resolved_query, metadata)
                 handler_used = None
             elif use_supervisor:
@@ -745,12 +771,23 @@ class ConversationAgent:
 
             intent, metadata, handler = self.router.route(resolved_query, self.context)
 
+            schema_action = metadata.get("schema_action")
+            schema_tool_name = metadata.get("schema_tool_name")
+            schema_args = metadata.get("schema_args") or {}
+            schema_direct = bool(
+                schema_action == "execute"
+                and schema_tool_name
+                and schema_tool_name != "analyze_stock"
+            )
+
             if capture_thinking and intent_step is not None:
                 intent_step["result"] = self._compact_dict({
                     "intent": intent.value,
                     "tickers": metadata.get('tickers', []),
                     "company_names": metadata.get('company_names', []),
                     "is_comparison": metadata.get('is_comparison'),
+                    "schema_action": metadata.get('schema_action'),
+                    "schema_tool_name": metadata.get('schema_tool_name'),
                 })
 
             # Agent gate (reliability-first)
@@ -760,12 +797,22 @@ class ConversationAgent:
                     "agent_gate",
                     "评估是否需要调用多Agent..."
                 )
-            gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
-            use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
-            gate_decision.used_supervisor = bool(
-                use_supervisor or (intent == Intent.REPORT and self.supervisor)
-            )
-            gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
+            if schema_direct:
+                gate_decision = AgentGateDecision(router_intent=intent.value if intent else None)
+                gate_decision.policy = "schema_router"
+                gate_decision.exclusion_reason = "schema_direct_tool"
+                gate_decision.need_agent = False
+                gate_decision.should_use_supervisor = False
+                gate_decision.used_supervisor = False
+                gate_decision.agent_path = "chat_handler"
+                use_supervisor = False
+            else:
+                gate_decision = self._evaluate_agent_gate(resolved_query, intent, metadata)
+                use_supervisor = bool(gate_decision.should_use_supervisor and intent != Intent.REPORT and self.supervisor)
+                gate_decision.used_supervisor = bool(
+                    use_supervisor or (intent == Intent.REPORT and self.supervisor)
+                )
+                gate_decision.agent_path = "supervisor" if gate_decision.used_supervisor else "chat_handler"
             metadata["agent_gate"] = gate_decision.to_dict()
             if capture_thinking and gate_step is not None:
                 gate_step["result"] = self._compact_dict(gate_decision.to_dict())
@@ -788,7 +835,16 @@ class ConversationAgent:
                 )
 
             handler_used = handler
-            if intent == Intent.REPORT and self.supervisor and metadata.get('tickers'):
+            if schema_direct:
+                result = await asyncio.to_thread(
+                    self.chat_handler.handle_schema_tool,
+                    schema_tool_name,
+                    schema_args,
+                    resolved_query,
+                    self.context,
+                )
+                handler_used = self.chat_handler.handle_schema_tool
+            elif intent == Intent.REPORT and self.supervisor and metadata.get('tickers'):
                 result = await self._handle_report_async(resolved_query, metadata)
                 handler_used = None
             elif use_supervisor:
@@ -1008,6 +1064,17 @@ class ConversationAgent:
     def _handle_clarify(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """处理需要澄清的查询"""
         clarify_reason = metadata.get("clarify_reason")
+        if metadata.get("schema_action") == "clarify":
+            question = metadata.get("schema_question") or "请提供更具体的信息。"
+            return {
+                'success': True,
+                'response': question,
+                'intent': 'clarify',
+                'needs_clarification': True,
+                'schema_tool_name': metadata.get("schema_tool_name"),
+                'schema_missing': metadata.get("schema_missing"),
+            }
+
         if metadata.get('company_names') or metadata.get('company_mentions'):
             return self.chat_handler._handle_company_clarification(query, metadata)
         if clarify_reason == "followup_without_context":

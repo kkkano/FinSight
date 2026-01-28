@@ -14,9 +14,10 @@
 > ✅ **近期同步**: DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
 > ✅ **近期同步**: BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
 > ✅ **近期同步**: API 鉴权 + 限流 + 免责声明模板落地，确保合规门禁（P0-29）
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 ---
 
-## 0.1 Recent Updates (2026-01-24)
+## 0.1 Recent Updates (2026-01-28)
 
 - Evidence pool is returned for research outputs to make RAG evidence traceable
 - News outputs include summary + relevance filtering

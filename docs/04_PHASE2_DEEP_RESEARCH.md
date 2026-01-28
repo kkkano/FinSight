@@ -1,7 +1,7 @@
 # FinSight 阶段2：深度研报与按需调用
 
 > **计划周期**: Week 5 - Week 6
-> **更新日期**: 2026-01-22
+> **更新日期**: 2026-01-28
 > **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
 >
 > **近期同步**:
@@ -20,9 +20,10 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
 ---
 
-## 0.1 Recent Updates (2026-01-24)
+## 0.1 Recent Updates (2026-01-28)
 
 - Evidence pool exposed for chat/report to make research traceable
 - News output adds short “overall summary” and relevance filtering
