@@ -1,0 +1,8 @@
+﻿2026-01-29
+
+Schema Router follow-up notes:
+- Supervisor endpoints now use SchemaToolRouter before SupervisorAgent.
+- Clarify is returned for invalid JSON / unknown tool to avoid dual-brain divergence.
+- SlotCompletenessGate returns structured missing_fields to keep clarify UI consistent.
+- News/news_sentiment now respect limit when provided by schema args.
+- Keep an eye on pending_tool_call persistence in supervisor flows (uses agent.context now).

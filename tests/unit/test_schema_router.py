@@ -43,16 +43,51 @@ def test_missing_required_fields_detected():
     reason="langchain_core not available",
 )
 def test_route_clarify_then_execute():
-    llm = DummyLLM('{"tool_name":"get_price","args":{"ticker":null}}')
+    llm = DummyLLM('{"tool_name":"get_price","args":{"ticker":null},"confidence":0.9}')
     router = schema_router.SchemaToolRouter(llm)
     context = DummyContext()
 
     result = router.route_query("help me check the price", context)
     assert result is not None
     assert result.intent == "clarify"
+    assert result.metadata.get("schema_action") == "clarify"
+    assert result.metadata.get("schema_missing")[0]["field"] == "ticker"
+    assert result.metadata.get("source") == "schema_router"
     assert context.pending_tool_call is not None
 
     result = router.route_query("TSLA", context)
+    assert result is not None
+    assert result.metadata.get("schema_action") == "execute"
+    assert result.metadata.get("schema_args", {}).get("ticker") == "TSLA"
+    assert "TSLA" in result.metadata.get("tickers", [])
+
+
+@pytest.mark.skipif(
+    not schema_router.LANGCHAIN_AVAILABLE,
+    reason="langchain_core not available",
+)
+def test_company_name_needs_intent_action():
+    llm = DummyLLM('{"tool_name":"get_market_sentiment","args":{},"confidence":0.9}')
+    router = schema_router.SchemaToolRouter(llm)
+    context = DummyContext()
+
+    result = router.route_query("特斯拉", context)
+    assert result is not None
+    assert result.metadata.get("schema_action") == "clarify"
+    missing = result.metadata.get("schema_missing") or []
+    assert any(item.get("field") == "intent" for item in missing)
+
+
+@pytest.mark.skipif(
+    not schema_router.LANGCHAIN_AVAILABLE,
+    reason="langchain_core not available",
+)
+def test_complete_query_executes_without_clarify():
+    llm = DummyLLM('{"tool_name":"get_price","args":{"ticker":"TSLA"},"confidence":0.95}')
+    router = schema_router.SchemaToolRouter(llm)
+    context = DummyContext()
+
+    result = router.route_query("查一下特斯拉的股价", context)
     assert result is not None
     assert result.metadata.get("schema_action") == "execute"
     assert "TSLA" in result.metadata.get("tickers", [])
@@ -63,9 +98,11 @@ def test_route_clarify_then_execute():
     reason="langchain_core not available",
 )
 def test_unknown_tool_falls_back():
-    llm = DummyLLM('{"tool_name":"unknown_tool","args":{}}')
+    llm = DummyLLM('{"tool_name":"unknown_tool","args":{},"confidence":0.9}')
     router = schema_router.SchemaToolRouter(llm)
     context = DummyContext()
 
     result = router.route_query("test", context)
-    assert result is None
+    assert result is not None
+    assert result.intent == "clarify"
+    assert result.metadata.get("clarify_reason") == "unknown_tool"

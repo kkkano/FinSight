@@ -19,7 +19,7 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
 ---
 
 ## 0.1 Recent Updates (2026-01-28)

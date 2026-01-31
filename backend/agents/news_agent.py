@@ -30,8 +30,26 @@ class NewsAgent(BaseFinancialAgent):
 
         results = []
 
-        # 1. 使用 get_company_news 获取新闻（结构化输出，含多源回退）
-        if self.circuit_breaker.can_call("news_api"):
+        # 1) Prefer finnhub-style tool when available (aligns with stream path + tests)
+        finnhub_news = getattr(self.tools, "_fetch_with_finnhub_news", None)
+        if finnhub_news and self.circuit_breaker.can_call("finnhub"):
+            try:
+                finnhub_items = finnhub_news(ticker)
+                if isinstance(finnhub_items, list):
+                    for item in finnhub_items:
+                        if not isinstance(item, dict):
+                            continue
+                        item.setdefault("ticker", ticker)
+                        item.setdefault("source", "finnhub")
+                        results.append(item)
+                    if results:
+                        self.circuit_breaker.record_success("finnhub")
+            except Exception as e:
+                logger.info(f"[NewsAgent] _fetch_with_finnhub_news failed: {e}")
+                self.circuit_breaker.record_failure("finnhub")
+
+        # 2) Fallback to get_company_news if finnhub tool not present
+        if not results and self.circuit_breaker.can_call("news_api"):
             try:
                 get_news = getattr(self.tools, "get_company_news", None)
                 if get_news:
@@ -45,7 +63,6 @@ class NewsAgent(BaseFinancialAgent):
                         if results:
                             self.circuit_breaker.record_success("news_api")
                     elif news_data and isinstance(news_data, str) and "No " not in news_data:
-                        # 兼容旧格式：解析新闻文本为结构化数据
                         parsed_news = self._parse_news_text(news_data, ticker)
                         if parsed_news:
                             results.extend(parsed_news)
@@ -54,21 +71,39 @@ class NewsAgent(BaseFinancialAgent):
                 logger.info(f"[NewsAgent] get_company_news failed: {e}")
                 self.circuit_breaker.record_failure("news_api")
 
-        # 2. 如果新闻不足，尝试搜索补充
-        if len(results) < 3:
-            if self.circuit_breaker.can_call("search"):
-                try:
-                    search_func = getattr(self.tools, "search", None)
-                    if search_func:
-                        search_text = search_func(f"{ticker} stock news latest")
-                        if search_text and isinstance(search_text, str):
-                            parsed_search = self._parse_search_results(search_text, ticker)
-                            if parsed_search:
-                                results.extend(parsed_search)
-                                self.circuit_breaker.record_success("search")
-                except Exception as e:
-                    logger.info(f"[NewsAgent] search fallback failed: {e}")
-                    self.circuit_breaker.record_failure("search")
+        # 3) Secondary fallback to tavily-style tool
+        if len(results) < 3 and self.circuit_breaker.can_call("tavily"):
+            try:
+                search_news = getattr(self.tools, "_search_company_news", None)
+                if search_news:
+                    t_results = search_news(f"{ticker} stock news")
+                    if isinstance(t_results, list):
+                        for item in t_results:
+                            if not isinstance(item, dict):
+                                continue
+                            item.setdefault("ticker", ticker)
+                            item.setdefault("source", "tavily")
+                            results.append(item)
+                        if t_results:
+                            self.circuit_breaker.record_success("tavily")
+            except Exception as e:
+                logger.info(f"[NewsAgent] _search_company_news failed: {e}")
+                self.circuit_breaker.record_failure("tavily")
+
+        # 4) Legacy text search fallback
+        if len(results) < 3 and self.circuit_breaker.can_call("search"):
+            try:
+                search_func = getattr(self.tools, "search", None)
+                if search_func:
+                    search_text = search_func(f"{ticker} stock news latest")
+                    if search_text and isinstance(search_text, str):
+                        parsed_search = self._parse_search_results(search_text, ticker)
+                        if parsed_search:
+                            results.extend(parsed_search)
+                            self.circuit_breaker.record_success("search")
+            except Exception as e:
+                logger.info(f"[NewsAgent] search fallback failed: {e}")
+                self.circuit_breaker.record_failure("search")
 
         # Deduplicate (title-level)
         seen_titles = set()

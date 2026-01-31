@@ -25,6 +25,9 @@ from .news import (
     get_company_news,
     get_news_sentiment,
     get_market_news_headlines,
+    _format_search_news_items,
+    _build_search_news_items,
+    _parse_rss_items,
 )
 from .price import (
     _fetch_with_alpha_vantage,
@@ -90,6 +93,9 @@ __all__ = [
     "get_company_news",
     "get_news_sentiment",
     "get_market_news_headlines",
+    "_format_search_news_items",
+    "_build_search_news_items",
+    "_parse_rss_items",
     "_fetch_with_alpha_vantage",
     "_fetch_with_finnhub",
     "_fetch_with_yfinance",

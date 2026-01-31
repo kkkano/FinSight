@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, AsyncMock
 from backend.services.memory import UserProfile
 from backend.orchestration.forum import ForumHost, ForumOutput, AgentOutput
 from backend.orchestration.supervisor_agent import SupervisorAgent
+from backend.orchestration.intent_classifier import ClassificationResult, AgentIntent
 
 @pytest.mark.asyncio
 async def test_forum_host_context_injection():
@@ -51,7 +52,7 @@ async def test_supervisor_pass_profile():
     mock_tools = MagicMock()
     mock_cache = MagicMock()
 
-    supervisor = AgentSupervisor(mock_llm, mock_tools, mock_cache)
+    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
 
     # Mock Agents
     for name in supervisor.agents:
@@ -75,8 +76,17 @@ async def test_supervisor_pass_profile():
 
     profile = UserProfile(user_id="u2", risk_tolerance="high")
 
-    # Run analyze
-    result = await supervisor.analyze("分析 AAPL", "AAPL", user_profile=profile)
+    supervisor.classifier.classify = MagicMock(return_value=ClassificationResult(
+        intent=AgentIntent.REPORT,
+        confidence=1.0,
+        tickers=["AAPL"],
+        method="test",
+        reasoning="forced",
+        scores={},
+    ))
+
+    # Run process
+    result = await supervisor.process("分析 AAPL", tickers=["AAPL"], user_profile=profile)
 
     # Verify analyze call passed profile to forum
     supervisor.forum.synthesize.assert_called_once()

@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from backend.conversation.router import Intent
@@ -11,6 +13,9 @@ class StubContext:
     def resolve_reference(self, query: str) -> str:
         self.resolved_calls.append(query)
         return query.replace("它", "AAPL")
+
+    def preprocess_query(self, query: str) -> dict:
+        return {"query": query}
 
     def add_turn(self, **_kwargs):
         return None
@@ -44,14 +49,25 @@ class StubAgent:
         return {"success": True, "response": "default", "intent": "chat"}
 
 
+class DummySupervisor:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def process_stream(self, *_args, **_kwargs):
+        yield json.dumps({"type": "done", "intent": "chat"})
+
+
 def test_chat_stream_resolves_reference(monkeypatch):
     import backend.api.main as main
+    import backend.orchestration.supervisor_agent as supervisor_module
 
     stub_agent = StubAgent()
     monkeypatch.setattr(main, "agent", stub_agent)
+    monkeypatch.setattr(main, "create_llm", lambda: object())
+    monkeypatch.setattr(supervisor_module, "SupervisorAgent", DummySupervisor)
 
     client = TestClient(main.app)
-    with client.stream("POST", "/chat/stream", json={"query": "它的行情"}) as response:
+    with client.stream("POST", "/chat/supervisor/stream", json={"query": "它的行情"}) as response:
         assert response.status_code == 200
         _ = [line for line in response.iter_lines() if line]
 

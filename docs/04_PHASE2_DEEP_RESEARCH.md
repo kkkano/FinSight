@@ -20,7 +20,7 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
 ---
 
 ## 0.1 Recent Updates (2026-01-28)
@@ -33,8 +33,8 @@
 
 ## 0. 当前状态（2026-01-11）
 
-- /chat/stream 全意图真实 token 流式输出已完成（含 REPORT done 事件 ReportIR）
-- /chat 与 /chat/stream 已接入异步 Supervisor 与指代消解
+- /chat/supervisor/stream 全意图真实 token 流式输出已完成（含 REPORT done 事件 ReportIR）
+- /chat/supervisor 与 /chat/supervisor/stream 已接入异步 Supervisor 与指代消解
 - Phase 1 技术/基本面 Agent 已补齐，ReportIR Schema/Validator 已完成，DeepSearch 真实检索 + PDF + Self-RAG 已落地，重点转向 Macro 升级与前端结构化卡片优化
 
 ## 1. 核心任务拆解

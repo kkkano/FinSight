@@ -14,18 +14,13 @@ interface DiagnosticsPanelProps {
 
 export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClassName }) => {
   const [orch, setOrch] = useState<OrchestratorStats | null>(null);
-  const [langgraph, setLanggraph] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
 
   const load = async () => {
     try {
       setLoading(true);
-      const [lg, oc] = await Promise.all([
-        apiClient.diagnosticsLanggraph(),
-        apiClient.diagnosticsOrchestrator(),
-      ]);
-      setLanggraph(lg?.data || lg);
+      const oc = await apiClient.diagnosticsOrchestrator();
       setOrch(oc?.data || oc);
     } catch (e) {
       console.error('Diagnostics fetch failed', e);
@@ -103,15 +98,6 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClass
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {langgraph && (
-              <div>
-                <div className="font-semibold text-fin-text">LangGraph</div>
-                <div>状态: {langgraph.available ? 'ready' : 'degraded'}</div>
-                <div>模型: {langgraph.agent_info?.model ?? langgraph.self_check?.model ?? '—'}</div>
-                <div>节点: {langgraph.self_check?.graph?.nodes?.join(', ') || '—'}</div>
               </div>
             )}
           </div>

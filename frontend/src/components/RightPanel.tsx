@@ -88,8 +88,8 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
   const [, setMarketQuotes] = useState<Quote[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [langgraph, setLanggraph] = useState<any>(null);
   const [orchestrator, setOrchestrator] = useState<any>(null);
+  const [health, setHealth] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [chartHeight, setChartHeight] = useState(250);
@@ -193,17 +193,15 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
 
   const loadDiagnostics = async () => {
     try {
-      const [lg, oc, health] = await Promise.all([
-        apiClient.diagnosticsLanggraph(),
+      const [oc, health] = await Promise.all([
         apiClient.diagnosticsOrchestrator(),
         apiClient.healthCheck(),
       ]);
-      // 正确读取嵌套结构
-      setLanggraph({ ...lg, health });
       setOrchestrator(oc);
+      setHealth(health);
     } catch (error) {
-      setLanggraph(null);
       setOrchestrator(null);
+      setHealth(null);
     }
   };
 
@@ -251,10 +249,9 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
   }, [positionRows]);
 
   // 从真实后端数据提取 Agent 状态
-  const agentInfo = langgraph?.data?.agent_info;
   const orchestratorStats = orchestrator?.data?.orchestrator_stats;
   const sourceStats = orchestrator?.data?.by_source?.stock_price || [];
-  const healthComponents = langgraph?.health?.components || {};
+  const healthComponents = health?.components || {};
 
   // 计算总请求数 (从所有数据源累加)
   const totalCalls = sourceStats.reduce((sum: number, s: any) => sum + (s.total_calls || 0), 0);
@@ -456,18 +453,17 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
       {/* Agent 运行状态 - 真实数据 */}
       <Widget title="Agent 运行状态" icon={<Activity size={14} />}>
         <div className="space-y-2 text-xs">
-          {/* Provider/Model Info */}
-          <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
-            <span className="text-fin-muted">Provider</span>
-            <span className="text-fin-text font-medium">{agentInfo?.provider || 'Unknown'}</span>
+          {/* Provider/Model Info */}          <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
+            <span className="text-fin-muted">LLM</span>
+            <span className="text-fin-text font-medium">{healthComponents.llm?.status ?? 'unknown'}</span>
           </div>
           <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
-            <span className="text-fin-muted">Model</span>
-            <span className="text-fin-text font-medium">{agentInfo?.model || 'Unknown'}</span>
+            <span className="text-fin-muted">Supervisor</span>
+            <span className="text-fin-text font-medium">{healthComponents.supervisor?.status ?? 'unknown'}</span>
           </div>
           <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
             <span className="text-fin-muted">Tools</span>
-            <span className="text-fin-text font-medium">{agentInfo?.tools_count || 0} 个</span>
+            <span className="text-fin-text font-medium">{healthComponents.tools_module?.status ?? 'unknown'}</span>
           </div>
 
           {/* 子 Agent 健康状态 */}

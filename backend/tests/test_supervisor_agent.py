@@ -5,7 +5,7 @@ IntentClassifier 测试
 """
 
 import pytest
-from backend.orchestration.intent_classifier import IntentClassifier, Intent, ClassificationResult
+from backend.orchestration.intent_classifier import IntentClassifier, AgentIntent, ClassificationResult
 
 
 def _embedding_available() -> bool:
@@ -27,13 +27,13 @@ class TestIntentClassifierRules:
         test_cases = ["你好", "您好", "hello", "Hi", "你是谁", "介绍一下"]
         for query in test_cases:
             result = self.classifier.classify(query, [])
-            assert result.intent == Intent.GREETING, f"Failed for: {query}"
+            assert result.intent == AgentIntent.GREETING, f"Failed for: {query}"
             assert result.method == "rule"
 
     def test_comparison_with_multiple_tickers(self):
         """测试多标的自动识别为对比"""
         result = self.classifier.classify("分析一下", ["AAPL", "MSFT"])
-        assert result.intent == Intent.COMPARISON
+        assert result.intent == AgentIntent.COMPARISON
         assert result.method == "rule"
 
 
@@ -56,7 +56,7 @@ class TestIntentClassifierEmbedding:
         ]
         for query, tickers in test_cases:
             result = self.classifier.classify(query, tickers)
-            assert result.intent == Intent.PRICE, f"Failed for: {query}"
+            assert result.intent == AgentIntent.PRICE, f"Failed for: {query}"
             assert "embedding" in result.method
 
     @pytest.mark.skipif(
@@ -72,7 +72,7 @@ class TestIntentClassifierEmbedding:
         ]
         for query, tickers in test_cases:
             result = self.classifier.classify(query, tickers)
-            assert result.intent == Intent.NEWS, f"Failed for: {query}"
+            assert result.intent == AgentIntent.NEWS, f"Failed for: {query}"
 
     @pytest.mark.skipif(
         not _embedding_available(),
@@ -87,7 +87,7 @@ class TestIntentClassifierEmbedding:
         ]
         for query, tickers in test_cases:
             result = self.classifier.classify(query, tickers)
-            assert result.intent == Intent.TECHNICAL, f"Failed for: {query}"
+            assert result.intent == AgentIntent.TECHNICAL, f"Failed for: {query}"
 
     @pytest.mark.skipif(
         not _embedding_available(),
@@ -102,7 +102,7 @@ class TestIntentClassifierEmbedding:
         ]
         for query, tickers in test_cases:
             result = self.classifier.classify(query, tickers)
-            assert result.intent == Intent.FUNDAMENTAL, f"Failed for: {query}"
+            assert result.intent == AgentIntent.FUNDAMENTAL, f"Failed for: {query}"
 
     @pytest.mark.skipif(
         not _embedding_available(),
@@ -117,7 +117,7 @@ class TestIntentClassifierEmbedding:
         ]
         for query, tickers in test_cases:
             result = self.classifier.classify(query, tickers)
-            assert result.intent == Intent.REPORT, f"Failed for: {query}"
+            assert result.intent == AgentIntent.REPORT, f"Failed for: {query}"
 
     @pytest.mark.skipif(
         not _embedding_available(),
@@ -128,7 +128,7 @@ class TestIntentClassifierEmbedding:
         test_cases = ["市场情绪怎么样", "恐惧贪婪指数", "fear greed index"]
         for query in test_cases:
             result = self.classifier.classify(query, [])
-            assert result.intent == Intent.SENTIMENT, f"Failed for: {query}"
+            assert result.intent == AgentIntent.SENTIMENT, f"Failed for: {query}"
 
     @pytest.mark.skipif(
         not _embedding_available(),
@@ -139,7 +139,7 @@ class TestIntentClassifierEmbedding:
         test_cases = ["CPI 数据", "美联储利率", "FOMC 会议"]
         for query in test_cases:
             result = self.classifier.classify(query, [])
-            assert result.intent == Intent.MACRO, f"Failed for: {query}"
+            assert result.intent == AgentIntent.MACRO, f"Failed for: {query}"
 
 
 class TestIntentClassifierKeywordFallback:
@@ -153,12 +153,12 @@ class TestIntentClassifierKeywordFallback:
     def test_price_keyword_fallback(self):
         """价格关键词回退"""
         result = self.classifier.classify("AAPL 价格", ["AAPL"])
-        assert result.intent == Intent.PRICE
+        assert result.intent == AgentIntent.PRICE
 
     def test_news_keyword_fallback(self):
         """新闻关键词回退"""
         result = self.classifier.classify("AAPL 新闻", ["AAPL"])
-        assert result.intent == Intent.NEWS
+        assert result.intent == AgentIntent.NEWS
 
 
 class TestIntentClassifierCostSaving:

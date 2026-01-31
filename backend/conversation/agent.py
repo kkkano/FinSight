@@ -25,7 +25,7 @@ from backend.conversation.router import ConversationRouter, Intent
 from backend.handlers.chat_handler import ChatHandler
 from backend.handlers.followup_handler import FollowupHandler
 from backend.orchestration.supervisor_agent import SupervisorAgent
-from backend.orchestration.intent_classifier import IntentClassifier, Intent as AgentIntent
+from backend.orchestration.intent_classifier import IntentClassifier, AgentIntent
 
 
 @dataclass
@@ -946,22 +946,42 @@ class ConversationAgent:
         
         ticker = tickers[0]
         try:
-            analysis_result = await self.supervisor.analyze(query, ticker, user_profile=None)
-            forum_output = analysis_result.get("forum_output")
+            supervisor_result = await self.supervisor.process(
+                query=query,
+                tickers=[ticker],
+                user_profile=None,
+                context_summary=self.context.get_summary(),
+                context_ticker=self.context.current_focus,
+            )
 
-            response_text = forum_output.consensus if forum_output else ""
-            result = {
-                'success': True,
-                'response': response_text,
-                'data': analysis_result,
-                'method': 'supervisor',
-            }
-            return result
+            response_text = str(supervisor_result.response) if supervisor_result.response is not None else ""
+            report_payload = None
+            try:
+                if supervisor_result.intent and getattr(supervisor_result.intent, "value", "") == "report":
+                    if supervisor_result.forum_output:
+                        report_payload = self.supervisor._build_report_ir(
+                            supervisor_result,
+                            ticker,
+                            supervisor_result.classification,
+                        )
+                    elif response_text:
+                        report_payload = self.supervisor._build_fallback_report(
+                            supervisor_result,
+                            ticker,
+                            supervisor_result.classification,
+                        )
+            except Exception as exc:
+                logger.info(f"[Agent] build report payload failed: {exc}")
+
+            converted = self._convert_supervisor_result(supervisor_result)
+            converted["report"] = report_payload
+            converted["method"] = "supervisor"
+            return converted
         except Exception as e:
             logger.error(f"[Agent] Supervisor async call failed: {e}")
             return {
                 'success': False,
-                'response': f'报告生成失败: {str(e)}',
+                'response': f'?????????: {str(e)}',
                 'intent': 'report',
             }
 
@@ -1062,10 +1082,9 @@ class ConversationAgent:
         }
 
     def _handle_clarify(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """处理需要澄清的查询"""
-        clarify_reason = metadata.get("clarify_reason")
+        """Handle clarification requests (SchemaRouter only)."""
         if metadata.get("schema_action") == "clarify":
-            question = metadata.get("schema_question") or "请提供更具体的信息。"
+            question = metadata.get("schema_question") or "clarify_required"
             return {
                 'success': True,
                 'response': question,
@@ -1073,40 +1092,11 @@ class ConversationAgent:
                 'needs_clarification': True,
                 'schema_tool_name': metadata.get("schema_tool_name"),
                 'schema_missing': metadata.get("schema_missing"),
+                'source': metadata.get("source", "schema_router"),
             }
 
-        if metadata.get('company_names') or metadata.get('company_mentions'):
-            return self.chat_handler._handle_company_clarification(query, metadata)
-        if clarify_reason == "followup_without_context":
-            response = """看起来你是在追问上一条内容，但我这边没有上下文。可以告诉我你具体想追问哪只股票/指数/行业或哪条新闻吗？
-
-例如：
-1. "AAPL 为什么今天下跌？"
-2. "最近市场热点有哪些？"
-3. "解释一下刚才的结论：XXX"
-"""
-            return {
-                'success': True,
-                'response': response,
-                'intent': 'clarify',
-                'needs_clarification': True,
-            }
-
-        return {
-            'success': True,
-            'response': """抱歉，我不太确定您想了解什么。
-
-我是专注于**金融市场分析**的助手。对于非金融类问题（如编程代码、天气、八卦娱乐等），我可能无法提供准确帮助。
-
-您可以尝试问我：
-1. 股票行情：**"AAPL 现在多少钱？"**
-2. 公司分析：**"分析一下特斯拉"**
-3. 投资建议：**"现在买英伟达怎么样？"**
-
-请提供具体的股票代码或公司名称，重新提问！""",
-            'intent': 'clarify',
-            'needs_clarification': True,
-        }
+        logger.info("[ConversationAgent] Clarify intent without schema_action; fallback to chat handler")
+        return self._handle_chat(query, metadata)
 
     def _default_handler(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """默认处理器"""

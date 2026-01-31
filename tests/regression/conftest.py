@@ -19,6 +19,17 @@ from tests.regression.mocks.mock_llm import MockLLM
 BASELINES_DIR = os.path.join(os.path.dirname(__file__), "baselines")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def disable_llm_rate_limit() -> None:
+    """Disable global LLM rate limiter for deterministic tests."""
+    os.environ["LLM_RATE_LIMIT_ENABLED"] = "false"
+    try:
+        from backend.services.rate_limiter import LLMRateLimiter
+        LLMRateLimiter.reset_instance()
+    except Exception:
+        pass
+
+
 @pytest.fixture(scope="session")
 def mock_tools():
     """Return MockToolsModule instance"""

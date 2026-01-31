@@ -665,18 +665,23 @@ def _get_index_news(ticker: str) -> List[Dict[str, Any]]:
             if item:
                 news_items.append(item)
             
-            if len(news_items) >= 5:
+            if len(news_items) >= limit:
                 break
     
     return news_items
 
 
-def get_company_news(ticker: str) -> List[Dict[str, Any]]:
+def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
     智能获取新闻：自动识别是公司股票还是市场指数（结构化输出）。
     - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
     - 市场指数：使用搜索策略获取宏观市场新闻
     """
+    try:
+        limit = int(limit) if limit is not None else 5
+    except Exception:
+        limit = 5
+    limit = max(1, min(limit, 20))
     # 🔍 关键判断：这是指数还是公司股票？
     if _is_market_index(ticker):
         # 优先用 alert_scheduler 的新闻抓取（含48h过滤）
@@ -704,7 +709,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
                     )
                     if item:
                         items.append(item)
-                    if len(items) >= 5:
+                    if len(items) >= limit:
                         break
                 if items:
                     return items
@@ -736,7 +741,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
                     )
                     if item:
                         items.append(item)
-                    if len(items) >= 5:
+                    if len(items) >= limit:
                         break
                 if items:
                     return items
@@ -773,7 +778,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
                 )
                 if item:
                     items.append(item)
-                if len(items) >= 5:
+                if len(items) >= limit:
                     break
             if items:
                 return items
@@ -808,7 +813,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
                     )
                     if item:
                         items.append(item)
-                    if len(items) >= 5:
+                    if len(items) >= limit:
                         break
                 if items:
                     return items
@@ -845,7 +850,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
                 )
                 if item:
                     items.append(item)
-                if len(items) >= 5:
+                if len(items) >= limit:
                     break
             if items:
                 return items
@@ -855,7 +860,7 @@ def get_company_news(ticker: str) -> List[Dict[str, Any]]:
     # 方法4: 回退到公司特定搜索
     logger.info(f"Falling back to search for {ticker} news")
     fallback_text = search(f"{ticker} company latest news stock")
-    items = _build_search_news_items(fallback_text, limit=5, max_age_days=7)
+    items = _build_search_news_items(fallback_text, limit=limit, max_age_days=7)
     if items:
         for item in items:
             if isinstance(item, dict):

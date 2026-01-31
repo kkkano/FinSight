@@ -146,7 +146,7 @@ class ChatHandler:
             primary_ticker = tickers[0] if tickers else None
 
             if metadata.get('ticker_candidates') and not tickers:
-                return self._handle_company_clarification(query, metadata)
+                return self._handle_company_clarification(query, metadata, context)
 
             if is_economic_events_query:
                 return self._handle_economic_events(query, context)
@@ -166,7 +166,7 @@ class ChatHandler:
                 if primary_ticker:
                     return self._handle_news_query(primary_ticker, query, context)
                 if explicit_company:
-                    return self._handle_company_clarification(query, metadata)
+                    return self._handle_company_clarification(query, metadata, context)
                 if self.tools_module and hasattr(self.tools_module, "get_market_news_headlines"):
                     try:
                         news_text = self.tools_module.get_market_news_headlines()
@@ -193,12 +193,12 @@ class ChatHandler:
                 # 新闻类无 ticker 查询：默认用大盘指数
                 if is_price_query:
                     if explicit_company:
-                        return self._handle_company_clarification(query, metadata)
-                    return self._handle_price_clarification(query)
+                        return self._handle_company_clarification(query, metadata, context)
+                    return self._handle_price_clarification(query, context)
 
                 if is_news_query:
                     if explicit_company:
-                        return self._handle_company_clarification(query, metadata)
+                        return self._handle_company_clarification(query, metadata, context)
                     default_news_ticker = os.getenv("DEFAULT_NEWS_TICKER", "^GSPC")
                     return self._handle_news_query(default_news_ticker, query, context)
 
@@ -260,12 +260,13 @@ class ChatHandler:
         ticker = args.get("ticker")
         tickers = args.get("tickers") if isinstance(args.get("tickers"), list) else []
         limit = args.get("limit")
+        timeframe = args.get("timeframe")
         search_query = args.get("query") or query
 
         if tool == "get_price":
             result = self._handle_price_query(ticker, query, context)
         elif tool == "get_news":
-            result = self._handle_news_query(ticker, query, context)
+            result = self._handle_news_query(ticker, query, context, limit=limit)
         elif tool == "compare_stocks":
             metadata = {"tickers": tickers, "is_comparison": True}
             result = self._handle_comparison_query(tickers, query, metadata, context)
@@ -274,7 +275,7 @@ class ChatHandler:
         elif tool == "get_economic_events":
             result = self._handle_economic_events(query, context)
         elif tool == "get_news_sentiment":
-            result = self._handle_news_sentiment_query(ticker, query, context)
+            result = self._handle_news_sentiment_query(ticker, query, context, limit=limit)
         elif tool == "search":
             result = self._handle_with_search(search_query, context)
         elif tool == "greeting":
@@ -287,6 +288,10 @@ class ChatHandler:
             if limit is not None:
                 data = result.get("data") or {}
                 data["limit"] = limit
+                result["data"] = data
+            if timeframe is not None:
+                data = result.get("data") or {}
+                data["timeframe"] = timeframe
                 result["data"] = data
         return result
 
@@ -488,13 +493,13 @@ class ChatHandler:
         处理简单的闲聊和问候（例如：你好，你是谁，谢谢）。
         """
         if any(kw in query for kw in ['你好', '您好', '喂', '嗨', 'hello', 'hi']):
-            response = "你好！我是一个金融智能分析助手，可以帮您查询股票价格、分析走势或生成深度报告。请问您想了解哪支股票？"
+            response = "你好！我是一个金融智能分析助手，可以帮您查询股票价格、分析走势或生成深度报告。"
         elif any(kw in query for kw in ['你是谁', '你叫什么', '介绍自己', '自我介绍']):
-            response = "我叫 FinSight Agent，是专为金融市场设计的人工智能。我可以实时获取数据，并利用 LLM 帮您解读复杂的市场信息。请开始提问吧！"
+            response = "我叫 FinSight Agent，是专为金融市场设计的人工智能。我可以实时获取数据，并解读复杂的市场信息。"
         elif any(kw in query for kw in ['谢谢', '再见', '好的', 'ok', 'bye']):
             response = "不客气，很高兴为您服务！如果您还有其他金融问题，随时可以问我。再见！"
         else:
-            response = "很高兴与您交流！请问有什么金融相关的问题我可以帮忙的吗？"
+            response = "很高兴与您交流！如需查询，请直接输入股票代码或公司名称。"
 
         return {
             'success': True,
@@ -503,58 +508,18 @@ class ChatHandler:
             'metadata': {},
         }
         
-    def _handle_price_clarification(self, query: str) -> Dict[str, Any]:
-        """价格类查询但缺少 ticker 时的澄清提示。"""
-        response = (
-            "你想查询哪一只股票/指数的实时行情？\n"
-            "请提供股票代码或公司名称，例如：AAPL/苹果、GOOGL/谷歌、^GSPC/标普500。"
-        )
-        return {
-            'success': True,
-            'response': response,
-            'intent': 'clarify',
-            'needs_clarification': True,
-            'thinking': "Missing ticker for price query; asked for clarification.",
-        }
-    def _handle_company_clarification(self, query: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """公司名可识别但无法唯一解析 ticker 时的澄清提示。"""
-        company_hint = None
-        for key in ('company_names', 'company_mentions'):
-            items = metadata.get(key) if metadata else None
-            if items:
-                company_hint = items[0]
-                break
+    def _handle_price_clarification(self, query: str, context: Optional[Any] = None) -> Dict[str, Any]:
+        """Fallback when schema router should have asked for details."""
+        return self._handle_with_search(query, context)
 
-        candidates = metadata.get('ticker_candidates') if metadata else None
-        if candidates:
-            lines = []
-            for item in candidates[:5]:
-                symbol = item.get('symbol') if isinstance(item, dict) else str(item)
-                desc = item.get('description') if isinstance(item, dict) else ''
-                line = '- ' + symbol
-                if desc:
-                    line += ' (' + desc + ')'
-                lines.append(line)
-            response = (
-                '我找到了多个可能的股票代码，和“' + str(company_hint) + '”相关，请确认一个：\n'
-                + '\n'.join(lines)
-                + '\n\n你也可以直接说“美股/法股/港股/英股”等市场偏好。'
-            )
-        elif company_hint:
-            response = (
-                '我识别到了公司名称“' + str(company_hint) + '”，但未能解析到唯一股票代码或交易所。\n'
-                + '请提供股票代码或市场（例如：AAPL、TSLA、CAP.PA / CAPMF）。\n'
-                + '你也可以直接说“美股/法股/港股/英股”等市场偏好。'
-            )
-        else:
-            response = self._generate_clarification_response(query)
-        return {
-            'success': True,
-            'response': response,
-            'intent': 'clarify',
-            'needs_clarification': True,
-            'thinking': 'Explicit company mention without ticker; asked for clarification.',
-        }
+    def _handle_company_clarification(
+        self,
+        query: str,
+        metadata: Dict[str, Any],
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """Fallback when schema router should have asked for details."""
+        return self._handle_with_search(query, context)
 
     def _handle_price_query(
         self, 
@@ -564,7 +529,7 @@ class ChatHandler:
     ) -> Dict[str, Any]:
         """处理价格查询"""
         if not ticker:
-            return self._handle_price_clarification(query)
+            return self._handle_price_clarification(query, context)
 
         orchestrator_error = None
         # 优先使用 Orchestrator (假设 Orchestrator 已经处理了缓存/回退逻辑)
@@ -675,7 +640,8 @@ class ChatHandler:
         self,
         ticker: str,
         query: str,
-        context: Optional[Any] = None
+        context: Optional[Any] = None,
+        limit: Optional[int] = None
     ) -> Dict[str, Any]:
         """处理新闻查询 - P1: 优先使用 NewsAgent 的反思循环"""
         cache_key = f"deepsearch:news:{ticker}"
@@ -753,9 +719,14 @@ class ChatHandler:
         # 回退常规新闻工具
         if self.tools_module and hasattr(self.tools_module, 'get_company_news'):
             try:
-                news_info = self.tools_module.get_company_news(ticker)
+                if limit is not None:
+                    news_info = self.tools_module.get_company_news(ticker, limit=limit)
+                else:
+                    news_info = self.tools_module.get_company_news(ticker)
                 news_response = news_info
                 if isinstance(news_info, list):
+                    if limit is not None:
+                        news_info = news_info[: max(1, int(limit))]
                     formatter = getattr(self.tools_module, "format_news_items", None)
                     if formatter:
                         news_response = formatter(news_info, title=f"Latest News ({ticker})")
@@ -1022,18 +993,14 @@ class ChatHandler:
         self,
         ticker: Optional[str],
         query: str,
-        context: Optional[Any] = None
+        context: Optional[Any] = None,
+        limit: Optional[int] = None
     ) -> Dict[str, Any]:
         if not ticker:
-            return {
-                'success': True,
-                'response': "想看哪只标的的新闻情绪？请提供股票代码或公司名称。",
-                'intent': 'clarify',
-                'needs_clarification': True,
-            }
+            return self._handle_with_search(query, context)
 
         orchestrator_error = None
-        if self.orchestrator and hasattr(self.orchestrator, 'fetch'):
+        if limit is None and self.orchestrator and hasattr(self.orchestrator, 'fetch'):
             try:
                 result = self.orchestrator.fetch('news_sentiment', ticker)
                 if result and result.success:
@@ -1060,7 +1027,10 @@ class ChatHandler:
 
         if self.tools_module and hasattr(self.tools_module, 'get_news_sentiment'):
             try:
-                text = self.tools_module.get_news_sentiment(ticker)
+                if limit is not None:
+                    text = self.tools_module.get_news_sentiment(ticker, limit=limit)
+                else:
+                    text = self.tools_module.get_news_sentiment(ticker)
                 if context and hasattr(context, 'cache_data'):
                     context.cache_data(f'news_sentiment:{ticker}', text)
                 return {
@@ -1141,10 +1111,10 @@ class ChatHandler:
         if not self.tools_module or not hasattr(self.tools_module, 'search'):
             return {
                 'success': False,
-                'response': "搜索工具暂不可用，无法查询成分股信息。",
-                'error': 'tool_not_available',
-                'intent': 'chat',
-                'thinking': "No search tool available for composition query."
+                'response': 'Search tool unavailable. Please try again later.',
+                'error': 'search_unavailable',
+                'intent': 'general_search',
+                'thinking': 'Search tool unavailable for fallback.'
             }
 
         try:
@@ -1299,7 +1269,7 @@ User Question: {query}
 {context_info}
 
 **CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY**:
-1. Understand User Intent (already invested vs preparing to invest).
+1. Understand User AgentIntent (already invested vs preparing to invest).
 2. Provide specific, actionable investment advice (e.g., continue holding, add positions, invest in 3-5 batches). 
 3. Include a brief Market Analysis (2-3 sentences).
 4. Include a clear Risk Warning at the end.
@@ -1357,11 +1327,11 @@ User Question: {query}
         
         if not self.tools_module or not hasattr(self.tools_module, 'search'):
             return {
-                'success': True, # 视为成功返回澄清信息
-                'response': self._generate_clarification_response(query),
-                'needs_clarification': True,
-                'intent': 'chat',
-                'thinking': "No ticker and no search tool, asked for clarification."
+                'success': False,
+                'response': 'Search tool unavailable. Please try again later.',
+                'error': 'search_unavailable',
+                'intent': 'general_search',
+                'thinking': 'Search tool unavailable for fallback.'
             }
 
         try:
@@ -1449,15 +1419,6 @@ Search Results: {search_result[:3000]}
 
         return str(price_data)
 
-    def _generate_clarification_response(self, query: str) -> str:
-        """Generate clarification request"""
-        responses = [
-            "请问您想了解哪支股票或指数？请提供股票代码或公司名称，例如 AAPL/苹果、^GSPC/标普500。",
-            "我需要知道您问的是哪支股票。请告诉我股票代码或公司名称，例如 'AAPL' 或 '苹果'。",
-            "您想查询哪支股票的信息？可以直接说公司名或指数名称，我会帮你匹配代码。",
-        ]
-        return random.choice(responses)
-    
     # --- LLM 增强方法（保留，但通常 handle 方法已覆盖） ---
     def _build_llm_enhance_prompt(self, query: str, raw_response: str) -> str:
         """Build the prompt used for LLM-enhanced chat responses."""

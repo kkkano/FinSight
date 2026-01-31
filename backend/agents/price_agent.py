@@ -157,7 +157,8 @@ class PriceAgent(BaseFinancialAgent):
             agent_name=self.AGENT_NAME,
             summary=summary_text,
             evidence=evidence,
-            confidence=0.9 if not fallback_used else 0.5,
+            # Price is a direct lookup; treat primary-source success as full confidence.
+            confidence=1.0 if not fallback_used else 0.5,
             data_sources=[source],
             as_of=as_of,
             fallback_used=fallback_used

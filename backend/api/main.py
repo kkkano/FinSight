@@ -62,7 +62,7 @@ except ImportError as e:
     ChartTypeDetector = None
 
 # 导入 Agent
-from backend.conversation.agent import create_agent as CreateReActAgent
+from backend.conversation.agent import create_agent
 from backend.llm_config import create_llm  # 导入 create_llm 以支持热加载
 
 # 导入 MemoryService
@@ -77,14 +77,13 @@ except Exception as e:
 # 初始化 Agent
 try:
     # 尝试初始化，如果失败则打印详细堆栈
-    agent = CreateReActAgent(
+    agent = create_agent(
         use_llm=True,
-        use_orchestrator=True,
-        use_report_agent=True
+        use_orchestrator=True
     )
-    logger.info("[Init] ReAct Agent initialized successfully.")
+    logger.info("[Init] ConversationAgent initialized successfully.")
 except Exception as e:
-    logger.info(f"[Init] Error initializing ReAct Agent: {e}")
+    logger.info(f"[Init] Error initializing ConversationAgent: {e}")
     traceback.print_exc()
     agent = None
 
@@ -416,28 +415,6 @@ def metrics_endpoint():
     return Response(content=payload, media_type=content_type)
 
 
-@app.get("/diagnostics/langgraph", response_model=DiagnosticsResponse)
-def diagnostics_langgraph():
-    """
-    LangGraph 报告 Agent 的自检与描述。
-    返回 DAG 概览、模型/提供商及自检状态，不触发外部 LLM 调用。
-    """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-    try:
-        info = agent.describe_report_agent() if hasattr(agent, "describe_report_agent") else {
-            "available": False,
-            "error": "describe_report_agent_not_supported",
-        }
-        return {
-            "status": "ok" if info.get("available") else "degraded",
-            "data": info,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"diagnostics failed: {exc}")
-
-
 @app.get("/diagnostics/orchestrator", response_model=DiagnosticsResponse)
 def diagnostics_orchestrator():
     """
@@ -455,51 +432,6 @@ def diagnostics_orchestrator():
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}")
-
-@app.post("/chat")
-async def chat_endpoint(request: ChatRequest):
-    """
-    对话接口
-    支持图表数据摘要自动加入上下文
-    """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-
-    try:
-        # 检查是否请求思考过程
-        include_thinking = request.query.startswith("[THINKING]") if hasattr(request, 'query') else False
-        if include_thinking:
-            query = request.query.replace("[THINKING]", "").strip()
-        else:
-            query = request.query
-
-        # 调用 Agent 的 chat 方法（捕获思考过程）
-        if hasattr(agent, "chat_async"):
-            result = await agent.chat_async(query, capture_thinking=True)
-        else:
-            result = agent.chat(query, capture_thinking=True)
-
-        # 构造符合前端预期的响应格式
-        return {
-            "success": result.get('success', True),
-            "response": result.get('response', '无响应'),
-            "intent": result.get('intent', 'chat'),
-            "current_focus": result.get('current_focus'),
-            "response_time_ms": result.get('response_time_ms', 0),
-            "session_id": request.session_id or "new_session",
-            "thinking": result.get('thinking', []),  # 思考过程
-            "report": result.get('report'),
-            "data": result.get('data'),
-            "metadata": result.get('metadata'),
-            "method": result.get('method'),
-        }
-    except HTTPException:
-        # 已经构造好的业务错误（如 400/404），直接透传
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/chat/supervisor")
 async def chat_supervisor_endpoint(request: ChatRequest):
@@ -522,21 +454,53 @@ async def chat_supervisor_endpoint(request: ChatRequest):
              raise HTTPException(status_code=500, detail="LLM not initialized")
 
         from backend.orchestration.supervisor_agent import SupervisorAgent
-        from backend.conversation.router import extract_tickers
+        from backend.conversation.router import extract_tickers, Intent
 
-        # 提取 tickers
-        tickers_result = extract_tickers(request.query)
-        # extract_tickers 返回 dict，需要提取 tickers 列表
-        tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
+        preprocess = agent.context.preprocess_query(request.query)
+        prepared_query = preprocess.get("query", request.query)
+        resolved_query = agent.context.resolve_reference(prepared_query)
+
+        intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
+        selected_ticker = preprocess.get("selected_ticker")
+        if selected_ticker and selected_ticker not in metadata.get("tickers", []):
+            metadata.setdefault("tickers", []).insert(0, selected_ticker)
+        if preprocess.get("selection_reason"):
+            metadata["selection_reason"] = preprocess.get("selection_reason")
+        if preprocess.get("market_hint"):
+            metadata["market_hint"] = preprocess.get("market_hint")
+
+        if intent == Intent.CLARIFY:
+            question = metadata.get("schema_question") or "Please provide more details."
+            return {
+                "success": True,
+                "response": question,
+                "schema_question": question,
+                "intent": "clarify",
+                "classification": {"method": "schema_router", "confidence": 0.95},
+                "session_id": request.session_id or "new_session",
+                "needs_clarification": True,
+                "missing_fields": metadata.get("schema_missing", []),
+                "schema_tool_name": metadata.get("schema_tool_name"),
+                "source": metadata.get("source", "schema_router"),
+            }
+
+        tickers = metadata.get("tickers", [])
+        if not tickers:
+            tickers_result = extract_tickers(resolved_query)
+            tickers = tickers_result.get("tickers", []) if isinstance(tickers_result, dict) else tickers_result
+
+
+        
 
         # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
         tools_module = None
         cache = None
         circuit_breaker = None
-        if agent.orchestrator:
-            tools_module = getattr(agent.orchestrator, 'tools_module', None)
-            cache = getattr(agent.orchestrator, 'cache', None)
-            circuit_breaker = getattr(agent.orchestrator, 'circuit_breaker', None)
+        orchestrator = getattr(agent, "orchestrator", None)
+        if orchestrator:
+            tools_module = getattr(orchestrator, 'tools_module', None)
+            cache = getattr(orchestrator, 'cache', None)
+            circuit_breaker = getattr(orchestrator, 'circuit_breaker', None)
         if not tools_module:
             import backend.tools as tools_module
 
@@ -568,13 +532,7 @@ async def chat_supervisor_endpoint(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 保留旧端点兼容
-@app.post("/chat/smart")
-async def chat_smart_endpoint(request: ChatRequest):
-    """兼容旧接口，重定向到 supervisor"""
-    return await chat_supervisor_endpoint(request)
-
-
+# 主入口流式端点
 @app.post("/chat/supervisor/stream")
 async def chat_supervisor_stream_endpoint(request: ChatRequest):
     """
@@ -594,17 +552,16 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     if not current_llm:
          raise HTTPException(status_code=500, detail="LLM not initialized")
 
+    import json as _json
+
     from backend.orchestration.supervisor_agent import SupervisorAgent
-    from backend.conversation.router import extract_tickers
+    from backend.conversation.router import extract_tickers, Intent
 
     preprocess = agent.context.preprocess_query(request.query)
     prepared_query = preprocess.get("query", request.query)
     resolved_query = agent.context.resolve_reference(prepared_query)
 
-    # 提取 tickers
-    tickers_result = extract_tickers(resolved_query)
-    # extract_tickers 返回 dict，需要提取 tickers 列表
-    tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
+    
 
     intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
     selected_ticker = preprocess.get("selected_ticker")
@@ -614,8 +571,24 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
         metadata["selection_reason"] = preprocess.get("selection_reason")
     if preprocess.get("market_hint"):
         metadata["market_hint"] = preprocess.get("market_hint")
-    if metadata.get("tickers"):
-        tickers = metadata["tickers"]
+
+    if intent == Intent.CLARIFY:
+        question = metadata.get("schema_question") or "Please provide more details."
+
+        async def clarify_response():
+            yield f"data: {_json.dumps({'type': 'token', 'content': question}, ensure_ascii=False)}\n\n"
+            yield f"data: {_json.dumps({'type': 'done', 'intent': 'clarify', 'needs_clarification': True, 'schema_question': question, 'missing_fields': metadata.get('schema_missing', []), 'schema_tool_name': metadata.get('schema_tool_name'), 'source': metadata.get('source', 'schema_router')}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            clarify_response(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
+
+    tickers = metadata.get("tickers", [])
+    if not tickers:
+        tickers_result = extract_tickers(resolved_query)
+        tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
 
     agent_gate = None
     if hasattr(agent, "evaluate_agent_gate"):
@@ -645,10 +618,11 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     tools_module = None
     cache = None
     circuit_breaker = None
-    if agent.orchestrator:
-        tools_module = getattr(agent.orchestrator, 'tools_module', None)
-        cache = getattr(agent.orchestrator, 'cache', None)
-        circuit_breaker = getattr(agent.orchestrator, 'circuit_breaker', None)
+    orchestrator = getattr(agent, "orchestrator", None)
+    if orchestrator:
+        tools_module = getattr(orchestrator, 'tools_module', None)
+        cache = getattr(orchestrator, 'cache', None)
+        circuit_breaker = getattr(orchestrator, 'circuit_breaker', None)
     if not tools_module:
         import backend.tools as tools_module
 
@@ -682,474 +656,6 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
 
 
 # 保留旧流式端点兼容
-@app.post("/chat/smart/stream")
-async def chat_smart_stream_endpoint(request: ChatRequest):
-    """兼容旧接口，重定向到 supervisor/stream"""
-    return await chat_supervisor_stream_endpoint(request)
-
-
-@app.post("/chat/stream")
-async def chat_stream_endpoint(request: ChatRequest):
-    """
-    流式对话接口 - 根据意图路由到不同处理器
-    只有 REPORT 意图才使用 LangGraph Agent 流式输出
-    CHAT 等简单意图使用快速响应
-    """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-
-    import json
-
-    # 1. 先进行指代消解 + 意图路由
-    from backend.conversation.router import Intent
-    preprocess = agent.context.preprocess_query(request.query)
-    prepared_query = preprocess.get("query", request.query)
-    resolved_query = agent.context.resolve_reference(prepared_query)
-    intent, metadata, handler = agent.router.route(resolved_query, agent.context)
-
-    selected_ticker = preprocess.get("selected_ticker")
-    if selected_ticker and selected_ticker not in metadata.get("tickers", []):
-        metadata.setdefault("tickers", []).insert(0, selected_ticker)
-    if preprocess.get("selection_reason"):
-        metadata["selection_reason"] = preprocess.get("selection_reason")
-    if preprocess.get("market_hint"):
-        metadata["market_hint"] = preprocess.get("market_hint")
-
-    agent_gate = None
-    if hasattr(agent, "evaluate_agent_gate"):
-        agent_gate = agent.evaluate_agent_gate(resolved_query, intent, metadata)
-        if hasattr(agent_gate, "to_dict"):
-            metadata["agent_gate"] = agent_gate.to_dict()
-
-    def build_thinking_trace(result: Dict[str, Any], elapsed_seconds: float, agent_gate: Any = None) -> List[Dict[str, Any]]:
-        steps: List[Dict[str, Any]] = []
-
-        def add_step(stage: str, message: str, payload: Optional[Dict[str, Any]] = None) -> None:
-            step = {
-                "stage": stage,
-                "message": message,
-                "timestamp": datetime.now().isoformat(),
-            }
-            if payload:
-                step["result"] = payload
-            steps.append(step)
-
-        summary = agent.context.get_summary()
-        if hasattr(agent, "_trim_text"):
-            summary = agent._trim_text(summary, 200)
-
-        add_step(
-            "reference_resolution",
-            "解析上下文引用完成",
-            {
-                "original_query": request.query,
-                "preprocessed_query": prepared_query,
-                "resolved_query": resolved_query,
-                "selected_ticker": preprocess.get("selected_ticker"),
-                "selection_reason": preprocess.get("selection_reason"),
-                "market_hint": preprocess.get("market_hint"),
-                "current_focus": agent.context.current_focus,
-                "context_summary": summary,
-            },
-        )
-        add_step(
-            "intent_classification",
-            "识别查询意图完成",
-            {
-                "intent": intent.value,
-                "tickers": metadata.get("tickers", []),
-                "company_names": metadata.get("company_names", []),
-                "is_comparison": metadata.get("is_comparison"),
-            },
-        )
-
-        if agent_gate:
-            gate_payload = agent_gate
-            if hasattr(agent_gate, "to_dict"):
-                gate_payload = agent_gate.to_dict()
-            add_step(
-                "agent_gate",
-                "评估是否需要调用多Agent",
-                gate_payload,
-            )
-
-        if metadata.get("tickers"):
-            collection_result: Dict[str, Any] = {}
-            if hasattr(agent, "_build_collection_result"):
-                collection_result = agent._build_collection_result(metadata, result)
-            add_step(
-                "data_collection",
-                f"{metadata['tickers'][0]} 数据收集完成",
-                collection_result or {"ticker": metadata["tickers"][0]},
-            )
-
-        processing_payload: Dict[str, Any] = {}
-        if hasattr(agent, "_build_processing_result"):
-            processing_payload = agent._build_processing_result(intent, handler, result)
-        add_step("processing", "响应生成完成", processing_payload or {"intent": intent.value})
-
-        add_step(
-            "complete",
-            "处理完成",
-            {
-                "elapsed_seconds": elapsed_seconds,
-                "success": result.get("success", True),
-                "report_present": bool(result.get("report")),
-            },
-        )
-
-        return steps
-
-    # 2. 根据意图决定处理方式
-    if intent == Intent.REPORT:
-        report_agent = getattr(agent, "report_agent", None)
-        supervisor = getattr(agent, "supervisor", None)
-        ticker = metadata["tickers"][0] if metadata.get("tickers") else None
-
-        # NOTE: report_builder 现在不再依赖 report_handler，报告 IR 由 streaming.py 内部处理
-        report_builder = None
-
-        supervisor_force = _env_bool("SUPERVISOR_STREAM_FORCE", "false")
-        use_supervisor = bool(
-            supervisor
-            and ticker
-            and hasattr(supervisor, "analyze_stream")
-            and (supervisor_force or report_agent is None)
-        )
-
-        if agent_gate:
-            agent_gate.used_supervisor = bool(use_supervisor or report_agent)
-            if use_supervisor:
-                agent_gate.agent_path = "supervisor"
-            elif report_agent:
-                agent_gate.agent_path = "report_agent"
-            else:
-                agent_gate.agent_path = "chat_handler"
-            if hasattr(agent_gate, "to_dict"):
-                metadata["agent_gate"] = agent_gate.to_dict()
-
-        if use_supervisor:
-            async def generate_report():
-                start_time = datetime.now()
-                response_text = ""
-                async for chunk in stream_supervisor_sse(supervisor, resolved_query, ticker, report_builder):
-                    if chunk.startswith("data: "):
-                        payload_text = chunk[6:].strip()
-                        try:
-                            payload = json.loads(payload_text)
-                        except json.JSONDecodeError:
-                            payload = None
-                        if payload and payload.get("type") == "token":
-                            response_text += payload.get("content", "")
-                        elif payload and payload.get("type") == "done":
-                            if not payload.get("report") and report_builder and response_text:
-                                try:
-                                    payload["report"] = report_builder(response_text)
-                                except Exception:
-                                    pass
-                            result = {
-                                "success": True,
-                                "response": response_text,
-                                "report": payload.get("report"),
-                                "method": "supervisor_stream",
-                            }
-                            agent_outputs = payload.get("agent_outputs") if isinstance(payload, dict) else None
-                            if agent_outputs and isinstance(agent_outputs, dict):
-                                result["data"] = {"agent_outputs": agent_outputs}
-                                plan_data = payload.get("plan")
-                                plan_trace = payload.get("plan_trace")
-                                if plan_data:
-                                    result["data"]["plan"] = plan_data
-                                if plan_trace:
-                                    result["data"]["plan_trace"] = plan_trace
-                                if payload.get("report"):
-                                    report = payload.get("report")
-                                    citations = []
-                                    agent_traces = {}
-                                    for name, output in agent_outputs.items():
-                                        if not isinstance(output, dict):
-                                            continue
-                                        evidence = output.get("evidence") or []
-                                        if evidence:
-                                            prefix = str(name).upper()[:2] if name else "AG"
-                                            # 内联构建 citations，不再依赖 report_handler
-                                            for idx, ev in enumerate(evidence):
-                                                citation = {
-                                                    "id": f"{prefix}{idx + 1}",
-                                                    "source": ev.get("source", "Unknown"),
-                                                    "url": ev.get("url", ""),
-                                                    "title": ev.get("title", ev.get("source", "")),
-                                                    "snippet": ev.get("snippet", ev.get("content", ""))[:200],
-                                                }
-                                                citations.append(citation)
-                                        trace = output.get("trace")
-                                        if trace:
-                                            agent_traces[name] = trace
-                                    if citations and isinstance(report, dict):
-                                        report["citations"] = citations
-                                    if agent_traces and isinstance(report, dict):
-                                        meta = report.get("meta") if isinstance(report, dict) else {}
-                                        meta = dict(meta) if isinstance(meta, dict) else {}
-                                        meta.setdefault("agent_traces", agent_traces)
-                                        report["meta"] = meta
-                                    if isinstance(report, dict):
-                                        try:
-                                            from backend.report.validator import ReportValidator
-                                            report = ReportValidator.validate_and_fix(report, as_dict=True)
-                                        except Exception:
-                                            pass
-                                    payload["report"] = report
-                                    result["report"] = report
-                            payload["thinking"] = build_thinking_trace(
-                                result,
-                                round((datetime.now() - start_time).total_seconds(), 2),
-                                agent_gate,
-                            )
-                            payload['current_focus'] = agent.context.current_focus
-                            payload['intent'] = intent.value
-                            agent.context.add_turn(query=request.query, intent=intent.value, response=response_text, metadata=metadata)
-                            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                            continue
-                    yield chunk
-        elif report_agent and hasattr(report_agent, "analyze_stream"):
-            async def generate_report():
-                start_time = datetime.now()
-                response_text = ""
-                async for chunk in stream_report_sse(report_agent, resolved_query, report_builder):
-                    if chunk.startswith("data: "):
-                        payload_text = chunk[6:].strip()
-                        try:
-                            payload = json.loads(payload_text)
-                        except json.JSONDecodeError:
-                            payload = None
-                        if payload and payload.get("type") == "token":
-                            response_text += payload.get("content", "")
-                        elif payload and payload.get("type") == "done":
-                            if not payload.get("report") and report_builder and response_text:
-                                try:
-                                    payload["report"] = report_builder(response_text)
-                                except Exception:
-                                    pass
-                            result = {
-                                "success": True,
-                                "response": response_text,
-                                "report": payload.get("report"),
-                                "method": "report_agent_stream",
-                            }
-                            payload["thinking"] = build_thinking_trace(
-                                result,
-                                round((datetime.now() - start_time).total_seconds(), 2),
-                                agent_gate,
-                            )
-                            payload['current_focus'] = agent.context.current_focus
-                            payload['intent'] = intent.value
-                            agent.context.add_turn(query=request.query, intent=intent.value, response=response_text, metadata=metadata)
-                            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                            continue
-                    yield chunk
-        else:
-            # Stream fallback using the non-streaming report path.
-            async def generate_report():
-                try:
-                    start_time = datetime.now()
-                    logger.info(f"[Stream REPORT] using async agent.chat_async()")
-                    result = await agent.chat_async(resolved_query, capture_thinking=True)
-                    response_text = result.get('response', '')
-                    report_data = result.get('report')
-                    thinking_steps = result.get('thinking', [])
-
-                    logger.info(f"[Stream REPORT] agent.chat report present: {report_data is not None}")
-                    if report_data:
-                        logger.info(f"[Stream REPORT] report keys: {list(report_data.keys())}")
-
-                    import re
-                    sentences = re.split(r'([。！？.!?\n])', response_text)
-                    buffer = ""
-                    for i, part in enumerate(sentences):
-                        buffer += part
-                        if part in ['。', '！', '？', '.', '!', '?', '\n'] or i == len(sentences) - 1:
-                            if buffer.strip():
-                                yield f"data: {json.dumps({'type': 'token', 'content': buffer}, ensure_ascii=False)}\n\n"
-                                buffer = ""
-
-                    done_data = {'type': 'done'}
-                    done_data['current_focus'] = agent.context.current_focus
-                    done_data['intent'] = intent.value
-                    if report_data:
-                        done_data['report'] = report_data
-                        logger.info(f"[Stream REPORT] done event includes report")
-                    if thinking_steps:
-                        done_data['thinking'] = thinking_steps
-                    else:
-                        result['report'] = report_data
-                    done_data['thinking'] = build_thinking_trace(
-                        result,
-                        round((datetime.now() - start_time).total_seconds(), 2),
-                        agent_gate,
-                    )
-                    yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
-
-        return StreamingResponse(
-            generate_report(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
-        )
-
-    else:
-        # 其他意图：优先走真实 token 流式输出
-        async def generate_chat():
-            try:
-                start_time = datetime.now()
-                agent.stats['total_queries'] += 1
-                agent.stats['intents'][intent.value] = agent.stats['intents'].get(intent.value, 0) + 1
-
-                response_text = ""
-                result: Dict[str, Any] = {}
-
-                use_supervisor = bool(
-                    agent_gate
-                    and getattr(agent_gate, "should_use_supervisor", False)
-                    and intent != Intent.REPORT
-                    and getattr(agent, "supervisor", None)
-                )
-                if agent_gate:
-                    agent_gate.used_supervisor = use_supervisor
-                    agent_gate.agent_path = "supervisor" if use_supervisor else "chat_handler"
-                    if hasattr(agent_gate, "to_dict"):
-                        metadata["agent_gate"] = agent_gate.to_dict()
-
-                if use_supervisor:
-                    supervisor_result = await agent.supervisor.process(
-                        query=resolved_query,
-                        tickers=metadata.get("tickers", []),
-                        context_summary=agent.context.get_summary(),
-                        context_ticker=agent.context.current_focus,
-                    )
-                    result = agent._convert_supervisor_result(supervisor_result)
-                    result["agent_gate"] = metadata.get("agent_gate")
-                    response_text = result.get("response", "")
-                    if response_text:
-                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
-
-                elif intent == Intent.CHAT and hasattr(agent.chat_handler, "stream_with_llm"):
-                    result_container: Dict[str, Any] = {}
-                    async for token in agent.chat_handler.stream_with_llm(
-                        resolved_query, metadata, agent.context, result_container
-                    ):
-                        if token:
-                            response_text += token
-                            yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
-                    result = result_container or {'success': True, 'response': response_text, 'intent': 'chat'}
-
-                elif intent == Intent.FOLLOWUP and hasattr(agent.followup_handler, "stream_with_llm"):
-                    result_container = {}
-                    async for token in agent.followup_handler.stream_with_llm(
-                        resolved_query, metadata, agent.context, result_container
-                    ):
-                        if token:
-                            response_text += token
-                            yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
-                    result = result_container or {'success': True, 'response': response_text, 'intent': 'followup'}
-
-                elif handler:
-                    result = handler(resolved_query, metadata)
-                    response_text = result.get('response', '')
-                    if response_text:
-                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
-                else:
-                    result = agent._default_handler(resolved_query, metadata)
-                    response_text = result.get('response', '')
-                    if response_text:
-                        yield f"data: {json.dumps({'type': 'token', 'content': response_text}, ensure_ascii=False)}\n\n"
-
-                if not result.get('response'):
-                    result['response'] = response_text
-
-                if isinstance(result, dict) and "agent_used" not in result:
-                    result["agent_used"] = bool(use_supervisor)
-                    result["agent_path"] = "supervisor" if use_supervisor else "chat_handler"
-                    result["agent_gate"] = metadata.get("agent_gate")
-
-                if intent in [Intent.CHAT, Intent.REPORT, Intent.FOLLOWUP]:
-                    before = result.get('response', '')
-                    result = agent._add_chart_marker(result, request.query, metadata, resolved_query)
-                    after = result.get('response', '')
-                    if after.startswith(before) and after != before:
-                        suffix = after[len(before):]
-                        if suffix.strip():
-                            yield f"data: {json.dumps({'type': 'token', 'content': suffix}, ensure_ascii=False)}\n\n"
-
-                done_data = {'type': 'done'}
-                done_data['current_focus'] = agent.context.current_focus
-                done_data['intent'] = intent.value
-                if result.get('report'):
-                    done_data['report'] = result['report']
-                done_data['thinking'] = build_thinking_trace(
-                    result,
-                    round((datetime.now() - start_time).total_seconds(), 2),
-                )
-                agent.context.add_turn(
-                    query=request.query,
-                    intent=intent.value,
-                    response=result.get('response', ''),
-                    metadata=metadata
-                )
-                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-            except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
-
-        return StreamingResponse(
-            generate_chat(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
-        )
-
-@app.post("/api/chart/detect", response_model=ChartDetectResponse)
-async def detect_chart_type(request: dict):
-    """
-    智能检测用户查询需要的图表类型
-    """
-    if not ChartTypeDetector:
-        return {
-            "success": False,
-            "should_generate": False,
-            "chart_type": "none",
-            "data_dimension": "none",
-            "confidence": 0.0,
-            "reason": "Chart detector not available"
-        }
-
-    try:
-        query = request.get('query', '')
-        ticker = request.get('ticker')
-
-        result = ChartTypeDetector.detect_chart_type(query, ticker)
-        should_generate = ChartTypeDetector.should_generate_chart(query)
-
-        return {
-            "success": True,
-            "should_generate": should_generate,
-            "chart_type": result.get('chart_type') or "none",
-            "data_dimension": result.get('data_dimension') or "none",
-            "confidence": result.get('confidence', 0.0) or 0.0,
-            "reason": result.get('reason') or ""
-        }
-    except Exception as e:
-        traceback.print_exc()
-        return {
-            "success": False,
-            "should_generate": False,
-            "chart_type": "none",
-            "data_dimension": "none",
-            "confidence": 0.0,
-            "reason": str(e)
-        }
-
 @app.post("/api/chat/add-chart-data", response_model=ChartDataResponse)
 async def add_chart_data(request: dict):
     """
@@ -1186,9 +692,10 @@ def get_price(ticker: str):
     """获取股票价格（带缓存，TTL=60秒）"""
     try:
         # 尝试从缓存获取
-        if agent and agent.orchestrator:
+        orchestrator = getattr(agent, "orchestrator", None)
+        if agent and orchestrator:
             cache_key = f"price:{ticker}"
-            cached_data = agent.orchestrator.cache.get(cache_key)
+            cached_data = orchestrator.cache.get(cache_key)
             if cached_data is not None:
                 logger.info(f"[API] 从缓存获取价格: {ticker}")
                 return {"ticker": ticker, "data": cached_data, "cached": True}
@@ -1197,8 +704,9 @@ def get_price(ticker: str):
         price_info = get_stock_price(ticker)
 
         # 存入缓存（TTL=60秒）
-        if agent and agent.orchestrator and price_info:
-            agent.orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
+        orchestrator = getattr(agent, "orchestrator", None)
+        if agent and orchestrator and price_info:
+            orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
             logger.info(f"[API] 价格已缓存: {ticker}")
 
         return {"ticker": ticker, "data": price_info}
@@ -1244,9 +752,10 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
     """
     try:
         # 尝试从 Agent 的 orchestrator 缓存获取
-        if agent and agent.orchestrator:
+        orchestrator = getattr(agent, "orchestrator", None)
+        if agent and orchestrator:
             cache_key = f"kline:{ticker}:{period}:{interval}"
-            cached_data = agent.orchestrator.cache.get(cache_key)
+            cached_data = orchestrator.cache.get(cache_key)
             if cached_data is not None:
                 logger.info(f"[API] 从缓存获取 K 线数据: {ticker} ({period}, {interval})")
                 return {"ticker": ticker, "data": cached_data, "cached": True}
@@ -1255,9 +764,10 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         kline_data = get_stock_historical_data(ticker, period=period, interval=interval)
         
         # 如果成功获取，存入缓存（缓存 1 小时）
-        if "error" not in kline_data and agent and agent.orchestrator:
+        orchestrator = getattr(agent, "orchestrator", None)
+        if "error" not in kline_data and agent and orchestrator:
             cache_key = f"kline:{ticker}:{period}:{interval}"
-            agent.orchestrator.cache.set(cache_key, kline_data, ttl=3600)  # 1小时缓存
+            orchestrator.cache.set(cache_key, kline_data, ttl=3600)  # 1小时缓存
             logger.info(f"[API] K 线数据已缓存: {ticker} ({period}, {interval})")
         
         # 确保返回格式符合前端期望：{ticker, data: {kline_data: [...] 或 error: "..."}}

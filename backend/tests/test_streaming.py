@@ -7,15 +7,18 @@
 import asyncio
 import httpx
 import json
+import pytest
+
+pytestmark = pytest.mark.skip(reason="manual integration test; requires running backend server")
 
 
 async def test_stream_endpoint():
-    """测试 /chat/stream 端点"""
+    """测试 /chat/supervisor/stream 端点"""
     print("=" * 60)
     print("[TEST] Streaming API Test")
     print("=" * 60)
 
-    url = "http://127.0.0.1:8000/chat/stream"
+    url = "http://127.0.0.1:8000/chat/supervisor/stream"
     payload = {"query": "What is the price of AAPL?"}
 
     print(f"\nRequest: POST {url}")

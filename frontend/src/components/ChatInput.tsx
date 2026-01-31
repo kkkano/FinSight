@@ -48,7 +48,6 @@ export const ChatInput: React.FC = () => {
     draft,
     setDraft,
     currentTicker,
-    chatMode,  // 获取当前聊天模式
   } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -208,8 +207,6 @@ export const ChatInput: React.FC = () => {
           thinkingSteps = [...thinkingSteps, step];
           updateMessage(aiMsgId, { thinking: thinkingSteps });
         },
-        // mode - 传递当前聊天模式
-        chatMode,
         // history - 传递对话历史用于上下文理解
         history
       );

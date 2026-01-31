@@ -3,7 +3,6 @@ import type { Message } from '../types';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
-type ChatMode = 'smart' | 'traditional';
 type PortfolioPositions = Record<string, number>;
 
 const getInitialLayout = (): LayoutMode => {
@@ -25,11 +24,6 @@ const getInitialSubscriptionEmail = (): string => {
   return window.localStorage.getItem('finsight-subscription-email') || '';
 };
 
-const getInitialChatMode = (): ChatMode => {
-  if (typeof window === 'undefined') return 'smart';
-  const stored = window.localStorage.getItem('finsight-chat-mode');
-  return stored === 'smart' || stored === 'traditional' ? (stored as ChatMode) : 'smart';
-};
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {
   if (typeof window === 'undefined') return {};
@@ -66,7 +60,6 @@ const applyThemeClass = (theme: Theme) => {
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
-const initialChatMode = getInitialChatMode();
 const initialPortfolioPositions = getInitialPortfolioPositions();
 applyThemeClass(initialTheme);
 
@@ -93,8 +86,6 @@ interface AppState {
   draft: string;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
-  chatMode: ChatMode;
-  setChatMode: (mode: ChatMode) => void;
   portfolioPositions: PortfolioPositions;
   setPortfolioPosition: (ticker: string, shares: number) => void;
   removePortfolioPosition: (ticker: string) => void;
@@ -119,7 +110,6 @@ export const useStore = create<AppState>((set) => ({
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
-  chatMode: initialChatMode,
   portfolioPositions: initialPortfolioPositions,
 
   addMessage: (message) =>
@@ -177,14 +167,6 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-subscription-email', email);
       }
       return { subscriptionEmail: email };
-    }),
-
-  setChatMode: (mode) =>
-    set(() => {
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('finsight-chat-mode', mode);
-      }
-      return { chatMode: mode };
     }),
 
   setPortfolioPosition: (ticker, shares) =>

@@ -30,7 +30,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const { theme, setTheme, subscriptionEmail, setSubscriptionEmail, setLayoutMode, chatMode, setChatMode } = useStore();
+  const { theme, setTheme, subscriptionEmail, setSubscriptionEmail, setLayoutMode } = useStore();
 
   // Subscription State
   const [subs, setSubs] = useState<Subscription[]>([]);
@@ -46,7 +46,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   // Diagnostics State
   const [orchestratorStats, setOrchestratorStats] = useState<any>(null);
-  const [langgraphInfo, setLanggraphInfo] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagError, setDiagError] = useState<string | null>(null);
 
@@ -95,12 +94,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setDiagLoading(true);
     setDiagError(null);
     try {
-      const [orchRes, lgRes] = await Promise.all([
-        apiClient.diagnosticsOrchestrator().catch(() => null),
-        apiClient.diagnosticsLanggraph().catch(() => null),
-      ]);
+      const orchRes = await apiClient.diagnosticsOrchestrator().catch(() => null);
       setOrchestratorStats(orchRes);
-      setLanggraphInfo(lgRes);
     } catch (e) {
       setDiagError('诊断加载失败');
     } finally {
@@ -419,38 +414,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
           </section>
 
-          {/* 聊天模式 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
-            <h3 className="text-sm font-medium text-fin-text mb-3">聊天模式</h3>
-            <div className="flex gap-4 text-sm">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="chatMode"
-                  checked={chatMode === 'smart'}
-                  onChange={() => setChatMode('smart')}
-                  className="accent-fin-primary"
-                />
-                <span className="text-fin-text">协调者模式</span>
-                <span className="text-[10px] text-fin-muted">(Supervisor Agent)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="chatMode"
-                  checked={chatMode === 'traditional'}
-                  onChange={() => setChatMode('traditional')}
-                  className="accent-fin-primary"
-                />
-                <span className="text-fin-text">传统模式</span>
-                <span className="text-[10px] text-fin-muted">(规则路由)</span>
-              </label>
-            </div>
-            <p className="text-[10px] text-fin-muted mt-2">
-              协调者模式：意图分类(规则+LLM) → Supervisor协调 → Worker Agents → Forum综合
-            </p>
-          </section>
-
           {/* 外观 */}
           <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">外观主题</h3>
@@ -527,35 +490,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         </>
                       );
                     })()}
-                  </div>
-                ) : (
-                  <div className="text-fin-muted">无数据</div>
-                )}
-              </div>
-
-              {/* LangGraph */}
-              <div className="border border-fin-border rounded p-3 bg-fin-panel/60">
-                <div className="font-medium text-fin-text mb-2 flex items-center gap-1">
-                  {langgraphInfo?.status === 'ok' ? (
-                    <CheckCircle size={12} className="text-green-400" />
-                  ) : (
-                    <XCircle size={12} className="text-yellow-400" />
-                  )}
-                  LangGraph Agent
-                </div>
-                {langgraphInfo?.data ? (
-                  <div className="space-y-1 text-fin-muted">
-                    {/* 从 agent_info 提取数据 */}
-                    <div>Available: {langgraphInfo.data.agent_info ? 'Yes' : 'No'}</div>
-                    <div>Provider: {langgraphInfo.data.agent_info?.provider || '-'}</div>
-                    <div>Model: {langgraphInfo.data.agent_info?.model || '-'}</div>
-                    <div>Tools: {langgraphInfo.data.agent_info?.tools_count || 0} 个</div>
-                    {langgraphInfo.data.agent_info?.tools && (
-                      <div className="pt-1 border-t border-fin-border mt-1 text-[10px]">
-                        {langgraphInfo.data.agent_info.tools.slice(0, 5).join(', ')}
-                        {langgraphInfo.data.agent_info.tools.length > 5 && ' ...'}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-fin-muted">无数据</div>

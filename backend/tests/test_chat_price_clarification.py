@@ -36,12 +36,12 @@ class DummyHandler(ChatHandler):
         return {"path": "news"}
 
 
-def test_price_query_without_ticker_prompts_clarification():
+def test_price_query_without_ticker_falls_back_to_search():
     handler = ChatHandler(llm=None, orchestrator=None)
     handler.tools_module = None
     response = handler.handle("\u5b9e\u65f6\u884c\u60c5\u67e5\u8be2", metadata={}, context=None)
-    assert response.get("needs_clarification") is True
-    assert "AAPL" in response.get("response", "")
+    assert response.get("intent") == "general_search"
+    assert response.get("error") == "search_unavailable"
 
 
 def test_price_query_prefers_price_over_news_keywords():

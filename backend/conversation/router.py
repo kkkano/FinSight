@@ -4,7 +4,7 @@ ConversationRouter - Conversation Router
 Handles intent recognition and mode dispatch
 
 ⚠️ 架构说明 (2026-01-24):
-本模块定义的 Intent 枚举与 backend/config/keywords.py 中的 Intent 是**不同的**：
+本模块定义的 Intent 枚举与 backend/config/keywords.py 中的 AgentIntent 是**不同的**：
 
 | 模块 | Intent 用途 | 使用者 |
 |------|-------------|--------|
@@ -17,7 +17,6 @@ Handles intent recognition and mode dispatch
 """
 
 import logging
-import os
 from enum import Enum
 from typing import Tuple, Dict, Any, Optional, List, Callable
 import re
@@ -85,14 +84,7 @@ class ConversationRouter:
         self._schema_router = None
         self._init_schema_router()
 
-    def _schema_enabled(self) -> bool:
-        value = os.getenv("USE_SCHEMA_ROUTER", "").strip().lower()
-        return value in {"1", "true", "yes", "on"}
-
     def _init_schema_router(self) -> None:
-        if not self._schema_enabled():
-            self._schema_router = None
-            return
         try:
             from backend.conversation.schema_router import SchemaToolRouter
             self._schema_router = SchemaToolRouter(self.llm)
@@ -101,10 +93,8 @@ class ConversationRouter:
             self._schema_router = None
 
     def _get_schema_router(self):
-        if self._schema_enabled() and self._schema_router is None:
+        if self._schema_router is None:
             self._init_schema_router()
-        if not self._schema_enabled():
-            return None
         return self._schema_router
 
     @staticmethod
@@ -141,12 +131,20 @@ class ConversationRouter:
         # 1. 获取上下文摘要 (用于 FOLLOWUP/CHAT 的意图判断)
         context_summary = context.get_summary()
         last_long = context.get_last_long_response()
+        base_metadata = self._extract_metadata(query)
+
+        # Fast-path: high-confidence rule-based intents bypass SchemaRouter
+        # This includes GREETING, REPORT, ALERT, etc. - all non-CLARIFY results
+        # Matches the correct behavior in classify_intent() method
+        quick_intent = self._quick_match(query, context_summary, last_long, base_metadata)
+        if quick_intent and quick_intent != Intent.CLARIFY:
+            handler = self._handlers.get(quick_intent)
+            return quick_intent, base_metadata, handler
 
         schema_router = self._get_schema_router()
         if schema_router:
             schema_result = schema_router.route_query(query, context)
             if schema_result:
-                base_metadata = self._extract_metadata(query)
                 metadata = {**base_metadata, **schema_result.metadata}
                 if "tickers" in schema_result.metadata:
                     metadata["tickers"] = schema_result.metadata["tickers"]
@@ -156,6 +154,11 @@ class ConversationRouter:
 
         # 2. 识别意图和提取元数据
         intent, metadata = self.classify_intent(query, context_summary, last_long)
+
+        # SchemaRouter should be the only clarify source
+        if intent == Intent.CLARIFY:
+            metadata["clarify_fallback"] = True
+            intent = Intent.CHAT
         
         # 3. 找到对应的处理器
         handler = self._handlers.get(intent)
@@ -253,7 +256,11 @@ class ConversationRouter:
         ]
         
         # 强制将最简单的问候语直接匹配为 GREETING
-        is_simple_greeting = any(kw == query_lower for kw in ['你好', '您好', 'hi', 'hello', '喂'])
+        # 包括拼音和中英文常见问候语
+        is_simple_greeting = any(kw == query_lower for kw in [
+            '你好', '您好', 'hi', 'hello', '喂',
+            'nihao', 'ninhao',  # 拼音问候语
+        ])
         has_greeting_kw = any(kw in query_lower for kw in greeting_keywords)
         
         if is_simple_greeting or has_greeting_kw:

@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-IntentClassifier - Hybrid Intent Classifier
+IntentClassifier - Hybrid AgentIntent Classifier
 Three-layer architecture: Rule fast-path -> Embedding similarity -> LLM fallback
 """
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+import asyncio
 import re
 import logging
 
 # Import from centralized config
 from backend.config.keywords import (
-    Intent,
+    AgentIntent,
     GREETING_PATTERNS,
     KEYWORD_BOOST,
     INTENT_EXAMPLES,
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ClassificationResult:
     """Classification result"""
-    intent: Intent
+    intent: AgentIntent
     confidence: float
     tickers: List[str]
     method: str  # "rule" / "embedding" / "embedding+keyword" / "llm" / "fallback"
@@ -67,12 +68,17 @@ class EmbeddingClassifier:
         for intent, examples in INTENT_EXAMPLES.items():
             self._intent_embeddings[intent] = self._model.encode(examples, convert_to_tensor=True)
 
-    def compute_similarity(self, query: str) -> Dict[Intent, float]:
+    def compute_similarity(self, query: str) -> Dict[AgentIntent, float]:
         """Compute similarity between query and each intent"""
         if not self._load_model():
             return {}
 
-        from sentence_transformers import util
+        try:
+            from sentence_transformers import util
+        except ModuleNotFoundError:
+            logger.warning("[IntentClassifier] sentence-transformers utils missing, fallback to keyword mode")
+            return {}
+
         query_embedding = self._model.encode(query, convert_to_tensor=True)
 
         scores = {}
@@ -85,7 +91,7 @@ class EmbeddingClassifier:
 
 class IntentClassifier:
     """
-    Hybrid Intent Classifier
+    Hybrid AgentIntent Classifier
     Three-layer: Rule -> Embedding + keyword boost -> LLM fallback
     """
 
@@ -105,17 +111,17 @@ class IntentClassifier:
         3. LLM fallback (confidence < threshold)
 
         Args:
-            query: 用户查询
-            tickers: 检测到的股票代码
-            context_summary: 对话上下文摘要（用于理解追问）
+            query: ??????
+            tickers: ?????????????
+            context_summary: ???????????????????????
         """
         query_lower = query.lower().strip()
         tickers = tickers or []
 
-        # 如果有上下文，将其与查询结合用于分类
+        # ???????????????????????????
         effective_query = query
         if context_summary:
-            effective_query = f"[对话上下文]\n{context_summary}\n\n[当前问题]\n{query}"
+            effective_query = f"[?????]\n{context_summary}\n\n[????]\n{query}"
 
         # === Layer 1: Rule fast-path ===
         rule_result = self._rule_classify(query_lower, tickers)
@@ -129,15 +135,28 @@ class IntentClassifier:
 
         # === Layer 3: LLM fallback ===
         if self.llm:
-            candidates = embedding_result.scores if embedding_result else {}
-            return self._llm_classify(query, tickers, candidates)
+            if embedding_result:
+                if self._event_loop_running():
+                    return embedding_result
+                candidates = embedding_result.scores if embedding_result else {}
+                return self._llm_classify(query, tickers, candidates)
+            if self._event_loop_running():
+                return ClassificationResult(
+                    intent=AgentIntent.SEARCH,
+                    confidence=0.5,
+                    tickers=tickers,
+                    method="fallback",
+                    reasoning="Cannot determine intent without LLM in running event loop",
+                    scores={}
+                )
+            return self._llm_classify(query, tickers, {})
 
         # === No LLM: return embedding result or fallback ===
         if embedding_result:
             return embedding_result
 
         return ClassificationResult(
-            intent=Intent.SEARCH,
+            intent=AgentIntent.SEARCH,
             confidence=0.5,
             tickers=tickers,
             method="fallback",
@@ -145,27 +164,156 @@ class IntentClassifier:
             scores={}
         )
 
+    @staticmethod
+    def _event_loop_running() -> bool:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+        return True
+
     def _rule_classify(self, query_lower: str, tickers: List[str]) -> Optional[ClassificationResult]:
         """Rule fast-path for clear simple intents
         规则快速路径：处理明确的简单意图
         """
 
+        if not query_lower:
+            return ClassificationResult(
+                intent=AgentIntent.CLARIFY,
+                confidence=0.9,
+                tickers=[],
+                method="rule",
+                reasoning="Empty query"
+            )
+
+        analysis_keywords = ['analysis', 'analyze', 'report', 'in-depth', 'deep', 'detailed', '分析', '报告', '深度', '详细', '研报', '调研']
+        report_keywords = KEYWORD_BOOST.get(AgentIntent.REPORT, [])
+        has_analysis_intent = any(kw in query_lower for kw in analysis_keywords) or any(kw in query_lower for kw in report_keywords)
+
+        news_keywords = KEYWORD_BOOST.get(AgentIntent.NEWS, [])
+
+        technical_keywords = KEYWORD_BOOST.get(AgentIntent.TECHNICAL, [])
+        fundamental_keywords = KEYWORD_BOOST.get(AgentIntent.FUNDAMENTAL, [])
+        macro_keywords = KEYWORD_BOOST.get(AgentIntent.MACRO, [])
+        sentiment_keywords = KEYWORD_BOOST.get(AgentIntent.SENTIMENT, [])
+
+        has_news = any(kw in query_lower for kw in news_keywords)
+        has_technical = any(kw in query_lower for kw in technical_keywords)
+        has_fundamental = any(kw in query_lower for kw in fundamental_keywords)
+        has_macro = any(kw in query_lower for kw in macro_keywords)
+        has_sentiment = any(kw in query_lower for kw in sentiment_keywords)
+        analysis_subintent_count = sum([has_news, has_technical, has_fundamental, has_macro, has_sentiment])
+
+        if not tickers:
+            off_topic_keywords = ['weather', 'temperature', 'rain', 'forecast', '天气', '温度', '下雨', '晴天', '气温', '穿什么']
+            if any(kw in query_lower for kw in off_topic_keywords):
+                return ClassificationResult(
+                    intent=AgentIntent.OFF_TOPIC,
+                    confidence=0.95,
+                    tickers=[],
+                    method="rule",
+                    reasoning="Matched off-topic keywords"
+                )
+
+            if has_macro:
+                return ClassificationResult(
+                    intent=AgentIntent.MACRO,
+                    confidence=0.9,
+                    tickers=[],
+                    method="rule",
+                    reasoning="Macro intent without ticker"
+                )
+
+            if has_sentiment:
+                return ClassificationResult(
+                    intent=AgentIntent.SENTIMENT,
+                    confidence=0.9,
+                    tickers=[],
+                    method="rule",
+                    reasoning="Sentiment intent without ticker"
+                )
+
+            if has_analysis_intent:
+                return ClassificationResult(
+                    intent=AgentIntent.CLARIFY,
+                    confidence=0.85,
+                    tickers=[],
+                    method="rule",
+                    reasoning="Missing ticker for analysis request"
+                )
+
+        if has_analysis_intent and tickers:
+            if analysis_subintent_count >= 2:
+                return ClassificationResult(
+                    intent=AgentIntent.REPORT,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="Multi-dimension analysis request"
+                )
+            if has_news:
+                return ClassificationResult(
+                    intent=AgentIntent.NEWS,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="News analysis intent with ticker"
+                )
+            if has_technical:
+                return ClassificationResult(
+                    intent=AgentIntent.TECHNICAL,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="Technical analysis intent with ticker"
+                )
+            if has_fundamental:
+                return ClassificationResult(
+                    intent=AgentIntent.FUNDAMENTAL,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="Fundamental analysis intent with ticker"
+                )
+            if has_macro:
+                return ClassificationResult(
+                    intent=AgentIntent.MACRO,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="Macro analysis intent with ticker"
+                )
+            if has_sentiment:
+                return ClassificationResult(
+                    intent=AgentIntent.SENTIMENT,
+                    confidence=0.9,
+                    tickers=tickers,
+                    method="rule",
+                    reasoning="Sentiment analysis intent with ticker"
+                )
+            return ClassificationResult(
+                intent=AgentIntent.REPORT,
+                confidence=0.9,
+                tickers=tickers,
+                method="rule",
+                reasoning="Analysis intent with ticker"
+            )
+
         # Greeting / 问候语检测
         for pattern in GREETING_PATTERNS:
             if re.search(pattern, query_lower):
                 return ClassificationResult(
-                    intent=Intent.GREETING,
+                    intent=AgentIntent.GREETING,
                     confidence=0.98,
                     tickers=[],
                     method="rule",
                     reasoning="Matched greeting pattern"
                 )
 
-        # News keyword fast-path
-        news_keywords = KEYWORD_BOOST.get(Intent.NEWS, [])
-        if any(kw in query_lower for kw in news_keywords):
+        # News keyword fast-path (avoid overriding analysis intent)
+        if not has_analysis_intent and has_news:
             return ClassificationResult(
-                intent=Intent.NEWS,
+                intent=AgentIntent.NEWS,
                 confidence=0.9,
                 tickers=tickers,
                 method="rule",
@@ -179,11 +327,19 @@ class IntentClassifier:
 
         if len(tickers) >= 2 and has_comparison_intent:
             return ClassificationResult(
-                intent=Intent.COMPARISON,
+                intent=AgentIntent.COMPARISON,
                 confidence=0.9,
                 tickers=tickers,
                 method="rule",
                 reasoning="Detected multiple tickers with comparison keywords"
+            )
+        if len(tickers) >= 2:
+            return ClassificationResult(
+                intent=AgentIntent.COMPARISON,
+                confidence=0.78,
+                tickers=tickers,
+                method="rule",
+                reasoning="Detected multiple tickers without explicit comparison keywords"
             )
 
         return None
@@ -224,7 +380,7 @@ class IntentClassifier:
     def _keyword_only_classify(self, query_lower: str, tickers: List[str]) -> Optional[ClassificationResult]:
         """Keyword-only classification (fallback when embedding unavailable)"""
 
-        scores = {intent: 0.0 for intent in Intent}
+        scores = {intent: 0.0 for intent in AgentIntent}
 
         for intent, keywords in KEYWORD_BOOST.items():
             for kw in keywords:
@@ -233,7 +389,7 @@ class IntentClassifier:
 
         # Boost relevant intents when tickers present
         if tickers:
-            for intent in [Intent.PRICE, Intent.NEWS, Intent.TECHNICAL, Intent.FUNDAMENTAL, Intent.REPORT]:
+            for intent in [AgentIntent.PRICE, AgentIntent.NEWS, AgentIntent.TECHNICAL, AgentIntent.FUNDAMENTAL, AgentIntent.REPORT]:
                 scores[intent] += 0.2
 
         best_intent = max(scores, key=scores.get)
@@ -297,17 +453,17 @@ Return only the intent name (e.g., PRICE):"""
             intent_str = response.content.strip().upper()
 
             intent_map = {
-                "PRICE": Intent.PRICE,
-                "NEWS": Intent.NEWS,
-                "SENTIMENT": Intent.SENTIMENT,
-                "TECHNICAL": Intent.TECHNICAL,
-                "FUNDAMENTAL": Intent.FUNDAMENTAL,
-                "MACRO": Intent.MACRO,
-                "REPORT": Intent.REPORT,
-                "COMPARISON": Intent.COMPARISON,
-                "SEARCH": Intent.SEARCH,
-                "CLARIFY": Intent.CLARIFY,
-                "OFF_TOPIC": Intent.OFF_TOPIC,
+                "PRICE": AgentIntent.PRICE,
+                "NEWS": AgentIntent.NEWS,
+                "SENTIMENT": AgentIntent.SENTIMENT,
+                "TECHNICAL": AgentIntent.TECHNICAL,
+                "FUNDAMENTAL": AgentIntent.FUNDAMENTAL,
+                "MACRO": AgentIntent.MACRO,
+                "REPORT": AgentIntent.REPORT,
+                "COMPARISON": AgentIntent.COMPARISON,
+                "SEARCH": AgentIntent.SEARCH,
+                "CLARIFY": AgentIntent.CLARIFY,
+                "OFF_TOPIC": AgentIntent.OFF_TOPIC,
             }
 
             # Extract intent
@@ -316,7 +472,7 @@ Return only the intent name (e.g., PRICE):"""
                     intent_str = name
                     break
 
-            intent = intent_map.get(intent_str, Intent.SEARCH)
+            intent = intent_map.get(intent_str, AgentIntent.SEARCH)
 
             return ClassificationResult(
                 intent=intent,
@@ -330,7 +486,7 @@ Return only the intent name (e.g., PRICE):"""
         except Exception as e:
             logger.error(f"[IntentClassifier] LLM classification failed: {e}")
             return ClassificationResult(
-                intent=Intent.SEARCH,
+                intent=AgentIntent.SEARCH,
                 confidence=0.5,
                 tickers=tickers,
                 method="fallback",

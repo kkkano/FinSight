@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, AsyncMock
 from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.macro_agent import MacroAgent
 from backend.orchestration.supervisor_agent import SupervisorAgent
+from backend.orchestration.intent_classifier import ClassificationResult, AgentIntent
 from backend.agents.base_agent import AgentOutput
 
 @pytest.mark.asyncio
@@ -117,7 +118,7 @@ async def test_supervisor_integration_phase2():
     mock_tools = MagicMock()
     mock_cache = MagicMock()
 
-    supervisor = AgentSupervisor(mock_llm, mock_tools, mock_cache)
+    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
 
     # Check if new agents are registered
     assert "deep_search" in supervisor.agents
@@ -139,8 +140,17 @@ async def test_supervisor_integration_phase2():
     # Mock Forum synthesize
     supervisor.forum.synthesize = AsyncMock(return_value=MagicMock())
 
-    # Run analyze
-    await supervisor.analyze("Deep analysis of NVDA", "NVDA")
+    classification = ClassificationResult(
+        intent=AgentIntent.REPORT,
+        confidence=1.0,
+        tickers=["NVDA"],
+        method="test",
+        reasoning="forced",
+        scores={},
+    )
+
+    # Run report handler directly (avoids agent reset in process)
+    await supervisor._handle_report("Deep analysis of NVDA", "NVDA", None, classification)
 
     # Verify agents were called
     supervisor.agents["deep_search"].research.assert_called()

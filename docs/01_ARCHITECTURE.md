@@ -1,6 +1,6 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> **更新日期**: 2026-01-28
+> **更新日期**: 2026-01-31
 > **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 > **架构模式**: Supervisor Agent (协调者模式)
 >
@@ -9,7 +9,7 @@
 > - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
 > - get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）
 > - SSRF 防护扩展至 DeepSearch + fetch_url_content（P1-2）
-> - pytest 收集 backend/tests + test/（不再标记 legacy）
+> - pytest 收集 backend/tests + tests/regression（legacy test/ 将移除）
 > - PlanIR + Executor 与 EvidencePolicy 落地（计划模板/执行 trace/引用校验）
 > - DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
 > - BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
@@ -17,7 +17,9 @@
 > - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
 > - Trace 规范化输出 + /metrics 可观测性入口
 > - 新增 Need-Agent Gate：可靠性优先路由 + Trace 记录是否调用 Agent
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
+> - SlotCompletenessGate: company_name_only 规则（≤15字符 + 无动作词 + 有实体 → 追问意图）; get_market_sentiment 守卫; 缺失 ticker 校验
+> - 多轮补槽：pending_tool_call 状态记忆 + 600s TTL + _handle_pending 自动补参
 > - Evidence Pool：外部数据/工具调用时返回证据池并在前端展示
 > - News/Report 输出加入“总览/结论”摘要，防止堆叠信息
 > - 多 ticker 对比自动补齐图表标记（多图或合图）
@@ -38,14 +40,18 @@ flowchart TB
         UI["ChatList + StockChart"]
         EP["Evidence Pool"]
         Profile["UserProfile"]
-        Settings["Settings Modal<br/>模式切换"]
     end
 
-    subgraph Backend["后端 (FastAPI + LangGraph)"]
-        API["/chat/stream API"]
+    subgraph Backend["后端 (FastAPI + LangChain)"]
+        API["/chat/supervisor(/stream) API"]
+        CA["ConversationAgent<br/>（统一入口）"]
+        CM["ContextManager<br/>（历史 + 引用）"]
         CR["ConversationRouter<br/>对话路由"]
-        SchemaRouter["SchemaToolRouter<br/>LLM tool + Schema 校验"]
-        Clarify["ClarifyTool<br/>模板追问"]
+        subgraph SchemaLayer["Schema 驱动路由"]
+            SchemaRouter["SchemaToolRouter<br/>LLM tool + Pydantic"]
+            SlotGate["SlotCompletenessGate<br/>company_name_only + 守卫"]
+            Clarify["ClarifyTool<br/>模板追问"]
+        end
         Gate["Need-Agent Gate<br/>可靠性优先"]
         CH["ChatHandler<br/>快速响应"]
 
@@ -80,12 +86,15 @@ flowchart TB
 
     %% Data Flow
     UI --> API
-    API --> CR
+    API --> CA
+    CA --> CM
+    CA --> CR
     CR --> SchemaRouter
-    SchemaRouter -->|clarify| Clarify
+    SchemaRouter --> SlotGate
+    SlotGate -->|clarify| Clarify
     Clarify --> CH
-    SchemaRouter -->|execute| CH
-    SchemaRouter -->|fallback| Gate
+    SlotGate -->|execute| CH
+    SlotGate -->|fallback| Gate
     Gate -->|快速路径| CH
     Gate -->|需要Agent| IC
     IC -->|意图分类| SA
@@ -135,12 +144,114 @@ flowchart TB
 - **内容**：来源、URL、时间戳、置信度、简短摘要
 - **原则**：凡涉及外部数据或推断，必须附证据池；纯对话不强制
 - **展示**：Chat 与 Report 均可展示证据池，避免“无源结论”
-- **回传**：Supervisor 与工具输出统一透传到 SSE done 与 /chat 响应
+- **回传**：Supervisor 与工具输出统一透传到 SSE done 与 /chat/supervisor 响应
 
-## 1.3 News / Report “总览”输出
+## 1.3 News / Report "总览"输出
 
-- **News**：默认输出“要点 + 简短总览 + 风险提示”，避免堆叠无关内容
+- **News**：默认输出"要点 + 简短总览 + 风险提示"，避免堆叠无关内容
 - **Report**：总览放在开头，后续分章节展开，并标注引用与新鲜度
+
+## 1.4 SchemaToolRouter（Schema 驱动工具路由）🆕
+
+**文件**: `backend/conversation/schema_router.py`
+
+在 ConversationAgent 对话入口中，SchemaToolRouter 负责**一次 LLM 调用**选择工具 + 返回结构化结果。
+
+### 1.4.1 路由流程
+
+```
+用户输入
+    ↓
+┌─────────────────────────────────────┐
+│ Step 1: 检查 pending_tool_call     │
+│ - 有 pending → 补槽路径            │
+│ - 无 pending → LLM 路由            │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ Step 2: LLM 一次调用返回 JSON      │
+│ {tool_name, args, confidence}      │
+│ - confidence < 0.7 → clarify       │
+│ - unknown tool → clarify           │
+│ - invalid JSON → clarify           │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ Step 3: SlotCompletenessGate       │
+│ - company_name_only → clarify      │
+│ - get_market_sentiment 守卫        │
+│ - 缺失 ticker → clarify           │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ Step 4: Schema Required Fields     │
+│ - Pydantic 校验缺失必填字段        │
+│ - 缺失 → ClarifyTool 追问          │
+│ - 完整 → execute                   │
+└─────────────────────────────────────┘
+```
+
+### 1.4.2 10 个 Tool Schema
+
+| Tool | Schema | Intent | 必填字段 |
+|------|--------|--------|----------|
+| `analyze_stock` | AnalyzeStock | report | ticker |
+| `get_price` | GetPrice | chat | ticker |
+| `compare_stocks` | CompareStocks | chat | tickers (≥2) |
+| `get_news` | GetNews | chat | ticker |
+| `get_market_sentiment` | GetMarketSentiment | chat | — |
+| `get_economic_events` | GetEconomicEvents | economic_events | — |
+| `get_news_sentiment` | GetNewsSentiment | news_sentiment | ticker |
+| `search` | SearchWeb | chat | query |
+| `greeting` | Greeting | greeting | — |
+| `clarify` | Clarify | clarify | — |
+
+### 1.4.3 SlotCompletenessGate 业务规则
+
+**规则 0: `company_name_only` 检测**
+
+检测纯公司名/ticker 查询，触发意图追问而非直接执行：
+
+```python
+# 触发条件：
+# 1. query ≤ 15 字符
+# 2. 无动作词（分析/价格/新闻/比较...）
+# 3. 包含可识别的公司名或 ticker
+
+# 示例：
+# "特斯拉" → clarify（您想对特斯拉做什么？）
+# "AAPL"   → clarify（您想对 AAPL 做什么？）
+# "分析特斯拉" → execute（有动作词，直接执行）
+```
+
+**规则 1: `get_market_sentiment` 守卫**
+
+防止 LLM 将分析类查询误判为情绪查询：
+- 有分析意图 + 无情绪关键词 → 建议 `analyze_stock`
+- 无情绪关键词 → 追问确认
+
+**规则 2: 缺失 ticker 校验**
+
+`analyze_stock`、`get_news`、`compare_stocks` 等工具强制要求 ticker/tickers，缺失时触发补槽。
+
+### 1.4.4 ClarifyTool 模板化追问
+
+根据 missing fields 生成友好问题（中文模板）：
+
+| 缺失字段 | 追问模板 |
+|----------|---------|
+| ticker | 请提供股票代码，如 AAPL、TSLA（或公司名）。 |
+| tickers | 请提供至少两个股票代码，如 AAPL, MSFT。 |
+| intent | 您想对 {company} 做什么？查价格、看新闻还是深度分析？ |
+| low_confidence | 您的问题比较模糊，请提供更多细节。 |
+
+### 1.4.5 多轮补槽 (Pending Tool Call)
+
+当 clarify 触发时，`pending_tool_call` 记录缺失状态：
+- 用户下一轮回复 → `_handle_pending()` 尝试补齐参数
+- 补齐成功 → execute
+- 仍缺失 → 继续 clarify
+- 超时（600s）→ 清除 pending
 
 ---
 
@@ -413,3 +524,4 @@ sequenceDiagram
 ---
 
 > 🚀 **Next Step**: 进入 Phase 2 研报增强（ReportIR Schema/DeepSearch/Macro）与前端报告卡片对齐。
+

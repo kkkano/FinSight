@@ -20,7 +20,7 @@
 > - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates (USE_SCHEMA_ROUTER)
+> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
 ---
 
 ## 0.1 Recent Updates (2026-01-28)
@@ -79,9 +79,9 @@
 
 ## 4. 补充更新（2026-01-09）
 
-- /chat 使用 `chat_async`，Supervisor 异步链路稳定
-- /chat/stream 支持 ReportAgent 真实流式，SSE done 事件带 ReportIR
-- /chat/stream 已接入 resolve_reference，与 /chat 链路一致
+- /chat/supervisor 使用 `chat_async`，Supervisor 异步链路稳定
+- /chat/supervisor/stream 支持 ReportAgent 真实流式，SSE done 事件带 ReportIR
+- /chat/supervisor/stream 已接入 resolve_reference，与 /chat/supervisor 链路一致
 
 ---
 
@@ -98,3 +98,4 @@
 - **前端 ThinkingProcess.tsx**: 新增 Agent 阶段标签（supervisor_start, agent_start, agent_done 等）
 - **前端 client.ts**: 处理 Agent 进度 SSE 事件，复用 onThinking 回调
 - **效果**: 用户可实时看到"🚀 Multi-Agent 分析启动"、"⏳ News Agent 分析中"、"✅ Agent 完成"等状态
+

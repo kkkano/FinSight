@@ -4,7 +4,7 @@ P0 稳定性回归测试：健康检查与基本请求校验。
 
 目标：
 - / 与 /health 端点始终可用，用于监控与存活检查；
-- /chat 在收到空 query 时由 Pydantic 校验层直接返回 422，
+- /chat/supervisor 在收到空 query 时由 Pydantic 校验层直接返回 422，
   避免空请求进入主链路。
 """
 
@@ -48,6 +48,11 @@ def test_chat_empty_query_validation():
     空 query 应在进入处理函数前被 Pydantic 拦截，返回 422。
     这样可以避免空请求进入主链路，提升稳健性。
     """
-    resp = client.post("/chat", json={"query": ""})
+    resp = client.post("/chat/supervisor", json={"query": ""})
     assert resp.status_code == 422
 
+
+def test_legacy_chat_endpoint_removed():
+    """旧 /chat 端点应已移除，返回 404。"""
+    resp = client.post("/chat", json={"query": "AAPL 现在多少钱"})
+    assert resp.status_code == 404

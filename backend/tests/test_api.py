@@ -71,22 +71,22 @@ def run_api_tests():
     session_id = None
     
     try:
-        response = client.post("/chat", json={"query": "AAPL 股价多少"})
+        response = client.post("/chat/supervisor", json={"query": "AAPL 股价多少"})
         passed = response.status_code == 200
         data = response.json()
         session_id = data.get("session_id")
         results.append((
-            "POST /chat 基本调用",
+            "POST /chat/supervisor 基本调用",
             passed and data.get("success"),
-            f"意图: {data.get('intent')}, 焦点: {data.get('current_focus')}"
+            f"意图: {data.get('intent')}"
         ))
     except Exception as e:
-        results.append(("POST /chat 基本调用", False, str(e)))
+        results.append(("POST /chat/supervisor 基本调用", False, str(e)))
     
     # 测试多轮对话
     if session_id:
         try:
-            response = client.post("/chat", json={
+            response = client.post("/chat/supervisor", json={
                 "query": "它最近新闻",
                 "session_id": session_id
             })
@@ -95,7 +95,7 @@ def run_api_tests():
             results.append((
                 "多轮对话（使用会话ID）",
                 passed and data.get("session_id") == session_id,
-                f"焦点保持: {data.get('current_focus')}"
+                f"意图: {data.get('intent')}"
             ))
         except Exception as e:
             results.append(("多轮对话", False, str(e)))
@@ -108,7 +108,7 @@ def run_api_tests():
     
     for query, expected_intent, desc in intent_tests:
         try:
-            response = client.post("/chat", json={"query": query})
+            response = client.post("/chat/supervisor", json={"query": query})
             data = response.json()
             intent = data.get("intent")
             passed = intent == expected_intent
@@ -197,7 +197,7 @@ def run_api_tests():
     print("-" * 50)
     
     try:
-        response = client.post("/chat", json={"query": ""})
+        response = client.post("/chat/supervisor", json={"query": ""})
         # 空查询应该返回 422 验证错误
         passed = response.status_code == 422
         results.append(("空查询验证", passed, f"状态码: {response.status_code}"))

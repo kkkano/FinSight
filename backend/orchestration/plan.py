@@ -127,15 +127,17 @@ class PlanBuilder:
             )
 
         if steps:
-            steps.append(
-                PlanStep(
-                    step_id="synthesize_forum",
-                    title="Synthesize forum consensus",
-                    step_type="forum",
-                    depends_on=[step.step_id for step in steps],
-                    timeout_seconds=timeouts.get("forum", None),
+            # Fast-path: skip forum synthesis when only 1-2 agents are needed.
+            if len(steps) > 2:
+                steps.append(
+                    PlanStep(
+                        step_id="synthesize_forum",
+                        title="Synthesize forum consensus",
+                        step_type="forum",
+                        depends_on=[step.step_id for step in steps],
+                        timeout_seconds=timeouts.get("forum", None),
+                    )
                 )
-            )
 
         return PlanIR(
             plan_id=f"plan_{uuid.uuid4().hex[:8]}",

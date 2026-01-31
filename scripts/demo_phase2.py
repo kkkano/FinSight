@@ -16,7 +16,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.orchestration.supervisor import AgentSupervisor
+from backend.orchestration.supervisor_agent import SupervisorAgent
 from backend.services.memory import UserProfile
 from backend.report.ir import ReportIR
 from backend.report.validator import ReportValidator
@@ -61,7 +61,7 @@ async def run_demo():
     tools = MagicMock()
     cache = MagicMock()
 
-    supervisor = AgentSupervisor(llm, tools, cache)
+    supervisor = SupervisorAgent(llm, tools, cache)
 
     # 2. 模拟 DeepSearchAgent 和 MacroAgent 的真实返回 (因为 MockLLM 不会真去搜索)
     # 我们这里手动 patch 它们的 research 方法，让它们返回丰富的数据，模拟真实情况
@@ -102,10 +102,10 @@ async def run_demo():
     ticker = "NVDA"
     print(f"🔍 分析目标: {ticker} - {query}")
 
-    result = await supervisor.analyze(query, ticker, user_profile)
+    result = await supervisor.process(query, tickers=[ticker], user_profile=user_profile)
 
     # 5. 提取 ForumOutput 并转换为 ReportIR (模拟 ReportHandler 的工作)
-    forum_output = result["forum_output"]
+    forum_output = result.forum_output
 
     # 手动构建 ReportIR (在实际 ReportHandler 中会有转换逻辑)
     # 这里为了演示效果，我们手动组装一个结构化非常好的对象

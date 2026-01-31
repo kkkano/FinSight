@@ -1,7 +1,7 @@
 ﻿# FinSight AI - Multi-Agent Financial Intelligence Platform
 
 [![LangChain](https://img.shields.io/badge/LangChain-1.1.0-green)](https://github.com/langchain-ai/langchain)
-[![LangGraph](https://img.shields.io/badge/LangGraph-1.x-blue)](https://github.com/langchain-ai/langgraph)
+[![Supervisor](https://img.shields.io/badge/Supervisor-Forum-blue)](./docs/01_ARCHITECTURE.md)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-18+-blue)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
@@ -17,7 +17,7 @@ FinSight AI is a conversational, multi-agent financial research assistant that c
 
 - Supervisor Agent architecture: intent classification + worker agent coordination + forum synthesis
 - 6 specialized agents: Price, News, Technical, Fundamental, Macro, DeepSearch
-- FastAPI backend + LangChain + LangGraph orchestration
+- FastAPI backend + LangChain + Supervisor-Forum orchestration
 - React + TypeScript + Tailwind frontend with professional report cards
 - Real-time market data with multi-source fallback (yfinance, Finnhub, Alpha Vantage, etc.)
 
@@ -88,8 +88,8 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Cost efficient: simple queries handled by rules with no LLM cost
 - Report intent rules cover “analyze/分析” with ticker context (no LLM required)
 - Reliability-first Agent Gate: CHAT can escalate to Supervisor based on timeliness/decision/evidence needs
-- SchemaToolRouter (optional): one-shot tool selection + Pydantic validation + template-based ClarifyTool
-- Pending tool state stores missing slots for multi-turn clarification (USE_SCHEMA_ROUTER)
+- SchemaToolRouter: one-shot tool selection + Pydantic validation + template-based ClarifyTool; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
+- Pending tool state stores missing slots for multi-turn clarification
 
 ### Real-time Streaming and Transparency
 - Token-by-token streaming responses
@@ -123,10 +123,15 @@ flowchart TB
     end
 
     subgraph API["FastAPI Backend"]
-        Stream["/chat/stream"]
+        Stream["/chat/supervisor(/stream)"]
+        CA["ConversationAgent<br/>(Unified Entry)"]
+        CM["ContextManager<br/>(History + References)"]
         Router["ConversationRouter"]
-        SchemaRouter["SchemaToolRouter<br/>LLM tool + schema check"]
-        Clarify["ClarifyTool<br/>Template questions"]
+        subgraph SchemaLayer["Schema-Driven Routing"]
+            SchemaRouter["SchemaToolRouter<br/>LLM tool + Pydantic"]
+            SlotGate["SlotCompletenessGate<br/>company_name_only + guards"]
+            Clarify["ClarifyTool<br/>Template questions"]
+        end
         Gate["Need-Agent Gate<br/>Reliability-first"]
         ChatHandler["ChatHandler"]
         Classifier["IntentClassifier<br/>Rule + Embedding + LLM"]
@@ -160,12 +165,15 @@ flowchart TB
     end
 
     UI --> Stream
-    Stream --> Router
+    Stream --> CA
+    CA --> CM
+    CA --> Router
     Router --> SchemaRouter
-    SchemaRouter -->|clarify| Clarify
+    SchemaRouter --> SlotGate
+    SlotGate -->|clarify| Clarify
     Clarify --> ChatHandler
-    SchemaRouter -->|execute| ChatHandler
-    SchemaRouter -->|fallback| Gate
+    SlotGate -->|execute| ChatHandler
+    SlotGate -->|fallback| Gate
     Gate -->|fast path| ChatHandler
     Gate -->|needs agent| Classifier
     Classifier --> SupRouter
@@ -187,16 +195,20 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    Input[User Query] --> Schema[SchemaToolRouter<br/>USE_SCHEMA_ROUTER]
-    Schema -->|Clarify| Clarify[ClarifyTool]
-    Schema -->|Execute| Chat[ChatHandler]
-    Schema -->|No Match| Rule[Rule Matching<br/>FREE]
+    Input[User Query] --> CA[ConversationAgent]
+    CA --> Schema[SchemaToolRouter<br/>LLM returns JSON]
+    Schema --> SlotGate[SlotCompletenessGate]
+    SlotGate -->|company_name_only| Clarify[ClarifyTool]
+    SlotGate -->|missing ticker| Clarify
+    SlotGate -->|low confidence| Clarify
+    SlotGate -->|Execute| Chat[ChatHandler]
+    SlotGate -->|No Match| Rule[Rule Matching<br/>FREE]
     Rule -->|Match| Direct[Direct Response]
     Rule -->|No Match| Embed[Embedding + Keywords<br/>LOW COST]
     Embed -->|High Confidence| Gate[Need-Agent Gate]
     Embed -->|Low Confidence| LLM[LLM Classification<br/>PAID]
     LLM --> Gate
-    Gate -->|Fast Path| Chat[ChatHandler]
+    Gate -->|Fast Path| Chat
     Gate -->|Needs Agent| Agent[SupervisorAgent]
 ```
 
@@ -313,7 +325,6 @@ LANGSMITH_PROJECT=FinSight
 ENABLE_LANGSMITH=false
 
 # Quality & Guardrails
-USE_SCHEMA_ROUTER=false
 DATA_CONTEXT_MAX_SKEW_HOURS=24
 BUDGET_MAX_TOOL_CALLS=50
 BUDGET_MAX_ROUNDS=12
@@ -346,14 +357,13 @@ LLM config precedence:
 - `GET /health` basic health check
 - `GET /metrics` Prometheus metrics (requires `prometheus-client`)
 - `GET /diagnostics/orchestrator` orchestrator stats
-- `GET /diagnostics/langgraph` report agent diagnostics
 
 ## Project Structure
 
 ```
 FinSight/
 |-- backend/
-|   |-- agents/
+|   |-- agents/                     # 6 Worker Agents
 |   |   |-- base_agent.py
 |   |   |-- price_agent.py
 |   |   |-- news_agent.py
@@ -361,29 +371,61 @@ FinSight/
 |   |   |-- fundamental_agent.py
 |   |   |-- macro_agent.py
 |   |   |-- deep_search_agent.py
-|   |-- orchestration/
+|   |   |-- search_convergence.py
+|   |-- conversation/               # Conversation entry + routing
+|   |   |-- agent.py                # ConversationAgent (unified entry)
+|   |   |-- context.py              # ContextManager
+|   |   |-- router.py               # ConversationRouter
+|   |   |-- schema_router.py        # SchemaToolRouter + SlotCompletenessGate
+|   |-- orchestration/              # Supervisor-Forum coordination
 |   |   |-- supervisor_agent.py
 |   |   |-- intent_classifier.py
 |   |   |-- forum.py
-|   |-- report/
+|   |   |-- orchestrator.py
+|   |   |-- tools_bridge.py
+|   |   |-- cache.py
+|   |   |-- budget.py
+|   |   |-- data_context.py
+|   |   |-- validator.py
+|   |   |-- trace.py / trace_schema.py
+|   |-- handlers/                   # Intent handlers
+|   |   |-- chat_handler.py
+|   |   |-- followup_handler.py
+|   |-- report/                     # Report IR + validation
 |   |   |-- ir.py
 |   |   |-- validator.py
-|   |-- services/
-|   |   |-- cache.py
+|   |   |-- evidence_policy.py
+|   |   |-- disclaimer.py
+|   |-- knowledge/                  # RAG + Vector store
+|   |   |-- rag_engine.py
+|   |   |-- vector_store.py
+|   |-- config/                     # Ticker mapping + config
+|   |   |-- ticker_mapping.py
+|   |-- security/                   # SSRF protection
+|   |   |-- ssrf.py
+|   |-- services/                   # Core services
 |   |   |-- circuit_breaker.py
 |   |   |-- memory.py
-|   |-- api/
+|   |   |-- pdf_export.py
+|   |   |-- rate_limiter.py
+|   |   |-- health_probe.py
+|   |-- api/                        # FastAPI endpoints
 |   |   |-- main.py
-|   |-- langchain_tools.py
-|   |-- legacy/
-|   |   |-- streaming_support.py
-|   |-- tools/
+|   |   |-- schemas.py
+|   |   |-- streaming.py
+|   |   |-- chart_detector.py
+|   |-- tools/                      # Financial data tools
 |   |   |-- search.py
 |   |   |-- news.py
 |   |   |-- price.py
 |   |   |-- financial.py
 |   |   |-- macro.py
 |   |   |-- web.py
+|   |-- langchain_tools.py
+|   |-- tests/                      # Backend tests
+|-- tests/                          # New test directory
+|   |-- regression/                 # Regression tests + evaluators
+|   |-- unit/                       # Unit tests
 |-- frontend/
 |   |-- src/
 |   |   |-- components/
@@ -394,10 +436,6 @@ FinSight/
 |   |   |-- store/useStore.ts
 |   |   |-- api/client.ts
 |-- docs/
-|   |-- archive/
-|   |-- plans/
-|   |-- reports/
-|   |-- design/
 |-- images/
 ```
 
@@ -405,7 +443,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-01-28 | Version: 0.6.7
+> Last Updated: 2026-01-31 | Version: 0.6.8
 
 ### Current Progress
 
@@ -440,6 +478,11 @@ FinSight/
 - [x] Dynamic DeepSearch query templates
 - [x] Portfolio snapshot with holdings input
 - [x] Full-screen K-line charts
+- [x] SchemaToolRouter: one-shot LLM tool selection + Pydantic validation
+- [x] SlotCompletenessGate: company_name_only rule + sentiment guard + ticker validation
+- [x] Multi-turn slot filling with pending_tool_call state
+- [x] ClarifyTool template-based follow-up questions
+- [x] Architecture refactor regression tests (12 test cases)
 
 ### In Progress
 - [ ] RAG integration with DeepSearch
