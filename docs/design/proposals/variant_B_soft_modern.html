@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSight · Variant B: Soft & Modern</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #fafafa;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f5f5f5;
+      --border: #e8e8e8;
+      --border-hover: #d0d0d0;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --text-muted: #999999;
+      --accent-purple: #7c3aed;
+      --accent-purple-light: #ede9fe;
+      --accent-blue: #3b82f6;
+      --accent-blue-light: #dbeafe;
+      --accent-green: #10b981;
+      --accent-green-light: #d1fae5;
+      --accent-amber: #f59e0b;
+      --accent-amber-light: #fef3c7;
+      --accent-red: #ef4444;
+      --accent-red-light: #fee2e2;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+      --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+    }
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      min-height: 100vh;
+    }
+    /* Soft card styling */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+    .card:hover {
+      border-color: var(--border-hover);
+      box-shadow: var(--shadow-md);
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-body {
+      padding: 20px;
+    }
+    /* Soft buttons */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+      color: white;
+      box-shadow: 0 4px 14px rgba(124, 58, 237, 0.25);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35);
+    }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: #ebebeb;
+    }
+    /* Soft input */
+    .input-soft {
+      background: var(--bg-tertiary);
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+    .input-soft:focus {
+      outline: none;
+      background: white;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 4px var(--accent-purple-light);
+    }
+    .input-soft::placeholder {
+      color: var(--text-muted);
+    }
+    /* Navigation */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      margin: 4px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .nav-item.active {
+      background: var(--accent-purple-light);
+      color: var(--accent-purple);
+    }
+    .nav-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: var(--bg-tertiary);
+    }
+    .nav-item.active .nav-icon {
+      background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+      color: white;
+    }
+    /* Chat bubbles */
+    .chat-user {
+      background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+      color: white;
+      border-radius: 20px 20px 4px 20px;
+      padding: 14px 18px;
+      max-width: 80%;
+      margin-left: auto;
+    }
+    .chat-ai {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-radius: 20px 20px 20px 4px;
+      padding: 14px 18px;
+      max-width: 80%;
+    }
+    /* Status badges */
+    .badge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-success {
+      background: var(--accent-green-light);
+      color: var(--accent-green);
+    }
+    .badge-warning {
+      background: var(--accent-amber-light);
+      color: var(--accent-amber);
+    }
+    .badge-info {
+      background: var(--accent-blue-light);
+      color: var(--accent-blue);
+    }
+    .badge-purple {
+      background: var(--accent-purple-light);
+      color: var(--accent-purple);
+    }
+    /* Pipeline steps */
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+      transition: all 0.15s;
+    }
+    .pipeline-step:hover {
+      background: var(--bg-tertiary);
+    }
+    .step-indicator {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .step-ok .step-indicator {
+      background: var(--accent-green-light);
+      color: var(--accent-green);
+    }
+    .step-run .step-indicator {
+      background: var(--accent-amber-light);
+      color: var(--accent-amber);
+      animation: pulse-soft 2s infinite;
+    }
+    .step-idle .step-indicator {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+    }
+    @keyframes pulse-soft {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    /* Price change */
+    .price-up { color: var(--accent-green); }
+    .price-down { color: var(--accent-red); }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ccc; }
+    /* Animations */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in {
+      animation: fadeInUp 0.4s ease forwards;
+    }
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="p-5 border-b border-[var(--border)]">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-purple)] to-indigo-500 flex items-center justify-center">
+          <span class="text-white font-bold text-lg">F</span>
+        </div>
+        <div>
+          <div class="font-semibold text-base">FinSight</div>
+          <div class="text-xs text-[var(--text-muted)]">AI Research Platform</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-3">
+      <div class="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider px-4 mb-2">Menu</div>
+      <nav>
+        <a href="#" class="nav-item active">
+          <span class="nav-icon">🏠</span>
+          <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">💬</span>
+          <span>Chat</span>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">📚</span>
+          <span>Research</span>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">📈</span>
+          <span>Financials</span>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">⭐</span>
+          <span>Watchlist</span>
+        </a>
+        <a href="#" class="nav-item">
+          <span class="nav-icon">🔔</span>
+          <span>Alerts</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="mt-auto p-4 border-t border-[var(--border)]">
+      <div class="card p-4" style="background: linear-gradient(135deg, #f3e8ff, #dbeafe);">
+        <div class="text-sm font-semibold mb-1">🎉 Pro Plan Active</div>
+        <div class="text-xs text-[var(--text-secondary)]">Unlimited deep analysis</div>
+      </div>
+    </div>
+
+    <div class="p-4 border-t border-[var(--border)]">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-semibold">U</div>
+        <div>
+          <div class="text-sm font-medium">User</div>
+          <div class="text-xs text-[var(--text-muted)]">user@example.com</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main style="margin-left: 260px; padding: 24px;">
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-6 animate-in">
+      <div>
+        <h1 class="text-2xl font-semibold">Good morning! ☀️</h1>
+        <p class="text-[var(--text-secondary)] mt-1">Here's what's happening with your portfolio today.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <input type="text" placeholder="Search stocks, commands..." class="input-soft w-80">
+        <button class="btn btn-primary">+ New Chat</button>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-12 gap-6">
+      <!-- Left Column -->
+      <div class="col-span-8 space-y-6">
+        <!-- Market Overview -->
+        <div class="card animate-in delay-1">
+          <div class="card-header flex items-center justify-between">
+            <div>
+              <h2 class="font-semibold">Market Overview</h2>
+              <p class="text-sm text-[var(--text-muted)]">Real-time indices</p>
+            </div>
+            <span class="badge badge-success">● Live</span>
+          </div>
+          <div class="card-body">
+            <div class="grid grid-cols-4 gap-4 mb-6">
+              <div class="p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100">
+                <div class="text-sm text-[var(--text-secondary)] mb-1">S&P 500</div>
+                <div class="text-2xl font-semibold">5,120</div>
+                <div class="text-sm price-up font-medium">+0.63%</div>
+              </div>
+              <div class="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
+                <div class="text-sm text-[var(--text-secondary)] mb-1">NASDAQ</div>
+                <div class="text-2xl font-semibold">18,105</div>
+                <div class="text-sm price-up font-medium">+0.92%</div>
+              </div>
+              <div class="p-4 rounded-xl bg-gradient-to-br from-red-50 to-orange-50 border border-red-100">
+                <div class="text-sm text-[var(--text-secondary)] mb-1">DOW</div>
+                <div class="text-2xl font-semibold">39,872</div>
+                <div class="text-sm price-down font-medium">-0.18%</div>
+              </div>
+              <div class="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-100">
+                <div class="text-sm text-[var(--text-secondary)] mb-1">VIX</div>
+                <div class="text-2xl font-semibold">14.28</div>
+                <div class="text-sm text-[var(--text-muted)] font-medium">Low</div>
+              </div>
+            </div>
+            <div id="chartIndices" style="height: 200px;"></div>
+          </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="card animate-in delay-2">
+          <div class="card-header flex items-center justify-between">
+            <div>
+              <h2 class="font-semibold">AI Assistant</h2>
+              <p class="text-sm text-[var(--text-muted)]">Ask anything about stocks</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-info">1,240 tokens</span>
+              <span class="badge badge-success">320ms</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="h-72 overflow-auto space-y-4 mb-4" id="chatList">
+              <div class="chat-ai">
+                <p>Hi! 👋 I'm your AI research assistant. I can help you analyze stocks, get news, compare companies, and generate reports.</p>
+                <p class="text-sm opacity-75 mt-2">Try: "分析特斯拉" or "AAPL vs MSFT"</p>
+              </div>
+              <div class="chat-user">
+                分析一下特斯拉
+              </div>
+              <div class="chat-ai">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="badge badge-success">BULLISH</span>
+                  <span class="badge badge-purple">85% Confidence</span>
+                </div>
+                <p class="mb-3"><strong>TSLA Analysis Summary</strong></p>
+                <p class="text-sm text-[var(--text-secondary)] leading-relaxed">
+                  Tesla exhibits strong momentum with Q4 deliveries exceeding estimates.
+                  Technical indicators show bullish crossover. Key risk: macro sensitivity to rate decisions.
+                  Recommended action: <strong>Buy on dips</strong>, target price $280.
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <input type="text" placeholder="Ask about any stock..." class="input-soft flex-1" id="chatInput">
+              <button class="btn btn-primary">Send →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div class="col-span-4 space-y-6">
+        <!-- Agent Pipeline -->
+        <div class="card animate-in delay-2">
+          <div class="card-header">
+            <h2 class="font-semibold">Agent Pipeline</h2>
+            <p class="text-sm text-[var(--text-muted)]">Processing status</p>
+          </div>
+          <div class="card-body">
+            <div class="pipeline-step step-ok">
+              <div class="step-indicator">✓</div>
+              <div class="flex-1">
+                <div class="font-medium text-sm">Router</div>
+                <div class="text-xs text-[var(--text-muted)]">Intent classified</div>
+              </div>
+              <span class="text-xs text-[var(--text-muted)]">120ms</span>
+            </div>
+            <div class="pipeline-step step-ok">
+              <div class="step-indicator">✓</div>
+              <div class="flex-1">
+                <div class="font-medium text-sm">Validator</div>
+                <div class="text-xs text-[var(--text-muted)]">Schema passed</div>
+              </div>
+              <span class="text-xs text-[var(--text-muted)]">80ms</span>
+            </div>
+            <div class="pipeline-step step-ok">
+              <div class="step-indicator">✓</div>
+              <div class="flex-1">
+                <div class="font-medium text-sm">Gate</div>
+                <div class="text-xs text-[var(--text-muted)]">needs-agent</div>
+              </div>
+              <span class="text-xs text-[var(--text-muted)]">100ms</span>
+            </div>
+            <div class="pipeline-step step-run">
+              <div class="step-indicator">⟳</div>
+              <div class="flex-1">
+                <div class="font-medium text-sm">Agents</div>
+                <div class="text-xs text-[var(--text-muted)]">3/4 complete</div>
+              </div>
+              <span class="text-xs text-[var(--accent-amber)]">Running</span>
+            </div>
+            <div class="pipeline-step step-idle">
+              <div class="step-indicator">○</div>
+              <div class="flex-1">
+                <div class="font-medium text-sm">Synthesize</div>
+                <div class="text-xs text-[var(--text-muted)]">Waiting</div>
+              </div>
+              <span class="text-xs text-[var(--text-muted)]">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Watchlist -->
+        <div class="card animate-in delay-3">
+          <div class="card-header flex items-center justify-between">
+            <div>
+              <h2 class="font-semibold">Watchlist</h2>
+              <p class="text-sm text-[var(--text-muted)]">Your favorites</p>
+            </div>
+            <button class="text-sm text-[var(--accent-purple)] font-medium">+ Add</button>
+          </div>
+          <div class="card-body space-y-3">
+            <div class="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition cursor-pointer">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center text-white font-semibold text-xs">TSLA</div>
+                <div>
+                  <div class="font-medium">Tesla</div>
+                  <div class="text-xs text-[var(--text-muted)]">Auto</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-semibold">$248.50</div>
+                <div class="text-sm price-up">+2.13%</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition cursor-pointer">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold text-xs">NVDA</div>
+                <div>
+                  <div class="font-medium">NVIDIA</div>
+                  <div class="text-xs text-[var(--text-muted)]">Semicon</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-semibold">$495.22</div>
+                <div class="text-sm price-up">+1.47%</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--bg-tertiary)] transition cursor-pointer">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-semibold text-xs">AAPL</div>
+                <div>
+                  <div class="font-medium">Apple</div>
+                  <div class="text-xs text-[var(--text-muted)]">Tech</div>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="font-semibold">$178.52</div>
+                <div class="text-sm price-down">-0.32%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Evidence -->
+        <div class="card animate-in delay-3">
+          <div class="card-header">
+            <h2 class="font-semibold">Evidence Pool</h2>
+            <p class="text-sm text-[var(--text-muted)]">Sources & citations</p>
+          </div>
+          <div class="card-body space-y-3">
+            <div class="p-3 rounded-xl bg-[var(--bg-tertiary)]">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-medium">Reuters</span>
+                <span class="text-xs text-[var(--accent-green)]">0.95</span>
+              </div>
+              <p class="text-xs text-[var(--text-secondary)]">Tesla Q4 deliveries beat estimates by 5%</p>
+            </div>
+            <div class="p-3 rounded-xl bg-[var(--bg-tertiary)]">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-medium">SEC EDGAR</span>
+                <span class="text-xs text-[var(--accent-green)]">0.88</span>
+              </div>
+              <p class="text-xs text-[var(--text-secondary)]">10-K filing: Revenue growth +18% YoY</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Floating badge -->
+  <div class="fixed bottom-4 right-4 bg-gradient-to-r from-[var(--accent-purple)] to-indigo-500 text-white px-4 py-2 rounded-xl shadow-lg text-sm font-medium">
+    🎨 方案B: Soft & Modern (Notion风格)
+  </div>
+
+  <script>
+    const chartIndices = echarts.init(document.getElementById('chartIndices'));
+    const x = Array.from({length: 30}, (_, i) => `Day ${i+1}`);
+    const randWalk = (n, start, vol) => {
+      const arr = [start];
+      for (let i = 1; i < n; i++) arr.push(Math.max(1, arr[i-1] + (Math.random()*2-1)*vol));
+      return arr;
+    };
+
+    chartIndices.setOption({
+      grid: { left: 50, right: 20, top: 20, bottom: 30 },
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'category', data: x, axisLine: {lineStyle: {color: '#e8e8e8'}}, axisLabel: {color: '#999', fontSize: 11} },
+      yAxis: { type: 'value', axisLine: {lineStyle: {color: '#e8e8e8'}}, splitLine: {lineStyle: {color: '#f0f0f0'}}, axisLabel: {color: '#999', fontSize: 11} },
+      series: [
+        { type: 'line', name: 'SPX', data: randWalk(30, 5100, 15), smooth: true, symbol: 'none', lineStyle: {color: '#10b981', width: 2}, areaStyle: {color: 'rgba(16,185,129,0.1)'} },
+        { type: 'line', name: 'NDX', data: randWalk(30, 18100, 50), smooth: true, symbol: 'none', lineStyle: {color: '#3b82f6', width: 2}, areaStyle: {color: 'rgba(59,130,246,0.1)'} }
+      ]
+    });
+
+    window.addEventListener('resize', () => chartIndices.resize());
+  </script>
+</body>
+</html>

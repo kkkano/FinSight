@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>方案B: 对话优先型 - FinSight</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; }
+    .glass-card { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.1); }
+    .gradient-text { background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .pulse-dot { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .agent-log { font-family: 'Monaco', 'Menlo', monospace; font-size: 11px; }
+    .agent-tab.active { background: rgba(59, 130, 246, 0.2); border-bottom: 2px solid #3b82f6; }
+    .typing-indicator span { animation: blink 1.4s infinite both; }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 60%, 100% { opacity: 0; } 30% { opacity: 1; } }
+  </style>
+</head>
+<body class="text-slate-200">
+  <div class="flex h-screen">
+    <!-- 左侧: Agent状态面板 (参考BettaFish) -->
+    <aside class="w-80 bg-slate-900/95 border-r border-slate-700/50 flex flex-col">
+      <!-- Logo -->
+      <div class="p-4 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold gradient-text">FinSight</h1>
+            <p class="text-[10px] text-slate-500">Multi-Agent Research</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Tabs -->
+      <div class="flex border-b border-slate-700/50 overflow-x-auto">
+        <button class="agent-tab active flex-1 px-3 py-2 text-[11px] text-blue-400 whitespace-nowrap">All Agents</button>
+        <button class="agent-tab flex-1 px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">Price</button>
+        <button class="agent-tab flex-1 px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">News</button>
+        <button class="agent-tab flex-1 px-3 py-2 text-[11px] text-slate-400 whitespace-nowrap">Deep</button>
+      </div>
+
+      <!-- Agent 实时日志流 -->
+      <div class="flex-1 overflow-y-auto p-3 space-y-2 agent-log">
+        <!-- PriceAgent -->
+        <div class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+            <span class="text-emerald-400 font-medium">PriceAgent</span>
+            <span class="text-slate-500 ml-auto">2.3s</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Fetching AAPL realtime price...</div>
+            <div class="text-emerald-400">✓ Price: $178.52 (+1.24%)</div>
+            <div class="text-emerald-400">✓ Volume: 52.3M</div>
+          </div>
+        </div>
+
+        <!-- NewsAgent -->
+        <div class="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+            <span class="text-blue-400 font-medium">NewsAgent</span>
+            <span class="text-slate-500 ml-auto">4.1s</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Searching news sources...</div>
+            <div class="text-blue-400">✓ Found 12 relevant articles</div>
+            <div class="text-slate-400">  - Reuters: Q4 Earnings Beat</div>
+            <div class="text-slate-400">  - Bloomberg: AI Strategy</div>
+          </div>
+        </div>
+
+        <!-- TechnicalAgent -->
+        <div class="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+            <span class="text-purple-400 font-medium">TechnicalAgent</span>
+            <span class="text-slate-500 ml-auto">3.5s</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Calculating indicators...</div>
+            <div class="text-purple-400">✓ RSI: 58.2 (Neutral)</div>
+            <div class="text-purple-400">✓ MACD: Bullish crossover</div>
+            <div class="text-purple-400">✓ Support: $172, Resistance: $185</div>
+          </div>
+        </div>
+
+        <!-- DeepSearchAgent - Running -->
+        <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+            <span class="text-amber-400 font-medium">DeepSearchAgent</span>
+            <span class="text-amber-400 ml-auto">Running...</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Deep web research in progress...</div>
+            <div class="text-slate-400">  Analyzing SEC filings...</div>
+            <div class="text-slate-400">  Scanning analyst reports...</div>
+            <div class="typing-indicator text-amber-400">
+              <span>●</span><span>●</span><span>●</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FundamentalAgent -->
+        <div class="p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+            <span class="text-orange-400 font-medium">FundamentalAgent</span>
+            <span class="text-slate-500 ml-auto">5.2s</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Analyzing financials...</div>
+            <div class="text-orange-400">✓ P/E: 28.5 (Industry: 25.2)</div>
+            <div class="text-orange-400">✓ Revenue Growth: +6.1% YoY</div>
+            <div class="text-orange-400">✓ Gross Margin: 46.2%</div>
+          </div>
+        </div>
+
+        <!-- MacroAgent -->
+        <div class="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 bg-cyan-500 rounded-full"></span>
+            <span class="text-cyan-400 font-medium">MacroAgent</span>
+            <span class="text-slate-500 ml-auto">2.8s</span>
+          </div>
+          <div class="text-slate-300 pl-4">
+            <div>→ Checking macro conditions...</div>
+            <div class="text-cyan-400">✓ Fed Rate: 4.50% (Stable)</div>
+            <div class="text-cyan-400">✓ CPI: 2.8% (Cooling)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent 状态总览 -->
+      <div class="p-3 border-t border-slate-700/50 bg-slate-800/50">
+        <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Pipeline Status</div>
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-2 rounded-full bg-slate-700 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-emerald-500 via-blue-500 to-amber-500" style="width: 83%;"></div>
+          </div>
+          <span class="text-xs text-slate-300">5/6</span>
+        </div>
+        <div class="mt-2 flex items-center gap-2 text-[10px]">
+          <span class="text-emerald-400">✓ 5 completed</span>
+          <span class="text-amber-400">● 1 running</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧: 全屏对话区 -->
+    <main class="flex-1 flex flex-col bg-slate-900/50">
+      <!-- 顶栏 -->
+      <header class="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <h2 class="text-lg font-semibold text-white">Deep Research: AAPL</h2>
+          <span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">BULLISH · 85%</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <button class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">Export PDF</button>
+          <button class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs text-white">New Research</button>
+        </div>
+      </header>
+
+      <!-- 对话内容 -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- 用户消息 -->
+        <div class="flex justify-end">
+          <div class="max-w-2xl bg-blue-600 rounded-2xl rounded-tr-sm px-5 py-3">
+            <p class="text-white">分析一下苹果公司(AAPL)的投资价值，包括技术面、基本面和市场情绪</p>
+          </div>
+        </div>
+
+        <!-- AI 综合报告 -->
+        <div class="flex gap-4">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0 flex items-center justify-center">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <div class="flex-1 space-y-4">
+            <!-- 摘要卡片 -->
+            <div class="glass-card rounded-xl p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white">AAPL 深度研究报告</h3>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-1 rounded-full text-[10px] bg-emerald-500/20 text-emerald-400">BULLISH</span>
+                  <span class="px-2 py-1 rounded-full text-[10px] bg-blue-500/20 text-blue-400">85% Confidence</span>
+                </div>
+              </div>
+
+              <p class="text-slate-300 leading-relaxed mb-4">
+                Apple Inc. (AAPL) 展现出强劲的基本面，Q4 2025 营收超预期3.2%。服务业务持续高速增长(+18% YoY)，
+                有效抵消了中国市场iPhone销售放缓的影响。iOS 19 的AI整合为公司下一轮增长周期奠定了良好基础。
+                综合6个Agent分析结果，建议 <span class="text-emerald-400 font-semibold">买入</span>，12个月目标价 $210。
+              </p>
+
+              <!-- 关键指标 -->
+              <div class="grid grid-cols-4 gap-3 mb-4">
+                <div class="bg-slate-800/60 rounded-lg p-3">
+                  <div class="text-[10px] text-slate-400 uppercase">Price</div>
+                  <div class="text-lg font-bold text-white">$178.52</div>
+                  <div class="text-xs text-emerald-400">+1.24%</div>
+                </div>
+                <div class="bg-slate-800/60 rounded-lg p-3">
+                  <div class="text-[10px] text-slate-400 uppercase">P/E Ratio</div>
+                  <div class="text-lg font-bold text-white">28.5</div>
+                  <div class="text-xs text-slate-400">Industry: 25.2</div>
+                </div>
+                <div class="bg-slate-800/60 rounded-lg p-3">
+                  <div class="text-[10px] text-slate-400 uppercase">Revenue</div>
+                  <div class="text-lg font-bold text-white">$119.6B</div>
+                  <div class="text-xs text-emerald-400">+6.1% YoY</div>
+                </div>
+                <div class="bg-slate-800/60 rounded-lg p-3">
+                  <div class="text-[10px] text-slate-400 uppercase">Target</div>
+                  <div class="text-lg font-bold text-emerald-400">$210</div>
+                  <div class="text-xs text-slate-400">+17.6% upside</div>
+                </div>
+              </div>
+
+              <!-- 风险与催化剂 -->
+              <div class="grid grid-cols-2 gap-4">
+                <div class="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3">
+                  <div class="text-[10px] text-rose-400 uppercase tracking-wider mb-2">⚠️ 风险</div>
+                  <ul class="text-xs text-slate-300 space-y-1">
+                    <li>• 中国市场竞争加剧</li>
+                    <li>• 消费电子需求放缓</li>
+                    <li>• 估值相对较高</li>
+                  </ul>
+                </div>
+                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                  <div class="text-[10px] text-emerald-400 uppercase tracking-wider mb-2">🚀 催化剂</div>
+                  <ul class="text-xs text-slate-300 space-y-1">
+                    <li>• Apple Intelligence 发布</li>
+                    <li>• 服务收入持续增长</li>
+                    <li>• Vision Pro 生态扩展</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- 来源 -->
+            <div class="flex flex-wrap gap-2 text-[10px]">
+              <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400">reuters.com · 3</span>
+              <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400">bloomberg.com · 2</span>
+              <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400">sec.gov · 2</span>
+              <span class="px-2 py-1 rounded-full bg-slate-800 text-slate-400">wsj.com · 2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入区 -->
+      <div class="p-6 border-t border-slate-700/50">
+        <div class="max-w-4xl mx-auto flex items-center gap-4">
+          <input type="text" placeholder="继续提问或输入新的股票代码进行分析..."
+            class="flex-1 px-5 py-4 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 text-base">
+          <button class="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-colors">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 方案说明标签 -->
+  <div class="fixed bottom-4 right-4 bg-purple-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">
+    💬 方案B: 对话优先型 (Agent实时日志)
+  </div>
+</body>
+</html>

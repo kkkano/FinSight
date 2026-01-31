@@ -34,6 +34,7 @@ The goal is to feel like talking to a Chief Investment Officer who can quickly p
 ![Report Card 3](./images/report3.png)
 ![Report Card 4](./images/report4.png)
 ![Report Card 5](./images/report5.png)
+![Developer Console](./images/console.png)
 
 ---
 
@@ -100,6 +101,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Portfolio snapshot with editable holdings
 - Agent Gate decisions are visible in trace (used agent vs fast path)
 - Evidence pool is shown when tools/agents are invoked
+- **Developer Console**: Real-time SSE event viewer with 26 event types (tool_start/end, llm_start/end, cache_hit/miss, agent_start/done/step, supervisor_start/done, etc.)
 
 ### Alert and Subscription System
 - Price alerts: email notifications when price changes exceed thresholds
@@ -444,7 +446,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-01-31 | Version: 0.6.8
+> Last Updated: 2026-02-01 | Version: 0.6.9
 
 ### Current Progress
 

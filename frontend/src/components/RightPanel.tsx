@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import { StockChart } from './StockChart';
+import { AgentLogPanel } from './AgentLogPanel';
 import { Activity, Bell, RefreshCw, TrendingUp, X, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 
 const DEFAULT_USER_ID = 'default_user';
@@ -83,7 +84,7 @@ const Widget: React.FC<{
   );
 };
 
-export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse }) => {
+export const RightPanel: React.FC<{ onCollapse: () => void; onSubscribeClick?: () => void }> = ({ onCollapse, onSubscribeClick }) => {
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition } = useStore();
   const [, setMarketQuotes] = useState<Quote[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -299,7 +300,10 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
             </div>
           ))}
           {alerts.length === 0 && <div className="text-xs text-fin-muted py-2">暂无订阅提醒</div>}
-          <button className="w-full py-1.5 border border-dashed border-fin-border rounded text-xs text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors">
+          <button
+            onClick={onSubscribeClick}
+            className="w-full py-1.5 border border-dashed border-fin-border rounded text-xs text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors"
+          >
             + 管理订阅规则
           </button>
         </div>
@@ -450,80 +454,8 @@ export const RightPanel: React.FC<{ onCollapse: () => void }> = ({ onCollapse })
         </div>
       </Widget>
 
-      {/* Agent 运行状态 - 真实数据 */}
-      <Widget title="Agent 运行状态" icon={<Activity size={14} />}>
-        <div className="space-y-2 text-xs">
-          {/* Provider/Model Info */}          <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
-            <span className="text-fin-muted">LLM</span>
-            <span className="text-fin-text font-medium">{healthComponents.llm?.status ?? 'unknown'}</span>
-          </div>
-          <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
-            <span className="text-fin-muted">Supervisor</span>
-            <span className="text-fin-text font-medium">{healthComponents.supervisor?.status ?? 'unknown'}</span>
-          </div>
-          <div className="flex items-center justify-between pb-2 border-b border-fin-border/50">
-            <span className="text-fin-muted">Tools</span>
-            <span className="text-fin-text font-medium">{healthComponents.tools_module?.status ?? 'unknown'}</span>
-          </div>
-
-          {/* 子 Agent 健康状态 */}
-          {Object.keys(healthComponents).length > 0 && (
-            <div className="pt-2 border-t border-fin-border/50">
-              <div className="text-[10px] text-fin-muted mb-1 uppercase">子 Agent 状态</div>
-              <div className="space-y-1">
-                {subAgents.map((agent) => {
-                  const comp = healthComponents[agent.key];
-                  const isOk = comp?.status === 'ok';
-                  return (
-                    <div key={agent.key} className="flex items-center justify-between text-[10px]">
-                      <div className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${isOk ? 'bg-fin-success' : 'bg-fin-muted'}`} />
-                        <span className="text-fin-text">{agent.name}</span>
-                      </div>
-                      <span className={isOk ? 'text-fin-success' : 'text-fin-muted'}>{isOk ? '在线' : '离线'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Stats */}
-          <div className="flex items-center justify-between">
-            <span className="text-fin-muted">总请求</span>
-            <span className="text-fin-text">{totalCalls}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-fin-muted">成功</span>
-            <span className="text-fin-success">{totalSuccesses}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-fin-muted">缓存命中</span>
-            <span className="text-fin-text">{cacheHits}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-fin-muted">回退次数</span>
-            <span className="text-fin-warning">{fallbackCount}</span>
-          </div>
-          {/* Data Sources */}
-          {sourceStats.length > 0 && (
-            <div className="pt-2 border-t border-fin-border/50">
-              <div className="text-[10px] text-fin-muted mb-1 uppercase">数据源状态</div>
-              <div className="space-y-1">
-                {sourceStats.slice(0, 4).map((src: any) => (
-                  <div key={src.name} className="flex items-center justify-between text-[10px]">
-                    <div className="flex items-center gap-1">
-                      <span className={`w-1.5 h-1.5 rounded-full ${src.circuit_state === 'CLOSED' ? 'bg-fin-success' : 'bg-fin-danger'}`} />
-                      <span className="text-fin-text">{src.name}</span>
-                    </div>
-                    <span className="text-fin-muted">{src.total_calls || 0} calls</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </Widget>
+      {/* Agent 运行状态 - 增强版实时日志面板 */}
+      <AgentLogPanel />
 
       {/* Footer */}
       {lastUpdated && (

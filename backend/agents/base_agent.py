@@ -2,8 +2,10 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
 import asyncio
+import time
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.orchestration.trace_schema import create_trace_event
+from backend.orchestration.trace_emitter import get_trace_emitter
 
 @dataclass
 class EvidenceItem:
@@ -49,9 +51,25 @@ class BaseFinancialAgent:
         self._current_query = query
         self._current_ticker = ticker
         trace: List[Dict[str, Any]] = []
-        
+        global_emitter = get_trace_emitter()
+        start_time = time.perf_counter()
+
         def _log_event(event_type: str, details: Dict[str, Any]):
             trace.append(create_trace_event(event_type, agent=self.AGENT_NAME, **details))
+            # 发射到全局 TraceEmitter
+            if event_type == "agent_start":
+                global_emitter.emit_agent_start(self.AGENT_NAME, query=details.get("query"), ticker=details.get("ticker"))
+            elif event_type == "agent_end":
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                global_emitter.emit_agent_done(
+                    self.AGENT_NAME,
+                    success=True,
+                    duration_ms=duration_ms,
+                    summary=f"confidence={details.get('confidence')}, evidence={details.get('evidence_count')}"
+                )
+            else:
+                global_emitter.emit_agent_step(self.AGENT_NAME, event_type, details)
+
             if on_event:
                 # Bridge internal trace events to external listener
                 try:
@@ -164,14 +182,40 @@ class BaseFinancialAgent:
         try:
             from langchain_core.messages import HumanMessage
             from backend.services.rate_limiter import acquire_llm_token
-            
+
             # 获取速率限制令牌
             if not await acquire_llm_token(timeout=60.0):
                 return []  # 限流超时，跳过此步骤
-            
+
+            # 发射 LLM 调用开始事件
+            trace_emitter = get_trace_emitter()
+            trace_emitter.emit_llm_start(
+                model=getattr(self.llm, "model_name", None),
+                prompt_preview=prompt[:100] + "...",
+                agent=self.AGENT_NAME
+            )
+            start_time = time.perf_counter()
+
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             text = response.content if hasattr(response, "content") else str(response)
-        except Exception:
+
+            # 发射 LLM 调用结束事件
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            trace_emitter.emit_llm_end(
+                model=getattr(self.llm, "model_name", None),
+                duration_ms=duration_ms,
+                success=True,
+                agent=self.AGENT_NAME
+            )
+        except Exception as e:
+            # 发射 LLM 调用失败事件
+            trace_emitter = get_trace_emitter()
+            trace_emitter.emit_llm_end(
+                model=getattr(self.llm, "model_name", None) if self.llm else None,
+                success=False,
+                error=str(e),
+                agent=self.AGENT_NAME
+            )
             return []
 
         gaps: List[str] = []
@@ -233,15 +277,41 @@ class BaseFinancialAgent:
         try:
             from langchain_core.messages import HumanMessage
             from backend.services.rate_limiter import acquire_llm_token
-            
+
             # 获取速率限制令牌
             if not await acquire_llm_token(timeout=60.0):
                 return summary  # 限流超时，返回原摘要
-            
+
+            # 发射 LLM 调用开始事件
+            trace_emitter = get_trace_emitter()
+            trace_emitter.emit_llm_start(
+                model=getattr(self.llm, "model_name", None),
+                prompt_preview="[update_summary] " + prompt[:80] + "...",
+                agent=self.AGENT_NAME
+            )
+            start_time = time.perf_counter()
+
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             updated = response.content if hasattr(response, "content") else str(response)
+
+            # 发射 LLM 调用结束事件
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            trace_emitter.emit_llm_end(
+                model=getattr(self.llm, "model_name", None),
+                duration_ms=duration_ms,
+                success=True,
+                agent=self.AGENT_NAME
+            )
             return updated.strip() or summary
-        except Exception:
+        except Exception as e:
+            # 发射 LLM 调用失败事件
+            trace_emitter = get_trace_emitter()
+            trace_emitter.emit_llm_end(
+                model=getattr(self.llm, "model_name", None) if self.llm else None,
+                success=False,
+                error=str(e),
+                agent=self.AGENT_NAME
+            )
             return summary
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:

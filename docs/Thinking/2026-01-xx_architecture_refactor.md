@@ -602,7 +602,95 @@ https://github.com/666ghj/BettaFish
 FinSight 项目主页（内部参考）
 https://github.com/kkkano/FinSight
 ```
+真正的“最佳实践”：Postgres +（可选）向量库，而不是 Mongo vs SQL 二选一
 
+很多成熟做法是三层：
+
+Postgres：存 session/messages/state/evidence/trace（事实记录、可审计）
+
+对象存储（可选）：大块 artifact（长报告、抓取网页全文、PDF）放 S3/MinIO，DB 只存引用
+强烈建议：Postgres（或先 SQLite）+ JSONB
+
+先快速把 sessions/messages/session_state/events 落库
+
+Evidence/Trace 先用 JSONB 存
+
+后续再把关键字段“抽列”做索引
+
+
+把 RAG 定位成一个独立能力/独立工具：ResearchLibrary / ReportLibrary
+然后让 DeepSearch 在需要时调用它，而不是把 DeepSearch 直接等同于 RAG。
+
+这样你得到的是“组合能力”：
+
+DeepSearch：负责 orchestration（搜什么、怎么对照、怎么写报告、怎么拼 evidence）
+
+RAG/研报库：负责从“你自己的库”里检索出可靠片段
+
+4) 最实用的判断规则：什么时候用 RAG，什么时候用联网搜索？
+
+你可以用你现有的 Gate 思路（freshness_need / evidence_need）直接做一个硬规则：
+
+用 RAG（研报库/年报库）的条件更像：
+
+freshness_need = low（不强调“今天/最新”）
+
+evidence_need = high（要求“出处/引用/依据”）
+
+或者问题是“结构化长期知识”：
+
+公司商业模式、风险因素、历史财务摘要
+
+行业框架、名词解释、投资知识
+
+用联网 DeepSearch（Web/Search/News）的条件更像：
+
+freshness_need = high（今天、最新、刚刚、本周）
+
+事件驱动：财报发布、突发新闻、政策变化、市场波动
+
+你库里不可能及时更新的内容
+
+一句话：
+
+“要最新”靠联网，“要稳定可引用”靠 RAG。
+
+5) 我建议你现在“最优路径”（不浪费重构成本）
+
+你现在如果问我：DeepSearch 要不要立刻上 RAG？
+我会推荐这个顺序（最稳、最省返工）：
+
+Step A：先把 DeepSearch 做成“检索编排器”，先不强依赖 RAG
+
+先把这些打牢：
+
+抓取/搜索的证据入池（EvidenceItem 完整：url、ts、snippet、freshness）
+
+缓存（同一 URL/同一 query 的缓存 + 负缓存）
+
+去重（同一新闻多源重复）
+
+失败回退链（搜索源/抓取源/降级提示）
+
+Trace 全链路（后面做前端仪表盘就能直接吃）
+
+Step B：再加一个“研报库（RAG Tool）”，作为独立路由/独立工具
+
+先从最有价值的语料开始：
+
+你认可来源的研报（可控）
+
+公司年报/财报文本（稳定）
+
+DeepSearch 在需要“长期知识/引用”的时候调用它
+
+Step C：最后再做 Hybrid：RAG 优先 + Web fallback
+
+“库里命中就引用”
+
+“库里缺就联网补齐”
+
+这时候 DeepSearch 就是最强形态：既稳又新
 ---
 
 > 记录人：Codex

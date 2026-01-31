@@ -239,6 +239,37 @@ class SubscriptionService:
                     self._save_subscriptions()
                     break
 
+    def toggle_subscription(self, email: str, ticker: str, enabled: bool) -> bool:
+        """
+        启用或禁用订阅
+
+        Args:
+            email: 用户邮箱
+            ticker: 股票代码
+            enabled: True=启用, False=禁用
+
+        Returns:
+            是否操作成功
+        """
+        if email not in self.subscriptions:
+            return False
+
+        for sub in self.subscriptions[email]:
+            if sub['ticker'] == ticker:
+                sub['disabled'] = not enabled
+                if enabled:
+                    # 启用时重置失败计数
+                    sub['alert_failures'] = 0
+                    sub['last_alert_error'] = None
+                    sub['last_alert_error_at'] = None
+                sub['updated_at'] = datetime.now().isoformat()
+                self._save_subscriptions()
+                logger.info(f"{'Enabled' if enabled else 'Disabled'} subscription: {email} -> {ticker}")
+                return True
+
+        return False
+
+
 
 # 全局实例
 _subscription_service = None

@@ -9,14 +9,14 @@
       ],
       "price_threshold": 0.1,
       "created_at": "2026-01-24T17:39:13.621501",
-      "updated_at": "2026-01-24T17:39:13.621506",
-      "last_alert_at": "2026-01-24T18:23:55.999467",
-      "last_news_at": "2026-01-24T17:53:56.528183",
-      "last_alert_attempt_at": "2026-01-24T19:02:51.281716",
-      "last_alert_error": "send_failed",
-      "last_alert_error_at": "2026-01-24T19:02:51.281716",
-      "alert_failures": 3,
-      "disabled": true
+      "updated_at": "2026-02-01T01:53:10.294397",
+      "last_alert_at": "2026-02-01T01:53:08.958162",
+      "last_news_at": "2026-02-01T01:24:09.544614",
+      "alert_failures": 0,
+      "disabled": true,
+      "last_alert_attempt_at": "2026-02-01T01:53:08.958162",
+      "last_alert_error": null,
+      "last_alert_error_at": null
     }
   ]
 }

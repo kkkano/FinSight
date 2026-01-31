@@ -120,3 +120,102 @@ export interface KlineResponse {
   };
   cached?: boolean;
 }
+
+// Agent Log Types - 用于实时日志面板
+export type AgentLogLevel = 'info' | 'debug' | 'warn' | 'error' | 'success';
+
+export type AgentLogSource =
+  | 'supervisor'
+  | 'router'
+  | 'gate'
+  | 'planner'
+  | 'news_agent'
+  | 'price_agent'
+  | 'fundamental_agent'
+  | 'technical_agent'
+  | 'macro_agent'
+  | 'deep_search_agent'
+  | 'forum'
+  | 'system';
+
+export interface AgentLogEntry {
+  id: string;
+  timestamp: string;
+  source: AgentLogSource;
+  level: AgentLogLevel;
+  message: string;
+  details?: Record<string, any>;  // JSON 格式的详细数据
+  duration_ms?: number;           // 执行耗时
+  tool_name?: string;             // 使用的工具名称
+  tool_input?: any;               // 工具输入
+  tool_output?: any;              // 工具输出
+}
+
+export interface AgentStatus {
+  source: AgentLogSource;
+  status: 'idle' | 'running' | 'success' | 'error' | 'waiting';
+  startTime?: string;
+  endTime?: string;
+  lastMessage?: string;
+  progress?: number;  // 0-100
+}
+
+// Raw SSE Event - 开发者控制台原始事件
+// 包含所有 TraceEmitter 发射的事件类型
+export type RawEventType =
+  // Token 流式输出
+  | 'token'
+  // 思考步骤
+  | 'thinking'
+  // 工具调用
+  | 'tool_start'
+  | 'tool_end'
+  | 'tool_call'
+  // LLM 调用
+  | 'llm_call'
+  | 'llm_start'
+  | 'llm_end'
+  // 缓存操作
+  | 'cache_hit'
+  | 'cache_miss'
+  | 'cache_set'
+  // 数据源和 API
+  | 'data_source'
+  | 'api_call'
+  // Agent 执行
+  | 'agent_start'
+  | 'agent_done'
+  | 'agent_step'
+  | 'agent_error'
+  // Supervisor 执行
+  | 'supervisor_start'
+  | 'supervisor_done'
+  // Forum 综合
+  | 'forum_start'
+  | 'forum_done'
+  // 系统事件
+  | 'system'
+  // 完成和错误
+  | 'done'
+  | 'error'
+  // 未知类型兜底
+  | 'unknown';
+
+export interface RawSSEEvent {
+  id: string;                    // 唯一标识
+  timestamp: string;             // ISO 时间戳
+  eventType: RawEventType;       // 事件类型
+  rawData: string;               // 原始 JSON 字符串
+  parsedData: any;               // 解析后的数据对象
+  size: number;                  // 数据大小（字节）
+  sessionId?: string;            // 会话 ID
+}
+
+// Console Filter Options
+export interface ConsoleFilterOptions {
+  eventTypes: RawEventType[];    // 要显示的事件类型
+  searchText: string;            // 搜索文本
+  showRawJson: boolean;          // 是否显示原始 JSON
+  autoScroll: boolean;           // 自动滚动
+  maxEvents: number;             // 最大事件数
+}

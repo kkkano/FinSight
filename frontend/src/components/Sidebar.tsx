@@ -13,6 +13,7 @@ interface WatchlistItem {
 
 interface SidebarProps {
     onSettingsClick?: () => void;
+    onSubscribeClick?: () => void;
 }
 
 const DEFAULT_USER_ID = 'default_user';
@@ -24,7 +25,7 @@ const RISK_LABELS: Record<string, string> = {
     aggressive: '进取型投资者',
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick }) => {
     const [activeTab, setActiveTab] = useState('chat');
     const [userName, setUserName] = useState('用户');
     const [riskPreference, setRiskPreference] = useState('balanced');
@@ -172,7 +173,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick }) => {
                     icon={<Bell size={18} />}
                     label="订阅管理"
                     active={activeTab === 'alerts'}
-                    onClick={() => setActiveTab('alerts')}
+                    onClick={() => {
+                        setActiveTab('alerts');
+                        if (onSubscribeClick) onSubscribeClick();
+                    }}
                     badge={alertCount > 0 ? String(alertCount) : undefined}
                 />
                 <NavItem

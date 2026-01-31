@@ -16,33 +16,12 @@ interface UserConfig {
   layout_mode?: 'centered' | 'full';
 }
 
-interface Subscription {
-  email: string;
-  ticker: string;
-  alert_types: string[];
-  price_threshold: number | null;
-  last_alert_at?: string;
-  last_news_at?: string;
-}
-
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [config, setConfig] = useState<UserConfig>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const { theme, setTheme, subscriptionEmail, setSubscriptionEmail, setLayoutMode } = useStore();
-
-  // Subscription State
-  const [subs, setSubs] = useState<Subscription[]>([]);
-  const [subsLoading, setSubsLoading] = useState(false);
-  const [subsError, setSubsError] = useState<string | null>(null);
-  const [subForm, setSubForm] = useState({
-    email: '',
-    tickers: '',
-    price_threshold: 5,
-    alert_types: ['price_change'] as string[],
-  });
-  const [subSubmitting, setSubSubmitting] = useState(false);
+  const { theme, setTheme, setLayoutMode } = useStore();
 
   // Diagnostics State
   const [orchestratorStats, setOrchestratorStats] = useState<any>(null);
@@ -52,12 +31,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   useEffect(() => {
     if (isOpen) {
       loadConfig();
-      loadSubscriptions();
       loadDiagnostics();
-      // 同步邮箱
-      if (subscriptionEmail && subscriptionEmail !== subForm.email) {
-        setSubForm((prev) => ({ ...prev, email: subscriptionEmail }));
-      }
     }
   }, [isOpen]);
 
@@ -72,31 +46,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
-  const loadSubscriptions = async () => {
-    setSubsLoading(true);
-    setSubsError(null);
-    try {
-      const scopedEmail = subscriptionEmail || subForm.email.trim();
-      const res = await apiClient.listSubscriptions(scopedEmail || undefined);
-      if (res?.success) {
-        setSubs(res.subscriptions || []);
-      } else {
-        setSubsError(res?.detail || '加载订阅失败');
-      }
-    } catch (e) {
-      setSubsError('加载订阅失败');
-    } finally {
-      setSubsLoading(false);
-    }
-  };
-
   const loadDiagnostics = async () => {
     setDiagLoading(true);
     setDiagError(null);
     try {
       const orchRes = await apiClient.diagnosticsOrchestrator().catch(() => null);
       setOrchestratorStats(orchRes);
-    } catch (e) {
+    } catch {
       setDiagError('诊断加载失败');
     } finally {
       setDiagLoading(false);
@@ -127,74 +83,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
-  const handleSubChange = (key: string, value: any) => {
-    setSubForm((prev) => ({ ...prev, [key]: value }));
-    if (key === 'email') {
-      setSubscriptionEmail(value);
-    }
-  };
-
-  const toggleAlertType = (value: string) => {
-    setSubForm((prev) => {
-      const exists = prev.alert_types.includes(value);
-      const next = exists ? prev.alert_types.filter((v) => v !== value) : [...prev.alert_types, value];
-      return { ...prev, alert_types: next };
-    });
-  };
-
-  const handleSubscribe = async () => {
-    if (!subForm.email || !subForm.tickers) {
-      setSubsError('请填写邮箱与股票代码');
-      return;
-    }
-    const tickerList = subForm.tickers
-      .split(/[,\s]+/)
-      .map((t) => t.trim().toUpperCase())
-      .filter(Boolean);
-    if (!tickerList.length) {
-      setSubsError('请输入至少一个股票代码');
-      return;
-    }
-    setSubSubmitting(true);
-    setSubsError(null);
-    try {
-      for (const t of tickerList) {
-        await apiClient.subscribe({
-          email: subForm.email.trim(),
-          ticker: t,
-          alert_types: subForm.alert_types,
-          price_threshold: subForm.price_threshold ?? null,
-        });
-      }
-      setSubscriptionEmail(subForm.email.trim());
-      setSubForm((prev) => ({ ...prev, tickers: '' }));
-      await loadSubscriptions();
-    } catch (e) {
-      setSubsError('订阅失败，请稍后再试');
-    } finally {
-      setSubSubmitting(false);
-    }
-  };
-
-  const handleUnsubscribe = async (email: string, ticker?: string) => {
-    setSubsLoading(true);
-    setSubsError(null);
-    try {
-      const res = await apiClient.unsubscribe({ email, ticker });
-      if (res?.success) {
-        // 直接从本地状态移除，避免 email 不一致导致刷新失败
-        setSubs(prev => prev.filter(s => !(s.email === email && s.ticker === ticker)));
-      } else {
-        setSubsError(res?.detail || '取消订阅失败');
-      }
-    } catch (e) {
-      console.error('取消订阅失败:', e);
-      setSubsError('取消订阅失败');
-    } finally {
-      setSubsLoading(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -216,124 +104,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* 订阅管理 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-fin-text">订阅管理</h3>
-              {subsLoading && <span className="text-[11px] text-fin-muted">刷新中…</span>}
-            </div>
-            <div className="grid md:grid-cols-2 gap-4 text-sm">
-              <div className="space-y-2">
-                <label className="text-xs text-fin-muted">邮箱</label>
-                <input
-                  type="email"
-                  value={subForm.email}
-                  onChange={(e) => handleSubChange('email', e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-fin-muted">股票代码（可多只，逗号/空格分隔）</label>
-                <textarea
-                  rows={2}
-                  value={subForm.tickers}
-                  onChange={(e) => handleSubChange('tickers', e.target.value)}
-                  placeholder="如 AAPL, MSFT, TSLA"
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm uppercase resize-none focus:border-fin-primary outline-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-fin-muted">触发阈值(涨跌幅%)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
-                  value={subForm.price_threshold}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    handleSubChange('price_threshold', isNaN(v) ? null : v);
-                  }}
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-fin-muted">提醒类型</label>
-                <div className="flex gap-4 text-sm pt-1">
-                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={subForm.alert_types.includes('price_change')}
-                      onChange={() => toggleAlertType('price_change')}
-                      className="accent-fin-primary"
-                    />
-                    <span className="text-fin-text">价格波动</span>
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={subForm.alert_types.includes('news')}
-                      onChange={() => toggleAlertType('news')}
-                      className="accent-fin-primary"
-                    />
-                    <span className="text-fin-text">新闻</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-            {subsError && <p className="text-xs text-red-400 mt-2">{subsError}</p>}
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={handleSubscribe}
-                disabled={subSubmitting}
-                className="px-4 py-2 rounded bg-fin-primary text-white text-sm hover:bg-blue-600 disabled:opacity-60"
-              >
-                {subSubmitting ? '提交中…' : '保存订阅'}
-              </button>
-            </div>
-
-            {/* 已订阅列表 */}
-            <div className="mt-5 border-t border-fin-border pt-4">
-              <h4 className="text-xs font-medium text-fin-muted mb-3">已订阅</h4>
-              <div className="space-y-2 max-h-48 overflow-auto">
-                {subs.map((sub) => (
-                  <div
-                    key={`${sub.email}-${sub.ticker}`}
-                    className="flex items-center justify-between text-xs border border-fin-border rounded px-3 py-2 bg-fin-panel/60"
-                  >
-                    <div className="space-y-1">
-                      <div className="text-fin-text font-medium">{sub.ticker}</div>
-                      <div className="text-fin-muted">{sub.email}</div>
-                      <div className="text-fin-muted">
-                        {sub.alert_types?.join(', ')} | 阈值 {sub.price_threshold ?? '-'}%
-                      </div>
-                      {(sub.last_alert_at || sub.last_news_at) && (
-                        <div className="text-[10px] text-fin-muted">
-                          {sub.last_alert_at && <>最后价格提醒: {new Date(sub.last_alert_at).toLocaleString()}</>}
-                          {sub.last_news_at && (
-                            <>
-                              {sub.last_alert_at ? ' · ' : ''}
-                              最后新闻提醒: {new Date(sub.last_news_at).toLocaleString()}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleUnsubscribe(sub.email, sub.ticker)}
-                      className="text-red-400 hover:text-red-300 hover:underline ml-3"
-                    >
-                      取消
-                    </button>
-                  </div>
-                ))}
-                {!subs.length && !subsLoading && (
-                  <p className="text-xs text-fin-muted">暂无订阅</p>
-                )}
-              </div>
-            </div>
-          </section>
-
           {/* LLM 配置 */}
           <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">LLM 配置（可选）</h3>
@@ -471,7 +241,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 </div>
                 {orchestratorStats?.data ? (
                   <div className="space-y-1 text-fin-muted">
-                    {/* 从 by_source.stock_price 计算总请求 */}
                     {(() => {
                       const sources = orchestratorStats.data.by_source?.stock_price || [];
                       const totalCalls = sources.reduce((sum: number, s: any) => sum + (s.total_calls || 0), 0);

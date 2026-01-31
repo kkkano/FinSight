@@ -1,7 +1,7 @@
 import axios from 'axios';
 // 确保你有 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
-import type { ChatResponse, KlineResponse } from '../types/index';
+import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
 
 // 本地开发地址，生产环境请改为实际域名
 const API_BASE_URL = 'http://127.0.0.1:8000';
@@ -136,6 +136,11 @@ export const apiClient = {
     return response.data;
   },
 
+  async toggleSubscription(payload: { email: string; ticker: string; enabled: boolean }): Promise<any> {
+    const response = await api.post('/api/subscription/toggle', payload);
+    return response.data;
+  },
+
   // 导出 PDF
   async exportPDF(messages: any[], charts?: any[], title?: string): Promise<Blob> {
     const response = await api.post('/api/export/pdf', {
@@ -168,8 +173,11 @@ export const apiClient = {
     onDone?: (report?: any, thinking?: any[], meta?: any) => void,  // Phase 2: 支持 report 数据
     onError?: (error: string) => void,
     onThinking?: (step: any) => void,
-    history?: Array<{role: string, content: string}>  // 新增：对话历史
+    history?: Array<{role: string, content: string}>,  // 对话历史
+    onRawEvent?: (event: RawSSEEvent) => void  // 原始 SSE 事件回调
   ): Promise<void> {
+    let eventCounter = 0;
+
     const response = await fetch(`${API_BASE_URL}/chat/supervisor/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -196,8 +204,23 @@ export const apiClient = {
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
+          const rawJson = line.slice(6);
           try {
-            const data = JSON.parse(line.slice(6));
+            const data = JSON.parse(rawJson);
+
+            // 发送原始事件到控制台
+            if (onRawEvent) {
+              const eventType: RawEventType = data.type || 'unknown';
+              onRawEvent({
+                id: `sse-${Date.now()}-${eventCounter++}`,
+                timestamp: new Date().toISOString(),
+                eventType,
+                rawData: rawJson,
+                parsedData: data,
+                size: new Blob([rawJson]).size,
+              });
+            }
+
             if (data.type === 'token' && data.content) {
               // 立即调用 onToken，确保流式效果
               onToken(data.content);
@@ -229,7 +252,17 @@ export const apiClient = {
               });
             }
           } catch (e) {
-            // ignore parse errors
+            // 解析失败也要发送到控制台
+            if (onRawEvent) {
+              onRawEvent({
+                id: `sse-err-${Date.now()}-${eventCounter++}`,
+                timestamp: new Date().toISOString(),
+                eventType: 'unknown',
+                rawData: rawJson,
+                parsedData: { parseError: true, raw: rawJson, error: String(e) },
+                size: new Blob([rawJson]).size,
+              });
+            }
           }
         }
       }

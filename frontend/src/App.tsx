@@ -3,6 +3,7 @@ import { ChatList } from './components/ChatList';
 import Sidebar from './components/Sidebar';
 import { ChatInput } from './components/ChatInput';
 import { SettingsModal } from './components/SettingsModal';
+import { SubscribeModal } from './components/SubscribeModal';
 import { Sun, Moon, ChevronLeft } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { apiClient } from './api/client';
@@ -27,6 +28,7 @@ type MarketQuote = {
 function App() {
   const [isChartPanelExpanded, setIsChartPanelExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [userCollapsed, setUserCollapsed] = useState(false);
   const [marketQuotes, setMarketQuotes] = useState<MarketQuote[]>(
     MARKET_INDICES.map(m => ({ label: m.label, flag: m.flag, loading: true }))
@@ -100,7 +102,10 @@ function App() {
   return (
     <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
       {/* 1. Sidebar (Fixed width) */}
-      <Sidebar onSettingsClick={() => setIsSettingsOpen(true)} />
+      <Sidebar
+        onSettingsClick={() => setIsSettingsOpen(true)}
+        onSubscribeClick={() => setIsSubscribeOpen(true)}
+      />
 
       {/* 2. Main Workspace (Flex fill) */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -148,7 +153,7 @@ function App() {
 
           {/* Right: Auxiliary Panel (Visualization & Context) */}
           <div className={`w-[380px] flex flex-col gap-4 transition-all duration-300 ${isChartPanelExpanded ? '' : '-mr-[380px] hidden'}`}>
-            <RightPanel onCollapse={toggleRightPanel} />
+            <RightPanel onCollapse={toggleRightPanel} onSubscribeClick={() => setIsSubscribeOpen(true)} />
           </div>
           {!isChartPanelExpanded && (
             <button
@@ -166,6 +171,7 @@ function App() {
       </div>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SubscribeModal isOpen={isSubscribeOpen} onClose={() => setIsSubscribeOpen(false)} />
     </div>
   );
 }

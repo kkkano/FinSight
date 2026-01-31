@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.streaming import stream_report_sse, stream_supervisor_sse
 from backend.api.schemas import (
-    ChatRequest, SubscriptionRequest, UnsubscribeRequest,
+    ChatRequest, SubscriptionRequest, UnsubscribeRequest, ToggleSubscriptionRequest,
     ChatResponse, SupervisorResponse, HealthResponse, RootResponse,
     DiagnosticsResponse, UserProfileResponse, SubscriptionResponse,
     SubscriptionListResponse, StockDataResponse, KlineResponse,
@@ -881,6 +881,43 @@ async def get_subscriptions(email: str = None):
             "subscriptions": subscriptions,
             "count": len(subscriptions)
         }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/subscription/toggle", response_model=SubscriptionResponse)
+async def toggle_subscription(request: ToggleSubscriptionRequest):
+    """
+    启用或禁用订阅
+
+    请求体:
+    {
+        "email": "用户邮箱",
+        "ticker": "股票代码",
+        "enabled": true/false
+    }
+    """
+    try:
+        from backend.services.subscription_service import get_subscription_service
+
+        subscription_service = get_subscription_service()
+        success = subscription_service.toggle_subscription(
+            email=request.email,
+            ticker=request.ticker,
+            enabled=request.enabled,
+        )
+
+        if success:
+            return {
+                "success": True,
+                "message": f"订阅已{'启用' if request.enabled else '禁用'}",
+                "email": request.email,
+                "ticker": request.ticker,
+            }
+        else:
+            raise HTTPException(status_code=404, detail="订阅未找到")
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

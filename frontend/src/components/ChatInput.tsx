@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { ThinkingStep } from '../types/index';
+import type { ThinkingStep, AgentLogSource } from '../types/index';
 import { SendHorizontal } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -36,6 +36,40 @@ const extractTicker = (text: string): string | null => {
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
+// Agent 日志来源映射 (stage -> AgentLogSource)
+const mapStageToSource = (stage: string): AgentLogSource => {
+  const mapping: Record<string, AgentLogSource> = {
+    supervisor_start: 'supervisor',
+    agent_start: 'planner',
+    agent_done: 'planner',
+    agent_error: 'planner',
+    forum_start: 'forum',
+    forum_done: 'forum',
+    classifying: 'router',
+    classified: 'router',
+    agent_selected: 'gate',
+    tool_selected: 'gate',
+    reasoning: 'supervisor',
+    reference_resolution: 'supervisor',
+    intent_classification: 'router',
+    agent_gate: 'gate',
+    data_collection: 'supervisor',
+    processing: 'supervisor',
+    complete: 'system',
+    tool_call: 'system',
+    llm_call: 'supervisor',
+    error: 'system',
+  };
+  // 检查是否包含 agent 名称
+  if (stage.includes('news')) return 'news_agent';
+  if (stage.includes('price')) return 'price_agent';
+  if (stage.includes('fundamental')) return 'fundamental_agent';
+  if (stage.includes('technical')) return 'technical_agent';
+  if (stage.includes('macro')) return 'macro_agent';
+  if (stage.includes('deep_search') || stage.includes('search')) return 'deep_search_agent';
+  return mapping[stage] || 'system';
+};
+
 export const ChatInput: React.FC = () => {
   const [input, setInput] = useState('');
   const {
@@ -48,6 +82,11 @@ export const ChatInput: React.FC = () => {
     draft,
     setDraft,
     currentTicker,
+    // Agent Logs
+    addAgentLog,
+    updateAgentStatus,
+    // Raw SSE Events
+    addRawEvent,
   } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -115,6 +154,17 @@ export const ChatInput: React.FC = () => {
     setLoading(true);
     setStatus('Streaming response...');
 
+    // 记录请求开始日志
+    addAgentLog({
+      id: uuidv4(),
+      timestamp: new Date().toISOString(),
+      source: 'system',
+      level: 'info',
+      message: `New query: "${userMsgContent.slice(0, 50)}${userMsgContent.length > 50 ? '...' : ''}"`,
+    });
+    // 重置所有 Agent 状态为 idle
+    updateAgentStatus('supervisor', { status: 'running', startTime: new Date().toISOString() });
+
     let fullContent = '';
     let thinkingSteps: ThinkingStep[] = [];
 
@@ -132,10 +182,27 @@ export const ChatInput: React.FC = () => {
         // onToolStart
         (name) => {
           setStatus(`Calling tool: ${name}...`);
+          // 记录工具调用日志
+          addAgentLog({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
+            source: 'system',
+            level: 'info',
+            message: `Tool started: ${name}`,
+            tool_name: name,
+          });
         },
         // onToolEnd
         () => {
           setStatus('Generating response...');
+          // 记录工具完成日志
+          addAgentLog({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
+            source: 'system',
+            level: 'success',
+            message: 'Tool execution completed',
+          });
         },
         // onDone - Phase 2: 支持 report 数据
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
@@ -201,14 +268,65 @@ export const ChatInput: React.FC = () => {
         (error) => {
           updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
           setStatus('Error occurred');
+          // 记录错误日志
+          addAgentLog({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
+            source: 'system',
+            level: 'error',
+            message: `Error: ${error}`,
+          });
+          // 更新所有运行中的 Agent 状态为错误
+          updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
         },
         // onThinking
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
           updateMessage(aiMsgId, { thinking: thinkingSteps });
+
+          // 将 thinking 事件转换为 AgentLog
+          const source = mapStageToSource(step.stage);
+          const isError = step.stage.includes('error');
+          const isComplete = step.stage.includes('done') || step.stage.includes('complete');
+          const isStart = step.stage.includes('start');
+
+          // 添加日志
+          addAgentLog({
+            id: uuidv4(),
+            timestamp: step.timestamp || new Date().toISOString(),
+            source,
+            level: isError ? 'error' : isComplete ? 'success' : 'info',
+            message: step.message || step.stage,
+            details: step.result,
+          });
+
+          // 更新 Agent 状态
+          if (isStart) {
+            updateAgentStatus(source, {
+              status: 'running',
+              startTime: step.timestamp || new Date().toISOString(),
+              lastMessage: step.message,
+            });
+          } else if (isComplete) {
+            updateAgentStatus(source, {
+              status: 'success',
+              endTime: step.timestamp || new Date().toISOString(),
+              lastMessage: step.message,
+            });
+          } else if (isError) {
+            updateAgentStatus(source, {
+              status: 'error',
+              endTime: step.timestamp || new Date().toISOString(),
+              lastMessage: step.message,
+            });
+          }
         },
         // history - 传递对话历史用于上下文理解
-        history
+        history,
+        // onRawEvent - 原始 SSE 事件推送到控制台
+        (event) => {
+          addRawEvent(event);
+        }
       );
     } catch (error) {
       updateMessage(aiMsgId, {

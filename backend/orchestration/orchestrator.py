@@ -21,6 +21,7 @@ if PROJECT_ROOT not in sys.path:
 from backend.orchestration.cache import DataCache
 from backend.orchestration.validator import DataValidator, ValidationResult
 from backend.orchestration.data_context import DataContextCollector, extract_context_fields
+from backend.orchestration.trace_emitter import get_trace_emitter
 from backend.services import CircuitBreaker
 from backend.metrics import (
     observe_orch_latency,
@@ -228,7 +229,8 @@ class ToolOrchestrator:
         self._stats['total_requests'] += 1
         start_time = time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
-        
+        trace_emitter = get_trace_emitter()
+
         # 1. 检查缓存（除非强制刷新）
         if not force_refresh:
             cache_key = f"{data_type}:{ticker}"
@@ -236,6 +238,7 @@ class ToolOrchestrator:
             if cached_data is not None:
                 self._stats['cache_hits'] += 1
                 increment_cache_hit(data_type)
+                trace_emitter.emit_cache_hit(cache_key, source="orchestrator")
                 # cache created_at not stored directly; approximate with current time
                 cached_as_of = now_iso
                 cached_as_of, currency, adjustment, data_context = self._build_data_context(
@@ -269,6 +272,7 @@ class ToolOrchestrator:
         sources = self.sources.get(data_type, [])
         if not sources:
             # 没有配置数据源，尝试直接调用工具模块的函数
+            trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
             return self._fallback_direct_call(data_type, ticker, start_time)
         
         # 动态排序：按失败率 / 连续失败 / 手工优先级
@@ -303,7 +307,10 @@ class ToolOrchestrator:
         
         tried_sources = []
         last_error = None
-        
+
+        # 缓存未命中，开始尝试数据源
+        trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
+
         for i, source in enumerate(sources):
             # 冷却期跳过
             if source.cooldown_seconds > 0 and source.last_fail:
@@ -318,10 +325,18 @@ class ToolOrchestrator:
             tried_sources.append(source.name)
             self._stats['sources'].setdefault(source.name, {'calls': 0, 'success': 0, 'fail': 0})
             self._stats['sources'][source.name]['calls'] += 1
-            
+
+            # 发射数据源调用开始事件
+            source_start_time = time.time()
+            trace_emitter.emit_data_source_query(
+                source.name, data_type, ticker=ticker,
+                success=True, fallback=(i > 0)
+            )
+
             try:
                 result = self._try_source(source, ticker, **kwargs)
-                
+                source_duration_ms = int((time.time() - source_start_time) * 1000)
+
                 if result is None:
                     source.consecutive_failures += 1
                     source.last_fail = datetime.now()
@@ -330,6 +345,11 @@ class ToolOrchestrator:
                     if self.circuit_breaker:
                         self.circuit_breaker.record_failure(source.name)
                     increment_failure(data_type, source.name)
+                    trace_emitter.emit_data_source_query(
+                        source.name, data_type, ticker=ticker,
+                        success=False, duration_ms=source_duration_ms,
+                        error="返回空结果", fallback=(i > 0)
+                    )
                     continue
 
                 # 3. 验证数据
@@ -339,7 +359,8 @@ class ToolOrchestrator:
                     # 4. 更新缓存
                     cache_key = f"{data_type}:{ticker}"
                     self.cache.set(cache_key, result, data_type=data_type)
-                    
+                    trace_emitter.emit_cache_set(cache_key)
+
                     # 更新统计
                     source.last_success = datetime.now()
                     source.consecutive_failures = 0
@@ -347,11 +368,11 @@ class ToolOrchestrator:
                     self._stats['sources'][source.name]['success'] += 1
                     if self.circuit_breaker:
                         self.circuit_breaker.record_success(source.name)
-                    
+
                     if i > 0:
                         self._stats['fallback_used'] += 1
                         increment_fallback(data_type)
-                    
+
                     resolved_as_of, currency, adjustment, data_context = self._build_data_context(
                         source.name,
                         result,
@@ -359,6 +380,14 @@ class ToolOrchestrator:
                         ticker=ticker,
                     )
                     duration = (time.time() - start_time) * 1000
+
+                    # 发射数据源成功事件
+                    trace_emitter.emit_data_source_query(
+                        source.name, data_type, ticker=ticker,
+                        success=True, duration_ms=source_duration_ms,
+                        fallback=(i > 0)
+                    )
+
                     observe_orch_latency(data_type, duration)
                     return FetchResult(
                         success=True,
@@ -389,8 +418,14 @@ class ToolOrchestrator:
                     if self.circuit_breaker:
                         self.circuit_breaker.record_failure(source.name)
                     increment_failure(data_type, source.name)
-                
+                    trace_emitter.emit_data_source_query(
+                        source.name, data_type, ticker=ticker,
+                        success=False, duration_ms=source_duration_ms,
+                        error=f"验证失败: {validation.issues}", fallback=(i > 0)
+                    )
+
             except Exception as e:
+                source_duration_ms = int((time.time() - source_start_time) * 1000)
                 source.consecutive_failures += 1
                 source.last_fail = datetime.now()
                 last_error = str(e)
@@ -399,6 +434,11 @@ class ToolOrchestrator:
                 if self.circuit_breaker:
                     self.circuit_breaker.record_failure(source.name)
                 increment_failure(data_type, source.name)
+                trace_emitter.emit_data_source_query(
+                    source.name, data_type, ticker=ticker,
+                    success=False, duration_ms=source_duration_ms,
+                    error=str(e), fallback=(i > 0)
+                )
                 logger.info(f"[Orchestrator] {source.name} 失败: {e}")
                 continue
             

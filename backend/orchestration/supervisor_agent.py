@@ -6,12 +6,14 @@ Mature multi-Agent architecture: AgentIntent Classification → Supervisor Coord
 
 import logging
 import asyncio
+import time
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 
 from backend.orchestration.intent_classifier import IntentClassifier, AgentIntent, ClassificationResult
 from backend.orchestration.budget import BudgetManager, BudgetedTools, BudgetExceededError
 from backend.orchestration.forum import ForumHost
+from backend.orchestration.trace_emitter import get_trace_emitter
 from backend.agents.base_agent import AgentOutput
 
 logger = logging.getLogger(__name__)
@@ -300,10 +302,25 @@ class SupervisorAgent:
         if not ticker:
             return await self._handle_search(query, None, classification, context_summary)
 
+        trace_emitter = get_trace_emitter()
+
         try:
             self._consume_round("tool:price")
+            # 发射工具调用开始事件
+            trace_emitter.emit_tool_start("get_stock_price", {"ticker": ticker})
+            tool_start_time = time.perf_counter()
+
             # Direct tool call, no Agent
             price_data = self.tools_module.get_stock_price(ticker)
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                "get_stock_price",
+                success=not (isinstance(price_data, dict) and price_data.get("error")),
+                duration_ms=tool_duration_ms,
+                result_preview=str(price_data)[:100] if price_data else None
+            )
 
             if isinstance(price_data, dict) and price_data.get("error"):
                 return self._result(
@@ -341,7 +358,23 @@ class SupervisorAgent:
 - 1-2句话，简洁专业
 - 上下文无关时仅返回价格数据
 </rules>"""
+                    # 发射 LLM 调用开始事件
+                    llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+                    trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+                    llm_start_time = time.perf_counter()
+
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+                    # 发射 LLM 调用结束事件
+                    llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
+                    response_text = response.content if hasattr(response, 'content') else str(response)
+                    trace_emitter.emit_llm_end(
+                        model=llm_model,
+                        duration_ms=llm_duration_ms,
+                        success=True,
+                        output_preview=response_text[:100] if response_text else None
+                    )
+
                     return self._result(
                         success=True,
                         intent=AgentIntent.PRICE,
@@ -412,6 +445,8 @@ class SupervisorAgent:
 
     async def _handle_news(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle news query - 显示原始新闻，有上下文时补充分析"""
+        trace_emitter = get_trace_emitter()
+
         try:
             # Prefer NewsAgent for reliability when ticker is available
             if ticker:
@@ -419,7 +454,20 @@ class SupervisorAgent:
                 if news_agent:
                     try:
                         self._consume_round("agent:news")
+                        # 发射 Agent 开始事件
+                        trace_emitter.emit_agent_start("NewsAgent", query=query, ticker=ticker)
+                        agent_start_time = time.perf_counter()
+
                         output = await news_agent.research(query, ticker)
+
+                        # 发射 Agent 完成事件
+                        agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
+                        trace_emitter.emit_agent_done(
+                            "NewsAgent",
+                            duration_ms=agent_duration_ms,
+                            success=bool(output and output.summary)
+                        )
+
                         if output and output.summary:
                             summary_text = output.summary
                             summary_lower = summary_text.lower()
@@ -439,10 +487,24 @@ class SupervisorAgent:
                         logger.info(f"[Supervisor] NewsAgent failed: {e}")
 
             self._consume_round("tool:news")
+            # 发射工具调用开始事件
+            tool_name = "get_company_news" if ticker else "search"
+            trace_emitter.emit_tool_start(tool_name, {"ticker": ticker} if ticker else {"query": query})
+            tool_start_time = time.perf_counter()
+
             if ticker:
                 news_data = self.tools_module.get_company_news(ticker)
             else:
                 news_data = self.tools_module.search(query)
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                tool_name,
+                success=not (isinstance(news_data, dict) and news_data.get("error")),
+                duration_ms=tool_duration_ms,
+                result_preview=str(news_data)[:100] if news_data else None
+            )
 
             if isinstance(news_data, dict) and news_data.get("error"):
                 return self._result(
@@ -489,8 +551,23 @@ class SupervisorAgent:
 - 不重复新闻内容
 - 仅分析关联性
 </rules>"""
+                    # 发射 LLM 调用开始事件
+                    llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+                    trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+                    llm_start_time = time.perf_counter()
+
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+                    # 发射 LLM 调用结束事件
+                    llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
                     context_analysis = response.content if hasattr(response, 'content') else str(response)
+                    trace_emitter.emit_llm_end(
+                        model=llm_model,
+                        duration_ms=llm_duration_ms,
+                        success=True,
+                        output_preview=context_analysis[:100] if context_analysis else None
+                    )
+
                     # 先显示新闻，再显示上下文分析
                     base_response = f"{base_response}\n\n{context_analysis}"
                 except Exception as e:
@@ -534,15 +611,31 @@ class SupervisorAgent:
         Returns:
             SupervisorResult: 包含深度新闻分析的结果
         """
+        trace_emitter = get_trace_emitter()
+
         try:
             self._consume_round("tool:news_analysis")
             from langchain_core.messages import HumanMessage
 
             # 1. 先获取原始新闻数据
+            # 发射工具调用开始事件
+            tool_name = "get_company_news" if ticker else "search"
+            trace_emitter.emit_tool_start(tool_name, {"ticker": ticker} if ticker else {"query": query})
+            tool_start_time = time.perf_counter()
+
             if ticker:
                 news_data = self.tools_module.get_company_news(ticker)
             else:
                 news_data = self.tools_module.search(query)
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                tool_name,
+                success=not (isinstance(news_data, dict) and news_data.get("error")),
+                duration_ms=tool_duration_ms,
+                result_preview=str(news_data)[:100] if news_data else None
+            )
 
             if isinstance(news_data, dict) and news_data.get("error"):
                 return self._result(
@@ -594,8 +687,22 @@ class SupervisorAgent:
 - 数据支撑，专业客观
 </rules>"""
 
+            # 发射 LLM 调用开始事件
+            llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+            trace_emitter.emit_llm_start(model=llm_model, prompt_preview=analysis_prompt[:150])
+            llm_start_time = time.perf_counter()
+
             response = await self.llm.ainvoke([HumanMessage(content=analysis_prompt)])
+
+            # 发射 LLM 调用结束事件
+            llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
             analysis_content = response.content if hasattr(response, 'content') else str(response)
+            trace_emitter.emit_llm_end(
+                model=llm_model,
+                duration_ms=llm_duration_ms,
+                success=True,
+                output_preview=analysis_content[:100] if analysis_content else None
+            )
 
             # 3. 组合原始新闻 + 分析结果
             final_response = f"""## 📰 相关新闻
@@ -625,10 +732,26 @@ class SupervisorAgent:
         Handle market sentiment query
         如果有上下文（之前讨论的股票/新闻），结合上下文来分析情绪
         """
+        trace_emitter = get_trace_emitter()
+
         try:
             # 1. 获取基础市场情绪数据
             self._consume_round("tool:sentiment")
+            # 发射工具调用开始事件
+            trace_emitter.emit_tool_start("get_market_sentiment", {"query": query, "ticker": ticker})
+            tool_start_time = time.perf_counter()
+
             sentiment_data = self.tools_module.get_market_sentiment()
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                "get_market_sentiment",
+                success=sentiment_data is not None,
+                duration_ms=tool_duration_ms,
+                result_preview=str(sentiment_data)[:100] if sentiment_data else None
+            )
+
             base_sentiment = str(sentiment_data) if sentiment_data else "暂无市场情绪数据"
 
             # 2. 如果没有上下文，直接返回基础情绪
@@ -648,7 +771,20 @@ class SupervisorAgent:
                     news_agent = self.agents.get("news")
                     if news_agent:
                         self._consume_round("agent:news")
+                        # 发射 Agent 开始事件
+                        trace_emitter.emit_agent_start("NewsAgent", query=f"{ticker} news sentiment", ticker=ticker)
+                        agent_start_time = time.perf_counter()
+
                         news_output = await news_agent.research(f"{ticker} news sentiment", ticker)
+
+                        # 发射 Agent 完成事件
+                        agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
+                        trace_emitter.emit_agent_done(
+                            "NewsAgent",
+                            duration_ms=agent_duration_ms,
+                            success=bool(news_output and news_output.summary)
+                        )
+
                         if news_output and news_output.summary:
                             news_content = f"\n\n【{ticker} 相关新闻】\n{news_output.summary}"
                 except Exception as e:
@@ -671,8 +807,22 @@ class SupervisorAgent:
 </rules>"""
 
             from langchain_core.messages import HumanMessage
+            # 发射 LLM 调用开始事件
+            llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+            trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+            llm_start_time = time.perf_counter()
+
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+            # 发射 LLM 调用结束事件
+            llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
             analysis = response.content if hasattr(response, 'content') else str(response)
+            trace_emitter.emit_llm_end(
+                model=llm_model,
+                duration_ms=llm_duration_ms,
+                success=True,
+                output_preview=analysis[:100] if analysis else None
+            )
 
             return self._result(
                 success=True,
@@ -691,6 +841,8 @@ class SupervisorAgent:
 
     async def _handle_single_agent(self, agent_name: str, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Handle single Agent query with context awareness"""
+        trace_emitter = get_trace_emitter()
+
         if not ticker:
             if agent_name == "macro":
                 ticker = ""
@@ -713,7 +865,20 @@ class SupervisorAgent:
                 enhanced_query = f"{query}\n\n【参考上下文】\n{context_summary}"
 
             self._consume_round(f"agent:{agent_name}")
+            # 发射 Agent 开始事件
+            trace_emitter.emit_agent_start(f"{agent_name.capitalize()}Agent", query=enhanced_query, ticker=ticker)
+            agent_start_time = time.perf_counter()
+
             output = await agent.research(enhanced_query, ticker)
+
+            # 发射 Agent 完成事件
+            agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
+            trace_emitter.emit_agent_done(
+                f"{agent_name.capitalize()}Agent",
+                duration_ms=agent_duration_ms,
+                success=bool(output and output.summary)
+            )
+
             base_response = output.summary if output else "分析完成，但无结果"
 
             # If context exists and agent returns result, optionally enhance with LLM
@@ -733,8 +898,22 @@ class SupervisorAgent:
 - 融入上下文相关话题
 - 保持专业简洁
 </rules>"""
+                    # 发射 LLM 调用开始事件
+                    llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+                    trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+                    llm_start_time = time.perf_counter()
+
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+                    # 发射 LLM 调用结束事件
+                    llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
                     base_response = response.content if hasattr(response, 'content') else str(response)
+                    trace_emitter.emit_llm_end(
+                        model=llm_model,
+                        duration_ms=llm_duration_ms,
+                        success=True,
+                        output_preview=base_response[:100] if base_response else None
+                    )
                 except Exception as e:
                     logger.info(f"[Supervisor] {agent_name} context enhancement failed: {e}")
 
@@ -868,9 +1047,25 @@ class SupervisorAgent:
         if len(tickers) < 2:
             return await self._handle_search(query, None, classification, context_summary)
 
+        trace_emitter = get_trace_emitter()
+
         try:
             self._consume_round("tool:comparison")
+            # 发射工具调用开始事件
+            trace_emitter.emit_tool_start("get_performance_comparison", {"tickers": tickers})
+            tool_start_time = time.perf_counter()
+
             comparison_data = self.tools_module.get_performance_comparison(tickers)
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                "get_performance_comparison",
+                success=comparison_data is not None,
+                duration_ms=tool_duration_ms,
+                result_preview=str(comparison_data)[:100] if comparison_data else None
+            )
+
             base_response = str(comparison_data) if comparison_data else "对比完成，但无数据"
 
             selected_agents = self._select_agents_for_query(query)
@@ -886,9 +1081,28 @@ class SupervisorAgent:
                     enhanced_query = f"{query}\n\n【参考上下文】\n{context_summary}"
                 try:
                     self._consume_round(f"agent:{agent_name}")
+                    # 发射 Agent 开始事件
+                    trace_emitter.emit_agent_start(f"{agent_name.capitalize()}Agent", query=enhanced_query[:100], ticker=ticker)
+                    agent_start_time = time.perf_counter()
+
                     output = await agent.research(enhanced_query, ticker)
+
+                    # 发射 Agent 完成事件
+                    agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
+                    trace_emitter.emit_agent_done(
+                        f"{agent_name.capitalize()}Agent",
+                        duration_ms=agent_duration_ms,
+                        success=bool(output and getattr(output, 'summary', None))
+                    )
+
                     return agent_name, ticker, output, None
                 except Exception as exc:
+                    # 发射 Agent 错误事件
+                    trace_emitter.emit_agent_done(
+                        f"{agent_name.capitalize()}Agent",
+                        duration_ms=0,
+                        success=False
+                    )
                     return agent_name, ticker, None, str(exc)
 
             tasks = []
@@ -935,8 +1149,22 @@ class SupervisorAgent:
 - 给出明确的对比结论
 - 如某维度无数据，明确说明
 </rules>"""
+                    # 发射 LLM 调用开始事件
+                    llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+                    trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+                    llm_start_time = time.perf_counter()
+
                     response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+                    # 发射 LLM 调用结束事件
+                    llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
                     response_text = response.content if hasattr(response, 'content') else str(response)
+                    trace_emitter.emit_llm_end(
+                        model=llm_model,
+                        duration_ms=llm_duration_ms,
+                        success=True,
+                        output_preview=response_text[:100] if response_text else None
+                    )
                     missing = [t for t in tickers if t and t.upper() not in response_text.upper()]
                     if missing:
                         response_text = f"{base_response}\n\n{response_text}"
@@ -970,9 +1198,24 @@ class SupervisorAgent:
 
     async def _handle_search(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """Fallback search with context awareness"""
+        trace_emitter = get_trace_emitter()
+
         try:
             self._consume_round("tool:search")
+            # 发射工具调用开始事件
+            trace_emitter.emit_tool_start("search", {"query": query})
+            tool_start_time = time.perf_counter()
+
             search_result = self.tools_module.search(query)
+
+            # 发射工具调用结束事件
+            tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
+            trace_emitter.emit_tool_end(
+                "search",
+                success=search_result is not None,
+                duration_ms=tool_duration_ms,
+                result_preview=str(search_result)[:100] if search_result else None
+            )
 
             # Use LLM to synthesize search results with context
             from langchain_core.messages import HumanMessage
@@ -992,12 +1235,27 @@ class SupervisorAgent:
 {f"- 结合上下文话题" if context_summary else ""}
 </rules>"""
 
+            # 发射 LLM 调用开始事件
+            llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+            trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+            llm_start_time = time.perf_counter()
+
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+
+            # 发射 LLM 调用结束事件
+            llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            trace_emitter.emit_llm_end(
+                model=llm_model,
+                duration_ms=llm_duration_ms,
+                success=True,
+                output_preview=response_text[:100] if response_text else None
+            )
 
             return self._result(
                 success=True,
                 intent=AgentIntent.SEARCH,
-                response=response.content if hasattr(response, 'content') else str(response),
+                response=response_text,
                 classification=classification
             )
         except Exception as e:
@@ -1131,6 +1389,15 @@ class SupervisorAgent:
         self._agents = None
 
         thinking_steps = []  # 收集思考步骤
+        trace_emitter = get_trace_emitter()
+        stream_start_time = time.perf_counter()
+
+        # 连接 TraceEmitter 的 async_queue，使所有 emit_* 事件流入此队列
+        trace_queue = asyncio.Queue()
+        trace_emitter.set_async_queue(trace_queue)
+
+        # 发射 Supervisor 开始事件
+        trace_emitter.emit_supervisor_start(query=query, tickers=tickers)
 
         try:
             # 0. 如果有对话上下文，尝试从中提取相关信息
@@ -1244,10 +1511,26 @@ class SupervisorAgent:
                         yield json.dumps({"type": "thinking", **t_step}, ensure_ascii=False)
                         
                 except asyncio.TimeoutError:
-                    continue
+                    pass
                 except Exception as e:
                     logger.error(f"[process_stream] Event loop error: {e}")
-            
+
+                # 每轮都排空 trace_queue，将 TraceEmitter 事件转为 SSE
+                try:
+                    while True:
+                        trace_evt = trace_queue.get_nowait()
+                        yield json.dumps(trace_evt.to_sse_dict(), ensure_ascii=False)
+                except asyncio.QueueEmpty:
+                    pass
+
+            # 主循环结束后再排空一次，捕获最后残留的 trace 事件
+            try:
+                while True:
+                    trace_evt = trace_queue.get_nowait()
+                    yield json.dumps(trace_evt.to_sse_dict(), ensure_ascii=False)
+            except asyncio.QueueEmpty:
+                pass
+
             # 获取结果
             result = await process_task
 
@@ -1325,6 +1608,15 @@ class SupervisorAgent:
                     }
                     thinking_steps.insert(-1, select_step)
 
+            # 发射 Supervisor 完成事件
+            total_duration_ms = int((time.perf_counter() - stream_start_time) * 1000)
+            trace_emitter.emit_supervisor_done(
+                query=query,
+                intent=result.intent.value if result.intent else None,
+                success=result.success,
+                duration_ms=total_duration_ms
+            )
+
             yield json.dumps({
                 "type": "done",
                 "success": result.success,
@@ -1346,6 +1638,9 @@ class SupervisorAgent:
                 "type": "error",
                 "message": f"处理请求时出错: {str(e)}"
             }, ensure_ascii=False)
+        finally:
+            # 清理 TraceEmitter async_queue，防止跨请求泄漏
+            trace_emitter.clear_async_queue()
 
     def _build_report_ir(self, result: SupervisorResult, ticker: str, classification: ClassificationResult) -> dict:
         """

@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { Message } from '../types';
+import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent } from '../types';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
@@ -89,6 +89,20 @@ interface AppState {
   portfolioPositions: PortfolioPositions;
   setPortfolioPosition: (ticker: string, shares: number) => void;
   removePortfolioPosition: (ticker: string) => void;
+  // Agent Logs - 实时日志面板
+  agentLogs: AgentLogEntry[];
+  agentStatuses: Record<AgentLogSource, AgentStatus>;
+  addAgentLog: (log: AgentLogEntry) => void;
+  updateAgentStatus: (source: AgentLogSource, status: Partial<AgentStatus>) => void;
+  clearAgentLogs: () => void;
+  setAgentLogsPanelOpen: (open: boolean) => void;
+  isAgentLogsPanelOpen: boolean;
+  // Raw SSE Events - 开发者控制台
+  rawEvents: RawSSEEvent[];
+  addRawEvent: (event: RawSSEEvent) => void;
+  clearRawEvents: () => void;
+  isConsoleOpen: boolean;
+  setConsoleOpen: (open: boolean) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -111,6 +125,26 @@ export const useStore = create<AppState>((set) => ({
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
   portfolioPositions: initialPortfolioPositions,
+  // Agent Logs 初始状态
+  agentLogs: [],
+  agentStatuses: {
+    supervisor: { source: 'supervisor', status: 'idle' },
+    router: { source: 'router', status: 'idle' },
+    gate: { source: 'gate', status: 'idle' },
+    planner: { source: 'planner', status: 'idle' },
+    news_agent: { source: 'news_agent', status: 'idle' },
+    price_agent: { source: 'price_agent', status: 'idle' },
+    fundamental_agent: { source: 'fundamental_agent', status: 'idle' },
+    technical_agent: { source: 'technical_agent', status: 'idle' },
+    macro_agent: { source: 'macro_agent', status: 'idle' },
+    deep_search_agent: { source: 'deep_search_agent', status: 'idle' },
+    forum: { source: 'forum', status: 'idle' },
+    system: { source: 'system', status: 'idle' },
+  },
+  isAgentLogsPanelOpen: true,
+  // Raw SSE Events 初始状态
+  rawEvents: [],
+  isConsoleOpen: true,
 
   addMessage: (message) =>
     set((state) => ({
@@ -196,4 +230,49 @@ export const useStore = create<AppState>((set) => ({
 
   setDraft: (text) =>
     set(() => ({ draft: text })),
+
+  // Agent Logs Actions
+  addAgentLog: (log) =>
+    set((state) => ({
+      // 保留最近 500 条日志，防止内存溢出
+      agentLogs: [...state.agentLogs, log].slice(-500),
+    })),
+
+  updateAgentStatus: (source, status) =>
+    set((state) => ({
+      agentStatuses: {
+        ...state.agentStatuses,
+        [source]: {
+          ...state.agentStatuses[source],
+          ...status,
+          source,
+        },
+      },
+    })),
+
+  clearAgentLogs: () =>
+    set((state) => ({
+      agentLogs: [],
+      agentStatuses: Object.fromEntries(
+        Object.keys(state.agentStatuses).map((key) => [
+          key,
+          { source: key as AgentLogSource, status: 'idle' as const },
+        ])
+      ) as Record<AgentLogSource, AgentStatus>,
+    })),
+
+  setAgentLogsPanelOpen: (open) =>
+    set(() => ({ isAgentLogsPanelOpen: open })),
+
+  // Raw SSE Events Actions
+  addRawEvent: (event) =>
+    set((state) => ({
+      rawEvents: [...state.rawEvents, event].slice(-1000),
+    })),
+
+  clearRawEvents: () =>
+    set(() => ({ rawEvents: [] })),
+
+  setConsoleOpen: (open) =>
+    set(() => ({ isConsoleOpen: open })),
 }));

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSight · Variant A: Bloomberg Terminal Style</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-tertiary: #1a1a1a;
+      --border: #2a2a2a;
+      --text-primary: #e8e8e8;
+      --text-secondary: #888888;
+      --text-muted: #555555;
+      --accent-green: #00ff88;
+      --accent-amber: #ffaa00;
+      --accent-red: #ff4444;
+      --accent-blue: #4488ff;
+      --accent-cyan: #00ddff;
+    }
+    * { font-family: 'IBM Plex Sans', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      min-height: 100vh;
+    }
+    /* Bloomberg-style header bar */
+    .header-bar {
+      background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    /* Compact panel styling */
+    .panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+    }
+    .panel-header {
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+    /* Data grid styling */
+    .data-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 80px 60px;
+      padding: 4px 12px;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 12px;
+      transition: background 0.1s;
+    }
+    .data-row:hover { background: #1a1a1a; }
+    /* Ticker styling */
+    .ticker {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--accent-cyan);
+    }
+    .price-up { color: var(--accent-green); }
+    .price-down { color: var(--accent-red); }
+    /* Status indicators */
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-active { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .dot-pending { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); }
+    .dot-idle { background: var(--text-muted); }
+    /* Terminal input */
+    .terminal-input {
+      background: #0f0f0f;
+      border: 1px solid var(--border);
+      color: var(--accent-green);
+      font-family: 'JetBrains Mono', monospace;
+      caret-color: var(--accent-green);
+    }
+    .terminal-input:focus {
+      outline: none;
+      border-color: var(--accent-green);
+      box-shadow: 0 0 0 1px var(--accent-green);
+    }
+    .terminal-input::placeholder { color: #444; }
+    /* Chat bubbles */
+    .chat-user {
+      background: #1a2a1a;
+      border: 1px solid #2a3a2a;
+      color: var(--accent-green);
+    }
+    .chat-ai {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+    }
+    /* Blinking cursor effect */
+    .cursor-blink::after {
+      content: '▊';
+      animation: blink 1s step-end infinite;
+      color: var(--accent-green);
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #444; }
+    /* Navigation */
+    .nav-item {
+      padding: 8px 16px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .nav-item:hover { color: var(--text-primary); background: #1a1a1a; }
+    .nav-item.active {
+      color: var(--accent-amber);
+      border-bottom-color: var(--accent-amber);
+      background: linear-gradient(180deg, transparent 0%, rgba(255,170,0,0.05) 100%);
+    }
+    /* Function key badges */
+    .fn-key {
+      background: #222;
+      border: 1px solid #333;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+      border-radius: 3px;
+    }
+    /* Pipeline step */
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 11px;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .pipeline-step .step-name { flex: 1; color: var(--text-secondary); }
+    .pipeline-step .step-status { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .step-ok { color: var(--accent-green); }
+    .step-run { color: var(--accent-amber); }
+    .step-idle { color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <!-- Header Bar (Bloomberg-style) -->
+  <header class="header-bar px-4 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-[#ff6600] flex items-center justify-center text-black font-bold text-sm">FS</div>
+        <div>
+          <div class="text-sm font-semibold">FINSIGHT</div>
+          <div class="text-[10px] text-[var(--text-muted)] mono">TERMINAL v2.0</div>
+        </div>
+      </div>
+      <div class="h-6 w-px bg-[var(--border)]"></div>
+      <div class="flex items-center gap-1">
+        <span class="status-dot dot-active"></span>
+        <span class="text-[10px] text-[var(--accent-green)] mono">6 AGENTS ONLINE</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="text-right">
+        <div class="text-[10px] text-[var(--text-muted)]">SESSION</div>
+        <div class="text-xs mono text-[var(--accent-cyan)]">SESS_7A3F</div>
+      </div>
+      <div class="text-right">
+        <div class="text-[10px] text-[var(--text-muted)]">MARKET</div>
+        <div class="text-xs mono text-[var(--accent-green)]">OPEN</div>
+      </div>
+      <div class="text-right mono">
+        <div class="text-lg font-semibold" id="clock">--:--:--</div>
+        <div class="text-[10px] text-[var(--text-muted)]" id="date">----</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="flex items-center border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+    <a href="#" class="nav-item active" data-route="dashboard">
+      <span class="fn-key mr-2">F1</span>DASHBOARD
+    </a>
+    <a href="#" class="nav-item" data-route="chat">
+      <span class="fn-key mr-2">F2</span>CHAT
+    </a>
+    <a href="#" class="nav-item" data-route="research">
+      <span class="fn-key mr-2">F3</span>RESEARCH
+    </a>
+    <a href="#" class="nav-item" data-route="financials">
+      <span class="fn-key mr-2">F4</span>FINANCIALS
+    </a>
+    <a href="#" class="nav-item" data-route="watchlist">
+      <span class="fn-key mr-2">F5</span>WATCHLIST
+    </a>
+    <a href="#" class="nav-item" data-route="alerts">
+      <span class="fn-key mr-2">F6</span>ALERTS
+    </a>
+    <div class="flex-1"></div>
+    <div class="px-4 py-2">
+      <input type="text" placeholder="SEARCH: TSLA / 苹果 / 分析..."
+             class="terminal-input px-3 py-1.5 text-xs w-64">
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="p-2 grid grid-cols-12 gap-2" style="height: calc(100vh - 90px);">
+
+    <!-- Left Column: Market Data -->
+    <div class="col-span-3 space-y-2 overflow-auto">
+      <!-- Indices -->
+      <div class="panel">
+        <div class="panel-header flex items-center justify-between">
+          <span>INDICES</span>
+          <span class="text-[var(--accent-green)]">● LIVE</span>
+        </div>
+        <div class="p-2 space-y-1">
+          <div class="flex items-center justify-between text-xs">
+            <span class="mono text-[var(--accent-cyan)]">SPX</span>
+            <span class="mono">5,120.45</span>
+            <span class="mono price-up">+0.63%</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="mono text-[var(--accent-cyan)]">NDX</span>
+            <span class="mono">18,105.22</span>
+            <span class="mono price-up">+0.92%</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="mono text-[var(--accent-cyan)]">DJI</span>
+            <span class="mono">39,872.10</span>
+            <span class="mono price-down">-0.18%</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="mono text-[var(--accent-cyan)]">VIX</span>
+            <span class="mono">14.28</span>
+            <span class="mono text-[var(--text-muted)]">LOW</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hot Stocks -->
+      <div class="panel flex-1">
+        <div class="panel-header">MOVERS</div>
+        <div>
+          <div class="data-row">
+            <span class="ticker">TSLA</span>
+            <span class="text-[var(--text-secondary)]">Tesla Inc</span>
+            <span class="mono">248.50</span>
+            <span class="mono price-up">+2.13%</span>
+          </div>
+          <div class="data-row">
+            <span class="ticker">NVDA</span>
+            <span class="text-[var(--text-secondary)]">NVIDIA Corp</span>
+            <span class="mono">495.22</span>
+            <span class="mono price-up">+1.47%</span>
+          </div>
+          <div class="data-row">
+            <span class="ticker">AAPL</span>
+            <span class="text-[var(--text-secondary)]">Apple Inc</span>
+            <span class="mono">178.52</span>
+            <span class="mono price-down">-0.32%</span>
+          </div>
+          <div class="data-row">
+            <span class="ticker">MSFT</span>
+            <span class="text-[var(--text-secondary)]">Microsoft</span>
+            <span class="mono">378.91</span>
+            <span class="mono price-up">+0.58%</span>
+          </div>
+          <div class="data-row">
+            <span class="ticker">AMD</span>
+            <span class="text-[var(--text-secondary)]">AMD Inc</span>
+            <span class="mono">142.88</span>
+            <span class="mono price-up">+1.02%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="panel">
+        <div class="panel-header">SPX INTRADAY</div>
+        <div id="chartIndices" style="height: 180px;"></div>
+      </div>
+    </div>
+
+    <!-- Middle Column: Chat & Report -->
+    <div class="col-span-6 flex flex-col gap-2">
+      <!-- Chat Panel -->
+      <div class="panel flex-1 flex flex-col">
+        <div class="panel-header flex items-center justify-between">
+          <span>AI TERMINAL</span>
+          <div class="flex items-center gap-3">
+            <span class="text-[10px] text-[var(--text-muted)]">TOKENS: <span class="text-[var(--accent-amber)]">1,240</span></span>
+            <span class="text-[10px] text-[var(--text-muted)]">LATENCY: <span class="text-[var(--accent-green)]">320ms</span></span>
+          </div>
+        </div>
+        <div class="flex-1 overflow-auto p-3 space-y-3" id="chatList">
+          <div class="chat-ai rounded px-3 py-2 text-xs mono leading-relaxed">
+            <span class="text-[var(--accent-amber)]">[SYSTEM]</span> FinSight Terminal Ready.<br>
+            <span class="text-[var(--text-muted)]">Commands: PRICE [ticker] | NEWS [ticker] | ANALYZE [ticker] | COMPARE [t1] [t2]</span>
+          </div>
+          <div class="chat-user rounded px-3 py-2 text-xs mono">
+            <span class="text-[var(--text-muted)]">[USER]</span> ANALYZE TSLA
+          </div>
+          <div class="chat-ai rounded px-3 py-2 text-xs mono leading-relaxed">
+            <span class="text-[var(--accent-green)]">[ROUTING]</span> Intent=analyze, Ticker=TSLA, Confidence=0.92<br>
+            <span class="text-[var(--accent-green)]">[GATE]</span> Path=needs-agent (budget=high, evidence=required)<br>
+            <span class="text-[var(--accent-amber)]">[PLANNER]</span> Spawning 4 agents: Price, News, Fundamental, Technical<br>
+            <span class="text-[var(--accent-green)]">[FORUM]</span> Synthesis complete. Report ready.
+          </div>
+        </div>
+        <div class="p-2 border-t border-[var(--border)]">
+          <div class="flex items-center gap-2">
+            <span class="text-[var(--accent-green)] mono text-sm">❯</span>
+            <input type="text" placeholder="Enter command..."
+                   class="terminal-input flex-1 px-2 py-1.5 text-xs" id="chatInput">
+            <button class="px-3 py-1.5 bg-[var(--accent-amber)] text-black text-xs font-semibold hover:bg-[#ffbb33]">
+              EXEC
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Panel -->
+      <div class="panel">
+        <div class="panel-header flex items-center justify-between">
+          <span>REPORT OUTPUT</span>
+          <span class="text-[var(--accent-green)]">TSLA</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 p-2">
+          <div id="chartPrice" style="height: 160px;"></div>
+          <div class="text-xs space-y-2 p-2">
+            <div class="text-[var(--accent-amber)] font-semibold">SUMMARY</div>
+            <p class="text-[var(--text-secondary)] leading-relaxed">
+              TSLA exhibits momentum breakout pattern. Q4 deliveries exceeded estimates.
+              Technical: RSI=62 (neutral-bullish), MACD crossover positive.
+              Risk: Macro sensitivity to rate decisions.
+            </p>
+            <div class="flex gap-2 mt-2">
+              <span class="px-2 py-1 bg-[#1a2a1a] text-[var(--accent-green)] text-[10px] rounded">BULLISH</span>
+              <span class="px-2 py-1 bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-[10px] rounded">85% CONF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Agent Status & Evidence -->
+    <div class="col-span-3 space-y-2 overflow-auto">
+      <!-- Agent Pipeline -->
+      <div class="panel">
+        <div class="panel-header">AGENT PIPELINE</div>
+        <div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Rule Fast-Path</span>
+            <span class="step-status step-ok">MISS 120ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">LLM Router</span>
+            <span class="step-status step-ok">OK 240ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Schema Validate</span>
+            <span class="step-status step-ok">PASS 80ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Gate Policy</span>
+            <span class="step-status step-ok">AGENT 100ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Planner</span>
+            <span class="step-status step-ok">4 TASKS 140ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Agent: Price</span>
+            <span class="step-status step-ok">OK 180ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-active"></span>
+            <span class="step-name">Agent: News</span>
+            <span class="step-status step-ok">OK 220ms</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-pending"></span>
+            <span class="step-name">Agent: Fundamental</span>
+            <span class="step-status step-run">RUNNING...</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-idle"></span>
+            <span class="step-name">Agent: Technical</span>
+            <span class="step-status step-idle">PENDING</span>
+          </div>
+          <div class="pipeline-step">
+            <span class="status-dot dot-idle"></span>
+            <span class="step-name">Forum Synthesize</span>
+            <span class="step-status step-idle">PENDING</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence -->
+      <div class="panel flex-1">
+        <div class="panel-header">EVIDENCE POOL</div>
+        <div class="p-2 space-y-2 text-xs">
+          <div class="bg-[var(--bg-tertiary)] rounded p-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[var(--accent-cyan)]">yfinance</span>
+              <span class="text-[var(--text-muted)]">0.95</span>
+            </div>
+            <p class="text-[var(--text-secondary)]">TSLA price: $248.50 (+2.13%)</p>
+          </div>
+          <div class="bg-[var(--bg-tertiary)] rounded p-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[var(--accent-cyan)]">Reuters</span>
+              <span class="text-[var(--text-muted)]">0.88</span>
+            </div>
+            <p class="text-[var(--text-secondary)]">Tesla Q4 deliveries beat estimates by 5%</p>
+          </div>
+          <div class="bg-[var(--bg-tertiary)] rounded p-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[var(--accent-cyan)]">SEC EDGAR</span>
+              <span class="text-[var(--text-muted)]">0.82</span>
+            </div>
+            <p class="text-[var(--text-secondary)]">10-K filing: Revenue growth +18% YoY</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="panel">
+        <div class="panel-header">METRICS</div>
+        <div class="grid grid-cols-3 gap-2 p-2 text-center">
+          <div>
+            <div class="text-[10px] text-[var(--text-muted)]">TOKENS</div>
+            <div class="text-lg font-semibold mono text-[var(--accent-amber)]">1,240</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-[var(--text-muted)]">LATENCY</div>
+            <div class="text-lg font-semibold mono text-[var(--accent-green)]">1.2s</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-[var(--text-muted)]">COST</div>
+            <div class="text-lg font-semibold mono text-[var(--text-primary)]">$0.02</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Status Bar -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)] border-t border-[var(--border)] px-4 py-1 flex items-center justify-between text-[10px] mono">
+    <div class="flex items-center gap-4">
+      <span class="text-[var(--text-muted)]">PATH: <span class="text-[var(--accent-amber)]">needs-agent</span></span>
+      <span class="text-[var(--text-muted)]">BUDGET: <span class="text-[var(--accent-green)]">HIGH</span></span>
+      <span class="text-[var(--text-muted)]">EVIDENCE: <span class="text-[var(--accent-cyan)]">3</span></span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-[var(--text-muted)]">API: <span class="text-[var(--accent-green)]">●</span> gemini-2.5-flash</span>
+      <span class="text-[var(--text-muted)]">FINSIGHT TERMINAL v2.0 | 方案A: Bloomberg Terminal风格</span>
+    </div>
+  </footer>
+
+  <script>
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString('en-US', {hour12: false});
+      document.getElementById('date').textContent = now.toLocaleDateString('en-US', {month:'short', day:'2-digit', year:'numeric'});
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Charts
+    const chartIndices = echarts.init(document.getElementById('chartIndices'));
+    const chartPrice = echarts.init(document.getElementById('chartPrice'));
+
+    const x = Array.from({length: 30}, (_, i) => `${i+1}`);
+    const randWalk = (n, start, vol) => {
+      const arr = [start];
+      for (let i = 1; i < n; i++) arr.push(Math.max(1, arr[i-1] + (Math.random()*2-1)*vol));
+      return arr;
+    };
+
+    chartIndices.setOption({
+      grid: { left: 40, right: 10, top: 10, bottom: 20 },
+      xAxis: { type: 'category', data: x, axisLine: {lineStyle: {color: '#333'}}, axisLabel: {color: '#555', fontSize: 9} },
+      yAxis: { type: 'value', axisLine: {lineStyle: {color: '#333'}}, splitLine: {lineStyle: {color: '#1a1a1a'}}, axisLabel: {color: '#555', fontSize: 9} },
+      series: [{ type: 'line', data: randWalk(30, 5100, 15), smooth: true, symbol: 'none', lineStyle: {color: '#00ff88', width: 1.5}, areaStyle: {color: 'rgba(0,255,136,0.1)'} }]
+    });
+
+    chartPrice.setOption({
+      grid: { left: 40, right: 10, top: 10, bottom: 20 },
+      xAxis: { type: 'category', data: x, axisLine: {lineStyle: {color: '#333'}}, axisLabel: {color: '#555', fontSize: 9} },
+      yAxis: { type: 'value', axisLine: {lineStyle: {color: '#333'}}, splitLine: {lineStyle: {color: '#1a1a1a'}}, axisLabel: {color: '#555', fontSize: 9} },
+      series: [{ type: 'candlestick', data: Array.from({length:30}, () => {
+        const o = 240 + Math.random()*20;
+        const c = o + (Math.random()*10-5);
+        return [o, c, Math.min(o,c)-Math.random()*3, Math.max(o,c)+Math.random()*3];
+      }), itemStyle: {color: '#00ff88', color0: '#ff4444', borderColor: '#00ff88', borderColor0: '#ff4444'} }]
+    });
+
+    window.addEventListener('resize', () => {
+      chartIndices.resize();
+      chartPrice.resize();
+    });
+  </script>
+</body>
+</html>

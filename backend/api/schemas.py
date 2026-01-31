@@ -64,6 +64,14 @@ class UnsubscribeRequest(BaseModel):
     email: str = Field(..., min_length=3, description="用户邮箱")
     ticker: Optional[str] = Field(None, min_length=1, description="股票代码")
 
+class ToggleSubscriptionRequest(BaseModel):
+    """启用/禁用订阅请求"""
+    email: str = Field(..., min_length=3, description="用户邮箱")
+    ticker: str = Field(..., min_length=1, description="股票代码")
+    enabled: bool = Field(..., description="True=启用, False=禁用")
+
+
+
 
 class UserProfileUpdateRequest(BaseModel):
     """用户画像更新请求"""

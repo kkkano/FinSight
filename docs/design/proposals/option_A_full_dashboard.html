@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>方案A: 完整仪表盘型 - FinSight</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .pulse-dot { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .nav-item:hover { background: rgba(59, 130, 246, 0.1); }
+    .nav-item.active { background: rgba(59, 130, 246, 0.2); border-left: 3px solid #3b82f6; }
+    .sparkline { height: 30px; }
+  </style>
+</head>
+<body class="text-slate-200">
+  <div class="flex min-h-screen">
+    <!-- 侧边栏 -->
+    <aside class="w-64 bg-slate-900/95 border-r border-slate-700/50 flex flex-col">
+      <!-- Logo -->
+      <div class="p-6 border-b border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold gradient-text">FinSight</h1>
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider">AI Financial Intelligence</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 导航 -->
+      <nav class="flex-1 p-4 space-y-1">
+        <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"/>
+          </svg>
+          Dashboard
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Deep Research
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+          </svg>
+          Watchlist
+        </a>
+        <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          Alerts
+          <span class="ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">3</span>
+        </a>
+      </nav>
+
+      <!-- 用户 -->
+      <div class="p-4 border-t border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-sm font-bold text-white">U</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">User</p>
+            <p class="text-[11px] text-slate-500">Pro Plan</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <main class="flex-1 overflow-auto">
+      <!-- 顶栏 -->
+      <header class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700/50 px-6 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 max-w-xl">
+            <div class="relative">
+              <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <input type="text" placeholder="搜索股票或输入分析请求... (AAPL, 分析特斯拉)"
+                class="w-full pl-12 pr-4 py-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50">
+            </div>
+          </div>
+          <div class="flex items-center gap-4 ml-6">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+              <span class="w-2 h-2 bg-emerald-500 rounded-full pulse-dot"></span>
+              <span class="text-xs text-emerald-400">6 Agents Online</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="p-6 space-y-6">
+        <!-- 市场概览 4卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="glass-card rounded-xl p-4 cursor-pointer hover:border-emerald-500/30 transition-all">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-400 uppercase">S&P 500</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/20 text-emerald-400">+1.2%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">4,892.45</div>
+            <div class="text-sm text-emerald-400">+58.23</div>
+          </div>
+          <div class="glass-card rounded-xl p-4 cursor-pointer hover:border-emerald-500/30 transition-all">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-400 uppercase">NASDAQ</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/20 text-emerald-400">+1.8%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">15,628.95</div>
+            <div class="text-sm text-emerald-400">+276.54</div>
+          </div>
+          <div class="glass-card rounded-xl p-4 cursor-pointer hover:border-red-500/30 transition-all">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-400 uppercase">DOW JONES</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400">-0.3%</span>
+            </div>
+            <div class="text-2xl font-bold text-white">38,456.12</div>
+            <div class="text-sm text-red-400">-115.34</div>
+          </div>
+          <div class="glass-card rounded-xl p-4 cursor-pointer hover:border-amber-500/30 transition-all">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-slate-400 uppercase">VIX</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-400">Low</span>
+            </div>
+            <div class="text-2xl font-bold text-white">14.28</div>
+            <div class="text-xs text-slate-500">Fear & Greed: Neutral</div>
+          </div>
+        </div>
+
+        <!-- AI对话 + Watchlist -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- AI 对话区 -->
+          <div class="lg:col-span-2 glass-card rounded-xl overflow-hidden flex flex-col" style="height: 480px;">
+            <div class="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="text-sm font-semibold text-white">FinSight AI</h3>
+                  <p class="text-[10px] text-slate-400">Multi-Agent System</p>
+                </div>
+              </div>
+              <span class="px-2 py-1 rounded-full text-[10px] bg-blue-500/20 text-blue-400">Deep Research</span>
+            </div>
+
+            <!-- 消息列表 -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+              <div class="flex justify-end">
+                <div class="max-w-[80%] bg-blue-600 rounded-2xl rounded-tr-sm px-4 py-2">
+                  <p class="text-sm text-white">分析一下苹果公司(AAPL)的投资价值</p>
+                </div>
+              </div>
+
+              <!-- Agent 执行状态 -->
+              <div class="flex gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                </div>
+                <div class="flex-1 bg-slate-800/60 rounded-xl p-3 border border-slate-700/50">
+                  <div class="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Agent Pipeline</div>
+                  <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                      <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                      </span>
+                      <span class="text-xs text-slate-300">PriceAgent</span>
+                      <span class="text-[10px] text-emerald-400 ml-auto">$178.52 (+1.2%)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                      </span>
+                      <span class="text-xs text-slate-300">NewsAgent</span>
+                      <span class="text-[10px] text-slate-400 ml-auto">12 sources</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+                        <div class="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                      </span>
+                      <span class="text-xs text-slate-300">DeepSearchAgent</span>
+                      <span class="text-[10px] text-blue-400 ml-auto">Searching...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入框 -->
+            <div class="p-4 border-t border-slate-700/50">
+              <div class="flex items-center gap-3">
+                <input type="text" placeholder="Ask about any stock..."
+                  class="flex-1 px-4 py-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50">
+                <button class="p-3 bg-blue-600 hover:bg-blue-500 rounded-xl transition-colors">
+                  <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Watchlist -->
+          <div class="glass-card rounded-xl p-4" style="height: 480px;">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-white">Watchlist</h3>
+              <button class="text-xs text-blue-400 hover:text-blue-300">+ Add</button>
+            </div>
+            <div class="space-y-3 overflow-y-auto" style="max-height: 400px;">
+              <!-- Stock Items -->
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold">AAPL</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Apple</p>
+                      <p class="text-[10px] text-slate-400">Tech</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$178.52</p>
+                    <p class="text-[10px] text-emerald-400">+1.24%</p>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold">MSFT</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Microsoft</p>
+                      <p class="text-[10px] text-slate-400">Tech</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$378.91</p>
+                    <p class="text-[10px] text-emerald-400">+0.85%</p>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold">NVDA</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">NVIDIA</p>
+                      <p class="text-[10px] text-slate-400">Semicon</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$495.22</p>
+                    <p class="text-[10px] text-emerald-400">+2.31%</p>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-slate-800/40 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-xs font-bold">TSLA</div>
+                    <div>
+                      <p class="text-sm font-medium text-white">Tesla</p>
+                      <p class="text-[10px] text-slate-400">Auto</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-white">$248.50</p>
+                    <p class="text-[10px] text-red-400">-0.92%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 最新新闻 -->
+        <div class="glass-card rounded-xl p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-white">Latest News</h3>
+            <span class="text-xs text-blue-400 cursor-pointer">View All</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="p-3 bg-slate-800/40 rounded-lg">
+              <div class="flex items-start gap-2">
+                <div class="w-2 h-2 mt-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                <div>
+                  <p class="text-sm text-slate-200 font-medium">Apple announces record Q4 earnings</p>
+                  <p class="text-[10px] text-slate-400 mt-1">Reuters · 2h ago</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-3 bg-slate-800/40 rounded-lg">
+              <div class="flex items-start gap-2">
+                <div class="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                <div>
+                  <p class="text-sm text-slate-200 font-medium">Fed signals potential rate cuts in 2026</p>
+                  <p class="text-[10px] text-slate-400 mt-1">Bloomberg · 4h ago</p>
+                </div>
+              </div>
+            </div>
+            <div class="p-3 bg-slate-800/40 rounded-lg">
+              <div class="flex items-start gap-2">
+                <div class="w-2 h-2 mt-2 rounded-full bg-amber-500 flex-shrink-0"></div>
+                <div>
+                  <p class="text-sm text-slate-200 font-medium">NVIDIA unveils next-gen AI chips</p>
+                  <p class="text-[10px] text-slate-400 mt-1">WSJ · 6h ago</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 方案说明标签 -->
+  <div class="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">
+    📊 方案A: 完整仪表盘型
+  </div>
+</body>
+</html>

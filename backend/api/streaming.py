@@ -2,13 +2,36 @@
 # -*- coding: utf-8 -*-
 """
 流式响应支持
-用于展示 Agent 的思考过程
+用于展示 Agent 的思考过程，集成全局追踪事件
 """
 
 from typing import AsyncGenerator, Dict, Any, Optional, Callable, List
 from fastapi.responses import StreamingResponse
 import json
+import asyncio
+import logging
 from datetime import datetime
+
+from backend.orchestration.trace_emitter import get_trace_emitter, TraceEvent
+
+logger = logging.getLogger(__name__)
+
+
+def _trace_event_to_sse(event: TraceEvent) -> str:
+    """将 TraceEvent 转换为 SSE 格式字符串"""
+    return f"data: {json.dumps(event.to_sse_dict(), ensure_ascii=False)}\n\n"
+
+
+async def _drain_trace_queue(queue: asyncio.Queue, timeout: float = 0.01) -> List[TraceEvent]:
+    """非阻塞地获取队列中所有待处理的 trace 事件"""
+    events: List[TraceEvent] = []
+    try:
+        while True:
+            event = queue.get_nowait()
+            events.append(event)
+    except asyncio.QueueEmpty:
+        pass
+    return events
 
 
 class ThinkingStream:
@@ -158,17 +181,27 @@ async def stream_supervisor_sse(
     ticker: str,
     report_builder: Optional[Callable[[str], Any]] = None,
 ) -> AsyncGenerator[str, None]:
-    import asyncio
-    """Stream supervisor analysis events as SSE lines and attach a report on done."""
-    import logging
+    """
+    Stream supervisor analysis events as SSE lines and attach a report on done.
+    同时集成全局 TraceEmitter 事件，提供详细的后端操作追踪。
+    """
     from backend.orchestration.trace import normalize_trace
-    logger = logging.getLogger(__name__)
-    
+
     consensus_text = ""
     consensus_emitted = False
 
+    # 创建 trace 事件队列并连接到全局 TraceEmitter
+    trace_queue: asyncio.Queue = asyncio.Queue()
+    trace_emitter = get_trace_emitter()
+    trace_emitter.set_async_queue(trace_queue)
+
     try:
         async for raw in supervisor.analyze_stream(query, ticker):
+            # 先处理所有待处理的 trace 事件
+            trace_events = await _drain_trace_queue(trace_queue)
+            for te in trace_events:
+                yield _trace_event_to_sse(te)
+
             if raw is None:
                 continue
             payload = str(raw).strip()
@@ -194,14 +227,13 @@ async def stream_supervisor_sse(
                         chunk = consensus_text[i:i + chunk_size]
                         yield f"data: {json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False)}\n\n"
                         # 添加小延迟，让前端有时间渲染每个 chunk
-                        import asyncio
                         await asyncio.sleep(0.02)
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             elif event_type == "done":
                 output = data.get("output") or {}
                 if not consensus_text:
                     consensus_text = output.get("consensus", "")
-                
+
                 logger.info(f"[stream_supervisor_sse] done event - consensus_text length: {len(consensus_text)}, report_builder: {report_builder is not None}")
 
                 done_payload: Dict[str, Any] = {"type": "done"}
@@ -240,8 +272,17 @@ async def stream_supervisor_sse(
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
             else:
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+        # 最后再处理一次剩余的 trace 事件
+        final_trace_events = await _drain_trace_queue(trace_queue)
+        for te in final_trace_events:
+            yield _trace_event_to_sse(te)
+
     except Exception as exc:
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+    finally:
+        # 清理队列连接
+        trace_emitter.clear_async_queue()
 
 
 def create_thinking_callback(stream_generator):
