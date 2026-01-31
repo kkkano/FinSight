@@ -170,7 +170,7 @@ def create_llm(provider: str = "gemini_proxy", model: str = None, temperature: f
     if not api_key:
         raise ValueError(f"API key not found for provider '{provider}'")
 
-    logger.info(f"[LLM Factory] Creating LLM: model={model_name}, api_base={api_base}, timeout={request_timeout}s")
+    logger.info(f"[LLM Factory] Creating LLM: model={model_name}, api_base={api_base}, timeout={request_timeout}s, max_retries=10")
 
     return ChatOpenAI(
         model=model_name,
@@ -179,4 +179,5 @@ def create_llm(provider: str = "gemini_proxy", model: str = None, temperature: f
         temperature=temperature,
         max_tokens=max_tokens,
         request_timeout=request_timeout,
+        max_retries=3,  # SDK 默认重试，应对临时性网络错误
     )

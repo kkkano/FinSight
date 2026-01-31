@@ -77,6 +77,29 @@ const ConfidenceMeter: React.FC<{ score: number }> = ({ score }) => {
 
 const normalizeAnchor = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '-');
 
+/** Strip markdown syntax and count only actual content characters (Chinese chars + English words + numbers). */
+const countContentChars = (markdown: string): number => {
+  if (!markdown) return 0;
+  let text = markdown
+    .replace(/```[\s\S]*?```/g, '')       // code blocks
+    .replace(/`[^`]*`/g, '')              // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images
+    .replace(/\[[^\]]*\]\([^)]*\)/g, (m) => m.replace(/\[([^\]]*)\]\([^)]*\)/, '$1')) // links → text
+    .replace(/^#{1,6}\s+/gm, '')          // headings
+    .replace(/(\*{1,3}|_{1,3})(.*?)\1/g, '$2') // bold/italic
+    .replace(/~~.*?~~/g, '')              // strikethrough
+    .replace(/^[\s]*[-*+]\s+/gm, '')      // unordered lists
+    .replace(/^[\s]*\d+\.\s+/gm, '')      // ordered lists
+    .replace(/^>+\s?/gm, '')              // blockquotes
+    .replace(/---+|===+|\*\*\*+/g, '')    // horizontal rules
+    .replace(/\|/g, '')                   // table pipes
+    .replace(/[:\-]+/g, ' ');             // table alignment
+  // Count Chinese characters + English words + numbers
+  const chinese = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+  const words = (text.match(/[a-zA-Z0-9]+/g) || []).length;
+  return chinese + words;
+};
+
 const formatTable = (table: { headers?: string[]; rows?: string[][] }) => {
   if (!table) return '';
   const headers = table.headers || [];
@@ -1029,7 +1052,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                       <span className="text-base">📋</span>
                       综合研究报告
                       <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
-                        {((report as any).synthesis_report || '').length} 字
+                        {countContentChars((report as any).synthesis_report || '')} 字
                       </span>
                       {/* 展开/收起按钮 - 仅在全屏模式也提供 */}
                       <button
@@ -1346,7 +1369,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     <span className="text-base">📋</span>
                     综合研究报告
                     <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
-                      {((report as any).synthesis_report || '').length} 字
+                      {countContentChars((report as any).synthesis_report || '')} 字
                     </span>
                     {/* 展开/收起按钮 */}
                     <button

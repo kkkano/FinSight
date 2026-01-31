@@ -5,6 +5,10 @@
 > **架构模式**: Supervisor Agent (协调者模式)
 >
 > **近期同步**:
+> - **路由架构标准化 (2026-01-31)**: 完整设计文档见 [ROUTING_ARCHITECTURE_STANDARD.md](./ROUTING_ARCHITECTURE_STANDARD.md)
+>   - 双层 Intent 设计：Layer 1 (路由级) + Layer 2 (执行级)
+>   - SchemaToolRouter 作为 Clarify 唯一入口
+>   - 回归测试基线 (64 test cases)
 > - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
 > - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
 > - get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）

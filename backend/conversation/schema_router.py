@@ -409,12 +409,14 @@ class SchemaToolRouter:
 
         if tool_name == "clarify":
             reason = args.get("reason", "llm_uncertain")
+            # Use LLM-generated message if available, otherwise fallback to template
+            question = args.get("message") or CLARIFY_TEMPLATES["default"]
             return self._make_clarify_result(
                 query,
                 tool_name,
                 args,
                 [],
-                CLARIFY_TEMPLATES["default"],
+                question,
                 reason,
             )
 

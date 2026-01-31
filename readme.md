@@ -80,6 +80,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - TraceEvent Schema v1 with versioned event format (event_type/duration/metadata)
 - Supervisor stream normalizes trace output to v1 for all agent outputs and plan traces
 - Regression testing framework with 25 baseline cases and automated comparison reports
+- **Routing Architecture Standard**: dual-layer Intent design (see [ROUTING_ARCHITECTURE_STANDARD.md](./docs/ROUTING_ARCHITECTURE_STANDARD.md))
 
 ### Smart Intent Classification
 - 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback

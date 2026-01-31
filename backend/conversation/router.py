@@ -258,7 +258,7 @@ class ConversationRouter:
         # 强制将最简单的问候语直接匹配为 GREETING
         # 包括拼音和中英文常见问候语
         is_simple_greeting = any(kw == query_lower for kw in [
-            '你好', '您好', 'hi', 'hello', '喂',
+            '你好', '您好', 'hi', 'hello', 'hey', '喂',
             'nihao', 'ninhao',  # 拼音问候语
         ])
         has_greeting_kw = any(kw in query_lower for kw in greeting_keywords)
@@ -268,7 +268,36 @@ class ConversationRouter:
             if not self._contains_financial_keywords(query_lower):
                 return Intent.GREETING
 
-        # === 2. 报告关键词（只有明确要求深度报告时才触发）===
+        # === 2. 监控/提醒关键词 (高优先级，避免被误判) ===
+        alert_keywords = [
+            '提醒', '监控', '盯着', '通知', '预警',
+            'alert', 'notify', 'watch', 'monitor', 'track',
+            '跌破', '涨到', '到达', '突破', '跌到', '涨破',
+            '价格到', '股价到', '低于', '高于',
+        ]
+        if any(kw in query_lower for kw in alert_keywords):
+            return Intent.ALERT
+
+        # === 3. 新闻情绪关键词 ===
+        news_sentiment_keywords = [
+            '新闻情绪', '舆情', '舆情指数', '媒体情绪', 'news sentiment', 'headline sentiment',
+            'sentiment of news', 'media sentiment'
+        ]
+        if any(kw in query_lower for kw in news_sentiment_keywords):
+            return Intent.NEWS_SENTIMENT
+        if '情绪' in query_lower and any(kw in query_lower for kw in ['新闻', '快讯', 'headline', 'news']):
+            return Intent.NEWS_SENTIMENT
+
+        # === 4. 经济日历/宏观事件关键词 ===
+        economic_event_keywords = [
+            '经济日历', '宏观日历', '经济事件', '宏观事件', '经济数据', '数据公布',
+            '非农', 'cpi', 'ppi', 'gdp', 'pmi', 'fomc', '利率决议', '央行会议',
+            'economic calendar', 'economic events', 'macro events', 'macro calendar'
+        ]
+        if any(kw in query_lower for kw in economic_event_keywords):
+            return Intent.ECONOMIC_EVENTS
+
+        # === 5. 报告关键词（只有明确要求深度报告时才触发）===
         # 注意：单独的"分析"太宽泛，移除它，只保留明确要求深度报告的关键词
         report_keywords = [
             '详细分析', '深度分析', '全面分析', '投资分析', '深入分析',
@@ -318,34 +347,8 @@ class ConversationRouter:
             )
             if has_financial_context:
                 return Intent.REPORT
-        
-        # === 3. 监控/提醒关键词 ===
-        alert_keywords = [
-            '提醒', '监控', '盯着', '通知', '预警',
-            'alert', 'notify', 'watch', 'monitor', 'track',
-            '跌破', '涨到', '到达', '突破', '跌到', '涨破',
-            '价格到', '股价到', '低于', '高于',
-        ]
-        if any(kw in query_lower for kw in alert_keywords):
-            return Intent.ALERT
 
-        news_sentiment_keywords = [
-            '新闻情绪', '舆情', '舆情指数', '媒体情绪', 'news sentiment', 'headline sentiment',
-            'sentiment of news', 'media sentiment'
-        ]
-        if any(kw in query_lower for kw in news_sentiment_keywords):
-            return Intent.NEWS_SENTIMENT
-        if '情绪' in query_lower and any(kw in query_lower for kw in ['新闻', '快讯', 'headline', 'news']):
-            return Intent.NEWS_SENTIMENT
-
-        economic_event_keywords = [
-            '经济日历', '宏观日历', '经济事件', '宏观事件', '经济数据', '数据公布',
-            '非农', 'cpi', 'ppi', 'gdp', 'pmi', 'fomc', '利率决议', '央行会议',
-            'economic calendar', 'economic events', 'macro events', 'macro calendar'
-        ]
-        if any(kw in query_lower for kw in economic_event_keywords):
-            return Intent.ECONOMIC_EVENTS
-
+        # === 6. 市场情绪关键词 (Fear & Greed) ===
         sentiment_strong = [
             '恐惧贪婪', '恐惧', '贪婪', '恐慌', 'fear & greed', 'fear and greed',
             'fear&greed', '情绪指标', '风险偏好', 'risk appetite'
@@ -359,7 +362,7 @@ class ConversationRouter:
         if any(kw in query_lower for kw in sentiment_soft) and any(ctx in query_lower for ctx in sentiment_context):
             return Intent.CHAT
 
-        # === 4. 市场新闻/热点 ===
+        # === 7. 市场新闻/热点 ===
         market_news_terms = [
             '热点', '新闻', '快讯', '头条', 'headline', 'breaking', 'news'
         ]
