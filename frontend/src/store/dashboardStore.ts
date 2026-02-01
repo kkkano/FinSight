@@ -27,7 +27,8 @@ interface DashboardStore {
   dashboardData: DashboardData | null;
   isLoading: boolean;
   error: string | null;
-  activeSelection: SelectionItem | null;  // 当前选中的新闻/报告（用于 MiniChat 上下文引用）
+  activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
+  activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻多选引用
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -43,6 +44,8 @@ interface DashboardStore {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setActiveSelection: (selection: SelectionItem | null) => void;
+  toggleSelection: (selection: SelectionItem) => void;
+  setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
 }
 
@@ -84,11 +87,12 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
   isLoading: false,
   error: null,
   activeSelection: null,  // 当前选中的新闻/报告
+  activeSelections: [],
 
   // 设置当前资产（同时清除 selection，因为切换股票后之前的引用不再有效）
   setActiveAsset: (asset) => {
     saveToStorage(STORAGE_KEYS.ACTIVE_ASSET, asset);
-    set({ activeAsset: asset, error: null, activeSelection: null });
+    set({ activeAsset: asset, error: null, activeSelection: null, activeSelections: [] });
   },
 
   // 设置能力集
@@ -167,8 +171,37 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
   setError: (error) => set({ error }),
 
   // 设置当前选中的新闻/报告（用于 MiniChat 上下文引用）
-  setActiveSelection: (selection) => set({ activeSelection: selection }),
+  setActiveSelection: (selection) =>
+    set({
+      activeSelection: selection,
+      activeSelections: selection ? [selection] : [],
+    }),
+
+  // 多选：切换某个 selection 是否被选中
+  toggleSelection: (selection) =>
+    set((state) => {
+      const existing = state.activeSelections;
+      const sameType = existing.length === 0 || existing.every((s) => s.type === selection.type);
+      const nextBase = sameType ? existing : [];
+
+      const isSelected = nextBase.some((s) => s.id === selection.id);
+      const next = isSelected
+        ? nextBase.filter((s) => s.id !== selection.id)
+        : [...nextBase, selection];
+
+      return {
+        activeSelections: next,
+        activeSelection: next.length === 1 ? next[0] : null,
+      };
+    }),
+
+  // 直接设置多选列表（会同步单选兼容字段）
+  setSelections: (selections) =>
+    set({
+      activeSelections: selections,
+      activeSelection: selections.length === 1 ? selections[0] : null,
+    }),
 
   // 清除当前选择
-  clearSelection: () => set({ activeSelection: null }),
+  clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
 }));

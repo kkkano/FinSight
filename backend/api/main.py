@@ -517,8 +517,67 @@ async def chat_supervisor_endpoint(request: ChatRequest):
             circuit_breaker=circuit_breaker
         )
 
+        # 处理临时上下文（ephemeral context，不入库，仅本次请求生效）
+        context_summary = None
+        if request.context:
+            context_parts = []
+
+            if request.context.active_symbol:
+                symbol = request.context.active_symbol
+                view = request.context.view or "dashboard"
+                context_parts.append(
+                    f"用户当前正在 {view} 视图查看 {symbol}。"
+                    f"请基于此上下文回答问题，除非用户明确询问其他标的。"
+                )
+                if symbol.upper() not in [t.upper() for t in tickers]:
+                    tickers.insert(0, symbol.upper())
+
+            selections = []
+            if request.context.selection:
+                selections.append(request.context.selection)
+            if getattr(request.context, "selections", None):
+                selections.extend([s for s in (request.context.selections or []) if s])
+
+            if selections:
+                uniq = []
+                seen = set()
+                for s in selections:
+                    key = (getattr(s, "type", None), getattr(s, "id", None))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    uniq.append(s)
+                selections = uniq
+
+                by_type = {"news": [], "report": []}
+                for s in selections:
+                    if s.type in by_type:
+                        by_type[s.type].append(s)
+                    else:
+                        by_type.setdefault(s.type, []).append(s)
+
+                for sel_type, group in by_type.items():
+                    if not group:
+                        continue
+                    type_label = "新闻" if sel_type == "news" else "报告"
+                    selection_info = f"用户正在询问以下{type_label}（共{len(group)}条）：\n"
+                    for i, sel in enumerate(group, start=1):
+                        selection_info += f"{i}. 标题：{sel.title}\n"
+                        if sel.source:
+                            selection_info += f"   来源：{sel.source}\n"
+                        if sel.ts:
+                            selection_info += f"   时间：{sel.ts}\n"
+                        if sel.snippet:
+                            selection_info += f"   摘要：{sel.snippet}\n"
+                        if sel.url:
+                            selection_info += f"   链接：{sel.url}\n"
+                    context_parts.append(selection_info.strip())
+
+            if context_parts:
+                context_summary = "[System Context]\n" + "\n\n".join(context_parts)
+
         # 执行
-        result = await supervisor.process(request.query, tickers)
+        result = await supervisor.process(resolved_query, tickers, context_summary=context_summary)
 
         return {
             "success": result.success,
@@ -569,11 +628,31 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     # 如果用户有明确的 Selection（新闻/报告引用），将其信息融入查询
     # 这样路由器能正确理解用户意图，不会返回 CLARIFY
     selection_context_hint = None
-    if request.context and request.context.selection:
-        sel = request.context.selection
-        type_label = "新闻" if sel.type == "news" else "报告"
-        # 构建上下文提示，帮助路由器理解查询
-        selection_context_hint = f"[引用{type_label}: {sel.title}]"
+    selections = []
+    if request.context:
+        if request.context.selection:
+            selections.append(request.context.selection)
+        if getattr(request.context, "selections", None):
+            selections.extend([s for s in (request.context.selections or []) if s])
+    if selections:
+        # 去重（按 type + id）
+        uniq = []
+        seen = set()
+        for s in selections:
+            key = (getattr(s, "type", None), getattr(s, "id", None))
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append(s)
+        selections = uniq
+
+        first = selections[0]
+        type_label = "新闻" if first.type == "news" else "报告"
+        if len(selections) == 1:
+            selection_context_hint = f"[引用{type_label}: {first.title}]"
+        else:
+            selection_context_hint = f"[引用{type_label}: {len(selections)}条]"
+
         # 如果用户查询很短/模糊，将 Selection 信息附加到查询中用于意图分类
         if len(resolved_query.strip()) < 30:
             resolved_query = f"{resolved_query} {selection_context_hint}"
@@ -588,13 +667,23 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     if preprocess.get("market_hint"):
         metadata["market_hint"] = preprocess.get("market_hint")
 
+    # ── Selection Context 强制路由（优先级最高）────────────────────
+    # Dashboard 里明确选择了新闻/报告，意图直接按 selection 类型确定
+    if selections:
+        from backend.conversation.router import Intent
+        metadata["has_selection_context"] = True
+        if selections[0].type == "news":
+            intent = Intent.NEWS
+        elif selections[0].type == "report":
+            intent = Intent.REPORT
+
     # ── 有 Selection Context 时跳过 CLARIFY ──────────────────────
     # 用户明确引用了新闻/报告，即使查询模糊也不需要澄清
     if intent == Intent.CLARIFY:
         # 如果有 Selection Context，改为 SEARCH/NEWS 意图
-        if request.context and request.context.selection:
+        if selections:
             logger.info(f"[SelectionContext] Overriding CLARIFY intent due to selection context")
-            intent = Intent.NEWS  # 引用新闻时使用 NEWS 意图
+            intent = Intent.NEWS  # 默认兜底（上面已按 type 强制过）
             metadata["has_selection_context"] = True
         else:
             question = metadata.get("schema_question") or "Please provide more details."
@@ -655,20 +744,31 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
                 tickers.insert(0, symbol.upper())
 
         # 2. Selection 上下文（强约束 - 用户明确引用的对象）
-        if request.context.selection:
-            sel = request.context.selection
-            type_label = "新闻" if sel.type == "news" else "报告"
-            selection_info = f"用户正在询问以下{type_label}：\n"
-            selection_info += f"- 标题：{sel.title}\n"
-            if sel.source:
-                selection_info += f"- 来源：{sel.source}\n"
-            if sel.ts:
-                selection_info += f"- 时间：{sel.ts}\n"
-            if sel.snippet:
-                selection_info += f"- 摘要：{sel.snippet}\n"
-            if sel.url:
-                selection_info += f"- 链接：{sel.url}\n"
-            context_parts.append(selection_info.strip())
+        if selections:
+            # 按类型分组（避免混合时信息混乱）
+            by_type = {"news": [], "report": []}
+            for s in selections:
+                if s.type in by_type:
+                    by_type[s.type].append(s)
+                else:
+                    by_type.setdefault(s.type, []).append(s)
+
+            for sel_type, group in by_type.items():
+                if not group:
+                    continue
+                type_label = "新闻" if sel_type == "news" else "报告"
+                selection_info = f"用户正在询问以下{type_label}（共{len(group)}条）：\n"
+                for i, sel in enumerate(group, start=1):
+                    selection_info += f"{i}. 标题：{sel.title}\n"
+                    if sel.source:
+                        selection_info += f"   来源：{sel.source}\n"
+                    if sel.ts:
+                        selection_info += f"   时间：{sel.ts}\n"
+                    if sel.snippet:
+                        selection_info += f"   摘要：{sel.snippet}\n"
+                    if sel.url:
+                        selection_info += f"   链接：{sel.url}\n"
+                context_parts.append(selection_info.strip())
 
         # 合并上下文
         if context_parts:

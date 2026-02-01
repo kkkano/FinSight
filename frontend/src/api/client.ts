@@ -11,6 +11,7 @@ export interface ChatContext {
   active_symbol?: string;
   view?: string;
   selection?: SelectionItem;
+  selections?: SelectionItem[];
 }
 
 // 本地开发地址，生产环境请改为实际域名

@@ -249,6 +249,18 @@ class SupervisorAgent:
         classification = self.classifier.classify(query, tickers, context_summary=context_summary)
         logger.info(f"[Supervisor] AgentIntent: {classification.intent.value} (method: {classification.method}, confidence: {classification.confidence})")
 
+        # ── Selection Context 强制意图（优先级最高）────────────────────
+        # Dashboard 里用户明确选择了新闻/报告，则按选择类型直接路由，避免误判。
+        if context_summary and "[System Context]" in context_summary:
+            if ("用户正在询问以下新闻" in context_summary) or ("引用新闻" in context_summary):
+                classification.intent = AgentIntent.NEWS
+                classification.method = f"{classification.method}+selection_override"
+                classification.reasoning = (classification.reasoning or "") + " | selection_context=news"
+            elif ("用户正在询问以下报告" in context_summary) or ("引用报告" in context_summary):
+                classification.intent = AgentIntent.REPORT
+                classification.method = f"{classification.method}+selection_override"
+                classification.reasoning = (classification.reasoning or "") + " | selection_context=report"
+
         # 2. Route based on intent
         intent = classification.intent
 

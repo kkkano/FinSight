@@ -126,11 +126,21 @@ interface NewsItemCardProps {
 }
 
 function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
-  const { setActiveSelection, activeSelection } = useDashboardStore();
+  const { setActiveSelection, toggleSelection, activeSelections } = useDashboardStore();
 
   // 生成新闻 ID（用于比较是否已选中）
   const newsId = generateNewsId(news.title, news.source, news.ts);
-  const isSelected = activeSelection?.id === newsId;
+  const isSelected = activeSelections.some((s) => s.id === newsId);
+
+  const selection: SelectionItem = {
+    type: 'news',
+    id: newsId,
+    title: news.title,
+    url: news.url,
+    source: news.source,
+    ts: news.ts,
+    snippet: news.summary?.slice(0, 100) || news.title.slice(0, 100),
+  };
 
   const handleClick = () => {
     if (news.url && news.url !== '#') {
@@ -142,17 +152,14 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
   const handleAskAbout = (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止冒泡，避免触发卡片点击（外链跳转）
 
-    const selection: SelectionItem = {
-      type: 'news',
-      id: newsId,
-      title: news.title,
-      url: news.url,
-      source: news.source,
-      ts: news.ts,
-      snippet: news.summary?.slice(0, 100) || news.title.slice(0, 100),
-    };
-
+    // 单选快捷：点击即“只引用这一条”
     setActiveSelection(selection);
+  };
+
+  // 多选：checkbox toggle
+  const handleToggleSelect = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleSelection(selection);
   };
 
   return (
@@ -165,6 +172,20 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
       } ${news.url && news.url !== '#' ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
+        {/* 多选 checkbox */}
+        <button
+          onClick={handleToggleSelect}
+          title={isSelected ? '取消选择' : '选择'}
+          className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+            isSelected
+              ? 'bg-fin-primary border-fin-primary'
+              : 'border-fin-border bg-transparent hover:border-fin-primary'
+          }`}
+          aria-pressed={isSelected}
+        >
+          {isSelected && <span className="text-white text-[10px] leading-none">✓</span>}
+        </button>
+
         <div className="flex-1 min-w-0">
           {/* 标题 */}
           <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">

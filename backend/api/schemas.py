@@ -31,6 +31,7 @@ class ChatContext(BaseModel):
     active_symbol: Optional[str] = Field(None, description="当前关注的股票代码")
     view: Optional[str] = Field(None, description="当前视图: chat/dashboard")
     selection: Optional[SelectionContext] = Field(None, description="当前选中的新闻/报告引用")
+    selections: Optional[list[SelectionContext]] = Field(None, description="当前多选的新闻/报告引用列表")
 
 
 class ChatRequest(BaseModel):

@@ -95,7 +95,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     // Raw SSE Events
     addRawEvent,
   } = useStore();
-  const { activeAsset, activeSelection, clearSelection } = useDashboardStore();
+  const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -342,9 +342,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             ctx.active_symbol = activeAsset.symbol;
             ctx.view = 'chat';
           }
-          if (activeSelection) {
-            ctx.selection = activeSelection;
-          }
+          if (activeSelections.length === 1) ctx.selection = activeSelections[0];
+          if (activeSelections.length > 1) ctx.selections = activeSelections;
           return Object.keys(ctx).length > 0 ? ctx : undefined;
         })()
       );
@@ -379,14 +378,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   return (
     <div className="p-4 bg-fin-bg border-t border-fin-border">
       {/* Selection Pill - 显示当前选中的新闻/报告 */}
-      {activeSelection && (
+      {activeSelections.length > 0 && (
         <div className="max-w-5xl mx-auto mb-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium max-w-[400px] border border-amber-500/20">
             <Paperclip size={12} className="shrink-0" />
             <span className="truncate">
-              {activeSelection.type === 'news' ? '📰' : '📊'}{' '}
-              引用: {activeSelection.title.slice(0, 40)}
-              {activeSelection.title.length > 40 ? '...' : ''}
+              {activeSelections[0].type === 'news' ? '📰' : '📊'}{' '}
+              引用: {activeSelections.length === 1
+                ? `${activeSelections[0].title.slice(0, 40)}${activeSelections[0].title.length > 40 ? '...' : ''}`
+                : `${activeSelections.length}条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
             </span>
             <button
               onClick={clearSelection}

@@ -17,7 +17,7 @@ import { useDashboardStore } from '../store/dashboardStore';
 export const MiniChat: React.FC = () => {
   // 共享主 Chat 的 messages（统一上下文）
   const { messages, addMessage, updateMessage, currentTicker } = useStore();
-  const { activeAsset, activeSelection, clearSelection } = useDashboardStore();
+  const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
   // 本地 loading 状态（不影响主 Chat 的全局 loading）
   const [isLoading, setIsLoading] = useState(false);
@@ -94,7 +94,8 @@ export const MiniChat: React.FC = () => {
         context.view = 'dashboard';
       }
 
-      if (activeSelection) context.selection = activeSelection;
+      if (activeSelections.length === 1) context.selection = activeSelections[0];
+      if (activeSelections.length > 1) context.selections = activeSelections;
 
       // 如果有任何上下文，才传递
       const contextToSend = Object.keys(context).length > 0 ? context : undefined;
@@ -224,12 +225,14 @@ export const MiniChat: React.FC = () => {
           )}
 
           {/* Selection Pill - 选中的新闻/报告 */}
-          {activeSelection && (
+          {activeSelections.length > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-medium max-w-[200px]">
               <Paperclip size={10} className="shrink-0" />
               <span className="truncate">
-                {activeSelection.type === 'news' ? '📰' : '📊'} {activeSelection.title.slice(0, 25)}
-                {activeSelection.title.length > 25 ? '...' : ''}
+                {activeSelections[0].type === 'news' ? '📰' : '📊'}{' '}
+                {activeSelections.length === 1
+                  ? `${activeSelections[0].title.slice(0, 25)}${activeSelections[0].title.length > 25 ? '...' : ''}`
+                  : `${activeSelections.length}条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
               </span>
               <button
                 onClick={clearSelection}
