@@ -20,6 +20,7 @@ EXA_API_KEY = os.getenv("EXA_API_KEY", "").strip('"')
 OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY", "").strip('"')
 EODHD_API_KEY = os.getenv("EODHD_API_KEY", "").strip('"')
 FRED_API_KEY = os.getenv("FRED_API_KEY", "").strip('"')
+FMP_API_KEY = os.getenv("FMP_API_KEY", "").strip('"')  # Financial Modeling Prep
 
 try:
     finnhub_client = finnhub.Client(api_key=FINNHUB_API_KEY)

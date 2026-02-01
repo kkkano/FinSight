@@ -1,9 +1,10 @@
 # FinSight 阶段0：基座强化完成报告
 
-> **更新日期**: 2026-01-28
+> **更新日期**: 2026-02-01
 > **状态**: 已完成 (100%)
 >
 > **近期同步**:
+> - **Selection Context / 上下文附件 (v0.7.0)**: `SelectionItem` 类型 + `activeSelection` 状态 + NewsFeed "问这条"按钮 + Selection Pill UI + 后端 `SelectionContext` Pydantic 模型，详见 [feature_logs/2026-02-01_selection_context.md](./feature_logs/2026-02-01_selection_context.md)
 > - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
 > - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
 > - get_company_news 改为结构化列表，NewsAgent/ReportHandler/ChatHandler 同步适配（P1-1）

@@ -27,6 +27,7 @@ The goal is to feel like talking to a Chief Investment Officer who can quickly p
 
 ## Screenshots
 
+![Dashboard Overview](./images/dashboard.png)
 ![Chat Comparison 1](./images/new1.png)
 ![Chat Comparison 2](./images/new2.png)
 ![Report Card 1](./images/report1.png)
@@ -87,6 +88,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - 3-layer hybrid system: rule matching -> embedding similarity -> LLM fallback
 - NEWS sub-intent: distinguishes fetch news vs analyze news impact
 - NEWS keyword fast-path reduces misclassification to generic search
+- Selection Context (news/report reference) routes analysis through a single news-analysis pipeline (no duplicate prompts)
 - Cost efficient: simple queries handled by rules with no LLM cost
 - Report intent rules cover “analyze/分析” with ticker context (no LLM required)
 - Reliability-first Agent Gate: CHAT can escalate to Supervisor based on timeliness/decision/evidence needs
@@ -102,6 +104,20 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 - Agent Gate decisions are visible in trace (used agent vs fast path)
 - Evidence pool is shown when tools/agents are invoked
 - **Developer Console**: Real-time SSE event viewer with 26 event types (tool_start/end, llm_start/end, cache_hit/miss, agent_start/done/step, supervisor_start/done, etc.)
+- **Selection Context**: News/Report reference system - click "Ask about this" in Dashboard to attach specific news context to your questions
+- Observability is non-blocking: TraceEmitter accepts forward-compatible metadata fields so tracing cannot break business logic
+
+### Selection Context → Unified News Analysis
+
+```mermaid
+flowchart LR
+    UI[Dashboard NewsFeed<br/>Ask about this] --> Store[Zustand<br/>activeSelection]
+    Store --> Req[/chat/supervisor/stream<br/>context.selection/]
+    Req --> CM[ContextManager<br/>builds [System Context]]
+    CM --> SA[SupervisorAgent]
+    SA -->|NEWS + Selection Context| ANA[_handle_news_analysis<br/>single implementation]
+    ANA --> OUT[Structured analysis<br/>summary/impact/insight/risks]
+```
 
 ### Alert and Subscription System
 - Price alerts: email notifications when price changes exceed thresholds
@@ -118,11 +134,13 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 flowchart TB
     subgraph Frontend["Frontend (React + Vite)"]
         UI[Chat UI]
+        Dashboard["Dashboard<br/>(KPI/Chart/News)"]
         ReportView[ReportView Card]
         Evidence[Evidence Pool]
         Trace[Agent Trace]
         Chart["K-line Chart"]
         Settings["Settings Modal"]
+        SelectionCtx["Selection Context<br/>(News/Report Reference)"]
     end
 
     subgraph API["FastAPI Backend"]
@@ -446,7 +464,7 @@ FinSight/
 
 ## Status
 
-> Last Updated: 2026-02-01 | Version: 0.6.9
+> Last Updated: 2026-02-02 | Version: 0.7.0
 
 ### Current Progress
 

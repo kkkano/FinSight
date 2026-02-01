@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal } from 'lucide-react';
+import { SendHorizontal, Paperclip, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
+import type { ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
+import { useDashboardStore } from '../store/dashboardStore';
 
 const extractTickers = (text: string): string[] => {
   const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
@@ -70,7 +72,12 @@ const mapStageToSource = (stage: string): AgentLogSource => {
   return mapping[stage] || 'system';
 };
 
-export const ChatInput: React.FC = () => {
+interface ChatInputProps {
+  onDashboardRequest?: (symbol: string) => void;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDashboardRequest }) => {
   const [input, setInput] = useState('');
   const {
     addMessage,
@@ -88,6 +95,7 @@ export const ChatInput: React.FC = () => {
     // Raw SSE Events
     addRawEvent,
   } = useStore();
+  const { activeAsset, activeSelection, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const shouldGenerateChart = async (
@@ -326,7 +334,19 @@ export const ChatInput: React.FC = () => {
         // onRawEvent - 原始 SSE 事件推送到控制台
         (event) => {
           addRawEvent(event);
-        }
+        },
+        // context - 临时上下文（Selection + Active Symbol）
+        (() => {
+          const ctx: ChatContext = {};
+          if (activeAsset?.symbol) {
+            ctx.active_symbol = activeAsset.symbol;
+            ctx.view = 'chat';
+          }
+          if (activeSelection) {
+            ctx.selection = activeSelection;
+          }
+          return Object.keys(ctx).length > 0 ? ctx : undefined;
+        })()
       );
     } catch (error) {
       updateMessage(aiMsgId, {
@@ -358,6 +378,26 @@ export const ChatInput: React.FC = () => {
 
   return (
     <div className="p-4 bg-fin-bg border-t border-fin-border">
+      {/* Selection Pill - 显示当前选中的新闻/报告 */}
+      {activeSelection && (
+        <div className="max-w-5xl mx-auto mb-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium max-w-[400px] border border-amber-500/20">
+            <Paperclip size={12} className="shrink-0" />
+            <span className="truncate">
+              {activeSelection.type === 'news' ? '📰' : '📊'}{' '}
+              引用: {activeSelection.title.slice(0, 40)}
+              {activeSelection.title.length > 40 ? '...' : ''}
+            </span>
+            <button
+              onClick={clearSelection}
+              className="shrink-0 p-0.5 rounded-full hover:bg-amber-500/20 transition-colors"
+              title="取消引用"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        </div>
+      )}
       <div className="relative flex items-center max-w-5xl mx-auto">
         <input
           ref={inputRef}

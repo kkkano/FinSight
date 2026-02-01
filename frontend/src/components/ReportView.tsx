@@ -584,45 +584,6 @@ const SectionRenderer: React.FC<{
   );
 };
 
-const InsightCard: React.FC<{
-  title: string;
-  items: string[];
-  tone?: 'neutral' | 'risk' | 'catalyst';
-  icon?: React.ReactNode;
-}> = ({ title, items, tone = 'neutral', icon }) => {
-  const toneClass =
-    tone === 'risk'
-      ? 'border-rose-200/70 bg-rose-50/70 dark:border-rose-800/60 dark:bg-rose-900/20'
-      : tone === 'catalyst'
-        ? 'border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-800/60 dark:bg-emerald-900/20'
-        : 'border-slate-200/80 bg-white/80 dark:border-slate-700/60 dark:bg-slate-900/60';
-
-  return (
-    <div className={`rounded-xl border ${toneClass} p-4 space-y-2`}>
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300">
-        {icon}
-        {title}
-      </div>
-      {items.length > 0 ? (
-        <ul className="text-xs text-slate-700 dark:text-slate-200 space-y-1 list-disc list-inside">
-          {items.map((item, idx) => (
-            <li key={idx}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-xs text-slate-400">暂无结构化信息</div>
-      )}
-    </div>
-  );
-};
-
-const MetricCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="rounded-lg border border-slate-200/80 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60 p-3">
-    <div className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</div>
-    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-1">{value}</div>
-  </div>
-);
-
 const EvidencePool: React.FC<{
   citations: Citation[];
   sourceSummary: { domain: string; count: number }[];

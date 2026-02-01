@@ -1,10 +1,20 @@
 # FinSight 终极架构设计：智能金融合伙人
 
-> **更新日期**: 2026-01-31
+> **更新日期**: 2026-02-01
 > **核心愿景**: 从被动问答的"工具人"升级为主动服务的"智能合伙人"
 > **架构模式**: Supervisor Agent (协调者模式)
 >
 > **近期同步**:
+> - **Selection Context / 上下文附件 (2026-02-01 / v0.7.0)**:
+>   - 新增 `SelectionItem` 类型和 `activeSelection` 状态
+>   - NewsFeed "问这条"按钮 + Selection Pill UI
+>   - ChatInput/MiniChat 统一支持 context.selection 传递
+>   - 后端 `SelectionContext` Pydantic 模型 + system prompt 注入
+>   - 详见 [feature_logs/2026-02-01_selection_context.md](./feature_logs/2026-02-01_selection_context.md)
+> - **News 分析链路收敛 + 可观测性安全 (2026-02-02)**:
+>   - Selection Context 的新闻分析统一走 `SupervisorAgent._handle_news_analysis()`（删除 `_handle_news` 内重复 prompt）
+>   - 只要用户请求“分析/影响”，分析失败也不会回显原始新闻列表，而是返回结构化失败原因 + 下一步建议
+>   - TraceEmitter `emit_llm_end()` 支持 `output_preview` 与向前兼容元数据，追踪打点不会再打断主业务
 > - **路由架构标准化 (2026-01-31)**: 完整设计文档见 [ROUTING_ARCHITECTURE_STANDARD.md](./ROUTING_ARCHITECTURE_STANDARD.md)
 >   - 双层 Intent 设计：Layer 1 (路由级) + Layer 2 (执行级)
 >   - SchemaToolRouter 作为 Clarify 唯一入口
@@ -37,6 +47,16 @@
 ## 一、架构全景图 (The Big Picture)
 
 FinSight 采用 **Supervisor Agent 协调者模式**，实现业界标准的多 Agent 协作架构。
+
+```mermaid
+flowchart LR
+    UI[Dashboard 新闻\n问这条] --> Sel[Selection Context]
+    Sel --> API[/chat/supervisor/stream]
+    API --> CM[ContextManager\n注入 [System Context]]
+    CM --> SA[SupervisorAgent]
+    SA -->|NEWS + Selection Context| ANA[_handle_news_analysis\n唯一实现]
+    ANA --> OUT[结构化分析输出\n摘要/影响/启示/风险]
+```
 
 ```mermaid
 flowchart TB

@@ -190,7 +190,12 @@ class IntentClassifier:
         report_keywords = KEYWORD_BOOST.get(AgentIntent.REPORT, [])
         has_analysis_intent = any(kw in query_lower for kw in analysis_keywords) or any(kw in query_lower for kw in report_keywords)
 
-        news_keywords = KEYWORD_BOOST.get(AgentIntent.NEWS, [])
+        # NOTE: KEYWORD_BOOST may not always include Chinese tokens like "新闻".
+        # Add a small built-in set to avoid misrouting news-impact requests to REPORT.
+        builtin_news_keywords = [
+            "新闻", "快讯", "消息", "舆情", "headline", "headlines", "news",
+        ]
+        news_keywords = list(set(KEYWORD_BOOST.get(AgentIntent.NEWS, []) + builtin_news_keywords))
 
         technical_keywords = KEYWORD_BOOST.get(AgentIntent.TECHNICAL, [])
         fundamental_keywords = KEYWORD_BOOST.get(AgentIntent.FUNDAMENTAL, [])
@@ -203,6 +208,17 @@ class IntentClassifier:
         has_macro = any(kw in query_lower for kw in macro_keywords)
         has_sentiment = any(kw in query_lower for kw in sentiment_keywords)
         analysis_subintent_count = sum([has_news, has_technical, has_fundamental, has_macro, has_sentiment])
+
+        # Multi-ticker + analysis request defaults to comparison unless user explicitly
+        # asks for a report-like artifact or a specific analysis dimension.
+        if has_analysis_intent and tickers and len(tickers) >= 2 and analysis_subintent_count == 0:
+            return ClassificationResult(
+                intent=AgentIntent.COMPARISON,
+                confidence=0.88,
+                tickers=tickers,
+                method="rule",
+                reasoning="Multi-ticker analysis request defaults to comparison"
+            )
 
         if not tickers:
             off_topic_keywords = ['weather', 'temperature', 'rain', 'forecast', '天气', '温度', '下雨', '晴天', '气温', '穿什么']

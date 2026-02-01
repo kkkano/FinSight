@@ -15,11 +15,30 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="消息内容")
 
 
+class SelectionContext(BaseModel):
+    """选中对象的上下文（用于 MiniChat 引用特定新闻/报告）"""
+    type: str = Field(..., description="对象类型: news/report")
+    id: str = Field(..., description="对象ID（hash）")
+    title: str = Field(..., description="标题")
+    url: Optional[str] = Field(None, description="链接")
+    source: Optional[str] = Field(None, description="来源")
+    ts: Optional[str] = Field(None, description="时间戳")
+    snippet: Optional[str] = Field(None, description="摘要/前100字")
+
+
+class ChatContext(BaseModel):
+    """临时上下文（仅本次请求生效，不入库）"""
+    active_symbol: Optional[str] = Field(None, description="当前关注的股票代码")
+    view: Optional[str] = Field(None, description="当前视图: chat/dashboard")
+    selection: Optional[SelectionContext] = Field(None, description="当前选中的新闻/报告引用")
+
+
 class ChatRequest(BaseModel):
     """聊天请求"""
     query: str = Field(..., min_length=1, description="用户查询内容")
     session_id: Optional[str] = Field(None, description="会话ID")
     history: Optional[list[ChatMessage]] = Field(None, description="对话历史(后端按 CHAT_HISTORY_MAX_MESSAGES 截断)")
+    context: Optional[ChatContext] = Field(None, description="临时上下文（不入库，仅当次请求生效）")
 
     model_config = {"extra": "ignore"}
 

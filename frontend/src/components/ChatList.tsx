@@ -10,7 +10,7 @@ import { ThinkingProcess } from './ThinkingProcess';
 import { ReportView } from './ReportView';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
-import type { KlineData, ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
+import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 

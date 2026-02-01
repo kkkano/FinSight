@@ -199,15 +199,33 @@ class TraceEmitter:
             metadata={"model": model, "prompt_preview": prompt_preview}
         ))
 
-    def emit_llm_end(self, model: str = None, tokens: int = None,
-                     duration_ms: int = None, success: bool = True,
-                     error: str = None, agent: str = None):
+    def emit_llm_end(
+        self,
+        model: str = None,
+        tokens: int = None,
+        duration_ms: int = None,
+        success: bool = True,
+        error: str = None,
+        agent: str = None,
+        output_preview: str = None,
+        **extra_metadata: Any,
+    ):
         """发射 LLM 调用结束事件"""
         msg = f"🧠 LLM 完成"
         if tokens:
             msg += f" ({tokens} tokens)"
         if duration_ms:
             msg += f" [{duration_ms}ms]"
+
+        metadata = {
+            "model": model,
+            "tokens": tokens,
+            "success": success,
+            "error": error,
+            "output_preview": output_preview,
+        }
+        if extra_metadata:
+            metadata.update(extra_metadata)
         self._emit(TraceEvent(
             event_type="llm_end",
             category=TraceCategory.LLM,
@@ -215,7 +233,7 @@ class TraceEmitter:
             level=TraceLevel.INFO if success else TraceLevel.ERROR,
             duration_ms=duration_ms,
             agent=agent,
-            metadata={"model": model, "tokens": tokens, "success": success, "error": error}
+            metadata=metadata,
         ))
 
     @contextmanager

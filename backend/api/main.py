@@ -20,6 +20,7 @@ from backend.api.schemas import (
     SubscriptionListResponse, StockDataResponse, KlineResponse,
     ConfigResponse, ChartDetectResponse, ChartDataResponse,
 )
+from backend.api.dashboard_router import dashboard_router
 from backend.metrics import METRICS_ENABLED, metrics_payload
 
 logger = logging.getLogger(__name__)
@@ -116,8 +117,8 @@ def _extract_api_key(request: Request) -> Optional[str]:
 
 
 def _is_allowlisted_path(path: str) -> bool:
-    allow_prefixes = ("/", "/docs", "/openapi.json", "/redoc", "/health")
-    return path in allow_prefixes or path.startswith(("/docs", "/redoc"))
+    allow_prefixes = ("/", "/docs", "/openapi.json", "/redoc", "/health", "/api/dashboard")
+    return path in allow_prefixes or path.startswith(("/docs", "/redoc", "/api/dashboard"))
 
 
 class SimpleRateLimiter:
@@ -238,6 +239,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 注册 Dashboard 路由
+app.include_router(dashboard_router)
 
 
 @app.middleware("http")
@@ -561,7 +565,19 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     prepared_query = preprocess.get("query", request.query)
     resolved_query = agent.context.resolve_reference(prepared_query)
 
-    
+    # ── Selection Context 预处理（在意图分类之前）──────────────────
+    # 如果用户有明确的 Selection（新闻/报告引用），将其信息融入查询
+    # 这样路由器能正确理解用户意图，不会返回 CLARIFY
+    selection_context_hint = None
+    if request.context and request.context.selection:
+        sel = request.context.selection
+        type_label = "新闻" if sel.type == "news" else "报告"
+        # 构建上下文提示，帮助路由器理解查询
+        selection_context_hint = f"[引用{type_label}: {sel.title}]"
+        # 如果用户查询很短/模糊，将 Selection 信息附加到查询中用于意图分类
+        if len(resolved_query.strip()) < 30:
+            resolved_query = f"{resolved_query} {selection_context_hint}"
+            logger.info(f"[SelectionContext] Enhanced query for routing: {resolved_query}")
 
     intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
     selected_ticker = preprocess.get("selected_ticker")
@@ -572,18 +588,26 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     if preprocess.get("market_hint"):
         metadata["market_hint"] = preprocess.get("market_hint")
 
+    # ── 有 Selection Context 时跳过 CLARIFY ──────────────────────
+    # 用户明确引用了新闻/报告，即使查询模糊也不需要澄清
     if intent == Intent.CLARIFY:
-        question = metadata.get("schema_question") or "Please provide more details."
+        # 如果有 Selection Context，改为 SEARCH/NEWS 意图
+        if request.context and request.context.selection:
+            logger.info(f"[SelectionContext] Overriding CLARIFY intent due to selection context")
+            intent = Intent.NEWS  # 引用新闻时使用 NEWS 意图
+            metadata["has_selection_context"] = True
+        else:
+            question = metadata.get("schema_question") or "Please provide more details."
 
-        async def clarify_response():
-            yield f"data: {_json.dumps({'type': 'token', 'content': question}, ensure_ascii=False)}\n\n"
-            yield f"data: {_json.dumps({'type': 'done', 'intent': 'clarify', 'needs_clarification': True, 'schema_question': question, 'missing_fields': metadata.get('schema_missing', []), 'schema_tool_name': metadata.get('schema_tool_name'), 'source': metadata.get('source', 'schema_router')}, ensure_ascii=False)}\n\n"
+            async def clarify_response():
+                yield f"data: {_json.dumps({'type': 'token', 'content': question}, ensure_ascii=False)}\n\n"
+                yield f"data: {_json.dumps({'type': 'done', 'intent': 'clarify', 'needs_clarification': True, 'schema_question': question, 'missing_fields': metadata.get('schema_missing', []), 'schema_tool_name': metadata.get('schema_tool_name'), 'source': metadata.get('source', 'schema_router')}, ensure_ascii=False)}\n\n"
 
-        return StreamingResponse(
-            clarify_response(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
-        )
+            return StreamingResponse(
+                clarify_response(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+            )
 
     tickers = metadata.get("tickers", [])
     if not tickers:
@@ -613,6 +637,43 @@ async def chat_supervisor_stream_endpoint(request: ChatRequest):
     #         {"role": msg.role, "content": msg.content}
     #         for msg in request.history[-max_history:]
     #     ]
+
+    # 处理临时上下文（ephemeral context，不入库，仅本次请求生效）
+    if request.context:
+        context_parts = []
+
+        # 1. Active Symbol 上下文（弱约束）
+        if request.context.active_symbol:
+            symbol = request.context.active_symbol
+            view = request.context.view or "dashboard"
+            context_parts.append(
+                f"用户当前正在 {view} 视图查看 {symbol}。"
+                f"请基于此上下文回答问题，除非用户明确询问其他标的。"
+            )
+            # 确保 tickers 包含当前 symbol
+            if symbol.upper() not in [t.upper() for t in tickers]:
+                tickers.insert(0, symbol.upper())
+
+        # 2. Selection 上下文（强约束 - 用户明确引用的对象）
+        if request.context.selection:
+            sel = request.context.selection
+            type_label = "新闻" if sel.type == "news" else "报告"
+            selection_info = f"用户正在询问以下{type_label}：\n"
+            selection_info += f"- 标题：{sel.title}\n"
+            if sel.source:
+                selection_info += f"- 来源：{sel.source}\n"
+            if sel.ts:
+                selection_info += f"- 时间：{sel.ts}\n"
+            if sel.snippet:
+                selection_info += f"- 摘要：{sel.snippet}\n"
+            if sel.url:
+                selection_info += f"- 链接：{sel.url}\n"
+            context_parts.append(selection_info.strip())
+
+        # 合并上下文
+        if context_parts:
+            context_msg = "[System Context]\n" + "\n\n".join(context_parts)
+            conversation_context = [{"role": "system", "content": context_msg}]
 
     # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
     tools_module = None

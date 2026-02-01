@@ -2,6 +2,16 @@ import axios from 'axios';
 // 确保你有 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
+import type { SelectionItem } from '../types/dashboard';
+
+/**
+ * Chat Context - 临时上下文（不入库，仅本次请求生效）
+ */
+export interface ChatContext {
+  active_symbol?: string;
+  view?: string;
+  selection?: SelectionItem;
+}
 
 // 本地开发地址，生产环境请改为实际域名
 const API_BASE_URL = 'http://127.0.0.1:8000';
@@ -174,14 +184,20 @@ export const apiClient = {
     onError?: (error: string) => void,
     onThinking?: (step: any) => void,
     history?: Array<{role: string, content: string}>,  // 对话历史
-    onRawEvent?: (event: RawSSEEvent) => void  // 原始 SSE 事件回调
+    onRawEvent?: (event: RawSSEEvent) => void,  // 原始 SSE 事件回调
+    context?: ChatContext  // 临时上下文（不入库，仅本次请求生效）
   ): Promise<void> {
     let eventCounter = 0;
+
+    const body: Record<string, any> = { query, history };
+    if (context) {
+      body.context = context;
+    }
 
     const response = await fetch(`${API_BASE_URL}/chat/supervisor/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, history }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {

@@ -14,6 +14,9 @@ interface WatchlistItem {
 interface SidebarProps {
     onSettingsClick?: () => void;
     onSubscribeClick?: () => void;
+    onDashboardClick?: (symbol: string) => void;
+    onChatClick?: () => void;
+    currentView?: 'chat' | 'dashboard';  // 接收当前视图状态
 }
 
 const DEFAULT_USER_ID = 'default_user';
@@ -25,15 +28,25 @@ const RISK_LABELS: Record<string, string> = {
     aggressive: '进取型投资者',
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick }) => {
-    const [activeTab, setActiveTab] = useState('chat');
+const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick, onDashboardClick, onChatClick, currentView }) => {
+    // 使用传入的 currentView 作为初始值，并保持同步
+    const [activeTab, setActiveTab] = useState(currentView === 'dashboard' ? 'dashboard' : 'chat');
     const [userName, setUserName] = useState('用户');
     const [riskPreference, setRiskPreference] = useState('balanced');
     const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
     const [alertCount, setAlertCount] = useState(0);
     const [showAddInput, setShowAddInput] = useState(false);
     const [newTicker, setNewTicker] = useState('');
-    const { subscriptionEmail, portfolioPositions } = useStore();
+    const { subscriptionEmail, portfolioPositions, currentTicker } = useStore();
+
+    // 同步外部视图状态
+    useEffect(() => {
+        if (currentView === 'dashboard') {
+            setActiveTab('dashboard');
+        } else if (currentView === 'chat') {
+            setActiveTab('chat');
+        }
+    }, [currentView]);
 
     // 添加股票到 Watchlist
     const handleAddTicker = async () => {
@@ -155,13 +168,32 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick }) 
                     icon={<MessageSquare size={18} />}
                     label="智能对话"
                     active={activeTab === 'chat'}
-                    onClick={() => setActiveTab('chat')}
+                    onClick={() => {
+                        setActiveTab('chat');
+                        if (onChatClick) onChatClick();
+                    }}
                 />
                 <NavItem
                     icon={<LayoutDashboard size={18} />}
                     label="仪表盘"
                     active={activeTab === 'dashboard'}
-                    onClick={() => setActiveTab('dashboard')}
+                    onClick={() => {
+                        setActiveTab('dashboard');
+                        if (!onDashboardClick) return;
+
+                        // 优先级：watchlist 第一个 -> 持仓第一个 -> 当前聊天 ticker
+                        const firstWatchlistSymbol = watchlist[0]?.symbol;
+                        const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
+                        const fallbackSymbol = (firstWatchlistSymbol || firstPositionSymbol || currentTicker || '').toString().trim();
+
+                        if (fallbackSymbol) {
+                            onDashboardClick(fallbackSymbol);
+                            return;
+                        }
+
+                        // 没有任何可用标的：展开输入框提示用户先添加
+                        setShowAddInput(true);
+                    }}
                 />
                 <NavItem
                     icon={<FileText size={18} />}
@@ -193,7 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick }) 
             {/* Watchlist Mini */}
             <div className="mt-auto border-t border-fin-border pt-5">
                 <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
-                    <span>实时关注 ({watchlist.length})</span>
+                    <span>我的持仓 ({watchlist.length})</span>
                     <Plus
                         size={16}
                         className="cursor-pointer hover:text-fin-primary"
@@ -227,7 +259,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, onSubscribeClick }) 
                         watchlist.map((item) => {
                             const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
                             return (
-                                <div key={item.symbol} className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors">
+                                <div
+                                    key={item.symbol}
+                                    className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
+                                    onClick={() => onDashboardClick && onDashboardClick(item.symbol)}
+                                >
                                     <div className="flex flex-col">
                                         <span className="font-bold text-fin-text text-sm">{item.symbol}</span>
                                         <span className="text-[10px] text-fin-muted">{item.name}</span>

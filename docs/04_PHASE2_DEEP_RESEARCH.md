@@ -1,10 +1,11 @@
 # FinSight 阶段2：深度研报与按需调用
 
 > **计划周期**: Week 5 - Week 6
-> **更新日期**: 2026-01-28
+> **更新日期**: 2026-02-01
 > **核心目标**: 生产"卖方分析师"级别的深度研报 (Deep Research)
 >
 > **近期同步**:
+> - **Selection Context / 上下文附件 (v0.7.0)**: 用户可在 Dashboard 选中新闻/报告，通过 Selection Pill 引用上下文与 AI 对话，详见 [feature_logs/2026-02-01_selection_context.md](./feature_logs/2026-02-01_selection_context.md)
 > - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
 > - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
 > - get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）

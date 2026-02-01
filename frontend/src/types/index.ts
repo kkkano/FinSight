@@ -12,6 +12,15 @@ export interface ThinkingStep {
   timestamp: string;
 }
 
+// Evidence item for citations/sources
+export interface EvidenceItem {
+  title?: string;
+  source?: string;
+  url?: string;
+  snippet?: string;
+  confidence?: number;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -29,6 +38,8 @@ export interface Message {
   fallback_used?: boolean;
   tried_sources?: string[];
   report?: ReportIR;  // Phase 2: 深度研报数据
+  evidence_pool?: EvidenceItem[];  // Evidence/citations pool
+  via?: 'main' | 'mini';  // 消息来源入口：主聊天区 or 右侧面板 MiniChat
 }
 
 export interface KlineData {

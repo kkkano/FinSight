@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import { StockChart } from './StockChart';
 import { AgentLogPanel } from './AgentLogPanel';
-import { Activity, Bell, RefreshCw, TrendingUp, X, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
+import { MiniChat } from './MiniChat';
+import { Activity, Bell, RefreshCw, TrendingUp, X, Maximize2, Terminal } from 'lucide-react';
 
 const DEFAULT_USER_ID = 'default_user';
 
@@ -54,43 +55,60 @@ const formatChangePct = (value?: number | null) => {
   return `${sign}${value.toFixed(2)}%`;
 };
 
-// Collapsible Widget
-const Widget: React.FC<{
-  title: string;
-  icon?: React.ReactNode;
-  action?: React.ReactNode;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}> = ({ title, icon, action, defaultOpen = true, children }) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
 
-  return (
-    <section className="bg-fin-card border border-fin-border rounded-xl shadow-sm flex flex-col">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between p-3 hover:bg-fin-hover/50 transition-colors rounded-t-xl"
-      >
-        <div className="flex items-center gap-2 text-xs font-semibold text-fin-text-secondary uppercase tracking-wider">
-          {icon}
-          {title}
-        </div>
-        <div className="flex items-center gap-2">
-          {action}
-          {isOpen ? <ChevronUp size={14} className="text-fin-muted" /> : <ChevronDown size={14} className="text-fin-muted" />}
-        </div>
-      </button>
-      {isOpen && <div className="px-4 pb-4">{children}</div>}
-    </section>
-  );
+// Tab types for the right panel (removed 'chat' as main area already has chat)
+type RightPanelTab = 'alerts' | 'portfolio' | 'chart' | 'console';
+
+// 触发记录类型
+type TriggerRecord = {
+  id: string;
+  ticker: string;
+  type: string;
+  message: string;
+  timestamp: number;
 };
 
-export const RightPanel: React.FC<{ onCollapse: () => void; onSubscribeClick?: () => void }> = ({ onCollapse, onSubscribeClick }) => {
+// Tab button component
+const TabButton: React.FC<{
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  badge?: number;
+}> = ({ icon, active, onClick, title, badge }) => (
+  <button
+    onClick={onClick}
+    title={title}
+    className={`relative p-2 rounded-lg transition-all ${
+      active
+        ? 'bg-fin-primary/10 text-fin-primary'
+        : 'text-fin-muted hover:text-fin-text hover:bg-fin-hover'
+    }`}
+  >
+    {icon}
+    {badge !== undefined && badge > 0 && (
+      <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-fin-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+        {badge > 9 ? '9+' : badge}
+      </span>
+    )}
+  </button>
+);
+
+export const RightPanel: React.FC<{ onCollapse: () => void; onSubscribeClick?: () => void; showMiniChat?: boolean }> = ({ onCollapse, onSubscribeClick, showMiniChat = true }) => {
+  // Tab state - default to 'alerts' now
+  const [activeTab, setActiveTab] = useState<RightPanelTab>('alerts');
+
+  // 触发记录和未读计数
+  const [triggerRecords, setTriggerRecords] = useState<TriggerRecord[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition } = useStore();
   const [, setMarketQuotes] = useState<Quote[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
-  const [orchestrator, setOrchestrator] = useState<any>(null);
-  const [health, setHealth] = useState<any>(null);
+  // Reserved for future agent diagnostics panel
+  // const [orchestrator, setOrchestrator] = useState<any>(null);
+  // const [health, setHealth] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
   const [chartHeight, setChartHeight] = useState(250);
@@ -192,23 +210,55 @@ export const RightPanel: React.FC<{ onCollapse: () => void; onSubscribeClick?: (
     }
   };
 
-  const loadDiagnostics = async () => {
-    try {
-      const [oc, health] = await Promise.all([
-        apiClient.diagnosticsOrchestrator(),
-        apiClient.healthCheck(),
-      ]);
-      setOrchestrator(oc);
-      setHealth(health);
-    } catch (error) {
-      setOrchestrator(null);
-      setHealth(null);
+  // 点击 alerts tab 时清除未读计数
+  const handleAlertsTabClick = useCallback(() => {
+    setActiveTab('alerts');
+    setUnreadCount(0);
+  }, []);
+
+  // 删除触发记录
+  const deleteTriggerRecord = useCallback((id: string) => {
+    setTriggerRecords((prev) => prev.filter((record) => record.id !== id));
+  }, []);
+
+  // 模拟触发记录（实际应从后端获取）
+  // TODO: 对接后端真实触发记录 API
+  useEffect(() => {
+    // 模拟一些触发记录用于展示
+    const mockRecords: TriggerRecord[] = alerts.slice(0, 3).map((alert, idx) => ({
+      id: `trigger-${Date.now()}-${idx}`,
+      ticker: alert.ticker || 'UNKNOWN',
+      type: (alert.alert_types || ['price_change'])[0],
+      message: `${alert.ticker} 触发了 ${(alert.alert_types || []).join(', ')} 提醒`,
+      timestamp: Date.now() - idx * 3600000,
+    }));
+    if (mockRecords.length > 0) {
+      setTriggerRecords(mockRecords);
+      // 只有不在 alerts tab 时才增加未读计数
+      if (activeTab !== 'alerts') {
+        setUnreadCount(mockRecords.length);
+      }
     }
-  };
+  }, [alerts]);
+
+  // Reserved for future agent diagnostics panel
+  // const loadDiagnostics = async () => {
+  //   try {
+  //     const [oc, health] = await Promise.all([
+  //       apiClient.diagnosticsOrchestrator(),
+  //       apiClient.healthCheck(),
+  //     ]);
+  //     setOrchestrator(oc);
+  //     setHealth(health);
+  //   } catch (error) {
+  //     setOrchestrator(null);
+  //     setHealth(null);
+  //   }
+  // };
 
   const refreshAll = async () => {
     setLoading(true);
-    await Promise.all([loadMarketQuotes(), loadWatchlist(), loadAlerts(), loadDiagnostics()]);
+    await Promise.all([loadMarketQuotes(), loadWatchlist(), loadAlerts()]);
     setLastUpdated(new Date());
     setLoading(false);
   };
@@ -249,220 +299,288 @@ export const RightPanel: React.FC<{ onCollapse: () => void; onSubscribeClick?: (
     return { totalValue, dayChange, avgChange, topMover, holdingsCount: holdings.length };
   }, [positionRows]);
 
-  // 从真实后端数据提取 Agent 状态
-  const orchestratorStats = orchestrator?.data?.orchestrator_stats;
-  const sourceStats = orchestrator?.data?.by_source?.stock_price || [];
-  const healthComponents = health?.components || {};
+  // 从真实后端数据提取 Agent 状态 - Reserved for future agent status panel
+  // const orchestratorStats = orchestrator?.data?.orchestrator_stats;
+  // const sourceStats = orchestrator?.data?.by_source?.stock_price || [];
 
-  // 计算总请求数 (从所有数据源累加)
-  const totalCalls = sourceStats.reduce((sum: number, s: any) => sum + (s.total_calls || 0), 0);
-  const totalSuccesses = sourceStats.reduce((sum: number, s: any) => sum + (s.total_successes || 0), 0);
-  const cacheHits = orchestratorStats?.cache_hits ?? orchestrator?.data?.cache_hits ?? 0;
-  const fallbackCount = orchestratorStats?.fallback_count ?? orchestrator?.data?.fallback_count ?? 0;
+  // Tab content renderers
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'alerts':
+        return (
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-fin-text-secondary">订阅提醒</span>
+              <span className="text-[10px] text-fin-muted bg-fin-bg px-1.5 rounded">{alerts.length} 条</span>
+            </div>
+            <div className="space-y-2">
+              {alerts.slice(0, 10).map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center border-b border-fin-border/50 pb-2 last:border-0">
+                  <div className="flex gap-2 items-center">
+                    <span className="text-fin-primary text-sm">🚀</span>
+                    <div>
+                      <div className="text-xs font-semibold text-fin-text">{item.ticker} 触发提醒</div>
+                      <div className="text-[10px] text-fin-text-secondary">{(item.alert_types || []).join(', ')}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {alerts.length === 0 && <div className="text-xs text-fin-muted py-4 text-center">暂无订阅提醒</div>}
+            </div>
+            <button
+              onClick={onSubscribeClick}
+              className="w-full py-2 border border-dashed border-fin-border rounded-lg text-xs text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors"
+            >
+              + 管理订阅规则
+            </button>
 
-  // 子 Agent 状态列表
-  const subAgents = [
-    { name: 'NewsAgent', key: 'news_agent' },
-    { name: 'PriceAgent', key: 'price_agent' },
-    { name: 'Orchestrator', key: 'orchestrator' },
-    { name: 'LLM', key: 'llm' },
-    { name: 'Memory', key: 'memory' },
-  ];
+            {/* 触发记录区域 */}
+            <div className="pt-3 border-t border-fin-border/50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-fin-text-secondary">触发记录</span>
+                <span className="text-[10px] text-fin-muted bg-fin-bg px-1.5 rounded">{triggerRecords.length} 条</span>
+              </div>
+              <div className="space-y-2">
+                {triggerRecords.map((record) => (
+                  <div key={record.id} className="flex justify-between items-center bg-fin-bg/50 rounded-lg px-2 py-1.5 group">
+                    <div className="flex gap-2 items-center flex-1 min-w-0">
+                      <span className="text-fin-warning text-sm">⚡</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-fin-text truncate">{record.ticker}</div>
+                        <div className="text-[10px] text-fin-muted truncate">{record.message}</div>
+                        <div className="text-[9px] text-fin-muted/70">
+                          {new Date(record.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteTriggerRecord(record.id)}
+                      className="p-1 text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="删除记录"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {triggerRecords.length === 0 && (
+                  <div className="text-xs text-fin-muted py-3 text-center">暂无触发记录</div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'portfolio':
+        return (
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-fin-text-secondary">资产组合</span>
+              <button
+                onClick={() => {
+                  if (isPortfolioEditing) {
+                    savePortfolioEdit();
+                  } else {
+                    startPortfolioEdit();
+                  }
+                }}
+                className="text-[10px] px-2 py-0.5 rounded-full border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary transition-colors"
+              >
+                {isPortfolioEditing ? 'Save' : 'Edit'}
+              </button>
+            </div>
+            {isPortfolioEditing ? (
+              <div className="space-y-3">
+                {positionRows.length > 0 ? (
+                  <div className="space-y-2">
+                    {positionRows.map((item) => (
+                      <div key={item.ticker} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-fin-text">{item.ticker}</span>
+                          <span className="text-[10px] text-fin-muted">
+                            {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '--'}
+                          </span>
+                        </div>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          value={positionDrafts[item.ticker] ?? ''}
+                          onChange={(e) =>
+                            setPositionDrafts((prev) => ({ ...prev, [item.ticker]: e.target.value }))
+                          }
+                          className="w-20 px-2 py-1 rounded border border-fin-border bg-fin-bg text-fin-text text-right text-xs focus:outline-none focus:border-fin-primary"
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-fin-muted">Add watchlist tickers to set holdings.</div>
+                )}
+                <div className="flex items-center justify-between text-[10px] text-fin-muted">
+                  <span>Blank or 0 removes a position.</span>
+                  <button onClick={cancelPortfolioEdit} className="text-fin-muted hover:text-fin-text">Cancel</button>
+                </div>
+              </div>
+            ) : portfolioSummary ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="text-xl font-bold text-fin-text">${portfolioSummary.totalValue.toLocaleString()}</div>
+                  <div className={`text-sm font-medium ${portfolioSummary.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
+                    {portfolioSummary.dayChange >= 0 ? '+' : ''}{portfolioSummary.dayChange.toFixed(2)} ({formatChangePct(portfolioSummary.avgChange)})
+                  </div>
+                  <div className="text-[10px] text-fin-muted">Holdings {portfolioSummary.holdingsCount}</div>
+                </div>
+                <div className="space-y-2">
+                  {positionRows.filter((item) => item.shares > 0).map((item) => (
+                    <div key={item.ticker} className="flex items-center justify-between text-xs">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-fin-text">{item.ticker}</span>
+                        <span className="text-[10px] text-fin-muted">
+                          {item.shares} shares{typeof item.price === 'number' ? ` @ $${item.price.toFixed(2)}` : ''}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-fin-text">${item.value.toLocaleString()}</div>
+                        <div className={`text-[10px] ${item.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
+                          {item.dayChange >= 0 ? '+' : ''}{item.dayChange.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-fin-muted py-4 text-center">Set holdings to generate portfolio summary.</div>
+            )}
+          </div>
+        );
+
+      case 'chart':
+        return (
+          <div className="flex-1 overflow-hidden p-3 flex flex-col">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-fin-text-secondary">Market Chart</span>
+              <button
+                onClick={() => setIsChartMaximized(true)}
+                className="p-1 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-primary transition-colors"
+                title="全屏查看"
+              >
+                <Maximize2 size={12} />
+              </button>
+            </div>
+            <div className="flex-1 relative min-h-0">
+              <div
+                style={{ height: chartHeight }}
+                className="w-full bg-fin-bg-secondary/50 rounded-lg overflow-hidden"
+              >
+                <StockChart />
+              </div>
+              {/* 拉伸手柄 */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize bg-gradient-to-t from-fin-border/30 to-transparent flex items-center justify-center"
+                onMouseDown={(e) => {
+                  const startY = e.clientY;
+                  const startHeight = chartHeight;
+                  const onMouseMove = (moveEvent: MouseEvent) => {
+                    const diff = moveEvent.clientY - startY;
+                    setChartHeight(Math.max(150, Math.min(500, startHeight + diff)));
+                  };
+                  const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                  };
+                  document.addEventListener('mousemove', onMouseMove);
+                  document.addEventListener('mouseup', onMouseUp);
+                }}
+              >
+                <div className="w-8 h-1 bg-fin-border rounded-full" />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'console':
+        return (
+          <div className="flex-1 overflow-hidden">
+            <AgentLogPanel />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-3 h-full overflow-y-auto pr-1">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between pb-2">
-        <span className="text-xs font-bold text-fin-text-secondary uppercase">Context Awareness</span>
-        <div className="flex gap-2">
-          <button onClick={refreshAll} className="p-1 hover:bg-fin-hover rounded text-fin-muted" title="Refresh">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+    <div className="flex flex-col h-full bg-fin-card border border-fin-border rounded-xl shadow-sm overflow-hidden">
+      {/* Tab Header */}
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-fin-border bg-fin-bg/50">
+        <div className="flex items-center gap-1">
+          <TabButton
+            icon={<Bell size={14} />}
+            active={activeTab === 'alerts'}
+            onClick={handleAlertsTabClick}
+            title="消息中心"
+            badge={unreadCount}
+          />
+          <TabButton
+            icon={<Activity size={14} />}
+            active={activeTab === 'portfolio'}
+            onClick={() => setActiveTab('portfolio')}
+            title="资产组合"
+          />
+          <TabButton
+            icon={<TrendingUp size={14} />}
+            active={activeTab === 'chart'}
+            onClick={() => setActiveTab('chart')}
+            title="Market Chart"
+          />
+          <TabButton
+            icon={<Terminal size={14} />}
+            active={activeTab === 'console'}
+            onClick={() => setActiveTab('console')}
+            title="Console"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refreshAll}
+            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={onCollapse} className="p-1 hover:bg-fin-hover rounded text-fin-muted" title="Collapse">
-            <X size={14} />
+          <button
+            onClick={onCollapse}
+            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
+            title="Collapse"
+          >
+            <X size={12} />
           </button>
         </div>
       </div>
 
-      {/* 消息中心 - 可收起 */}
-      <Widget title="消息中心" icon={<Bell size={14} />} action={<span className="text-[10px] text-fin-muted bg-fin-bg px-1.5 rounded">{alerts.length} 条</span>}>
-        <div className="flex flex-col gap-2">
-          {alerts.slice(0, 5).map((item, idx) => (
-            <div key={idx} className="flex justify-between items-center border-b border-fin-border/50 pb-2 last:border-0">
-              <div className="flex gap-2 items-center">
-                <span className="text-fin-primary text-sm">🚀</span>
-                <div>
-                  <div className="text-xs font-semibold text-fin-text">{item.ticker} 触发提醒</div>
-                  <div className="text-[10px] text-fin-text-secondary">{(item.alert_types || []).join(', ')}</div>
-                </div>
-              </div>
-              <div className="text-[10px] text-fin-muted">触发 0 次</div>
-            </div>
-          ))}
-          {alerts.length === 0 && <div className="text-xs text-fin-muted py-2">暂无订阅提醒</div>}
-          <button
-            onClick={onSubscribeClick}
-            className="w-full py-1.5 border border-dashed border-fin-border rounded text-xs text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors"
-          >
-            + 管理订阅规则
-          </button>
+      {/* 上半区：Tab Content（可滚动） */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {renderTabContent()}
+      </div>
+
+      {/* 下半区：MiniChat（仅在 Dashboard 视图显示，Chat 视图隐藏避免重复） */}
+      {showMiniChat && (
+        <div className="h-[45%] min-h-[180px] border-t border-fin-border flex flex-col">
+          <MiniChat />
         </div>
-      </Widget>
-
-      {/* 资产组合 - 可收起 */}
-      <Widget
-        title="资产组合快照"
-        icon={<Activity size={14} />}
-        action={
-          <button
-            onClick={(event) => {
-              event.stopPropagation();
-              if (isPortfolioEditing) {
-                savePortfolioEdit();
-              } else {
-                startPortfolioEdit();
-              }
-            }}
-            className="text-[10px] px-2 py-0.5 rounded-full border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary transition-colors"
-          >
-            {isPortfolioEditing ? 'Save' : 'Edit'}
-          </button>
-        }
-      >
-        {isPortfolioEditing ? (
-          <div className="space-y-3">
-            {positionRows.length > 0 ? (
-              <div className="space-y-2">
-                {positionRows.map((item) => (
-                  <div key={item.ticker} className="flex items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-fin-text">{item.ticker}</span>
-                      <span className="text-[10px] text-fin-muted">
-                        {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '--'}
-                      </span>
-                    </div>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={positionDrafts[item.ticker] ?? ''}
-                      onChange={(event) =>
-                        setPositionDrafts((prev) => ({
-                          ...prev,
-                          [item.ticker]: event.target.value,
-                        }))
-                      }
-                      className="w-20 px-2 py-1 rounded border border-fin-border bg-fin-bg text-fin-text text-right focus:outline-none focus:border-fin-primary"
-                      placeholder="0"
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-fin-muted">Add watchlist tickers to set holdings.</div>
-            )}
-            <div className="flex items-center justify-between text-[10px] text-fin-muted">
-              <span>Blank or 0 removes a position.</span>
-              <button
-                onClick={(event) => {
-                  event.stopPropagation();
-                  cancelPortfolioEdit();
-                }}
-                className="text-fin-muted hover:text-fin-text"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : portfolioSummary ? (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="text-xl font-bold text-fin-text">${portfolioSummary.totalValue.toLocaleString()}</div>
-              <div className={`text-sm font-medium ${portfolioSummary.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
-                {portfolioSummary.dayChange >= 0 ? '+' : ''}{portfolioSummary.dayChange.toFixed(2)} ({formatChangePct(portfolioSummary.avgChange)})
-              </div>
-              <div className="text-[10px] text-fin-muted">Holdings {portfolioSummary.holdingsCount}</div>
-            </div>
-            <div className="space-y-2">
-              {positionRows
-                .filter((item) => item.shares > 0)
-                .map((item) => (
-                  <div key={item.ticker} className="flex items-center justify-between text-xs">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-fin-text">{item.ticker}</span>
-                      <span className="text-[10px] text-fin-muted">
-                        {item.shares} shares{typeof item.price === 'number' ? ` @ $${item.price.toFixed(2)}` : ''}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-fin-text">${item.value.toLocaleString()}</div>
-                      <div className={`text-[10px] ${item.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
-                        {item.dayChange >= 0 ? '+' : ''}{item.dayChange.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ) : (
-          <div className="text-xs text-fin-muted">Set holdings to generate portfolio summary.</div>
-        )}
-      </Widget>
-
-      {/* Market Chart - 可收起且可拉伸 */}
-      <Widget
-        title="Market Chart"
-        icon={<TrendingUp size={14} />}
-        action={
-          <button
-            onClick={() => setIsChartMaximized(true)}
-            className="p-1 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-primary transition-colors"
-            title="全屏查看图表"
-          >
-            <Maximize2 size={12} />
-          </button>
-        }
-      >
-        <div className="relative">
-          <div
-            style={{ height: chartHeight }}
-            className="w-full bg-fin-bg-secondary/50 rounded-lg overflow-hidden"
-          >
-            <StockChart />
-          </div>
-          {/* 拉伸手柄 */}
-          <div
-            className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize bg-gradient-to-t from-fin-border/30 to-transparent flex items-center justify-center"
-            onMouseDown={(e) => {
-              const startY = e.clientY;
-              const startHeight = chartHeight;
-              const onMouseMove = (moveEvent: MouseEvent) => {
-                const diff = moveEvent.clientY - startY;
-                setChartHeight(Math.max(150, Math.min(500, startHeight + diff)));
-              };
-              const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-              };
-              document.addEventListener('mousemove', onMouseMove);
-              document.addEventListener('mouseup', onMouseUp);
-            }}
-          >
-            <div className="w-8 h-1 bg-fin-border rounded-full" />
-          </div>
-        </div>
-      </Widget>
-
-      {/* Agent 运行状态 - 增强版实时日志面板 */}
-      <AgentLogPanel />
+      )}
 
       {/* Footer */}
       {lastUpdated && (
-        <div className="text-[10px] text-fin-muted text-center py-1">
+        <div className="text-[10px] text-fin-muted text-center py-1 border-t border-fin-border/50 shrink-0">
           上次更新: {lastUpdated.toLocaleTimeString()}
         </div>
       )}
+
       {/* Chart Maximize Modal */}
       {isChartMaximized && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
