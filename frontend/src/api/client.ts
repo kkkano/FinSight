@@ -14,6 +14,12 @@ export interface ChatContext {
   selections?: SelectionItem[];
 }
 
+export interface ChatOptions {
+  output_mode?: 'chat' | 'brief' | 'investment_report';
+  strict_selection?: boolean;
+  locale?: string;
+}
+
 // 本地开发地址，生产环境请改为实际域名
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
@@ -40,11 +46,12 @@ export const createCancelToken = () => {
 
 export const apiClient = {
   // 发送聊天消息（协调者主入口）
-  async sendMessage(query: string, sessionId?: string): Promise<ChatResponse> {
+  async sendMessage(query: string, sessionId?: string, options?: ChatOptions): Promise<ChatResponse> {
     try {
       const response = await api.post<ChatResponse>('/chat/supervisor', {
         query,
-        session_id: sessionId
+        session_id: sessionId,
+        options,
       });
 
       // 兼容性处理：如果后端返回结构不一致，确保前端不白屏
@@ -186,13 +193,21 @@ export const apiClient = {
     onThinking?: (step: any) => void,
     history?: Array<{role: string, content: string}>,  // 对话历史
     onRawEvent?: (event: RawSSEEvent) => void,  // 原始 SSE 事件回调
-    context?: ChatContext  // 临时上下文（不入库，仅本次请求生效）
+    context?: ChatContext,  // 临时上下文（不入库，仅本次请求生效）
+    options?: ChatOptions,  // 输出/路由选项（不入库，仅本次请求生效）
+    sessionId?: string,
   ): Promise<void> {
     let eventCounter = 0;
 
     const body: Record<string, any> = { query, history };
+    if (sessionId) {
+      body.session_id = sessionId;
+    }
     if (context) {
       body.context = context;
+    }
+    if (options) {
+      body.options = options;
     }
 
     const response = await fetch(`${API_BASE_URL}/chat/supervisor/stream`, {
@@ -235,6 +250,7 @@ export const apiClient = {
                 rawData: rawJson,
                 parsedData: data,
                 size: new Blob([rawJson]).size,
+                sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
               });
             }
 
@@ -260,11 +276,19 @@ export const apiClient = {
             } else if (data.type === 'error') {
               onError?.(data.message);
             } else if (['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)) {
-              // Agent 进度事件 - 转换为 thinking 格式
+              // Agent 进度事件 - 转换为 thinking 格式（兼容后端字段 agent/name/inputs/step_id）
+              const agentName = data.agent || data.name;
               onThinking?.({
                 stage: data.type,
-                message: data.agent ? `${data.agent} Agent` : (data.message || ''),
-                result: { agent: data.agent, status: data.status, agents: data.agents },
+                message: agentName ? `${agentName} Agent` : (data.message || ''),
+                result: {
+                  agent: agentName,
+                  status: data.status,
+                  step_id: data.step_id,
+                  inputs: data.inputs,
+                  error: data.error,
+                  agents: data.agents,
+                },
                 timestamp: new Date().toISOString()
               });
             }
@@ -278,6 +302,7 @@ export const apiClient = {
                 rawData: rawJson,
                 parsedData: { parseError: true, raw: rawJson, error: String(e) },
                 size: new Blob([rawJson]).size,
+                sessionId: undefined,
               });
             }
           }

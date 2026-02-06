@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from typing import Any, Optional
 
@@ -9,7 +9,7 @@ def _normalize_published_date(value: Any) -> Optional[str]:
         return value.strftime("%Y-%m-%d")
     if isinstance(value, (int, float)):
         try:
-            return datetime.utcfromtimestamp(value).strftime("%Y-%m-%d")
+            return datetime.fromtimestamp(value, timezone.utc).strftime("%Y-%m-%d")
         except Exception:
             return None
     if isinstance(value, str):

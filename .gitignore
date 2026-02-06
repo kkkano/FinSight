@@ -74,6 +74,9 @@ logs/
 temp/
 tmp/
 
+# --- Runtime Data ---
+data/langgraph/
+
 # --- Agentic Tools ---
 .antigravity/
 .cursor/

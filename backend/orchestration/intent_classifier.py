@@ -47,6 +47,10 @@ class EmbeddingClassifier:
 
     def _load_model(self):
         """Lazy load embedding model"""
+        # Some tests force-disable embedding by setting `_model = False`.
+        # Treat that as "unavailable" (do not attempt to encode).
+        if self._model is False:
+            return False
         if self._model is not None:
             return True
         try:

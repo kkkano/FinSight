@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Mini Chat 组件 - 右侧面板的快捷输入窗口
  *
  * 与主 Chat 共享同一份 messages 列表（统一上下文）。
@@ -6,19 +6,21 @@
  * 临时上下文（如当前关注的 symbol 和选中的新闻），不会注入到消息内容中。
  */
 import { useRef, useEffect, useState } from 'react';
-import { Send, Loader2, X, Paperclip } from 'lucide-react';
+import { Send, Loader2, X, Paperclip, FileText } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiClient, type ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
+import { ReportView } from './ReportView';
 
 export const MiniChat: React.FC = () => {
   // 共享主 Chat 的 messages（统一上下文）
-  const { messages, addMessage, updateMessage, currentTicker } = useStore();
+  const { messages, addMessage, updateMessage, currentTicker, sessionId, setSessionId } = useStore();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
+  const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
   // 本地 loading 状态（不影响主 Chat 的全局 loading）
   const [isLoading, setIsLoading] = useState(false);
   // 用户是否关闭了 context pill
@@ -31,6 +33,7 @@ export const MiniChat: React.FC = () => {
 
   // 当前 symbol（优先 dashboardStore，兜底 useStore）
   const currentSymbol = activeAsset?.symbol || currentTicker || null;
+  const canGenerateReport = Boolean(currentSymbol || activeSelections.length > 0);
 
   // 是否展示 context pill
   const showContextPill = contextEnabled && !!currentSymbol;
@@ -45,7 +48,13 @@ export const MiniChat: React.FC = () => {
     setContextEnabled(true);
   }, [currentSymbol]);
 
-  const handleSend = async () => {
+  useEffect(() => {
+    if (!canGenerateReport && outputMode === 'investment_report') {
+      setOutputMode('brief');
+    }
+  }, [canGenerateReport, outputMode]);
+
+  const handleSend = async (forcedOutputMode?: 'investment_report') => {
     const text = input.trim();
     if (!text || isLoading) return;
 
@@ -77,6 +86,7 @@ export const MiniChat: React.FC = () => {
     // 重置累积 ref
     accumulatedContentRef.current = '';
     accumulatedThinkingRef.current = [];
+    const effectiveOutputMode = forcedOutputMode ?? outputMode;
 
     try {
       // 构建统一的历史记录（取 messages，排除 welcome 和 loading）
@@ -112,8 +122,11 @@ export const MiniChat: React.FC = () => {
         },
         undefined, // onToolStart
         undefined, // onToolEnd
-        (report, thinking) => {
+        (report, thinking, meta) => {
           // onDone
+          if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
+            setSessionId(meta.session_id);
+          }
           updateMessage(aiMsgId, {
             isLoading: false,
             report,
@@ -136,6 +149,10 @@ export const MiniChat: React.FC = () => {
         history,
         undefined, // onRawEvent
         contextToSend,   // 临时上下文（symbol + selection）
+        effectiveOutputMode === 'investment_report'
+          ? { output_mode: 'investment_report', strict_selection: false }
+          : { output_mode: 'brief' },
+        sessionId || undefined,
       );
     } catch (error) {
       updateMessage(aiMsgId, {
@@ -193,11 +210,17 @@ export const MiniChat: React.FC = () => {
                   <span className="whitespace-pre-wrap break-words">{msg.content}</span>
                 ) : (
                   // AI 回复：Markdown 渲染
-                  <div className="prose prose-sm prose-invert max-w-none text-fin-text prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1 prose-code:text-fin-primary prose-code:bg-fin-bg/50 prose-code:px-1 prose-code:rounded">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
+                  msg.report ? (
+                    <div className="max-w-none">
+                      <ReportView report={msg.report as any} />
+                    </div>
+                  ) : (
+                    <div className="prose prose-sm prose-invert max-w-none text-fin-text prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1 prose-code:text-fin-primary prose-code:bg-fin-bg/50 prose-code:px-1 prose-code:rounded">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -245,9 +268,39 @@ export const MiniChat: React.FC = () => {
           )}
         </div>
 
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-fin-muted">输出</span>
+          <button
+            type="button"
+            onClick={() => setOutputMode('brief')}
+            disabled={isLoading}
+            className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+              outputMode === 'brief'
+                ? 'border-fin-primary text-fin-primary bg-fin-primary/10'
+                : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50'
+            }`}
+          >
+            简报
+          </button>
+          <button
+            type="button"
+            onClick={() => setOutputMode('investment_report')}
+            disabled={isLoading || !canGenerateReport}
+            className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+              outputMode === 'investment_report'
+                ? 'border-amber-500 text-amber-500 bg-amber-500/10'
+                : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={canGenerateReport ? '切换到研报模式' : '请选择标的或引用内容后生成研报'}
+          >
+            研报
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <input
             type="text"
+            data-testid="mini-chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -256,9 +309,20 @@ export const MiniChat: React.FC = () => {
             className="flex-1 px-3 py-2 text-xs bg-fin-bg border border-fin-border rounded-lg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary disabled:opacity-50"
           />
           <button
-            onClick={handleSend}
+            data-testid="mini-chat-report-btn"
+            onClick={() => handleSend('investment_report')}
+            disabled={isLoading || !input.trim() || !canGenerateReport}
+            className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="生成研报"
+          >
+            <FileText size={14} />
+          </button>
+          <button
+            data-testid="mini-chat-send-btn"
+            onClick={() => handleSend()}
             disabled={isLoading || !input.trim()}
             className="p-2 bg-fin-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            title={outputMode === 'investment_report' ? '发送（研报模式）' : '发送'}
           >
             {isLoading ? (
               <Loader2 size={14} className="animate-spin" />
@@ -271,3 +335,4 @@ export const MiniChat: React.FC = () => {
     </div>
   );
 };
+

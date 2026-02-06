@@ -1,0 +1,300 @@
+# -*- coding: utf-8 -*-
+import asyncio
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def test_planner_llm_mode_falls_back_when_llm_unavailable(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import backend.llm_config as llm_config
+
+    def _boom(*_args, **_kwargs):
+        raise ValueError("no api key")
+
+    monkeypatch.setattr(llm_config, "create_llm", _boom)
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "分析影响",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "unknown", "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 4}, "allowed_tools": ["search"]},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    assert isinstance(out.get("plan_ir"), dict)
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is True
+
+
+def test_planner_llm_mode_enforces_state_output_mode_and_allowlist(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp(
+                """
+                ```json
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "investment_report",
+                  "steps": [
+                    {"id":"sX","kind":"tool","name":"search","inputs":{"query":"AAPL news"},"why":"ok","optional":true},
+                    {"id":"sY","kind":"tool","name":"get_stock_price","inputs":{"ticker":"AAPL"},"why":"no","optional":true}
+                  ],
+                  "budget": {"max_rounds": 9, "max_tools": 99},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                ```
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    selection_payload = [{"type": "news", "id": "n1", "title": "t", "snippet": "s"}]
+    state = {
+        "query": "分析影响",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "news_item", "selection_payload": selection_payload},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 1}, "allowed_tools": ["search"], "allowed_agents": []},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+
+    plan = out.get("plan_ir") or {}
+    assert plan.get("output_mode") == "brief", "planner must not self-upgrade output_mode"
+    assert (plan.get("budget") or {}).get("max_tools") == 1, "budget must be enforced from policy"
+
+    steps = plan.get("steps") or []
+    assert steps and steps[0].get("name") == "summarize_selection"
+    assert all(s.get("name") in ("summarize_selection", "search") for s in steps)
+    assert len([s for s in steps if s.get("kind") in ("tool", "agent")]) <= 1
+
+
+def test_planner_llm_mode_sanitizes_extra_fields_and_avoids_validation_errors(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            # Intentionally include extra fields and a malformed synthesis object.
+            return _Resp(
+                """
+                {
+                  "goal": "compare",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"], "extra": "x"},
+                  "output_mode": "investment_report",
+                  "steps": [
+                    {"id":"s1","kind":"tool","name":"get_performance_comparison","inputs":{"tickers":["AAPL","MSFT"]},"why":"x","optional":false,"extra":"bad"}
+                  ],
+                  "budget": {"max_rounds": 99, "max_tools": 99, "extra": "bad"},
+                  "synthesis": {"kind":"llm","name":"investment_compare","style":"concise","sections":["a"],"extra":"bad"},
+                  "top_extra": "bad"
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "对比 AAPL 和 MSFT 哪个更值得投资",
+        "output_mode": "brief",
+        "operation": {"name": "compare", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 3, "max_tools": 2},
+            "allowed_tools": ["get_performance_comparison", "search"],
+            "allowed_agents": [],
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+
+    plan = out.get("plan_ir") or {}
+    assert plan.get("output_mode") == "brief"
+    assert set((plan.get("synthesis") or {}).keys()) == {"style", "sections"}
+
+    steps = plan.get("steps") or []
+    assert any(s.get("name") == "get_performance_comparison" for s in steps)
+    assert all("extra" not in s for s in steps), "planner should strip unknown step fields"
+
+
+def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            # Intentionally omit agent steps; enforcement should add them in investment_report mode.
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "investment_report",
+                  "steps": [
+                    {"id":"s1","kind":"tool","name":"search","inputs":{"query":"AAPL news"},"why":"ok","optional":true}
+                  ],
+                  "budget": {"max_rounds": 9, "max_tools": 99},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "详细分析苹果公司，生成投资报告",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 8},
+            "allowed_tools": ["search"],
+            "allowed_agents": [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent",
+            ],
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+
+    plan = out.get("plan_ir") or {}
+    steps = plan.get("steps") or []
+    step_ids = [s.get("id") for s in steps]
+    assert len(step_ids) == len(set(step_ids)), "planner must emit unique step ids to avoid step_results overwrites"
+    agent_steps = [s for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
+    names = {s.get("name") for s in agent_steps}
+    for expected in (
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "deep_search_agent",
+    ):
+        assert expected in names
+
+    for step in agent_steps:
+        inputs = step.get("inputs") or {}
+        assert inputs.get("query") == state["query"]
+        assert inputs.get("ticker") == "AAPL"
+
+
+def test_planner_investment_report_budget_prioritizes_baseline_agents_over_tools(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            # Create a plan that would exceed max_tools unless we drop tools or agents.
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["TSLA"]},
+                  "output_mode": "investment_report",
+                  "steps": [
+                    {"id":"s1","kind":"tool","name":"search","inputs":{"query":"TSLA news"},"why":"ok"},
+                    {"id":"s2","kind":"tool","name":"get_company_news","inputs":{"ticker":"TSLA","limit":5},"why":"ok"},
+                    {"id":"s3","kind":"tool","name":"get_current_datetime","inputs":{},"why":"ok"},
+                    {"id":"s4","kind":"tool","name":"get_company_info","inputs":{"ticker":"TSLA"},"why":"ok"}
+                  ],
+                  "budget": {"max_rounds": 9, "max_tools": 99},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "深度分析 TSLA，生成投资报告",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["TSLA"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 8},
+            "allowed_tools": ["search", "get_company_news", "get_current_datetime", "get_company_info"],
+            "allowed_agents": [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent",
+            ],
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    plan = out.get("plan_ir") or {}
+    steps = plan.get("steps") or []
+    # Ensure baseline agent cards are always present even under tight max_tools.
+    agent_steps = [s for s in steps if s.get("kind") == "agent"]
+    names = {s.get("name") for s in agent_steps}
+    assert "macro_agent" in names
+    assert "deep_search_agent" in names
+
+    step_ids = [s.get("id") for s in steps]
+    assert len(step_ids) == len(set(step_ids))
+
+    # Budget applies to tool+agent steps; baseline has 6 agents so tools may be trimmed.
+    tool_agent_steps = [s for s in steps if s.get("kind") in ("tool", "agent")]
+    assert len(tool_agent_steps) <= 8

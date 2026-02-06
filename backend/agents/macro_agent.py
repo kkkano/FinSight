@@ -30,13 +30,6 @@ class MacroAgent(BaseFinancialAgent):
         """
         宏观搜索策略：使用 FRED API 获取真实宏观经济数据
         """
-        # 关键词提取
-        macro_keywords = ["inflation", "rate", "fed", "recession", "gdp", "cpi", "unemployment", "macro", "economy", "interest", "treasury"]
-        relevant = any(k in query.lower() for k in macro_keywords)
-
-        if not relevant and "macro" not in query.lower():
-            return {"status": "skipped", "reason": "No macro intent detected"}
-
         # 使用 FRED API 获取真实数据
         try:
             if hasattr(self.tools, 'get_fred_data'):

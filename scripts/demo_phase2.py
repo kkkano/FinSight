@@ -162,7 +162,7 @@ async def run_demo():
     md_content = render_markdown(validated_report)
 
     # 8. 保存文件
-    output_path = "docs/PHASE2_DEMO_REPORT.md"
+    output_path = "docs/reports/PHASE2_DEMO_REPORT.md"
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(md_content)
 

@@ -19,7 +19,6 @@ def test_validator_init():
     validator = DataValidator()
     assert validator is not None
     print("✅ 验证器初始化测试通过")
-    return True
 
 
 def test_validation_result_structure():
@@ -42,7 +41,6 @@ def test_validation_result_structure():
     assert 'confidence' in d
     
     print("✅ ValidationResult 结构测试通过")
-    return True
 
 
 def test_price_validation_valid():
@@ -56,7 +54,6 @@ def test_price_validation_valid():
     assert result.confidence > 0.5
     
     print("✅ 有效价格数据验证测试通过")
-    return True
 
 
 def test_price_validation_error():
@@ -70,7 +67,6 @@ def test_price_validation_error():
     assert len(result.issues) > 0
     
     print("✅ 错误价格数据验证测试通过")
-    return True
 
 
 def test_price_validation_dict():
@@ -98,7 +94,6 @@ def test_price_validation_dict():
     assert len(result.warnings) > 0
     
     print("✅ 字典格式价格数据验证测试通过")
-    return True
 
 
 def test_company_info_validation():
@@ -120,7 +115,6 @@ def test_company_info_validation():
     assert result.is_valid == False
     
     print("✅ 公司信息验证测试通过")
-    return True
 
 
 def test_financials_validation():
@@ -148,7 +142,6 @@ def test_financials_validation():
     assert len(result.warnings) > 0
     
     print("✅ 财务数据验证测试通过")
-    return True
 
 
 def test_financials_cross_validation():
@@ -167,7 +160,6 @@ def test_financials_cross_validation():
     assert len(result.issues) > 0 or len(result.warnings) > 0
     
     print("✅ 财务数据交叉验证测试通过")
-    return True
 
 
 def test_news_validation():
@@ -188,7 +180,6 @@ def test_news_validation():
     assert result.is_valid == False
     
     print("✅ 新闻数据验证测试通过")
-    return True
 
 
 def test_generic_validation():
@@ -208,7 +199,6 @@ def test_generic_validation():
     assert result.is_valid == False
     
     print("✅ 通用验证测试通过")
-    return True
 
 
 def test_empty_string():
@@ -221,7 +211,6 @@ def test_empty_string():
     assert result.confidence < 1.0
     
     print("✅ 空字符串验证测试通过")
-    return True
 
 
 def test_validation_confidence_levels():
@@ -240,7 +229,6 @@ def test_validation_confidence_levels():
         assert result.confidence < 1.0
     
     print("✅ 验证置信度级别测试通过")
-    return True
 
 
 def run_all_tests():
@@ -268,8 +256,8 @@ def run_all_tests():
     results = {}
     for test_name, test_func in tests:
         try:
-            result = test_func()
-            results[test_name] = result
+            test_func()
+            results[test_name] = True
         except Exception as e:
             print(f"❌ {test_name} 测试失败: {e}")
             import traceback

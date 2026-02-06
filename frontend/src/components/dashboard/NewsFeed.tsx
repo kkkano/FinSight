@@ -165,6 +165,7 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
   return (
     <div
       onClick={handleClick}
+      data-testid={`news-item-${newsId}`}
       className={`group p-3 rounded-lg border transition-colors ${
         isSelected
           ? 'border-fin-primary bg-fin-primary/5'
@@ -175,6 +176,7 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
         {/* 多选 checkbox */}
         <button
           onClick={handleToggleSelect}
+          data-testid={`news-select-${newsId}`}
           title={isSelected ? '取消选择' : '选择'}
           className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
             isSelected
@@ -216,6 +218,7 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
           {/* "问这条"按钮 */}
           <button
             onClick={handleAskAbout}
+            data-testid={`news-ask-${newsId}`}
             title="问这条"
             className={`p-1.5 rounded-md transition-all ${
               isSelected

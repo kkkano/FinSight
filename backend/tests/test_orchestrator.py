@@ -59,7 +59,6 @@ def test_orchestrator_init():
     assert len(orchestrator.sources) == 0  # 未加载工具模块时为空
     
     print("[OK] 编排器初始化测试通过")
-    return True
 
 
 def test_manual_source_registration():
@@ -76,7 +75,6 @@ def test_manual_source_registration():
     assert orchestrator.sources['price'][0].name == 'mock_success'
     
     print("[OK] 手动注册数据源测试通过")
-    return True
 
 
 def test_fetch_success():
@@ -95,7 +93,6 @@ def test_fetch_success():
     assert result.duration_ms > 0
     
     print("[OK] 成功获取数据测试通过")
-    return True
 
 
 def test_fetch_with_fallback():
@@ -115,7 +112,6 @@ def test_fetch_with_fallback():
     assert stats['orchestrator']['fallback_used'] == 1, "应该记录一次回退"
     
     print("[OK] 失败回退测试通过")
-    return True
 
 
 def test_fetch_all_fail():
@@ -133,7 +129,6 @@ def test_fetch_all_fail():
     assert 'tried:' in result.source
     
     print("[OK] 所有数据源失败测试通过")
-    return True
 
 
 def test_cache_integration():
@@ -167,7 +162,6 @@ def test_cache_integration():
     assert call_count[0] == 2
     
     print("[OK] 缓存集成测试通过")
-    return True
 
 
 def test_rate_limit_handling():
@@ -184,7 +178,6 @@ def test_rate_limit_handling():
     assert result.source == 'mock_success', "应该回退到成功的数据源"
     
     print("[OK] 限速处理测试通过")
-    return True
 
 
 def test_none_result_handling():
@@ -201,7 +194,6 @@ def test_none_result_handling():
     assert result.source == 'mock_success', "应该跳过返回 None 的数据源"
     
     print("[OK] None 结果处理测试通过")
-    return True
 
 
 def test_consecutive_failures_priority():
@@ -222,7 +214,6 @@ def test_consecutive_failures_priority():
     assert result.source == 'reliable'
     
     print("[OK] 连续失败优先级降低测试通过")
-    return True
 
 
 def test_stats_tracking():
@@ -249,7 +240,6 @@ def test_stats_tracking():
     assert stats['cache']['hits'] >= 1
     
     print("[OK] 统计追踪测试通过")
-    return True
 
 
 def test_validation_integration():
@@ -273,7 +263,6 @@ def test_validation_integration():
     assert result.validation.is_valid == True
     
     print("[OK] 数据验证集成测试通过")
-    return True
 
 
 def test_reset_stats():
@@ -297,7 +286,6 @@ def test_reset_stats():
     assert stats['orchestrator']['total_requests'] == 0
     
     print("[OK] 重置统计测试通过")
-    return True
 
 
 def run_all_tests():
@@ -325,8 +313,8 @@ def run_all_tests():
     results = {}
     for test_name, test_func in tests:
         try:
-            result = test_func()
-            results[test_name] = result
+            test_func()
+            results[test_name] = True
         except Exception as e:
             print(f"[FAIL] {test_name} 测试失败: {e}")
             import traceback

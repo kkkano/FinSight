@@ -15,6 +15,9 @@
 > ✅ **近期同步**: BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
 > ✅ **近期同步**: API 鉴权 + 限流 + 免责声明模板落地，确保合规门禁（P0-29）
 > - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
+
+> ⚠️ **SSOT（唯一标准）**：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`  
+> 本文档聚焦 RAG/向量库能力；与编排/路由冲突时，以 LangGraph 重构指南为准。
 ---
 
 ## 0.1 Recent Updates (2026-01-28)

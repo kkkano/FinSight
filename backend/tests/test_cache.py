@@ -29,7 +29,6 @@ def test_basic_set_get():
     assert result["price"] == 150.0, "缓存值应该正确"
     
     print("✅ 基本 set/get 测试通过")
-    return True
 
 
 def test_cache_miss():
@@ -41,7 +40,6 @@ def test_cache_miss():
     assert result is None, "不存在的键应返回 None"
     
     print("✅ 缓存未命中测试通过")
-    return True
 
 
 def test_ttl_expiration():
@@ -63,7 +61,6 @@ def test_ttl_expiration():
     assert result2 is None, "过期后应返回 None"
     
     print("✅ TTL 过期测试通过")
-    return True
 
 
 def test_default_ttl_by_type():
@@ -76,7 +73,6 @@ def test_default_ttl_by_type():
     assert cache.DEFAULT_TTL['news'] == 1800, "news TTL 应为 30 分钟"
     
     print("✅ 默认 TTL 配置测试通过")
-    return True
 
 
 def test_cache_stats():
@@ -105,7 +101,6 @@ def test_cache_stats():
     assert "%" in stats['hit_rate'], "命中率应该是百分比格式"
     
     print("✅ 缓存统计测试通过")
-    return True
 
 
 def test_cache_delete():
@@ -127,7 +122,6 @@ def test_cache_delete():
     assert result == False, "删除不存在的键应返回 False"
     
     print("✅ 缓存删除测试通过")
-    return True
 
 
 def test_cache_clear():
@@ -147,7 +141,6 @@ def test_cache_clear():
     assert len(cache) == 0, "清空后应该为空"
     
     print("✅ 清空缓存测试通过")
-    return True
 
 
 def test_cache_contains():
@@ -160,7 +153,6 @@ def test_cache_contains():
     assert "not_exists" not in cache, "'not_exists' 不应在缓存中"
     
     print("✅ 'in' 操作符测试通过")
-    return True
 
 
 def test_cleanup_expired():
@@ -185,7 +177,6 @@ def test_cleanup_expired():
     assert cache.get("long") is not None, "长 TTL 缓存应该还在"
     
     print("✅ 过期缓存清理测试通过")
-    return True
 
 
 def test_thread_safety():
@@ -228,7 +219,6 @@ def test_thread_safety():
     assert len(errors) == 0, f"不应该有线程安全错误: {errors}"
     
     print("✅ 线程安全测试通过")
-    return True
 
 
 def run_all_tests():
@@ -254,8 +244,8 @@ def run_all_tests():
     results = {}
     for test_name, test_func in tests:
         try:
-            result = test_func()
-            results[test_name] = result
+            test_func()
+            results[test_name] = True
         except Exception as e:
             print(f"❌ {test_name} 测试失败: {e}")
             import traceback

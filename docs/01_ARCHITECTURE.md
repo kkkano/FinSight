@@ -44,6 +44,30 @@
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 ---
 
+> ⚠️ **SSOT（唯一标准）**：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（2026-02-02 起）  
+> 本文档的 Supervisor/Intent Router 架构说明已进入“历史参考”模式，不应再驱动新开发。
+
+## 当前架构（LangGraph 单入口｜2026）
+
+```mermaid
+flowchart TD
+  A[API /chat/*] --> B[BuildInitialState]
+  B --> C[NormalizeUIContext]
+  C --> D[ResolveSubject]
+  D --> E[ParseOperation]
+  E --> F[DecideOutputMode]
+  F --> G[PolicyGate]
+  G --> H[Planner (PlanIR)]
+  H --> I[ExecutePlan (parallel+cache)]
+  I --> J[Render (templates)]
+  J --> Z[Response / SSE]
+```
+
+关键点：
+- 研报不再是“意图”，而是 `output_mode`（由 UI 按钮显式触发）。
+- selection.type 仅表示输入对象类型（`news|filing|doc`），由 ResolveSubject 决定 `subject_type`。
+- Planner 默认“最小计划”，避免“分析=全家桶”。
+
 ## 一、架构全景图 (The Big Picture)
 
 FinSight 采用 **Supervisor Agent 协调者模式**，实现业界标准的多 Agent 协作架构。

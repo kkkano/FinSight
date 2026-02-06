@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, X } from 'lucide-react';
+import { SendHorizontal, Paperclip, X, FileText } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
@@ -62,6 +62,8 @@ const mapStageToSource = (stage: string): AgentLogSource => {
     llm_call: 'supervisor',
     error: 'system',
   };
+  if (stage.startsWith('langgraph_')) return 'supervisor';
+  if (stage.startsWith('executor_step')) return 'supervisor';
   // 检查是否包含 agent 名称
   if (stage.includes('news')) return 'news_agent';
   if (stage.includes('price')) return 'price_agent';
@@ -79,6 +81,7 @@ interface ChatInputProps {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDashboardRequest }) => {
   const [input, setInput] = useState('');
+  const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
   const {
     addMessage,
     updateMessage,
@@ -89,6 +92,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     draft,
     setDraft,
     currentTicker,
+    sessionId,
+    setSessionId,
     // Agent Logs
     addAgentLog,
     updateAgentStatus,
@@ -124,7 +129,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     return { ticker, chartType: 'line' };
   };
 
-  const handleSend = async () => {
+  const handleSend = async (forcedOutputMode?: 'investment_report') => {
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
@@ -175,6 +180,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
     let fullContent = '';
     let thinkingSteps: ThinkingStep[] = [];
+    const effectiveOutputMode = forcedOutputMode ?? outputMode;
 
     try {
       await apiClient.sendMessageStream(
@@ -215,6 +221,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         // onDone - Phase 2: 支持 report 数据
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
           console.log('[ChatInput] onDone called, report:', report); // Debug Log
+          if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
+            setSessionId(meta.session_id);
+          }
           // 合并实时收集的 thinking 和 done 事件中的 thinking
           // 如果 done 事件中有 thinking，优先使用（通常是完整版），但也保留之前的实时步骤
           if (thinking && thinking.length) {
@@ -345,7 +354,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           if (activeSelections.length === 1) ctx.selection = activeSelections[0];
           if (activeSelections.length > 1) ctx.selections = activeSelections;
           return Object.keys(ctx).length > 0 ? ctx : undefined;
-        })()
+        })(),
+        effectiveOutputMode === 'investment_report'
+          ? { output_mode: 'investment_report', strict_selection: false }
+          : { output_mode: 'brief' },
+        sessionId || undefined,
       );
     } catch (error) {
       updateMessage(aiMsgId, {
@@ -375,6 +388,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
   };
 
+  const canGenerateReport = Boolean(activeAsset?.symbol || currentTicker || activeSelections.length > 0);
+
+  useEffect(() => {
+    if (!canGenerateReport && outputMode === 'investment_report') {
+      setOutputMode('brief');
+    }
+  }, [canGenerateReport, outputMode]);
+
   return (
     <div className="p-4 bg-fin-bg border-t border-fin-border">
       {/* Selection Pill - 显示当前选中的新闻/报告 */}
@@ -398,6 +419,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           </span>
         </div>
       )}
+      <div className="max-w-5xl mx-auto mb-2 flex items-center gap-2 text-xs">
+        <span className="text-fin-muted">输出模式</span>
+        <button
+          type="button"
+          onClick={() => setOutputMode('brief')}
+          disabled={isChatLoading}
+          className={`px-2 py-1 rounded border transition-colors ${
+            outputMode === 'brief'
+              ? 'border-fin-primary text-fin-primary bg-fin-primary/10'
+              : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50'
+          }`}
+        >
+          简报
+        </button>
+        <button
+          type="button"
+          onClick={() => setOutputMode('investment_report')}
+          disabled={isChatLoading || !canGenerateReport}
+          className={`px-2 py-1 rounded border transition-colors ${
+            outputMode === 'investment_report'
+              ? 'border-amber-500 text-amber-500 bg-amber-500/10'
+              : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+          title={canGenerateReport ? '切换到研报模式' : '请选择标的或引用内容后生成研报'}
+        >
+          研报
+        </button>
+      </div>
       <div className="relative flex items-center max-w-5xl mx-auto">
         <input
           ref={inputRef}
@@ -408,15 +457,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           onKeyDown={handleKeyDown}
           placeholder="Ask anything about a ticker... (e.g., AAPL price trend)"
           disabled={isChatLoading}
-          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-12 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted"
+          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted"
         />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isChatLoading}
-          className="absolute right-2 p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-0 disabled:scale-90 transition-all duration-200"
-        >
-          <SendHorizontal size={18} />
-        </button>
+
+        <div className="absolute right-2 flex items-center gap-2">
+          <button
+            data-testid="chat-report-btn"
+            onClick={() => handleSend('investment_report')}
+            disabled={!input.trim() || isChatLoading || !canGenerateReport}
+            className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="生成研报"
+          >
+            <FileText size={18} />
+          </button>
+          <button
+            data-testid="chat-send-btn"
+            onClick={() => handleSend()}
+            disabled={!input.trim() || isChatLoading}
+            className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title={outputMode === 'investment_report' ? '发送（研报模式）' : '发送'}
+          >
+            <SendHorizontal size={18} />
+          </button>
+        </div>
       </div>
       <div className="text-center mt-2">
         <p className="text-xs text-fin-muted">

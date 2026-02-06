@@ -30,6 +30,29 @@ const stageLabels: Record<string, string> = {
   agent_selected: '🤖 选择专家Agent',
   tool_selected: '🔧 选择工具',
   reasoning: '💭 推理思考中',
+  // LangGraph streaming
+  langgraph_start: '🔗 LangGraph 启动',
+  executor_step_start: '⚙️ 执行步骤开始',
+  executor_step_done: '✅ 执行步骤完成',
+  executor_step_error: '❌ 执行步骤失败',
+  llm_call_start: '🧠 LLM 调用开始',
+  llm_call_done: '🧠 LLM 调用完成',
+  llm_call_error: '🧠 LLM 调用失败',
+};
+
+const formatLangGraphStage = (stage: string) => {
+  if (!stage.startsWith('langgraph_')) return null;
+  if (stage === 'langgraph_start') return stageLabels.langgraph_start;
+
+  const suffix = stage.endsWith('_start') ? 'start' : stage.endsWith('_done') ? 'done' : null;
+  if (!suffix) return null;
+
+  const node = stage
+    .replace(/^langgraph_/, '')
+    .replace(/_(start|done)$/, '');
+  return suffix === 'start'
+    ? `▶️ LangGraph 节点开始：${node}`
+    : `✅ LangGraph 节点完成：${node}`;
 };
 
 const getStageIcon = (stage: string) => {
@@ -294,7 +317,7 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
                 <span className="mt-0.5">{getStageIcon(step.stage)}</span>
                 <div className="flex-1 min-w-0 text-left">
                   <div className="font-medium text-fin-text flex items-center gap-2">
-                    {stageLabels[step.stage] || step.stage}
+                    {formatLangGraphStage(step.stage) || stageLabels[step.stage] || step.stage}
                     {step.result?.confidence !== undefined && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-fin-bg rounded">
                         置信度: {formatConfidence(step.result.confidence)}

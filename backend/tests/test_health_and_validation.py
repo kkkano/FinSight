@@ -40,6 +40,11 @@ def test_health_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("status") == "healthy"
+    components = data.get("components") or {}
+    checkpointer = components.get("checkpointer") or {}
+    assert checkpointer.get("status") == "ok"
+    assert checkpointer.get("schema_version") == "checkpointer.v1"
+    assert checkpointer.get("backend") in ("sqlite", "postgres", "memory")
     assert "timestamp" in data
 
 

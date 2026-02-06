@@ -8,11 +8,12 @@ import traceback
 import time
 from collections import deque
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from backend.api.streaming import stream_report_sse, stream_supervisor_sse
 from backend.api.schemas import (
     ChatRequest, SubscriptionRequest, UnsubscribeRequest, ToggleSubscriptionRequest,
     ChatResponse, SupervisorResponse, HealthResponse, RootResponse,
@@ -21,7 +22,12 @@ from backend.api.schemas import (
     ConfigResponse, ChartDetectResponse, ChartDataResponse,
 )
 from backend.api.dashboard_router import dashboard_router
+from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
+from backend.conversation.context import ContextManager
+from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
+from backend.llm_config import create_llm  # Legacy test compatibility hook.
+from backend.orchestration.tools_bridge import get_global_orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +68,6 @@ except ImportError as e:
     logger.info(f"❌ Error importing chart detector: {e}")
     ChartTypeDetector = None
 
-# 导入 Agent
-from backend.conversation.agent import create_agent
-from backend.llm_config import create_llm  # 导入 create_llm 以支持热加载
-
 # 导入 MemoryService
 try:
     from backend.services.memory import MemoryService, UserProfile
@@ -75,20 +77,97 @@ except Exception as e:
     logger.info(f"[Init] Error initializing MemoryService: {e}")
     memory_service = None
 
-# 初始化 Agent
-try:
-    # 尝试初始化，如果失败则打印详细堆栈
-    agent = create_agent(
-        use_llm=True,
-        use_orchestrator=True
-    )
-    logger.info("[Init] ConversationAgent initialized successfully.")
-except Exception as e:
-    logger.info(f"[Init] Error initializing ConversationAgent: {e}")
-    traceback.print_exc()
-    agent = None
+agent = None  # Deprecated: kept for backward-compat tests/monkeypatch hooks only.
 
 _schedulers = []
+_reference_contexts: Dict[str, ContextManager] = {}
+_reference_lock = Lock()
+
+
+def _resolve_thread_id(session_id: Optional[str]) -> str:
+    resolved = (session_id or "").strip()
+    if resolved:
+        return resolved
+    return str(uuid4())
+
+
+def _get_session_context(session_id: str) -> ContextManager:
+    with _reference_lock:
+        manager = _reference_contexts.get(session_id)
+        if manager is None:
+            manager = ContextManager(max_turns=20)
+            _reference_contexts[session_id] = manager
+        return manager
+
+
+def _resolve_query_reference(query: str, thread_id: str) -> str:
+    # Backward compatibility for tests still monkeypatching `main.agent.context.resolve_reference`.
+    if agent and getattr(agent, "context", None) and hasattr(agent.context, "resolve_reference"):
+        try:
+            return agent.context.resolve_reference(query)
+        except Exception:
+            pass
+    try:
+        return _get_session_context(thread_id).resolve_reference(query)
+    except Exception:
+        return query
+
+
+def _update_session_context(
+    *,
+    thread_id: str,
+    original_query: str,
+    response_markdown: str,
+    subject: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not thread_id:
+        return
+    try:
+        tickers = []
+        if isinstance(subject, dict):
+            tickers = [str(t).strip().upper() for t in (subject.get("tickers") or []) if str(t).strip()]
+        metadata: Dict[str, Any] = {}
+        if tickers:
+            metadata["tickers"] = tickers
+        _get_session_context(thread_id).add_turn(
+            query=original_query,
+            intent="chat",
+            response=response_markdown or "",
+            metadata=metadata,
+        )
+    except Exception:
+        logger.exception("failed to update session context")
+
+
+def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
+    ui_context: Dict[str, Any] = {}
+    if not request.context:
+        return ui_context
+    if request.context.active_symbol:
+        ui_context["active_symbol"] = request.context.active_symbol
+    if request.context.view:
+        ui_context["view"] = request.context.view
+
+    selections: List[Dict[str, Any]] = []
+    if request.context.selection:
+        selections.append(request.context.selection.model_dump())
+    if getattr(request.context, "selections", None):
+        selections.extend([s.model_dump() for s in (request.context.selections or []) if s])
+    if selections:
+        ui_context["selections"] = selections
+    return ui_context
+
+
+def _contract_info() -> Dict[str, str]:
+    return contract_manifest()
+
+
+def _get_orchestrator_safe():
+    try:
+        return get_global_orchestrator()
+    except Exception:
+        logger.exception("failed to initialize orchestrator")
+        return None
 
 def _env_bool(key: str, default: str = "false") -> bool:
     return os.getenv(key, default).lower() in ("true", "1", "yes", "on")
@@ -165,7 +244,6 @@ _rate_limiter = SimpleRateLimiter.from_env()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan handler to start/stop price_change scheduler."""
-
     from backend.services.alert_scheduler import run_price_change_cycle
     from backend.services.scheduler_runner import start_price_change_scheduler
 
@@ -211,6 +289,12 @@ async def lifespan(app: FastAPI):
             _schedulers.append(sched)
     else:
         logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
+
+    try:
+        await aget_graph_runner()
+        logger.info("[GraphRunner] initialized in lifespan")
+    except Exception as exc:
+        logger.exception("[GraphRunner] initialization failed in lifespan: %s", exc)
 
     try:
         yield
@@ -345,68 +429,48 @@ def read_root():
     return {
         "status": "healthy",
         "message": "FinSight API is running",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 
 @app.get("/health")
 def health_check():
     """
-    增强健康检查端点 - 包含子Agent状态和后端服务状态
+    增强健康检查端点 - LangGraph/Orchestrator/Memory 状态
     """
-    # 基础状态
     status = "healthy"
-    components = {}
+    components: Dict[str, Dict[str, Any]] = {}
 
-    # 检查 Agent 状态
-    if agent:
-        components["agent"] = {"status": "ok", "available": True}
+    components["langgraph_runner"] = {"status": "ok" if graph_runner_ready() else "initializing"}
+    checkpointer_info = get_graph_checkpointer_info()
+    checkpointer_status = "ok" if checkpointer_info.get("backend") != "unknown" else "initializing"
+    components["checkpointer"] = {"status": checkpointer_status, **checkpointer_info}
 
-        # 检查 LLM
-        has_llm = hasattr(agent, "llm") and agent.llm is not None
-        components["llm"] = {"status": "ok" if has_llm else "unavailable"}
-
-        # 检查 Orchestrator
-        has_orchestrator = hasattr(agent, "orchestrator") and agent.orchestrator is not None
-        components["orchestrator"] = {"status": "ok" if has_orchestrator else "unavailable"}
-
-        # 检查 Orchestrator 内部组件
-        if has_orchestrator:
-            has_cache = hasattr(agent.orchestrator, 'cache') and agent.orchestrator.cache is not None
-            has_tools = hasattr(agent.orchestrator, 'tools_module') and agent.orchestrator.tools_module is not None
-            components["cache"] = {"status": "ok" if has_cache else "unavailable"}
-            components["tools_module"] = {"status": "ok" if has_tools else "unavailable"}
-
-        # 检查子 Agent（只有 llm + orchestrator + cache + tools_module 都存在才会初始化）
-        if hasattr(agent, "news_agent") and agent.news_agent:
-            components["news_agent"] = {"status": "ok"}
-        else:
-            components["news_agent"] = {"status": "unavailable", "reason": "not initialized"}
-
-        if hasattr(agent, "price_agent") and agent.price_agent:
-            components["price_agent"] = {"status": "ok"}
-        else:
-            components["price_agent"] = {"status": "unavailable", "reason": "not initialized"}
-
-        # 检查 Supervisor
-        if hasattr(agent, "supervisor") and agent.supervisor:
-            components["supervisor"] = {"status": "ok"}
-        else:
-            components["supervisor"] = {"status": "unavailable"}
+    orchestrator = _get_orchestrator_safe()
+    if orchestrator:
+        components["orchestrator"] = {"status": "ok"}
+        has_cache = hasattr(orchestrator, "cache") and orchestrator.cache is not None
+        has_tools = hasattr(orchestrator, "tools_module") and orchestrator.tools_module is not None
+        components["cache"] = {"status": "ok" if has_cache else "unavailable"}
+        components["tools_module"] = {"status": "ok" if has_tools else "unavailable"}
     else:
         status = "degraded"
-        components["agent"] = {"status": "error", "available": False}
+        components["orchestrator"] = {"status": "error", "available": False}
+        components["cache"] = {"status": "unavailable"}
+        components["tools_module"] = {"status": "unavailable"}
 
-    # 检查 MemoryService
-    if memory_service:
-        components["memory"] = {"status": "ok"}
+    components["memory"] = {"status": "ok" if memory_service else "unavailable"}
+
+    # Explicitly mark legacy agent as deprecated to prevent accidental reuse.
+    if agent:
+        components["legacy_agent"] = {"status": "deprecated", "available": True}
     else:
-        components["memory"] = {"status": "unavailable"}
+        components["legacy_agent"] = {"status": "deprecated", "available": False}
 
     return {
         "status": status,
         "components": components,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 
@@ -425,14 +489,15 @@ def diagnostics_orchestrator():
     返回 Orchestrator 的聚合健康信息：总请求、缓存命中、回退次数、按源统计。
     供前端健康面板使用。
     """
-    if not agent or not getattr(agent, "orchestrator", None):
+    orchestrator = _get_orchestrator_safe()
+    if not orchestrator:
         raise HTTPException(status_code=500, detail="Orchestrator not initialized")
     try:
-        stats = agent.orchestrator.get_stats()
+        stats = orchestrator.get_stats()
         return {
             "status": "ok",
             "data": stats,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}")
@@ -440,154 +505,57 @@ def diagnostics_orchestrator():
 @app.post("/chat/supervisor")
 async def chat_supervisor_endpoint(request: ChatRequest):
     """
-    协调者模式对话接口 - Supervisor Agent 架构
-    意图分类(规则+LLM) → Supervisor协调 → Worker Agents → Forum综合
+    LangGraph 单入口对话接口（Phase 5：移除 legacy Supervisor/Router）。
     """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-
     try:
-        # 动态创建 LLM 以支持配置热加载
-        try:
-            current_llm = create_llm()
-        except Exception as e:
-            logger.error(f"Failed to create LLM: {e}")
-            current_llm = agent.llm  # 回退到全局 LLM
-            
-        if not current_llm:
-             raise HTTPException(status_code=500, detail="LLM not initialized")
+        runner = await aget_graph_runner()
+        thread_id = _resolve_thread_id(request.session_id)
+        ui_context = _build_ui_context(request)
 
-        from backend.orchestration.supervisor_agent import SupervisorAgent
-        from backend.conversation.router import extract_tickers, Intent
+        output_mode = None
+        strict_selection = None
+        if getattr(request, "options", None):
+            output_mode = request.options.output_mode
+            strict_selection = request.options.strict_selection
 
-        preprocess = agent.context.preprocess_query(request.query)
-        prepared_query = preprocess.get("query", request.query)
-        resolved_query = agent.context.resolve_reference(prepared_query)
+        resolved_query = _resolve_query_reference(request.query, thread_id)
 
-        intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
-        selected_ticker = preprocess.get("selected_ticker")
-        if selected_ticker and selected_ticker not in metadata.get("tickers", []):
-            metadata.setdefault("tickers", []).insert(0, selected_ticker)
-        if preprocess.get("selection_reason"):
-            metadata["selection_reason"] = preprocess.get("selection_reason")
-        if preprocess.get("market_hint"):
-            metadata["market_hint"] = preprocess.get("market_hint")
-
-        if intent == Intent.CLARIFY:
-            question = metadata.get("schema_question") or "Please provide more details."
-            return {
-                "success": True,
-                "response": question,
-                "schema_question": question,
-                "intent": "clarify",
-                "classification": {"method": "schema_router", "confidence": 0.95},
-                "session_id": request.session_id or "new_session",
-                "needs_clarification": True,
-                "missing_fields": metadata.get("schema_missing", []),
-                "schema_tool_name": metadata.get("schema_tool_name"),
-                "source": metadata.get("source", "schema_router"),
-            }
-
-        tickers = metadata.get("tickers", [])
-        if not tickers:
-            tickers_result = extract_tickers(resolved_query)
-            tickers = tickers_result.get("tickers", []) if isinstance(tickers_result, dict) else tickers_result
-
-
-        
-
-        # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
-        tools_module = None
-        cache = None
-        circuit_breaker = None
-        orchestrator = getattr(agent, "orchestrator", None)
-        if orchestrator:
-            tools_module = getattr(orchestrator, 'tools_module', None)
-            cache = getattr(orchestrator, 'cache', None)
-            circuit_breaker = getattr(orchestrator, 'circuit_breaker', None)
-        if not tools_module:
-            import backend.tools as tools_module
-
-        # 创建 Supervisor Agent
-        # 创建 Supervisor Agent
-        supervisor = SupervisorAgent(
-            llm=current_llm,
-            tools_module=tools_module,
-            cache=cache,
-            circuit_breaker=circuit_breaker
+        state = await runner.ainvoke(
+            thread_id=thread_id,
+            query=resolved_query,
+            ui_context=ui_context,
+            output_mode=output_mode,
+            strict_selection=strict_selection,
         )
+        markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
+        report = None
+        try:
+            from backend.graph.report_builder import build_report_payload
 
-        # 处理临时上下文（ephemeral context，不入库，仅本次请求生效）
-        context_summary = None
-        if request.context:
-            context_parts = []
+            report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
+        except Exception:
+            report = None
 
-            if request.context.active_symbol:
-                symbol = request.context.active_symbol
-                view = request.context.view or "dashboard"
-                context_parts.append(
-                    f"用户当前正在 {view} 视图查看 {symbol}。"
-                    f"请基于此上下文回答问题，除非用户明确询问其他标的。"
-                )
-                if symbol.upper() not in [t.upper() for t in tickers]:
-                    tickers.insert(0, symbol.upper())
-
-            selections = []
-            if request.context.selection:
-                selections.append(request.context.selection)
-            if getattr(request.context, "selections", None):
-                selections.extend([s for s in (request.context.selections or []) if s])
-
-            if selections:
-                uniq = []
-                seen = set()
-                for s in selections:
-                    key = (getattr(s, "type", None), getattr(s, "id", None))
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    uniq.append(s)
-                selections = uniq
-
-                by_type = {"news": [], "report": []}
-                for s in selections:
-                    if s.type in by_type:
-                        by_type[s.type].append(s)
-                    else:
-                        by_type.setdefault(s.type, []).append(s)
-
-                for sel_type, group in by_type.items():
-                    if not group:
-                        continue
-                    type_label = "新闻" if sel_type == "news" else "报告"
-                    selection_info = f"用户正在询问以下{type_label}（共{len(group)}条）：\n"
-                    for i, sel in enumerate(group, start=1):
-                        selection_info += f"{i}. 标题：{sel.title}\n"
-                        if sel.source:
-                            selection_info += f"   来源：{sel.source}\n"
-                        if sel.ts:
-                            selection_info += f"   时间：{sel.ts}\n"
-                        if sel.snippet:
-                            selection_info += f"   摘要：{sel.snippet}\n"
-                        if sel.url:
-                            selection_info += f"   链接：{sel.url}\n"
-                    context_parts.append(selection_info.strip())
-
-            if context_parts:
-                context_summary = "[System Context]\n" + "\n\n".join(context_parts)
-
-        # 执行
-        result = await supervisor.process(resolved_query, tickers, context_summary=context_summary)
-
+        _update_session_context(
+            thread_id=thread_id,
+            original_query=request.query,
+            response_markdown=markdown,
+            subject=state.get("subject"),
+        )
         return {
-            "success": result.success,
-            "response": result.response,
-            "intent": result.intent.value if result.intent else None,
-            "classification": {
-                "method": result.classification.method if result.classification else None,
-                "confidence": result.classification.confidence if result.classification else None,
-            } if result.classification else None,
-            "session_id": request.session_id or "new_session",
+            "success": True,
+            "schema_version": CHAT_RESPONSE_SCHEMA_VERSION,
+            "contracts": _contract_info(),
+            "response": markdown,
+            "report": report,
+            "intent": "chat",
+            "classification": {"method": "langgraph", "confidence": 1.0},
+            "session_id": thread_id,
+            "graph": {
+                "subject": state.get("subject"),
+                "output_mode": state.get("output_mode"),
+                "trace": state.get("trace"),
+            },
         }
 
     except Exception as e:
@@ -599,220 +567,128 @@ async def chat_supervisor_endpoint(request: ChatRequest):
 @app.post("/chat/supervisor/stream")
 async def chat_supervisor_stream_endpoint(request: ChatRequest):
     """
-    协调者模式流式接口 - 实时报告意图分类和执行进度
-    支持多轮对话上下文
+    LangGraph 单入口流式接口（Phase 5：移除 legacy Supervisor/Router）。
     """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-        
-    # 动态创建 LLM 以支持配置热加载
-    try:
-        current_llm = create_llm()
-    except Exception as e:
-        logger.error(f"Failed to create LLM: {e}")
-        current_llm = agent.llm  # 回退到全局 LLM
-        
-    if not current_llm:
-         raise HTTPException(status_code=500, detail="LLM not initialized")
-
+    import asyncio as _asyncio
     import json as _json
 
-    from backend.orchestration.supervisor_agent import SupervisorAgent
-    from backend.conversation.router import extract_tickers, Intent
+    from backend.graph.event_bus import reset_event_emitter, set_event_emitter
 
-    preprocess = agent.context.preprocess_query(request.query)
-    prepared_query = preprocess.get("query", request.query)
-    resolved_query = agent.context.resolve_reference(prepared_query)
+    runner = await aget_graph_runner()
+    thread_id = _resolve_thread_id(request.session_id)
+    ui_context = _build_ui_context(request)
 
-    # ── Selection Context 预处理（在意图分类之前）──────────────────
-    # 如果用户有明确的 Selection（新闻/报告引用），将其信息融入查询
-    # 这样路由器能正确理解用户意图，不会返回 CLARIFY
-    selection_context_hint = None
-    selections = []
-    if request.context:
-        if request.context.selection:
-            selections.append(request.context.selection)
-        if getattr(request.context, "selections", None):
-            selections.extend([s for s in (request.context.selections or []) if s])
-    if selections:
-        # 去重（按 type + id）
-        uniq = []
-        seen = set()
-        for s in selections:
-            key = (getattr(s, "type", None), getattr(s, "id", None))
-            if key in seen:
-                continue
-            seen.add(key)
-            uniq.append(s)
-        selections = uniq
+    output_mode = None
+    strict_selection = None
+    if getattr(request, "options", None):
+        output_mode = request.options.output_mode
+        strict_selection = request.options.strict_selection
 
-        first = selections[0]
-        type_label = "新闻" if first.type == "news" else "报告"
-        if len(selections) == 1:
-            selection_context_hint = f"[引用{type_label}: {first.title}]"
-        else:
-            selection_context_hint = f"[引用{type_label}: {len(selections)}条]"
+    resolved_query = _resolve_query_reference(request.query, thread_id)
 
-        # 如果用户查询很短/模糊，将 Selection 信息附加到查询中用于意图分类
-        if len(resolved_query.strip()) < 30:
-            resolved_query = f"{resolved_query} {selection_context_hint}"
-            logger.info(f"[SelectionContext] Enhanced query for routing: {resolved_query}")
+    queue: "_asyncio.Queue[object]" = _asyncio.Queue()
+    _END = object()
 
-    intent, metadata, _handler = agent.router.route(resolved_query, agent.context)
-    selected_ticker = preprocess.get("selected_ticker")
-    if selected_ticker and selected_ticker not in metadata.get("tickers", []):
-        metadata.setdefault("tickers", []).insert(0, selected_ticker)
-    if preprocess.get("selection_reason"):
-        metadata["selection_reason"] = preprocess.get("selection_reason")
-    if preprocess.get("market_hint"):
-        metadata["market_hint"] = preprocess.get("market_hint")
+    async def _emit(payload: dict) -> None:
+        outgoing = dict(payload)
+        original_schema = outgoing.get("schema_version")
+        if isinstance(original_schema, str) and original_schema and original_schema != SSE_EVENT_SCHEMA_VERSION:
+            outgoing["trace_schema_version"] = original_schema
+        outgoing["schema_version"] = SSE_EVENT_SCHEMA_VERSION
+        await queue.put(outgoing)
 
-    # ── Selection Context 强制路由（优先级最高）────────────────────
-    # Dashboard 里明确选择了新闻/报告，意图直接按 selection 类型确定
-    if selections:
-        from backend.conversation.router import Intent
-        metadata["has_selection_context"] = True
-        if selections[0].type == "news":
-            intent = Intent.NEWS
-        elif selections[0].type == "report":
-            intent = Intent.REPORT
-
-    # ── 有 Selection Context 时跳过 CLARIFY ──────────────────────
-    # 用户明确引用了新闻/报告，即使查询模糊也不需要澄清
-    if intent == Intent.CLARIFY:
-        # 如果有 Selection Context，改为 SEARCH/NEWS 意图
-        if selections:
-            logger.info(f"[SelectionContext] Overriding CLARIFY intent due to selection context")
-            intent = Intent.NEWS  # 默认兜底（上面已按 type 强制过）
-            metadata["has_selection_context"] = True
-        else:
-            question = metadata.get("schema_question") or "Please provide more details."
-
-            async def clarify_response():
-                yield f"data: {_json.dumps({'type': 'token', 'content': question}, ensure_ascii=False)}\n\n"
-                yield f"data: {_json.dumps({'type': 'done', 'intent': 'clarify', 'needs_clarification': True, 'schema_question': question, 'missing_fields': metadata.get('schema_missing', []), 'schema_tool_name': metadata.get('schema_tool_name'), 'source': metadata.get('source', 'schema_router')}, ensure_ascii=False)}\n\n"
-
-            return StreamingResponse(
-                clarify_response(),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    async def _producer() -> None:
+        token = set_event_emitter(_emit)
+        try:
+            await queue.put(
+                {
+                    "schema_version": SSE_EVENT_SCHEMA_VERSION,
+                    "type": "thinking",
+                    "stage": "langgraph_start",
+                    "message": "LangGraph",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
             )
 
-    tickers = metadata.get("tickers", [])
-    if not tickers:
-        tickers_result = extract_tickers(resolved_query)
-        tickers = tickers_result.get('tickers', []) if isinstance(tickers_result, dict) else tickers_result
-
-    agent_gate = None
-    if hasattr(agent, "evaluate_agent_gate"):
-        agent_gate = agent.evaluate_agent_gate(resolved_query, intent, metadata)
-        # Supervisor endpoint always uses agent; override if needed
-        if agent_gate.exclusion_reason == "supervisor_unavailable":
-            agent_gate.exclusion_reason = None
-            agent_gate.need_agent = True
-            agent_gate.should_use_supervisor = True
-        agent_gate.used_supervisor = True
-        agent_gate.agent_path = "supervisor"
-        if hasattr(agent_gate, "to_dict"):
-            metadata["agent_gate"] = agent_gate.to_dict()
-
-    # 构建对话上下文
-    # 注意：对于报告生成，不依赖历史上下文，只依赖当前问题
-    # 这样可以避免闲聊消息（如打招呼）污染报告内容
-    conversation_context = None
-    # if request.history:
-    #     max_history = _env_int("CHAT_HISTORY_MAX_MESSAGES", 12)
-    #     conversation_context = [
-    #         {"role": msg.role, "content": msg.content}
-    #         for msg in request.history[-max_history:]
-    #     ]
-
-    # 处理临时上下文（ephemeral context，不入库，仅本次请求生效）
-    if request.context:
-        context_parts = []
-
-        # 1. Active Symbol 上下文（弱约束）
-        if request.context.active_symbol:
-            symbol = request.context.active_symbol
-            view = request.context.view or "dashboard"
-            context_parts.append(
-                f"用户当前正在 {view} 视图查看 {symbol}。"
-                f"请基于此上下文回答问题，除非用户明确询问其他标的。"
+            state = await runner.ainvoke(
+                thread_id=thread_id,
+                query=resolved_query,
+                ui_context=ui_context,
+                output_mode=output_mode,
+                strict_selection=strict_selection,
             )
-            # 确保 tickers 包含当前 symbol
-            if symbol.upper() not in [t.upper() for t in tickers]:
-                tickers.insert(0, symbol.upper())
+            markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
+            report = None
+            try:
+                from backend.graph.report_builder import build_report_payload
 
-        # 2. Selection 上下文（强约束 - 用户明确引用的对象）
-        if selections:
-            # 按类型分组（避免混合时信息混乱）
-            by_type = {"news": [], "report": []}
-            for s in selections:
-                if s.type in by_type:
-                    by_type[s.type].append(s)
-                else:
-                    by_type.setdefault(s.type, []).append(s)
+                report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
+            except Exception:
+                report = None
 
-            for sel_type, group in by_type.items():
-                if not group:
+            _update_session_context(
+                thread_id=thread_id,
+                original_query=request.query,
+                response_markdown=markdown,
+                subject=state.get("subject"),
+            )
+
+            # Stream output chunks (best-effort). Node-level trace is streamed in real-time above.
+            chunk_size = 60
+            for i in range(0, len(markdown), chunk_size):
+                chunk = markdown[i : i + chunk_size]
+                if chunk:
+                    await queue.put({"schema_version": SSE_EVENT_SCHEMA_VERSION, "type": "token", "content": chunk})
+                await _asyncio.sleep(0)
+
+            await queue.put(
+                {
+                    "schema_version": SSE_EVENT_SCHEMA_VERSION,
+                    "type": "done",
+                    "contracts": _contract_info(),
+                    "intent": "chat",
+                    "session_id": thread_id,
+                    "response": markdown,
+                    "report": report,
+                    "graph": {
+                        "subject": state.get("subject"),
+                        "output_mode": state.get("output_mode"),
+                        "trace": state.get("trace"),
+                    },
+                }
+            )
+        except Exception as exc:
+            await queue.put({"schema_version": SSE_EVENT_SCHEMA_VERSION, "type": "error", "message": str(exc)})
+        finally:
+            reset_event_emitter(token)
+            await queue.put(_END)
+
+    producer_task = _asyncio.create_task(_producer())
+
+    async def _stream():
+        try:
+            while True:
+                try:
+                    item = await _asyncio.wait_for(queue.get(), timeout=5)
+                except _asyncio.TimeoutError:
+                    # SSE keep-alive comment to prevent idle timeouts in proxies/browsers.
+                    yield ": keep-alive\n\n"
                     continue
-                type_label = "新闻" if sel_type == "news" else "报告"
-                selection_info = f"用户正在询问以下{type_label}（共{len(group)}条）：\n"
-                for i, sel in enumerate(group, start=1):
-                    selection_info += f"{i}. 标题：{sel.title}\n"
-                    if sel.source:
-                        selection_info += f"   来源：{sel.source}\n"
-                    if sel.ts:
-                        selection_info += f"   时间：{sel.ts}\n"
-                    if sel.snippet:
-                        selection_info += f"   摘要：{sel.snippet}\n"
-                    if sel.url:
-                        selection_info += f"   链接：{sel.url}\n"
-                context_parts.append(selection_info.strip())
-
-        # 合并上下文
-        if context_parts:
-            context_msg = "[System Context]\n" + "\n\n".join(context_parts)
-            conversation_context = [{"role": "system", "content": context_msg}]
-
-    # 获取 tools_module, cache, circuit_breaker (从 orchestrator 获取)
-    tools_module = None
-    cache = None
-    circuit_breaker = None
-    orchestrator = getattr(agent, "orchestrator", None)
-    if orchestrator:
-        tools_module = getattr(orchestrator, 'tools_module', None)
-        cache = getattr(orchestrator, 'cache', None)
-        circuit_breaker = getattr(orchestrator, 'circuit_breaker', None)
-    if not tools_module:
-        import backend.tools as tools_module
-
-    # 创建 Supervisor Agent
-    # 创建 Supervisor Agent
-    supervisor = SupervisorAgent(
-        llm=current_llm,
-        tools_module=tools_module,
-        cache=cache,
-        circuit_breaker=circuit_breaker
-    )
-
-    async def generate():
-        async for chunk in supervisor.process_stream(
-            resolved_query,
-            tickers,
-            conversation_context=conversation_context,
-            agent_gate=metadata.get("agent_gate"),
-        ):
-            yield f"data: {chunk}\n\n"
+                if item is _END:
+                    break
+                yield f"data: {_json.dumps(item, ensure_ascii=False)}\n\n"
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
+                try:
+                    await producer_task
+                except Exception:
+                    pass
 
     return StreamingResponse(
-        generate(),
+        _stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
 
 
@@ -823,27 +699,24 @@ async def add_chart_data(request: dict):
     将图表数据摘要加入聊天上下文
     前端在生成图表后调用此接口
     """
-    if not agent:
-        raise HTTPException(status_code=500, detail="Agent not initialized")
-    
     try:
         ticker = request.get('ticker')
         summary = request.get('summary', '')
+        session_id = (request.get("session_id") or "").strip() or "default"
         
         if not ticker or not summary:
             return {"success": False, "error": "Missing ticker or summary"}
         
-        # 将图表数据摘要作为系统消息加入上下文
-        # 这样后续对话时AI可以看到这些数据
+        # 将图表数据摘要写入会话上下文（仅用于本进程内引用消解）
         chart_message = f"[图表数据] {summary}"
-        agent.context.add_turn(
+        _get_session_context(session_id).add_turn(
             query=f"查看 {ticker} 的图表数据",
             intent="chat",
             response=chart_message,
-            metadata={"ticker": ticker, "chart_data": True}
+            metadata={"ticker": ticker, "tickers": [ticker], "chart_data": True}
         )
         
-        return {"success": True, "message": "Chart data added to context"}
+        return {"success": True, "message": "Chart data added to context", "session_id": session_id}
     except Exception as e:
         traceback.print_exc()
         return {"success": False, "error": str(e)}
@@ -852,9 +725,9 @@ async def add_chart_data(request: dict):
 def get_price(ticker: str):
     """获取股票价格（带缓存，TTL=60秒）"""
     try:
+        orchestrator = _get_orchestrator_safe()
         # 尝试从缓存获取
-        orchestrator = getattr(agent, "orchestrator", None)
-        if agent and orchestrator:
+        if orchestrator:
             cache_key = f"price:{ticker}"
             cached_data = orchestrator.cache.get(cache_key)
             if cached_data is not None:
@@ -865,8 +738,7 @@ def get_price(ticker: str):
         price_info = get_stock_price(ticker)
 
         # 存入缓存（TTL=60秒）
-        orchestrator = getattr(agent, "orchestrator", None)
-        if agent and orchestrator and price_info:
+        if orchestrator and price_info:
             orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
             logger.info(f"[API] 价格已缓存: {ticker}")
 
@@ -912,9 +784,9 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         interval: 数据间隔 (1d, 1wk, 1mo)
     """
     try:
-        # 尝试从 Agent 的 orchestrator 缓存获取
-        orchestrator = getattr(agent, "orchestrator", None)
-        if agent and orchestrator:
+        orchestrator = _get_orchestrator_safe()
+        # 尝试从全局 orchestrator 缓存获取
+        if orchestrator:
             cache_key = f"kline:{ticker}:{period}:{interval}"
             cached_data = orchestrator.cache.get(cache_key)
             if cached_data is not None:
@@ -925,8 +797,7 @@ def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
         kline_data = get_stock_historical_data(ticker, period=period, interval=interval)
         
         # 如果成功获取，存入缓存（缓存 1 小时）
-        orchestrator = getattr(agent, "orchestrator", None)
-        if "error" not in kline_data and agent and orchestrator:
+        if "error" not in kline_data and orchestrator:
             cache_key = f"kline:{ticker}:{period}:{interval}"
             orchestrator.cache.set(cache_key, kline_data, ttl=3600)  # 1小时缓存
             logger.info(f"[API] K 线数据已缓存: {ticker} ({period}, {interval})")

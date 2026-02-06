@@ -93,6 +93,7 @@ const countContentChars = (markdown: string): number => {
     .replace(/^>+\s?/gm, '')              // blockquotes
     .replace(/---+|===+|\*\*\*+/g, '')    // horizontal rules
     .replace(/\|/g, '')                   // table pipes
+    .replace(/https?:\/\/\S+/g, '')       // raw URLs (ignore for content length)
     .replace(/[:\-]+/g, ' ');             // table alignment
   // Count Chinese characters + English words + numbers
   const chinese = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;

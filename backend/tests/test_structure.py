@@ -6,6 +6,7 @@ Step 1.1 测试 - 验证目录结构
 
 import sys
 import os
+import pytest
 
 # 添加项目根目录到路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,10 +19,8 @@ def test_backend_package():
         import backend
         assert hasattr(backend, '__version__')
         print("✅ backend 包导入成功")
-        return True
     except ImportError as e:
-        print(f"❌ backend 包导入失败: {e}")
-        return False
+        pytest.fail(f"backend 包导入失败: {e}")
 
 
 def test_orchestration_module():
@@ -44,10 +43,8 @@ def test_orchestration_module():
         assert validator is not None
         
         print("✅ orchestration 模块测试通过")
-        return True
     except Exception as e:
-        print(f"❌ orchestration 模块测试失败: {e}")
-        return False
+        pytest.fail(f"orchestration 模块测试失败: {e}")
 
 
 def test_conversation_module():
@@ -78,12 +75,8 @@ def test_conversation_module():
         assert "AAPL" in metadata.get('tickers', [])
         
         print("✅ conversation 模块测试通过")
-        return True
     except Exception as e:
-        print(f"❌ conversation 模块测试失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        pytest.fail(f"conversation 模块测试失败: {e}")
 
 
 def test_handlers_module():
@@ -101,10 +94,8 @@ def test_handlers_module():
         assert followup_handler is not None
         
         print("✅ handlers 模块测试通过")
-        return True
     except Exception as e:
-        print(f"❌ handlers 模块测试失败: {e}")
-        return False
+        pytest.fail(f"handlers 模块测试失败: {e}")
 
 
 def test_prompts_module():
@@ -124,10 +115,8 @@ def test_prompts_module():
         assert "{risk_tolerance}" in FORUM_SYNTHESIS_PROMPT
         
         print("✅ prompts 模块测试通过")
-        return True
     except Exception as e:
-        print(f"❌ prompts 模块测试失败: {e}")
-        return False
+        pytest.fail(f"prompts 模块测试失败: {e}")
 
 
 def test_directory_structure():
@@ -151,7 +140,7 @@ def test_directory_structure():
             print(f"❌ 目录缺失: {dir_path}")
             all_exist = False
     
-    return all_exist
+    assert all_exist, "目录结构缺失，请检查上方日志"
 
 
 def run_all_tests():
@@ -161,14 +150,22 @@ def run_all_tests():
     print("=" * 60)
     print()
     
-    results = {
-        "目录结构": test_directory_structure(),
-        "backend 包": test_backend_package(),
-        "orchestration 模块": test_orchestration_module(),
-        "conversation 模块": test_conversation_module(),
-        "handlers 模块": test_handlers_module(),
-        "prompts 模块": test_prompts_module(),
-    }
+    results = {}
+    tests = [
+        ("目录结构", test_directory_structure),
+        ("backend 包", test_backend_package),
+        ("orchestration 模块", test_orchestration_module),
+        ("conversation 模块", test_conversation_module),
+        ("handlers 模块", test_handlers_module),
+        ("prompts 模块", test_prompts_module),
+    ]
+
+    for test_name, test_func in tests:
+        try:
+            test_func()
+            results[test_name] = True
+        except Exception:
+            results[test_name] = False
     
     print()
     print("=" * 60)

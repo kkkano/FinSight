@@ -21,6 +21,9 @@
 > - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
 > - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
 > - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
+
+> ⚠️ **SSOT（唯一标准）**：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`  
+> 本文档为历史阶段总结；后续架构与开发以 LangGraph 重构指南为准。
 ---
 
 ## 0.1 Recent Updates (2026-01-28)

@@ -7,6 +7,7 @@ Mature multi-Agent architecture: AgentIntent Classification → Supervisor Coord
 import logging
 import asyncio
 import time
+import warnings
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 
@@ -17,6 +18,21 @@ from backend.orchestration.trace_emitter import get_trace_emitter
 from backend.agents.base_agent import AgentOutput
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_WARNED = False
+
+
+def _warn_deprecated_once() -> None:
+    global _DEPRECATION_WARNED
+    if _DEPRECATION_WARNED:
+        return
+    _DEPRECATION_WARNED = True
+    warnings.warn(
+        "SupervisorAgent is deprecated; use the LangGraph entry point (backend.graph) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning("[DEPRECATED] SupervisorAgent is legacy; prefer LangGraph (backend.graph).")
 
 
 @dataclass
@@ -51,6 +67,7 @@ class SupervisorAgent:
     """
 
     def __init__(self, llm, tools_module, cache, circuit_breaker=None):
+        _warn_deprecated_once()
         self.llm = llm
         self.tools_module = tools_module
         # Keep a reference to the original tools module so we can re-wrap
@@ -248,18 +265,6 @@ class SupervisorAgent:
         # 1. AgentIntent classification (带上下文)
         classification = self.classifier.classify(query, tickers, context_summary=context_summary)
         logger.info(f"[Supervisor] AgentIntent: {classification.intent.value} (method: {classification.method}, confidence: {classification.confidence})")
-
-        # ── Selection Context 强制意图（优先级最高）────────────────────
-        # Dashboard 里用户明确选择了新闻/报告，则按选择类型直接路由，避免误判。
-        if context_summary and "[System Context]" in context_summary:
-            if ("用户正在询问以下新闻" in context_summary) or ("引用新闻" in context_summary):
-                classification.intent = AgentIntent.NEWS
-                classification.method = f"{classification.method}+selection_override"
-                classification.reasoning = (classification.reasoning or "") + " | selection_context=news"
-            elif ("用户正在询问以下报告" in context_summary) or ("引用报告" in context_summary):
-                classification.intent = AgentIntent.REPORT
-                classification.method = f"{classification.method}+selection_override"
-                classification.reasoning = (classification.reasoning or "") + " | selection_context=report"
 
         # 2. Route based on intent
         intent = classification.intent

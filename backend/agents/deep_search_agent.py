@@ -629,7 +629,13 @@ queries要求：
             
             message = HumanMessage(content=prompt)
             if hasattr(self.llm, "ainvoke"):
-                response = await self.llm.ainvoke([message])
+                from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+
+                response = await ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [message],
+                    acquire_token=False,
+                )
             else:
                 response = await asyncio.to_thread(self.llm.invoke, [message])
             return getattr(response, "content", "") if response is not None else ""

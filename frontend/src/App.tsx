@@ -1,16 +1,17 @@
-﻿import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { ChatList } from './components/ChatList';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Sun, Moon, ChevronLeft } from 'lucide-react';
 import Sidebar from './components/Sidebar';
+import { ChatList } from './components/ChatList';
 import { ChatInput } from './components/ChatInput';
+import { RightPanel } from './components/RightPanel';
+import { AgentLogPanel } from './components/AgentLogPanel';
 import { SettingsModal } from './components/SettingsModal';
 import { SubscribeModal } from './components/SubscribeModal';
-import { Sun, Moon, ChevronLeft } from 'lucide-react';
+import { Dashboard } from './pages/Dashboard';
 import { useStore } from './store/useStore';
 import { apiClient } from './api/client';
-import { RightPanel } from './components/RightPanel';
-import { Dashboard } from './pages/Dashboard';
 
-// 市场指数配置
 const MARKET_INDICES = [
   { label: 'S&P 500', ticker: '^GSPC', flag: '🇺🇸' },
   { label: '沪深300', ticker: '000300.SS', flag: '🇨🇳' },
@@ -26,42 +27,50 @@ type MarketQuote = {
   loading?: boolean;
 };
 
-// 视图类型
 type ViewType = 'chat' | 'dashboard';
 
-// 右侧面板宽度约束
 const DEFAULT_PANEL_WIDTH = 380;
 const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 600;
 const PANEL_WIDTH_STORAGE_KEY = 'finsight_right_panel_width';
 
-function App() {
-  // 读取 URL 参数判断初始视图
-  const initialView = useMemo<ViewType>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const dashboardSymbol = urlParams.get('symbol');
-    return dashboardSymbol ? 'dashboard' : 'chat';
+const MOBILE_BREAKPOINT = 1024;
+
+const decodeSymbolParam = (raw?: string): string | null => {
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+};
+
+const useIsMobileLayout = () => {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < MOBILE_BREAKPOINT : false,
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const initialSymbol = useMemo(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('symbol');
-  }, []);
+  return isMobile;
+};
 
-  // 视图状态
-  const [view, setView] = useState<ViewType>(initialView);
-  const [dashboardSymbol, setDashboardSymbol] = useState<string | null>(initialSymbol);
+function WorkspaceShell({ view, dashboardSymbol }: { view: ViewType; dashboardSymbol: string | null }) {
+  const navigate = useNavigate();
+  const isMobile = useIsMobileLayout();
 
-  const [isChartPanelExpanded, setIsChartPanelExpanded] = useState(true);
+  const [isContextPanelExpanded, setIsContextPanelExpanded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
-  const [userCollapsed, setUserCollapsed] = useState(false);
   const [marketQuotes, setMarketQuotes] = useState<MarketQuote[]>(
-    MARKET_INDICES.map(m => ({ label: m.label, flag: m.flag, loading: true }))
+    MARKET_INDICES.map((m) => ({ label: m.label, flag: m.flag, loading: true })),
   );
-  const { currentTicker, theme, setTheme } = useStore();
+  const { theme, setTheme } = useStore();
 
-  // 右侧面板宽度（从 localStorage 恢复）
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const saved = localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
@@ -72,94 +81,73 @@ function App() {
         }
       }
     } catch {
-      // localStorage 不可用
+      // localStorage not available
     }
     return DEFAULT_PANEL_WIDTH;
   });
   const panelWidthRef = useRef(panelWidth);
 
-  // 同步 ref 并持久化宽度
   useEffect(() => {
     panelWidthRef.current = panelWidth;
     try {
       localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(panelWidth));
     } catch {
-      // localStorage 不可用
+      // localStorage not available
     }
   }, [panelWidth]);
 
-  // 拖拽调整面板宽度
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = panelWidthRef.current;
+  const handleResizeStart = useCallback(
+    (event: React.MouseEvent) => {
+      if (isMobile) return;
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      // 向左拖动 = 增大宽度，向右拖动 = 减小宽度
-      const diff = startX - moveEvent.clientX;
-      const newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, startWidth + diff));
-      setPanelWidth(newWidth);
-    };
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = panelWidthRef.current;
 
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const diff = startX - moveEvent.clientX;
+        const nextWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, startWidth + diff));
+        setPanelWidth(nextWidth);
+      };
 
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }, []);
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
 
-  // 切换到 Dashboard 视图
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [isMobile],
+  );
+
   const openDashboard = (symbol: string) => {
-    setDashboardSymbol(symbol);
-    setView('dashboard');
-    // 更新 URL（不刷新页面）
-    const url = new URL(window.location.href);
-    url.searchParams.set('symbol', symbol);
-    window.history.pushState({}, '', url.toString());
+    const normalized = symbol.trim();
+    if (!normalized) return;
+    navigate(`/dashboard/${encodeURIComponent(normalized)}`);
   };
 
-  // 返回 Chat 视图
+  const handleDashboardSymbolChange = (symbol: string) => {
+    const normalized = symbol.trim();
+    if (!normalized) return;
+    navigate(`/dashboard/${encodeURIComponent(normalized)}`);
+  };
+
   const backToChat = () => {
-    setView('chat');
-    setDashboardSymbol(null);
-    // 清除 URL 参数
-    const url = new URL(window.location.href);
-    url.searchParams.delete('symbol');
-    window.history.pushState({}, '', url.toString());
+    navigate('/chat');
   };
 
-  // 监听浏览器前进/后退
-  useEffect(() => {
-    const handlePopState = () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const symbol = urlParams.get('symbol');
-      if (symbol) {
-        setDashboardSymbol(symbol);
-        setView('dashboard');
-      } else {
-        setDashboardSymbol(null);
-        setView('chat');
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // 加载市场指数数据
-  const loadMarketQuotes = async () => {
+  const loadMarketQuotes = useCallback(async () => {
     const results = await Promise.all(
       MARKET_INDICES.map(async (item) => {
         try {
           const response = await apiClient.fetchStockPrice(item.ticker);
           const payload = response?.data ?? response;
           const data = payload?.data ?? payload;
-          // 解析价格和涨跌幅
           let price: number | undefined;
           let changePct: number | undefined;
           if (typeof data === 'object' && data.price) {
@@ -175,39 +163,16 @@ function App() {
         } catch {
           return { label: item.label, flag: item.flag, loading: false };
         }
-      })
+      }),
     );
     setMarketQuotes(results);
-  };
-
-  // 初始加载 + 定时刷新
-  useEffect(() => {
-    loadMarketQuotes();
-    const timer = setInterval(loadMarketQuotes, 60000);
-    return () => clearInterval(timer);
   }, []);
 
-  // 生成图表时自动展开右侧面板（仅当用户未手动收起）
   useEffect(() => {
-    if (currentTicker && !isChartPanelExpanded && !userCollapsed) {
-      setIsChartPanelExpanded(true);
-    }
-  }, [currentTicker, isChartPanelExpanded, userCollapsed]);
-
-  // ticker 变化时重置手动折叠标记
-  useEffect(() => {
-    if (currentTicker) {
-      setUserCollapsed(false);
-    }
-  }, [currentTicker]);
-
-  const toggleRightPanel = () => {
-    setIsChartPanelExpanded((prev) => {
-      const next = !prev;
-      setUserCollapsed(!next);
-      return next;
-    });
-  };
+    loadMarketQuotes();
+    const timer = setInterval(loadMarketQuotes, 60_000);
+    return () => clearInterval(timer);
+  }, [loadMarketQuotes]);
 
   const formatChangePct = (value?: number) => {
     if (value === undefined || Number.isNaN(value)) return null;
@@ -215,9 +180,63 @@ function App() {
     return `${sign}${value.toFixed(2)}%`;
   };
 
+  const contextPanelShellClass = useMemo(
+    () =>
+      isMobile
+        ? 'w-full shrink-0 border-t border-fin-border bg-fin-bg p-3 max-h-[48vh] min-h-[320px]'
+        : 'h-full shrink-0 border-l border-fin-border bg-fin-bg p-4',
+    [isMobile],
+  );
+
+  const renderContextPanel = (showMiniChat: boolean) => {
+    if (!isContextPanelExpanded) return null;
+
+    return (
+      <>
+        {!isMobile && (
+          <div
+            className="w-1.5 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-fin-primary/10 transition-colors"
+            onMouseDown={handleResizeStart}
+            title="拖拽调整宽度"
+          >
+            <div className="w-0.5 h-16 rounded-full bg-fin-border group-hover:bg-fin-primary/60 transition-colors" />
+          </div>
+        )}
+
+        <aside
+          data-testid="context-panel-shell"
+          className={contextPanelShellClass}
+          style={!isMobile ? { width: panelWidth } : undefined}
+        >
+          <RightPanel
+            onCollapse={() => setIsContextPanelExpanded(false)}
+            onSubscribeClick={() => setIsSubscribeOpen(true)}
+            showMiniChat={showMiniChat}
+            className="h-full"
+          />
+        </aside>
+      </>
+    );
+  };
+
+  const renderExpandContextButton = () => {
+    if (isContextPanelExpanded) return null;
+
+    return (
+      <button
+        type="button"
+        data-testid="context-panel-expand"
+        onClick={() => setIsContextPanelExpanded(true)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm"
+        title="展开右侧面板"
+      >
+        <ChevronLeft size={16} />
+      </button>
+    );
+  };
+
   return (
-    <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
-      {/* 1. Sidebar (Fixed width) */}
+    <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden max-lg:flex-col">
       <Sidebar
         onSettingsClick={() => setIsSettingsOpen(true)}
         onSubscribeClick={() => setIsSubscribeOpen(true)}
@@ -226,62 +245,37 @@ function App() {
         currentView={view}
       />
 
-      {/* 条件渲染: Dashboard 或 Chat 视图 */}
       {view === 'dashboard' ? (
-        <div className="flex-1 flex h-full overflow-hidden relative">
-          <Dashboard
-            initialSymbol={dashboardSymbol ?? undefined}
-            onBackToChat={backToChat}
-          />
-          {/* Dashboard 视图下的可收起右侧面板 */}
-          {isChartPanelExpanded && (
-            <>
-              {/* 拖拽调整宽度手柄 */}
-              <div
-                className="w-1.5 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-fin-primary/10 transition-colors"
-                onMouseDown={handleResizeStart}
-                title="拖拽调整宽度"
-              >
-                <div className="w-0.5 h-16 rounded-full bg-fin-border group-hover:bg-fin-primary/60 transition-colors" />
-              </div>
-              <div
-                className="shrink-0 flex flex-col gap-4 p-4 bg-fin-bg border-l border-fin-border"
-                style={{ width: panelWidth }}
-              >
-                <RightPanel onCollapse={toggleRightPanel} onSubscribeClick={() => setIsSubscribeOpen(true)} />
-              </div>
-            </>
-          )}
-          {!isChartPanelExpanded && (
-            <button
-              onClick={() => {
-                setIsChartPanelExpanded(true);
-                setUserCollapsed(false);
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm"
-              title="展开右侧面板"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
+        <div className="flex-1 min-w-0 flex min-h-0 overflow-hidden relative max-lg:flex-col">
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+            <Dashboard
+              initialSymbol={dashboardSymbol ?? undefined}
+              onBackToChat={backToChat}
+              onSymbolChange={handleDashboardSymbolChange}
+            />
+            <div className="shrink-0 px-4 pb-4 max-lg:px-3 max-lg:pb-3">
+              <AgentLogPanel />
+            </div>
+          </div>
+
+          {renderContextPanel(true)}
+          {renderExpandContextButton()}
         </div>
       ) : (
-        /* 2. Main Workspace (Chat View) */
-        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-          {/* Header */}
-          <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0">
-            <div className="flex gap-6 text-xs text-fin-text font-medium">
-              {marketQuotes.map((q) => (
-                <span key={q.label} className="flex items-center gap-1">
-                  {q.flag} {q.label}:{' '}
-                  {q.loading ? (
+        <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
+          <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:px-3">
+            <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-none">
+              {marketQuotes.map((quote) => (
+                <span key={quote.label} className="flex items-center gap-1 whitespace-nowrap">
+                  {quote.flag} {quote.label}:{' '}
+                  {quote.loading ? (
                     <span className="text-fin-muted">...</span>
-                  ) : q.changePct !== undefined ? (
-                    <span className={q.changePct >= 0 ? 'text-fin-success' : 'text-fin-danger'}>
-                      {formatChangePct(q.changePct)}
+                  ) : quote.changePct !== undefined ? (
+                    <span className={quote.changePct >= 0 ? 'text-fin-success' : 'text-fin-danger'}>
+                      {formatChangePct(quote.changePct)}
                     </span>
-                  ) : q.price !== undefined ? (
-                    <span className="text-fin-warning">${q.price.toLocaleString()}</span>
+                  ) : quote.price !== undefined ? (
+                    <span className="text-fin-warning">${quote.price.toLocaleString()}</span>
                   ) : (
                     <span className="text-fin-muted">--</span>
                   )}
@@ -289,58 +283,36 @@ function App() {
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               <button
+                type="button"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
-              <button className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text">
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+              >
                 导出 PDF
               </button>
             </div>
           </header>
 
-          {/* Workspace Grid: Chat + Aux Panel */}
-          <div className="flex-1 flex overflow-hidden p-5 gap-5">
-            {/* Left: Chat Interaction */}
-            <div className="flex-1 bg-fin-card border border-fin-border rounded-2xl flex flex-col overflow-hidden shadow-sm">
-              <ChatList />
-              <ChatInput onDashboardRequest={openDashboard} />
+          <div className="flex-1 min-h-0 flex overflow-hidden p-5 gap-4 max-lg:flex-col max-lg:p-3">
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 overflow-hidden">
+              <div className="flex-1 bg-fin-card border border-fin-border rounded-2xl flex flex-col overflow-hidden shadow-sm min-h-0">
+                <ChatList />
+                <ChatInput onDashboardRequest={openDashboard} />
+              </div>
+              <div className="shrink-0">
+                <AgentLogPanel />
+              </div>
             </div>
 
-            {/* Right: Auxiliary Panel (Visualization & Context) */}
-            {isChartPanelExpanded && (
-              <>
-                {/* 拖拽调整宽度手柄 */}
-                <div
-                  className="w-1.5 shrink-0 cursor-col-resize group flex items-center justify-center hover:bg-fin-primary/10 transition-colors"
-                  onMouseDown={handleResizeStart}
-                  title="拖拽调整宽度"
-                >
-                  <div className="w-0.5 h-16 rounded-full bg-fin-border group-hover:bg-fin-primary/60 transition-colors" />
-                </div>
-                <div
-                  className="shrink-0 flex flex-col gap-4"
-                  style={{ width: panelWidth }}
-                >
-                  <RightPanel onCollapse={toggleRightPanel} onSubscribeClick={() => setIsSubscribeOpen(true)} showMiniChat={false} />
-                </div>
-              </>
-            )}
-            {!isChartPanelExpanded && (
-              <button
-                onClick={() => {
-                  setIsChartPanelExpanded(true);
-                  setUserCollapsed(false);
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm"
-                title="展开右侧面板"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            )}
+            {renderContextPanel(false)}
+            {renderExpandContextButton()}
           </div>
         </div>
       )}
@@ -348,6 +320,39 @@ function App() {
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <SubscribeModal isOpen={isSubscribeOpen} onClose={() => setIsSubscribeOpen(false)} />
     </div>
+  );
+}
+
+function ChatRoute() {
+  return <WorkspaceShell view="chat" dashboardSymbol={null} />;
+}
+
+function DashboardRoute() {
+  const { symbol } = useParams();
+  return <WorkspaceShell view="dashboard" dashboardSymbol={decodeSymbolParam(symbol)} />;
+}
+
+function RootRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const symbol = params.get('symbol');
+
+  if (symbol && symbol.trim()) {
+    return <Navigate to={{ pathname: `/dashboard/${encodeURIComponent(symbol.trim())}`, search: '' }} replace />;
+  }
+
+  return <Navigate to={{ pathname: '/chat', search: '' }} replace />;
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="/chat" element={<ChatRoute />} />
+      <Route path="/dashboard" element={<DashboardRoute />} />
+      <Route path="/dashboard/:symbol" element={<DashboardRoute />} />
+      <Route path="*" element={<Navigate to="/chat" replace />} />
+    </Routes>
   );
 }
 

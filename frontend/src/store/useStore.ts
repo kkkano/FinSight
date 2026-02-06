@@ -24,6 +24,14 @@ const getInitialSubscriptionEmail = (): string => {
   return window.localStorage.getItem('finsight-subscription-email') || '';
 };
 
+const getInitialSessionId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem('finsight-session-id');
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {
   if (typeof window === 'undefined') return {};
@@ -60,6 +68,7 @@ const applyThemeClass = (theme: Theme) => {
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
+const initialSessionId = getInitialSessionId();
 const initialPortfolioPositions = getInitialPortfolioPositions();
 applyThemeClass(initialTheme);
 
@@ -86,6 +95,8 @@ interface AppState {
   draft: string;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
+  sessionId: string | null;
+  setSessionId: (sessionId: string | null) => void;
   portfolioPositions: PortfolioPositions;
   setPortfolioPosition: (ticker: string, shares: number) => void;
   removePortfolioPosition: (ticker: string) => void;
@@ -124,6 +135,7 @@ export const useStore = create<AppState>((set) => ({
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
+  sessionId: initialSessionId,
   portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
@@ -201,6 +213,18 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-subscription-email', email);
       }
       return { subscriptionEmail: email };
+    }),
+
+  setSessionId: (sessionId) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        if (sessionId) {
+          window.localStorage.setItem('finsight-session-id', sessionId);
+        } else {
+          window.localStorage.removeItem('finsight-session-id');
+        }
+      }
+      return { sessionId };
     }),
 
   setPortfolioPosition: (ticker, shares) =>

@@ -1,7 +1,7 @@
 ﻿# FinSight AI - Multi-Agent Financial Intelligence Platform
 
 [![LangChain](https://img.shields.io/badge/LangChain-1.1.0-green)](https://github.com/langchain-ai/langchain)
-[![Supervisor](https://img.shields.io/badge/Supervisor-Forum-blue)](./docs/01_ARCHITECTURE.md)
+[![LangGraph](https://img.shields.io/badge/LangGraph-SSOT-blue)](./docs/06_LANGGRAPH_REFACTOR_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-18+-blue)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
@@ -13,15 +13,33 @@
 
 ## Overview
 
-FinSight AI is a conversational, multi-agent financial research assistant that combines:
+> **SSOT (Single Source of Truth)**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`  
+> Legacy Supervisor/Intent router docs are kept for reference but should not drive new development.
+> **Docs entry map**: `docs/DOCS_INDEX.md` (active docs vs archived docs)
 
-- Supervisor Agent architecture: intent classification + worker agent coordination + forum synthesis
-- 6 specialized agents: Price, News, Technical, Fundamental, Macro, DeepSearch
-- FastAPI backend + LangChain + Supervisor-Forum orchestration
-- React + TypeScript + Tailwind frontend with professional report cards
-- Real-time market data with multi-source fallback (yfinance, Finnhub, Alpha Vantage, etc.)
+FinSight AI is migrating to a **LangGraph single-orchestrator** architecture (2026-style):
 
-The goal is to feel like talking to a Chief Investment Officer who can quickly pull data, run analysis playbooks, and produce professional-grade investment reports.
+- **Single graph entrypoint** for `/chat/*` (LangGraph is now the default path)
+- **Task model**: `subject_type + operation + output_mode` (replaces 10+ “intent”)
+- **Planner-Executor**: constrained `PlanIR` + executable steps (parallel groups + caching)
+- **Explicit report mode** via UI button **“生成研报”** (`options.output_mode=investment_report`)
+- **Structured selection context**: selection.type is input type (`news | filing | doc`), not “report intent”
+
+The goal remains: talk to a finance copilot that can pull data, plan work, and produce structured outputs with traceable evidence.
+
+### Runtime Flags
+
+```bash
+# Enable real LLM planning/synthesis (requires LLM config)
+set LANGGRAPH_PLANNER_MODE=llm
+set LANGGRAPH_SYNTHESIZE_MODE=llm
+
+# Default: dry-run executor (no live tool calls)
+set LANGGRAPH_EXECUTE_LIVE_TOOLS=false
+
+# Evidence rendering toggle (default false; report uses Sources/证据池 cards)
+set LANGGRAPH_SHOW_EVIDENCE=true
+```
 
 ---
 
@@ -41,7 +59,16 @@ The goal is to feel like talking to a Chief Investment Officer who can quickly p
 
 ## Key Features
 
-### Multi-Agent Supervisor Architecture
+> **Note**: The project is migrating from legacy Supervisor/Intent routing to a LangGraph single-orchestrator design.  
+> For the canonical design + tasks: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`.
+
+### LangGraph Orchestration (Current)
+
+- Single graph entrypoint with explicit state (`subject_type + operation + output_mode`)
+- `PolicyGate` (budget + allowlist + schema) → `Planner` (PlanIR) → `ExecutePlan` (parallel + cache) → `Render` (templates)
+- Output mode “investment_report” is triggered by UI button, not generic “分析” keywords
+
+### Legacy: Multi-Agent Supervisor Architecture (Historical)
 ```
 User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
                                                         |
@@ -63,6 +90,7 @@ User Query -> IntentClassifier (Rule + Embedding + LLM) -> SupervisorAgent
 ```
 
 ### Professional Report Generation
+- Current: templates are selected by `subject_type + output_mode` (news/company/filing), not a single fixed 8-section report.
 - 8-section analysis reports: Executive Summary, Market Position, Fundamental Analysis, Macro and Catalysts, Risk Assessment, Investment Strategy, Scenario Analysis, Monitoring Events
 - Agent contribution tracking: see which agent provided each insight
 - Evidence pool with citation confidence and freshness metadata

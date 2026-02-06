@@ -87,7 +87,7 @@ export interface NewsItem {
 
 // === 选中对象（用于 MiniChat 上下文引用） ===
 export interface SelectionItem {
-  type: 'news' | 'report';
+  type: 'news' | 'filing' | 'doc';
   id: string;           // hash(title + source + ts)
   title: string;
   url?: string;
