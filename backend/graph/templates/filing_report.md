@@ -6,15 +6,18 @@
 
 $summary
 
-### 关键指标/要点（如适用）
+### 关键指标/要点
 
 $highlights
 
-### 解读与影响（如适用）
+### Section-Level Citations
+
+$section_citations
+
+### 解读与影响
 
 $analysis
 
 ### 风险提示
 
 $risks
-

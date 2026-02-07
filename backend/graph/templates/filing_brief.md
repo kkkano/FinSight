@@ -10,7 +10,10 @@ $summary
 
 $highlights
 
+### Section-Level Citations
+
+$section_citations
+
 ### 风险与不确定性
 
 $risks
-

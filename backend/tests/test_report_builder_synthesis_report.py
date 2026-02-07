@@ -54,3 +54,39 @@ def test_synthesis_report_does_not_include_evidence_overview_or_duplicate_query(
     assert unique_url not in synthesis_report
     assert synthesis_report.count(query) == 1
 
+
+def test_build_report_payload_filing_includes_section_level_citations_in_meta_and_sections():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "filing", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": []},
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": "## 文档解读\n\n",
+            "evidence_pool": [
+                {
+                    "title": "10-K Item 7 Management Discussion",
+                    "url": "https://example.com/10k#item7",
+                    "snippet": "Item 7 discusses liquidity and operations.",
+                    "source": "sec",
+                    "published_date": "2026-02-01T00:00:00Z",
+                    "confidence": 0.8,
+                }
+            ],
+            "step_results": {},
+            "errors": [],
+            "render_vars": {},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="解读AAPL 10-K", thread_id="t-filing")
+    assert isinstance(report, dict)
+
+    meta = report.get("meta") or {}
+    section_refs = meta.get("filing_section_citations")
+    assert isinstance(section_refs, list)
+    assert section_refs and section_refs[0].get("section") == "Item 7"
+
+    sections = report.get("sections") or []
+    assert any((s.get("title") or "") == "Section-level Citations" for s in sections)

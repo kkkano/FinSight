@@ -99,6 +99,55 @@ class _CitationBuild:
     id_by_url: dict[str, str]
 
 
+_FILING_SECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\bItem\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
+    re.compile(r"\bNote\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
+    re.compile(r"\bPart\s+([IVX]+)\b", flags=re.IGNORECASE),
+]
+
+
+def _detect_filing_section_ref(item: dict[str, Any]) -> str | None:
+    text = " ".join(
+        [
+            _safe_str(item.get("title") or ""),
+            _safe_str(item.get("snippet") or ""),
+            _safe_str((item.get("metadata") or {}).get("section") if isinstance(item.get("metadata"), dict) else ""),
+        ]
+    )
+    if not text:
+        return None
+    for pattern in _FILING_SECTION_PATTERNS:
+        m = pattern.search(text)
+        if not m:
+            continue
+        key = pattern.pattern.lower()
+        value = m.group(1).upper()
+        if "item" in key:
+            return f"Item {value}"
+        if "note" in key:
+            return f"Note {value}"
+        if "part" in key:
+            return f"Part {value}"
+    return None
+
+
+def _build_filing_section_citations(citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    section_map: dict[str, list[str]] = {}
+    for item in citations:
+        if not isinstance(item, dict):
+            continue
+        section = _safe_str(item.get("section_ref") or "").strip()
+        source_id = _safe_str(item.get("source_id") or "").strip()
+        if not section or not source_id:
+            continue
+        section_map.setdefault(section, [])
+        if source_id not in section_map[section]:
+            section_map[section].append(source_id)
+
+    ordered = sorted(section_map.items(), key=lambda kv: kv[0])
+    return [{"section": section, "source_ids": source_ids} for section, source_ids in ordered]
+
+
 def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBuild:
     citations: list[dict[str, Any]] = []
     id_by_url: dict[str, str] = {}
@@ -125,6 +174,7 @@ def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBui
                 "published_date": _safe_str(item.get("published_date") or ""),
                 "confidence": float(item.get("confidence", 0.7) or 0.7),
                 "freshness_hours": _freshness_hours(item.get("published_date")),
+                "section_ref": _detect_filing_section_ref(item),
             }
         )
         if len(citations) >= 24:
@@ -537,6 +587,11 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
     # Evidence pool → citations
     citation_build = _build_citations(evidence_pool)
     citations = citation_build.citations
+    filing_section_citations = (
+        _build_filing_section_citations(citations)
+        if subject_type in ("filing", "research_doc")
+        else []
+    )
 
     # Agent summaries/status
     agent_status = _agent_status_from_steps(
@@ -567,6 +622,30 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
                 "confidence": item.get("confidence"),
                 "data_sources": item.get("data_sources", []),
                 "contents": [{"type": "text", "content": _safe_str(item.get("summary") or "")}],
+            }
+        )
+        section_order += 1
+
+    if filing_section_citations:
+        lines = []
+        for item in filing_section_citations[:24]:
+            section = _safe_str(item.get("section") or "").strip()
+            source_ids = item.get("source_ids") if isinstance(item.get("source_ids"), list) else []
+            source_ids = [f"[{_safe_str(x).strip()}]" for x in source_ids if _safe_str(x).strip()]
+            if not section:
+                continue
+            if source_ids:
+                lines.append(f"- {section}: {', '.join(source_ids)}")
+            else:
+                lines.append(f"- {section}")
+        sections.append(
+            {
+                "title": "Section-level Citations",
+                "order": section_order,
+                "agent_name": "filing_citation_mapper",
+                "confidence": 0.9,
+                "data_sources": ["evidence_pool"],
+                "contents": [{"type": "text", "content": "\n".join(lines) if lines else "- N/A"}],
             }
         )
         section_order += 1
@@ -634,6 +713,7 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
             "thread_id": thread_id,
             "subject_type": subject_type,
             "agent_summaries": agent_summaries,
+            "filing_section_citations": filing_section_citations,
             "graph_trace": state.get("trace") if isinstance(state.get("trace"), dict) else {},
         },
     }

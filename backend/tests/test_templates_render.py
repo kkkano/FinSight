@@ -133,3 +133,30 @@ def test_render_company_fetch_uses_company_news_template():
     md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "### 公司快讯" in md
     assert "### 最新新闻" in md
+
+def test_render_filing_report_includes_section_level_citations():
+    state = {
+        "query": "解读最新 10-K",
+        "output_mode": "investment_report",
+        "operation": {"name": "summarize", "confidence": 0.8, "params": {}},
+        "subject": {
+            "subject_type": "filing",
+            "tickers": ["AAPL"],
+            "selection_ids": ["f1"],
+            "selection_types": ["filing"],
+            "selection_payload": [{"type": "filing", "id": "f1", "title": "AAPL 10-K"}],
+        },
+        "artifacts": {
+            "evidence_pool": [
+                {
+                    "title": "Form 10-K Item 1A Risk Factors",
+                    "url": "https://example.com/aapl-10k#item1a",
+                    "snippet": "Item 1A details principal risks.",
+                    "source": "sec",
+                }
+            ]
+        },
+    }
+    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    assert "Section-Level Citations" in md
+    assert "Item 1A" in md

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from string import Template
 
@@ -79,6 +80,61 @@ def render_stub(state: GraphState) -> dict:
         # Do not leak internal executor step_results into user-facing markdown.
         # The UI already exposes structured traces in the "Agent Trace" panel.
         return ""
+
+    def _fmt_section_citations() -> str:
+        artifacts_local = state.get("artifacts") or {}
+        evidence_pool = artifacts_local.get("evidence_pool") if isinstance(artifacts_local, dict) else None
+        if not isinstance(evidence_pool, list) or not evidence_pool:
+            return "- （暂无 section 级引用）"
+
+        patterns = [
+            re.compile(r"\bItem\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
+            re.compile(r"\bNote\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
+            re.compile(r"\bPart\s+([IVX]+)\b", flags=re.IGNORECASE),
+        ]
+        section_hits: dict[str, list[str]] = {}
+
+        for item in evidence_pool:
+            if not isinstance(item, dict):
+                continue
+            text = " ".join([str(item.get("title") or ""), str(item.get("snippet") or "")])
+            if not text.strip():
+                continue
+            section_ref = None
+            for pattern in patterns:
+                match = pattern.search(text)
+                if not match:
+                    continue
+                key = pattern.pattern.lower()
+                value = match.group(1).upper()
+                if "item" in key:
+                    section_ref = f"Item {value}"
+                elif "note" in key:
+                    section_ref = f"Note {value}"
+                elif "part" in key:
+                    section_ref = f"Part {value}"
+                break
+            if not section_ref:
+                continue
+
+            title = str(item.get("title") or section_ref).strip()
+            url = str(item.get("url") or "").strip()
+            label = f"[{title}]({url})" if url else title
+
+            section_hits.setdefault(section_ref, [])
+            if label not in section_hits[section_ref]:
+                section_hits[section_ref].append(label)
+
+        if not section_hits:
+            return "- （暂无 section 级引用）"
+
+        lines = []
+        for section in sorted(section_hits.keys()):
+            refs = "; ".join(section_hits[section][:3])
+            lines.append(f"- {section}: {refs}")
+            if len(lines) >= 8:
+                break
+        return "\n".join(lines) if lines else "- （暂无 section 级引用）"
 
     template_key = None
     if subject_type in ("news_item", "news_set"):
@@ -188,6 +244,7 @@ def render_stub(state: GraphState) -> dict:
                 "- 如需更深入章节，请点击“生成研报”。",
             ]
         ),
+        "section_citations": _fmt_section_citations(),
     }
 
     if isinstance(render_vars, dict):
