@@ -117,7 +117,20 @@ export interface ReportIR {
     data_context?: Record<string, any>;
     [key: string]: any;
   };
-  agent_status?: Record<string, { status: string; confidence?: number; error?: string }>;
+  agent_status?: Record<string, {
+    status: string;
+    confidence?: number;
+    error?: string;
+    skipped_reason?: string;
+    escalation_not_needed?: boolean;
+    evidence_quality?: {
+      overall_score?: number;
+      source_diversity?: number;
+      has_conflicts?: boolean;
+      [key: string]: any;
+    };
+    data_sources?: string[];
+  }>;
 }
 
 export interface KlineResponse {

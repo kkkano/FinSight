@@ -90,3 +90,55 @@ def test_build_report_payload_filing_includes_section_level_citations_in_meta_an
 
     sections = report.get("sections") or []
     assert any((s.get("title") or "") == "Section-level Citations" for s in sections)
+
+
+def test_build_report_payload_agent_status_exposes_evidence_quality_and_skip_reason():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["fundamental_agent", "macro_agent"]},
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "kind": "agent", "name": "fundamental_agent"},
+                {"id": "s2", "kind": "agent", "name": "macro_agent"},
+            ]
+        },
+        "artifacts": {
+            "draft_markdown": "## Report\n",
+            "evidence_pool": [],
+            "errors": [],
+            "render_vars": {},
+            "step_results": {
+                "s1": {
+                    "output": {
+                        "summary": "ok",
+                        "confidence": 0.8,
+                        "data_sources": ["yfinance"],
+                        "evidence_quality": {"overall_score": 0.77, "has_conflicts": False},
+                    }
+                },
+                "s2": {
+                    "output": {
+                        "skipped": True,
+                        "reason": "escalation_not_needed",
+                    }
+                },
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-status")
+    assert isinstance(report, dict)
+
+    agent_status = report.get("agent_status") or {}
+    fundamental = agent_status.get("fundamental_agent") or {}
+    macro = agent_status.get("macro_agent") or {}
+
+    assert fundamental.get("status") == "success"
+    assert isinstance(fundamental.get("evidence_quality"), dict)
+    assert fundamental.get("evidence_quality", {}).get("overall_score") == 0.77
+
+    assert macro.get("status") == "not_run"
+    assert macro.get("skipped_reason") == "escalation_not_needed"
+    assert macro.get("escalation_not_needed") is True

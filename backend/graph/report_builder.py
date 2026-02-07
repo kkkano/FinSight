@@ -224,7 +224,17 @@ def _agent_status_from_steps(
         raw = step_results.get(step_id) if isinstance(step_results, dict) else None
         output = raw.get("output") if isinstance(raw, dict) else None
         if isinstance(output, dict) and output.get("skipped") is True:
-            status[agent_name] = {"status": "not_run", "confidence": 0.0}
+            reason = _safe_str(output.get("reason") or "skipped") or "skipped"
+            skipped_payload: dict[str, Any] = {
+                "status": "not_run",
+                "confidence": 0.0,
+                "skipped_reason": reason,
+                "escalation_not_needed": reason == "escalation_not_needed",
+            }
+            evidence_quality = output.get("evidence_quality")
+            if isinstance(evidence_quality, dict):
+                skipped_payload["evidence_quality"] = evidence_quality
+            status[agent_name] = skipped_payload
             continue
 
         confidence = None
@@ -235,7 +245,15 @@ def _agent_status_from_steps(
         except Exception:
             conf = 0.6
 
-        status[agent_name] = {"status": "success", "confidence": max(0.0, min(1.0, conf))}
+        success_payload: dict[str, Any] = {"status": "success", "confidence": max(0.0, min(1.0, conf))}
+        if isinstance(output, dict):
+            evidence_quality = output.get("evidence_quality")
+            if isinstance(evidence_quality, dict):
+                success_payload["evidence_quality"] = evidence_quality
+            data_sources = output.get("data_sources")
+            if isinstance(data_sources, list):
+                success_payload["data_sources"] = [str(x) for x in data_sources if str(x).strip()][:8]
+        status[agent_name] = success_payload
 
     return status
 
@@ -307,15 +325,25 @@ def _agent_summaries_from_steps(
         raw = step_results.get(step_id) if isinstance(step_results, dict) else None
         output = raw.get("output") if isinstance(raw, dict) else None
         if isinstance(output, dict) and output.get("skipped") is True:
+            reason = _safe_str(output.get("reason") or "skipped") or "skipped"
+            summary_text = "Not run."
+            if reason == "dry_run":
+                summary_text = "Not run (dry_run)."
+            elif reason == "escalation_not_needed":
+                summary_text = "Not run (escalation not needed)."
+            elif reason:
+                summary_text = f"Not run ({reason})."
             summaries.append(
                 {
                     "title": title,
                     "order": order,
                     "agent_name": agent_name,
                     "status": "not_run",
-                    "summary": "未运行（当前为 dry_run 或未启用 live tools）",
+                    "summary": summary_text,
                     "confidence": 0.0,
                     "data_sources": [],
+                    "skipped_reason": reason,
+                    "escalation_not_needed": reason == "escalation_not_needed",
                 }
             )
             order += 1
@@ -340,6 +368,7 @@ def _agent_summaries_from_steps(
                 "summary": summary or "（无输出）",
                 "confidence": max(0.0, min(1.0, confidence_value)),
                 "data_sources": [str(x) for x in data_sources if str(x).strip()][:8],
+                "evidence_quality": output.get("evidence_quality") if isinstance(output.get("evidence_quality"), dict) else {},
             }
         )
         order += 1
