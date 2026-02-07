@@ -175,6 +175,51 @@ const formatDetailedResult = (result: any): React.ReactNode => {
     );
   }
 
+  // Agent 选择理由（policy_gate）
+  if (result.agent_selection && typeof result.agent_selection === 'object') {
+    const selection = result.agent_selection as {
+      selected?: string[];
+      required?: string[];
+      scored?: Array<{ agent?: string; score?: number; reasons?: string[] }>;
+    };
+    const selected = Array.isArray(selection.selected) ? selection.selected : [];
+    const required = Array.isArray(selection.required) ? selection.required : [];
+    const scored = Array.isArray(selection.scored) ? selection.scored : [];
+
+    if (selected.length > 0 || scored.length > 0) {
+      items.push(
+        <div key="agent-selection" className="py-1">
+          <div className="text-fin-muted mb-1">Agent 选择依据:</div>
+          {selected.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {selected.map((name) => (
+                <span key={name} className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px]">
+                  {name}
+                  {required.includes(name) ? ' · required' : ''}
+                </span>
+              ))}
+            </div>
+          )}
+          {scored.length > 0 && (
+            <div className="space-y-1">
+              {scored.map((row, idx) => (
+                <div key={`${row.agent || 'agent'}-${idx}`} className="text-[11px] text-fin-text/90">
+                  <div className="font-medium">
+                    {row.agent || `agent_${idx + 1}`}
+                    {typeof row.score === 'number' ? ` (${row.score.toFixed(2)})` : ''}
+                  </div>
+                  {Array.isArray(row.reasons) && row.reasons.length > 0 && (
+                    <div className="text-fin-muted pl-2">• {row.reasons.join(' · ')}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+  }
+
   // 选择的 Agent
   if (result.agent || result.agent_name) {
     items.push(

@@ -80,10 +80,36 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
             if isinstance(policy, dict):
                 budget = policy.get("budget") or {}
                 tools = policy.get("allowed_tools") or []
+                selection = policy.get("agent_selection") or {}
+                selected_agents = selection.get("selected") if isinstance(selection, dict) else []
+                selected_agents = selected_agents if isinstance(selected_agents, list) else []
+                required_agents = selection.get("required") if isinstance(selection, dict) else []
+                required_agents = required_agents if isinstance(required_agents, list) else []
+                scores = selection.get("scores") if isinstance(selection, dict) else {}
+                scores = scores if isinstance(scores, dict) else {}
+                reasons = selection.get("reasons") if isinstance(selection, dict) else {}
+                reasons = reasons if isinstance(reasons, dict) else {}
+                score_rows: list[dict[str, Any]] = []
+                for name in selected_agents[:8]:
+                    if not isinstance(name, str):
+                        continue
+                    reason_items = reasons.get(name) if isinstance(reasons.get(name), list) else []
+                    score_rows.append(
+                        {
+                            "agent": name,
+                            "score": _safe_preview(scores.get(name)),
+                            "reasons": [_safe_preview(item, limit=120) for item in reason_items[:6]],
+                        }
+                    )
                 return {
                     "budget": budget,
                     "allowed_tools": tools[:12],
                     "allowed_tools_count": len(tools) if isinstance(tools, list) else None,
+                    "agent_selection": {
+                        "selected": selected_agents[:8],
+                        "required": required_agents[:8],
+                        "scored": score_rows,
+                    },
                 }
             return {}
 
