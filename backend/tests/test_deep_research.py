@@ -131,11 +131,10 @@ async def test_macro_agent():
     mock_llm = MagicMock()
     mock_cache = MagicMock()
     mock_tools = MagicMock()
-    mock_tools.get_fred_data.return_value = {
-        "fed_rate": 5.0,
-        "fed_rate_formatted": "5.0%",
-        "cpi_formatted": "3.2%",
-    }
+    mock_tools.get_fred_data.return_value = {"fed_rate": 5.0, "cpi": 3.2, "unemployment": 4.1}
+    mock_tools.get_market_sentiment.return_value = "CNN Fear & Greed Index: 60 (Greed)"
+    mock_tools.get_economic_events.return_value = "FOMC this week"
+    mock_tools.search.return_value = "Federal funds rate 4.9%, CPI 3.1%, unemployment rate 4.2%"
 
     agent = MacroAgent(mock_llm, mock_cache, mock_tools)
 
@@ -144,9 +143,11 @@ async def test_macro_agent():
 
     assert isinstance(result, AgentOutput)
     assert result.agent_name == "macro"
-    # Ensure evidence is collected (even if mocked)
-    if result.evidence:
-        assert result.evidence[0].source.startswith("FRED")
+    assert result.evidence
+    assert any(item.source == "FRED" for item in result.evidence)
+    assert result.evidence_quality.get("overall_score", 0) > 0
+    assert result.evidence_quality.get("source_diversity", 0) >= 1
+    assert "FRED" in result.data_sources
 
 @pytest.mark.asyncio
 async def test_macro_agent_fallback_structured():
@@ -154,15 +155,36 @@ async def test_macro_agent_fallback_structured():
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     mock_tools.get_fred_data.side_effect = Exception("FRED down")
-    mock_tools.search.return_value = "fallback text"
+    mock_tools.search.return_value = "latest CPI 3.0% and unemployment rate 4.0%"
+    mock_tools.get_market_sentiment.return_value = ""
+    mock_tools.get_economic_events.return_value = ""
 
     agent = MacroAgent(mock_llm, mock_cache, mock_tools)
     result = await agent.research("inflation analysis", "N/A")
 
-    assert "搜索回退" in result.summary
+    assert "fallback" in result.summary.lower()
     assert "Web Search" in result.data_sources
     assert result.evidence is not None
     assert len(result.evidence) > 0
+    assert result.fallback_used is True
+
+
+@pytest.mark.asyncio
+async def test_macro_agent_conflict_merge_prefers_fred():
+    mock_llm = MagicMock()
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    mock_tools.get_fred_data.return_value = {"fed_rate": 5.5, "cpi": 3.0, "unemployment": 3.9}
+    mock_tools.get_market_sentiment.return_value = ""
+    mock_tools.get_economic_events.return_value = ""
+    mock_tools.search.return_value = "Federal funds rate 4.4%, CPI 2.1%, unemployment rate 4.8%"
+
+    agent = MacroAgent(mock_llm, mock_cache, mock_tools)
+    result = await agent.research("macro update", "N/A")
+
+    assert result.agent_name == "macro"
+    assert result.evidence_quality.get("has_conflicts") is True
+    assert any("conflict" in risk.lower() for risk in result.risks)
 
 @pytest.mark.asyncio
 async def test_supervisor_integration_phase2():
