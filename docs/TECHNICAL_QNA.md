@@ -96,10 +96,10 @@ FastAPI 本身运行在一个 Event Loop 中。如果我们在请求处理函数
 
 ```mermaid
 flowchart LR
-    A[Yahoo Finance] -->|失败/限流| B[Google Finance (Scraper)]
-    B -->|失败| C[Stooq API]
-    C -->|失败| D[CNBC/Finnhub]
-    D -->|全部失败| E[抛出异常/返回空]
+    A["Yahoo Finance"] -->|失败/限流| B["Google Finance (Scraper)"]
+    B -->|失败| C["Stooq API"]
+    C -->|失败| D["CNBC/Finnhub"]
+    D -->|全部失败| E["抛出异常/返回空"]
 ```
 
 **设计要点**:

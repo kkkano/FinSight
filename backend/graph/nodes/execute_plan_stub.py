@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.graph.adapters import (
@@ -21,6 +24,49 @@ def build_tool_invokers(allowed_tools: list[str]) -> dict[str, Any]:
 def build_agent_invokers(allowed_agents: list[str], state: GraphState) -> dict[str, Any]:
     # Backward-compatible wrapper for tests that monkeypatch this symbol.
     return _build_agent_invokers(allowed_agents=allowed_agents or [], state=state)
+
+
+def _env_int(name: str, default: int, *, min_value: int = 0, max_value: int = 10_000) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = int(str(raw).strip())
+    except Exception:
+        return default
+    return max(min_value, min(max_value, parsed))
+
+
+def _ttl_hours_for_evidence(*, subject_type: str, evidence_type: str, source: str) -> int:
+    """
+    RAG v2 TTL policy (minimal closed-loop):
+    - filing/research_doc: persistent (no TTL)
+    - news/selection/search-derived: short-term TTL
+    - others: session-ephemeral TTL
+    """
+    if subject_type in ("filing", "research_doc"):
+        return 0
+    news_ttl = _env_int("RAG_V2_NEWS_TTL_HOURS", 24 * 7, min_value=1, max_value=24 * 180)
+    ephemeral_ttl = _env_int("RAG_V2_EPHEMERAL_TTL_HOURS", 12, min_value=1, max_value=24 * 30)
+
+    source_norm = (source or "").strip().lower()
+    evidence_type_norm = (evidence_type or "").strip().lower()
+    if evidence_type_norm in ("news", "selection"):
+        return news_ttl
+    if source_norm in ("news", "selection", "search", "tavily", "exa", "google_news"):
+        return news_ttl
+    return ephemeral_ttl
+
+
+def _build_rag_doc_id(*, thread_id: str, evidence: dict[str, Any], index: int) -> str:
+    explicit = str(evidence.get("id") or "").strip()
+    if explicit:
+        return explicit
+    title = str(evidence.get("title") or "").strip()
+    url = str(evidence.get("url") or "").strip()
+    snippet = str(evidence.get("snippet") or "").strip()
+    material = f"{thread_id}|{index}|{title}|{url}|{snippet}".encode("utf-8")
+    return hashlib.sha1(material).hexdigest()[:24]
 
 
 async def execute_plan_stub(state: GraphState) -> dict:
@@ -268,6 +314,87 @@ async def execute_plan_stub(state: GraphState) -> dict:
         deduped.append(e)
     artifacts["evidence_pool"] = deduped
 
+    # Phase 11.11.2: RAG v2 minimal loop
+    rag_trace: dict[str, Any] = {"enabled": False}
+    try:
+        from backend.rag.hybrid_service import RAGDocument, get_rag_service
+
+        query_text = str(state.get("query") or "").strip()
+        thread_id = str(state.get("thread_id") or "").strip() or "unknown"
+        if query_text and deduped:
+            rag = get_rag_service()
+            subject_type = str((subject or {}).get("subject_type") or "unknown")
+            collection = f"session:{thread_id}"
+            now = datetime.now(timezone.utc)
+            rag_docs: list[RAGDocument] = []
+            for idx, evidence in enumerate(deduped[:80]):
+                title = str(evidence.get("title") or "").strip()
+                snippet = str(evidence.get("snippet") or "").strip()
+                content = "\n".join([v for v in (title, snippet) if v]).strip()
+                if not content:
+                    continue
+                evidence_type = str(evidence.get("type") or "selection").strip()
+                source = str(evidence.get("source") or "selection").strip() or "selection"
+                ttl_hours = _ttl_hours_for_evidence(
+                    subject_type=subject_type,
+                    evidence_type=evidence_type,
+                    source=source,
+                )
+                expires_at = None if ttl_hours <= 0 else now + timedelta(hours=ttl_hours)
+                rag_docs.append(
+                    RAGDocument(
+                        collection=collection,
+                        scope="persistent" if ttl_hours <= 0 else "ephemeral",
+                        source_id=_build_rag_doc_id(thread_id=thread_id, evidence=evidence, index=idx),
+                        content=content[:4000],
+                        title=title or None,
+                        url=str(evidence.get("url") or "").strip() or None,
+                        source=source,
+                        metadata={
+                            "published_date": evidence.get("published_date"),
+                            "confidence": evidence.get("confidence"),
+                            "type": evidence_type,
+                        },
+                        expires_at=expires_at,
+                    )
+                )
+
+            if rag_docs:
+                ingest_stats = await asyncio.to_thread(rag.ingest_documents, rag_docs)
+                top_k = _env_int("RAG_V2_TOP_K", 6, min_value=1, max_value=20)
+                rag_hits = await asyncio.to_thread(
+                    rag.hybrid_search,
+                    query_text,
+                    collection=collection,
+                    top_k=top_k,
+                )
+                cleaned = await asyncio.to_thread(rag.cleanup_expired)
+                artifacts["rag_context"] = rag_hits
+                artifacts["rag_stats"] = {
+                    "backend": rag.backend_name,
+                    "collection": collection,
+                    "indexed": int(ingest_stats.get("indexed", 0)),
+                    "skipped": int(ingest_stats.get("skipped", 0)),
+                    "hits": len(rag_hits),
+                    "expired_cleaned": int(cleaned),
+                }
+                rag_trace = {
+                    "enabled": True,
+                    "backend": rag.backend_name,
+                    "collection": collection,
+                    "indexed": int(ingest_stats.get("indexed", 0)),
+                    "hits": len(rag_hits),
+                    "top_k": top_k,
+                }
+            else:
+                rag_trace = {"enabled": False, "reason": "no_rag_documents"}
+        elif not deduped:
+            rag_trace = {"enabled": False, "reason": "empty_evidence_pool"}
+        else:
+            rag_trace = {"enabled": False, "reason": "empty_query"}
+    except Exception as exc:
+        rag_trace = {"enabled": False, "error": str(exc)}
+
     trace.update(
         {
             "executor": {
@@ -279,4 +406,5 @@ async def execute_plan_stub(state: GraphState) -> dict:
             }
         }
     )
+    trace["rag"] = rag_trace
     return {"artifacts": artifacts, "trace": trace}

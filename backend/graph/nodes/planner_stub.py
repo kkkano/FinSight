@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
+
+from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 
@@ -147,17 +150,30 @@ def planner_stub(state: GraphState) -> dict:
             )
             step_id += 1
 
-        # In report mode, run a standard set of expert agents for richer cards (ReportView).
-        # Keep this deterministic in stub mode (no planner-LLM dependency).
-        agent_order = [
-            "price_agent",
-            "news_agent",
-            "technical_agent",
-            "fundamental_agent",
-            "macro_agent",
-            "deep_search_agent",
-        ]
-        for agent_name in agent_order:
+        all_agents = sorted(allowed_agents)
+        try:
+            max_agents = int((os.getenv("LANGGRAPH_REPORT_MAX_AGENTS") or "4").strip())
+        except Exception:
+            max_agents = 4
+        max_agents = max(1, min(max_agents, len(all_agents))) if all_agents else 0
+        try:
+            min_agents = int((os.getenv("LANGGRAPH_REPORT_MIN_AGENTS") or "2").strip())
+        except Exception:
+            min_agents = 2
+        min_agents = max(1, min(min_agents, max_agents)) if max_agents else 0
+
+        selected_agents: list[str] = []
+        if all_agents and max_agents > 0:
+            selected = select_agents_for_request(
+                state,
+                all_agents,
+                max_agents=max_agents,
+                min_agents=min_agents,
+            )
+            selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
+
+        # In report mode, run score-selected expert agents for richer cards (ReportView).
+        for agent_name in selected_agents:
             if agent_name not in allowed_agents:
                 continue
             steps.append(

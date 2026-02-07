@@ -17,10 +17,13 @@ def test_policy_gate_outputs_budget_and_allowed_tools():
     )
     policy = result.get("policy") or {}
     budget = policy.get("budget") or {}
+    allowed_agents = policy.get("allowed_agents") or []
     assert budget.get("max_rounds") == 6
     assert budget.get("max_tools") == 8
     assert "get_stock_price" in (policy.get("allowed_tools") or [])
-    assert "price_agent" in (policy.get("allowed_agents") or [])
+    assert {"price_agent", "news_agent", "fundamental_agent"}.issubset(set(allowed_agents))
+    assert "deep_search_agent" not in allowed_agents
+    assert len(allowed_agents) <= 4
 
 
 def test_policy_gate_includes_tool_schemas_for_allowed_tools():
@@ -106,3 +109,23 @@ def test_policy_gate_company_compare_brief_disables_agents_by_default():
     )
     policy = result.get("policy") or {}
     assert (policy.get("allowed_agents") or []) == []
+
+
+def test_policy_gate_company_report_deep_query_includes_deep_search_agent():
+    result = policy_gate(
+        {
+            "query": "Deep research for AAPL and generate investment report",
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+            "output_mode": "investment_report",
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    assert "deep_search_agent" in allowed_agents

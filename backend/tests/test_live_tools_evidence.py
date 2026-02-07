@@ -100,3 +100,81 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
     pool = artifacts.get("evidence_pool") or []
 
     assert any(e.get("type") == "agent" and "Revenue" in str(e.get("snippet") or "") for e in pool)
+
+
+def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
+    monkeypatch.setenv("RAG_V2_BACKEND", "memory")
+    monkeypatch.setenv("RAG_V2_TOP_K", "3")
+
+    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+
+    state = {
+        "thread_id": "thread-rag-1",
+        "query": "苹果最近业绩和iPhone需求怎么样",
+        "plan_ir": {
+            "goal": "x",
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": ["n1", "n2"],
+                "selection_types": ["news", "news"],
+                "selection_payload": [
+                    {
+                        "id": "n1",
+                        "type": "news",
+                        "title": "Apple reports strong iPhone demand",
+                        "snippet": "Revenue guidance improved with stronger iPhone upgrades.",
+                        "source": "news",
+                        "url": "https://example.com/apple-1",
+                    },
+                    {
+                        "id": "n2",
+                        "type": "news",
+                        "title": "Microsoft Azure update",
+                        "snippet": "Azure growth remains healthy across enterprise segments.",
+                        "source": "news",
+                        "url": "https://example.com/msft-1",
+                    },
+                ],
+            },
+            "output_mode": "investment_report",
+            "steps": [],
+            "budget": {"max_rounds": 1, "max_tools": 1},
+            "synthesis": {"style": "concise", "sections": []},
+        },
+        "policy": {"allowed_tools": [], "allowed_agents": [], "budget": {"max_rounds": 1, "max_tools": 1}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_payload": [
+                {
+                    "id": "n1",
+                    "type": "news",
+                    "title": "Apple reports strong iPhone demand",
+                    "snippet": "Revenue guidance improved with stronger iPhone upgrades.",
+                    "source": "news",
+                    "url": "https://example.com/apple-1",
+                },
+                {
+                    "id": "n2",
+                    "type": "news",
+                    "title": "Microsoft Azure update",
+                    "snippet": "Azure growth remains healthy across enterprise segments.",
+                    "source": "news",
+                    "url": "https://example.com/msft-1",
+                },
+            ],
+        },
+        "trace": {},
+    }
+
+    out = _run(execute_plan_stub(state))
+    artifacts = out.get("artifacts") or {}
+    rag_context = artifacts.get("rag_context") or []
+    rag_stats = artifacts.get("rag_stats") or {}
+
+    assert rag_context, "rag_context should be populated from evidence_pool"
+    assert rag_stats.get("backend") == "memory"
+    assert rag_stats.get("collection") == "session:thread-rag-1"
+    assert any("Apple" in str(item.get("title") or item.get("content") or "") for item in rag_context)

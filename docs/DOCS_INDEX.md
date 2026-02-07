@@ -1,4 +1,4 @@
-﻿# 文档导航与状态（2026-02）
+# 文档导航与状态（2026-02）
 
 本页用于标记当前有效文档、历史文档与归档位置，避免继续在过期文档上开发。
 
@@ -6,25 +6,34 @@
 
 - `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`：LangGraph 重构 SSOT（唯一开发标准）
 - `docs/11_PRODUCTION_RUNBOOK.md`：生产部署/回滚/排障 Runbook
-- `docs/01_ARCHITECTURE.md`：架构说明（保留，冲突时以 06 为准）
-- `docs/05_RAG_ARCHITECTURE.md`：RAG 设计说明（后续按 06/11.10 决议继续演进）
-- `readme.md`、`readme_cn.md`：项目入口说明
+- `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
+- `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
+- `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
+- `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
+- `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策
+- `README.md`、`readme_cn.md`：项目入口说明（版本/架构/fallback/tool）
+- `tests/retrieval_eval/*`：检索质量评测基线（dataset/thresholds/baseline/CI gate）
 
-## 2. 次级参考（仅供补充，不作为 SSOT）
+## 2. 历史阶段文档（仅参考，不作为实现依据）
 
 - `docs/02_PHASE0_COMPLETION.md`
 - `docs/03_PHASE1_IMPLEMENTATION.md`
 - `docs/04_PHASE2_DEEP_RESEARCH.md`
 - `docs/05_PHASE3_ACTIVE_SERVICE.md`
+- `docs/Thinking/2026-01-31_architecture_refactor_guide.md`（Superseded）
+- `docs/Thinking/2026-01-31_routing_architecture_decision.md`（Superseded）
+
+## 3. 次级参考文档
+
 - `docs/PROJECT_STRUCTURE.md`
 - `docs/ROUTING_ARCHITECTURE_STANDARD.md`
-- `docs/ROADMAP.md`
+- `docs/ROADMAP.md`（历史路线图）
 - `docs/TECHNICAL_QNA.md`
 - `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`
 - `docs/REPORT_CHART_SPEC.md`
 - `docs/design_concept_v2.html`
 
-## 3. 已归档（2026-02 清理）
+## 4. 已归档（2026-02 清理）
 
 已迁移到 `docs/archive/2026-02-doc-cleanup/`：
 
@@ -39,8 +48,8 @@
 - `DASHBOARD_IMPLEMENTATION_PLAN.md`
 - `_utf8_test.txt`
 
-## 4. 规则
+## 5. 文档治理规则
 
-- 新增核心设计或执行规则，先写入 `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`。
-- 文档与代码冲突时，先更新代码，再同步 06 和 11。
-- 历史文档只允许归档，不允许继续作为“当前实现依据”。
+- 新增核心设计/规则，先写入 `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`。
+- 与代码冲突时，以代码与 06 为准，并同步更新 01/README。
+- 历史文档允许保留，但必须在首屏标注 `Archived` 或 `Superseded`。

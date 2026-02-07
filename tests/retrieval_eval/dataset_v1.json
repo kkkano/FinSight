@@ -1,0 +1,563 @@
+{
+  "version": "v1",
+  "description": "Retrieval quality evaluation set grouped by news/company/filing/report",
+  "cases": [
+    {
+      "id": "news_nvidia_guidance",
+      "bucket": "news",
+      "query": "nvidia guidance raised ai chip demand",
+      "gold_answer": "NVIDIA raised guidance because AI chip demand stayed strong.",
+      "gold_evidence_ids": [
+        "news_nvidia_guidance_q1",
+        "news_tsmc_ai_orders"
+      ],
+      "gold_citation_ids": [
+        "news_nvidia_guidance_q1"
+      ],
+      "relevance": {
+        "news_nvidia_guidance_q1": 3,
+        "news_tsmc_ai_orders": 2
+      },
+      "corpus": [
+        {
+          "id": "news_nvidia_guidance_q1",
+          "title": "NVIDIA raises Q1 guidance on AI chip demand",
+          "content": "nvidia guidance raised ai chip demand. management said data center ai chip demand remained strong and backlog expanded.",
+          "url": "https://example.com/news/nvidia-guidance-q1",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-28"
+          }
+        },
+        {
+          "id": "news_tsmc_ai_orders",
+          "title": "TSMC sees more AI accelerator orders",
+          "content": "tsmc reported ai orders increased from major gpu customers, supporting ai chip demand visibility.",
+          "url": "https://example.com/news/tsmc-ai-orders",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-29"
+          }
+        },
+        {
+          "id": "news_oil_inventory",
+          "title": "Crude oil inventory builds in US",
+          "content": "energy market update with crude inventory increase and refinery maintenance.",
+          "url": "https://example.com/news/oil-inventory",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-27"
+          }
+        },
+        {
+          "id": "news_retail_sales",
+          "title": "Retail sales mixed in January",
+          "content": "consumer spending mixed across categories with softer electronics and stronger travel.",
+          "url": "https://example.com/news/retail-sales",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-30"
+          }
+        },
+        {
+          "id": "news_shipping_rates",
+          "title": "Container shipping rates decline",
+          "content": "shipping rates eased due capacity normalization and weaker seasonal demand.",
+          "url": "https://example.com/news/shipping-rates",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-25"
+          }
+        }
+      ]
+    },
+    {
+      "id": "news_tesla_price_cut",
+      "bucket": "news",
+      "query": "tesla europe price cut demand trend",
+      "gold_answer": "Tesla's Europe price cut aimed to stabilize demand trend.",
+      "gold_evidence_ids": [
+        "news_tesla_price_cut_eu",
+        "news_eu_ev_registrations"
+      ],
+      "gold_citation_ids": [
+        "news_tesla_price_cut_eu"
+      ],
+      "relevance": {
+        "news_tesla_price_cut_eu": 3,
+        "news_eu_ev_registrations": 2
+      },
+      "corpus": [
+        {
+          "id": "news_tesla_price_cut_eu",
+          "title": "Tesla cuts prices in Europe",
+          "content": "tesla europe price cut demand trend. tesla reduced model prices in europe to defend demand and share.",
+          "url": "https://example.com/news/tesla-eu-price-cut",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-20"
+          }
+        },
+        {
+          "id": "news_eu_ev_registrations",
+          "title": "EU EV registrations slow",
+          "content": "eu electric vehicle registrations slowed, highlighting weak demand trend before new incentives.",
+          "url": "https://example.com/news/eu-ev-registrations",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-18"
+          }
+        },
+        {
+          "id": "news_fed_minutes",
+          "title": "Fed minutes suggest patience",
+          "content": "federal reserve minutes pointed to policy patience and labor market resilience.",
+          "url": "https://example.com/news/fed-minutes",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-21"
+          }
+        },
+        {
+          "id": "news_airline_capacity",
+          "title": "Airline summer capacity expands",
+          "content": "airlines announced additional summer routes and modest fare growth.",
+          "url": "https://example.com/news/airline-capacity",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-22"
+          }
+        },
+        {
+          "id": "news_food_prices",
+          "title": "Food prices moderate",
+          "content": "food inflation moderated due improved logistics and harvest conditions.",
+          "url": "https://example.com/news/food-prices",
+          "source": "newswire",
+          "metadata": {
+            "published_date": "2026-01-19"
+          }
+        }
+      ]
+    },
+    {
+      "id": "company_apple_services",
+      "bucket": "company",
+      "query": "apple services gross margin expansion catalysts",
+      "gold_answer": "Apple services and mix shift are key gross margin catalysts.",
+      "gold_evidence_ids": [
+        "company_apple_services_margin",
+        "company_apple_install_base"
+      ],
+      "gold_citation_ids": [
+        "company_apple_services_margin"
+      ],
+      "relevance": {
+        "company_apple_services_margin": 3,
+        "company_apple_install_base": 2
+      },
+      "corpus": [
+        {
+          "id": "company_apple_services_margin",
+          "title": "Apple services drive gross margin expansion",
+          "content": "apple services gross margin expansion catalysts include subscription mix, advertising, and payment services.",
+          "url": "https://example.com/company/apple-services-margin",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-15"
+          }
+        },
+        {
+          "id": "company_apple_install_base",
+          "title": "Installed base supports monetization",
+          "content": "apple installed base growth supports services monetization and gross margin leverage over time.",
+          "url": "https://example.com/company/apple-installed-base",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-14"
+          }
+        },
+        {
+          "id": "company_apple_hardware_headwind",
+          "title": "Hardware refresh cycle mixed",
+          "content": "hardware demand is mixed and foreign exchange remains a modest headwind.",
+          "url": "https://example.com/company/apple-hardware",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-13"
+          }
+        },
+        {
+          "id": "company_disney_streaming",
+          "title": "Disney streaming update",
+          "content": "streaming subscriber growth decelerated while parks profitability improved.",
+          "url": "https://example.com/company/disney-streaming",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-12"
+          }
+        },
+        {
+          "id": "company_cola_pricing",
+          "title": "Beverage pricing remains resilient",
+          "content": "consumer staples pricing remains resilient despite volume softness in select channels.",
+          "url": "https://example.com/company/beverage-pricing",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-12"
+          }
+        }
+      ]
+    },
+    {
+      "id": "company_msft_azure_capex",
+      "bucket": "company",
+      "query": "microsoft azure growth capex guidance",
+      "gold_answer": "Microsoft keeps strong Azure growth with elevated AI capex guidance.",
+      "gold_evidence_ids": [
+        "company_msft_azure_growth",
+        "company_msft_capex_guidance"
+      ],
+      "gold_citation_ids": [
+        "company_msft_azure_growth"
+      ],
+      "relevance": {
+        "company_msft_azure_growth": 3,
+        "company_msft_capex_guidance": 2
+      },
+      "corpus": [
+        {
+          "id": "company_msft_azure_growth",
+          "title": "Azure growth remains strong",
+          "content": "microsoft azure growth accelerated with ai workload demand and enterprise cloud migration.",
+          "url": "https://example.com/company/msft-azure-growth",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-24"
+          }
+        },
+        {
+          "id": "company_msft_capex_guidance",
+          "title": "Microsoft raises capex guidance",
+          "content": "microsoft capex guidance increased for data center and ai infrastructure expansion.",
+          "url": "https://example.com/company/msft-capex-guidance",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-24"
+          }
+        },
+        {
+          "id": "company_oracle_license",
+          "title": "Oracle license trends mixed",
+          "content": "license and hardware revenue mixed while cloud backlog improved.",
+          "url": "https://example.com/company/oracle-license",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-22"
+          }
+        },
+        {
+          "id": "company_utilities_demand",
+          "title": "Utilities demand outlook steady",
+          "content": "regulated utility demand outlook remained steady with no major surprises.",
+          "url": "https://example.com/company/utilities-demand",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-21"
+          }
+        },
+        {
+          "id": "company_fintech_margins",
+          "title": "Fintech margins improve",
+          "content": "cost discipline improved fintech operating margin in recent quarter.",
+          "url": "https://example.com/company/fintech-margins",
+          "source": "company_note",
+          "metadata": {
+            "as_of": "2026-01-23"
+          }
+        }
+      ]
+    },
+    {
+      "id": "filing_supply_chain_risk",
+      "bucket": "filing",
+      "query": "10-k risk factors supply chain concentration",
+      "gold_answer": "The 10-K highlights supply chain concentration as a key risk factor.",
+      "gold_evidence_ids": [
+        "filing_10k_supply_chain_risk",
+        "filing_10k_supplier_dependency"
+      ],
+      "gold_citation_ids": [
+        "filing_10k_supply_chain_risk"
+      ],
+      "relevance": {
+        "filing_10k_supply_chain_risk": 3,
+        "filing_10k_supplier_dependency": 2
+      },
+      "corpus": [
+        {
+          "id": "filing_10k_supply_chain_risk",
+          "title": "10-K Risk Factors: Supply chain concentration",
+          "content": "10-k risk factors include supply chain concentration and dependence on limited manufacturing partners.",
+          "url": "https://example.com/filing/10k-supply-chain-risk",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "10-K",
+            "period": "FY2025"
+          }
+        },
+        {
+          "id": "filing_10k_supplier_dependency",
+          "title": "10-K Supplier dependency disclosure",
+          "content": "supplier dependency risk may impact component availability and gross margin if disruptions occur.",
+          "url": "https://example.com/filing/10k-supplier-dependency",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "10-K",
+            "period": "FY2025"
+          }
+        },
+        {
+          "id": "filing_8k_board_change",
+          "title": "8-K Board appointment",
+          "content": "company announced appointment of a new board member with audit background.",
+          "url": "https://example.com/filing/8k-board-change",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "8-K"
+          }
+        },
+        {
+          "id": "filing_10q_revenue",
+          "title": "10-Q Revenue discussion",
+          "content": "quarterly revenue increased driven by enterprise segment demand.",
+          "url": "https://example.com/filing/10q-revenue",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "10-Q"
+          }
+        },
+        {
+          "id": "filing_proxy_compensation",
+          "title": "Proxy executive compensation",
+          "content": "proxy statement describes executive compensation policy and committee governance.",
+          "url": "https://example.com/filing/proxy-comp",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "DEF 14A"
+          }
+        }
+      ]
+    },
+    {
+      "id": "filing_buyback_8k",
+      "bucket": "filing",
+      "query": "8-k share repurchase authorization size",
+      "gold_answer": "The 8-K announced a new share repurchase authorization with stated size.",
+      "gold_evidence_ids": [
+        "filing_8k_buyback_auth",
+        "filing_board_capital_policy"
+      ],
+      "gold_citation_ids": [
+        "filing_8k_buyback_auth"
+      ],
+      "relevance": {
+        "filing_8k_buyback_auth": 3,
+        "filing_board_capital_policy": 2
+      },
+      "corpus": [
+        {
+          "id": "filing_8k_buyback_auth",
+          "title": "8-K: New share repurchase authorization",
+          "content": "8-k share repurchase authorization size announced at 15 billion dollars over multi-year horizon.",
+          "url": "https://example.com/filing/8k-buyback-auth",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "8-K",
+            "event": "buyback"
+          }
+        },
+        {
+          "id": "filing_board_capital_policy",
+          "title": "Board capital allocation update",
+          "content": "board approved updated capital policy prioritizing buyback and dividends.",
+          "url": "https://example.com/filing/board-capital-policy",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "8-K"
+          }
+        },
+        {
+          "id": "filing_10k_tax_note",
+          "title": "10-K tax note",
+          "content": "effective tax rate changed due international mix and one-time items.",
+          "url": "https://example.com/filing/10k-tax-note",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "10-K"
+          }
+        },
+        {
+          "id": "filing_10q_inventory",
+          "title": "10-Q inventory detail",
+          "content": "inventory turnover improved sequentially with lower channel stock.",
+          "url": "https://example.com/filing/10q-inventory",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "10-Q"
+          }
+        },
+        {
+          "id": "filing_proxy_attendance",
+          "title": "Proxy meeting attendance",
+          "content": "annual meeting attendance and voting outcomes were disclosed.",
+          "url": "https://example.com/filing/proxy-attendance",
+          "source": "filing",
+          "metadata": {
+            "filing_type": "DEF 14A"
+          }
+        }
+      ]
+    },
+    {
+      "id": "report_cloud_valuation",
+      "bucket": "report",
+      "query": "cloud software valuation compression reacceleration",
+      "gold_answer": "The report links valuation compression to rate shock and reacceleration to growth durability.",
+      "gold_evidence_ids": [
+        "report_cloud_valuation_cycle",
+        "report_growth_durability"
+      ],
+      "gold_citation_ids": [
+        "report_cloud_valuation_cycle"
+      ],
+      "relevance": {
+        "report_cloud_valuation_cycle": 3,
+        "report_growth_durability": 2
+      },
+      "corpus": [
+        {
+          "id": "report_cloud_valuation_cycle",
+          "title": "Cloud software valuation compression cycle",
+          "content": "cloud software valuation compression followed rates shock, while multiples recover when growth reacceleration is credible.",
+          "url": "https://example.com/report/cloud-valuation-cycle",
+          "source": "sellside_report",
+          "metadata": {
+            "analyst": "A.Team",
+            "date": "2026-01-10"
+          }
+        },
+        {
+          "id": "report_growth_durability",
+          "title": "Durable growth and margin expansion framework",
+          "content": "durable growth plus operating leverage supports rerating during reacceleration phases.",
+          "url": "https://example.com/report/growth-durability",
+          "source": "sellside_report",
+          "metadata": {
+            "analyst": "B.Team",
+            "date": "2026-01-09"
+          }
+        },
+        {
+          "id": "report_oil_outlook",
+          "title": "Oil macro outlook",
+          "content": "oil balance expected to normalize with opec supply discipline.",
+          "url": "https://example.com/report/oil-outlook",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-08"
+          }
+        },
+        {
+          "id": "report_airline_unit_revenue",
+          "title": "Airline unit revenue trend",
+          "content": "airline unit revenue expected flat with selective international strength.",
+          "url": "https://example.com/report/airline-unit-revenue",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-07"
+          }
+        },
+        {
+          "id": "report_food_costs",
+          "title": "Food input cost update",
+          "content": "food producers benefit from easing packaging and freight costs.",
+          "url": "https://example.com/report/food-costs",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-06"
+          }
+        }
+      ]
+    },
+    {
+      "id": "report_semis_inventory",
+      "bucket": "report",
+      "query": "semiconductor cycle inventory correction recovery timing",
+      "gold_answer": "The report indicates inventory correction phase and expected recovery timing in the semiconductor cycle.",
+      "gold_evidence_ids": [
+        "report_semis_inventory_cycle",
+        "report_semis_recovery_timing"
+      ],
+      "gold_citation_ids": [
+        "report_semis_inventory_cycle"
+      ],
+      "relevance": {
+        "report_semis_inventory_cycle": 3,
+        "report_semis_recovery_timing": 2
+      },
+      "corpus": [
+        {
+          "id": "report_semis_inventory_cycle",
+          "title": "Semiconductor inventory correction phase",
+          "content": "semiconductor cycle inventory correction progressed across analog and memory channels.",
+          "url": "https://example.com/report/semis-inventory-cycle",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-16"
+          }
+        },
+        {
+          "id": "report_semis_recovery_timing",
+          "title": "Semiconductor recovery timing outlook",
+          "content": "recovery timing likely in second half as lead times stabilize and utilization improves.",
+          "url": "https://example.com/report/semis-recovery-timing",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-16"
+          }
+        },
+        {
+          "id": "report_bank_nim",
+          "title": "Bank net interest margin review",
+          "content": "net interest margin pressure moderated due deposit beta stabilization.",
+          "url": "https://example.com/report/bank-nim",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-15"
+          }
+        },
+        {
+          "id": "report_retail_traffic",
+          "title": "Retail traffic trend",
+          "content": "store traffic improved in urban format while suburban remained mixed.",
+          "url": "https://example.com/report/retail-traffic",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-14"
+          }
+        },
+        {
+          "id": "report_healthcare_devices",
+          "title": "Healthcare devices demand",
+          "content": "procedure volumes grew with stable reimbursement assumptions.",
+          "url": "https://example.com/report/healthcare-devices",
+          "source": "sellside_report",
+          "metadata": {
+            "date": "2026-01-13"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -9,6 +9,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
+from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.plan_ir import PlanIR, PlanBudget
 from backend.graph.planner_prompt import build_planner_prompt
 from backend.graph.event_bus import emit_event
@@ -51,11 +52,32 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
     policy = state.get("policy") or {}
     budget = policy.get("budget") if isinstance(policy, dict) else None
     allowed_tools = set((policy.get("allowed_tools") or []) if isinstance(policy, dict) else [])
-    allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
 
     # Force output_mode + budget to avoid "model self-upgrades".
     output_mode = state.get("output_mode") or "brief"
     safe_budget = PlanBudget.model_validate(budget or {"max_rounds": 3, "max_tools": 4}).model_dump()
+    allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
+    selected_agent_order: list[str] = []
+    if output_mode == "investment_report" and allowed_agents:
+        try:
+            report_max_agents = int(_env_str("LANGGRAPH_REPORT_MAX_AGENTS", "4"))
+        except Exception:
+            report_max_agents = 4
+        report_max_agents = max(1, min(report_max_agents, len(allowed_agents)))
+        try:
+            report_min_agents = int(_env_str("LANGGRAPH_REPORT_MIN_AGENTS", "2"))
+        except Exception:
+            report_min_agents = 2
+        report_min_agents = max(1, min(report_min_agents, report_max_agents))
+        selection = select_agents_for_request(
+            state,
+            sorted(allowed_agents),
+            max_agents=report_max_agents,
+            min_agents=report_min_agents,
+        )
+        selected_agent_order = [str(name) for name in (selection.get("selected") or []) if isinstance(name, str) and name]
+        if selected_agent_order:
+            allowed_agents = set(selected_agent_order)
 
     subject = state.get("subject") or {"subject_type": "unknown"}
     query = (state.get("query") or "").strip()
@@ -238,17 +260,22 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
             "对比问题：必须先拿到多标的 YTD/1Y 表现作为基础数据",
         )
 
-    # In report mode, enforce a deterministic baseline set of expert agents so the UI cards are populated.
+    default_agent_order = [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "deep_search_agent",
+    ]
+    if selected_agent_order:
+        agent_order = [name for name in selected_agent_order if name in allowed_agents]
+    else:
+        agent_order = [name for name in default_agent_order if name in allowed_agents]
+
+    # In report mode, enforce a deterministic score-selected agent baseline.
     if output_mode == "investment_report" and primary_ticker:
         existing_agent_names = {s.get("name") for s in sanitized_steps if s.get("kind") == "agent"}
-        agent_order = [
-            "price_agent",
-            "news_agent",
-            "technical_agent",
-            "fundamental_agent",
-            "macro_agent",
-            "deep_search_agent",
-        ]
 
         insert_at = 0
         if sanitized_steps and sanitized_steps[0].get("kind") == "llm" and sanitized_steps[0].get("name") == "summarize_selection":

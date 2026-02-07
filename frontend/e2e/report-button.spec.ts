@@ -202,6 +202,29 @@ test('Route switch: sidebar can switch between chat and dashboard', async ({ pag
   await expect(page).toHaveURL('/chat');
 });
 
+test('Context panel tabs can switch and panel can collapse/expand', async ({ page }) => {
+  await page.goto('/dashboard/AAPL');
+
+  const panel = page.getByTestId('context-panel');
+  await expect(panel).toBeVisible();
+
+  await page.getByTestId('context-tab-chart').click();
+  await expect(panel.getByText('Market Chart')).toBeVisible();
+
+  await page.getByTestId('context-tab-portfolio').click();
+  await expect(panel.getByText('Portfolio')).toBeVisible();
+
+  await panel.locator('button[title="Collapse"]').click();
+  await expect(page.getByTestId('context-panel-shell')).toHaveCount(0);
+
+  const expandButton = page.getByTestId('context-panel-expand');
+  await expect(expandButton).toBeVisible();
+  await expandButton.click();
+
+  await expect(page.getByTestId('context-panel-shell')).toBeVisible();
+  await expect(page.getByTestId('context-panel')).toBeVisible();
+});
+
 test('Session continuity: chat and mini chat share session_id', async ({ page }) => {
   const payloads: any[] = [];
 

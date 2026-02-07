@@ -39,8 +39,8 @@
 
 ```mermaid
 flowchart LR
-  UI[ChatInput / MiniChat] --> SSE[/chat/supervisor/stream]
-  UI --> API[/chat/supervisor]
+  UI[ChatInput / MiniChat] --> SSE["/chat/supervisor/stream"]
+  UI --> API["/chat/supervisor"]
   API --> LG[LangGraph Runner]
   API -.legacy fallback hooks.-> LC[Legacy Context/Agent Compatibility]
   API --> ORCH[Global ToolOrchestrator]
@@ -53,7 +53,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   FE[React App + Router + Design System]
-  FE -->|session_id + context + options| CHATAPI[/chat/supervisor*]
+  FE -->|session_id + context + options| CHATAPI["/chat/supervisor*"]
   CHATAPI --> ORCHAPI[API Compatibility Layer]
   ORCHAPI --> GRAPH[Single LangGraph Entry]
   GRAPH --> POLICY[PolicyGate]
@@ -158,20 +158,20 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[API /chat/*] --> B[BuildInitialState]
+  A["API /chat/*"] --> B[BuildInitialState]
   B --> C[NormalizeUIContext]
-  C --> H[DecideOutputMode (UI > explicit words > default)]
-  H --> D[ResolveSubject (deterministic)]
-  D --> E{Need Clarify?}
-  E -- yes --> F[Clarify/Interrupt] --> Z[Return/Stream]
-  E -- no --> G[ParseOperation (LLM constrained)]
-  G --> I[Policy/Budget Gate]
-  I --> J{FastPath?}
-  J -- yes --> K[Direct Node (single tool/agent)] --> S[Synthesize]
-  J -- no --> P[Planner Node (LLM -> PlanIR)]
-  P --> Q[Execute Plan (parallel/serial)] --> S[Synthesize]
-  S --> R[Render Template by SubjectType+OutputMode]
-  R --> M[Memory Writeback (allowed fields only)]
+  C --> H["DecideOutputMode (UI > explicit words > default)"]
+  H --> D["ResolveSubject (deterministic)"]
+  D --> E{"Need Clarify?"}
+  E -- yes --> F["Clarify/Interrupt"] --> Z["Return/Stream"]
+  E -- no --> G["ParseOperation (LLM constrained)"]
+  G --> I["Policy/Budget Gate"]
+  I --> J{"FastPath?"}
+  J -- yes --> K["Direct Node (single tool/agent)"] --> S[Synthesize]
+  J -- no --> P["Planner Node (LLM -> PlanIR)"]
+  P --> Q["Execute Plan (parallel/serial)"] --> S[Synthesize]
+  S --> R["Render Template by SubjectType+OutputMode"]
+  R --> M["Memory Writeback (allowed fields only)"]
   M --> Z
 ```
 
@@ -595,7 +595,7 @@ SUBJECT_SUBGRAPHS = {
 - [x] 2026-02-03：LLM 不可用/输出非法：fallback 到 `planner_stub`，并写入 `trace.planner_runtime`｜证据：`backend/graph/nodes/planner.py`、`backend/tests/test_planner_node.py::test_planner_llm_mode_falls_back_when_llm_unavailable`
 - [x] 2026-02-03：Graph 接线：`runner.py` 的 `planner` 节点从 `planner_stub` 切换到 `planner`｜证据：`backend/graph/runner.py`、`backend/graph/nodes/__init__.py`
 - [x] 2026-02-03：测试：无 API key 时 `LANGGRAPH_PLANNER_MODE=llm` 不应失败且应 fallback（断言 trace）｜证据：`backend/tests/test_planner_node.py`
-- [x] 2026-02-05：修复 Planner 注入默认 steps 时 step_id 冲突（重复 id 会覆盖 step_results→多 Agent 卡片内容重复）；investment_report 预算裁剪时优先保留 baseline agents（macro/deep_search），必要时丢弃工具步骤｜证据：`backend/graph/nodes/planner.py`、`backend/tests/test_planner_node.py::test_planner_llm_mode_investment_report_enforces_default_agents`、`backend/tests/test_planner_node.py::test_planner_investment_report_budget_prioritizes_baseline_agents_over_tools`
+- [x] 2026-02-05：修复 Planner 注入默认 steps 时 step_id 冲突（重复 id 会覆盖 step_results→多 Agent 卡片内容重复）；investment_report 预算裁剪时优先保留 baseline agents（macro/deep_search），必要时丢弃工具步骤｜证据：`backend/graph/nodes/planner.py`、`backend/tests/test_planner_node.py::test_planner_llm_mode_investment_report_enforces_scored_agent_subset`、`backend/tests/test_planner_node.py::test_planner_investment_report_budget_prioritizes_selected_agents_over_tools`
 
 #### 11.3.3 Executor（并行与缓存）
 
@@ -656,7 +656,7 @@ SUBJECT_SUBGRAPHS = {
 - [x] 2026-02-04：研报字数兜底：ReportBuilder 生成 `synthesis_report`，若不足则追加“情景分析/估值拆解/监控清单”等附录，保证综合报告可读且不低于阈值（默认按前端计数≈2000字）｜证据：`backend/graph/report_builder.py`
 - [x] 2026-02-04：LLM 限速重试（临时措施）：新增 `ainvoke_with_rate_limit_retry`，在 planner/synthesize 与 Agent LLM 调用处启用；遇到 429/Quota 时按 5min 级等待重试（默认最多 200 次，可通过 env 调整）｜证据：`backend/services/llm_retry.py`、`backend/graph/nodes/planner.py`、`backend/graph/nodes/synthesize.py`、`backend/agents/base_agent.py`、`backend/agents/deep_search_agent.py`
 - [x] 2026-02-04：回归用例（示例 query）：`分析苹果公司，生成投资报告`、`对比 AAPL 和 MSFT，生成投资报告`、`分析这条新闻对股价的影响，生成研报`（selection=news）、`研读这个文档，生成研报`（selection=doc）｜证据：`backend/tests/test_langgraph_api_stub.py`
-- [x] 2026-02-05：修复“宏观分析未运行”：LLM Planner 在研报模式强制补齐默认 agents（含 `macro_agent`），并为 agent/tool 补齐 inputs（query/ticker/selection_ids）避免 trace 显示空 `{}`｜证据：`backend/graph/nodes/planner.py`、`backend/tests/test_planner_node.py::test_planner_llm_mode_investment_report_enforces_default_agents`
+- [x] 2026-02-05：修复“宏观分析未运行”：LLM Planner 在研报模式强制补齐默认 agents（含 `macro_agent`），并为 agent/tool 补齐 inputs（query/ticker/selection_ids）避免 trace 显示空 `{}`｜证据：`backend/graph/nodes/planner.py`、`backend/tests/test_planner_node.py::test_planner_llm_mode_investment_report_enforces_scored_agent_subset`
 - [x] 2026-02-05：修复 trace 可读性：`executor_step_start.result.inputs` 输出结构化对象（不再是 JSON 字符串）；`agent_start/agent_done` 事件字段与前端对齐并携带 step_id/inputs｜证据：`backend/graph/executor.py`、`backend/tests/test_langgraph_api_stub.py::test_chat_supervisor_stream_executor_step_inputs_are_structured_json_object`、`frontend/src/api/client.ts`
 - [x] 2026-02-05：研报去重 & 证据分离：综合研报正文不再重复“问题”行，也不再输出“证据池概览（链接）”；markdown 渲染默认不输出 evidence 链接（可用 `LANGGRAPH_SHOW_EVIDENCE=true` 开启）｜证据：`backend/graph/report_builder.py`、`backend/graph/nodes/render_stub.py`、`backend/tests/test_report_builder_synthesis_report.py`
 - [x] 2026-02-05：字数统计忽略 URL：BE/FE 计数函数均剔除 raw URL（避免“链接充字数”导致研报实际很短），综合研报仍保持 >=2000 字兜底｜证据：`backend/graph/report_builder.py`、`frontend/src/components/ReportView.tsx`、`backend/tests/test_report_builder_synthesis_report.py::test_count_content_chars_ignores_raw_urls`
@@ -812,11 +812,128 @@ SUBJECT_SUBGRAPHS = {
 
 ##### 11.10.6 下一步 Todo（进入 11.11 前必须完成）
 
-- [ ] 建立 `CapabilityRegistry` 并改造 Planner 为评分选路（替代研报全挂载惯性）。
-- [ ] 落地 RAG v2：Postgres `pgvector+tsvector` 混合检索最小闭环（含 TTL 机制）。
-- [ ] 完成 `App.tsx` 与 `RightPanel` 二次拆分，明确面板职责边界。
-- [ ] 同步文档收口：README/README_CN/01~05/Thinking ADR 全部对齐 SSOT。
-- [ ] 增加检索质量评测基线（Recall@K、nDCG、答案引用覆盖率）。
+- [x] 建立 `CapabilityRegistry` 并改造 Planner 为评分选路（替代研报全挂载惯性）。
+- [x] 落地 RAG v2：Postgres `pgvector+tsvector` 混合检索最小闭环（含 TTL 机制）。
+- [x] 2026-02-06：完成 `App.tsx` 与 `RightPanel` 二次拆分，明确面板职责边界（`App` 路由化、`WorkspaceShell` 组装化、`RightPanel` 组合层 + tab 子组件）｜证据：`frontend/src/App.tsx`、`frontend/src/components/layout/*`、`frontend/src/components/right-panel/*`、`npm run build --prefix frontend`（成功）、`npm run test:e2e --prefix frontend`（7 passed）
+- [x] 2026-02-07：同步文档收口：README/README_CN/01~05/Thinking ADR 全部对齐 SSOT。
+- [x] 2026-02-07：增加检索质量评测基线（Recall@K、nDCG、答案引用覆盖率、延迟）并接入 CI 门禁。
+
+#### 11.11 小结 G｜执行层能力升级（进行中）
+
+##### 11.11.2 RAG v2 最小闭环（Postgres/Memory 双后端 + 混合检索 + TTL）
+
+1. 新增 `backend/rag/hybrid_service.py`：  
+   - 支持 `memory` / `postgres` 双后端，`RAG_V2_BACKEND=auto` 时优先 Postgres（有 DSN）否则回退 memory。  
+   - 实现 Dense + Sparse 混合检索与 `RRF` 融合（`pgvector + tsvector` 在 Postgres 路径，纯 Python 同构逻辑用于 memory 路径）。  
+   - 支持 TTL 清理（`expires_at`）与按 `(collection, source_id)` upsert 去重。  
+
+2. 在 `backend/graph/nodes/execute_plan_stub.py` 接入闭环：  
+   - 将 `evidence_pool` 归一写入 session 级 collection（`session:{thread_id}`）；  
+   - 按 subject/evidence 类型应用 TTL 策略（news 短期、ephemeral 短期、filing/research_doc 可长期）；  
+   - 执行混合检索回填 `artifacts.rag_context` 与 `artifacts.rag_stats`，并在 `trace.rag` 暴露运行信息。  
+
+3. 在 `backend/graph/nodes/synthesize.py` 将 `rag_context` 注入 LLM synthesize 输入，确保“先检索后综合”路径可被模型消费。  
+
+4. 新增/补充测试：  
+   - `backend/tests/test_rag_v2_service.py`（检索排序、TTL、upsert）；  
+   - `backend/tests/test_live_tools_evidence.py` 新增 RAG context 回填断言。  
+
+##### 11.11.3 前端职责二次拆分（App/Workspace/RightPanel 组合层收口）
+
+1. `frontend/src/App.tsx` 仅保留路由职责：  
+   - `RootRedirect`（兼容 `/?symbol=XXX`）；  
+   - `ChatRoute`/`DashboardRoute`（将 symbol 与导航能力注入 `WorkspaceShell`）。
+
+2. `frontend/src/components/layout/WorkspaceShell.tsx` 承接应用壳层职责：  
+   - 侧边栏、模态框、右侧面板宽度与折叠状态；  
+   - 行情 hooks（`useMarketQuotes`）与移动端断点（`useIsMobileLayout`）；  
+   - Chat/Dashboard 工作区按路由切换，避免 `App.tsx` 继续膨胀。
+
+3. `RightPanel` 改为组合层，业务拆到子组件：  
+   - `useRightPanelData`：watchlist/alerts/portfolio 的数据与编辑动作；  
+   - `RightPanelHeader`：Tab 与刷新/折叠操作；  
+   - `RightPanelAlertsTab`、`RightPanelPortfolioTab`、`RightPanelChartTab`：按职责分离渲染。  
+   - 结果：`RightPanel.tsx` 不再内嵌多域业务细节，后续改动可局部测试。
+
+4. e2e 补充：  
+   - 新增 “Context panel tabs can switch and panel can collapse/expand”，覆盖 tab 切换与面板折叠/展开契约，防回归。
+
+##### 11.11.4 检索质量评测基线（Recall@K / nDCG / 引用覆盖率 / 延迟）
+
+1. 评测集落地（按桶分层 + 金标准）：  
+   - 新增 `tests/retrieval_eval/dataset_v1.json`，按 `news/company/filing/report` 四桶组织；  
+   - 每条 case 包含 `gold_answer`、`gold_evidence_ids`、`gold_citation_ids`、`relevance` 与 `corpus`（可追溯证据）。
+
+2. 离线评测脚本（可本地跑、可 CI 复用）：  
+   - 新增 `tests/retrieval_eval/run_retrieval_eval.py`；  
+   - 指标输出：`Recall@K`、`nDCG@K`、`Citation Coverage`、`Latency(mean/p95)`；  
+   - 产物输出：JSON + Markdown 对比报告（含与 baseline 的 delta）。
+
+3. 阈值门禁与基线快照：  
+   - 阈值配置：`tests/retrieval_eval/thresholds.json`（v1）  
+     - `recall_at_k_min=0.95`  
+     - `ndcg_at_k_min=0.95`  
+     - `citation_coverage_min=0.95`  
+     - `latency_p95_ms_max=10.0`  
+   - 基线快照：`tests/retrieval_eval/baseline_results.json`（v1，memory backend）。
+
+4. CI 门禁接入：  
+   - `.github/workflows/ci.yml` 新增 `retrieval-eval` job；  
+   - 执行 `python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix ci`；  
+   - 阈值不达标即 fail，并通过 `actions/upload-artifact` 上传报告目录 `tests/retrieval_eval/reports/`。
+
+5. 当前基线结果（2026-02-07，本地 memory backend）：  
+   - `Recall@K=1.0000`  
+   - `nDCG@K=1.0000`  
+   - `Citation Coverage=1.0000`  
+   - `Latency P95=0.08ms`  
+   - 结果快照（纳入版本库）：`tests/retrieval_eval/baseline_results.json`
+
+#### 11.12 小结 H｜DeepSearch/Agent 增强路线（新增）
+
+> 目标：在不破坏“LangGraph 单入口 + 可测可回归”前提下，吸收外部 DeepSearch 方案优点。  
+> 参考仓库：  
+> - `https://github.com/stay-leave/DeepSearchAcademic`  
+> - `https://github.com/666ghj/BettaFish`  
+> - `https://github.com/666ghj/DeepSearchAgent-Demo`
+
+##### 11.12.1 外部方案“可借鉴点”映射
+
+| 来源 | 可借鉴点 | FinSight 采用方式 | 不直接照搬的部分 |
+|---|---|---|---|
+| DeepSearchAcademic | 多轮检索-重排-引用闭环 | 在 Executor 增加多轮 query expansion + rerank hook | 不引入额外主编排入口 |
+| BettaFish | 研究任务分层（数据、分析、结论） | 用 PlanIR step kind + synthesis sections 固化三层输出 | 不复制其完整工程结构 |
+| DeepSearchAgent-Demo | 深搜任务拆解与证据聚合 | 在 `deep_search_agent` 增加任务模板与证据归一器 | 不把 demo 规则硬编码进主链路 |
+
+##### 11.12.2 Agent 能力增强（下一阶段）
+
+1. `deep_search_agent`：  
+   - 增加多轮检索策略（初检 -> 扩展 query -> 复检）；  
+   - 增加来源去重与冲突证据标注；  
+   - 输出 `evidence_quality`（来源数量、时间跨度、一致性）。
+2. `macro_agent`：  
+   - 增加主题化模板（通胀、利率、就业、增长）；  
+   - 输出对标的影响路径（渠道级因果链）。
+3. `fundamental_agent`：  
+   - 对 filing 章节做精确引用（Item/Note 级）；  
+   - 输出可追溯指标表（来源段落 ID）。
+4. `planner`：  
+   - 在 report 模式支持“逐级升级”策略：先低成本步骤，证据不足再升级高成本 Agent。  
+
+##### 11.12.3 RAG 后续落地重点（回答“到底存什么”）
+
+1. 主库只存原始证据文本：财报/公告/纪要/研究原文。  
+2. 生成研报正文不入主库（可选短 TTL 会话缓存）。  
+3. 实时新闻默认只存摘要和元数据（TTL 7~30 天）。  
+4. DeepSearch 长文抓取默认进会话级临时库（任务结束可清理）。  
+5. 引入 nightly 漂移监控：对固定评测集记录 Recall/nDCG/Citation 覆盖率趋势。  
+
+##### 11.12.4 建议执行顺序（4 个迭代）
+
+1. **Sprint 1**：`deep_search_agent` 多轮检索 + 证据质量字段，补单测。  
+2. **Sprint 2**：planner“逐级升级”策略 + 成本/延迟预算断言。  
+3. **Sprint 3**：filing 精确引用（章节级）+ 报告模板展示。  
+4. **Sprint 4**：nightly retrieval benchmark（postgres backend）+ 漂移告警。  
 
 ---
 
@@ -912,3 +1029,11 @@ erDiagram
 | 2026-02-06 | 11.9 小结 E（Warning 清零收口） | 清理 pytest return-not-none 测试写法；修复 datetime timezone-aware 弃用告警；Vite vendor 分包并消除构建 warning；升级 baseline-browser-mapping；补充 pytest warning baseline 配置 | `pytest -q backend/tests`（300 passed, 8 skipped，无 warnings） + `npm run build --prefix frontend`（成功，无 warning） + `npm run test:e2e --prefix frontend`（6 passed） | 11.9 完成后，CI 输出已从“告警噪音”收敛为“仅关注真实失败”；后续新增告警需按同标准在当节内清零 |
 | 2026-02-06 | 11.10 小结 F（架构体检与技术决议） | 完成对当前架构/编排/前后端交互/Agent 选路/RAG 选型的系统体检；形成生产决议：CapabilityRegistry + 评分选路、RAG 分层存储（长期库+临时库）、混合检索（pgvector+tsvector+RRF）、文档体系收口（README/01~05/Thinking ADR） | 文档证据：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.10） + 代码走查：`backend/graph/runner.py`、`backend/graph/nodes/policy_gate.py`、`backend/graph/adapters/agent_adapter.py`、`frontend/src/App.tsx`、`frontend/src/components/RightPanel.tsx`、`docs/05_RAG_ARCHITECTURE.md` | 本小结为架构决策记录，不涉及运行时代码变更；11.11 起按 11.10.6 Todo 执行并补测试证据 |
 | 2026-02-06 | 11.8 文档清理补录（归档 + 索引） | 归档过期文档到 `docs/archive/2026-02-doc-cleanup/`（`PROJECT_STATUS.md`、`PROJECT_ANALYSIS_V1.md`、`QUALITY_IMPROVEMENT_OVERVIEW_V2/V3.md`、`PROMPT_*`、`PHASE2_DEMO_REPORT.md`、`fix_summary_2026-01-24.md`、`DASHBOARD_IMPLEMENTATION_PLAN.md`、`_utf8_test.txt`）；新增 `docs/DOCS_INDEX.md` 和归档说明 `docs/archive/2026-02-doc-cleanup/README.md` | `rg -n "PROJECT_STATUS\\.md|PROJECT_ANALYSIS_V1\\.md|QUALITY_IMPROVEMENT_OVERVIEW_V[23]\\.md|PROMPT_OPTIMIZATION_PROPOSAL\\.md|PROMPT_REDESIGN_SYNTHESIS\\.md|PHASE2_DEMO_REPORT\\.md|fix_summary_2026-01-24\\.md|DASHBOARD_IMPLEMENTATION_PLAN\\.md|_utf8_test\\.txt" docs`（仅命中归档目录及索引/记录文档） | 文档入口已收口；后续新增文档必须先在 `docs/DOCS_INDEX.md` 标注状态，再决定是否进入主目录 |
+| 2026-02-06 | 11.11.1 小结 G（CapabilityRegistry + Planner评分选路） | 新增 `backend/graph/capability_registry.py` 统一 Agent 能力模型与评分器；`policy_gate` 在 investment_report 下按 subject/operation/query 选择 Agent 子集（默认最多4个）；`planner` 与 `planner_stub` 同步按评分选路注入/保留 Agent，不再固定全挂载 6 Agent；并补充回归测试覆盖默认公司研报、深度查询、文档场景。 | `pytest -q backend/tests/test_capability_registry.py backend/tests/test_policy_gate.py backend/tests/test_planner_node.py`（15 passed） + `pytest -q backend/tests`（305 passed, 8 skipped） + `npm run build --prefix frontend`（成功） + `npm run test:e2e --prefix frontend`（6 passed） | 11.10.6 首项 Todo 已完成；后续进入 11.11.2（RAG 分层存储与混合检索落地）。 |
+| 2026-02-06 | 11.11.2 小结 G（RAG v2 最小闭环） | 新增 `backend/rag/hybrid_service.py`（memory/postgres 双后端、RRF、TTL、upsert）；`execute_plan_stub` 打通 `evidence_pool -> ingest -> hybrid_retrieve -> artifacts.rag_context`；`synthesize` 增加 `rag_context` 输入；新增 `backend/tests/test_rag_v2_service.py` 与 execute_plan RAG 回填断言。 | `pytest -q backend/tests/test_rag_v2_service.py backend/tests/test_live_tools_evidence.py backend/tests/test_synthesize_node.py`（11 passed） + `pytest -q backend/tests`（309 passed, 8 skipped） + `npm run build --prefix frontend`（成功） + `npm run test:e2e --prefix frontend`（6 passed） | 11.10.6 第二项 Todo 已完成；下一步进入 `App.tsx/RightPanel` 职责再拆分与文档对齐。 |
+| 2026-02-06 | 11.11.3 小结 G（App/RightPanel 职责二次拆分） | 前端继续分层：`App.tsx` 保持路由入口；`WorkspaceShell` 承担壳层与布局状态；`RightPanel` 改为组合层并拆分为 `RightPanelAlertsTab`/`RightPanelPortfolioTab`/`RightPanelChartTab` + `useRightPanelData`；补充 Context Panel 折叠/展开与 Tab 切换 e2e。 | `npm run build --prefix frontend`（成功） + `npm run test:e2e --prefix frontend`（7 passed） | 已完成 11.10.6 第三项 Todo（App/RightPanel 二次拆分）；下一步优先推进文档 SSOT 收口或检索质量评测基线。 |
+| 2026-02-07 | 11.10.6 文档收口（README/01~05/Thinking ADR） | 完成 README/README_CN、`docs/01~05`、`docs/Thinking/2026-01-31_*` 的 SSOT 收口：更新当前架构图/功能图/fallback/tool/version，历史阶段文档改为 Archived，Thinking ADR 改为 Superseded，并同步 `docs/DOCS_INDEX.md`。 | 人工核对：`README.md`、`readme_cn.md`、`docs/01_ARCHITECTURE.md`、`docs/02_PHASE0_COMPLETION.md`、`docs/03_PHASE1_IMPLEMENTATION.md`、`docs/04_PHASE2_DEEP_RESEARCH.md`、`docs/05_PHASE3_ACTIVE_SERVICE.md`、`docs/05_RAG_ARCHITECTURE.md`、`docs/Thinking/2026-01-31_architecture_refactor_guide.md`、`docs/Thinking/2026-01-31_routing_architecture_decision.md`、`docs/DOCS_INDEX.md` | 11.10.6 第四项 Todo 已完成；下一步可进入检索质量评测基线（Recall@K/nDCG/引用覆盖率）。 |
+| 2026-02-07 | 11.11.4 检索质量评测基线 | 新增 `tests/retrieval_eval`（`dataset_v1.json`、`run_retrieval_eval.py`、`thresholds.json`、`baseline_results.json`、单测）；CI 新增 `retrieval-eval` 门禁并上传报告 artifact。 | `pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py`（5 passed） + `python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local`（PASS，Recall@K=1.0000 / nDCG@K=1.0000 / Citation Coverage=1.0000 / Latency P95=0.08ms） | 11.10.6 第五项 Todo 收口完成；后续若更换语料或检索算法，先更新 `baseline_results.json` 再调整阈值。 |
+| 2026-02-07 | 11.11.4 入口文档同步（README/README_CN/DOCS_INDEX） | 将检索评测基线从“计划中”改为“已落地”：补发布门禁命令、补检索评测运行说明与阈值/基线文件入口，并更新下一步优先事项为“扩评测集 + postgres nightly 基准”。 | `pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py`（5 passed） + `python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local`（PASS） | 防止入口文档继续误导（说“要做”而实际已完成）；后续只需在变更阈值/数据集时同步这三处入口。 |
+| 2026-02-07 | 11.12 文档增强（黑盒拆解 + DeepSearch 路线） | `docs/01` 增补运行时序/节点 I-O/Agent 选路与执行流程图；`docs/05` 增补“研报库边界”；`docs/06` 新增 11.12 外部方案吸收路线；新增 3 份当前有效 Thinking ADR。 | 人工核对：`docs/01_ARCHITECTURE.md`、`docs/05_RAG_ARCHITECTURE.md`、`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`、`docs/Thinking/ADR-2026-02-07-agent-routing.md`、`docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`、`docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md` | 解决“文档黑盒”问题，并把后续演进方向从口头建议固化为可执行文档。 |
+| 2026-02-07 | 11.12 文档增强（二次拆解 Agent 内部） | 按“query->选 Agent->planner->executor->子 Agent”链路补齐可追踪文档：`docs/01` 新增选路示例表（含 reason）、planner/executor 内部 mermaid、6 个子 Agent 数据源/回退/输出说明；README/README_CN 同步入口说明。 | 人工核对：`docs/01_ARCHITECTURE.md`、`readme.md`、`readme_cn.md` | 进一步消除黑盒认知，便于排障与后续 Agent 增强迭代。 |

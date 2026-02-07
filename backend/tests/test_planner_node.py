@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import asyncio
 
 
@@ -19,7 +19,7 @@ def test_planner_llm_mode_falls_back_when_llm_unavailable(monkeypatch):
     from backend.graph.nodes.planner import planner
 
     state = {
-        "query": "分析影响",
+        "query": "analyze impact",
         "output_mode": "brief",
         "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
         "subject": {"subject_type": "unknown", "selection_payload": []},
@@ -69,7 +69,7 @@ def test_planner_llm_mode_enforces_state_output_mode_and_allowlist(monkeypatch):
 
     selection_payload = [{"type": "news", "id": "n1", "title": "t", "snippet": "s"}]
     state = {
-        "query": "分析影响",
+        "query": "analyze impact",
         "output_mode": "brief",
         "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
         "subject": {"subject_type": "news_item", "selection_payload": selection_payload},
@@ -125,7 +125,7 @@ def test_planner_llm_mode_sanitizes_extra_fields_and_avoids_validation_errors(mo
     from backend.graph.nodes.planner import planner
 
     state = {
-        "query": "对比 AAPL 和 MSFT 哪个更值得投资",
+        "query": "compare AAPL and MSFT",
         "output_mode": "brief",
         "operation": {"name": "compare", "confidence": 0.9, "params": {}},
         "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"], "selection_payload": []},
@@ -151,7 +151,7 @@ def test_planner_llm_mode_sanitizes_extra_fields_and_avoids_validation_errors(mo
     assert all("extra" not in s for s in steps), "planner should strip unknown step fields"
 
 
-def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch):
+def test_planner_llm_mode_investment_report_enforces_scored_agent_subset(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 
     class _Resp:
@@ -160,7 +160,7 @@ def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch)
 
     class _FakeLLM:
         async def ainvoke(self, _messages):
-            # Intentionally omit agent steps; enforcement should add them in investment_report mode.
+            # Intentionally omit agent steps; enforcement should add score-selected agents.
             return _Resp(
                 """
                 {
@@ -183,7 +183,7 @@ def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch)
     from backend.graph.nodes.planner import planner
 
     state = {
-        "query": "详细分析苹果公司，生成投资报告",
+        "query": "Detailed investment report for AAPL",
         "output_mode": "investment_report",
         "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
         "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
@@ -211,17 +211,12 @@ def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch)
     steps = plan.get("steps") or []
     step_ids = [s.get("id") for s in steps]
     assert len(step_ids) == len(set(step_ids)), "planner must emit unique step ids to avoid step_results overwrites"
+
     agent_steps = [s for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
     names = {s.get("name") for s in agent_steps}
-    for expected in (
-        "price_agent",
-        "news_agent",
-        "fundamental_agent",
-        "technical_agent",
-        "macro_agent",
-        "deep_search_agent",
-    ):
-        assert expected in names
+    assert {"price_agent", "news_agent", "fundamental_agent"}.issubset(names)
+    assert "deep_search_agent" not in names
+    assert len(names) <= 4
 
     for step in agent_steps:
         inputs = step.get("inputs") or {}
@@ -229,7 +224,7 @@ def test_planner_llm_mode_investment_report_enforces_default_agents(monkeypatch)
         assert inputs.get("ticker") == "AAPL"
 
 
-def test_planner_investment_report_budget_prioritizes_baseline_agents_over_tools(monkeypatch):
+def test_planner_investment_report_budget_prioritizes_selected_agents_over_tools(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 
     class _Resp:
@@ -264,7 +259,7 @@ def test_planner_investment_report_budget_prioritizes_baseline_agents_over_tools
     from backend.graph.nodes.planner import planner
 
     state = {
-        "query": "深度分析 TSLA，生成投资报告",
+        "query": "Deep research on TSLA and generate an investment report",
         "output_mode": "investment_report",
         "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
         "subject": {"subject_type": "company", "tickers": ["TSLA"], "selection_payload": []},
@@ -286,15 +281,17 @@ def test_planner_investment_report_budget_prioritizes_baseline_agents_over_tools
     out = _run(planner(state))
     plan = out.get("plan_ir") or {}
     steps = plan.get("steps") or []
-    # Ensure baseline agent cards are always present even under tight max_tools.
+
+    # Ensure score-selected baseline agents are preserved under max_tools cap.
     agent_steps = [s for s in steps if s.get("kind") == "agent"]
     names = {s.get("name") for s in agent_steps}
-    assert "macro_agent" in names
     assert "deep_search_agent" in names
+    assert {"price_agent", "news_agent", "fundamental_agent"}.issubset(names)
+    assert len(names) <= 4
 
     step_ids = [s.get("id") for s in steps]
     assert len(step_ids) == len(set(step_ids))
 
-    # Budget applies to tool+agent steps; baseline has 6 agents so tools may be trimmed.
+    # Budget applies to tool+agent steps; selected baseline agents are kept first.
     tool_agent_steps = [s for s in steps if s.get("kind") in ("tool", "agent")]
     assert len(tool_agent_steps) <= 8

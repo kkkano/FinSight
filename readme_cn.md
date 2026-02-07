@@ -1,41 +1,168 @@
-﻿# FinSight AI：多智能体金融研究平台
+﻿# FinSight AI：LangGraph 金融研究副驾
 
-[![LangChain](https://img.shields.io/badge/LangChain-1.1.0-green)](https://github.com/langchain-ai/langchain)
-[![LangGraph](https://img.shields.io/badge/LangGraph-SSOT-blue)](./docs/06_LANGGRAPH_REFACTOR_GUIDE.md)
+[![LangChain](https://img.shields.io/badge/LangChain-1.2.7-green)](https://github.com/langchain-ai/langchain)
+[![LangGraph](https://img.shields.io/badge/LangGraph-1.0.7-blue)](https://github.com/langchain-ai/langgraph)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-18+-blue)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](./LICENSE)
 
-[English Version](./readme.md) | **中文文档** | [更多文档](./docs/)
+[English](./README.md) | **中文** | [文档索引](./docs/DOCS_INDEX.md)
 
 ---
 
 ## 项目概述
 
 > **SSOT（唯一标准）**：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`  
-> 旧 Supervisor/Intent Router 文档保留作参考，但不应再驱动新开发。
-> **文档入口索引**：`docs/DOCS_INDEX.md`（当前有效文档与归档文档）
+> **生产部署手册**：`docs/11_PRODUCTION_RUNBOOK.md`
 
-FinSight AI 正在迁移到 **LangGraph 单图编排**（2026 风格）：
+FinSight 当前已收敛为 `/chat/supervisor*` 的 **LangGraph 单入口编排**：
 
-- **单入口编排**：`/chat/*` 默认进入 LangGraph 单图（已不再使用 `LANGGRAPH_ENABLED` 分叉）
-- **任务三轴模型**：`subject_type + operation + output_mode`（替代 10+ Intent）
-- **Planner-Executor**：受约束的 `PlanIR` + 可执行步骤（并行组 + 缓存）
-- **研报必须显式选择**：通过 UI 按钮 **“生成研报”**（`options.output_mode=investment_report`），而不是靠“分析”关键词
-- **Selection Context 结构化**：selection.type 仅表示输入对象类型（`news | filing | doc`）
+- 单图主链：`BuildInitialState -> NormalizeUIContext -> DecideOutputMode -> ResolveSubject -> Clarify -> ParseOperation -> PolicyGate -> Planner -> ExecutePlan -> Synthesize -> Render`
+- 统一任务模型：`subject_type + operation + output_mode`
+- 研报模式必须显式指定：`options.output_mode=investment_report`
+- Selection Context 是结构化输入（`news | filing | doc`），不再等同“研报意图”
+- Checkpointer 支持 `sqlite` / `postgres`，并有受控回退策略
 
-目标依旧是：像一位金融合伙人一样，既能取数，也能规划与输出结构化结论（含 trace 与 evidence）。
+---
 
-### 迁移开关（开发期）
+## 快速开始
+
+### 后端
 
 ```bash
-set LANGGRAPH_PLANNER_MODE=llm
-set LANGGRAPH_SYNTHESIZE_MODE=llm
-set LANGGRAPH_EXECUTE_LIVE_TOOLS=false
-# 证据链接默认不在 markdown 内输出（研报在 Sources/证据池卡片展示）；需要时开启
-set LANGGRAPH_SHOW_EVIDENCE=true
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 ```
+
+### 前端
+
+```bash
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
+
+### 发布门禁（必须通过）
+
+```bash
+pytest -q backend/tests
+npm run build --prefix frontend
+npm run test:e2e --prefix frontend
+python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
+```
+
+---
+
+## 运行开关
+
+| 变量 | 默认值 | 作用 |
+|---|---:|---|
+| `LANGGRAPH_PLANNER_MODE` | `stub` | `stub` 为可测确定性规划；`llm` 为受约束 PlanIR 规划 |
+| `LANGGRAPH_SYNTHESIZE_MODE` | `stub` | `stub` 为确定性综合；`llm` 为校验后综合 |
+| `LANGGRAPH_EXECUTE_LIVE_TOOLS` | `false` | 是否执行真实工具/Agent |
+| `LANGGRAPH_SHOW_EVIDENCE` | `false` | 是否在 markdown 内输出证据链接 |
+| `LANGGRAPH_CHECKPOINTER_BACKEND` | `sqlite` | `sqlite` 或 `postgres` |
+| `LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK` | `true` | 后端异常时是否允许回退到内存 checkpointer |
+| `API_AUTH_ENABLED` | `false` | API Key 鉴权开关 |
+| `RATE_LIMIT_ENABLED` | `false` | HTTP 限流开关 |
+
+---
+
+## 当前架构
+
+```mermaid
+flowchart LR
+    FE[React 前端] --> API["/chat/supervisor*"]
+    API --> G[LangGraph Runner]
+    G --> N1[BuildInitialState]
+    N1 --> N2[NormalizeUIContext]
+    N2 --> N3[DecideOutputMode]
+    N3 --> N4[ResolveSubject]
+    N4 --> N5{是否需要澄清}
+    N5 -->|是| C[Clarify]
+    N5 -->|否| N6[ParseOperation]
+    C --> RENDER[Render]
+    N6 --> N7[PolicyGate]
+    N7 --> N8[Planner]
+    N8 --> N9[ExecutePlan]
+    N9 --> N10[Synthesize]
+    N10 --> RENDER
+    RENDER --> RESP[HTTP/SSE 响应]
+```
+
+### 检索 / RAG v2 联动
+
+```mermaid
+flowchart LR
+    INGEST[执行层证据写入] --> IDX[混合索引\nDense + Sparse]
+    IDX --> RETR[Hybrid Retrieval]
+    RETR --> RRF[RRF 融合]
+    RRF --> RERANK[轻量重排]
+    RERANK --> SYN[Synthesize]
+```
+
+---
+
+## Fallback 策略
+
+| 层级 | 主路径 | 回退路径 |
+|---|---|---|
+| 澄清 | 图内 `Clarify` 节点 | 确定性澄清文案 |
+| 规划 | `LANGGRAPH_PLANNER_MODE=llm` | `planner_stub`（受 Policy 约束） |
+| 综合 | `LANGGRAPH_SYNTHESIZE_MODE=llm` | 确定性 synthesize 输出 |
+| 工具数据 | 各数据源主通道 | 结构化 fallback 结果（带元数据） |
+| Checkpointer | sqlite/postgres saver | memory saver（仅在允许时） |
+
+---
+
+## 内置工具
+
+| 工具 | 说明 |
+|---|---|
+| `get_stock_price` | 行情快照 / 报价 |
+| `get_company_news` | 公司新闻 |
+| `get_company_info` | 公司资料与基本面摘要 |
+| `search` | 网页检索兜底与补充 |
+| `get_market_sentiment` | 市场情绪 |
+| `get_economic_events` | 宏观事件 |
+| `get_performance_comparison` | 标的表现对比 |
+| `analyze_historical_drawdowns` | 历史回撤分析 |
+| `get_technical_snapshot` | RSI/MACD/MA 技术快照 |
+| `get_current_datetime` | 时间上下文 |
+
+## 内置专家 Agent
+
+- `price_agent`
+- `news_agent`
+- `fundamental_agent`
+- `technical_agent`
+- `macro_agent`
+- `deep_search_agent`
+
+---
+
+## API 与契约
+
+### 核心接口
+
+- `POST /chat/supervisor`
+- `POST /chat/supervisor/stream`
+- `GET /health`
+- `GET /metrics`
+- `GET /diagnostics/orchestrator`
+
+### 契约版本
+
+- `chat.request.v1`
+- `chat.response.v1`
+- `graph.state.v1`
+- `chat.sse.v1`
+- `trace.v1`
+
+（定义于 `backend/contracts.py`）
 
 ---
 
@@ -53,513 +180,58 @@ set LANGGRAPH_SHOW_EVIDENCE=true
 
 ---
 
-## 核心特点
+## 文档分层
 
-> **提示**：项目正在从 legacy Supervisor/Intent routing 迁移到 LangGraph 单图编排。  
-> 以 `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` 为准。
+### 当前有效（实现依据）
 
-### LangGraph 编排（当前）
+- `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`
+- `docs/11_PRODUCTION_RUNBOOK.md`
+- `docs/01_ARCHITECTURE.md`（去黑盒版：query->agent 选路示例、planner/executor 内部 mermaid、各子 Agent 内部流程）
+- `docs/05_RAG_ARCHITECTURE.md`
+- `tests/retrieval_eval/run_retrieval_eval.py`（检索质量评测基线脚本）
 
-- 单图入口：显式 State（`subject_type + operation + output_mode`）
-- `PolicyGate`（budget/allowlist/schema）→ `Planner`（PlanIR）→ `ExecutePlan`（并行+缓存）→ `Render`（按 subject_type 模板）
-- 研报模式由 UI 按钮显式触发（不再把“分析”映射为研报）
-
-### Legacy：Supervisor 多智能体架构（历史）
-```
-用户提问 -> IntentClassifier (规则 + Embedding + LLM) -> SupervisorAgent
-                                                        |
-             +------------------------------------------+----------------------------------+
-             | Worker Agents（并行执行）                                                |
-             | - PriceAgent（实时行情）                                                 |
-             | - NewsAgent（新闻与情绪）                                                |
-             | - TechnicalAgent（技术指标）                                             |
-             | - FundamentalAgent（基本面）                                             |
-             | - MacroAgent（宏观数据）                                                 |
-             | - DeepSearchAgent（深度检索）                                            |
-             +-----------------------------------------------------------------------------+
-                                                        |
-                                   ForumHost（综合 + 置信度评分）
-                                                        |
-                         ReportIR（引用 + 置信度 + 新鲜度）
-                                                        |
-                     前端 ReportView（证据池 + Trace 展开）
-```
-
-### 专业报告生成
-- 当前：模板按 `subject_type + output_mode` 选择（news/company/filing），不再用单一固定 8 章覆盖所有对象。
-- 8 节结构化报告：执行摘要、市场定位、基本面分析、宏观与催化、风险评估、投资策略、情景分析、监控事件
-- Agent 贡献追踪：显示每个洞见来自哪个 Agent
-- 证据池：引用包含置信度与新鲜度字段
-- ReportIR 引用 schema 校验，保证字段完整
-- ReportSection 保留章节级置信度/来源 Agent/数据源
-- PlanIR + Executor：计划模板 + 执行 trace（step 级可追溯）
-- EvidencePolicy：引用校验 + 覆盖率阈值约束
-- News/Macro 回退结构化，保证下游分析稳定
-- News/Report 增加“总览/结论”摘要，避免信息堆叠
-- get_company_news 输出结构化列表，统一格式展示
-- DeepSearch 加入 SSRF 防护与重试
-- DeepSearch 动态查询模板根据意图关键词生成
-- DataContext 汇总各个数据源的 as_of/currency/adjustment，自动标注不一致
-- BudgetManager 控制工具调用/轮次/耗时，预算快照随响应回传
-- 安全门禁（API Key + 限流）与免责声明模板确保合规
-- SearchConvergence 模块：信息增益评分 + 内容去重 + 停止条件
-- TraceEvent Schema v1：统一事件格式（event_type/duration/metadata）
-- Supervisor 流式输出统一 normalize 到 trace v1
-- 回归测试框架：25 条基准用例 + 自动对比报告
-- **路由架构标准**：双层 Intent 设计（详见 [ROUTING_ARCHITECTURE_STANDARD.md](./docs/ROUTING_ARCHITECTURE_STANDARD.md)）
-
-### 智能意图分类
-- 3 层混合系统：规则匹配 -> Embedding 相似度 -> LLM 兜底
-- NEWS 子意图区分“拉取新闻”和“分析新闻影响”
-- NEWS 关键词快速通道，避免误判为通用搜索
-- 成本优化：简单请求优先走规则
-- 报告意图覆盖“分析/Analyze”，有 ticker 时无需 LLM
-- 可靠性优先 Agent 闸门：CHAT 可按时效/决策/证据需求升级到 Supervisor
-- SchemaToolRouter：一次 LLM 选工具 + Pydantic 校验 + 模板化追问；接入 /chat/supervisor 与 /chat/supervisor/stream；错误 JSON/未知 tool 走 clarify
-- 多轮补槽：pending tool 状态记忆缺失参数
-
-### 实时可视化与透明度
-- 流式输出（逐字呈现）
-- 交互式 K 线图（支持全屏）
-- 多 ticker 对比自动渲染多图
-- Agent Trace 分层展开，可逐步查看工具调用
-- 资产组合快照 + 持仓编辑
-- Trace 中可见 Agent 闸门决策（是否调用 Agent）
-- 调用了 Agent/工具时展示证据池
-- **开发者控制台**：实时 SSE 事件查看器，支持 26 种事件类型（tool_start/end、llm_start/end、cache_hit/miss、agent_start/done/step、supervisor_start/done 等）
-- **Selection Context（上下文附件）**：在 Dashboard 新闻/报告中点击“问这条”，把具体引用附加到提问里，避免“你说的是哪条新闻”
-- 可观测性不阻断业务：TraceEmitter 支持向前兼容字段，追踪打点不会因为参数变化而打断主链路
-
-### 订阅提醒系统
-- 价格提醒：达到阈值自动邮件通知
-- 新闻提醒：关注股票的定时新闻摘要
-- APScheduler 后台调度
-
----
-
-## 系统架构
-
-### 整体架构
-
-```mermaid
-flowchart TB
-    subgraph Frontend["前端 (React + Vite)"]
-        UI[Chat UI]
-        Dashboard["Dashboard\n(KPI/Chart/News)"]
-        ReportView[ReportView 卡片]
-        Evidence[证据池（chat/report）]
-        Trace[Agent Trace]
-        Chart[K线图]
-        Settings[设置面板]
-        SelectionCtx["Selection Context\n(新闻/报告引用)"]
-    end
-
-    subgraph API["FastAPI 后端"]
-        Stream["/chat/supervisor(/stream)"]
-        CA["ConversationAgent<br/>（统一入口）"]
-        CM["ContextManager<br/>（历史 + 引用）"]
-        Router["ConversationRouter"]
-        subgraph SchemaLayer["Schema 驱动路由"]
-            SchemaRouter["SchemaToolRouter<br/>LLM 工具 + Pydantic"]
-            SlotGate["SlotCompletenessGate<br/>company_name_only + 守卫"]
-            Clarify["ClarifyTool<br/>模板化追问"]
-        end
-        Gate["Need-Agent Gate<br/>可靠性优先"]
-        ChatHandler["ChatHandler"]
-        Classifier["IntentClassifier<br/>规则 + Embedding + LLM"]
-    end
-
-    subgraph Supervisor["SupervisorAgent"]
-        SupRouter[意图路由]
-        Workers[Worker Agents]
-        Forum[ForumHost]
-    end
-
-    subgraph Agents["专业 Agents"]
-        PA[PriceAgent]
-        NA[NewsAgent]
-        TA[TechnicalAgent]
-        FA[FundamentalAgent]
-        MA[MacroAgent]
-        DSA[DeepSearchAgent]
-    end
-
-    subgraph ReportIR["报告与证据"]
-        IR[ReportIR + 校验器]
-        Citations[引用（置信度 + 新鲜度）]
-    end
-
-    subgraph Services["核心服务"]
-        Cache[KV 缓存]
-        CB[熔断器]
-        SafeFetch[安全抓取（SSRF 防护 + 重试）]
-        Memory[用户记忆]
-    end
-
-    UI --> Stream
-    Dashboard --> Stream
-    Stream --> CA
-    CA --> CM
-    CA --> Router
-    Router --> SchemaRouter
-    SchemaRouter --> SlotGate
-    SlotGate -->|clarify| Clarify
-    Clarify --> ChatHandler
-    SlotGate -->|execute| ChatHandler
-    SlotGate -->|fallback| Gate
-    Gate -->|快速路径| ChatHandler
-    Gate -->|需要 Agent| Classifier
-    Classifier --> SupRouter
-    SupRouter --> Workers
-    Workers --> PA & NA & TA & FA & MA & DSA
-    PA & NA & TA & FA & MA & DSA --> Forum
-    Forum --> IR --> ReportView
-    IR --> Evidence
-    IR --> Trace
-    Stream --> Evidence
-
-    PA & NA & TA & FA & MA & DSA --> Cache
-    PA & NA & TA & FA & MA & DSA --> CB
-    DSA --> SafeFetch
-```
-
-### Selection Context → 统一新闻分析链路
-
-```mermaid
-flowchart LR
-    UI[Dashboard NewsFeed\n问这条] --> Store[Zustand\nactiveSelection]
-    Store --> Req[/chat/supervisor/stream\ncontext.selection/]
-    Req --> CM[ContextManager\n注入 [System Context]]
-    CM --> SA[SupervisorAgent]
-    SA -->|NEWS + Selection Context| ANA[_handle_news_analysis\n唯一实现]
-    ANA --> OUT[结构化输出\n摘要/影响/启示/风险]
-```
-
-### 意图分类流程
-
-```mermaid
-flowchart LR
-    Input[用户请求] --> CA[ConversationAgent]
-    CA --> Schema[SchemaToolRouter<br/>LLM 返回 JSON]
-    Schema --> SlotGate[SlotCompletenessGate]
-    SlotGate -->|company_name_only| Clarify[ClarifyTool]
-    SlotGate -->|缺失 ticker| Clarify
-    SlotGate -->|低置信度| Clarify
-    SlotGate -->|执行| Chat[ChatHandler]
-    SlotGate -->|未匹配| Rule[规则匹配<br/>免费]
-    Rule -->|命中| Direct[直接响应]
-    Rule -->|未命中| Embed[Embedding + 关键词<br/>低成本]
-    Embed -->|高置信度| Gate[Need-Agent 闸门]
-    Embed -->|低置信度| LLM[LLM 分类<br/>付费]
-    LLM --> Gate
-    Gate -->|快速路径| Chat
-    Gate -->|需要 Agent| Agent[SupervisorAgent]
-```
-
-### 数据回退策略
-
-```mermaid
-graph LR
-    Q[查询] --> A[yfinance]
-    A -->|失败| B[Finnhub]
-    B -->|失败| C[Alpha Vantage]
-    C -->|失败| D[网页抓取]
-    D -->|失败| E[搜索回退]
-    E -->|失败| F[结构化回退]
-    F -->|失败| G[优雅错误]
-```
-
----
-
-## 可用工具
-
-| 工具 | 说明 | 数据源 |
-|------|------|--------|
-| `get_stock_price` | 实时报价 + 多源回退 | yfinance -> Finnhub -> Alpha Vantage -> Web |
-| `get_company_info` | 公司基本面 | yfinance |
-| `get_company_news` | 最新新闻（结构化列表） | Reuters RSS + Bloomberg RSS + Finnhub |
-| `search` | 网络搜索 | Exa -> Tavily -> DuckDuckGo（Wikipedia 仅用于非金融查询） |
-| `get_market_sentiment` | 恐惧与贪婪指数 | CNN |
-| `get_economic_events` | 宏观日历 | Exa search |
-| `get_financial_statements` | 三大财务报表 | yfinance |
-| `get_key_metrics` | PE、ROE、利润率 | yfinance + 计算 |
-| `analyze_historical_drawdowns` | 回撤分析 | yfinance |
-| `get_performance_comparison` | 多标的对比 | yfinance |
-
----
-
-## 快速开始
-
-### 1. 后端 (FastAPI)
+## 检索评测基线（已落地）
 
 ```bash
-# 创建虚拟环境
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# 指标计算逻辑单测
+pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 API 密钥
-# 可选：前端 Settings Modal 会写入 `user_config.json`（LLM 配置优先级高于 .env）
-
-# 启动服务
-python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+# 离线检索门禁（Recall@K / nDCG@K / 引用覆盖率 / 延迟）
+python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 ```
 
-### 2. 前端 (React + Vite)
+阈值与基线快照：
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+- `tests/retrieval_eval/thresholds.json`
+- `tests/retrieval_eval/baseline_results.json`
 
-浏览器访问 `http://localhost:5173`
+### 历史阶段（仅参考）
 
-### 3. 健康检查
-
-```bash
-curl http://localhost:8000/health
-# {"status": "healthy"}
-```
-
-### 4. 测试
-
-```bash
-pytest backend/tests -q
-```
+- `docs/02_PHASE0_COMPLETION.md`
+- `docs/03_PHASE1_IMPLEMENTATION.md`
+- `docs/04_PHASE2_DEEP_RESEARCH.md`
+- `docs/05_PHASE3_ACTIVE_SERVICE.md`
+- `docs/Thinking/2026-01-31_architecture_refactor_guide.md`
+- `docs/Thinking/2026-01-31_routing_architecture_decision.md`
 
 ---
 
-## 环境变量
+## 当前优先事项
 
-```env
-# LLM 配置
-GEMINI_PROXY_API_KEY=your_key
-GEMINI_PROXY_API_BASE=https://your-proxy/v1
-
-# 金融数据 API（推荐）
-ALPHA_VANTAGE_API_KEY=...
-FINNHUB_API_KEY=...
-TIINGO_API_KEY=...
-TAVILY_API_KEY=...
-EXA_API_KEY=...
-FRED_API_KEY=...
-BLOOMBERG_RSS_URLS=...
-
-# 邮件提醒
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-EMAIL_FROM=FinSight <your_email@gmail.com>
-
-# 调度器
-PRICE_ALERT_SCHEDULER_ENABLED=true
-PRICE_ALERT_INTERVAL_MINUTES=15
-NEWS_ALERT_SCHEDULER_ENABLED=true
-NEWS_ALERT_INTERVAL_MINUTES=30
-
-# LangSmith（可选）
-LANGSMITH_API_KEY=...
-LANGSMITH_PROJECT=FinSight
-ENABLE_LANGSMITH=false
-
-# 质量和门槛
-DATA_CONTEXT_MAX_SKEW_HOURS=24
-BUDGET_MAX_TOOL_CALLS=50
-BUDGET_MAX_ROUNDS=12
-BUDGET_MAX_SECONDS=600
-CHAT_HISTORY_MAX_MESSAGES=12
-CACHE_JITTER_RATIO=0.1
-CACHE_NEGATIVE_TTL=60
-PRICE_CB_FAILURE_THRESHOLD=5
-PRICE_CB_RECOVERY_TIMEOUT=60
-NEWS_CB_FAILURE_THRESHOLD=3
-NEWS_CB_RECOVERY_TIMEOUT=180
-LOG_LEVEL=INFO
-
-# 安全门禁
-API_AUTH_ENABLED=false
-API_AUTH_KEYS=
-RATE_LIMIT_ENABLED=false
-RATE_LIMIT_PER_MINUTE=120
-RATE_LIMIT_WINDOW_SECONDS=60
-```
-
-LLM 配置优先级：
-- `user_config.json`（如果存在，由前端保存）优先生效
-- `.env` 提供默认 provider/model/api_base/api_key
-
----
-
-## 可观测性
-
-- `GET /health` 基础健康检查
-- `GET /metrics` Prometheus 指标（需安装 `prometheus-client`）
-- `GET /diagnostics/orchestrator` 编排器统计
-
-## 项目结构
-
-```
-FinSight/
-|-- backend/
-|   |-- agents/                     # 6 个 Worker Agent
-|   |   |-- base_agent.py
-|   |   |-- price_agent.py
-|   |   |-- news_agent.py
-|   |   |-- technical_agent.py
-|   |   |-- fundamental_agent.py
-|   |   |-- macro_agent.py
-|   |   |-- deep_search_agent.py
-|   |   |-- search_convergence.py
-|   |-- conversation/               # 对话入口 + 路由
-|   |   |-- agent.py                # ConversationAgent（统一入口）
-|   |   |-- context.py              # ContextManager
-|   |   |-- router.py               # ConversationRouter
-|   |   |-- schema_router.py        # SchemaToolRouter + SlotCompletenessGate
-|   |-- orchestration/              # Supervisor-Forum 编排
-|   |   |-- supervisor_agent.py
-|   |   |-- intent_classifier.py
-|   |   |-- forum.py
-|   |   |-- orchestrator.py
-|   |   |-- tools_bridge.py
-|   |   |-- cache.py
-|   |   |-- budget.py
-|   |   |-- data_context.py
-|   |   |-- validator.py
-|   |   |-- trace.py / trace_schema.py
-|   |-- handlers/                   # 意图处理器
-|   |   |-- chat_handler.py
-|   |   |-- followup_handler.py
-|   |-- report/                     # 报告 IR + 校验
-|   |   |-- ir.py
-|   |   |-- validator.py
-|   |   |-- evidence_policy.py
-|   |   |-- disclaimer.py
-|   |-- knowledge/                  # RAG + 向量存储
-|   |   |-- rag_engine.py
-|   |   |-- vector_store.py
-|   |-- config/                     # Ticker 映射 + 配置
-|   |   |-- ticker_mapping.py
-|   |-- security/                   # SSRF 防护
-|   |   |-- ssrf.py
-|   |-- services/                   # 核心服务
-|   |   |-- circuit_breaker.py
-|   |   |-- memory.py
-|   |   |-- pdf_export.py
-|   |   |-- rate_limiter.py
-|   |   |-- health_probe.py
-|   |-- api/                        # FastAPI 接口
-|   |   |-- main.py
-|   |   |-- schemas.py
-|   |   |-- streaming.py
-|   |   |-- chart_detector.py
-|   |-- tools/                      # 金融数据工具
-|   |   |-- search.py
-|   |   |-- news.py
-|   |   |-- price.py
-|   |   |-- financial.py
-|   |   |-- macro.py
-|   |   |-- web.py
-|   |-- langchain_tools.py
-|   |-- tests/                      # 后端测试
-|-- tests/                          # 新测试目录
-|   |-- regression/                 # 回归测试 + 评估器
-|   |-- unit/                       # 单元测试
-|-- frontend/
-|   |-- src/
-|   |   |-- components/
-|   |   |   |-- ReportView.tsx
-|   |   |   |-- ThinkingProcess.tsx
-|   |   |   |-- RightPanel.tsx
-|   |   |   |-- Sidebar.tsx
-|   |   |-- store/useStore.ts
-|   |   |-- api/client.ts
-|-- docs/
-|-- images/
-```
-
----
-
-## 当前状态
-
-> 最后更新: 2026-02-02 | 版本: 0.7.0
-
-### 完成进度
-
-| 模块 | 进度 | 说明 |
-|------|------|------|
-| 工具层 | 100% | 多源回退、缓存、熔断 |
-| Agent 层 | 100% | 6 个 Agent + 回退结构化 |
-| 编排层 | 100% | Supervisor + Forum + 流式 |
-| 报告卡片 | 100% | 引用置信度 + 新鲜度校验 |
-| 可解释性 | 90% | Trace 展开 + 诊断 |
-| 提醒系统 | 90% | 价格 + 新闻提醒 |
-
-### 已知问题
-
-| 问题 | 严重程度 | 状态 |
-|------|----------|------|
-| DeepSearch 未接入 RAG | 中 | 计划中 |
-| RiskAgent 未实现 | 中 | Phase 3 |
-| 移动端响应式待优化 | 低 | Backlog |
-
----
-
-## 路线图
-
-### 已完成 (v0.6.x)
-- [x] 多智能体 Supervisor 架构
-- [x] 8 节专业报告
-- [x] NEWS 子意图分类
-- [x] 引用置信度与新鲜度字段
-- [x] News/Macro 结构化回退
-- [x] DeepSearch SSRF 防护 + 重试
-- [x] DeepSearch 动态查询模板
-- [x] 资产组合快照（持仓输入）
-- [x] 全屏 K 线图
-- [x] SchemaToolRouter：一次 LLM 选工具 + Pydantic 校验
-- [x] SlotCompletenessGate：company_name_only 规则 + 情绪查询守卫 + ticker 校验
-- [x] 多轮补槽：pending_tool_call 状态记忆缺失参数
-- [x] ClarifyTool 模板化追问
-- [x] 架构重构回归测试（12 个测试用例）
-
-### 进行中
-- [ ] DeepSearch 接入 RAG
-- [ ] 用户长期记忆（向量库）
-
-### 计划中 (v0.7.x)
-- [ ] RiskAgent（VaR、仓位建议）
-- [ ] 组合分析
-- [ ] 多语言支持
-- [ ] 移动端响应式
-
----
-
-## 贡献
-
-欢迎贡献代码！提交 PR 前请阅读贡献指南。
-
-### 贡献者
-
-- Human Developer - 架构、前端、后端
-- Claude (Anthropic) - 代码辅助、文档
-
----
-
-## 许可证
-
-MIT License - 详见 [LICENSE](./LICENSE)
+- 扩充检索评测集并加入 hard-negative 案例
+- 增加 postgres 后端的 nightly 检索基准与漂移跟踪
+- 强化生产可观测性与契约稳定性
+- 每次架构变更后同步 SSOT 与入口文档
 
 ---
 
 ## 致谢
 
-- [LangChain](https://github.com/langchain-ai/langchain) - LLM 框架
-- [LangGraph](https://github.com/langchain-ai/langgraph) - Agent 编排
-- [yfinance](https://github.com/ranaroussi/yfinance) - 市场数据
-- [ECharts](https://echarts.apache.org/) - 图表库
+- [LangChain](https://github.com/langchain-ai/langchain)
+- [LangGraph](https://github.com/langchain-ai/langgraph)
+- [yfinance](https://github.com/ranaroussi/yfinance)
+- [ECharts](https://echarts.apache.org/)
+
+## 许可证
+
+MIT License - 见 [LICENSE](./LICENSE)

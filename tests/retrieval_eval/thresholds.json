@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "description": "Retrieval quality CI gates for HybridRAGService baseline set",
+  "top_k": 6,
+  "citation_top_k": 3,
+  "gates": {
+    "recall_at_k_min": 0.95,
+    "ndcg_at_k_min": 0.95,
+    "citation_coverage_min": 0.95,
+    "latency_p95_ms_max": 10.0
+  }
+}

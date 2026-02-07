@@ -693,6 +693,7 @@ async def synthesize(state: GraphState) -> dict:
     output_mode = state.get("output_mode") or "brief"
     artifacts = state.get("artifacts") or {}
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
+    rag_context = artifacts.get("rag_context") if isinstance(artifacts, dict) else None
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
 
     inputs = {
@@ -701,6 +702,7 @@ async def synthesize(state: GraphState) -> dict:
         "operation": operation,
         "output_mode": output_mode,
         "evidence_pool": evidence_pool if isinstance(evidence_pool, list) else [],
+        "rag_context": rag_context if isinstance(rag_context, list) else [],
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
 
@@ -725,7 +727,7 @@ summary, highlights, analysis.
 </output_format>
 
 <constraints>
-1) Use evidence_pool/step_results when available; if insufficient, state assumptions explicitly.
+1) Use rag_context/evidence_pool/step_results when available; if insufficient, state assumptions explicitly.
 2) Do NOT include raw tool outputs / search dumps / trace-like logs in any field.
 3) Avoid repeating disclaimers; put at most 1 short disclaimer in `risks`.
 4) Keep each field concise (<= 6 bullet lines when possible).

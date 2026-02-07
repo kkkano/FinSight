@@ -465,7 +465,7 @@ if request.context.selection:
 ```mermaid
 flowchart LR
   FE[Dashboard 选中新闻] --> Ctx[context.selection]
-  Ctx --> API[/chat/supervisor/stream]
+  Ctx --> API["/chat/supervisor/stream"]
   API --> SC[[System Context]]
   SC --> SA[SupervisorAgent]
   SA --> ANA[_handle_news_analysis]
