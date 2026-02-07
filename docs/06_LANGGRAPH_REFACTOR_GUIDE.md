@@ -935,6 +935,34 @@ SUBJECT_SUBGRAPHS = {
 3. **Sprint 3**：filing 精确引用（章节级）+ 报告模板展示。  
 4. **Sprint 4**：nightly retrieval benchmark（postgres backend）+ 漂移告警。  
 
+##### 11.12.5 收口状态（2026-02-07）
+
+- [x] Sprint 1（`deep_search_agent`）
+  - 增加 `evidence_quality` 输出字段（`doc_count/source_diversity/freshness_score/has_conflicts/overall_score`）。
+  - 每条 evidence 增加 `doc_quality` 与 `conflict_flag` 元信息，并在 trace 写入 `evidence_quality` 事件。
+  - 证据冲突时，风险提示追加冲突告警。
+- [x] Sprint 2（Planner 逐级升级 + 预算断言）
+  - 研报模式下高成本 agent（`macro_agent` / `deep_search_agent`）默认打上渐进升级输入：
+    - `__escalation_stage=high_cost`
+    - `__run_if_min_confidence`
+    - `__force_run`
+  - Executor 支持按 `max_confidence` 信号跳过高成本可选步骤（`escalation_not_needed`）。
+  - Planner runtime 新增 `budget_assertions`（估算 cost/latency、预算阈值、是否超预算、被裁剪步骤）。
+- [x] Sprint 3（filing 章节级引用）
+  - citation 构建新增 `section_ref`（Item/Note/Part）识别。
+  - Report payload 新增 `meta.filing_section_citations`，并在 `sections` 增加 `Section-level Citations`。
+  - `filing_report.md` / `filing_brief.md` 模板新增 `Section-Level Citations` 展示区。
+- [x] Sprint 4（nightly postgres benchmark + drift）
+  - 新增 `.github/workflows/retrieval-nightly.yml`（`pgvector/pgvector:pg16`，postgres 后端跑评测）。
+  - 评测脚本新增 `--drift-gate` 与 drift 阈值校验，报告输出 `drift_gate` 结果。
+  - `tests/retrieval_eval/thresholds.json` 新增 `drift_gates`。
+
+验证入口（本次收口）：
+- `pytest -q backend/tests/test_deep_research.py backend/tests/test_executor.py backend/tests/test_planner_node.py`
+- `pytest -q backend/tests/test_templates_render.py backend/tests/test_report_builder_synthesis_report.py`
+- `pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py`
+- `python tests/retrieval_eval/run_retrieval_eval.py --gate --drift-gate --report-prefix local`
+
 ---
 
 ## 12. 附录：持久化/记忆 ER 图（可选实现）
@@ -1037,3 +1065,11 @@ erDiagram
 | 2026-02-07 | 11.11.4 入口文档同步（README/README_CN/DOCS_INDEX） | 将检索评测基线从“计划中”改为“已落地”：补发布门禁命令、补检索评测运行说明与阈值/基线文件入口，并更新下一步优先事项为“扩评测集 + postgres nightly 基准”。 | `pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py`（5 passed） + `python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local`（PASS） | 防止入口文档继续误导（说“要做”而实际已完成）；后续只需在变更阈值/数据集时同步这三处入口。 |
 | 2026-02-07 | 11.12 文档增强（黑盒拆解 + DeepSearch 路线） | `docs/01` 增补运行时序/节点 I-O/Agent 选路与执行流程图；`docs/05` 增补“研报库边界”；`docs/06` 新增 11.12 外部方案吸收路线；新增 3 份当前有效 Thinking ADR。 | 人工核对：`docs/01_ARCHITECTURE.md`、`docs/05_RAG_ARCHITECTURE.md`、`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`、`docs/Thinking/ADR-2026-02-07-agent-routing.md`、`docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`、`docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md` | 解决“文档黑盒”问题，并把后续演进方向从口头建议固化为可执行文档。 |
 | 2026-02-07 | 11.12 文档增强（二次拆解 Agent 内部） | 按“query->选 Agent->planner->executor->子 Agent”链路补齐可追踪文档：`docs/01` 新增选路示例表（含 reason）、planner/executor 内部 mermaid、6 个子 Agent 数据源/回退/输出说明；README/README_CN 同步入口说明。 | 人工核对：`docs/01_ARCHITECTURE.md`、`readme.md`、`readme_cn.md` | 进一步消除黑盒认知，便于排障与后续 Agent 增强迭代。 |
+
+### 11.12.6 Patch Note (2026-02-07)
+- Planner escalation hardening:
+  - Required / `__force_run=true` high-cost agents are now protected from budget-pruning.
+  - Filing/report scenarios will keep required `deep_search_agent` instead of dropping it during latency budget trimming.
+- Validation:
+  - `pytest -q backend/tests/test_deep_research.py backend/tests/test_executor.py backend/tests/test_planner_node.py backend/tests/test_templates_render.py backend/tests/test_report_builder_synthesis_report.py tests/retrieval_eval/test_retrieval_eval_runner.py` -> `40 passed`
+  - `python tests/retrieval_eval/run_retrieval_eval.py --gate --drift-gate --report-prefix local` -> `PASS` (Recall@K=1.0000, nDCG@K=1.0000, Citation Coverage=1.0000, Latency P95=0.06ms)

@@ -50,6 +50,15 @@ class GateResult:
     thresholds: dict[str, float]
 
 
+@dataclass
+class DriftGateResult:
+    passed: bool
+    failed_metrics: list[str]
+    thresholds: dict[str, float]
+    delta: dict[str, float]
+    baseline_available: bool
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
@@ -284,6 +293,51 @@ def _gate(overall: dict[str, float], thresholds: dict[str, float]) -> GateResult
     return GateResult(passed=(len(failed) == 0), failed_metrics=failed, thresholds=thresholds)
 
 
+def _drift_gate(
+    overall: dict[str, float],
+    baseline_overall: dict[str, float] | None,
+    thresholds: dict[str, float],
+) -> DriftGateResult:
+    if not baseline_overall:
+        return DriftGateResult(
+            passed=True,
+            failed_metrics=[],
+            thresholds=thresholds,
+            delta={},
+            baseline_available=False,
+        )
+
+    delta = {
+        "recall_at_k": float(overall.get("recall_at_k", 0.0)) - float(baseline_overall.get("recall_at_k", 0.0)),
+        "ndcg_at_k": float(overall.get("ndcg_at_k", 0.0)) - float(baseline_overall.get("ndcg_at_k", 0.0)),
+        "citation_coverage": float(overall.get("citation_coverage", 0.0)) - float(baseline_overall.get("citation_coverage", 0.0)),
+        "latency_p95_ms": float(overall.get("latency_p95_ms", 0.0)) - float(baseline_overall.get("latency_p95_ms", 0.0)),
+    }
+
+    recall_delta_min = float(thresholds.get("recall_at_k_delta_min", -1.0))
+    ndcg_delta_min = float(thresholds.get("ndcg_at_k_delta_min", -1.0))
+    cite_delta_min = float(thresholds.get("citation_coverage_delta_min", -1.0))
+    latency_delta_max = float(thresholds.get("latency_p95_ms_delta_max", 10_000.0))
+
+    failed: list[str] = []
+    if delta["recall_at_k"] < recall_delta_min:
+        failed.append("recall_at_k_delta")
+    if delta["ndcg_at_k"] < ndcg_delta_min:
+        failed.append("ndcg_at_k_delta")
+    if delta["citation_coverage"] < cite_delta_min:
+        failed.append("citation_coverage_delta")
+    if delta["latency_p95_ms"] > latency_delta_max:
+        failed.append("latency_p95_ms_delta")
+
+    return DriftGateResult(
+        passed=(len(failed) == 0),
+        failed_metrics=failed,
+        thresholds=thresholds,
+        delta=delta,
+        baseline_available=True,
+    )
+
+
 def _format_pct(value: float) -> str:
     return f"{value * 100:.2f}%"
 
@@ -292,6 +346,7 @@ def _to_markdown(
     payload: dict[str, Any],
     *,
     gate: GateResult,
+    drift_gate: DriftGateResult,
     baseline_overall: dict[str, float] | None,
 ) -> str:
     overall = payload["overall_metrics"]
@@ -359,6 +414,37 @@ def _to_markdown(
         lines.append("")
         for metric in gate.failed_metrics:
             lines.append(f"- {metric}")
+
+    lines.append("")
+    lines.append("## Drift Gate")
+    lines.append("")
+    if not drift_gate.baseline_available:
+        lines.append("- Baseline unavailable: drift gate skipped.")
+    else:
+        lines.append(f"- Status: {'PASS' if drift_gate.passed else 'FAIL'}")
+        lines.append("")
+        lines.append("| Metric Delta | Current Delta | Threshold | Status |")
+        lines.append("|---|---:|---:|---|")
+        recall_delta = float(drift_gate.delta.get("recall_at_k", 0.0))
+        ndcg_delta = float(drift_gate.delta.get("ndcg_at_k", 0.0))
+        cite_delta = float(drift_gate.delta.get("citation_coverage", 0.0))
+        lat_delta = float(drift_gate.delta.get("latency_p95_ms", 0.0))
+        lines.append(
+            f"| Recall@K Δ | {_format_pct(recall_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('recall_at_k_delta_min', -1.0)))} | "
+            f"{'PASS' if 'recall_at_k_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
+        lines.append(
+            f"| nDCG@K Δ | {_format_pct(ndcg_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('ndcg_at_k_delta_min', -1.0)))} | "
+            f"{'PASS' if 'ndcg_at_k_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
+        lines.append(
+            f"| Citation Coverage Δ | {_format_pct(cite_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('citation_coverage_delta_min', -1.0)))} | "
+            f"{'PASS' if 'citation_coverage_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
+        lines.append(
+            f"| Latency P95 Δ (ms) | {lat_delta:+.2f} | <= {float(drift_gate.thresholds.get('latency_p95_ms_delta_max', 10000.0)):.2f} | "
+            f"{'PASS' if 'latency_p95_ms_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
 
     return "\n".join(lines) + "\n"
 
@@ -439,6 +525,7 @@ def save_reports(
     output_dir: Path,
     report_prefix: str,
     gate: GateResult,
+    drift_gate: DriftGateResult,
     baseline_overall: dict[str, float] | None,
 ) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -456,13 +543,20 @@ def save_reports(
                     "failed_metrics": gate.failed_metrics,
                     "thresholds": gate.thresholds,
                 },
+                "drift_gate": {
+                    "passed": drift_gate.passed,
+                    "failed_metrics": drift_gate.failed_metrics,
+                    "thresholds": drift_gate.thresholds,
+                    "delta": drift_gate.delta,
+                    "baseline_available": drift_gate.baseline_available,
+                },
             },
             f,
             ensure_ascii=False,
             indent=2,
         )
 
-    markdown = _to_markdown(payload, gate=gate, baseline_overall=baseline_overall)
+    markdown = _to_markdown(payload, gate=gate, drift_gate=drift_gate, baseline_overall=baseline_overall)
     with md_path.open("w", encoding="utf-8") as f:
         f.write(markdown)
 
@@ -481,6 +575,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=None, help="Override top-k")
     parser.add_argument("--citation-top-k", type=int, default=None, help="Override citation top-k")
     parser.add_argument("--gate", action="store_true", help="Fail (exit 1) when threshold gate fails")
+    parser.add_argument("--drift-gate", action="store_true", help="Fail (exit 1) when baseline drift gate fails")
     return parser.parse_args()
 
 
@@ -505,13 +600,17 @@ def main() -> int:
     thresholds = threshold_config.get("gates") if isinstance(threshold_config.get("gates"), dict) else {}
     threshold_values = {k: float(v) for k, v in thresholds.items() if isinstance(v, (int, float))}
     gate = _gate(payload["overall_metrics"], threshold_values)
+    drift_thresholds = threshold_config.get("drift_gates") if isinstance(threshold_config.get("drift_gates"), dict) else {}
+    drift_threshold_values = {k: float(v) for k, v in drift_thresholds.items() if isinstance(v, (int, float))}
 
     baseline_overall = payload["comparison"]["baseline_overall"] if payload["comparison"]["baseline_available"] else None
+    drift_gate = _drift_gate(payload["overall_metrics"], baseline_overall, drift_threshold_values)
     json_path, md_path = save_reports(
         payload,
         output_dir=output_dir,
         report_prefix=args.report_prefix,
         gate=gate,
+        drift_gate=drift_gate,
         baseline_overall=baseline_overall,
     )
 
@@ -528,15 +627,22 @@ def main() -> int:
     print(f"Gate: {'PASS' if gate.passed else 'FAIL'}")
     if gate.failed_metrics:
         print(f"Failed metrics: {', '.join(gate.failed_metrics)}")
+    if drift_gate.baseline_available:
+        print(f"Drift Gate: {'PASS' if drift_gate.passed else 'FAIL'}")
+        if drift_gate.failed_metrics:
+            print(f"Drift failed metrics: {', '.join(drift_gate.failed_metrics)}")
+    else:
+        print("Drift Gate: SKIPPED (baseline unavailable)")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
     print("=" * 72)
 
     if args.gate and not gate.passed:
         return 1
+    if args.drift_gate and not drift_gate.passed:
+        return 1
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
