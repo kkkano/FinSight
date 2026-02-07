@@ -42,7 +42,73 @@ def _extract_json_object(text: str) -> str:
     return cleaned[start : end + 1]
 
 
-def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str, Any]:
+_HIGH_COST_AGENTS: set[str] = {"macro_agent", "deep_search_agent"}
+
+
+def _is_deep_hint(query: str) -> bool:
+    q = (query or "").lower()
+    return any(
+        token in q
+        for token in (
+            "deep",
+            "deepsearch",
+            "report",
+            "filing",
+            "document",
+            "longform",
+        )
+    )
+
+
+def _estimate_step_cost_latency(step: dict[str, Any]) -> tuple[float, int]:
+    kind = str(step.get("kind") or "")
+    name = str(step.get("name") or "")
+    if kind == "llm":
+        return (0.8, 450)
+    if kind == "tool":
+        # Tools are generally cheaper than agent calls.
+        if name in ("search", "get_current_datetime"):
+            return (0.6, 250)
+        if name in ("get_stock_price", "get_technical_snapshot", "get_performance_comparison"):
+            return (0.8, 350)
+        return (1.0, 500)
+    if kind == "agent":
+        if name == "deep_search_agent":
+            return (3.8, 2800)
+        if name == "macro_agent":
+            return (2.6, 1700)
+        return (1.6, 900)
+    return (1.0, 500)
+
+
+def _build_budget_assertions(steps: list[dict[str, Any]], safe_budget: dict[str, Any]) -> dict[str, Any]:
+    total_cost = 0.0
+    total_latency_ms = 0
+    for step in steps:
+        cost, latency_ms = _estimate_step_cost_latency(step)
+        total_cost += cost
+        total_latency_ms += latency_ms
+
+    max_tools = int(safe_budget.get("max_tools", 0) or 0)
+    max_rounds = int(safe_budget.get("max_rounds", 0) or 0)
+    latency_per_round_ms = int(_env_str("LANGGRAPH_BUDGET_LATENCY_PER_ROUND_MS", "1400"))
+    cost_per_tool_unit = float(_env_str("LANGGRAPH_BUDGET_COST_PER_TOOL_UNIT", "1.5"))
+
+    cost_budget_units = round(max_tools * cost_per_tool_unit, 4) if max_tools > 0 else 0.0
+    latency_budget_ms = max_rounds * latency_per_round_ms if max_rounds > 0 else 0
+
+    return {
+        "estimated_cost_units": round(total_cost, 4),
+        "estimated_latency_ms": total_latency_ms,
+        "cost_budget_units": cost_budget_units,
+        "latency_budget_ms": latency_budget_ms,
+        "cost_within_budget": True if cost_budget_units <= 0 else total_cost <= cost_budget_units,
+        "latency_within_budget": True if latency_budget_ms <= 0 else total_latency_ms <= latency_budget_ms,
+        "step_count": len(steps),
+    }
+
+
+def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Enforce critical invariants from state + policy:
     - output_mode comes from state (UI override already applied)
@@ -78,12 +144,15 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
         selected_agent_order = [str(name) for name in (selection.get("selected") or []) if isinstance(name, str) and name]
         if selected_agent_order:
             allowed_agents = set(selected_agent_order)
+    agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+    required_agents = set(agent_selection.get("required") or []) if isinstance(agent_selection, dict) else set()
 
     subject = state.get("subject") or {"subject_type": "unknown"}
     query = (state.get("query") or "").strip()
     operation = state.get("operation") or {}
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
+    has_deep_hint = _is_deep_hint(query)
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     tickers = tickers if isinstance(tickers, list) else []
@@ -208,7 +277,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
                 "name": "summarize_selection",
                 "inputs": {"selection": selection_payload or [], "query": query},
                 "parallel_group": None,
-                "why": "Selection 是高权重证据，先读/先总结以避免跑偏",
+                "why": "Selection is high-signal evidence; summarize it first to avoid redundant tool calls.",
                 "optional": False,
             }
         )
@@ -244,20 +313,20 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
         existing_tool_names.add(name)
 
     if op_name == "price" and primary_ticker:
-        _insert_required_tool("get_stock_price", {"ticker": primary_ticker}, "价格/行情问题：必须先拿到最新价格")
+        _insert_required_tool("get_stock_price", {"ticker": primary_ticker}, "Price/quote request: fetch latest price first.")
     if op_name == "technical" and primary_ticker:
-        _insert_required_tool("get_stock_price", {"ticker": primary_ticker}, "技术面问题：必须先拿到最新价格")
+        _insert_required_tool("get_stock_price", {"ticker": primary_ticker}, "Technical request: fetch latest price first.")
         _insert_required_tool(
             "get_technical_snapshot",
             {"ticker": primary_ticker},
-            "技术面问题：必须计算 MA/RSI/MACD 等指标",
+            "Technical request: compute MA/RSI/MACD snapshot before synthesis.",
         )
     if op_name == "compare" and len(tickers) >= 2:
         mapping = {str(t).strip().upper(): str(t).strip().upper() for t in tickers[:6] if str(t).strip()}
         _insert_required_tool(
             "get_performance_comparison",
             {"tickers": mapping},
-            "对比问题：必须先拿到多标的 YTD/1Y 表现作为基础数据",
+            "Compare request: fetch multi-ticker performance baseline (YTD/1Y) first",
         )
 
     default_agent_order = [
@@ -293,20 +362,47 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
                 continue
             if agent_name in existing_agent_names:
                 continue
+            is_required_agent = agent_name in required_agents
+            force_escalation = agent_name in required_agents or (agent_name == "deep_search_agent" and has_deep_hint)
+            agent_inputs = {"query": query, "ticker": primary_ticker, "selection_ids": selection_ids}
+            if agent_name in _HIGH_COST_AGENTS:
+                agent_inputs = {
+                    **agent_inputs,
+                    "__escalation_stage": "high_cost",
+                    "__run_if_min_confidence": float(_env_str("LANGGRAPH_ESCALATION_MIN_CONFIDENCE", "0.72")),
+                    "__force_run": bool(force_escalation),
+                }
             sanitized_steps.insert(
                 insert_at,
                 {
                     "id": _next_step_id(existing_ids),
                     "kind": "agent",
                     "name": agent_name,
-                    "inputs": {"query": query, "ticker": primary_ticker, "selection_ids": selection_ids},
+                    "inputs": agent_inputs,
                     "parallel_group": None,
-                    "why": f"研报模式：默认运行 {agent_name} 输出可解释的卡片摘要与证据",
-                    "optional": True,
+                    "why": f"Report mode: run {agent_name} to output explainable cards and evidence.",
+                    "optional": not force_escalation and not is_required_agent,
                 },
             )
             insert_at += 1
             existing_agent_names.add(agent_name)
+
+    if output_mode == "investment_report":
+        escalation_threshold = float(_env_str("LANGGRAPH_ESCALATION_MIN_CONFIDENCE", "0.72"))
+        for step in sanitized_steps:
+            if step.get("kind") != "agent":
+                continue
+            name = str(step.get("name") or "")
+            if name not in _HIGH_COST_AGENTS:
+                continue
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+            if "__escalation_stage" not in inputs:
+                inputs["__escalation_stage"] = "high_cost"
+            if "__run_if_min_confidence" not in inputs:
+                inputs["__run_if_min_confidence"] = escalation_threshold
+            if "__force_run" not in inputs:
+                inputs["__force_run"] = bool(name in required_agents or (name == "deep_search_agent" and has_deep_hint))
+            step["inputs"] = inputs
 
     # Cap tool/agent steps count (rough) to budget.max_tools. Keep required tools first.
     max_tools = int(safe_budget.get("max_tools", 0) or 0)
@@ -356,14 +452,42 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> dict[str
                 kept.append(step)
             sanitized_steps = kept
 
-    return {
+    budget_assertions = _build_budget_assertions(sanitized_steps, safe_budget)
+    dropped_for_budget: list[str] = []
+    if not (budget_assertions.get("cost_within_budget") and budget_assertions.get("latency_within_budget")):
+        # Progressive escalation: drop optional high-cost steps first until budget assertions pass.
+        drop_order = []
+        for idx in range(len(sanitized_steps) - 1, -1, -1):
+            step = sanitized_steps[idx]
+            if not bool(step.get("optional")):
+                continue
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+            if bool(inputs.get("__force_run")):
+                continue
+            kind = str(step.get("kind") or "")
+            name = str(step.get("name") or "")
+            if kind == "agent" and name in required_agents:
+                continue
+            is_high_cost_agent = kind == "agent" and name in _HIGH_COST_AGENTS
+            drop_order.append((0 if is_high_cost_agent else 1, idx))
+        drop_order.sort()
+        for _priority, idx in drop_order:
+            step = sanitized_steps[idx]
+            dropped_for_budget.append(str(step.get("id") or step.get("name") or f"idx:{idx}"))
+            sanitized_steps.pop(idx)
+            budget_assertions = _build_budget_assertions(sanitized_steps, safe_budget)
+            if budget_assertions.get("cost_within_budget") and budget_assertions.get("latency_within_budget"):
+                break
+    budget_assertions["dropped_steps"] = dropped_for_budget
+
+    return ({
         "goal": goal,
         "subject": subject,
         "output_mode": output_mode,
         "budget": safe_budget,
         "steps": sanitized_steps,
         "synthesis": safe_synthesis,
-    }
+    }, budget_assertions)
 
 
 async def planner(state: GraphState) -> dict:
@@ -441,13 +565,14 @@ async def planner(state: GraphState) -> dict:
         payload = json.loads(json_text)
         if not isinstance(payload, dict):
             raise ValueError("PlanIR payload must be a JSON object")
-        payload = _enforce_policy(payload, state)
+        payload, budget_assertions = _enforce_policy(payload, state)
         plan = PlanIR.model_validate(payload)
         trace.update(
             {
                 "planner_runtime": {
                     **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
                     "steps": len(plan.steps),
+                    "budget_assertions": budget_assertions,
                 }
             }
         )
@@ -482,3 +607,4 @@ async def planner(state: GraphState) -> dict:
             }
         )
         return {**planner_stub(state), "trace": trace}
+

@@ -74,6 +74,58 @@ async def test_deep_search_agent_self_rag_merges_docs():
     assert "tavily" in result.data_sources
     assert "search" in result.data_sources
 
+
+@pytest.mark.asyncio
+async def test_deep_search_agent_outputs_evidence_quality_and_conflict_flags():
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+
+    docs = [
+        {
+            "title": "Analyst upgrade with strong growth outlook",
+            "url": "https://www.reuters.com/markets/aapl-upgrade",
+            "snippet": "Analysts see upside and raised targets.",
+            "content": "Strong demand and growth momentum support a bullish outlook.",
+            "source": "tavily",
+            "published_date": "2026-02-06T10:00:00Z",
+            "is_pdf": False,
+            "confidence": 0.8,
+        },
+        {
+            "title": "Downside risk rises after miss",
+            "url": "https://example.com/risk-note",
+            "snippet": "Company may miss guidance and face downside pressure.",
+            "content": "Weak demand and elevated risk could pressure margins.",
+            "source": "search",
+            "published_date": "2025-12-15T00:00:00Z",
+            "is_pdf": False,
+            "confidence": 0.7,
+        },
+    ]
+
+    agent._initial_search = AsyncMock(return_value=docs)
+    agent._first_summary = AsyncMock(return_value="Initial summary")
+    agent._identify_gaps = AsyncMock(return_value=[])
+
+    result = await agent.research("AAPL deep analysis", "AAPL")
+
+    assert isinstance(result, AgentOutput)
+    assert len(result.evidence) == 2
+    assert any("conflict" in r.lower() for r in result.risks)
+
+    for item in result.evidence:
+        assert isinstance(item.meta, dict)
+        assert "doc_quality" in item.meta
+        assert "evidence_quality" in item.meta
+        assert "conflict_flag" in item.meta
+
+    quality_events = [e for e in result.trace if isinstance(e, dict) and e.get("event_type") == "evidence_quality"]
+    assert quality_events, "deep_search should emit evidence_quality trace event"
+    payload = quality_events[-1].get("metadata") or {}
+    assert payload.get("has_conflicts") is True
+    assert float(payload.get("overall_score", 0.0)) >= 0.0
+
 @pytest.mark.asyncio
 async def test_macro_agent():
     mock_llm = MagicMock()

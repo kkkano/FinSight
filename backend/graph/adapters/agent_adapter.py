@@ -29,6 +29,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     evidence = getattr(output, "evidence", None) or []
     confidence = getattr(output, "confidence", None)
     as_of = getattr(output, "as_of", None)
+    evidence_quality = getattr(output, "evidence_quality", None)
     data_sources = getattr(output, "data_sources", None)
     fallback_used = getattr(output, "fallback_used", None)
     risks = getattr(output, "risks", None)
@@ -62,6 +63,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
         "summary": summary,
         "confidence": confidence,
         "as_of": as_of,
+        "evidence_quality": evidence_quality,
         "data_sources": data_sources,
         "fallback_used": fallback_used,
         "risks": risks,
@@ -158,4 +160,3 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
 
 
 __all__ = ["build_agent_invokers"]
-

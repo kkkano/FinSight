@@ -129,8 +129,50 @@ async def execute_plan(
     }
     cache = cache if cache is not None else {}
 
-    artifacts: dict[str, Any] = {"step_results": {}, "errors": []}
+    artifacts: dict[str, Any] = {
+        "step_results": {},
+        "errors": [],
+        "signals": {
+            "max_confidence": 0.0,
+            "latest_confidence": None,
+            "max_evidence_quality": 0.0,
+            "latest_evidence_quality": None,
+        },
+    }
     exec_events: list[dict[str, Any]] = []
+
+    def _as_float(value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    def _update_signals_from_output(output: Any) -> None:
+        if not isinstance(output, dict):
+            return
+        if output.get("skipped") is True:
+            return
+        signals = artifacts.get("signals")
+        if not isinstance(signals, dict):
+            return
+
+        confidence = _as_float(output.get("confidence"))
+        if confidence is not None:
+            signals["latest_confidence"] = confidence
+            prev_max = _as_float(signals.get("max_confidence")) or 0.0
+            if confidence > prev_max:
+                signals["max_confidence"] = confidence
+
+        evidence_quality = output.get("evidence_quality")
+        if isinstance(evidence_quality, dict):
+            quality_score = _as_float(evidence_quality.get("overall_score"))
+            if quality_score is not None:
+                signals["latest_evidence_quality"] = quality_score
+                prev_quality_max = _as_float(signals.get("max_evidence_quality")) or 0.0
+                if quality_score > prev_quality_max:
+                    signals["max_evidence_quality"] = quality_score
 
     async def _run_step(step: dict[str, Any]) -> None:
         step_id = step.get("id") or ""
@@ -166,7 +208,49 @@ async def execute_plan(
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
+            _update_signals_from_output(cache[key])
             return
+
+        escalation_stage = inputs.get("__escalation_stage") if isinstance(inputs, dict) else None
+        if optional and escalation_stage == "high_cost":
+            force_run = bool(inputs.get("__force_run"))
+            min_conf = _as_float(inputs.get("__run_if_min_confidence"))
+            min_conf = min_conf if min_conf is not None else 0.72
+            signals = artifacts.get("signals") if isinstance(artifacts.get("signals"), dict) else {}
+            current_conf = _as_float((signals or {}).get("max_confidence")) or 0.0
+            if (not force_run) and current_conf >= min_conf:
+                output = {
+                    "skipped": True,
+                    "reason": "escalation_not_needed",
+                    "current_confidence": current_conf,
+                    "min_confidence": min_conf,
+                }
+                cache[key] = output
+                artifacts["step_results"][step_id] = {"cached": False, "output": output}
+                exec_events.append(
+                    {
+                        "event": "executor.step_finished",
+                        "step_id": step_id,
+                        "cached": False,
+                        "duration_ms": int((time.perf_counter() - start) * 1000),
+                        "skipped": True,
+                    }
+                )
+                await emit_event(
+                    {
+                        "type": "thinking",
+                        "stage": "executor_step_done",
+                        "message": f"{step_id} skipped escalation",
+                        "result": {
+                            "cached": False,
+                            "skipped": True,
+                            "reason": "escalation_not_needed",
+                            "duration_ms": int((time.perf_counter() - start) * 1000),
+                        },
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    }
+                )
+                return
 
         try:
             # Deterministic local "LLM" step should run even in dry_run.
@@ -211,6 +295,7 @@ async def execute_plan(
 
             cache[key] = output
             artifacts["step_results"][step_id] = {"cached": False, "output": output}
+            _update_signals_from_output(output)
             exec_events.append(
                 {"event": "executor.step_finished", "step_id": step_id, "cached": False, "duration_ms": int((time.perf_counter() - start) * 1000)}
             )

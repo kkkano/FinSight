@@ -147,3 +147,87 @@ def test_execute_plan_supports_agent_steps_in_live_mode():
     artifacts, _events = _run(execute_plan(plan, agent_invokers={"fundamental_agent": fake_agent}, dry_run=False))
     output = artifacts["step_results"]["s1"]["output"]
     assert output.get("agent") == "ok"
+
+
+def test_execute_plan_progressive_escalation_skips_high_cost_step_when_confidence_sufficient():
+    calls = {"deep": 0}
+
+    async def low_cost_agent(_inputs):
+        return {"confidence": 0.9, "summary": "enough evidence"}
+
+    async def deep_agent(_inputs):
+        calls["deep"] += 1
+        return {"confidence": 0.95, "summary": "deep search"}
+
+    plan = {
+        "steps": [
+            {"id": "s1", "kind": "agent", "name": "price_agent", "inputs": {"ticker": "AAPL"}, "optional": False},
+            {
+                "id": "s2",
+                "kind": "agent",
+                "name": "deep_search_agent",
+                "inputs": {
+                    "ticker": "AAPL",
+                    "__escalation_stage": "high_cost",
+                    "__run_if_min_confidence": 0.8,
+                    "__force_run": False,
+                },
+                "optional": True,
+            },
+        ]
+    }
+
+    artifacts, _events = _run(
+        execute_plan(
+            plan,
+            agent_invokers={"price_agent": low_cost_agent, "deep_search_agent": deep_agent},
+            dry_run=False,
+        )
+    )
+
+    assert calls["deep"] == 0
+    step2_output = artifacts["step_results"]["s2"]["output"]
+    assert step2_output.get("skipped") is True
+    assert step2_output.get("reason") == "escalation_not_needed"
+    assert float((artifacts.get("signals") or {}).get("max_confidence") or 0.0) >= 0.9
+
+
+def test_execute_plan_progressive_escalation_force_run_executes_high_cost_step():
+    calls = {"deep": 0}
+
+    async def low_cost_agent(_inputs):
+        return {"confidence": 0.95, "summary": "enough evidence"}
+
+    async def deep_agent(_inputs):
+        calls["deep"] += 1
+        return {"confidence": 0.96, "summary": "deep search"}
+
+    plan = {
+        "steps": [
+            {"id": "s1", "kind": "agent", "name": "price_agent", "inputs": {"ticker": "AAPL"}, "optional": False},
+            {
+                "id": "s2",
+                "kind": "agent",
+                "name": "deep_search_agent",
+                "inputs": {
+                    "ticker": "AAPL",
+                    "__escalation_stage": "high_cost",
+                    "__run_if_min_confidence": 0.8,
+                    "__force_run": True,
+                },
+                "optional": True,
+            },
+        ]
+    }
+
+    artifacts, _events = _run(
+        execute_plan(
+            plan,
+            agent_invokers={"price_agent": low_cost_agent, "deep_search_agent": deep_agent},
+            dry_run=False,
+        )
+    )
+
+    assert calls["deep"] == 1
+    step2_output = artifacts["step_results"]["s2"]["output"]
+    assert step2_output.get("summary") == "deep search"

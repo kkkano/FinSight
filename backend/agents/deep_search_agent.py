@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional, Tuple, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import json
 import os
@@ -38,6 +38,33 @@ class DeepSearchAgent(BaseFinancialAgent):
     MAX_DOCS = int(os.getenv("DEEPSEARCH_MAX_DOCS", "4"))
     MIN_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MIN_TEXT_CHARS", "400"))
     MAX_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MAX_TEXT_CHARS", "12000"))
+    _POSITIVE_SIGNAL_TERMS = (
+        "beat",
+        "strong",
+        "growth",
+        "upside",
+        "raised",
+        "outperform",
+        "bullish",
+    )
+    _NEGATIVE_SIGNAL_TERMS = (
+        "miss",
+        "weak",
+        "decline",
+        "downside",
+        "cut",
+        "underperform",
+        "bearish",
+        "risk",
+    )
+    _HIGH_RELIABILITY_SOURCE_HINTS = (
+        "sec.gov",
+        "reuters.com",
+        "bloomberg.com",
+        "wsj.com",
+        "ft.com",
+        "investor.",
+    )
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         super().__init__(llm, cache, circuit_breaker)
@@ -157,7 +184,15 @@ class DeepSearchAgent(BaseFinancialAgent):
         # Add final convergence stats to trace
         _log_event("convergence_final", convergence.get_stats())
 
-        output = self._format_output(summary, all_docs or results, trace=trace)
+        evidence_quality = self._compute_evidence_quality(all_docs or results)
+        _log_event("evidence_quality", evidence_quality)
+
+        output = self._format_output(
+            summary,
+            all_docs or results,
+            trace=trace,
+            evidence_quality=evidence_quality,
+        )
         return output
 
     async def _initial_search(
@@ -259,10 +294,18 @@ queries要求：
             return summary
         return await self._summarize_docs(new_data, previous_summary=summary)
 
-    def _format_output(self, summary: str, raw_data: Any, trace: Optional[List[Dict[str, Any]]] = None) -> AgentOutput:
+    def _format_output(
+        self,
+        summary: str,
+        raw_data: Any,
+        trace: Optional[List[Dict[str, Any]]] = None,
+        evidence_quality: Optional[Dict[str, Any]] = None,
+    ) -> AgentOutput:
         evidence: List[EvidenceItem] = []
         data_sources: List[str] = []
         fallback_used = False
+        evidence_quality = evidence_quality or {}
+        has_conflicts = bool(evidence_quality.get("has_conflicts"))
 
         if isinstance(raw_data, list):
             for item in raw_data:
@@ -270,6 +313,7 @@ queries要求：
                 data_sources.append(source)
                 title = item.get("title") or ""
                 snippet = item.get("snippet") or item.get("content", "")[:240]
+                doc_quality = self._doc_quality_score(item)
                 evidence.append(EvidenceItem(
                     text=snippet,
                     source=source,
@@ -277,7 +321,16 @@ queries要求：
                     timestamp=item.get("published_date"),
                     confidence=item.get("confidence", 0.7),
                     title=title,
-                    meta={"is_pdf": item.get("is_pdf", False)},
+                    meta={
+                        "is_pdf": item.get("is_pdf", False),
+                        "doc_quality": doc_quality,
+                        "evidence_quality": {
+                            "overall_score": float(evidence_quality.get("overall_score", 0.0)),
+                            "source_diversity": int(evidence_quality.get("source_diversity", 0)),
+                            "has_conflicts": has_conflicts,
+                        },
+                        "conflict_flag": has_conflicts,
+                    },
                 ))
 
         data_sources = sorted(set(data_sources)) if data_sources else ["web"]
@@ -287,6 +340,8 @@ queries要求：
         risks = ["Sources may contain subjective analysis."]
         if fallback_used:
             risks.append("Limited deep research sources; results may be incomplete.")
+        if has_conflicts:
+            risks.append("Evidence signals conflict across sources; verify with primary filings/calls.")
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
@@ -295,10 +350,130 @@ queries要求：
             confidence=confidence,
             data_sources=data_sources,
             as_of=datetime.now().isoformat(),
+            evidence_quality=evidence_quality,
             fallback_used=fallback_used,
             risks=risks,
             trace=trace or [],
         )
+
+    def _compute_evidence_quality(self, docs: Any) -> Dict[str, Any]:
+        if not isinstance(docs, list) or not docs:
+            return {
+                "doc_count": 0,
+                "source_diversity": 0,
+                "avg_doc_quality": 0.0,
+                "freshness_score": 0.0,
+                "has_conflicts": False,
+                "overall_score": 0.0,
+            }
+
+        valid_docs = [doc for doc in docs if isinstance(doc, dict)]
+        if not valid_docs:
+            return {
+                "doc_count": 0,
+                "source_diversity": 0,
+                "avg_doc_quality": 0.0,
+                "freshness_score": 0.0,
+                "has_conflicts": False,
+                "overall_score": 0.0,
+            }
+
+        source_keys = set()
+        freshness_scores: List[float] = []
+        doc_scores: List[float] = []
+        for doc in valid_docs:
+            source_key = (doc.get("source") or self._infer_source(doc.get("url", "")) or "web").strip().lower()
+            if source_key:
+                source_keys.add(source_key)
+            freshness_scores.append(self._freshness_score(doc.get("published_date")))
+            doc_scores.append(self._doc_quality_score(doc))
+
+        source_diversity = len(source_keys)
+        diversity_score = min(1.0, source_diversity / 4.0)
+        avg_doc_quality = sum(doc_scores) / max(1, len(doc_scores))
+        freshness_score = sum(freshness_scores) / max(1, len(freshness_scores))
+        has_conflicts = self._detect_conflicts(valid_docs)
+
+        overall = (
+            avg_doc_quality * 0.45
+            + freshness_score * 0.25
+            + diversity_score * 0.20
+            + (0.10 if not has_conflicts else 0.0)
+        )
+        overall = max(0.0, min(1.0, overall))
+
+        return {
+            "doc_count": len(valid_docs),
+            "source_diversity": source_diversity,
+            "avg_doc_quality": round(avg_doc_quality, 4),
+            "freshness_score": round(freshness_score, 4),
+            "has_conflicts": bool(has_conflicts),
+            "overall_score": round(overall, 4),
+        }
+
+    def _doc_quality_score(self, doc: Dict[str, Any]) -> float:
+        source_score = self._source_reliability_score(doc)
+        freshness = self._freshness_score(doc.get("published_date"))
+        content = str(doc.get("content") or doc.get("snippet") or "")
+        depth = min(1.0, len(content) / 1200.0)
+        quality = source_score * 0.5 + freshness * 0.25 + depth * 0.25
+        return round(max(0.0, min(1.0, quality)), 4)
+
+    def _source_reliability_score(self, doc: Dict[str, Any]) -> float:
+        source = str(doc.get("source") or "").strip().lower()
+        url = str(doc.get("url") or "").strip().lower()
+        if doc.get("is_pdf"):
+            return 0.9
+        for hint in self._HIGH_RELIABILITY_SOURCE_HINTS:
+            if hint in source or hint in url:
+                return 0.9
+        if source in ("tavily", "exa"):
+            return 0.75
+        if source in ("search", "web"):
+            return 0.6
+        return 0.65
+
+    def _freshness_score(self, published_date: Any) -> float:
+        text = str(published_date or "").strip()
+        if not text:
+            return 0.5
+        try:
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+            dt = datetime.fromisoformat(text)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            hours = max(0.0, (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 3600.0)
+            if hours <= 24:
+                return 1.0
+            if hours <= 24 * 7:
+                return 0.85
+            if hours <= 24 * 30:
+                return 0.7
+            if hours <= 24 * 90:
+                return 0.55
+            return 0.4
+        except Exception:
+            return 0.5
+
+    def _detect_conflicts(self, docs: List[Dict[str, Any]]) -> bool:
+        positive_hits = 0
+        negative_hits = 0
+        for doc in docs:
+            text = " ".join(
+                [
+                    str(doc.get("title") or ""),
+                    str(doc.get("snippet") or ""),
+                    str(doc.get("content") or "")[:1200],
+                ]
+            ).lower()
+            pos = sum(1 for t in self._POSITIVE_SIGNAL_TERMS if t in text)
+            neg = sum(1 for t in self._NEGATIVE_SIGNAL_TERMS if t in text)
+            if pos > neg:
+                positive_hits += 1
+            elif neg > pos:
+                negative_hits += 1
+        return positive_hits > 0 and negative_hits > 0
 
     def _trace_step(self, stage: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         return create_trace_event(stage, agent=self.AGENT_NAME, **payload)

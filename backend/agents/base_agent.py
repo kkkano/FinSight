@@ -25,6 +25,7 @@ class AgentOutput:
     confidence: float
     data_sources: List[str]
     as_of: str
+    evidence_quality: Dict[str, Any] = field(default_factory=dict)
     fallback_used: bool = False
     risks: List[str] = field(default_factory=list)
     trace: List[Dict[str, Any]] = field(default_factory=list)

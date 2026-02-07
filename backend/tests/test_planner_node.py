@@ -295,3 +295,65 @@ def test_planner_investment_report_budget_prioritizes_selected_agents_over_tools
     # Budget applies to tool+agent steps; selected baseline agents are kept first.
     tool_agent_steps = [s for s in steps if s.get("kind") in ("tool", "agent")]
     assert len(tool_agent_steps) <= 8
+
+
+def test_planner_report_adds_progressive_escalation_inputs_for_high_cost_agents(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp(
+                """
+                {
+                  "goal": "read filing",
+                  "subject": {"subject_type": "filing", "tickers": ["AAPL"]},
+                  "output_mode": "investment_report",
+                  "steps": [
+                    {"id":"s1","kind":"tool","name":"search","inputs":{"query":"AAPL filing key points"},"why":"ok"}
+                  ],
+                  "budget": {"max_rounds": 4, "max_tools": 6},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "Read filing and deep analysis",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "filing", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 4, "max_tools": 6},
+            "allowed_tools": ["search"],
+            "allowed_agents": ["deep_search_agent", "fundamental_agent", "macro_agent"],
+            "agent_selection": {"required": ["deep_search_agent", "fundamental_agent"]},
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    plan = out.get("plan_ir") or {}
+    steps = plan.get("steps") or []
+    deep_steps = [s for s in steps if s.get("kind") == "agent" and s.get("name") == "deep_search_agent"]
+    assert deep_steps, "filing report should include deep_search_agent"
+    deep_inputs = deep_steps[0].get("inputs") or {}
+    assert deep_inputs.get("__escalation_stage") == "high_cost"
+    assert "__run_if_min_confidence" in deep_inputs
+    assert deep_inputs.get("__force_run") is True
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assertions = runtime.get("budget_assertions") or {}
+    assert "estimated_cost_units" in assertions
+    assert "estimated_latency_ms" in assertions
+    assert "cost_within_budget" in assertions
+    assert "latency_within_budget" in assertions
