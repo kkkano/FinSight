@@ -135,6 +135,80 @@ const buildSourceSummary = (citations: Citation[]) => {
     .slice(0, 6);
 };
 
+const buildEvidenceBadges = (citations: Citation[]) => {
+  if (!Array.isArray(citations) || citations.length === 0) {
+    return {
+      quality: {
+        label: 'Evidence N/A',
+        tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
+      },
+      freshness: {
+        label: 'Freshness N/A',
+        tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
+      },
+    };
+  }
+
+  const confidenceValues = citations
+    .map((item) => (typeof item.confidence === 'number' ? item.confidence : null))
+    .filter((item): item is number => item !== null);
+  const avgConfidence = confidenceValues.length > 0
+    ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
+    : null;
+
+  const freshnessValues = citations
+    .map((item) => (typeof item.freshness_hours === 'number' ? item.freshness_hours : null))
+    .filter((item): item is number => item !== null);
+  const freshestHours = freshnessValues.length > 0 ? Math.min(...freshnessValues) : null;
+
+  const quality = avgConfidence === null
+    ? {
+      label: 'Evidence Unscored',
+      tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
+    }
+    : avgConfidence >= 0.8
+      ? {
+        label: `Evidence High (${Math.round(avgConfidence * 100)}%)`,
+        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+      }
+      : avgConfidence >= 0.65
+        ? {
+          label: `Evidence Medium (${Math.round(avgConfidence * 100)}%)`,
+          tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+        }
+        : {
+          label: `Evidence Low (${Math.round(avgConfidence * 100)}%)`,
+          tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
+        };
+
+  const freshness = freshestHours === null
+    ? {
+      label: 'Freshness Unknown',
+      tone: 'bg-slate-100 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200',
+    }
+    : freshestHours <= 24
+      ? {
+        label: `Freshness <24h`,
+        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200',
+      }
+      : freshestHours <= 72
+        ? {
+          label: `Freshness <72h`,
+          tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200',
+        }
+        : freshestHours <= 24 * 7
+          ? {
+            label: `Freshness <7d`,
+            tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200',
+          }
+          : {
+            label: 'Freshness >7d',
+            tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200',
+          };
+
+  return { quality, freshness };
+};
+
 const classifyReportError = (error: string) => {
   const raw = String(error || '').trim();
   const lower = raw.toLowerCase();
@@ -704,6 +778,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const catalystItems = useMemo(() => extractCatalystItems(report.sections), [report.sections]);
   const metricItems = useMemo(() => extractMetrics(report.sections), [report.sections]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
+  const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
   const agentDetailSections = useMemo(() => {
     const metaSummaries = (report.meta as any)?.agent_summaries;
     if (Array.isArray(metaSummaries) && metaSummaries.length > 0) {
@@ -979,6 +1054,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               <div className="flex flex-wrap items-center gap-2">
                 <SentimentBadge sentiment={report.sentiment} confidence={report.confidence_score} />
                 {report.recommendation && <RecommendationBadge recommendation={report.recommendation} />}
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.quality.tone}`}>
+                  {evidenceBadges.quality.label}
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.freshness.tone}`}>
+                  {evidenceBadges.freshness.label}
+                </span>
               </div>
                 <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-300 mb-2">
@@ -1159,6 +1240,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
             <div className="flex flex-wrap items-center gap-2">
               <SentimentBadge sentiment={report.sentiment} confidence={report.confidence_score} />
               {report.recommendation && <RecommendationBadge recommendation={report.recommendation} />}
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.quality.tone}`}>
+                {evidenceBadges.quality.label}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.freshness.tone}`}>
+                {evidenceBadges.freshness.label}
+              </span>
             </div>
           </div>
           <div className="h-12 w-12 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
