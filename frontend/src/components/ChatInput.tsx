@@ -74,6 +74,72 @@ const mapStageToSource = (stage: string): AgentLogSource => {
   return mapping[stage] || 'system';
 };
 
+const estimateProgress = (stage: string, current: number): number => {
+  const langgraphNodeProgress: Record<string, number> = {
+    normalize_ui_context: 5,
+    resolve_subject: 12,
+    clarify: 18,
+    parse_operation: 25,
+    policy_gate: 35,
+    planner: 50,
+    execute_plan: 72,
+    synthesize: 88,
+    render: 95,
+  };
+
+  if (stage.startsWith('langgraph_')) {
+    const node = stage
+      .replace(/^langgraph_/, '')
+      .replace(/_(start|done)$/, '');
+    const base = langgraphNodeProgress[node];
+    if (typeof base === 'number') {
+      return stage.endsWith('_done') ? Math.min(99, base + 4) : base;
+    }
+  }
+
+  const staticProgress: Record<string, number> = {
+    classifying: 8,
+    classified: 15,
+    reference_resolution: 20,
+    intent_classification: 26,
+    agent_gate: 35,
+    agent_selected: 38,
+    tool_selected: 45,
+    supervisor_start: 5,
+    forum_start: 90,
+    forum_done: 98,
+    complete: 100,
+  };
+  if (typeof staticProgress[stage] === 'number') {
+    return staticProgress[stage];
+  }
+
+  if (stage === 'executor_step_start' || stage === 'agent_start') {
+    return Math.max(current, 72);
+  }
+  if (stage === 'executor_step_done' || stage === 'agent_done') {
+    return Math.min(96, Math.max(current, current + 3));
+  }
+  if (stage.includes('error')) {
+    return current;
+  }
+  return current;
+};
+
+const formatExecutionStep = (stage: string, message?: string): string => {
+  if (message && message.trim()) {
+    return message.trim();
+  }
+  if (stage.startsWith('langgraph_')) {
+    const label = stage
+      .replace(/^langgraph_/, '')
+      .replace(/_(start|done)$/, '')
+      .replace(/_/g, ' ');
+    return `LangGraph: ${label}`;
+  }
+  return stage.replace(/_/g, ' ');
+};
+
 interface ChatInputProps {
   onDashboardRequest?: (symbol: string) => void;
 }
@@ -89,6 +155,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     isChatLoading,
     setTicker,
     setStatus,
+    setExecutionState,
+    resetExecutionState,
     draft,
     setDraft,
     currentTicker,
@@ -166,6 +234,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
     setLoading(true);
     setStatus('Streaming response...');
+    setExecutionState('Preparing request', 0);
 
     // 记录请求开始日志
     addAgentLog({
@@ -196,6 +265,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         // onToolStart
         (name) => {
           setStatus(`Calling tool: ${name}...`);
+          const current = useStore.getState().executionProgress ?? 0;
+          setExecutionState(`Tool: ${name}`, Math.max(current, 72));
           // 记录工具调用日志
           addAgentLog({
             id: uuidv4(),
@@ -209,6 +280,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         // onToolEnd
         () => {
           setStatus('Generating response...');
+          const current = useStore.getState().executionProgress ?? 0;
+          setExecutionState('Synthesizing response', Math.max(current, 80));
           // 记录工具完成日志
           addAgentLog({
             id: uuidv4(),
@@ -279,12 +352,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             }
           }
           updateMessage(aiMsgId, { content: fullContent, isLoading: false, report, thinking: thinkingSteps, evidence_pool: evidencePool });
+          setExecutionState('Completed', 100);
           setStatus(null); // 清除状态，不再显示"Streaming response"
         },
         // onError
         (error) => {
           updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
           setStatus('Error occurred');
+          const current = useStore.getState().executionProgress ?? 0;
+          setExecutionState('Execution failed', current);
           // 记录错误日志
           addAgentLog({
             id: uuidv4(),
@@ -300,6 +376,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
           updateMessage(aiMsgId, { thinking: thinkingSteps });
+          const current = useStore.getState().executionProgress ?? 0;
+          const progress = estimateProgress(step.stage, current);
+          const stepLabel = formatExecutionStep(step.stage, step.message);
+          setExecutionState(stepLabel, progress);
 
           // 将 thinking 事件转换为 AgentLog
           const source = mapStageToSource(step.stage);
@@ -366,9 +446,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         isLoading: false,
       });
       setStatus('Request failed');
+      const current = useStore.getState().executionProgress ?? 0;
+      setExecutionState('Request failed', current);
     } finally {
       setLoading(false);
       setStatus(null); // 立即清除状态
+      resetExecutionState();
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };

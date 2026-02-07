@@ -68,7 +68,20 @@ const extractTicker = (text: string): string | null => {
 };
 
 export const ChatList: React.FC = () => {
-  const { messages, isChatLoading, statusMessage, statusSince, removeMessage, setStatus, setLoading, setTicker, addMessage, updateMessage } = useStore();
+  const {
+    messages,
+    isChatLoading,
+    statusMessage,
+    statusSince,
+    executionProgress,
+    currentStep,
+    removeMessage,
+    setStatus,
+    setLoading,
+    setTicker,
+    addMessage,
+    updateMessage,
+  } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsed, setElapsed] = useState<string>('0.0');
@@ -297,15 +310,29 @@ export const ChatList: React.FC = () => {
       {/* Loading Indicator */}
       {isChatLoading && (
         <div className="flex w-full justify-start animate-fade-in">
-          <div className="flex flex-row items-center ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 gap-2 shadow-sm">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 shadow-sm min-w-[280px] max-w-[420px]">
+            <div className="flex items-center gap-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-xs text-fin-muted">
+                {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
+              </span>
             </div>
-            <span className="text-xs text-fin-muted">
-              {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
-            </span>
+            <div className="mt-2">
+              <div className="h-1.5 rounded-full bg-fin-border/70 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-fin-primary transition-all duration-300"
+                  style={{ width: `${Math.max(0, Math.min(100, executionProgress ?? 0))}%` }}
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-between text-[10px] text-fin-muted">
+                <span className="truncate">{currentStep || 'Preparing execution...'}</span>
+                <span>{Math.round(executionProgress ?? 0)}%</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

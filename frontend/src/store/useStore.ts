@@ -82,7 +82,11 @@ interface AppState {
   isChatLoading: boolean;
   statusMessage: string | null;
   statusSince: number | null;
+  executionProgress: number | null;
+  currentStep: string | null;
   setStatus: (message: string | null) => void;
+  setExecutionState: (step: string | null, progress?: number | null) => void;
+  resetExecutionState: () => void;
   abortController: AbortController | null;
   setAbortController: (controller: AbortController | null) => void;
   currentTicker: string | null;
@@ -129,6 +133,8 @@ export const useStore = create<AppState>((set) => ({
   isChatLoading: false,
   statusMessage: null,
   statusSince: null,
+  executionProgress: null,
+  currentStep: null,
   currentTicker: null,
   abortController: null,
   draft: '',
@@ -187,6 +193,16 @@ export const useStore = create<AppState>((set) => ({
     set(() => ({
       statusMessage: message,
       statusSince: message ? Date.now() : null,
+    })),
+  setExecutionState: (step, progress = null) =>
+    set(() => ({
+      currentStep: step,
+      executionProgress: progress === null ? null : Math.max(0, Math.min(100, progress)),
+    })),
+  resetExecutionState: () =>
+    set(() => ({
+      currentStep: null,
+      executionProgress: null,
     })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
   setAbortController: (controller) => set({ abortController: controller }),
