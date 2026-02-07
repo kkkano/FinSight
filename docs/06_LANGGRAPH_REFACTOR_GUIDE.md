@@ -1073,3 +1073,85 @@ erDiagram
 - Validation:
   - `pytest -q backend/tests/test_deep_research.py backend/tests/test_executor.py backend/tests/test_planner_node.py backend/tests/test_templates_render.py backend/tests/test_report_builder_synthesis_report.py tests/retrieval_eval/test_retrieval_eval_runner.py` -> `40 passed`
   - `python tests/retrieval_eval/run_retrieval_eval.py --gate --drift-gate --report-prefix local` -> `PASS` (Recall@K=1.0000, nDCG@K=1.0000, Citation Coverage=1.0000, Latency P95=0.06ms)
+
+### 11.12.7 Patch Note (2026-02-07)
+- `macro_agent` source priority + conflict merge:
+  - Added source priority ordering: `fred > market_sentiment > economic_events > search_cross_check`.
+  - Added indicator-level merge + conflict detection with threshold-based checks.
+  - Added structured `evidence_quality` and richer `raw_data` (`source_health/used_sources/conflicts/merge`).
+  - Fixed status behavior: when FRED is unavailable but fallback data exists, status is `fallback` (not `success`).
+- `fundamental_agent` filing metric standardization:
+  - Added normalized metric pipeline (`revenue/net_income/operating_income/operating_cash_flow/total_assets/total_liabilities`).
+  - Unified `YoY/QoQ` calculation across quarterly/annual paths with explicit period metadata.
+  - Exposed standardized growth metadata in evidence and agent-level `evidence_quality`.
+- Frontend transparency update (Agent cards):
+  - `ReportIR.agent_status` now carries `evidence_quality`, `skipped_reason`, and `escalation_not_needed`.
+  - Agent card now explicitly displays `EQ xx%` / `EQ N/A`.
+  - Agent card now explicitly displays escalation skip state (`Escalation skipped`) and skip reason.
+- Validation:
+  - `pytest -q backend/tests/test_deep_research.py backend/tests/test_technical_fundamental_agents.py backend/tests/test_report_builder_synthesis_report.py` -> `15 passed`
+  - `npm run build --prefix frontend` -> `success`
+
+### 11.13 基金能力路线图（Fund Discovery + Compare + Group + AI Search）
+
+#### 11.13.1 是否适合现在做（结论）
+- 适合做：`基金列表/详情/对比`、`自选基金组`、`AI 搜索（基金域）`。  
+- 不建议直接做：`根据分析自动改配置/自动调仓`（高风险、合规与责任边界不清）。  
+- 建议替代：先做“`AI 建议 + 人工确认`”流程，保留审计日志与回滚能力。
+
+#### 11.13.2 产品边界（先立规矩）
+- 基金分析域与股票分析域并行，但共享 LangGraph 编排与报告框架。  
+- 基金域默认输出：`brief`（快评）与 `investment_report`（深度），不直接输出交易执行指令。  
+- 所有“配置建议”必须显式展示：依据、置信度、风险、数据时间戳。
+
+#### 11.13.3 架构落地（后端）
+1. 数据模型（新增）  
+   - `fund_master`（基金基础信息、类别、规模、费率、成立日）  
+   - `fund_nav_timeseries`（净值、回撤、波动、基准）  
+   - `fund_holding_snapshot`（前十大持仓、行业暴露、风格因子）  
+   - `watchlist_group` / `watchlist_group_item`（自选分组与成员）  
+2. Agent 扩展  
+   - `fund_profile_agent`：基金基本面与产品要素。  
+   - `fund_performance_agent`：收益/回撤/风险指标标准化。  
+   - `fund_compare_agent`：多基金统一口径对比（区间收益、回撤、费率、风格偏移）。  
+   - `fund_allocation_assistant_agent`（建议型）：给出配置建议，不落地执行。  
+3. LangGraph 编排  
+   - `parse_operation` 扩展：`fund_list` / `fund_detail` / `fund_compare` / `fund_search` / `fund_group_manage`。  
+   - `CapabilityRegistry` 扩展基金能力与评分规则（按 query + operation 选 Agent 子集）。  
+   - `policy_gate` 新增基金域预算策略（compare 允许更多并行 step）。  
+4. 检索/RAG  
+   - 基金域独立 collection：`fund_docs`（招募书、季报、公告摘要）  
+   - 混合检索：`pgvector + tsvector + RRF`，并保留 `citation` 强约束。  
+   - 时效策略：公告/季报长期，日频行情短 TTL；生成报告不入长期主库。  
+
+#### 11.13.4 架构落地（前端）
+1. 页面与信息架构  
+   - `FundList`：筛选、排序、快速 AI 搜索入口。  
+   - `FundDetail`：净值/回撤/持仓/费率/基金经理变化。  
+   - `FundCompare`：最多 3-5 只同屏对比，指标口径统一。  
+   - `WatchlistGroup`：分组管理、分组级别 AI 评估。  
+2. 交互增强  
+   - Agent 卡片沿用现有 `evidence_quality`、`freshness`、`escalation` 标识。  
+   - 配置建议卡片必须包含：`建议前后对比`、`风险提示`、`确认按钮`（无自动执行）。  
+3. 状态与契约  
+   - `ReportIR` 扩展基金域 section（`fund_profile`/`fund_performance`/`fund_compare`）。  
+   - 统一沿用 `session_id + output_mode + selection_ids` 契约，不引入第二套协议。
+
+#### 11.13.5 分阶段实施（建议 4 个迭代）
+1. Sprint A（MVP）  
+   - 基金列表 + 详情 + 基础 Agent（profile/performance）  
+   - API + 前端页面打通，补契约测试与 e2e  
+2. Sprint B  
+   - 基金对比（compare）+ 指标标准化 + 可视化  
+   - 增加 compare 报告模板与 citation 校验  
+3. Sprint C  
+   - 自选基金组（CRUD）+ 分组级 AI 搜索/摘要  
+   - 增加 group 级别缓存与权限控制  
+4. Sprint D  
+   - 配置建议助手（仅建议，不自动执行）  
+   - 增加“人工确认 + 审计日志 + 回滚”闭环
+
+#### 11.13.6 验收门槛（新增）
+- 后端：新增基金域测试集（Agent 单测 + 编排集成 + 报告契约）。  
+- 前端：关键路径 e2e（列表→详情→对比→分组→AI 搜索）。  
+- 质量：继续纳入 CI 门禁（测试通过 + 构建通过 + 检索评测不回退）。
