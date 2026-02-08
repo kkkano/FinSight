@@ -15,7 +15,6 @@ import {
   buildReportMessages,
 } from './ReportUtils';
 import { ReportHeader } from './ReportHeader';
-import { ReportSection } from './ReportSection';
 import { ReportAgentCard, ReportEvidencePoolSection } from './ReportAgentCard';
 import {
   ConfidenceMeter,

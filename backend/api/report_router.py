@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException
+
+# 防御性校验: report_id 仅允许安全字符
+_SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
+
+
+def _validate_report_id(report_id: str) -> str:
+    """校验 report_id 格式，防止注入或路径穿越。"""
+    if not report_id or not _SAFE_ID_PATTERN.fullmatch(report_id):
+        raise HTTPException(status_code=422, detail="report_id format invalid")
+    return report_id
 
 
 @dataclass(frozen=True)
@@ -23,6 +34,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         tag: Optional[str] = None,
+        source_type: Optional[str] = None,
         favorite_only: bool = False,
         limit: int = 50,
     ):
@@ -39,6 +51,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             date_from=date_from,
             date_to=date_to,
             tag=tag,
+            source_type=source_type,
             favorite_only=bool(favorite_only),
             limit=limit,
         )
@@ -46,6 +59,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
 
     @router.get("/api/reports/replay/{report_id}")
     async def get_report_replay(report_id: str, session_id: str):
+        report_id = _validate_report_id(report_id)
         try:
             normalized_session = deps.resolve_thread_id(session_id)
         except ValueError as exc:
@@ -91,6 +105,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
 
     @router.post("/api/reports/{report_id}/favorite")
     async def set_report_favorite(report_id: str, request: dict):
+        report_id = _validate_report_id(report_id)
         session_id = request.get("session_id")
         try:
             normalized_session = deps.resolve_thread_id(session_id)

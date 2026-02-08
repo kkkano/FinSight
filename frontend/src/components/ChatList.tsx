@@ -6,7 +6,7 @@ import { normalizeMarkdown } from '../utils/markdown';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
-import { ThinkingProcess } from './ThinkingProcess';
+import { ThinkingProcess } from './thinking';
 import { ReportView } from './report';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';

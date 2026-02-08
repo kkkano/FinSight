@@ -2,6 +2,10 @@
 import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
+// 共享 UI 组件
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Card } from './ui/Card';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -243,19 +247,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <Settings size={20} className="text-fin-primary" />
             <h2 id="settings-modal-title" className="text-lg font-semibold text-fin-text">设置</h2>
           </div>
-          <button
+          {/* 关闭按钮 — 使用共享 Button ghost 变体 */}
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onClose}
             aria-label="关闭设置"
-            className="p-1 hover:bg-fin-border rounded transition-colors"
+            className="p-1"
           >
             <X size={20} className="text-fin-muted" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* LLM 配置 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+          {/* LLM 配置 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">LLM 配置（可选）</h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
               <div>
@@ -275,51 +282,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <option value="custom">自定义</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs text-fin-muted mb-1">自定义模型名称</label>
-                <input
-                  type="text"
-                  value={config.llm_model || ''}
-                  onChange={(e) => handleChange('llm_model', e.target.value)}
-                  placeholder="如 gpt-4-turbo"
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                />
-              </div>
+              {/* 自定义模型名称 — 使用共享 Input 组件 */}
+              <Input
+                label="自定义模型名称"
+                type="text"
+                value={config.llm_model || ''}
+                onChange={(e) => handleChange('llm_model', e.target.value)}
+                placeholder="如 gpt-4-turbo"
+                className="py-2 rounded"
+              />
+              {/* API Endpoint — 使用共享 Input 组件 */}
               <div className="md:col-span-2">
-                <label className="block text-xs text-fin-muted mb-1">完整 API Endpoint (URL)</label>
-                <input
+                <Input
+                  label="完整 API Endpoint (URL)"
                   type="text"
                   value={config.llm_api_base || ''}
                   onChange={(e) => handleChange('llm_api_base', e.target.value)}
                   placeholder="如 https://new.123nhh.xyz/v1/chat/completions"
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none font-mono"
+                  className="py-2 rounded font-mono"
                 />
               </div>
+              {/* API Key — 使用共享 Input 组件 */}
               <div className="md:col-span-2">
-                <label className="block text-xs text-fin-muted mb-1">API Key</label>
-                <input
+                <Input
+                  label="API Key"
                   type="password"
                   value={config.llm_api_key || ''}
                   onChange={(e) => handleChange('llm_api_key', e.target.value)}
                   placeholder="留空使用默认配置"
-                  className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
+                  className="py-2 rounded"
                 />
               </div>
             </div>
-          </section>
+          </Card>
 
-          {/* LLM 多 Endpoint 轮换 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40" data-testid="settings-endpoints-section">
+          {/* LLM 多 Endpoint 轮换 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40" data-testid="settings-endpoints-section">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-fin-text">LLM Endpoints（轮换池）</h3>
-              <button
-                type="button"
+              {/* 新增 Endpoint 按钮 — 使用共享 Button secondary 变体 */}
+              <Button
+                size="sm"
                 data-testid="settings-endpoint-add"
                 onClick={addEndpoint}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-fin-border text-fin-text hover:border-fin-primary/60"
               >
                 <Plus size={12} /> 新增 Endpoint
-              </button>
+              </Button>
             </div>
 
             {(config.llm_endpoints || []).length === 0 ? (
@@ -336,28 +344,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   >
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-fin-muted">Endpoint #{index + 1}</p>
-                      <button
-                        type="button"
+                      {/* 删除 Endpoint 按钮 — 使用共享 Button danger 变体 */}
+                      <Button
+                        variant="danger"
+                        size="sm"
                         data-testid={`settings-endpoint-remove-${index}`}
                         onClick={() => removeEndpoint(index)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
                       >
                         <Trash2 size={12} /> 删除
-                      </button>
+                      </Button>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <label className="block text-xs text-fin-muted mb-1">名称</label>
-                        <input
-                          type="text"
-                          data-testid={`settings-endpoint-name-${index}`}
-                          value={endpoint.name || ''}
-                          onChange={(e) => updateEndpoint(index, { name: e.target.value })}
-                          placeholder={`endpoint-${index + 1}`}
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                        />
-                      </div>
+                      {/* 名称 — 使用共享 Input 组件 */}
+                      <Input
+                        label="名称"
+                        type="text"
+                        data-testid={`settings-endpoint-name-${index}`}
+                        value={endpoint.name || ''}
+                        onChange={(e) => updateEndpoint(index, { name: e.target.value })}
+                        placeholder={`endpoint-${index + 1}`}
+                        className="py-2 rounded"
+                      />
 
                       <div>
                         <label className="block text-xs text-fin-muted mb-1">Provider</label>
@@ -375,67 +383,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         </select>
                       </div>
 
+                      {/* API Base — 使用共享 Input 组件 */}
                       <div className="md:col-span-2">
-                        <label className="block text-xs text-fin-muted mb-1">API Base</label>
-                        <input
+                        <Input
+                          label="API Base"
                           type="text"
                           data-testid={`settings-endpoint-api-base-${index}`}
                           value={endpoint.api_base || ''}
                           onChange={(e) => updateEndpoint(index, { api_base: e.target.value })}
                           placeholder="https://example.com/v1"
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none font-mono"
+                          className="py-2 rounded font-mono"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-xs text-fin-muted mb-1">Model</label>
-                        <input
-                          type="text"
-                          data-testid={`settings-endpoint-model-${index}`}
-                          value={endpoint.model || ''}
-                          onChange={(e) => updateEndpoint(index, { model: e.target.value })}
-                          placeholder="gemini-2.5-flash"
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                        />
-                      </div>
+                      {/* Model — 使用共享 Input 组件 */}
+                      <Input
+                        label="Model"
+                        type="text"
+                        data-testid={`settings-endpoint-model-${index}`}
+                        value={endpoint.model || ''}
+                        onChange={(e) => updateEndpoint(index, { model: e.target.value })}
+                        placeholder="gemini-2.5-flash"
+                        className="py-2 rounded"
+                      />
 
-                      <div>
-                        <label className="block text-xs text-fin-muted mb-1">API Key</label>
-                        <input
-                          type="password"
-                          data-testid={`settings-endpoint-api-key-${index}`}
-                          value={endpoint.api_key || ''}
-                          onChange={(e) => updateEndpoint(index, { api_key: e.target.value })}
-                          placeholder="sk-***"
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                        />
-                      </div>
+                      {/* API Key — 使用共享 Input 组件 */}
+                      <Input
+                        label="API Key"
+                        type="password"
+                        data-testid={`settings-endpoint-api-key-${index}`}
+                        value={endpoint.api_key || ''}
+                        onChange={(e) => updateEndpoint(index, { api_key: e.target.value })}
+                        placeholder="sk-***"
+                        className="py-2 rounded"
+                      />
 
-                      <div>
-                        <label className="block text-xs text-fin-muted mb-1">权重</label>
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          data-testid={`settings-endpoint-weight-${index}`}
-                          value={endpoint.weight ?? 1}
-                          onChange={(e) => updateEndpoint(index, { weight: Number(e.target.value || 1) })}
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                        />
-                      </div>
+                      {/* 权重 — 使用共享 Input 组件 */}
+                      <Input
+                        label="权重"
+                        type="number"
+                        min={1}
+                        step={1}
+                        data-testid={`settings-endpoint-weight-${index}`}
+                        value={endpoint.weight ?? 1}
+                        onChange={(e) => updateEndpoint(index, { weight: Number(e.target.value || 1) })}
+                        className="py-2 rounded"
+                      />
 
-                      <div>
-                        <label className="block text-xs text-fin-muted mb-1">冷却秒数</label>
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          data-testid={`settings-endpoint-cooldown-${index}`}
-                          value={endpoint.cooldown_sec ?? DEFAULT_COOLDOWN_SEC}
-                          onChange={(e) => updateEndpoint(index, { cooldown_sec: Number(e.target.value || DEFAULT_COOLDOWN_SEC) })}
-                          className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 text-fin-text text-sm focus:border-fin-primary outline-none"
-                        />
-                      </div>
+                      {/* 冷却秒数 — 使用共享 Input 组件 */}
+                      <Input
+                        label="冷却秒数"
+                        type="number"
+                        min={1}
+                        step={1}
+                        data-testid={`settings-endpoint-cooldown-${index}`}
+                        value={endpoint.cooldown_sec ?? DEFAULT_COOLDOWN_SEC}
+                        onChange={(e) => updateEndpoint(index, { cooldown_sec: Number(e.target.value || DEFAULT_COOLDOWN_SEC) })}
+                        className="py-2 rounded"
+                      />
                     </div>
 
                     <label className="inline-flex items-center gap-2 text-xs text-fin-muted cursor-pointer">
@@ -456,10 +461,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <p className="text-xs text-fin-muted mt-3">
               保存时会写入 `llm_endpoints[]`。若有配置，首条 endpoint 会同时回填到 legacy 字段以保持兼容。
             </p>
-          </section>
+          </Card>
 
-          {/* 界面布局 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+          {/* 界面布局 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">界面布局</h3>
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -483,10 +488,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <span className="text-fin-text">铺满宽度</span>
               </label>
             </div>
-          </section>
+          </Card>
 
-          {/* 外观 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+          {/* 外观 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">外观主题</h3>
             <div className="flex gap-4">
               <button
@@ -508,10 +513,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <Moon size={16} /> 深色
               </button>
             </div>
-          </section>
+          </Card>
 
-          {/* Trace 可见性 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+          {/* Trace 可见性 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">Trace 可见性</h3>
             <div className="grid md:grid-cols-2 gap-3 text-sm">
               <button
@@ -586,23 +591,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <p className="text-xs text-fin-muted mt-2">
               默认开启。采集开关会随请求透传到后端，并即时影响当前会话。
             </p>
-          </section>
+          </Card>
 
-          {/* 系统诊断 */}
-          <section className="border border-fin-border rounded-lg p-4 bg-fin-bg/40">
+          {/* 系统诊断 — 使用共享 Card 组件 */}
+          <Card className="p-4 bg-fin-bg/40">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-fin-text flex items-center gap-2">
                 <Activity size={16} className="text-fin-primary" />
                 系统状态 & 诊断
               </h3>
-              <button
+              {/* 刷新按钮 — 使用共享 Button ghost 变体 */}
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={loadDiagnostics}
                 disabled={diagLoading}
-                className="text-xs text-fin-muted hover:text-fin-primary flex items-center gap-1"
+                className="text-xs text-fin-muted hover:text-fin-primary"
               >
                 <RefreshCw size={12} className={diagLoading ? 'animate-spin' : ''} />
                 刷新
-              </button>
+              </Button>
             </div>
 
             {diagError && <p className="text-xs text-red-400 mb-2">{diagError}</p>}
@@ -644,7 +652,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 )}
               </div>
             </div>
-          </section>
+          </Card>
 
           {/* 提示 */}
           <div className="p-3 bg-fin-bg border border-fin-border rounded text-xs text-fin-muted">
@@ -654,23 +662,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer — 使用共享 Button 组件 */}
         <div className="flex items-center justify-end gap-3 p-4 border-t border-fin-border sticky bottom-0 bg-fin-panel">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="md"
             data-testid="settings-cancel-btn"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-fin-muted hover:text-fin-text transition-colors"
+            className="px-4 py-2 text-fin-muted hover:text-fin-text"
           >
             取消
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             onClick={handleSave}
             disabled={loading}
-            className="px-4 py-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2 transition-colors text-sm"
+            className="px-4 py-2"
           >
-            {saved ? '✓ 已保存' : loading ? '保存中…' : '保存'}
-          </button>
+            {saved ? '✓ 已保存' : loading ? '保存中...' : '保存'}
+          </Button>
         </div>
       </div>
     </div>

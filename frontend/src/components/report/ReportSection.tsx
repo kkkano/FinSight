@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { normalizeMarkdown } from '../../utils/markdown';
 import type { ReportSection as ReportSectionType, ReportContent, Citation } from '../../types/index';
-import { ChevronDown, ChevronUp, BarChart2, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, BarChart2 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { buildChartOption } from './ReportUtils';
 

@@ -52,8 +52,9 @@
 
 ### Security
 
-- [ ] **Path traversal 风险**: 多个 endpoint 接受用户输入的文件名/路径, 未做路径清理
-  - Files: `backend/api/report_router.py`, `backend/api/system_router.py`
+- [x] **Path traversal 风险**: 多个 endpoint 接受用户输入的文件名/路径, 未做路径清理
+  - Fix: `_SAFE_ID_PATTERN` + `_validate_report_id()` 防御性校验
+  - Files: `backend/api/report_router.py`
 
 - [x] **Auth/Rate-limit 默认关闭**: `.env.example` 已添加 PRODUCTION 警告注释
   - File: `.env.example` — 生产部署必须开启 `API_AUTH_ENABLED=true`
@@ -87,7 +88,8 @@
 - [x] **ReportView.tsx 过大 (1643行)**: 已拆分为 6 个子文件
   - Fix: `frontend/src/components/report/` (Header/Section/AgentCard/Charts/Utils/Container)
 
-- [ ] **ThinkingProcess.tsx 过大 (501行)**: 大量渲染辅助函数可抽取
+- [x] **ThinkingProcess.tsx 过大 (501行)**: 已拆分为 ThinkingStepList + ThinkingStepContent 子组件
+  - Fix: `frontend/src/components/thinking/` (ThinkingProcess/ThinkingStepList/ThinkingStepContent)
 
 - [x] **App.css Vite 模板残留**: 43 行全部未使用 CSS
   - Fix: 已清空
@@ -106,8 +108,8 @@
 
 ### Documentation
 
-- [ ] **docs/06 混合职责**: 1584 行文件同时包含设计规范、TODO 列表、工作日志
-  - 应拆分为: 设计规范 + 变更日志 + 待办清单
+- [x] **docs/06 混合职责**: 1584 行文件同时包含设计规范、TODO 列表、工作日志
+  - Fix: 拆分为 `docs/06a_LANGGRAPH_DESIGN_SPEC.md` + `docs/06b_LANGGRAPH_CHANGELOG.md`
 
 - [x] **DOCS_INDEX 断链**: 已验证所有文档链接均可访问
   - File: `docs/DOCS_INDEX.md`
@@ -124,19 +126,22 @@
 - [x] **`updateLastMessage` 直接 mutation**: 已改为 immutable map + spread
   - File: `frontend/src/store/useStore.ts`
 
-- [ ] **响应式断点不统一**: CSS 使用 768/1024/1280px, JS `useIsMobileLayout` 仅 1024px
-  - 需要: 统一断点策略
+- [x] **响应式断点不统一**: CSS 使用 768/1024/1280px, JS `useIsMobileLayout` 仅 1024px
+  - Fix: 统一 `BREAKPOINTS` 常量, `useIsMobileLayout` 改用共享 breakpoints
+  - Files: `frontend/src/config/breakpoints.ts`, `frontend/src/hooks/useIsMobileLayout.ts`
 
 - [x] **移动端 Sidebar 无抽屉**: 已改为 fixed drawer + backdrop overlay 模式
   - Files: `frontend/src/components/Sidebar.tsx`, `frontend/src/components/layout/WorkspaceShell.tsx`
 
 ### Backend
 
-- [ ] **dry_run 模式无 UX 提示**: 默认 `LANGGRAPH_EXECUTE_LIVE_TOOLS=false`, 用户看不到提示
-  - 需要: 前端 banner 或 trace 标记
+- [x] **dry_run 模式无 UX 提示**: 默认 `LANGGRAPH_EXECUTE_LIVE_TOOLS=false`, 用户看不到提示
+  - Fix: `/health` 返回 `live_tools` 状态, 前端 Toast 警告通知
+  - Files: `backend/api/system_router.py`, `frontend/src/components/layout/WorkspaceShell.tsx`
 
-- [ ] **新闻降级无通知**: news_agent 全部数据源失败时静默降级
-  - 需要: 前端显示 "部分数据不可用" 提示
+- [x] **新闻降级无通知**: news_agent 全部数据源失败时静默降级
+  - Fix: NewsFeed 检测空数据源时 Toast 提示「数据源降级」
+  - File: `frontend/src/components/dashboard/NewsFeed.tsx`
 
 ### Documentation
 

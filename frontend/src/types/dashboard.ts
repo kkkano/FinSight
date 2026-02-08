@@ -157,6 +157,52 @@ export interface DashboardErrorResponse {
   error: DashboardErrorDetail;
 }
 
+// === 持仓头寸（含成本） ===
+export interface PortfolioPosition {
+  /** 股票代码（大写） */
+  symbol: string;
+  /** 持有股数 */
+  shares: number;
+  /** 平均成本价（可选，用于 P&L 计算） */
+  avgCost?: number;
+}
+
+// === 单个持仓 P&L 计算结果 ===
+export interface PositionPnL {
+  /** 股票代码 */
+  symbol: string;
+  /** 持有股数 */
+  shares: number;
+  /** 平均成本价 */
+  avgCost: number;
+  /** 当前价格（报价缺失时为 null） */
+  currentPrice: number | null;
+  /** 未实现盈亏金额（报价缺失时为 null） */
+  unrealizedPnL: number | null;
+  /** 未实现盈亏百分比（报价缺失时为 null） */
+  pnlPercent: number | null;
+  /** 持仓市值（报价缺失时为 null） */
+  marketValue: number | null;
+  /** 持仓成本 */
+  costBasis: number;
+}
+
+// === 投资组合 P&L 汇总结果 ===
+export interface PortfolioPnLResult {
+  /** 各持仓明细 */
+  positions: readonly PositionPnL[];
+  /** 组合总市值（仅含有报价的持仓） */
+  totalValue: number;
+  /** 组合总成本（仅含有报价的持仓） */
+  totalCost: number;
+  /** 组合总盈亏金额 */
+  totalPnL: number;
+  /** 组合总盈亏百分比 */
+  totalPnLPercent: number;
+  /** 是否有部分持仓缺失报价 */
+  hasPartialData: boolean;
+}
+
 // === localStorage 键 ===
 export const STORAGE_KEYS = {
   ACTIVE_ASSET: 'fs_dashboard_active_v1',

@@ -9,3 +9,6 @@ export type { BadgeProps, BadgeVariant } from './Badge';
 
 export { Input } from './Input';
 export type { InputProps } from './Input';
+
+export { ToastProvider, ToastContainer, useToast } from './Toast';
+export type { ToastType, ToastOptions, ToastItem, UseToastReturn } from './Toast';

@@ -5,6 +5,8 @@
 ## 1. 当前有效（生产与开发以这些为准）
 
 - `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`：LangGraph 重构 SSOT（唯一开发标准）
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 设计规范（从 06 拆分）
+- `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 变更日志（从 06 拆分）
 - `docs/11_PRODUCTION_RUNBOOK.md`：生产部署/回滚/排障 Runbook
 - `docs/TEAM_EXECUTION_MEMORY.md`：会话丢失后的执行恢复锚点（流程/证据/devlog 约束）
 - `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
@@ -13,6 +15,8 @@
 - `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
 - `docs/WORKBENCH_ROADMAP.md`：工作台开发路线图（Sprint 1-4）
 - `docs/ISSUE_TRACKER.md`：全量问题追踪清单（P0/P1/P2 checkbox）
+- `docs/V1_RELEASE_SUMMARY.md`：v1.0.0 发布总结
+- `docs/SPRINT2_DEVLOG.md`：Sprint 2 开发日志（v1.1.0 任务清单 + 变更记录）
 - `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
 - `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
 - `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策

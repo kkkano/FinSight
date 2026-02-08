@@ -1,5 +1,9 @@
+import { useState, useCallback } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { WorkspaceShell } from './components/layout/WorkspaceShell';
+import { ToastProvider } from './components/ui';
+import { CommandPalette } from './components/CommandPalette';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const decodeSymbolParam = (raw?: string): string | null => {
   if (!raw) return null;
@@ -62,8 +66,25 @@ function RootRedirect() {
 }
 
 function App() {
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  const handleToggleCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen((prev) => !prev);
+  }, []);
+
+  const handleCloseCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(false);
+  }, []);
+
+  // 注册全局键盘快捷键
+  useKeyboardShortcuts({
+    onToggleCommandPalette: handleToggleCommandPalette,
+    isCommandPaletteOpen,
+    onCloseCommandPalette: handleCloseCommandPalette,
+  });
+
   return (
-    <>
+    <ToastProvider>
       {/* Skip-navigation link: hidden by default, visible on keyboard focus */}
       <a
         href="#main-content"
@@ -79,7 +100,13 @@ function App() {
         <Route path="/dashboard/:symbol" element={<DashboardRoute />} />
         <Route path="*" element={<Navigate to="/chat" replace />} />
       </Routes>
-    </>
+
+      {/* 全局命令面板 */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={handleCloseCommandPalette}
+      />
+    </ToastProvider>
   );
 }
 

@@ -12,6 +12,9 @@ import { Plus, ExternalLink, X, RefreshCw } from 'lucide-react';
 import { useDashboardStore } from '../../store/dashboardStore';
 import { apiClient } from '../../api/client';
 import type { WatchItem, ActiveAsset } from '../../types/dashboard';
+// 共享 UI 组件
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
 
 // 价格数据类型
 type QuoteData = {
@@ -199,32 +202,36 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-fin-text">自选列表</h2>
           <div className="flex items-center gap-1">
-            {/* 刷新按钮 */}
-            <button
+            {/* 刷新按钮 — 使用共享 Button ghost 变体 */}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={loadQuotes}
               disabled={isRefreshing}
               aria-label="刷新报价"
-              className="p-1.5 rounded-lg hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary disabled:opacity-50"
+              className="p-1.5"
               title="刷新报价"
             >
               <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
-            </button>
-            {/* 添加按钮 */}
-            <button
+            </Button>
+            {/* 添加按钮 — 使用共享 Button ghost 变体 */}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setIsAdding(true)}
               aria-label="添加自选"
-              className="p-1.5 rounded-lg hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary"
+              className="p-1.5"
               title="添加自选"
             >
               <Plus size={14} />
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* 添加输入框 */}
+        {/* 添加输入框 — 使用共享 Input 和 Button 组件 */}
         {isAdding && (
           <div className="flex gap-2">
-            <input
+            <Input
               ref={inputRef}
               type="text"
               value={newSymbol}
@@ -232,25 +239,28 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
               onKeyDown={handleKeyDown}
               placeholder="输入代码"
               aria-label="输入股票代码"
-              className="flex-1 px-2 py-1.5 text-xs border border-fin-border rounded-lg bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
+              className="flex-1 text-xs py-1.5 px-2"
             />
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleAdd}
               aria-label="确认添加"
-              className="px-2 py-1.5 text-xs bg-fin-primary text-white rounded-lg hover:opacity-90 transition-opacity"
             >
               添加
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setIsAdding(false);
                 setNewSymbol('');
               }}
               aria-label="取消添加"
-              className="p-1.5 text-fin-muted hover:text-fin-text transition-colors"
+              className="p-1.5 text-fin-muted hover:text-fin-text"
             >
               <X size={12} />
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -305,33 +315,37 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                     </span>
                   </div>
 
-                  {/* 右侧：操作按钮（悬浮显示） */}
+                  {/* 右侧：操作按钮（悬浮显示） — 使用共享 Button ghost 变体 */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     {/* 外链按钮 */}
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         openYahooFinance(item.symbol);
                       }}
                       aria-label={`在 Yahoo Finance 查看 ${item.symbol}`}
-                      className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-primary transition-colors"
+                      className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-primary"
                       title="在 Yahoo Finance 查看"
                     >
                       <ExternalLink size={12} />
-                    </button>
+                    </Button>
 
                     {/* 删除按钮 */}
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(item.symbol);
                       }}
                       aria-label={`从自选列表中删除 ${item.symbol}`}
-                      className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-danger transition-colors"
+                      className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-danger"
                       title="删除"
                     >
                       <X size={12} />
-                    </button>
+                    </Button>
                   </div>
                 </li>
               );
@@ -340,26 +354,30 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
         )}
       </div>
 
-      {/* 右键菜单 */}
+      {/* 右键菜单 — 使用共享 Button ghost 变体 */}
       {contextMenu && (
         <div
           className="fixed z-50 bg-fin-card border border-fin-border rounded-lg shadow-lg py-1 min-w-[120px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => openYahooFinance(contextMenu.symbol)}
-            className="w-full px-3 py-1.5 text-left text-xs text-fin-text hover:bg-fin-hover flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-xs justify-start"
           >
             <ExternalLink size={12} />
             在 Yahoo 查看
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => handleDelete(contextMenu.symbol)}
-            className="w-full px-3 py-1.5 text-left text-xs text-fin-danger hover:bg-fin-hover flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-xs text-fin-danger justify-start"
           >
             <X size={12} />
             删除
-          </button>
+          </Button>
         </div>
       )}
 

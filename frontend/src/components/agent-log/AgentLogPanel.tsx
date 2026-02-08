@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Terminal, ChevronDown, Zap } from 'lucide-react';
+import { Terminal, ChevronDown } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import type { RawSSEEvent, RawEventType } from '../../types';
 import { getEventSummary, type EventStats } from './constants';
