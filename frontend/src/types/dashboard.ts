@@ -83,6 +83,34 @@ export interface NewsItem {
   source?: string;
   ts: string;
   summary?: string;
+  time_decay?: number;
+  source_reliability?: number;
+  impact_score?: number;
+  asset_relevance?: number;
+  source_penalty?: number;
+  ranking_score?: number;
+  ranking_reason?: string;
+  ranking_factors?: {
+    mode?: string;
+    half_life_hours?: number;
+    weights?: Record<string, number>;
+    weighted?: Record<string, number>;
+  };
+}
+
+export interface NewsRankingWeights {
+  time_decay: number;
+  source_reliability: number;
+  impact_score: number;
+  asset_relevance: number;
+}
+
+export interface NewsRankingMeta {
+  version: string;
+  formula: string;
+  weights?: Record<string, NewsRankingWeights>;
+  half_life_hours?: Record<string, number>;
+  notes?: string[];
 }
 
 // === 选中对象（用于 MiniChat 上下文引用） ===
@@ -100,7 +128,14 @@ export interface SelectionItem {
 export interface DashboardData {
   snapshot: SnapshotData;
   charts: Record<string, ChartPoint[]>;
-  news: Record<string, NewsItem[]>;
+  news: {
+    market: NewsItem[];
+    impact: NewsItem[];
+    market_raw?: NewsItem[];
+    impact_raw?: NewsItem[];
+    ranking_meta?: NewsRankingMeta;
+    [key: string]: NewsItem[] | NewsRankingMeta | undefined;
+  };
 }
 
 // === API 响应 ===

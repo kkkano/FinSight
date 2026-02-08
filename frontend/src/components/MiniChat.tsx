@@ -6,18 +6,27 @@
  * 临时上下文（如当前关注的 symbol 和选中的新闻），不会注入到消息内容中。
  */
 import { useRef, useEffect, useState } from 'react';
-import { Send, Loader2, X, Paperclip, FileText } from 'lucide-react';
+import { Send, Loader2, X, Paperclip } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiClient, type ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
-import { ReportView } from './ReportView';
+import { ReportView } from './report';
 
 export const MiniChat: React.FC = () => {
   // 共享主 Chat 的 messages（统一上下文）
-  const { messages, addMessage, updateMessage, currentTicker, sessionId, setSessionId } = useStore();
+  const {
+    messages,
+    addMessage,
+    updateMessage,
+    currentTicker,
+    sessionId,
+    setSessionId,
+    addRawEvent,
+    traceRawEnabled,
+  } = useStore();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
@@ -54,7 +63,7 @@ export const MiniChat: React.FC = () => {
     }
   }, [canGenerateReport, outputMode]);
 
-  const handleSend = async (forcedOutputMode?: 'investment_report') => {
+  const handleSend = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
 
@@ -86,7 +95,7 @@ export const MiniChat: React.FC = () => {
     // 重置累积 ref
     accumulatedContentRef.current = '';
     accumulatedThinkingRef.current = [];
-    const effectiveOutputMode = forcedOutputMode ?? outputMode;
+    const effectiveOutputMode = outputMode;
 
     try {
       // 构建统一的历史记录（取 messages，排除 welcome 和 loading）
@@ -147,12 +156,19 @@ export const MiniChat: React.FC = () => {
           });
         },
         history,
-        undefined, // onRawEvent
+        (event) => {
+          addRawEvent(event);
+        },
         contextToSend,   // 临时上下文（symbol + selection）
         effectiveOutputMode === 'investment_report'
-          ? { output_mode: 'investment_report', strict_selection: false }
-          : { output_mode: 'brief' },
+          ? {
+            output_mode: 'investment_report',
+            strict_selection: false,
+            trace_raw_override: traceRawEnabled ? 'on' : 'off',
+          }
+          : { output_mode: 'brief', trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         sessionId || undefined,
+        traceRawEnabled,
       );
     } catch (error) {
       updateMessage(aiMsgId, {
@@ -181,7 +197,7 @@ export const MiniChat: React.FC = () => {
         {recentMessages.length <= 1 ? (
           <div className="text-center text-fin-muted text-xs py-8">
             <p>👋 Hi! 有什么可以帮你的？</p>
-            <p className="mt-2 text-[10px]">
+            <p className="mt-2 text-2xs">
               {currentSymbol
                 ? `当前关注 ${currentSymbol}，可以直接问问题`
                 : '在这里快速提问关于股票、市场的问题'}
@@ -235,7 +251,7 @@ export const MiniChat: React.FC = () => {
         <div className="flex flex-wrap items-center gap-1.5">
           {/* Symbol Context Pill */}
           {showContextPill && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-fin-primary/10 text-fin-primary text-[10px] font-medium">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-fin-primary/10 text-fin-primary text-2xs font-medium">
               <span>📌 {currentSymbol}</span>
               <button
                 onClick={() => setContextEnabled(false)}
@@ -249,7 +265,7 @@ export const MiniChat: React.FC = () => {
 
           {/* Selection Pill - 选中的新闻/报告 */}
           {activeSelections.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-medium max-w-[200px]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-2xs font-medium max-w-[200px]">
               <Paperclip size={10} className="shrink-0" />
               <span className="truncate">
                 {activeSelections[0].type === 'news' ? '📰' : '📊'}{' '}
@@ -269,12 +285,13 @@ export const MiniChat: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-fin-muted">输出</span>
+          <span className="text-2xs text-fin-muted">深度</span>
           <button
             type="button"
+            data-testid="mini-chat-mode-brief-btn"
             onClick={() => setOutputMode('brief')}
             disabled={isLoading}
-            className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+            className={`px-1.5 py-0.5 rounded border text-2xs transition-colors ${
               outputMode === 'brief'
                 ? 'border-fin-primary text-fin-primary bg-fin-primary/10'
                 : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50'
@@ -284,16 +301,17 @@ export const MiniChat: React.FC = () => {
           </button>
           <button
             type="button"
+            data-testid="mini-chat-mode-deep-btn"
             onClick={() => setOutputMode('investment_report')}
             disabled={isLoading || !canGenerateReport}
-            className={`px-1.5 py-0.5 rounded border text-[10px] transition-colors ${
+            className={`px-1.5 py-0.5 rounded border text-2xs transition-colors ${
               outputMode === 'investment_report'
                 ? 'border-amber-500 text-amber-500 bg-amber-500/10'
                 : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={canGenerateReport ? '切换到研报模式' : '请选择标的或引用内容后生成研报'}
+            title={canGenerateReport ? '切换到深度分析模式' : '请选择标的或引用内容后启用深度分析'}
           >
-            研报
+            深度
           </button>
         </div>
 
@@ -309,20 +327,11 @@ export const MiniChat: React.FC = () => {
             className="flex-1 px-3 py-2 text-xs bg-fin-bg border border-fin-border rounded-lg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary disabled:opacity-50"
           />
           <button
-            data-testid="mini-chat-report-btn"
-            onClick={() => handleSend('investment_report')}
-            disabled={isLoading || !input.trim() || !canGenerateReport}
-            className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="生成研报"
-          >
-            <FileText size={14} />
-          </button>
-          <button
             data-testid="mini-chat-send-btn"
             onClick={() => handleSend()}
             disabled={isLoading || !input.trim()}
             className="p-2 bg-fin-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            title={outputMode === 'investment_report' ? '发送（研报模式）' : '发送'}
+            title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
           >
             {isLoading ? (
               <Loader2 size={14} className="animate-spin" />
@@ -335,4 +344,6 @@ export const MiniChat: React.FC = () => {
     </div>
   );
 };
+
+
 

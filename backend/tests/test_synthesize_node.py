@@ -1,9 +1,52 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from datetime import datetime, timezone
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def test_synthesize_llm_mode_handles_datetime_in_inputs(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    class _FakeResp:
+        def __init__(self, content: str):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _FakeResp('{"summary":"ok","risks":"- r"}')
+
+    import backend.llm_config as llm_config_mod
+
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda temperature=0.2: _FakeLLM())
+
+    from backend.graph.nodes.synthesize import synthesize
+
+    state = {
+        "query": "NVDA 最新股价和技术面分析",
+        "output_mode": "brief",
+        "operation": {"name": "company_news_brief", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["NVDA"], "selection_payload": []},
+        "artifacts": {
+            "step_results": {
+                "s1": {
+                    "cached": False,
+                    "output": {
+                        "as_of": datetime(2026, 2, 7, 21, 47, 39, tzinfo=timezone.utc),
+                        "price": 132.6,
+                    },
+                }
+            },
+            "evidence_pool": [],
+        },
+        "trace": {},
+    }
+
+    out = _run(synthesize(state))
+    render_vars = (out.get("artifacts") or {}).get("render_vars") or {}
+    assert isinstance(render_vars, dict) and render_vars
 
 
 def test_synthesize_stub_produces_render_vars_without_placeholders(monkeypatch):

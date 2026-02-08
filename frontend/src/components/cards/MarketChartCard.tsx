@@ -477,7 +477,7 @@ export function MarketChartCard({
           <h3 className="text-sm font-semibold text-fin-text">{title}</h3>
           {/* MA 图例 */}
           {chartType === 'candlestick' && hasOHLC && (
-            <div className="flex items-center gap-3 text-[10px]">
+            <div className="flex items-center gap-3 text-2xs">
               <span className="flex items-center gap-1">
                 <span className="w-3 h-0.5 bg-amber-500 rounded" />
                 <span className="text-fin-muted">MA5</span>
@@ -546,7 +546,7 @@ export function MarketChartCard({
       </div>
 
       {/* 底部说明 */}
-      <div className="mt-2 text-[10px] text-fin-muted text-center">
+      <div className="mt-2 text-2xs text-fin-muted text-center">
         使用工具栏进行区间缩放 · 滚轮缩放 · 拖动底部滑块 · 双击还原
       </div>
     </div>

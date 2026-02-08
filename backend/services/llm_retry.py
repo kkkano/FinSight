@@ -16,6 +16,8 @@ import os
 import random
 from typing import Any, Callable, Optional
 
+from backend.llm_config import report_llm_failure, report_llm_success
+
 
 def _env_int(name: str, default: int) -> int:
     try:
@@ -57,6 +59,7 @@ async def ainvoke_with_rate_limit_retry(
     llm: Any,
     messages: list[Any],
     *,
+    llm_factory: Optional[Callable[[], Any]] = None,
     max_attempts: Optional[int] = None,
     sleep_seconds: Optional[float] = None,
     jitter_seconds: Optional[float] = None,
@@ -67,24 +70,30 @@ async def ainvoke_with_rate_limit_retry(
     """
     Retry an async LLM call when we hit rate limits (429 / quota).
 
+    When *llm_factory* is provided, on a rate-limit error the loop creates a
+    **new** LLM instance (bound to a different endpoint via EndpointManager
+    round-robin) instead of retrying the same failed endpoint.
+
     Defaults (env overridable):
-    - LLM_RATE_LIMIT_RETRY_MAX_ATTEMPTS=200
-    - LLM_RATE_LIMIT_RETRY_SLEEP_SECONDS=310
-    - LLM_RATE_LIMIT_RETRY_JITTER_SECONDS=3
+    - LLM_RATE_LIMIT_RETRY_MAX_ATTEMPTS=6
+    - LLM_RATE_LIMIT_RETRY_SLEEP_SECONDS=5
+    - LLM_RATE_LIMIT_RETRY_JITTER_SECONDS=2
     - LLM_RATE_LIMIT_RETRY_ACQUIRE_TIMEOUT_SECONDS=3600
     """
     if max_attempts is None:
-        max_attempts = _env_int("LLM_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 200)
+        max_attempts = _env_int("LLM_RATE_LIMIT_RETRY_MAX_ATTEMPTS", 6)
     if sleep_seconds is None:
-        sleep_seconds = _env_float("LLM_RATE_LIMIT_RETRY_SLEEP_SECONDS", 310.0)
+        sleep_seconds = _env_float("LLM_RATE_LIMIT_RETRY_SLEEP_SECONDS", 5.0)
     if jitter_seconds is None:
-        jitter_seconds = _env_float("LLM_RATE_LIMIT_RETRY_JITTER_SECONDS", 3.0)
+        jitter_seconds = _env_float("LLM_RATE_LIMIT_RETRY_JITTER_SECONDS", 2.0)
     if acquire_timeout_seconds is None:
         acquire_timeout_seconds = _env_float("LLM_RATE_LIMIT_RETRY_ACQUIRE_TIMEOUT_SECONDS", 3600.0)
 
     enabled = _env_bool("LLM_RATE_LIMIT_RETRY_ENABLED", True)
     if not enabled or max_attempts <= 1:
-        return await llm.ainvoke(messages)
+        result = await llm.ainvoke(messages)
+        report_llm_success(llm)
+        return result
 
     acquire_fn = None
     if acquire_token:
@@ -95,6 +104,7 @@ async def ainvoke_with_rate_limit_retry(
         except Exception:
             acquire_fn = None
 
+    current_llm = llm
     last_exc: BaseException | None = None
     for attempt in range(1, max_attempts + 1):
         if acquire_fn is not None:
@@ -114,11 +124,20 @@ async def ainvoke_with_rate_limit_retry(
                 continue
 
         try:
-            return await llm.ainvoke(messages)
+            result = await current_llm.ainvoke(messages)
+            report_llm_success(current_llm)
+            return result
         except Exception as exc:
             last_exc = exc
+            report_llm_failure(current_llm, exc)
             if not is_rate_limit_error(exc) or attempt >= max_attempts:
                 raise
+            # Rotate to next endpoint when factory is available
+            if llm_factory is not None:
+                try:
+                    current_llm = llm_factory()
+                except Exception:
+                    pass  # factory failed; keep current_llm for next attempt
             wait = float(sleep_seconds) + random.uniform(0, float(jitter_seconds))
             if on_retry:
                 on_retry(attempt, exc)

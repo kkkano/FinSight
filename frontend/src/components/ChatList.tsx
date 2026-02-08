@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
 import { ThinkingProcess } from './ThinkingProcess';
-import { ReportView } from './ReportView';
+import { ReportView } from './report';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
@@ -28,8 +28,8 @@ const shouldGenerateChart = async (
         chartType: response.chart_type || 'line',
       };
     }
-  } catch (error) {
-    console.error('Chart detection failed:', error);
+  } catch {
+    console.error('Chart detection failed');
   }
 
   const lowerQuery = query.toLowerCase();
@@ -185,7 +185,7 @@ export const ChatList: React.FC = () => {
       if (response.current_focus || tickerToChart) {
         setTicker(response.current_focus || tickerToChart);
       }
-    } catch (error) {
+    } catch {
       updateMessage(messageId, {
         content: originalMsg.content,
         isLoading: false,
@@ -283,7 +283,7 @@ export const ChatList: React.FC = () => {
                       </span>
                       {msg.as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {msg.as_of}</span>}
                       {msg.tried_sources && msg.tried_sources.length > 0 && (
-                        <span className="text-[10px] text-fin-muted/70">
+                        <span className="text-2xs text-fin-muted/70">
                           尝试: {msg.tried_sources.join(' → ')}
                         </span>
                       )}
@@ -328,7 +328,7 @@ export const ChatList: React.FC = () => {
                   style={{ width: `${Math.max(0, Math.min(100, executionProgress ?? 0))}%` }}
                 />
               </div>
-              <div className="mt-1 flex items-center justify-between text-[10px] text-fin-muted">
+              <div className="mt-1 flex items-center justify-between text-2xs text-fin-muted">
                 <span className="truncate">{currentStep || 'Preparing execution...'}</span>
                 <span>{Math.round(executionProgress ?? 0)}%</span>
               </div>
@@ -441,7 +441,7 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
       {urlMeta.domain ? <Link2 size={14} /> : <ExternalLink size={14} />}
       <span className="truncate max-w-[160px]">{displayText}</span>
       {urlMeta.domain && (
-        <span className="text-[10px] text-fin-muted/70">({urlMeta.domain})</span>
+        <span className="text-2xs text-fin-muted/70">({urlMeta.domain})</span>
       )}
     </a>
   );
@@ -568,3 +568,5 @@ const LoadingDots: React.FC = () => (
     <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '300ms' }} />
   </div>
 );
+
+

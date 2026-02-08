@@ -6,6 +6,65 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def test_planner_ab_variant_is_deterministic_and_present_in_runtime(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_ENABLED", "true")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_SPLIT", "50")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_SALT", "unit-test-salt")
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "thread_id": "tenant:user:thread-fixed",
+        "query": "analyze impact",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "unknown", "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 4}, "allowed_tools": ["search"]},
+        "trace": {},
+    }
+
+    out1 = _run(planner(state))
+    out2 = _run(planner(state))
+
+    runtime1 = (out1.get("trace") or {}).get("planner_runtime") or {}
+    runtime2 = (out2.get("trace") or {}).get("planner_runtime") or {}
+
+    assert runtime1.get("variant") in {"A", "B"}
+    assert runtime1.get("variant") == runtime2.get("variant")
+
+
+def test_planner_runtime_contains_variant_when_llm_init_fails(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_ENABLED", "true")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_SPLIT", "50")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_AB_SALT", "unit-test-salt-2")
+
+    import backend.llm_config as llm_config
+
+    def _boom(*_args, **_kwargs):
+        raise ValueError("no api key")
+
+    monkeypatch.setattr(llm_config, "create_llm", _boom)
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "thread_id": "tenant:user:thread-fallback",
+        "query": "analyze impact",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "unknown", "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 4}, "allowed_tools": ["search"]},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("fallback") is True
+    assert runtime.get("variant") in {"A", "B"}
+
+
 def test_planner_llm_mode_falls_back_when_llm_unavailable(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 

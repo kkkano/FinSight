@@ -7,6 +7,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontSize: {
+        '2xs': ['11px', { lineHeight: '16px' }],
+      },
       colors: {
         fin: {
           bg: 'var(--fin-bg)',

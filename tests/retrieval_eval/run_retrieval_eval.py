@@ -563,6 +563,46 @@ def save_reports(
     return json_path, md_path
 
 
+def write_gate_summary(
+    *,
+    output_dir: Path,
+    payload: dict[str, Any],
+    gate: GateResult,
+    drift_gate: DriftGateResult,
+    json_report_path: Path,
+    markdown_report_path: Path,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = output_dir / "gate_summary.json"
+    summary = {
+        "run_id": payload.get("run_id"),
+        "generated_at": payload.get("generated_at"),
+        "backend": payload.get("backend"),
+        "backend_requested": payload.get("backend_requested"),
+        "case_count": payload.get("case_count"),
+        "overall_metrics": payload.get("overall_metrics"),
+        "gate": {
+            "passed": gate.passed,
+            "failed_metrics": gate.failed_metrics,
+            "thresholds": gate.thresholds,
+        },
+        "drift_gate": {
+            "passed": drift_gate.passed,
+            "failed_metrics": drift_gate.failed_metrics,
+            "thresholds": drift_gate.thresholds,
+            "delta": drift_gate.delta,
+            "baseline_available": drift_gate.baseline_available,
+        },
+        "reports": {
+            "json": str(json_report_path),
+            "markdown": str(markdown_report_path),
+        },
+    }
+    with summary_path.open("w", encoding="utf-8") as handle:
+        json.dump(summary, handle, ensure_ascii=False, indent=2)
+    return summary_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run retrieval quality baseline evaluation")
     parser.add_argument("--dataset", default=str(DEFAULT_DATASET), help="Path to evaluation dataset json")
@@ -613,6 +653,14 @@ def main() -> int:
         drift_gate=drift_gate,
         baseline_overall=baseline_overall,
     )
+    gate_summary_path = write_gate_summary(
+        output_dir=output_dir,
+        payload=payload,
+        gate=gate,
+        drift_gate=drift_gate,
+        json_report_path=json_path,
+        markdown_report_path=md_path,
+    )
 
     print("=" * 72)
     print("Retrieval Eval Baseline")
@@ -635,6 +683,7 @@ def main() -> int:
         print("Drift Gate: SKIPPED (baseline unavailable)")
     print(f"JSON report: {json_path}")
     print(f"Markdown report: {md_path}")
+    print(f"Gate summary: {gate_summary_path}")
     print("=" * 72)
 
     if args.gate and not gate.passed:

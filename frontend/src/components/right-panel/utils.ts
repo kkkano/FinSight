@@ -1,4 +1,4 @@
-export const parsePricePayload = (payload: any): { price?: number; change?: number; changePct?: number } => {
+﻿export const parsePricePayload = (payload: any): { price?: number; change?: number; changePct?: number } => {
   if (!payload) return {};
   if (typeof payload === 'object' && payload.price) {
     return {
@@ -26,4 +26,6 @@ export const formatPct = (value?: number | null) => {
   const sign = value >= 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;
 };
+
+
 

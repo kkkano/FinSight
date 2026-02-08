@@ -3,19 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import time
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
+from backend.graph.json_utils import json_dumps_safe
 
 
 AsyncInvoker = Callable[[dict[str, Any]], Awaitable[Any]]
 
 
 def _stable_json(obj: Any) -> str:
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json_dumps_safe(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def step_cache_key(kind: str, name: str, inputs: dict[str, Any]) -> str:
@@ -180,6 +180,7 @@ async def execute_plan(
         name = step.get("name") or ""
         inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
         optional = bool(step.get("optional"))
+        parallel_group = step.get("parallel_group") if isinstance(step.get("parallel_group"), str) else None
 
         start = time.perf_counter()
         exec_events.append({"event": "executor.step_started", "step_id": step_id, "kind": kind, "name": name})
@@ -195,16 +196,23 @@ async def execute_plan(
 
         key = step_cache_key(str(kind), str(name), inputs)
         if key in cache:
-            artifacts["step_results"][step_id] = {"cached": True, "output": cache[key]}
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            artifacts["step_results"][step_id] = {
+                "cached": True,
+                "output": cache[key],
+                "duration_ms": duration_ms,
+                "status_reason": "cache_hit",
+                "parallel_group": parallel_group,
+            }
             exec_events.append(
-                {"event": "executor.step_finished", "step_id": step_id, "cached": True, "duration_ms": int((time.perf_counter() - start) * 1000)}
+                {"event": "executor.step_finished", "step_id": step_id, "cached": True, "duration_ms": duration_ms}
             )
             await emit_event(
                 {
                     "type": "thinking",
                     "stage": "executor_step_done",
                     "message": f"{step_id} cached",
-                    "result": {"cached": True},
+                    "result": {"cached": True, "duration_ms": duration_ms},
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
@@ -219,6 +227,7 @@ async def execute_plan(
             signals = artifacts.get("signals") if isinstance(artifacts.get("signals"), dict) else {}
             current_conf = _as_float((signals or {}).get("max_confidence")) or 0.0
             if (not force_run) and current_conf >= min_conf:
+                duration_ms = int((time.perf_counter() - start) * 1000)
                 output = {
                     "skipped": True,
                     "reason": "escalation_not_needed",
@@ -226,13 +235,19 @@ async def execute_plan(
                     "min_confidence": min_conf,
                 }
                 cache[key] = output
-                artifacts["step_results"][step_id] = {"cached": False, "output": output}
+                artifacts["step_results"][step_id] = {
+                    "cached": False,
+                    "output": output,
+                    "duration_ms": duration_ms,
+                    "status_reason": "escalation_not_needed",
+                    "parallel_group": parallel_group,
+                }
                 exec_events.append(
                     {
                         "event": "executor.step_finished",
                         "step_id": step_id,
                         "cached": False,
-                        "duration_ms": int((time.perf_counter() - start) * 1000),
+                        "duration_ms": duration_ms,
                         "skipped": True,
                     }
                 )
@@ -245,7 +260,7 @@ async def execute_plan(
                             "cached": False,
                             "skipped": True,
                             "reason": "escalation_not_needed",
-                            "duration_ms": int((time.perf_counter() - start) * 1000),
+                            "duration_ms": duration_ms,
                         },
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     }
@@ -294,10 +309,20 @@ async def execute_plan(
                     raise ValueError(f"unsupported step kind/name in Phase 3 executor: {kind}:{name}")
 
             cache[key] = output
-            artifacts["step_results"][step_id] = {"cached": False, "output": output}
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            status_reason = "done"
+            if isinstance(output, dict) and output.get("skipped") is True:
+                status_reason = str(output.get("reason") or "skipped")
+            artifacts["step_results"][step_id] = {
+                "cached": False,
+                "output": output,
+                "duration_ms": duration_ms,
+                "status_reason": status_reason,
+                "parallel_group": parallel_group,
+            }
             _update_signals_from_output(output)
             exec_events.append(
-                {"event": "executor.step_finished", "step_id": step_id, "cached": False, "duration_ms": int((time.perf_counter() - start) * 1000)}
+                {"event": "executor.step_finished", "step_id": step_id, "cached": False, "duration_ms": duration_ms}
             )
             await emit_event(
                 {
@@ -307,7 +332,8 @@ async def execute_plan(
                     "result": {
                         "cached": False,
                         "skipped": isinstance(output, dict) and output.get("skipped") is True,
-                        "duration_ms": int((time.perf_counter() - start) * 1000),
+                        "duration_ms": duration_ms,
+                        "status_reason": status_reason,
                     },
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }

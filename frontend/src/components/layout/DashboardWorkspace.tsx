@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { AgentLogPanel } from '../AgentLogPanel';
+import { AgentLogPanel } from '../agent-log';
 import { Dashboard } from '../../pages/Dashboard';
 import { ContextPanelShell } from './ContextPanelShell';
 
@@ -8,6 +8,7 @@ type DashboardWorkspaceProps = {
   symbol: string | null;
   onBackToChat: () => void;
   onSymbolChange: (symbol: string) => void;
+  onGoWorkbench: (symbol: string) => void;
   contextPanel: {
     panelWidth: number;
     isExpanded: boolean;
@@ -23,6 +24,7 @@ export function DashboardWorkspace({
   symbol,
   onBackToChat,
   onSymbolChange,
+  onGoWorkbench,
   contextPanel,
 }: DashboardWorkspaceProps) {
   return (
@@ -32,6 +34,7 @@ export function DashboardWorkspace({
           initialSymbol={symbol ?? undefined}
           onBackToChat={onBackToChat}
           onSymbolChange={onSymbolChange}
+          onGoWorkbench={onGoWorkbench}
         />
         <div className="shrink-0 px-4 pb-4 max-lg:px-3 max-lg:pb-3">
           <AgentLogPanel />
@@ -51,4 +54,3 @@ export function DashboardWorkspace({
     </div>
   );
 }
-

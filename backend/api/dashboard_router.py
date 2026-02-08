@@ -5,7 +5,9 @@ Dashboard API 路由
 
 v2.0 重构：使用多源数据服务层（data_service.py），支持 10+ 数据源回退策略
 """
+import asyncio
 import logging
+from functools import partial
 from fastapi import APIRouter, Query
 from backend.dashboard.schemas import (
     DashboardState,
@@ -36,6 +38,19 @@ from backend.dashboard.data_service import (
 logger = logging.getLogger(__name__)
 
 dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
+
+_DASHBOARD_FETCH_TIMEOUT_SECONDS = 4.5
+
+
+async def _run_blocking(name: str, fn, *args, timeout: float = _DASHBOARD_FETCH_TIMEOUT_SECONDS, **kwargs):
+    bound = partial(fn, *args, **kwargs)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(bound), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("[Dashboard] %s timed out (%.1fs)", name, timeout)
+    except Exception as exc:
+        logger.warning("[Dashboard] %s failed: %s", name, exc)
+    return None
 
 
 # ── 默认 Watchlist ──────────────────────────────────────────
@@ -139,12 +154,16 @@ async def get_dashboard(
 
     asset_type = active_asset.type
     sym = active_asset.symbol
+    fallback_reasons: list[str] = []
 
     # 4. 聚合数据 - 使用多源数据服务层（支持 10+ 数据源回退）
     # 4.1 Snapshot 数据
     snapshot = dashboard_cache.get(symbol, "snapshot")
     if snapshot is None:
-        snapshot = fetch_snapshot(sym, asset_type)
+        snapshot = await _run_blocking("fetch_snapshot", fetch_snapshot, sym, asset_type)
+        if snapshot is None:
+            snapshot = {}
+            fallback_reasons.append("snapshot_unavailable")
         dashboard_cache.set(symbol, "snapshot", snapshot, ttl=dashboard_cache.TTL_SNAPSHOT)
     else:
         state.debug["cache"]["snapshot"] = True
@@ -152,24 +171,33 @@ async def get_dashboard(
     # 4.2 图表数据（根据资产类型获取不同数据）
     charts = dashboard_cache.get(symbol, "charts")
     if charts is None:
-        charts = {
-            "market_chart": fetch_market_chart(sym, period="1y", interval="1d"),
+        chart_tasks = {
+            "market_chart": _run_blocking("fetch_market_chart", fetch_market_chart, sym, period="1y", interval="1d"),
         }
 
         # Equity 特有数据：营收趋势、分部收入
         if asset_type == "equity":
-            charts["revenue_trend"] = fetch_revenue_trend(sym)
-            charts["segment_mix"] = fetch_segment_mix(sym)
+            chart_tasks["revenue_trend"] = _run_blocking("fetch_revenue_trend", fetch_revenue_trend, sym)
+            chart_tasks["segment_mix"] = _run_blocking("fetch_segment_mix", fetch_segment_mix, sym)
 
         # ETF 特有数据：板块权重、持仓
         elif asset_type == "etf":
-            charts["sector_weights"] = fetch_sector_weights(sym, asset_type)
-            charts["holdings"] = fetch_holdings(sym, asset_type, limit=50)
+            chart_tasks["sector_weights"] = _run_blocking("fetch_sector_weights", fetch_sector_weights, sym, asset_type)
+            chart_tasks["holdings"] = _run_blocking("fetch_holdings", fetch_holdings, sym, asset_type, limit=50)
 
         # Index 特有数据：板块权重、成分股
         elif asset_type == "index":
-            charts["sector_weights"] = fetch_sector_weights(sym, asset_type)
-            charts["top_constituents"] = fetch_top_constituents(sym, asset_type, limit=10)
+            chart_tasks["sector_weights"] = _run_blocking("fetch_sector_weights", fetch_sector_weights, sym, asset_type)
+            chart_tasks["top_constituents"] = _run_blocking("fetch_top_constituents", fetch_top_constituents, sym, asset_type, limit=10)
+
+        results = await asyncio.gather(*chart_tasks.values())
+        charts = {}
+        for key, value in zip(chart_tasks.keys(), results):
+            if value is None:
+                fallback_reasons.append(f"{key}_unavailable")
+                charts[key] = []
+            else:
+                charts[key] = value
 
         dashboard_cache.set(symbol, "charts", charts, ttl=dashboard_cache.TTL_CHARTS)
     else:
@@ -178,7 +206,11 @@ async def get_dashboard(
     # 4.3 新闻数据 - 使用多源回退（yfinance → Finnhub → Alpha Vantage → 搜索）
     news = dashboard_cache.get(symbol, "news")
     if news is None:
-        news = fetch_news(sym, limit=20)
+        fetched_news = await _run_blocking("fetch_news", fetch_news, sym, limit=20)
+        if fetched_news is None:
+            fetched_news = {"market": [], "impact": []}
+            fallback_reasons.append("news_unavailable")
+        news = fetched_news
         dashboard_cache.set(symbol, "news", news, ttl=dashboard_cache.TTL_NEWS)
     else:
         state.debug["cache"]["news"] = True
@@ -194,6 +226,9 @@ async def get_dashboard(
         raw_data.get("charts", {}),
         capabilities,
     )
+
+    if fallback_reasons:
+        state.debug["fallback_reasons"] = fallback_reasons
 
     data = DashboardData(
         snapshot=raw_data.get("snapshot", {}),

@@ -10,9 +10,10 @@ interface DashboardProps {
   initialSymbol?: string;
   onBackToChat?: () => void;
   onSymbolChange?: (symbol: string) => void;
+  onGoWorkbench?: (symbol: string) => void;
 }
 
-export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: DashboardProps) {
+export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
   const { activeAsset, isLoading, error, setActiveAsset } = useDashboardStore();
   const { theme, setTheme } = useStore();
 
@@ -55,20 +56,32 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange }: Dashb
         <header className="h-[52px] bg-fin-card border-b border-fin-border flex items-center justify-between px-5 shrink-0 max-lg:px-3">
           <div className="flex items-center gap-3 min-w-0">
             {onBackToChat && (
-              <button
-                type="button"
-                data-testid="dashboard-back-chat"
-                onClick={onBackToChat}
-                className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary text-xs shrink-0"
-              >
-                返回对话
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  data-testid="dashboard-back-chat"
+                  onClick={onBackToChat}
+                  className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary text-xs"
+                >
+                  返回对话
+                </button>
+                {onGoWorkbench && (
+                  <button
+                    type="button"
+                    data-testid="dashboard-go-workbench"
+                    onClick={() => onGoWorkbench(activeAsset?.symbol || currentSymbol)}
+                    className="px-3 py-1.5 rounded-lg border border-fin-primary/40 bg-fin-primary/10 hover:bg-fin-primary/20 transition-colors text-fin-primary text-xs"
+                  >
+                    去工作台
+                  </button>
+                )}
+              </div>
             )}
 
             {activeAsset && (
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-lg font-bold text-fin-text truncate">{activeAsset.display_name}</span>
-                <span className="text-[10px] text-fin-muted bg-fin-bg-secondary px-2 py-0.5 rounded shrink-0">
+                <span className="text-2xs text-fin-muted bg-fin-bg-secondary px-2 py-0.5 rounded shrink-0">
                   {activeAsset.type.toUpperCase()}
                 </span>
               </div>

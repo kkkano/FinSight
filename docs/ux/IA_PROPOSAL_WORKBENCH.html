@@ -1,0 +1,325 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinSight IA 提案 - Workbench + Assistant</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --panel: #ffffff;
+      --ink: #0f172a;
+      --muted: #5b667a;
+      --brand: #1d4ed8;
+      --brand-2: #0b255e;
+      --ok: #0f9d58;
+      --warn: #b7791f;
+      --line: #d9e2f1;
+      --chip: #e8eefc;
+      --news: #fef3c7;
+      --report: #dcfce7;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(1200px 400px at 70% -5%, #dbeafe 0, transparent 60%), var(--bg);
+    }
+    .wrap {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: linear-gradient(180deg, #08122b 0%, #0b1f4a 100%);
+      color: #e5edff;
+      padding: 20px 14px;
+      border-right: 1px solid #1f3166;
+    }
+    .logo { font-weight: 800; font-size: 22px; letter-spacing: 0.3px; margin-bottom: 18px; }
+    .sub { font-size: 12px; color: #b8c9f5; margin-bottom: 18px; }
+    .nav { display: grid; gap: 6px; }
+    .nav .item {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #cfe0ff;
+    }
+    .nav .item.active {
+      background: linear-gradient(90deg, #1f5fff 0%, #2a7dff 100%);
+      color: #fff;
+      font-weight: 700;
+    }
+    .nav .item.soon {
+      border-color: #2c3c69;
+      color: #9db3e4;
+    }
+
+    .main { padding: 20px 24px 36px; }
+    .title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .title h1 { margin: 0; font-size: 28px; font-family: "Source Han Sans SC", "Noto Sans SC", sans-serif; }
+    .title .tag { font-size: 12px; color: var(--muted); background: var(--chip); padding: 6px 10px; border-radius: 999px; }
+
+    .hero {
+      background: linear-gradient(120deg, #0a1f4b 0%, #163575 50%, #1f5cd8 100%);
+      color: #f5f9ff;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 14px 32px rgba(13, 33, 77, 0.28);
+    }
+    .hero h2 { margin: 0 0 8px; font-size: 24px; }
+    .hero p { margin: 0 0 14px; color: #d6e4ff; }
+    .hero .bar {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px;
+      background: #fff; border-radius: 12px; padding: 10px;
+    }
+    .hero .bar input {
+      border: 0; outline: 0; font-size: 15px;
+      color: #223;
+    }
+    .hero .bar button {
+      border: 0; background: var(--brand); color: #fff; padding: 10px 18px;
+      border-radius: 9px; font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 16px; }
+    .tiny { font-size: 12px; color: var(--muted); }
+
+    .flow {
+      display: grid;
+      gap: 8px;
+    }
+    .step {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #f8fbff;
+      border: 1px solid #d7e3fb;
+      font-size: 13px;
+    }
+    .arrow { text-align: center; color: #6b7ea8; font-size: 18px; }
+
+    .agent-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .agent-table th, .agent-table td {
+      padding: 8px 6px; border-bottom: 1px solid #ebf0fa; text-align: left;
+      vertical-align: top;
+    }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+      font-weight: 700;
+    }
+    .pill.ok { background: #dcfce7; color: #14532d; }
+    .pill.mid { background: #fef9c3; color: #854d0e; }
+
+    .compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;
+    }
+    .compare .box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+    .compare .box.news { border-left: 4px solid #d97706; }
+    .compare .box.report { border-left: 4px solid #16a34a; }
+
+    .roadmap { display: grid; gap: 10px; }
+    .roadmap .milestone {
+      border: 1px dashed #c9d8f5;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fcfdff;
+      font-size: 13px;
+    }
+
+    .footer-note {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #4b5a74;
+      background: #eef4ff;
+      border: 1px solid #cfe0ff;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    @media (max-width: 1080px) {
+      .wrap { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid #1f3166; }
+      .grid { grid-template-columns: 1fr; }
+      .compare { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside class="sidebar">
+      <div class="logo">FinSight IA vNext</div>
+      <div class="sub">在现有 Chat + Dashboard 基础上演进，不推倒重来</div>
+      <div class="nav">
+        <div class="item active">工作台（入口）</div>
+        <div class="item">AI 投研助手（任务流）</div>
+        <div class="item">资产中心（基金/股票/ETF）</div>
+        <div class="item">研报库（沉淀与检索）</div>
+        <div class="item">市场快讯（时间线）</div>
+        <div class="item soon">任务中心（异步 DeepSearch）</div>
+        <div class="item">设置 / 订阅</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="title">
+        <h1>建议的信息架构与交互编排</h1>
+        <span class="tag">基于当前路由与接口: /chat + /dashboard + /api/dashboard + /chat/supervisor/stream</span>
+      </div>
+
+      <section class="hero">
+        <h2>AI 投研入口不应只有聊天框</h2>
+        <p>保留对话作为核心交互，但增加「任务型入口」与「结果沉淀入口」，把一次问答变成可复用资产。</p>
+        <div class="bar">
+          <input value="示例：过去30天半导体主题基金，谁的回撤最小，给证据" readonly />
+          <button>启动任务</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h3>1) 查询执行流（建议展示给用户，而不是黑盒）</h3>
+          <div class="flow">
+            <div class="step">Query 输入（来源：工作台 / 资产页 / 快讯“问这条”）</div>
+            <div class="arrow">↓</div>
+            <div class="step">意图路由 + 资产/上下文补全（ticker, selection, view）</div>
+            <div class="arrow">↓</div>
+            <div class="step">Planner 产出 PlanIR（steps、budget、escalation）</div>
+            <div class="arrow">↓</div>
+            <div class="step">执行器并行调用 agent/tool（price/news/fundamental/macro/technical/deepsearch）</div>
+            <div class="arrow">↓</div>
+            <div class="step">Synthesize 生成 brief/report + citations + evidence_quality + freshness</div>
+            <div class="arrow">↓</div>
+            <div class="step">前端展示：结论 + 为什么选这些 agent + 证据质量 + 新鲜度</div>
+          </div>
+          <div class="footer-note">这块直接映射你现有后端能力（LangGraph runner + stream + ReportView），只需把可见性做出来。</div>
+        </article>
+
+        <article class="card">
+          <h3>2) AI 投研助手是否要单独开？</h3>
+          <table class="agent-table">
+            <thead>
+              <tr><th>方案</th><th>结论</th><th>理由</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>只放在聊天页</td>
+                <td><span class="pill mid">不推荐</span></td>
+                <td>发现成本高，任务状态弱，无法承接异步与沉淀。</td>
+              </tr>
+              <tr>
+                <td>单独“AI投研助手”页面 + 仍复用同一后端</td>
+                <td><span class="pill ok">推荐</span></td>
+                <td>前端分层清晰；后端不分叉；同一会话可回跳 chat。</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="tiny">关键：单独开页面，不单独开后端系统。保持一套 LangGraph 编排和数据契约。</div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h3>3) 新闻展示方式：你当前 vs 工作台快讯</h3>
+          <div class="compare">
+            <div class="box news">
+              <strong>当前 NewsFeed（Market/Impact 切换）</strong>
+              <ul>
+                <li>适合资产上下文内阅读（dashboard 内）</li>
+                <li>支持“问这条”，可直接喂给 mini-chat</li>
+                <li>弱在跨资产扫描和节奏感</li>
+              </ul>
+            </div>
+            <div class="box report">
+              <strong>工作台快讯（全市场时间线）</strong>
+              <ul>
+                <li>适合开盘前后快速扫盘</li>
+                <li>应增加“影响资产标签 + 热度 + 可信度”</li>
+                <li>点击后进入助手并带 selection/context</li>
+              </ul>
+            </div>
+          </div>
+          <div class="footer-note">最佳实践不是二选一：保留 dashboard NewsFeed（微观），新增工作台快讯（宏观）。</div>
+        </article>
+
+        <article class="card">
+          <h3>4) 仪表盘要不要拆？</h3>
+          <div class="roadmap">
+            <div class="milestone"><strong>P1（现在）</strong>：保持现有 /dashboard，新增顶部“工作台”入口与卡片跳转。</div>
+            <div class="milestone"><strong>P2（下一步）</strong>：拆出“资产中心”（基金列表/详情/对比），dashboard 回归“单资产观察”。</div>
+            <div class="milestone"><strong>P3（后续）</strong>：研报库 + 任务中心（异步深搜）联动，形成闭环：任务→研报→复盘。</div>
+          </div>
+          <div class="tiny">你现有组件已具备拆分基础：Sidebar、DashboardWidgets、NewsFeed、MiniChat、ReportView。</div>
+        </article>
+      </section>
+
+      <section class="card">
+        <h3>5) 后续方向（结合你问的基金列表/详情/对比、AI搜索、研报库）</h3>
+        <table class="agent-table">
+          <thead>
+            <tr>
+              <th>模块</th><th>前端</th><th>后端</th><th>优先级</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>基金列表/详情/对比</td>
+              <td>资产中心 3 级：列表→详情→对比篮子</td>
+              <td>新增 fund profile/holdings/perf 对比接口</td>
+              <td>P0</td>
+            </tr>
+            <tr>
+              <td>AI 投研助手</td>
+              <td>任务表单 + 进度 + agent reason/evidence/freshness</td>
+              <td>复用 /chat/supervisor/stream，补 task 元数据</td>
+              <td>P0</td>
+            </tr>
+            <tr>
+              <td>研报库</td>
+              <td>检索、筛选、对比、收藏、回放证据</td>
+              <td>report index + citation index + rerank</td>
+              <td>P1</td>
+            </tr>
+            <tr>
+              <td>市场快讯</td>
+              <td>时间线 + 影响资产标签 + 一键转助手</td>
+              <td>聚合 news + 相关资产打标 + 去重</td>
+              <td>P1</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <div class="footer-note">
+        结论：你给的参考图方向是对的，但建议做“分层增强”而不是一次性重设计。
+        先补可见性与任务流，再拆资产中心与研报库，既能快上线也不破坏现有系统稳定性。
+      </div>
+    </main>
+  </div>
+</body>
+</html>

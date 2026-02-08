@@ -1,17 +1,13 @@
-"""
-Dashboard 数据服务层
+"""Dashboard data service helpers.
 
-统一调用 tools 层的多源数据获取函数，提供 Dashboard 专用的数据接口。
-将原本 dashboard_router.py 中的单一数据源（yfinance）替换为多源回退策略。
-
-数据流:
-    Dashboard Router → Data Service → Tools Layer (10+ 数据源)
-                                         ↓
-                                    Dashboard Cache
+This module consolidates market/snapshot/news data retrieval and lightweight
+normalization for Dashboard API responses.
 """
+
+from __future__ import annotations
+
 import logging
 import math
-import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -22,705 +18,659 @@ from backend.dashboard.cache import dashboard_cache
 logger = logging.getLogger(__name__)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 工具函数
-# ══════════════════════════════════════════════════════════════════════════════
+_SOURCE_RELIABILITY_WEIGHTS = {
+    "reuters": 0.95,
+    "bloomberg": 0.95,
+    "wall street journal": 0.9,
+    "wsj": 0.9,
+    "financial times": 0.9,
+    "fitch": 0.88,
+    "moody": 0.88,
+    "s&p global": 0.88,
+    "sec": 0.86,
+    "cnbc": 0.82,
+    "marketwatch": 0.8,
+    "yahoo": 0.72,
+    "finnhub": 0.72,
+    "alpha vantage": 0.68,
+}
+
+_HIGH_IMPACT_KEYWORDS = {
+    "earnings",
+    "guidance",
+    "merger",
+    "acquisition",
+    "lawsuit",
+    "investigation",
+    "downgrade",
+    "upgrade",
+    "layoff",
+    "default",
+    "bankruptcy",
+    "rate hike",
+    "rate cut",
+    "cpi",
+    "inflation",
+    "tariff",
+}
+
+_MEDIUM_IMPACT_KEYWORDS = {
+    "forecast",
+    "estimate",
+    "partnership",
+    "supply",
+    "demand",
+    "regulation",
+    "approval",
+    "launch",
+    "product",
+    "guidance update",
+}
+
+_ASSET_ALIAS_WEIGHTS = {
+    "GOOGL": {"google", "alphabet"},
+    "GOOG": {"google", "alphabet"},
+    "META": {"meta", "facebook"},
+    "MSFT": {"microsoft"},
+    "AAPL": {"apple"},
+    "TSLA": {"tesla"},
+    "NVDA": {"nvidia"},
+    "AMZN": {"amazon"},
+}
+
+_NEWS_RANKING_WEIGHTS: dict[str, dict[str, float]] = {
+    "market": {
+        "time_decay": 0.45,
+        "source_reliability": 0.25,
+        "impact_score": 0.2,
+        "asset_relevance": 0.1,
+    },
+    "impact": {
+        "time_decay": 0.35,
+        "source_reliability": 0.2,
+        "impact_score": 0.25,
+        "asset_relevance": 0.2,
+    },
+}
+
+_NEWS_RANKING_HALF_LIFE_HOURS = {
+    "market": 24.0,
+    "impact": 36.0,
+}
 
 
 def _safe_float(value: Any) -> Optional[float]:
-    """安全转换为浮点数，处理 NaN 和 Inf"""
     if value is None:
         return None
     try:
-        f = float(value)
-        if math.isnan(f) or math.isinf(f):
+        output = float(value)
+        if math.isnan(output) or math.isinf(output):
             return None
-        return f
-    except (ValueError, TypeError):
+        return output
+    except (TypeError, ValueError):
         return None
 
 
 def _ts_seconds(ts: Any) -> Optional[int]:
-    """将各种时间格式转换为 Unix 秒级时间戳"""
+    if ts is None:
+        return None
     try:
-        if ts is None:
-            return None
         if isinstance(ts, (int, float)):
             return int(ts)
         if isinstance(ts, pd.Timestamp):
             return int(ts.to_pydatetime().timestamp())
         if isinstance(ts, datetime):
-            dt = ts
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+            dt = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
             return int(dt.timestamp())
-        # 字符串格式 "2024-01-15" 或 "2024-01-15 16:00"
         if isinstance(ts, str):
-            for fmt in ["%Y-%m-%d", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"]:
-                try:
-                    dt = datetime.strptime(ts, fmt)
-                    dt = dt.replace(tzinfo=timezone.utc)
-                    return int(dt.timestamp())
-                except ValueError:
-                    continue
+            raw = ts.strip()
+            if not raw:
+                return None
+            iso = raw.replace("Z", "+00:00")
+            try:
+                return int(datetime.fromisoformat(iso).timestamp())
+            except ValueError:
+                for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        return int(datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc).timestamp())
+                    except ValueError:
+                        continue
     except Exception:
         return None
     return None
 
 
 def _parse_time_to_unix(time_value: Any) -> Optional[int]:
-    """解析各种时间格式为 Unix 时间戳"""
     return _ts_seconds(time_value)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 市场数据获取
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") -> list[dict]:
-    """
-    获取 K 线图数据 - 使用多源回退策略
-
-    使用 tools/price.py 的 get_stock_historical_data()，支持 10+ 数据源：
-    yfinance → Alpha Vantage → Finnhub → IEX Cloud → Tiingo → Twelve Data → ...
-
-    Args:
-        symbol: 资产代码 (e.g., "AAPL", "^GSPC", "SPY", "BTC-USD")
-        period: 时间周期 ("1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y")
-        interval: 数据间隔 ("1d", "1wk", "1mo")
-
-    Returns:
-        list[dict]: OHLCV 数据列表
-            [{"time": 1705276800, "open": 180.5, "high": 185.2, "low": 179.8,
-              "close": 183.4, "volume": 1250000}, ...]
-    """
+def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") -> list[dict[str, Any]]:
     try:
-        # 动态导入避免循环依赖
         from backend.tools.price import get_stock_historical_data
 
         result = get_stock_historical_data(symbol, period=period, interval=interval)
-
-        if result.get("error"):
-            logger.info(f"[DataService] market_chart error for {symbol}: {result['error']}")
+        if not isinstance(result, dict) or result.get("error"):
             return []
 
-        kline_data = result.get("kline_data", [])
-        if not kline_data:
-            logger.info(f"[DataService] market_chart empty for {symbol}")
-            return []
-
-        # 转换为 Dashboard 格式 (time: unix seconds)
-        out = []
-        for item in kline_data:
-            ts = _parse_time_to_unix(item.get("time"))
+        rows = result.get("kline_data") or []
+        output: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            ts = _parse_time_to_unix(row.get("time"))
             if ts is None:
                 continue
-
-            out.append({
-                "time": ts,
-                "open": _safe_float(item.get("open")),
-                "high": _safe_float(item.get("high")),
-                "low": _safe_float(item.get("low")),
-                "close": _safe_float(item.get("close")),
-                "volume": _safe_float(item.get("volume")) or 0,
-            })
-
-        logger.info(f"[DataService] market_chart OK for {symbol}: {len(out)} bars, source={result.get('source', 'unknown')}")
-        return out
-
-    except Exception as e:
-        logger.info(f"[DataService] market_chart exception for {symbol}: {e}")
+            output.append(
+                {
+                    "time": ts,
+                    "open": _safe_float(row.get("open")),
+                    "high": _safe_float(row.get("high")),
+                    "low": _safe_float(row.get("low")),
+                    "close": _safe_float(row.get("close")),
+                    "volume": _safe_float(row.get("volume")) or 0,
+                }
+            )
+        return output
+    except Exception as exc:
+        logger.info("[DataService] fetch_market_chart failed for %s: %s", symbol, exc)
         return []
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 快照数据获取
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def fetch_snapshot(symbol: str, asset_type: str) -> dict:
-    """
-    获取快照数据 (KPI)
-
-    根据资产类型返回不同字段:
-    - equity: revenue, eps, gross_margin, fcf
-    - index: index_level
-    - etf: nav
-    - crypto: index_level
-
-    使用 yfinance 作为主要来源（info 数据目前没有更好的多源替代）
-
-    Args:
-        symbol: 资产代码
-        asset_type: 资产类型 ("equity", "index", "etf", "crypto")
-
-    Returns:
-        dict: 快照数据
-    """
-    import yfinance as yf
-
-    snapshot: dict = {}
+def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any]:
     try:
-        t = yf.Ticker(symbol)
+        import yfinance as yf
 
-        # 获取最近收盘价作为基础点位
+        ticker = yf.Ticker(symbol)
+        info: dict[str, Any] = {}
+        try:
+            info = getattr(ticker, "info", {}) or {}
+        except Exception:
+            info = {}
+
         last_close = None
         try:
-            hist = t.history(period="5d", interval="1d")
-            if hist is not None and not hist.empty and len(hist) >= 1:
+            hist = ticker.history(period="5d", interval="1d")
+            if hist is not None and not hist.empty:
                 last_close = _safe_float(hist["Close"].iloc[-1])
         except Exception:
             last_close = None
 
+        output: dict[str, Any] = {}
         if asset_type == "equity":
-            info = {}
-            try:
-                info = getattr(t, "info", {}) or {}
-            except Exception:
-                info = {}
-
-            snapshot.update({
-                "revenue": _safe_float(info.get("totalRevenue")),
-                "eps": _safe_float(info.get("trailingEps") or info.get("forwardEps")),
-                "gross_margin": _safe_float(info.get("grossMargins")),
-                "fcf": _safe_float(info.get("freeCashflow")),
-            })
-
-        elif asset_type == "index":
+            output.update(
+                {
+                    "revenue": _safe_float(info.get("totalRevenue")),
+                    "eps": _safe_float(info.get("trailingEps") or info.get("forwardEps")),
+                    "gross_margin": _safe_float(info.get("grossMargins")),
+                    "fcf": _safe_float(info.get("freeCashflow")),
+                }
+            )
+        elif asset_type in {"index", "crypto"}:
             if last_close is not None:
-                snapshot["index_level"] = last_close
-
+                output["index_level"] = last_close
         elif asset_type == "etf":
-            nav = None
-            try:
-                info = getattr(t, "info", {}) or {}
-                nav = _safe_float(info.get("navPrice"))
-            except Exception:
-                nav = None
-            snapshot["nav"] = nav if nav is not None else last_close
+            nav = _safe_float(info.get("navPrice"))
+            output["nav"] = nav if nav is not None else last_close
 
-        elif asset_type == "crypto":
-            if last_close is not None:
-                snapshot["index_level"] = last_close
-
-    except Exception as e:
-        logger.info(f"[DataService] snapshot failed for {symbol}: {e}")
-
-    return snapshot
+        return output
+    except Exception as exc:
+        logger.info("[DataService] fetch_snapshot failed for %s: %s", symbol, exc)
+        return {}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 营收趋势获取
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def fetch_revenue_trend(symbol: str) -> list[dict]:
-    """
-    获取季度营收趋势数据
-
-    使用 yfinance 的 quarterly_income_stmt 或 quarterly_financials
-
-    Args:
-        symbol: 股票代码
-
-    Returns:
-        list[dict]: 季度营收数据
-            [{"period": "2024 Q1", "value": 123456789, "name": "2024 Q1"}, ...]
-    """
-    import yfinance as yf
-
+def fetch_revenue_trend(symbol: str) -> list[dict[str, Any]]:
     try:
-        t = yf.Ticker(symbol)
+        import yfinance as yf
 
-        # 优先尝试 quarterly_income_stmt（更新的 API）
-        financials = None
-        try:
-            financials = getattr(t, "quarterly_income_stmt", None)
-            if financials is None or (hasattr(financials, "empty") and financials.empty):
-                financials = getattr(t, "quarterly_financials", None)
-        except Exception:
-            financials = getattr(t, "quarterly_financials", None)
-
+        ticker = yf.Ticker(symbol)
+        financials = getattr(ticker, "quarterly_income_stmt", None)
         if financials is None or (hasattr(financials, "empty") and financials.empty):
-            logger.info(f"[DataService] No quarterly financials for {symbol}")
+            financials = getattr(ticker, "quarterly_financials", None)
+        if financials is None or (hasattr(financials, "empty") and financials.empty):
             return []
 
-        # 查找营收行（可能的名称）
-        revenue_keys = ["Total Revenue", "Revenue", "Net Sales", "Operating Revenue"]
         revenue_row = None
-        for key in revenue_keys:
+        for key in ("Total Revenue", "Revenue", "Net Sales", "Operating Revenue"):
             if key in financials.index:
                 revenue_row = financials.loc[key]
                 break
-
         if revenue_row is None:
-            logger.info(f"[DataService] No revenue row found for {symbol}")
             return []
 
-        # 转换为列表格式，按时间排序
-        out: list[dict] = []
+        output: list[dict[str, Any]] = []
         for col in revenue_row.index:
             value = _safe_float(revenue_row[col])
             if value is None:
                 continue
-
-            # 格式化季度标签
             if isinstance(col, pd.Timestamp):
                 period = f"{col.year} Q{(col.month - 1) // 3 + 1}"
             else:
                 period = str(col)[:10]
+            output.append({"period": period, "value": value, "name": period})
 
-            out.append({
-                "period": period,
-                "value": value,
-                "name": period,
-            })
-
-        # 按时间正序排列（最早的在前）
-        out.reverse()
-        # 只保留最近 8 个季度
-        result = out[-8:]
-        logger.info(f"[DataService] revenue_trend OK for {symbol}: {len(result)} quarters")
-        return result
-
-    except Exception as e:
-        logger.info(f"[DataService] revenue_trend failed for {symbol}: {e}")
+        output.reverse()
+        return output[-8:]
+    except Exception as exc:
+        logger.info("[DataService] fetch_revenue_trend failed for %s: %s", symbol, exc)
         return []
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 分部数据获取
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def fetch_segment_mix(symbol: str) -> list[dict]:
-    """
-    获取业务分部收入占比
-
-    Phase 2 将使用 FMP API 实现
-    目前返回空数组（yfinance 不提供分部数据）
-
-    Args:
-        symbol: 股票代码
-
-    Returns:
-        list[dict]: 分部数据
-            [{"name": "iPhone", "value": 200000000000, "weight": 0.52}, ...]
-    """
+def fetch_segment_mix(symbol: str) -> list[dict[str, Any]]:
     try:
-        # Phase 2: 使用 FMP API
         from backend.tools.fmp import get_revenue_product_segmentation
-        segments = get_revenue_product_segmentation(symbol)
 
-        if segments:
-            return [
-                {
-                    "name": seg.get("segment", "Unknown"),
-                    "value": seg.get("revenue", 0),
-                    "weight": seg.get("percentage", 0) / 100,
-                }
-                for seg in segments
-            ]
-    except ImportError:
-        # FMP 模块尚未创建
-        pass
-    except Exception as e:
-        logger.info(f"[DataService] segment_mix failed for {symbol}: {e}")
-
-    # 暂时返回空
-    logger.info(f"[DataService] segment_mix: no data available for {symbol}")
-    return []
+        rows = get_revenue_product_segmentation(symbol)
+        if not rows:
+            return []
+        return [
+            {
+                "name": row.get("segment", "Unknown"),
+                "value": row.get("revenue", 0),
+                "weight": row.get("percentage", 0) / 100,
+            }
+            for row in rows
+        ]
+    except Exception:
+        return []
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# 新闻数据获取
-# ══════════════════════════════════════════════════════════════════════════════
+def _resolve_source_reliability(source: str) -> float:
+    text = (source or "").strip().lower()
+    if not text:
+        return 0.6
+    for key, score in _SOURCE_RELIABILITY_WEIGHTS.items():
+        if key in text:
+            return score
+    return 0.65
 
 
-def fetch_news(symbol: str, limit: int = 20) -> dict[str, list[dict]]:
-    """
-    获取新闻数据 - 使用多源回退策略
+def _estimate_impact_score(title: str, summary: str) -> float:
+    content = f"{title or ''} {summary or ''}".lower()
+    high_hits = sum(1 for token in _HIGH_IMPACT_KEYWORDS if token in content)
+    medium_hits = sum(1 for token in _MEDIUM_IMPACT_KEYWORDS if token in content)
+    score = 0.45 + min(0.35, high_hits * 0.15) + min(0.2, medium_hits * 0.06)
+    return max(0.0, min(1.0, score))
 
-    使用 tools/news.py 的多源获取：
-    yfinance → Finnhub → Alpha Vantage → 搜索
 
-    Args:
-        symbol: 资产代码
-        limit: 每类新闻的数量限制
-
-    Returns:
-        dict: {"market": [...], "impact": [...]}
-            - market: 市场新闻
-            - impact: 资产相关新闻
-    """
+def _calculate_time_decay(ts_iso: str, *, half_life_hours: float = 36.0) -> float:
+    if not ts_iso:
+        return 0.5
     try:
-        from backend.tools.news import get_company_news, get_market_news_headlines
+        dt = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age_hours = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 3600)
+        safe_half_life = max(1.0, float(half_life_hours))
+        return math.exp(-age_hours / safe_half_life)
+    except Exception:
+        return 0.5
 
-        # 获取资产相关新闻 (impact)
-        impact_items = []
-        try:
-            raw_impact = get_company_news(symbol, limit=limit)
-            if isinstance(raw_impact, list):
-                impact_items = raw_impact
-            elif isinstance(raw_impact, str):
-                # 某些情况下可能返回格式化字符串，需要解析
-                impact_items = _parse_news_text(raw_impact)
-        except Exception as e:
-            logger.info(f"[DataService] get_company_news failed for {symbol}: {e}")
 
-        # 获取市场新闻
-        market_items = []
-        try:
-            # 使用 SPY 作为市场新闻代理
-            raw_market = get_market_news_headlines(limit=limit)
-            if isinstance(raw_market, list):
-                market_items = raw_market
-            elif isinstance(raw_market, str):
-                market_items = _parse_news_text(raw_market)
-        except Exception as e:
-            logger.info(f"[DataService] get_market_news_headlines failed: {e}")
+def _build_asset_tokens(symbol: str) -> set[str]:
+    normalized_symbol = (symbol or "").strip().upper()
+    if not normalized_symbol:
+        return set()
 
-        # 转换为 Dashboard NewsItem 格式
-        result = {
-            "market": [_to_news_item(item) for item in market_items[:limit]],
-            "impact": [_to_news_item(item) for item in impact_items[:limit]],
+    tokens: set[str] = {
+        normalized_symbol.lower(),
+        normalized_symbol.replace(".", "").lower(),
+        normalized_symbol.replace("-", "").lower(),
+    }
+    tokens.update(_ASSET_ALIAS_WEIGHTS.get(normalized_symbol, set()))
+    return {token.strip().lower() for token in tokens if token and token.strip()}
+
+
+def _estimate_asset_relevance(symbol: str, mode: str, title: str, summary: str) -> float:
+    content = f"{title or ''} {summary or ''}".lower()
+    if not content:
+        return 0.35 if mode == "impact" else 0.4
+
+    tokens = _build_asset_tokens(symbol)
+    mention_hits = sum(1 for token in tokens if token in content)
+
+    high_hits = sum(1 for token in _HIGH_IMPACT_KEYWORDS if token in content)
+    medium_hits = sum(1 for token in _MEDIUM_IMPACT_KEYWORDS if token in content)
+
+    base = 0.35 if mode == "impact" else 0.4
+    mention_boost = min(0.4, mention_hits * (0.2 if mode == "impact" else 0.12))
+    keyword_boost = min(0.25, high_hits * 0.05 + medium_hits * 0.02)
+    score = base + mention_boost + keyword_boost
+    return max(0.0, min(1.0, score))
+
+
+def _calculate_source_penalty(source: str, source_counts: dict[str, int]) -> float:
+    normalized_source = (source or "").strip().lower()
+    if not normalized_source:
+        return 0.0
+    duplicate_count = max(0, source_counts.get(normalized_source, 0) - 1)
+    if duplicate_count == 0:
+        return 0.0
+    return min(0.08, duplicate_count * 0.02)
+
+
+def _build_ranking_reason(weighted_components: dict[str, float], source_penalty: float) -> str:
+    ordered = sorted(weighted_components.items(), key=lambda kv: kv[1], reverse=True)
+    dominant = [f"{key}={value:.2f}" for key, value in ordered[:2] if value > 0]
+    if source_penalty > 0:
+        dominant.append(f"source_penalty=-{source_penalty:.2f}")
+    if not dominant:
+        return "fallback_scoring"
+    return ", ".join(dominant)
+
+
+def _score_news_item(
+    item: dict[str, Any],
+    *,
+    symbol: str,
+    mode: str,
+    source_counts: dict[str, int],
+) -> dict[str, Any]:
+    title = str(item.get("title") or "")
+    summary = str(item.get("summary") or "")
+    source = str(item.get("source") or "")
+    ts = str(item.get("ts") or "")
+
+    weights = _NEWS_RANKING_WEIGHTS.get(mode, _NEWS_RANKING_WEIGHTS["market"])
+    half_life_hours = _NEWS_RANKING_HALF_LIFE_HOURS.get(mode, 36.0)
+
+    time_decay = _calculate_time_decay(ts, half_life_hours=half_life_hours)
+    source_reliability = _resolve_source_reliability(source)
+    impact_score = _estimate_impact_score(title, summary)
+    asset_relevance = _estimate_asset_relevance(symbol, mode, title, summary)
+    source_penalty = _calculate_source_penalty(source, source_counts)
+
+    weighted_components = {
+        "time_decay": time_decay * weights["time_decay"],
+        "source_reliability": source_reliability * weights["source_reliability"],
+        "impact_score": impact_score * weights["impact_score"],
+        "asset_relevance": asset_relevance * weights["asset_relevance"],
+    }
+    ranking_score = max(0.0, min(1.0, sum(weighted_components.values()) - source_penalty))
+
+    result = dict(item)
+    result.update(
+        {
+            "time_decay": round(time_decay, 6),
+            "source_reliability": round(source_reliability, 6),
+            "impact_score": round(impact_score, 6),
+            "asset_relevance": round(asset_relevance, 6),
+            "source_penalty": round(source_penalty, 6),
+            "ranking_score": round(ranking_score, 6),
+            "ranking_reason": _build_ranking_reason(weighted_components, source_penalty),
+            "ranking_factors": {
+                "mode": mode,
+                "half_life_hours": half_life_hours,
+                "weights": {key: round(value, 6) for key, value in weights.items()},
+                "weighted": {key: round(value, 6) for key, value in weighted_components.items()},
+            },
         }
-
-        logger.info(f"[DataService] news OK for {symbol}: market={len(result['market'])}, impact={len(result['impact'])}")
-        return result
-
-    except Exception as e:
-        logger.info(f"[DataService] news exception for {symbol}: {e}")
-        return {"market": [], "impact": []}
+    )
+    return result
 
 
-def _to_news_item(item: Any) -> dict:
-    """将各种新闻格式转换为统一的 NewsItem 格式"""
+def _rank_news_items(items: list[dict[str, Any]], limit: int, *, symbol: str, mode: str) -> list[dict[str, Any]]:
+    source_counts: dict[str, int] = {}
+    for item in items:
+        source_key = str(item.get("source") or "").strip().lower()
+        if source_key:
+            source_counts[source_key] = source_counts.get(source_key, 0) + 1
+
+    scored = [_score_news_item(item, symbol=symbol, mode=mode, source_counts=source_counts) for item in items]
+    scored.sort(
+        key=lambda item: (
+            -float(item.get("ranking_score") or 0.0),
+            -(float(_ts_seconds(item.get("ts")) or 0.0)),
+            -float(item.get("impact_score") or 0.0),
+            -float(item.get("asset_relevance") or 0.0),
+            str(item.get("title") or "").lower(),
+            str(item.get("source") or "").lower(),
+        )
+    )
+    return scored[:limit]
+
+
+def _to_news_item(item: Any) -> dict[str, Any]:
     if isinstance(item, dict):
-        # 标准格式
         title = item.get("title") or item.get("headline") or ""
         url = item.get("url") or item.get("link") or ""
         source = item.get("source") or item.get("publisher") or ""
         ts = item.get("ts") or item.get("published_at") or item.get("datetime") or ""
         summary = item.get("summary") or item.get("snippet") or item.get("content") or ""
 
-        # 处理时间戳
         if isinstance(ts, (int, float)):
             try:
-                dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-                ts = dt.isoformat()
+                ts = datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat()
             except Exception:
                 ts = ""
         elif not isinstance(ts, str):
             ts = str(ts) if ts else ""
 
         return {
-            "title": title.strip() if title else "",
-            "url": url.strip() if url else "",
-            "source": source.strip() if source else "",
+            "title": str(title).strip(),
+            "url": str(url).strip(),
+            "source": str(source).strip(),
             "ts": ts,
-            "summary": summary.strip() if summary else "",
-        }
-    else:
-        return {
-            "title": str(item) if item else "",
-            "url": "",
-            "source": "",
-            "ts": "",
-            "summary": "",
+            "summary": str(summary).strip(),
         }
 
+    text = str(item).strip() if item is not None else ""
+    return {"title": text, "url": "", "source": "", "ts": "", "summary": ""}
 
-def _parse_news_text(text: str) -> list[dict]:
-    """解析文本格式的新闻列表"""
-    items = []
+
+def _parse_news_text(text: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     if not text:
-        return items
-
-    # 尝试按行解析
-    lines = text.strip().split("\n")
-    for line in lines:
-        line = line.strip()
-        if line and len(line) > 10:
-            items.append({
-                "title": line,
-                "url": "",
-                "source": "",
-                "ts": "",
-                "summary": "",
-            })
-
-    return items
+        return rows
+    for line in text.strip().splitlines():
+        stripped = line.strip()
+        if stripped and len(stripped) > 10:
+            rows.append({"title": stripped, "url": "", "source": "", "ts": "", "summary": ""})
+    return rows
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ETF/Index 特定数据
-# ══════════════════════════════════════════════════════════════════════════════
+def fetch_news(symbol: str, limit: int = 20) -> dict[str, Any]:
+    try:
+        from backend.tools.news import get_company_news, get_market_news_headlines
+
+        impact_items: list[Any] = []
+        try:
+            raw_impact = get_company_news(symbol, limit=limit)
+            if isinstance(raw_impact, list):
+                impact_items = raw_impact
+            elif isinstance(raw_impact, str):
+                impact_items = _parse_news_text(raw_impact)
+        except Exception as exc:
+            logger.info("[DataService] get_company_news failed for %s: %s", symbol, exc)
+
+        market_items: list[Any] = []
+        try:
+            raw_market = get_market_news_headlines(limit=limit)
+            if isinstance(raw_market, list):
+                market_items = raw_market
+            elif isinstance(raw_market, str):
+                market_items = _parse_news_text(raw_market)
+        except Exception as exc:
+            logger.info("[DataService] get_market_news_headlines failed: %s", exc)
+
+        market_raw = [_to_news_item(item) for item in market_items[:limit]]
+        impact_raw = [_to_news_item(item) for item in impact_items[:limit]]
+
+        result = {
+            "market": _rank_news_items(market_raw, limit, symbol=symbol, mode="market"),
+            "impact": _rank_news_items(impact_raw, limit, symbol=symbol, mode="impact"),
+            "market_raw": market_raw,
+            "impact_raw": impact_raw,
+            "ranking_meta": {
+                "version": "v2",
+                "formula": "sum(weight_i * factor_i) - source_penalty",
+                "weights": _NEWS_RANKING_WEIGHTS,
+                "half_life_hours": _NEWS_RANKING_HALF_LIFE_HOURS,
+                "notes": [
+                    "ranked by recency, source reliability, impact, and asset relevance",
+                    "duplicate-source penalty improves feed diversity",
+                ],
+            },
+        }
+        return result
+    except Exception as exc:
+        logger.info("[DataService] fetch_news failed for %s: %s", symbol, exc)
+        return {
+            "market": [],
+            "impact": [],
+            "market_raw": [],
+            "impact_raw": [],
+            "ranking_meta": {
+                "version": "v2",
+                "formula": "sum(weight_i * factor_i) - source_penalty",
+                "weights": _NEWS_RANKING_WEIGHTS,
+                "half_life_hours": _NEWS_RANKING_HALF_LIFE_HOURS,
+                "notes": [
+                    "ranked by recency, source reliability, impact, and asset relevance",
+                    "duplicate-source penalty improves feed diversity",
+                ],
+            },
+        }
 
 
-def fetch_sector_weights(symbol: str, asset_type: str) -> list[dict]:
-    """
-    获取 ETF/Index 板块权重
-
-    Phase 3 将使用 FMP API 实现
-
-    Args:
-        symbol: ETF/Index 代码
-        asset_type: 资产类型
-
-    Returns:
-        list[dict]: 板块权重
-            [{"name": "Technology", "weight": 0.285}, ...]
-    """
-    if asset_type not in ("etf", "index"):
+def fetch_sector_weights(symbol: str, asset_type: str) -> list[dict[str, Any]]:
+    if asset_type not in {"etf", "index"}:
         return []
-
     try:
         from backend.tools.fmp import get_etf_sector_weights
-        weights = get_etf_sector_weights(symbol)
 
-        if weights:
-            return [
-                {"name": w.get("sector", "Unknown"), "weight": w.get("weight", 0) / 100}
-                for w in weights
-            ]
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.info(f"[DataService] sector_weights failed for {symbol}: {e}")
-
-    return []
+        rows = get_etf_sector_weights(symbol)
+        if not rows:
+            return []
+        return [
+            {"name": row.get("sector", "Unknown"), "weight": row.get("weight", 0) / 100}
+            for row in rows
+        ]
+    except Exception:
+        return []
 
 
-def fetch_top_constituents(symbol: str, asset_type: str, limit: int = 10) -> list[dict]:
-    """
-    获取指数成分股
-
-    Phase 3 将使用 FMP API 实现
-
-    Args:
-        symbol: Index 代码
-        asset_type: 资产类型
-        limit: 返回数量限制
-
-    Returns:
-        list[dict]: 成分股列表
-            [{"symbol": "AAPL", "name": "Apple Inc.", "weight": 0.072}, ...]
-    """
+def fetch_top_constituents(symbol: str, asset_type: str, limit: int = 10) -> list[dict[str, Any]]:
     if asset_type != "index":
         return []
-
     try:
         from backend.tools.fmp import get_index_constituents
-        constituents = get_index_constituents(symbol)
 
-        if constituents:
-            return [
-                {
-                    "symbol": c.get("symbol", ""),
-                    "name": c.get("name", ""),
-                    "weight": c.get("weight", 0),
-                }
-                for c in constituents[:limit]
-            ]
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.info(f"[DataService] top_constituents failed for {symbol}: {e}")
-
-    return []
-
-
-def fetch_holdings(symbol: str, asset_type: str, limit: int = 50) -> list[dict]:
-    """
-    获取 ETF 持仓
-
-    Phase 3 将使用 FMP API 实现
-
-    Args:
-        symbol: ETF 代码
-        asset_type: 资产类型
-        limit: 返回数量限制
-
-    Returns:
-        list[dict]: 持仓列表
-            [{"symbol": "AAPL", "name": "Apple Inc.", "weight": 0.072,
-              "shares": 123456, "value": 12345678}, ...]
-    """
-    if asset_type not in ("etf", "portfolio"):
+        rows = get_index_constituents(symbol)
+        if not rows:
+            return []
+        return [
+            {
+                "symbol": row.get("symbol", ""),
+                "name": row.get("name", ""),
+                "weight": row.get("weight", 0),
+            }
+            for row in rows[:limit]
+        ]
+    except Exception:
         return []
 
+
+def fetch_holdings(symbol: str, asset_type: str, limit: int = 50) -> list[dict[str, Any]]:
+    if asset_type not in {"etf", "portfolio"}:
+        return []
     try:
         from backend.tools.fmp import get_etf_holdings
-        holdings = get_etf_holdings(symbol, limit=limit)
 
-        if holdings:
-            return [
-                {
-                    "symbol": h.get("symbol", ""),
-                    "name": h.get("name", ""),
-                    "weight": h.get("weight", 0),
-                    "shares": h.get("shares", 0),
-                    "value": h.get("value", 0),
-                }
-                for h in holdings[:limit]
-            ]
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.info(f"[DataService] holdings failed for {symbol}: {e}")
-
-    return []
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 数据服务类（可选的面向对象封装）
-# ══════════════════════════════════════════════════════════════════════════════
+        rows = get_etf_holdings(symbol, limit=limit)
+        if not rows:
+            return []
+        return [
+            {
+                "symbol": row.get("symbol", ""),
+                "name": row.get("name", ""),
+                "weight": row.get("weight", 0),
+                "shares": row.get("shares", 0),
+                "value": row.get("value", 0),
+            }
+            for row in rows[:limit]
+        ]
+    except Exception:
+        return []
 
 
 class DashboardDataService:
-    """
-    Dashboard 数据服务
+    """Lightweight wrapper with cache-aware helper methods."""
 
-    提供统一的数据获取接口，内置缓存支持
-    """
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache = dashboard_cache
 
-    def get_market_chart(
-        self,
-        symbol: str,
-        period: str = "1y",
-        interval: str = "1d",
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取 K 线数据（带缓存）"""
+    def get_market_chart(self, symbol: str, period: str = "1y", interval: str = "1d", use_cache: bool = True) -> list[dict[str, Any]]:
         cache_key = f"market_chart:{period}:{interval}"
-
         if use_cache:
             cached = self.cache.get(symbol, cache_key)
             if cached is not None:
                 return cached
-
         data = fetch_market_chart(symbol, period, interval)
         self.cache.set(symbol, cache_key, data, ttl=self.cache.TTL_CHARTS)
         return data
 
-    def get_snapshot(
-        self,
-        symbol: str,
-        asset_type: str,
-        use_cache: bool = True,
-    ) -> dict:
-        """获取快照数据（带缓存）"""
+    def get_snapshot(self, symbol: str, asset_type: str, use_cache: bool = True) -> dict[str, Any]:
         if use_cache:
             cached = self.cache.get(symbol, "snapshot")
             if cached is not None:
                 return cached
-
         data = fetch_snapshot(symbol, asset_type)
         self.cache.set(symbol, "snapshot", data, ttl=self.cache.TTL_SNAPSHOT)
         return data
 
-    def get_revenue_trend(
-        self,
-        symbol: str,
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取营收趋势（带缓存）"""
+    def get_revenue_trend(self, symbol: str, use_cache: bool = True) -> list[dict[str, Any]]:
         if use_cache:
             cached = self.cache.get(symbol, "revenue_trend")
             if cached is not None:
                 return cached
-
         data = fetch_revenue_trend(symbol)
         self.cache.set(symbol, "revenue_trend", data, ttl=self.cache.TTL_CHARTS)
         return data
 
-    def get_segment_mix(
-        self,
-        symbol: str,
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取分部数据（带缓存）"""
+    def get_segment_mix(self, symbol: str, use_cache: bool = True) -> list[dict[str, Any]]:
         if use_cache:
             cached = self.cache.get(symbol, "segment_mix")
             if cached is not None:
                 return cached
-
         data = fetch_segment_mix(symbol)
-        # FMP 数据更新频率低，缓存 24 小时
-        self.cache.set(symbol, "segment_mix", data, ttl=86400)
+        self.cache.set(symbol, "segment_mix", data, ttl=self.cache.TTL_SEGMENT_MIX)
         return data
 
-    def get_news(
-        self,
-        symbol: str,
-        limit: int = 20,
-        use_cache: bool = True,
-    ) -> dict[str, list[dict]]:
-        """获取新闻数据（带缓存）"""
+    def get_news(self, symbol: str, limit: int = 20, use_cache: bool = True) -> dict[str, Any]:
         if use_cache:
             cached = self.cache.get(symbol, "news")
             if cached is not None:
                 return cached
-
         data = fetch_news(symbol, limit)
         self.cache.set(symbol, "news", data, ttl=self.cache.TTL_NEWS)
         return data
 
-    def get_sector_weights(
-        self,
-        symbol: str,
-        asset_type: str,
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取板块权重（带缓存）"""
+    def get_sector_weights(self, symbol: str, asset_type: str, use_cache: bool = True) -> list[dict[str, Any]]:
         if use_cache:
             cached = self.cache.get(symbol, "sector_weights")
             if cached is not None:
                 return cached
-
         data = fetch_sector_weights(symbol, asset_type)
-        self.cache.set(symbol, "sector_weights", data, ttl=3600)
+        self.cache.set(symbol, "sector_weights", data, ttl=self.cache.TTL_SECTOR_WEIGHTS)
         return data
 
-    def get_top_constituents(
-        self,
-        symbol: str,
-        asset_type: str,
-        limit: int = 10,
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取成分股（带缓存）"""
+    def get_top_constituents(self, symbol: str, asset_type: str, limit: int = 10, use_cache: bool = True) -> list[dict[str, Any]]:
         if use_cache:
             cached = self.cache.get(symbol, "top_constituents")
             if cached is not None:
                 return cached
-
         data = fetch_top_constituents(symbol, asset_type, limit)
-        self.cache.set(symbol, "top_constituents", data, ttl=3600)
+        self.cache.set(symbol, "top_constituents", data, ttl=self.cache.TTL_CONSTITUENTS)
         return data
 
-    def get_holdings(
-        self,
-        symbol: str,
-        asset_type: str,
-        limit: int = 50,
-        use_cache: bool = True,
-    ) -> list[dict]:
-        """获取持仓（带缓存）"""
+    def get_holdings(self, symbol: str, asset_type: str, limit: int = 50, use_cache: bool = True) -> list[dict[str, Any]]:
         if use_cache:
             cached = self.cache.get(symbol, "holdings")
             if cached is not None:
                 return cached
-
         data = fetch_holdings(symbol, asset_type, limit)
-        self.cache.set(symbol, "holdings", data, ttl=3600)
+        self.cache.set(symbol, "holdings", data, ttl=self.cache.TTL_HOLDINGS)
         return data
 
 
-# ── 单例实例 ──────────────────────────────────────────────────
 dashboard_data_service = DashboardDataService()

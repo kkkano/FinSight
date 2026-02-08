@@ -75,7 +75,7 @@ export const RightPanel: FC<RightPanelProps> = ({
       )}
 
       {lastUpdated && (
-        <div className="text-[10px] text-fin-muted text-center py-1 border-t border-fin-border/50 shrink-0">
+        <div className="text-2xs text-fin-muted text-center py-1 border-t border-fin-border/50 shrink-0">
           Last updated: {lastUpdated.toLocaleTimeString()}
         </div>
       )}

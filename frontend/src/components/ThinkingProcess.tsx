@@ -2,6 +2,7 @@
 import { Brain, ChevronDown, ChevronUp, Cpu, Target, Wrench, Sparkles, AlertCircle } from 'lucide-react';
 import type { ThinkingStep } from '../types';
 import React from 'react';
+import { useStore } from '../store/useStore';
 
 interface ThinkingProcessProps {
   thinking: ThinkingStep[];
@@ -85,6 +86,42 @@ const getTraceLabel = (step: any, index: number) =>
 const getTraceSummary = (step: any) =>
   step?.message || step?.summary || step?.detail || step?.reasoning || step?.status || '';
 
+const renderDecisionSummary = (result: any): React.ReactNode => {
+  if (!result || typeof result !== 'object') return null;
+
+  const lines: string[] = [];
+  if (typeof result.decision_type === 'string' && result.decision_type) {
+    lines.push(`决策类型: ${result.decision_type}`);
+  }
+  if (typeof result.summary === 'string' && result.summary) {
+    lines.push(`摘要: ${result.summary}`);
+  }
+  if (typeof result.input_state === 'string' && result.input_state) {
+    lines.push(`输入状态: ${result.input_state}`);
+  }
+  if (Array.isArray(result.input_sources) && result.input_sources.length > 0) {
+    lines.push(`输入来源: ${result.input_sources.join(', ')}`);
+  }
+  if (typeof result.decision_summary === 'string' && result.decision_summary) {
+    lines.push(`决策: ${result.decision_summary}`);
+  }
+  if (typeof result.selection_summary === 'string' && result.selection_summary) {
+    lines.push(`选择: ${result.selection_summary}`);
+  }
+  if (typeof result.status_reason === 'string' && result.status_reason) {
+    lines.push(`状态原因: ${result.status_reason}`);
+  }
+
+  if (lines.length === 0) return null;
+  return (
+    <div className="mb-2 text-[11px] text-fin-text bg-fin-panel/40 border border-fin-border/40 rounded px-2 py-1.5">
+      {lines.map((line, idx) => (
+        <div key={`${idx}-${line}`}>{line}</div>
+      ))}
+    </div>
+  );
+};
+
 const extractTraceSteps = (value: any): any[] => {
   if (!value) return [];
   if (Array.isArray(value)) return value;
@@ -95,7 +132,7 @@ const extractTraceSteps = (value: any): any[] => {
   return [];
 };
 
-const renderTraceSteps = (steps: any[], depth = 0): React.ReactNode => {
+const renderTraceSteps = (steps: any[], depth = 0, showPayload = true): React.ReactNode => {
   if (!steps || steps.length === 0) return null;
   return (
     <div className={`space-y-1 ${depth > 0 ? 'ml-3 border-l border-fin-border/40 pl-2' : ''}`}>
@@ -105,21 +142,25 @@ const renderTraceSteps = (steps: any[], depth = 0): React.ReactNode => {
         const timestamp = formatTraceTimestamp(step?.timestamp || step?.started_at || step?.completed_at);
         const nested = extractTraceSteps(step?.steps || step?.trace_steps || step?.trace || step?.children);
         const payload = step?.result || step?.data || step?.payload || step;
+        const payloadIsEmptyObject = payload && typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).length === 0;
+        const shouldShowPayload = Boolean(showPayload && !payloadIsEmptyObject);
         return (
           <details key={`${depth}-${index}`} className="group rounded-md border border-fin-border/40 bg-fin-bg/40 px-2 py-1">
             <summary className="cursor-pointer list-none flex items-start gap-2 text-[11px] text-fin-text">
               <span className="mt-0.5">{getStageIcon(String(step?.stage || step?.state || step?.name || 'step'))}</span>
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{label}</div>
-                {summary && <div className="text-[10px] text-fin-muted truncate">{summary}</div>}
+                {summary && <div className="text-2xs text-fin-muted truncate">{summary}</div>}
               </div>
-              {timestamp && <span className="text-[10px] text-fin-muted">{timestamp}</span>}
+              {timestamp && <span className="text-2xs text-fin-muted">{timestamp}</span>}
             </summary>
             <div className="mt-2 space-y-2">
-              {nested.length > 0 && renderTraceSteps(nested, depth + 1)}
-              <pre className="text-[10px] bg-fin-panel/60 p-2 rounded max-h-40 overflow-auto">
-                {JSON.stringify(payload, null, 2)}
-              </pre>
+              {nested.length > 0 && renderTraceSteps(nested, depth + 1, showPayload)}
+              {shouldShowPayload && (
+                <pre className="text-2xs bg-fin-panel/60 p-2 rounded max-h-40 overflow-auto">
+                  {JSON.stringify(payload, null, 2)}
+                </pre>
+              )}
             </div>
           </details>
         );
@@ -133,6 +174,10 @@ const formatDetailedResult = (result: any): React.ReactNode => {
   if (!result) return null;
 
   const items: React.ReactElement[] = [];
+  const decisionSummary = renderDecisionSummary(result);
+  if (decisionSummary) {
+    items.push(<div key="decision-summary">{decisionSummary}</div>);
+  }
 
   // 意图分类信息
   if (result.intent) {
@@ -298,7 +343,7 @@ const formatDetailedResult = (result: any): React.ReactNode => {
     if (steps.length === 0) return;
     items.push(
       <div key={`trace-${block.label}`} className="pt-1">
-        <div className="text-[10px] text-fin-muted uppercase mb-1">{block.label}</div>
+        <div className="text-2xs text-fin-muted uppercase mb-1">{block.label}</div>
         {renderTraceSteps(steps)}
       </div>
     );
@@ -319,6 +364,7 @@ const formatDetailedResult = (result: any): React.ReactNode => {
 export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) => {
   const [isExpanded, setIsExpanded] = useState(true); // 默认展开
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set([0])); // 默认展开第一个
+  const traceViewMode = useStore((state) => state.traceViewMode);
 
   if (!thinking?.length) {
     return null;
@@ -344,6 +390,9 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
           <Brain size={14} className="text-fin-primary" />
           <span className="font-medium">Agent Trace</span>
           <span className="text-fin-muted">({thinking.length} 步骤)</span>
+          <span className="text-2xs px-1.5 py-0.5 rounded bg-fin-panel border border-fin-border/60 text-fin-muted">
+            {traceViewMode === 'user' ? '用户视图' : traceViewMode === 'expert' ? '专家视图' : '开发视图'}
+          </span>
         </div>
         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
@@ -364,7 +413,7 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
                   <div className="font-medium text-fin-text flex items-center gap-2">
                     {formatLangGraphStage(step.stage) || stageLabels[step.stage] || step.stage}
                     {step.result?.confidence !== undefined && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-fin-bg rounded">
+                      <span className="text-2xs px-1.5 py-0.5 bg-fin-bg rounded">
                         置信度: {formatConfidence(step.result.confidence)}
                       </span>
                     )}
@@ -374,7 +423,7 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-fin-muted/50 text-[10px]">
+                  <span className="text-fin-muted/50 text-2xs">
                     {new Date(step.timestamp).toLocaleTimeString()}
                   </span>
                   {step.result && (
@@ -388,7 +437,56 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
 
               {step.result && expandedSteps.has(index) && (
                 <div className="px-3 pb-2 pt-1 border-t border-fin-border/30 bg-fin-bg/30">
-                  {formatDetailedResult(step.result)}
+                  {traceViewMode === 'user' ? (
+                    <div className="space-y-2">
+                      {renderDecisionSummary(step.result) || (
+                        <div className="text-[11px] text-fin-muted">暂无更多可解释信息。</div>
+                      )}
+                    </div>
+                  ) : traceViewMode === 'expert' ? (
+                    <div className="space-y-2">
+                      {renderDecisionSummary(step.result)}
+                      {(() => {
+                        const expertSnapshot: Record<string, any> = {};
+                        const candidateKeys = [
+                          'agent',
+                          'agent_name',
+                          'tools',
+                          'tool',
+                          'data_sources',
+                          'sources',
+                          'confidence',
+                          'status_reason',
+                          'selection_summary',
+                          'input_state',
+                          'input_sources',
+                          'fallback_reason',
+                        ];
+                        candidateKeys.forEach((key) => {
+                          const value = step.result?.[key];
+                          const hasValue =
+                            value !== undefined &&
+                            value !== null &&
+                            !(typeof value === 'string' && value.trim() === '') &&
+                            !(Array.isArray(value) && value.length === 0) &&
+                            !(typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+                          if (hasValue) {
+                            expertSnapshot[key] = value;
+                          }
+                        });
+                        if (Object.keys(expertSnapshot).length === 0) {
+                          return <div className="text-[11px] text-fin-muted">暂无专家层详情。</div>;
+                        }
+                        return (
+                          <pre className="text-2xs bg-fin-panel/60 p-2 rounded max-h-40 overflow-auto">
+                            {JSON.stringify(expertSnapshot, null, 2)}
+                          </pre>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    formatDetailedResult(step.result)
+                  )}
                 </div>
               )}
             </div>
@@ -398,3 +496,5 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
     </div>
   );
 };
+
+

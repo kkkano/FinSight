@@ -406,7 +406,7 @@ def _build_long_synthesis_report(
     agent_summaries: list[dict[str, Any]],
     citations: list[dict[str, Any]],
     base_markdown: str,
-    min_chars: int = 2000,
+    min_chars: int = 800,
 ) -> str:
     parts: list[str] = []
     title = f"{ticker_label} 综合研究报告"
@@ -582,6 +582,59 @@ def _build_long_synthesis_report(
     return report
 
 
+def _derive_report_tags_and_hints(
+    *,
+    subject_type: str,
+    tickers: list[str],
+    render_vars: dict[str, Any],
+    agent_status: dict[str, Any],
+) -> tuple[list[str], dict[str, Any]]:
+    compare_basis: list[str] = []
+    if len(tickers) > 1:
+        compare_basis.append("multi_ticker")
+
+    comparison_conclusion = _safe_str(render_vars.get("comparison_conclusion") or "").strip()
+    if comparison_conclusion:
+        compare_basis.append("comparison_conclusion")
+
+    comparison_metrics = render_vars.get("comparison_metrics")
+    if isinstance(comparison_metrics, str) and comparison_metrics.strip():
+        compare_basis.append("comparison_metrics")
+
+    is_compare = len(compare_basis) > 0
+
+    conflict_agents: list[str] = []
+    for agent_name, payload in agent_status.items():
+        if not isinstance(agent_name, str) or not isinstance(payload, dict):
+            continue
+        evidence_quality = payload.get("evidence_quality")
+        has_conflicts = (
+            isinstance(evidence_quality, dict)
+            and evidence_quality.get("has_conflicts") is True
+        )
+        if has_conflicts:
+            conflict_agents.append(agent_name)
+
+    conflict_agents = sorted(set(conflict_agents))
+    has_conflict = len(conflict_agents) > 0
+
+    tags: list[str] = []
+    if is_compare:
+        tags.append("compare")
+    if has_conflict:
+        tags.append("conflict")
+    if subject_type in ("filing", "research_doc"):
+        tags.append("filing")
+
+    hints: dict[str, Any] = {
+        "is_compare": is_compare,
+        "has_conflict": has_conflict,
+        "compare_basis": compare_basis,
+        "conflict_agents": conflict_agents,
+    }
+    return tags, hints
+
+
 def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -> dict[str, Any] | None:
     """
     Build a frontend-friendly ReportIR payload (used by ReportView cards) from LangGraph state.
@@ -680,6 +733,12 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
         section_order += 1
 
     risks = _extract_risks(render_vars)
+    report_tags, report_hints = _derive_report_tags_and_hints(
+        subject_type=subject_type,
+        tickers=tickers,
+        render_vars=render_vars,
+        agent_status=agent_status,
+    )
 
     # Confidence: average of successful agents, else 0.5.
     confidences = []
@@ -743,6 +802,7 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
             "subject_type": subject_type,
             "agent_summaries": agent_summaries,
             "filing_section_citations": filing_section_citations,
+            "report_hints": report_hints,
             "graph_trace": state.get("trace") if isinstance(state.get("trace"), dict) else {},
         },
     }
@@ -752,5 +812,12 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
     if isinstance(validated, dict):
         validated["synthesis_report"] = synthesis_report
         validated["agent_status"] = agent_status
+        validated["report_hints"] = report_hints
+        if report_tags:
+            validated["tags"] = report_tags
+
+        meta = validated.get("meta") if isinstance(validated.get("meta"), dict) else {}
+        meta["report_hints"] = report_hints
+        validated["meta"] = meta
         return validated
     return None

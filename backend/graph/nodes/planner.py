@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import threading
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -21,6 +23,97 @@ from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_li
 def _env_str(key: str, default: str) -> str:
     raw = os.getenv(key)
     return raw.strip() if isinstance(raw, str) and raw.strip() else default
+
+
+def _env_bool(key: str, default: bool = False) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(key: str, default: int) -> int:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return default
+
+
+def _resolve_planner_variant(state: GraphState) -> str:
+    if not _env_bool("LANGGRAPH_PLANNER_AB_ENABLED", False):
+        return "A"
+
+    split_percent = max(0, min(100, _env_int("LANGGRAPH_PLANNER_AB_SPLIT", 50)))
+    salt = _env_str("LANGGRAPH_PLANNER_AB_SALT", "planner-ab-v1")
+    thread_id = str(
+        state.get("thread_id")
+        or state.get("session_id")
+        or ((state.get("ui_context") or {}).get("session_id") if isinstance(state.get("ui_context"), dict) else "")
+        or "anonymous"
+    )
+    digest = hashlib.sha256(f"{salt}:{thread_id}".encode("utf-8")).hexdigest()
+    bucket = int(digest[:8], 16) % 100
+    return "A" if bucket < split_percent else "B"
+
+
+_PLANNER_AB_LOCK = threading.Lock()
+_PLANNER_AB_METRICS: dict[str, dict[str, float | int]] = {
+    "A": {"requests": 0, "fallbacks": 0, "retry_attempts": 0, "steps_total": 0},
+    "B": {"requests": 0, "fallbacks": 0, "retry_attempts": 0, "steps_total": 0},
+}
+
+
+def _record_planner_ab_metrics(*, variant: str, fallback: bool, retry_attempts: int, steps: int) -> None:
+    key = "B" if str(variant).upper() == "B" else "A"
+    with _PLANNER_AB_LOCK:
+        row = _PLANNER_AB_METRICS[key]
+        row["requests"] = int(row["requests"]) + 1
+        if fallback:
+            row["fallbacks"] = int(row["fallbacks"]) + 1
+        row["retry_attempts"] = int(row["retry_attempts"]) + max(0, int(retry_attempts))
+        row["steps_total"] = int(row["steps_total"]) + max(0, int(steps))
+
+
+def get_planner_ab_metrics() -> dict[str, Any]:
+    split_percent = max(0, min(100, _env_int("LANGGRAPH_PLANNER_AB_SPLIT", 50)))
+    enabled = _env_bool("LANGGRAPH_PLANNER_AB_ENABLED", False)
+    with _PLANNER_AB_LOCK:
+        by_variant: dict[str, Any] = {}
+        totals = {"requests": 0, "fallbacks": 0, "retry_attempts": 0, "steps_total": 0}
+        for key in ("A", "B"):
+            row = _PLANNER_AB_METRICS[key]
+            requests = int(row["requests"])
+            fallbacks = int(row["fallbacks"])
+            retries = int(row["retry_attempts"])
+            steps_total = int(row["steps_total"])
+            totals["requests"] += requests
+            totals["fallbacks"] += fallbacks
+            totals["retry_attempts"] += retries
+            totals["steps_total"] += steps_total
+            by_variant[key] = {
+                "requests": requests,
+                "fallbacks": fallbacks,
+                "fallback_rate": round((fallbacks / requests), 6) if requests > 0 else 0.0,
+                "retry_attempts": retries,
+                "avg_steps": round((steps_total / requests), 3) if requests > 0 else 0.0,
+            }
+
+    total_requests = totals["requests"]
+    return {
+        "enabled": enabled,
+        "split_percent": split_percent,
+        "variants": by_variant,
+        "totals": {
+            "requests": total_requests,
+            "fallbacks": totals["fallbacks"],
+            "fallback_rate": round((totals["fallbacks"] / total_requests), 6) if total_requests > 0 else 0.0,
+            "retry_attempts": totals["retry_attempts"],
+            "avg_steps": round((totals["steps_total"] / total_requests), 3) if total_requests > 0 else 0.0,
+        },
+    }
 
 
 def _extract_json_object(text: str) -> str:
@@ -500,15 +593,21 @@ async def planner(state: GraphState) -> dict:
     """
     mode = _env_str("LANGGRAPH_PLANNER_MODE", "stub").lower()
     trace = state.get("trace") or {}
+    planner_variant = _resolve_planner_variant(state)
 
     if mode != "llm":
-        trace.update({"planner_runtime": build_runtime(mode="stub", fallback=False)})
-        return {**planner_stub(state), "trace": trace}
+        trace.update({"planner_runtime": {**build_runtime(mode="stub", fallback=False), "variant": planner_variant}})
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
+        return out
 
     try:
         from backend.llm_config import create_llm
 
-        llm = create_llm(temperature=float(os.getenv("LANGGRAPH_PLANNER_TEMPERATURE", "0.2")))
+        _planner_temp = float(os.getenv("LANGGRAPH_PLANNER_TEMPERATURE", "0.2"))
+        llm = create_llm(temperature=_planner_temp)
+        llm_factory = lambda: create_llm(temperature=_planner_temp)  # noqa: E731
     except Exception as exc:
         append_failure(
             trace,
@@ -526,11 +625,15 @@ async def planner(state: GraphState) -> dict:
                     reason=f"llm_unavailable: {exc}",
                     retry_attempts=0,
                 )
+                | {"variant": planner_variant}
             }
         )
-        return {**planner_stub(state), "trace": trace}
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(variant=planner_variant, fallback=True, retry_attempts=0, steps=steps)
+        return out
 
-    prompt = build_planner_prompt(state)
+    prompt = build_planner_prompt(state, variant=planner_variant)
     retry_attempts = 0
 
     def _on_retry(attempt: int, _exc: BaseException) -> None:
@@ -549,6 +652,7 @@ async def planner(state: GraphState) -> dict:
         resp = await ainvoke_with_rate_limit_retry(
             llm,
             [HumanMessage(content=prompt)],
+            llm_factory=llm_factory,
             acquire_token=True,
             on_retry=_on_retry,
         )
@@ -571,10 +675,17 @@ async def planner(state: GraphState) -> dict:
             {
                 "planner_runtime": {
                     **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
+                    "variant": planner_variant,
                     "steps": len(plan.steps),
                     "budget_assertions": budget_assertions,
                 }
             }
+        )
+        _record_planner_ab_metrics(
+            variant=planner_variant,
+            fallback=False,
+            retry_attempts=retry_attempts,
+            steps=len(plan.steps),
         )
         return {"plan_ir": plan.model_dump(), "trace": trace}
     except Exception as exc:
@@ -604,7 +715,16 @@ async def planner(state: GraphState) -> dict:
                     reason=str(exc),
                     retry_attempts=retry_attempts,
                 )
+                | {"variant": planner_variant}
             }
         )
-        return {**planner_stub(state), "trace": trace}
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(
+            variant=planner_variant,
+            fallback=True,
+            retry_attempts=retry_attempts,
+            steps=steps,
+        )
+        return out
 

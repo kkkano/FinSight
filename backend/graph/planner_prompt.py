@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import json
-
+from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 
 
-def build_planner_prompt(state: GraphState) -> str:
+def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
     """
     Build a constrained Planner prompt that asks the model to output PlanIR JSON only.
 
@@ -25,6 +24,10 @@ def build_planner_prompt(state: GraphState) -> str:
     allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else None
     agent_schemas = policy.get("agent_schemas") if isinstance(policy, dict) else None
 
+    planner_variant = str(variant or "A").strip().upper()
+    if planner_variant not in {"A", "B"}:
+        planner_variant = "A"
+
     selection_payload = subject.get("selection_payload") if isinstance(subject, dict) else None
     has_selection = bool(selection_payload)
 
@@ -40,6 +43,16 @@ def build_planner_prompt(state: GraphState) -> str:
         "agent_schemas": agent_schemas,
     }
 
+    variant_guidance = (
+        "- Variant A: prioritize minimal-step plans with strong determinism and low execution cost.\n"
+        "- Prefer fewer required steps unless operation constraints demand more."
+    )
+    if planner_variant == "B":
+        variant_guidance = (
+            "- Variant B: prioritize explainability and plan robustness while keeping budget discipline.\n"
+            "- Make decision rationale explicit in `why`, and prefer parallel_group when safe."
+        )
+
     return f"""<role>FinSight Planner</role>
 
 <task>
@@ -47,8 +60,10 @@ You will create a structured execution plan (PlanIR) for a finance assistant.
 Return JSON ONLY. No markdown, no commentary.
 </task>
 
+<planner_variant>{planner_variant}</planner_variant>
+
 <inputs>
-{json.dumps(inputs, ensure_ascii=False, indent=2)}
+{json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
 <output_format>
@@ -78,6 +93,7 @@ Each step must follow:
 - If operation == "price": include get_stock_price (required).
 - If operation == "technical": include get_stock_price + get_technical_snapshot (required).
 - If operation == "fetch": prefer get_company_news or search for recency.
+{variant_guidance}
 </guidelines>
 """
 

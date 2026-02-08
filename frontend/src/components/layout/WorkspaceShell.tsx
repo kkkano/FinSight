@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
+import { Menu } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import { SettingsModal } from '../SettingsModal';
 import { SubscribeModal } from '../SubscribeModal';
@@ -8,14 +10,18 @@ import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
+import Workbench from '../../pages/Workbench';
+import { useDashboardData } from '../../hooks/useDashboardData';
+import { useDashboardStore } from '../../store/dashboardStore';
 
-export type WorkspaceView = 'chat' | 'dashboard';
+export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
 
 type WorkspaceShellProps = {
   view: WorkspaceView;
   dashboardSymbol: string | null;
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
+  navigateToWorkbench: () => void;
 };
 
 const DEFAULT_PANEL_WIDTH = 380;
@@ -30,13 +36,24 @@ export function WorkspaceShell({
   dashboardSymbol,
   navigateToChat,
   navigateToDashboard,
+  navigateToWorkbench,
 }: WorkspaceShellProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const workbenchParams = new URLSearchParams(location.search);
+  const fromDashboard = workbenchParams.get('from') === 'dashboard';
+  const workbenchSymbol = (workbenchParams.get('symbol') || '').trim() || null;
+
   const isMobile = useIsMobileLayout();
   const { theme, setTheme } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
+  const { dashboardData } = useDashboardStore();
+  const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || 'AAPL';
+  useDashboardData(view === 'workbench' ? preferredSymbol : null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isContextPanelExpanded, setIsContextPanelExpanded] = useState(true);
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -105,13 +122,26 @@ export function WorkspaceShell({
   };
 
   return (
-    <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden max-lg:flex-col">
+    <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
+      {/* Mobile menu button */}
+      {isMobile && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-3 left-3 z-50 p-2 rounded-lg bg-fin-card border border-fin-border text-fin-text hover:bg-fin-hover transition-colors lg:hidden"
+          aria-label="打开导航菜单"
+        >
+          <Menu size={20} />
+        </button>
+      )}
       <Sidebar
         onSettingsClick={() => setIsSettingsOpen(true)}
         onSubscribeClick={() => setIsSubscribeOpen(true)}
-        onDashboardClick={openDashboard}
-        onChatClick={navigateToChat}
+        onDashboardClick={(s) => { openDashboard(s); setIsSidebarOpen(false); }}
+        onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
+        onWorkbenchClick={() => { navigateToWorkbench(); setIsSidebarOpen(false); }}
         currentView={view}
+        isMobileOpen={isSidebarOpen}
+        onMobileClose={() => setIsSidebarOpen(false)}
       />
 
       {view === 'dashboard' ? (
@@ -120,8 +150,36 @@ export function WorkspaceShell({
           symbol={dashboardSymbol}
           onBackToChat={navigateToChat}
           onSymbolChange={openDashboard}
+          onGoWorkbench={(symbol) => {
+            const normalized = symbol.trim();
+            if (!normalized) {
+              navigate('/workbench?from=dashboard');
+              return;
+            }
+            navigate(`/workbench?from=dashboard&symbol=${encodeURIComponent(normalized)}`);
+          }}
           contextPanel={contextPanelProps}
         />
+      ) : view === 'workbench' ? (
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-5 max-lg:p-3">
+          <Workbench
+            symbol={preferredSymbol}
+            fromDashboard={fromDashboard}
+            newsItems={dashboardData?.news?.impact || []}
+            rawNewsItems={dashboardData?.news?.impact_raw || []}
+            rankingMeta={
+              typeof dashboardData?.news?.ranking_meta === 'object'
+                ? {
+                    version: (dashboardData.news.ranking_meta as { version?: string }).version,
+                    formula: (dashboardData.news.ranking_meta as { formula?: string }).formula,
+                    notes: Array.isArray((dashboardData.news.ranking_meta as { notes?: unknown[] }).notes)
+                      ? ((dashboardData.news.ranking_meta as { notes?: string[] }).notes || [])
+                      : [],
+                  }
+                : undefined
+            }
+          />
+        </div>
       ) : (
         <ChatWorkspace
           isMobile={isMobile}
@@ -138,4 +196,5 @@ export function WorkspaceShell({
     </div>
   );
 }
+
 

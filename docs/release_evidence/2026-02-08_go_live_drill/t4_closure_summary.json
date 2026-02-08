@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-02-08T12:15:16Z",
+  "pass": true,
+  "artifacts": {
+    "gray_rollout": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\gray_rollout_drill.json",
+    "rollback_rehearsal": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\rollback_rehearsal.json",
+    "llm_failover": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\llm_failover_drill.json",
+    "security_final_checks": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\security_final_checks.json"
+  },
+  "checks": {
+    "rollout": true,
+    "rollback": true,
+    "failover": true,
+    "security": true
+  }
+}

@@ -1,14 +1,6 @@
-/**
- * NewsFeed 组件 - 新闻流
- *
- * 功能：
- * - 双模式切换：Market 7x24 / Impact on {symbol}
- * - 新闻列表展示
- * - 外链跳转
- * - "问这条"按钮：将新闻选中到 MiniChat 上下文
- */
-import { useState } from 'react';
-import { ExternalLink, Newspaper, TrendingUp, MessageCircleQuestion } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ExternalLink, MessageCircleQuestion, Newspaper, TrendingUp } from 'lucide-react';
+
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { NewsItem, NewsModeType, SelectionItem } from '../../types/dashboard';
 import { generateNewsId } from '../../utils/hash';
@@ -16,23 +8,40 @@ import { generateNewsId } from '../../utils/hash';
 interface NewsFeedProps {
   marketNews: NewsItem[];
   impactNews: NewsItem[];
+  marketRawNews?: NewsItem[];
+  impactRawNews?: NewsItem[];
+  rankingFormula?: string;
+  rankingVersion?: string;
+  rankingNotes?: string[];
   loading?: boolean;
 }
 
-export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
+export function NewsFeed({
+  marketNews,
+  impactNews,
+  marketRawNews = [],
+  impactRawNews = [],
+  rankingFormula,
+  rankingVersion,
+  rankingNotes = [],
+  loading,
+}: NewsFeedProps) {
   const { activeAsset, newsMode, setNewsMode } = useDashboardStore();
   const [localMode, setLocalMode] = useState<NewsModeType>(newsMode);
+  const [displayMode, setDisplayMode] = useState<'ranked' | 'raw'>('ranked');
 
-  // 切换模式
   const handleModeChange = (mode: NewsModeType) => {
     setLocalMode(mode);
     setNewsMode(mode);
   };
 
-  // 当前显示的新闻
-  const currentNews = localMode === 'market' ? marketNews : impactNews;
+  const currentNews = useMemo(() => {
+    if (localMode === 'market') {
+      return displayMode === 'raw' ? (marketRawNews.length > 0 ? marketRawNews : marketNews) : marketNews;
+    }
+    return displayMode === 'raw' ? (impactRawNews.length > 0 ? impactRawNews : impactNews) : impactNews;
+  }, [displayMode, impactNews, impactRawNews, localMode, marketNews, marketRawNews]);
 
-  // 格式化时间
   const formatTime = (ts: string) => {
     if (!ts) return '';
     try {
@@ -45,7 +54,7 @@ export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
       if (hours < 1) return '刚刚';
       if (hours < 24) return `${hours}小时前`;
       if (days < 7) return `${days}天前`;
-      return ts.split('T')[0];
+      return ts.split('T')[0] || ts;
     } catch {
       return ts;
     }
@@ -69,15 +78,13 @@ export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
 
   return (
     <div className="bg-fin-card border border-fin-border rounded-xl p-4">
-      {/* Header with mode toggle */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-fin-border/60">
         <h3 className="text-sm font-semibold text-fin-text">新闻动态</h3>
-
-        {/* Mode Toggle */}
         <div className="flex bg-fin-bg-secondary rounded-lg p-0.5">
           <button
+            type="button"
             onClick={() => handleModeChange('market')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors transition-transform active:scale-95 ${
               localMode === 'market'
                 ? 'bg-fin-card text-fin-primary shadow-sm'
                 : 'text-fin-muted hover:text-fin-text'
@@ -87,8 +94,9 @@ export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
             Market 7x24
           </button>
           <button
+            type="button"
             onClick={() => handleModeChange('impact')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors transition-transform active:scale-95 ${
               localMode === 'impact'
                 ? 'bg-fin-card text-fin-primary shadow-sm'
                 : 'text-fin-muted hover:text-fin-text'
@@ -96,22 +104,58 @@ export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
           >
             <TrendingUp size={12} />
             Impact
-            {activeAsset && (
-              <span className="text-fin-muted">({activeAsset.symbol})</span>
-            )}
+            {activeAsset ? <span className="text-fin-muted">({activeAsset.symbol})</span> : null}
           </button>
         </div>
       </div>
 
-      {/* News List */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[11px] text-fin-muted">
+          {displayMode === 'ranked' ? '按策略排序' : '原始新闻流'}
+        </div>
+        <div className="flex items-center gap-1 bg-fin-bg-secondary rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => setDisplayMode('ranked')}
+            className={`px-2 py-1 text-[11px] rounded ${
+              displayMode === 'ranked' ? 'bg-fin-card text-fin-primary' : 'text-fin-muted hover:text-fin-text'
+            }`}
+          >
+            排序
+          </button>
+          <button
+            type="button"
+            onClick={() => setDisplayMode('raw')}
+            className={`px-2 py-1 text-[11px] rounded ${
+              displayMode === 'raw' ? 'bg-fin-card text-fin-primary' : 'text-fin-muted hover:text-fin-text'
+            }`}
+          >
+            原始
+          </button>
+        </div>
+      </div>
+
+      {displayMode === 'ranked' && rankingFormula ? (
+        <div className="mb-3 rounded border border-fin-border/60 bg-fin-bg-secondary/40 px-2.5 py-1.5 text-2xs text-fin-muted">
+          <div>排序依据：{rankingFormula}</div>
+          {rankingVersion ? <div>版本：{rankingVersion}</div> : null}
+          {rankingNotes.length > 0 ? <div>说明：{rankingNotes.join('；')}</div> : null}
+        </div>
+      ) : null}
+
       {currentNews.length === 0 ? (
         <div className="flex items-center justify-center h-32 text-fin-muted text-sm">
           {localMode === 'market' ? '暂无市场新闻' : '暂无相关新闻'}
         </div>
       ) : (
-        <div className="space-y-3 max-h-64 overflow-y-auto">
+        <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
           {currentNews.map((news, index) => (
-            <NewsItemCard key={index} news={news} formatTime={formatTime} />
+            <NewsItemCard
+              key={`${news.title}-${index}`}
+              news={news}
+              formatTime={formatTime}
+              showRanking={displayMode === 'ranked'}
+            />
           ))}
         </div>
       )}
@@ -119,16 +163,15 @@ export function NewsFeed({ marketNews, impactNews, loading }: NewsFeedProps) {
   );
 }
 
-// 单条新闻卡片
 interface NewsItemCardProps {
   news: NewsItem;
   formatTime: (ts: string) => string;
+  showRanking?: boolean;
 }
 
-function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
-  const { setActiveSelection, toggleSelection, activeSelections } = useDashboardStore();
+function NewsItemCard({ news, formatTime, showRanking = false }: NewsItemCardProps) {
+  const { activeSelections, setActiveSelection, toggleSelection } = useDashboardStore();
 
-  // 生成新闻 ID（用于比较是否已选中）
   const newsId = generateNewsId(news.title, news.source, news.ts);
   const isSelected = activeSelections.some((s) => s.id === newsId);
 
@@ -139,7 +182,7 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
     url: news.url,
     source: news.source,
     ts: news.ts,
-    snippet: news.summary?.slice(0, 100) || news.title.slice(0, 100),
+    snippet: (news.summary || news.title || '').slice(0, 100),
   };
 
   const handleClick = () => {
@@ -148,17 +191,13 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
     }
   };
 
-  // 处理"问这条"按钮点击
-  const handleAskAbout = (e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止冒泡，避免触发卡片点击（外链跳转）
-
-    // 单选快捷：点击即“只引用这一条”
+  const handleAskAbout = (event: React.MouseEvent) => {
+    event.stopPropagation();
     setActiveSelection(selection);
   };
 
-  // 多选：checkbox toggle
-  const handleToggleSelect = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleToggleSelect = (event: React.MouseEvent) => {
+    event.stopPropagation();
     toggleSelection(selection);
   };
 
@@ -166,15 +205,15 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
     <div
       onClick={handleClick}
       data-testid={`news-item-${newsId}`}
-      className={`group p-3 rounded-lg border transition-colors ${
+      className={`group p-3 rounded-lg border transition-colors transition-shadow hover:shadow-sm ${
         isSelected
           ? 'border-fin-primary bg-fin-primary/5'
-          : 'border-transparent hover:border-fin-border hover:bg-fin-hover'
+          : 'border-transparent hover:border-fin-border hover:bg-fin-hover/40'
       } ${news.url && news.url !== '#' ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
-        {/* 多选 checkbox */}
         <button
+          type="button"
           onClick={handleToggleSelect}
           data-testid={`news-select-${newsId}`}
           title={isSelected ? '取消选择' : '选择'}
@@ -184,43 +223,51 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
               : 'border-fin-border bg-transparent hover:border-fin-primary'
           }`}
           aria-pressed={isSelected}
+          aria-label={isSelected ? `取消选择 ${news.title}` : `选择 ${news.title}`}
         >
-          {isSelected && <span className="text-white text-[10px] leading-none">✓</span>}
+          {isSelected ? <span className="text-white text-2xs leading-none">✓</span> : null}
         </button>
 
         <div className="flex-1 min-w-0">
-          {/* 标题 */}
           <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">
             {news.title}
           </h4>
 
-          {/* 摘要（如果有） */}
-          {news.summary && (
+          {news.summary ? (
             <p className="text-xs text-fin-muted mt-1 line-clamp-2">
               {news.summary}
             </p>
-          )}
+          ) : null}
 
-          {/* Meta */}
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-fin-muted">
-            {news.source && (
+          <div className="flex items-center gap-2 mt-2 text-2xs text-fin-muted">
+            {news.source ? (
               <>
                 <span>{news.source}</span>
                 <span>·</span>
               </>
-            )}
+            ) : null}
             <span>{formatTime(news.ts)}</span>
+            {showRanking && typeof news.ranking_score === 'number' ? (
+              <>
+                <span>·</span>
+                <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
+              </>
+            ) : null}
           </div>
+
+          {showRanking && news.ranking_reason ? (
+            <div className="mt-1 text-2xs text-fin-muted">{news.ranking_reason}</div>
+          ) : null}
         </div>
 
-        {/* 操作按钮区 */}
         <div className="flex items-center gap-1 shrink-0 mt-1">
-          {/* "问这条"按钮 */}
           <button
+            type="button"
             onClick={handleAskAbout}
             data-testid={`news-ask-${newsId}`}
             title="问这条"
-            className={`p-1.5 rounded-md transition-all ${
+            aria-label={`询问关于 ${news.title}`}
+            className={`p-1.5 rounded-lg transition-all ${
               isSelected
                 ? 'bg-fin-primary text-white'
                 : 'text-fin-muted opacity-0 group-hover:opacity-100 hover:bg-fin-primary/10 hover:text-fin-primary'
@@ -229,13 +276,12 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
             <MessageCircleQuestion size={14} />
           </button>
 
-          {/* 外链图标 */}
-          {news.url && news.url !== '#' && (
+          {news.url && news.url !== '#' ? (
             <ExternalLink
               size={14}
               className="text-fin-muted opacity-0 group-hover:opacity-100 transition-opacity"
             />
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -243,3 +289,4 @@ function NewsItemCard({ news, formatTime }: NewsItemCardProps) {
 }
 
 export default NewsFeed;
+

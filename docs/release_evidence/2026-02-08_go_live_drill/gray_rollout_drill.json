@@ -1,0 +1,58 @@
+{
+  "generated_at": "2026-02-08T12:15:12Z",
+  "thresholds": {
+    "max_5xx_ratio": 0.02,
+    "p95_regression_factor": 2.0,
+    "min_citation_coverage": 0.95
+  },
+  "citation_coverage": 1.0,
+  "baseline_p95_ms": 163.42,
+  "stages": [
+    {
+      "stage_percent": 10,
+      "request_count": 10,
+      "success_count": 10,
+      "error_5xx_count": 0,
+      "error_5xx_ratio": 0.0,
+      "latency_p95_ms": 163.42,
+      "latency_mean_ms": 68.29,
+      "pass_5xx": true,
+      "pass_p95": true,
+      "pass_citation": true,
+      "pass_stage": true,
+      "rollback_reasons": []
+    },
+    {
+      "stage_percent": 50,
+      "request_count": 50,
+      "success_count": 50,
+      "error_5xx_count": 0,
+      "error_5xx_ratio": 0.0,
+      "latency_p95_ms": 114.79,
+      "latency_mean_ms": 77.01,
+      "pass_5xx": true,
+      "pass_p95": true,
+      "pass_citation": true,
+      "pass_stage": true,
+      "rollback_reasons": []
+    },
+    {
+      "stage_percent": 100,
+      "request_count": 100,
+      "success_count": 100,
+      "error_5xx_count": 0,
+      "error_5xx_ratio": 0.0,
+      "latency_p95_ms": 202.93,
+      "latency_mean_ms": 121.89,
+      "pass_5xx": true,
+      "pass_p95": true,
+      "pass_citation": true,
+      "pass_stage": true,
+      "rollback_reasons": []
+    }
+  ],
+  "pass": true,
+  "rollback_triggered": false,
+  "rollback_stage_percent": null,
+  "citation_report": "D:\\AgentProject\\FinSight\\tests\\retrieval_eval\\reports\\ci_retrieval-20260208-120803.json"
+}

@@ -1,6 +1,5 @@
 ﻿import { test, expect } from '@playwright/test';
 
-const BACKEND_BASE = 'http://127.0.0.1:8000';
 const E2E_SESSION_ID = 'sess-e2e-001';
 
 const fulfillJson = async (route: any, payload: unknown) => {
@@ -151,7 +150,7 @@ test.beforeEach(async ({ page }) => {
 
 });
 
-test('ChatInput: report button sends options.output_mode=investment_report', async ({ page }) => {
+test('ChatInput: deep mode + send uses options.output_mode=investment_report', async ({ page }) => {
   let captured: any = null;
 
   await page.route('**/chat/supervisor/stream', async (route) => {
@@ -162,13 +161,14 @@ test('ChatInput: report button sends options.output_mode=investment_report', asy
   await page.goto('/chat');
 
   await page.locator('#chat-input').fill('分析影响');
-  await page.getByTestId('chat-report-btn').click();
+  await page.getByTestId('chat-mode-deep-btn').click();
+  await page.getByTestId('chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();
   expect(captured?.options?.output_mode).toBe('investment_report');
 });
 
-test('MiniChat: report button sends options.output_mode=investment_report', async ({ page }) => {
+test('MiniChat: deep mode + send uses options.output_mode=investment_report', async ({ page }) => {
   let captured: any = null;
 
   await page.route('**/chat/supervisor/stream', async (route) => {
@@ -179,7 +179,8 @@ test('MiniChat: report button sends options.output_mode=investment_report', asyn
   await page.goto('/dashboard/AAPL');
 
   await page.getByTestId('mini-chat-input').fill('分析影响');
-  await page.getByTestId('mini-chat-report-btn').click();
+  await page.getByTestId('mini-chat-mode-deep-btn').click();
+  await page.getByTestId('mini-chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();
   expect(captured?.options?.output_mode).toBe('investment_report');
@@ -253,7 +254,7 @@ test('Session continuity: chat and mini chat share session_id', async ({ page })
   await page.getByTestId('mini-chat-send-btn').click();
   await expect.poll(() => payloads.length).toBeGreaterThanOrEqual(2);
 
-  expect(payloads[0]?.session_id).toBeUndefined();
+  expect(typeof payloads[0]?.session_id).toBe('string');
   expect(payloads[1]?.session_id).toBe(E2E_SESSION_ID);
 });
 

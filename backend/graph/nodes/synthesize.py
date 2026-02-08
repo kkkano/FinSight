@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from backend.graph.executor import summarize_selection
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
+from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
 
@@ -102,7 +103,7 @@ def _coerce_payload_to_strings(payload: dict[str, Any]) -> dict[str, Any]:
                     line = item.strip()
                 else:
                     try:
-                        line = json.dumps(item, ensure_ascii=False)
+                        line = json_dumps_safe(item, ensure_ascii=False)
                     except Exception:
                         line = str(item)
                 if line:
@@ -112,7 +113,7 @@ def _coerce_payload_to_strings(payload: dict[str, Any]) -> dict[str, Any]:
 
         if isinstance(value, dict):
             try:
-                coerced[key] = json.dumps(value, ensure_ascii=False)
+                coerced[key] = json_dumps_safe(value, ensure_ascii=False)
             except Exception:
                 coerced[key] = str(value)
             continue
@@ -157,7 +158,7 @@ def _format_risks(candidate: Any, *, base_risks: str) -> str:
                 value = v.strip()
             else:
                 try:
-                    value = json.dumps(v, ensure_ascii=False)
+                    value = json_dumps_safe(v, ensure_ascii=False)
                 except Exception:
                     value = str(v)
                 value = value.strip()
@@ -253,7 +254,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
         if out is None:
             return "- （暂无价格数据；如需可启用 live tools）"
         if isinstance(out, (dict, list)):
-            return f"- {json.dumps(out, ensure_ascii=False)[:800]}"
+            return f"- {json_dumps_safe(out, ensure_ascii=False)[:800]}"
         text = str(out).strip()
         return f"- {text}" if text else "- （价格数据为空）"
 
@@ -558,7 +559,10 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 metric_lines = ["- （暂无绩效对比数据）" if metrics_missing else "- （绩效对比数据不可用或格式异常）"]
 
             # Add a brief context line (no hard numbers) to help users answer "worth investing".
-            conclusion_lines.append("- 一般来说：MSFT 更偏云/AI 平台型；AAPL 更偏消费硬件+生态型。")
+            if len(tickers_list) >= 2:
+                conclusion_lines.append(
+                    f"- 对比视角：{' vs '.join(tickers_list)} 各自的商业模式、竞争壁垒和增长驱动力需结合具体业务分析。"
+                )
             conclusion_lines.append("- 更值得投资取决于：时间周期、风险偏好与估值/基本面假设。")
 
             return RenderVars(
@@ -665,7 +669,9 @@ async def synthesize(state: GraphState) -> dict:
     try:
         from backend.llm_config import create_llm
 
-        llm = create_llm(temperature=float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.2")))
+        _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.2"))
+        llm = create_llm(temperature=_synth_temp)
+        llm_factory = lambda: create_llm(temperature=_synth_temp)  # noqa: E731
     except Exception as exc:
         render_vars = _stub_render_vars(state)
         append_failure(
@@ -714,7 +720,7 @@ Return JSON ONLY. No markdown, no commentary.
 </task>
 
 <inputs>
-{json.dumps(inputs, ensure_ascii=False, indent=2)}
+{json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
 <output_format>
@@ -754,6 +760,7 @@ summary, highlights, analysis.
         resp = await ainvoke_with_rate_limit_retry(
             llm,
             [HumanMessage(content=prompt)],
+            llm_factory=llm_factory,
             acquire_token=True,
             on_retry=_on_retry,
         )

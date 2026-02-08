@@ -6,8 +6,13 @@
 
 - `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`：LangGraph 重构 SSOT（唯一开发标准）
 - `docs/11_PRODUCTION_RUNBOOK.md`：生产部署/回滚/排障 Runbook
+- `docs/TEAM_EXECUTION_MEMORY.md`：会话丢失后的执行恢复锚点（流程/证据/devlog 约束）
 - `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
 - `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
+- `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档（含 Mermaid 图）
+- `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
+- `docs/WORKBENCH_ROADMAP.md`：工作台开发路线图（Sprint 1-4）
+- `docs/ISSUE_TRACKER.md`：全量问题追踪清单（P0/P1/P2 checkbox）
 - `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
 - `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
 - `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策

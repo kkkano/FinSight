@@ -1,0 +1,188 @@
+{
+  "sample_size": 20,
+  "samples": [
+    {
+      "idx": 1,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 2,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 3,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 4,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 5,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 6,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 7,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 8,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 9,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 10,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 11,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 12,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 13,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 14,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 15,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 16,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 17,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 18,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 19,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    },
+    {
+      "idx": 20,
+      "status_code": 200,
+      "events": 31,
+      "thinking_events": 25,
+      "has_explainable_step": true,
+      "first_stage": "langgraph_start",
+      "first_message": "LangGraph"
+    }
+  ],
+  "pass_count": 20,
+  "coverage": 1.0,
+  "pass": true
+}

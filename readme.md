@@ -61,6 +61,9 @@ python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 | Variable | Default | Purpose |
 |---|---:|---|
 | `LANGGRAPH_PLANNER_MODE` | `stub` | `stub` deterministic planning, `llm` constrained PlanIR generation |
+| `LANGGRAPH_PLANNER_AB_ENABLED` | `false` | Enable deterministic planner prompt A/B assignment by thread |
+| `LANGGRAPH_PLANNER_AB_SPLIT` | `50` | A-variant traffic percentage (0-100), remainder goes to B |
+| `LANGGRAPH_PLANNER_AB_SALT` | `planner-ab-v1` | Salt for stable A/B bucketing |
 | `LANGGRAPH_SYNTHESIZE_MODE` | `stub` | `stub` deterministic render vars, `llm` synthesis with validation |
 | `LANGGRAPH_EXECUTE_LIVE_TOOLS` | `false` | Execute real tools/agents in executor |
 | `LANGGRAPH_SHOW_EVIDENCE` | `false` | Show evidence links in markdown output |
@@ -68,6 +71,12 @@ python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 | `LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK` | `true` | Allow fallback to memory checkpointer on backend failures |
 | `API_AUTH_ENABLED` | `false` | Enable API-key auth |
 | `RATE_LIMIT_ENABLED` | `false` | Enable HTTP rate limiting |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | CORS allow origins (comma-separated) |
+| `CORS_ALLOW_CREDENTIALS` | `false` | Whether to allow credentialed CORS requests |
+| `API_PUBLIC_PATHS` | `/health,/docs,/openapi.json,/redoc` | Public unauthenticated paths when auth is enabled |
+| `SESSION_CONTEXT_TTL_MINUTES` | `240` | Session reference context TTL (minutes) |
+| `SESSION_CONTEXT_MAX_THREADS` | `1000` | Max in-memory session contexts before LRU eviction |
+| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Frontend runtime backend base URL |
 
 ---
 
@@ -153,6 +162,7 @@ flowchart LR
 - `GET /health`
 - `GET /metrics`
 - `GET /diagnostics/orchestrator`
+- `GET /diagnostics/planner-ab` (alias: `/diagnostics/planner_ab`)
 
 ### Contract Versions
 

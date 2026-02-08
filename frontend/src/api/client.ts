@@ -1,8 +1,9 @@
-import axios from 'axios';
-// 确保你有 types/index.ts 文件定义了这些接口
+﻿import axios from 'axios';
+// 确保 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
 import type { SelectionItem } from '../types/dashboard';
+import { API_BASE_URL, buildApiUrl } from '../config/runtime';
 
 /**
  * Chat Context - 临时上下文（不入库，仅本次请求生效）
@@ -18,10 +19,22 @@ export interface ChatOptions {
   output_mode?: 'chat' | 'brief' | 'investment_report';
   strict_selection?: boolean;
   locale?: string;
+  trace_raw_override?: 'on' | 'off' | 'inherit';
 }
 
-// 本地开发地址，生产环境请改为实际域名
-const API_BASE_URL = 'http://127.0.0.1:8000';
+export interface ReportIndexItem {
+  report_id: string;
+  session_id: string;
+  ticker?: string;
+  title?: string;
+  summary?: string;
+  generated_at?: string;
+  confidence_score?: number;
+  is_favorite?: boolean;
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -95,7 +108,7 @@ export const apiClient = {
         ticker
       });
       return response.data;
-    } catch (error) {
+    } catch {
       // 即使检测失败也不要阻断流程，返回默认值
       return { success: false, should_generate: false };
     }
@@ -110,6 +123,53 @@ export const apiClient = {
   // 保存用户配置
   async saveConfig(config: any): Promise<any> {
     const response = await api.post('/api/config', config);
+    return response.data;
+  },
+
+  async listReportIndex(params: {
+    sessionId: string;
+    ticker?: string;
+    query?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    tag?: string;
+    favoriteOnly?: boolean;
+    limit?: number;
+  }): Promise<{ success: boolean; session_id: string; items: ReportIndexItem[]; count: number }> {
+    const response = await api.get('/api/reports/index', {
+      params: {
+        session_id: params.sessionId,
+        ticker: params.ticker,
+        query: params.query,
+        date_from: params.dateFrom,
+        date_to: params.dateTo,
+        tag: params.tag,
+        favorite_only: params.favoriteOnly,
+        limit: params.limit,
+      },
+    });
+    return response.data;
+  },
+
+  async getReportReplay(params: {
+    sessionId: string;
+    reportId: string;
+  }): Promise<{ success: boolean; session_id: string; report: any; citations: any[]; trace_digest: Record<string, any> }> {
+    const response = await api.get(`/api/reports/replay/${encodeURIComponent(params.reportId)}`, {
+      params: { session_id: params.sessionId },
+    });
+    return response.data;
+  },
+
+  async setReportFavorite(params: {
+    sessionId: string;
+    reportId: string;
+    isFavorite: boolean;
+  }): Promise<{ success: boolean; session_id: string; report_id: string; is_favorite: boolean }> {
+    const response = await api.post(`/api/reports/${encodeURIComponent(params.reportId)}/favorite`, {
+      session_id: params.sessionId,
+      is_favorite: params.isFavorite,
+    });
     return response.data;
   },
 
@@ -196,6 +256,7 @@ export const apiClient = {
     context?: ChatContext,  // 临时上下文（不入库，仅本次请求生效）
     options?: ChatOptions,  // 输出/路由选项（不入库，仅本次请求生效）
     sessionId?: string,
+    traceRawEnabled: boolean = true,
   ): Promise<void> {
     let eventCounter = 0;
 
@@ -210,7 +271,7 @@ export const apiClient = {
       body.options = options;
     }
 
-    const response = await fetch(`${API_BASE_URL}/chat/supervisor/stream`, {
+    const response = await fetch(buildApiUrl('/chat/supervisor/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -241,8 +302,8 @@ export const apiClient = {
             const data = JSON.parse(rawJson);
 
             // 发送原始事件到控制台
-            if (onRawEvent) {
-              const eventType: RawEventType = data.type || 'unknown';
+            if (onRawEvent && traceRawEnabled) {
+              const eventType: RawEventType = data.type || 'any';
               onRawEvent({
                 id: `sse-${Date.now()}-${eventCounter++}`,
                 timestamp: new Date().toISOString(),
@@ -265,7 +326,7 @@ export const apiClient = {
               // 从 thinking 事件中提取 ThinkingStep 格式的数据
               // 后端发送 {type: "thinking", stage: "...", message: "...", result: {...}, timestamp: "..."}
               const step = {
-                stage: data.stage || 'unknown',
+                stage: data.stage || 'any',
                 message: data.message,
                 result: data.result,
                 timestamp: data.timestamp || new Date().toISOString()
@@ -276,7 +337,7 @@ export const apiClient = {
             } else if (data.type === 'error') {
               onError?.(data.message);
             } else if (['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)) {
-              // Agent 进度事件 - 转换为 thinking 格式（兼容后端字段 agent/name/inputs/step_id）
+            // Agent 进度事件 - 转换为 thinking 格式（兼容后端字段）
               const agentName = data.agent || data.name;
               onThinking?.({
                 stage: data.type,
@@ -294,11 +355,11 @@ export const apiClient = {
             }
           } catch (e) {
             // 解析失败也要发送到控制台
-            if (onRawEvent) {
+            if (onRawEvent && traceRawEnabled) {
               onRawEvent({
                 id: `sse-err-${Date.now()}-${eventCounter++}`,
                 timestamp: new Date().toISOString(),
-                eventType: 'unknown',
+                eventType: 'any',
                 rawData: rawJson,
                 parsedData: { parseError: true, raw: rawJson, error: String(e) },
                 size: new Blob([rawJson]).size,
@@ -311,3 +372,6 @@ export const apiClient = {
     }
   },
 };
+
+
+

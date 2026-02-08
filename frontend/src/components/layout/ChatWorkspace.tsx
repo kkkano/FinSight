@@ -1,6 +1,6 @@
 import { Moon, Sun } from 'lucide-react';
 import type { MouseEvent } from 'react';
-import { AgentLogPanel } from '../AgentLogPanel';
+import { AgentLogPanel } from '../agent-log';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
 import { ContextPanelShell } from './ContextPanelShell';

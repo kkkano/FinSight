@@ -317,7 +317,8 @@ class TraceEmitter:
     def emit_data_source_query(self, source_name: str, query_type: str,
                                ticker: str = None, success: bool = True,
                                duration_ms: int = None, error: str = None,
-                               fallback: bool = False, agent: str = None):
+                               fallback: bool = False, agent: str = None,
+                               tried_sources: Optional[list[str]] = None):
         """发射数据源查询事件"""
         msg = f"📊 {source_name}: {query_type}"
         if ticker:
@@ -339,6 +340,7 @@ class TraceEmitter:
                 "ticker": ticker,
                 "success": success,
                 "fallback": fallback,
+                "tried_sources": tried_sources or [],
                 "error": error
             }
         ))

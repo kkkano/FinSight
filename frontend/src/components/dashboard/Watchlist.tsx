@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard Watchlist 组件
  *
  * 功能：
@@ -203,7 +203,8 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
             <button
               onClick={loadQuotes}
               disabled={isRefreshing}
-              className="p-1.5 rounded-md hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary disabled:opacity-50"
+              aria-label="刷新报价"
+              className="p-1.5 rounded-lg hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary disabled:opacity-50"
               title="刷新报价"
             >
               <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
@@ -211,7 +212,8 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
             {/* 添加按钮 */}
             <button
               onClick={() => setIsAdding(true)}
-              className="p-1.5 rounded-md hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary"
+              aria-label="添加自选"
+              className="p-1.5 rounded-lg hover:bg-fin-hover transition-colors text-fin-text-secondary hover:text-fin-primary"
               title="添加自选"
             >
               <Plus size={14} />
@@ -229,11 +231,13 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
               onChange={(e) => setNewSymbol(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="输入代码"
-              className="flex-1 px-2 py-1.5 text-xs border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
+              aria-label="输入股票代码"
+              className="flex-1 px-2 py-1.5 text-xs border border-fin-border rounded-lg bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
             />
             <button
               onClick={handleAdd}
-              className="px-2 py-1.5 text-xs bg-fin-primary text-white rounded hover:opacity-90 transition-opacity"
+              aria-label="确认添加"
+              className="px-2 py-1.5 text-xs bg-fin-primary text-white rounded-lg hover:opacity-90 transition-opacity"
             >
               添加
             </button>
@@ -242,6 +246,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                 setIsAdding(false);
                 setNewSymbol('');
               }}
+              aria-label="取消添加"
               className="p-1.5 text-fin-muted hover:text-fin-text transition-colors"
             >
               <X size={12} />
@@ -285,7 +290,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                     >
                       {item.symbol}
                     </span>
-                    <span className="text-[10px] text-fin-muted truncate max-w-[80px]">
+                    <span className="text-2xs text-fin-muted truncate max-w-[80px]">
                       {item.name || item.symbol}
                     </span>
                   </div>
@@ -295,7 +300,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                     <span className="text-xs font-medium text-fin-text">
                       {hasPrice ? `$${quote.price!.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
                     </span>
-                    <span className={`text-[10px] font-medium ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                    <span className={`text-2xs font-medium ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
                       {hasPrice ? formatChangePct(quote.changePct) : '--'}
                     </span>
                   </div>
@@ -308,6 +313,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                         e.stopPropagation();
                         openYahooFinance(item.symbol);
                       }}
+                      aria-label={`在 Yahoo Finance 查看 ${item.symbol}`}
                       className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-primary transition-colors"
                       title="在 Yahoo Finance 查看"
                     >
@@ -320,6 +326,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                         e.stopPropagation();
                         handleDelete(item.symbol);
                       }}
+                      aria-label={`从自选列表中删除 ${item.symbol}`}
                       className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-danger transition-colors"
                       title="删除"
                     >
@@ -358,7 +365,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 
       {/* 底部信息 */}
       <div className="p-3 border-t border-fin-border text-center">
-        <span className="text-[10px] text-fin-muted">
+        <span className="text-2xs text-fin-muted">
           共 {watchlist.length} 个自选
         </span>
       </div>
@@ -367,3 +374,5 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 }
 
 export default Watchlist;
+
+

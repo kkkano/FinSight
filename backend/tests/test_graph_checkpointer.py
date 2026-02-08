@@ -67,3 +67,15 @@ def test_checkpointer_no_fallback_raises(monkeypatch):
             checkpointer_mod.get_checkpointer_bundle()
     finally:
         _reset_bundle()
+
+
+def test_checkpointer_postgres_requires_dsn(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_BACKEND", "postgres")
+    monkeypatch.delenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN", raising=False)
+    monkeypatch.setenv("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "false")
+    _reset_bundle()
+    try:
+        with pytest.raises(ValueError, match="LANGGRAPH_CHECKPOINT_POSTGRES_DSN"):
+            checkpointer_mod.get_checkpointer_bundle()
+    finally:
+        _reset_bundle()

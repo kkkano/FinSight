@@ -6,8 +6,25 @@ on:
   pull_request:
 
 jobs:
-  backend-pytest:
+  stage1-frontend-lint:
+    name: Stage 1 - Frontend Lint
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Run frontend lint
+        run: npm run lint --prefix frontend
+
+  stage2-backend-tests:
+    name: Stage 2 - Backend Tests
+    runs-on: ubuntu-latest
+    needs: [stage1-frontend-lint]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,17 +34,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
-      - name: Run backend pytest smoke
-        run: |
-          pytest -q \
-            backend/tests/test_langgraph_api_stub.py \
-            backend/tests/test_phase5_no_double_routing.py \
-            backend/tests/test_health_and_validation.py \
-            backend/tests/test_streaming_reference_resolution.py
+      - name: Run backend pytest suite
+        run: pytest -q backend/tests
 
-  retrieval-eval:
+  stage3-retrieval-unit:
+    name: Stage 3 - Retrieval Eval Unit
     runs-on: ubuntu-latest
+    needs: [stage2-backend-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run retrieval eval runner tests
+        run: pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py
+
+  stage4-retrieval-gate:
+    name: Stage 4 - Retrieval Gate
+    runs-on: ubuntu-latest
+    needs: [stage3-retrieval-unit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,46 +67,84 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Run retrieval quality gate
-        run: |
-          python tests/retrieval_eval/run_retrieval_eval.py \
-            --gate \
-            --report-prefix ci \
-            --output-dir tests/retrieval_eval/reports
-      - name: Upload retrieval eval reports
+        run: python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix ci
+      - name: Verify retrieval gate summary
+        run: test -f tests/retrieval_eval/reports/gate_summary.json
+      - name: Upload retrieval reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: retrieval-eval-reports
-          path: tests/retrieval_eval/reports/
+          name: retrieval-reports
+          path: |
+            tests/retrieval_eval/reports/
+            tests/retrieval_eval/reports/gate_summary.json
 
-  frontend-build:
+  stage5-frontend-build:
+    name: Stage 5 - Frontend Build
     runs-on: ubuntu-latest
+    needs: [stage4-retrieval-gate]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
       - name: Build frontend
         run: npm run build --prefix frontend
+      - name: Upload frontend build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: |
+            frontend/dist/
 
-  e2e-smoke:
+  stage6-e2e:
+    name: Stage 6 - E2E
     runs-on: ubuntu-latest
-    needs: [frontend-build]
+    needs: [stage5-frontend-build]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - name: Run e2e smoke
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e tests
         run: npm run test:e2e --prefix frontend
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+
+  stage7-artifact-bundle:
+    name: Stage 7 - Bundle Artifacts
+    runs-on: ubuntu-latest
+    needs: [stage6-e2e]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-and-reports
+          path: |
+            .coverage
+            coverage.xml
+            htmlcov/
+            tests/retrieval_eval/reports/
+            tests/retrieval_eval/reports/gate_summary.json
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/dist/

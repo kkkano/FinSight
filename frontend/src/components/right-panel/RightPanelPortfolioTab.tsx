@@ -30,7 +30,7 @@ export function RightPanelPortfolioTab({
         <button
           type="button"
           onClick={() => (isPortfolioEditing ? onSavePortfolioEdit() : onStartPortfolioEdit())}
-          className="text-[10px] px-2 py-0.5 rounded-full border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary transition-colors"
+          className="text-2xs px-2 py-0.5 rounded-full border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary transition-colors"
         >
           {isPortfolioEditing ? 'Save' : 'Edit'}
         </button>
@@ -44,7 +44,7 @@ export function RightPanelPortfolioTab({
                 <div key={item.ticker} className="flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-fin-text">{item.ticker}</span>
-                    <span className="text-[10px] text-fin-muted">
+                    <span className="text-2xs text-fin-muted">
                       {typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '--'}
                     </span>
                   </div>
@@ -66,7 +66,7 @@ export function RightPanelPortfolioTab({
           ) : (
             <div className="text-xs text-fin-muted">Add watchlist tickers to set holdings.</div>
           )}
-          <div className="flex items-center justify-between text-[10px] text-fin-muted">
+          <div className="flex items-center justify-between text-2xs text-fin-muted">
             <span>Blank or 0 removes a position.</span>
             <button type="button" onClick={onCancelPortfolioEdit} className="hover:text-fin-text">
               Cancel
@@ -81,20 +81,20 @@ export function RightPanelPortfolioTab({
               {portfolioSummary.dayChange >= 0 ? '+' : ''}
               {portfolioSummary.dayChange.toFixed(2)} ({formatPct(portfolioSummary.avgChange)})
             </div>
-            <div className="text-[10px] text-fin-muted">Holdings {portfolioSummary.holdingsCount}</div>
+            <div className="text-2xs text-fin-muted">Holdings {portfolioSummary.holdingsCount}</div>
           </div>
           <div className="space-y-2">
             {portfolioSummary.holdings.map((item) => (
               <div key={item.ticker} className="flex items-center justify-between text-xs">
                 <div className="flex flex-col">
                   <span className="font-semibold text-fin-text">{item.ticker}</span>
-                  <span className="text-[10px] text-fin-muted">
+                  <span className="text-2xs text-fin-muted">
                     {item.shares} shares{typeof item.price === 'number' ? ` @ $${item.price.toFixed(2)}` : ''}
                   </span>
                 </div>
                 <div className="text-right">
                   <div className="text-fin-text">${item.value.toLocaleString()}</div>
-                  <div className={`text-[10px] ${item.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
+                  <div className={`text-2xs ${item.dayChange >= 0 ? 'text-fin-success' : 'text-fin-danger'}`}>
                     {item.dayChange >= 0 ? '+' : ''}
                     {item.dayChange.toFixed(2)}
                   </div>

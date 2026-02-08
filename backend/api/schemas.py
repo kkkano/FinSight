@@ -61,6 +61,10 @@ class ChatOptions(BaseModel):
         description="是否强制围绕 selection（默认 False，更自由）",
     )
     locale: Optional[str] = Field(None, description="语言/区域，例如 zh-CN")
+    trace_raw_override: Optional[Literal["on", "off", "inherit"]] = Field(
+        None,
+        description="Raw Trace 可见性覆盖：on/off/inherit（inherit=沿用服务端默认）",
+    )
 
 
 class ChatRequest(BaseModel):
@@ -164,6 +168,7 @@ class ConfigRequest(BaseModel):
     llm_model: Optional[str] = None
     llm_api_key: Optional[str] = None
     llm_api_base: Optional[str] = None
+    llm_endpoints: Optional[list[dict[str, Any]]] = None
     layout_mode: str = Field("centered", description="布局模式")
 
     model_config = {"extra": "allow"}

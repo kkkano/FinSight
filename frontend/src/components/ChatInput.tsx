@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, X, FileText } from 'lucide-react';
+import { SendHorizontal, Paperclip, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
@@ -35,10 +35,10 @@ const extractTicker = (text: string): string | null => {
   const tickers = extractTickers(text);
   return tickers.length ? tickers[0] : null;
 };
-const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
+const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '图表', 'k线'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
-// Agent 日志来源映射 (stage -> AgentLogSource)
+// Agent 阶段到日志源的映射 (stage -> AgentLogSource)
 const mapStageToSource = (stage: string): AgentLogSource => {
   const mapping: Record<string, AgentLogSource> = {
     supervisor_start: 'supervisor',
@@ -64,7 +64,7 @@ const mapStageToSource = (stage: string): AgentLogSource => {
   };
   if (stage.startsWith('langgraph_')) return 'supervisor';
   if (stage.startsWith('executor_step')) return 'supervisor';
-  // 检查是否包含 agent 名称
+  // 未匹配时尝试根据 stage 名称匹配 agent
   if (stage.includes('news')) return 'news_agent';
   if (stage.includes('price')) return 'price_agent';
   if (stage.includes('fundamental')) return 'fundamental_agent';
@@ -167,6 +167,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     updateAgentStatus,
     // Raw SSE Events
     addRawEvent,
+    traceRawEnabled,
   } = useStore();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -197,7 +198,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     return { ticker, chartType: 'line' };
   };
 
-  const handleSend = async (forcedOutputMode?: 'investment_report') => {
+  const handleSend = async () => {
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
@@ -208,12 +209,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput('');
     setDraft('');
 
-    // 获取当前消息列表用于构建历史（在添加新消息之前）
+    // Build history before appending new messages.
     const currentMessages = useStore.getState().messages;
     const history = currentMessages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-DEFAULT_HISTORY_LIMIT)  // 最近 N 条消息（可配置）
-      .map(m => ({ role: m.role, content: m.content }));
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-DEFAULT_HISTORY_LIMIT)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     addMessage({
       id: uuidv4(),
@@ -222,7 +223,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       timestamp: Date.now(),
     });
 
-    // 创建 AI 消息占位符
     const aiMsgId = uuidv4();
     addMessage({
       id: aiMsgId,
@@ -236,7 +236,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setStatus('Streaming response...');
     setExecutionState('Preparing request', 0);
 
-    // 记录请求开始日志
     addAgentLog({
       id: uuidv4(),
       timestamp: new Date().toISOString(),
@@ -244,17 +243,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       level: 'info',
       message: `New query: "${userMsgContent.slice(0, 50)}${userMsgContent.length > 50 ? '...' : ''}"`,
     });
-    // 重置所有 Agent 状态为 idle
     updateAgentStatus('supervisor', { status: 'running', startTime: new Date().toISOString() });
 
     let fullContent = '';
     let thinkingSteps: ThinkingStep[] = [];
-    const effectiveOutputMode = forcedOutputMode ?? outputMode;
+    const effectiveOutputMode = outputMode;
 
     try {
       await apiClient.sendMessageStream(
         userMsgContent,
-        // onToken - 逐字更新
         (token) => {
           const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
           if (safeToken) {
@@ -262,12 +259,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }
           updateMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
-        // onToolStart
         (name) => {
           setStatus(`Calling tool: ${name}...`);
           const current = useStore.getState().executionProgress ?? 0;
           setExecutionState(`Tool: ${name}`, Math.max(current, 72));
-          // 记录工具调用日志
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -277,12 +272,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             tool_name: name,
           });
         },
-        // onToolEnd
         () => {
           setStatus('Generating response...');
           const current = useStore.getState().executionProgress ?? 0;
           setExecutionState('Synthesizing response', Math.max(current, 80));
-          // 记录工具完成日志
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -291,77 +284,70 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             message: 'Tool execution completed',
           });
         },
-        // onDone - Phase 2: 支持 report 数据
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
-          console.log('[ChatInput] onDone called, report:', report); // Debug Log
+          console.log('[ChatInput] onDone called, report:', report);
           if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
             setSessionId(meta.session_id);
           }
-          // 合并实时收集的 thinking 和 done 事件中的 thinking
-          // 如果 done 事件中有 thinking，优先使用（通常是完整版），但也保留之前的实时步骤
+
           if (thinking && thinking.length) {
-            // 如果 done 事件中的 thinking 已包含完整流程，直接使用
-            // 否则合并两者（去重）
-            const existingStages = new Set(thinkingSteps.map(s => `${s.stage}-${s.message}`));
-            const newSteps = thinking.filter(s => !existingStages.has(`${s.stage}-${s.message}`));
+            const existingStages = new Set(thinkingSteps.map((s) => `${s.stage}-${s.message}`));
+            const newSteps = thinking.filter((s) => !existingStages.has(`${s.stage}-${s.message}`));
             if (newSteps.length > 0 && thinkingSteps.length > 0) {
-              // 合并：保留实时步骤 + 添加新步骤
               thinkingSteps = [...thinkingSteps, ...newSteps];
             } else if (thinking.length >= thinkingSteps.length) {
-              // done 事件中的更完整，直接使用
               thinkingSteps = thinking;
             }
-            // else: 保留现有的 thinkingSteps
           }
+
           if (!fullContent || fullContent.trim() === '' || fullContent.trim() === '[object Object]') {
-            const fallback = typeof meta?.response === 'string'
-              ? meta.response
-              : (report?.summary || '');
+            const fallback = typeof meta?.response === 'string' ? meta.response : report?.summary || '';
             if (fallback) {
               fullContent = fallback;
             }
           }
-          // 检测是否需要图表
+
           const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
           if (nextFocus) {
             setTicker(nextFocus);
           }
 
           const evidencePool = meta?.evidence_pool ?? meta?.data?.evidence_pool;
-
           const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
           const markerRegex = /\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g;
-          const existingTickers = new Set(
-            Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1])
-          );
+          const existingTickers = new Set(Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1]));
           const tickers = extractTickers(userMsgContent);
           const forceMulti = tickers.length > 1;
+
           if (chartInfo.chartType || forceMulti) {
-            const targetTickers = tickers.length ? tickers : (chartInfo.ticker ? [chartInfo.ticker] : []);
+            const targetTickers = tickers.length ? tickers : chartInfo.ticker ? [chartInfo.ticker] : [];
             const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
             if (missingTickers.length > 0) {
-              const chartType = forceMulti ? "line" : (chartInfo.chartType || "line");
+              const chartType = forceMulti ? 'line' : chartInfo.chartType || 'line';
               missingTickers.forEach((ticker) => {
-                fullContent += `
-
-[CHART:${ticker}:${chartType}]`;
+                fullContent += `\n\n[CHART:${ticker}:${chartType}]`;
               });
               if (targetTickers.length === 1) {
                 setTicker(targetTickers[0]);
               }
             }
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: false, report, thinking: thinkingSteps, evidence_pool: evidencePool });
+
+          updateMessage(aiMsgId, {
+            content: fullContent,
+            isLoading: false,
+            report,
+            thinking: thinkingSteps,
+            evidence_pool: evidencePool,
+          });
           setExecutionState('Completed', 100);
-          setStatus(null); // 清除状态，不再显示"Streaming response"
+          setStatus(null);
         },
-        // onError
         (error) => {
           updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
           setStatus('Error occurred');
           const current = useStore.getState().executionProgress ?? 0;
           setExecutionState('Execution failed', current);
-          // 记录错误日志
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -369,10 +355,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             level: 'error',
             message: `Error: ${error}`,
           });
-          // 更新所有运行中的 Agent 状态为错误
           updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
         },
-        // onThinking
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
           updateMessage(aiMsgId, { thinking: thinkingSteps });
@@ -381,13 +365,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           const stepLabel = formatExecutionStep(step.stage, step.message);
           setExecutionState(stepLabel, progress);
 
-          // 将 thinking 事件转换为 AgentLog
           const source = mapStageToSource(step.stage);
           const isError = step.stage.includes('error');
           const isComplete = step.stage.includes('done') || step.stage.includes('complete');
           const isStart = step.stage.includes('start');
 
-          // 添加日志
           addAgentLog({
             id: uuidv4(),
             timestamp: step.timestamp || new Date().toISOString(),
@@ -397,7 +379,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             details: step.result,
           });
 
-          // 更新 Agent 状态
           if (isStart) {
             updateAgentStatus(source, {
               status: 'running',
@@ -418,13 +399,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             });
           }
         },
-        // history - 传递对话历史用于上下文理解
         history,
-        // onRawEvent - 原始 SSE 事件推送到控制台
         (event) => {
           addRawEvent(event);
         },
-        // context - 临时上下文（Selection + Active Symbol）
         (() => {
           const ctx: ChatContext = {};
           if (activeAsset?.symbol) {
@@ -436,11 +414,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           return Object.keys(ctx).length > 0 ? ctx : undefined;
         })(),
         effectiveOutputMode === 'investment_report'
-          ? { output_mode: 'investment_report', strict_selection: false }
-          : { output_mode: 'brief' },
+          ? {
+              output_mode: 'investment_report',
+              strict_selection: false,
+              trace_raw_override: traceRawEnabled ? 'on' : 'off',
+            }
+          : { output_mode: 'brief', trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         sessionId || undefined,
+        traceRawEnabled,
       );
-    } catch (error) {
+    } catch {
       updateMessage(aiMsgId, {
         content: 'Network request failed. Please confirm the backend service is running.',
         isLoading: false,
@@ -450,13 +433,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       setExecutionState('Request failed', current);
     } finally {
       setLoading(false);
-      setStatus(null); // 立即清除状态
+      setStatus(null);
       resetExecutionState();
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
-  // 同步外部草稿（重试/编辑时填充输入框）
   useEffect(() => {
     setInput(draft || '');
     if (draft && inputRef.current) {
@@ -481,21 +463,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
   return (
     <div className="p-4 bg-fin-bg border-t border-fin-border">
-      {/* Selection Pill - 显示当前选中的新闻/报告 */}
+      {/* Selection Pill - 显示当前选中的内容引用 */}
       {activeSelections.length > 0 && (
         <div className="max-w-5xl mx-auto mb-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium max-w-[400px] border border-amber-500/20">
             <Paperclip size={12} className="shrink-0" />
             <span className="truncate">
-              {activeSelections[0].type === 'news' ? '📰' : '📊'}{' '}
-              引用: {activeSelections.length === 1
+              {activeSelections[0].type === 'news' ? '新闻' : '报告'}{' '}
+              已选: {activeSelections.length === 1
                 ? `${activeSelections[0].title.slice(0, 40)}${activeSelections[0].title.length > 40 ? '...' : ''}`
-                : `${activeSelections.length}条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
+                : `${activeSelections.length} 条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
             </span>
             <button
               onClick={clearSelection}
               className="shrink-0 p-0.5 rounded-full hover:bg-amber-500/20 transition-colors"
-              title="取消引用"
+              title="清除选择"
+              aria-label="清除选择"
             >
               <X size={12} />
             </button>
@@ -506,6 +489,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         <span className="text-fin-muted">输出模式</span>
         <button
           type="button"
+          data-testid="chat-mode-brief-btn"
           onClick={() => setOutputMode('brief')}
           disabled={isChatLoading}
           className={`px-2 py-1 rounded border transition-colors ${
@@ -518,6 +502,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         </button>
         <button
           type="button"
+          data-testid="chat-mode-deep-btn"
           onClick={() => setOutputMode('investment_report')}
           disabled={isChatLoading || !canGenerateReport}
           className={`px-2 py-1 rounded border transition-colors ${
@@ -525,9 +510,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               ? 'border-amber-500 text-amber-500 bg-amber-500/10'
               : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
-          title={canGenerateReport ? '切换到研报模式' : '请选择标的或引用内容后生成研报'}
+          title={canGenerateReport ? '切换到深度分析模式' : '请选择标的或引用内容后启用深度分析'}
         >
-          研报
+          深度
         </button>
       </div>
       <div className="relative flex items-center max-w-5xl mx-auto">
@@ -540,25 +525,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           onKeyDown={handleKeyDown}
           placeholder="Ask anything about a ticker... (e.g., AAPL price trend)"
           disabled={isChatLoading}
+          aria-label="输入聊天消息"
           className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted"
         />
 
         <div className="absolute right-2 flex items-center gap-2">
           <button
-            data-testid="chat-report-btn"
-            onClick={() => handleSend('investment_report')}
-            disabled={!input.trim() || isChatLoading || !canGenerateReport}
-            className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="生成研报"
-          >
-            <FileText size={18} />
-          </button>
-          <button
             data-testid="chat-send-btn"
             onClick={() => handleSend()}
             disabled={!input.trim() || isChatLoading}
+            aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
             className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={outputMode === 'investment_report' ? '发送（研报模式）' : '发送'}
+            title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
           >
             <SendHorizontal size={18} />
           </button>
@@ -571,34 +549,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('NVDA 最新股价和技术面分析')}
+            onClick={() => setInput('NVDA technical analysis')}
             disabled={isChatLoading}
           >
-            NVDA 技术分析
+            NVDA technical
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('对比 AAPL 和 MSFT 哪个更值得投资')}
+            onClick={() => setInput('Compare AAPL vs MSFT')}
             disabled={isChatLoading}
           >
-            AAPL vs MSFT 对比
+            AAPL vs MSFT
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('特斯拉最近有什么重大新闻')}
+            onClick={() => setInput('Latest Tesla key news')}
             disabled={isChatLoading}
           >
-            特斯拉新闻
+            Tesla news
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('详细分析苹果公司，生成投资报告')}
+            onClick={() => setInput('Detailed analysis for Apple with investment view')}
             disabled={isChatLoading}
           >
-            苹果深度报告
+            Apple deep analysis
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+

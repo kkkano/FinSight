@@ -14,6 +14,7 @@ from backend.graph.adapters import (
 )
 from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
+from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 
 
@@ -67,6 +68,26 @@ def _build_rag_doc_id(*, thread_id: str, evidence: dict[str, Any], index: int) -
     snippet = str(evidence.get("snippet") or "").strip()
     material = f"{thread_id}|{index}|{title}|{url}|{snippet}".encode("utf-8")
     return hashlib.sha1(material).hexdigest()[:24]
+
+
+def _sanitize_collection_segment(value: str) -> str:
+    import re
+
+    text = (value or "").strip()
+    if not text:
+        return "unknown"
+    normalized = re.sub(r"[^A-Za-z0-9._-]", "_", text)
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or "unknown"
+
+
+def _collection_from_thread_id(thread_id: str) -> str:
+    raw = str(thread_id or "").strip()
+    parts = raw.split(":")
+    if len(parts) == 3:
+        tenant, user, thread = (_sanitize_collection_segment(p) for p in parts)
+        return f"session:{tenant}:{user}:{thread}"
+    return f"session:{_sanitize_collection_segment(raw)}"
 
 
 async def execute_plan_stub(state: GraphState) -> dict:
@@ -200,7 +221,7 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 )
             return
 
-        snippet = json.dumps(output, ensure_ascii=False) if isinstance(output, (dict,)) else str(output)
+        snippet = json_dumps_safe(output, ensure_ascii=False) if isinstance(output, dict) else str(output)
         evidence_pool.append(
             {
                 "title": f"{tool_name} output",
@@ -324,7 +345,7 @@ async def execute_plan_stub(state: GraphState) -> dict:
         if query_text and deduped:
             rag = get_rag_service()
             subject_type = str((subject or {}).get("subject_type") or "unknown")
-            collection = f"session:{thread_id}"
+            collection = _collection_from_thread_id(thread_id)
             now = datetime.now(timezone.utc)
             rag_docs: list[RAGDocument] = []
             for idx, evidence in enumerate(deduped[:80]):

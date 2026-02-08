@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
@@ -16,10 +16,14 @@ interface SidebarProps {
   onSubscribeClick?: () => void;
   onDashboardClick?: (symbol: string) => void;
   onChatClick?: () => void;
-  currentView?: 'chat' | 'dashboard';
+  onWorkbenchClick?: () => void;
+  currentView?: 'chat' | 'dashboard' | 'workbench';
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const DEFAULT_USER_ID = 'default_user';
+const DEFAULT_DASHBOARD_SYMBOL = 'AAPL';
 
 const RISK_LABELS: Record<string, string> = {
   conservative: '保守型',
@@ -32,9 +36,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSubscribeClick,
   onDashboardClick,
   onChatClick,
+  onWorkbenchClick,
   currentView,
+  isMobileOpen = false,
+  onMobileClose,
 }) => {
-  const [activeTab, setActiveTab] = useState(currentView === 'dashboard' ? 'dashboard' : 'chat');
+  const [activeTab, setActiveTab] = useState(
+    currentView === 'dashboard' ? 'dashboard' : currentView === 'workbench' ? 'workbench' : 'chat'
+  );
   const [userName, setUserName] = useState('用户');
   const [riskPreference, setRiskPreference] = useState('balanced');
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -46,6 +55,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (currentView === 'dashboard') {
       setActiveTab('dashboard');
+    } else if (currentView === 'workbench') {
+      setActiveTab('workbench');
     } else if (currentView === 'chat') {
       setActiveTab('chat');
     }
@@ -73,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = useCallback(async () => {
     try {
       const response = await apiClient.getUserProfile(DEFAULT_USER_ID);
       const profile = response?.profile;
@@ -119,9 +130,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     } catch (error) {
       console.error('Failed to load user profile:', error);
     }
-  };
+  }, []);
 
-  const loadAlertCount = async () => {
+  const loadAlertCount = useCallback(async () => {
     if (!subscriptionEmail) {
       setAlertCount(0);
       return;
@@ -133,7 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     } catch {
       setAlertCount(0);
     }
-  };
+  }, [subscriptionEmail]);
 
   useEffect(() => {
     loadUserProfile();
@@ -143,13 +154,30 @@ const Sidebar: React.FC<SidebarProps> = ({
       loadAlertCount();
     }, 60_000);
     return () => clearInterval(timer);
-  }, [subscriptionEmail]);
+  }, [loadAlertCount, loadUserProfile]);
 
   return (
-    <aside
-      data-testid="sidebar"
-      className="w-[260px] h-full bg-fin-card border-r border-fin-border flex flex-col p-5 shrink-0 z-20 relative max-lg:w-full max-lg:h-auto max-lg:border-r-0 max-lg:border-b"
-    >
+    <>
+      {/* Mobile backdrop overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        data-testid="sidebar"
+        role="navigation"
+        aria-label="主导航栏"
+        className={[
+          'w-[260px] h-full bg-fin-card border-r border-fin-border flex flex-col p-5 shrink-0 z-40 relative',
+          // Mobile: fixed drawer, slide in/out
+          'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:h-full max-lg:border-r max-lg:border-b-0',
+          'max-lg:transition-transform max-lg:duration-300',
+          isMobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+        ].join(' ')}
+      >
       <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
         <span>📈</span> FinSight Pro
       </div>
@@ -161,7 +189,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <div className="font-semibold text-fin-text text-sm">{userName}</div>
-            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+            <span className="text-2xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
               {RISK_LABELS[riskPreference] || '稳健型'}
             </span>
           </div>
@@ -189,9 +217,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             setActiveTab('dashboard');
             if (!onDashboardClick) return;
 
-            const firstWatchlistSymbol = watchlist[0]?.symbol;
             const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
-            const fallbackSymbol = (firstWatchlistSymbol || firstPositionSymbol || currentTicker || '').toString().trim();
+            const fallbackSymbol = (currentTicker || firstPositionSymbol || DEFAULT_DASHBOARD_SYMBOL).toString().trim();
 
             if (fallbackSymbol) {
               onDashboardClick(fallbackSymbol);
@@ -204,9 +231,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <NavItem
           icon={<FileText size={18} />}
-          label="研报库"
-          active={activeTab === 'reports'}
-          onClick={() => setActiveTab('reports')}
+          label="工作台"
+          testId="sidebar-nav-workbench"
+          active={activeTab === 'workbench' || activeTab === 'reports'}
+          onClick={() => {
+            setActiveTab('workbench');
+            onWorkbenchClick?.();
+          }}
         />
 
         <NavItem
@@ -223,6 +254,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <NavItem
           icon={<Settings size={18} />}
           label="偏好设置"
+          testId="sidebar-nav-settings"
           active={activeTab === 'settings'}
           onClick={() => {
             setActiveTab('settings');
@@ -234,11 +266,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="mt-auto border-t border-fin-border pt-5">
         <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
           <span>我的关注 ({watchlist.length})</span>
-          <Plus
-            size={16}
-            className="cursor-pointer hover:text-fin-primary"
+          <button
+            type="button"
+            aria-label="添加关注股票"
             onClick={() => setShowAddInput((prev) => !prev)}
-          />
+            className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
+          >
+            <Plus size={16} />
+          </button>
         </div>
 
         {showAddInput && (
@@ -274,9 +309,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
-                    <span className="text-[10px] text-fin-muted truncate">{item.name}</span>
+                    <span className="text-2xs text-fin-muted truncate">{item.name}</span>
                     {shares > 0 && (
-                      <span className="text-[10px] text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
+                      <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
                         持仓 {shares}
                       </span>
                     )}
@@ -287,19 +322,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                       <div className={`font-medium text-sm ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
                         {item.price || '--'}
                       </div>
-                      <div className={`text-[10px] ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                      <div className={`text-2xs ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
                         {item.change || '--'}
                       </div>
                     </div>
 
-                    <X
-                      size={14}
-                      className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                    <button
+                      type="button"
+                      aria-label={`移除 ${item.symbol}`}
+                      className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
                       onClick={(event) => {
                         event.stopPropagation();
                         handleRemoveTicker(item.symbol);
                       }}
-                    />
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                 </div>
               );
@@ -310,6 +348,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
     </aside>
+    </>
   );
 };
 
@@ -325,11 +364,12 @@ const NavItem: React.FC<{
     type="button"
     data-testid={testId}
     onClick={onClick}
+    aria-current={active ? 'page' : undefined}
     className={`
       flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-sm text-left
       ${
         active
-          ? 'bg-blue-50 text-fin-primary font-medium'
+          ? 'bg-fin-primary/10 text-fin-primary font-medium'
           : 'text-fin-text-secondary hover:bg-fin-bg-secondary hover:text-fin-primary'
       }
     `}
@@ -337,7 +377,7 @@ const NavItem: React.FC<{
     {icon}
     <span>{label}</span>
     {badge && (
-      <span className="ml-auto bg-fin-danger text-white text-[10px] px-1.5 py-0.5 rounded-full">{badge}</span>
+      <span className="ml-auto bg-fin-danger text-white text-2xs px-1.5 py-0.5 rounded-full">{badge}</span>
     )}
   </button>
 );

@@ -48,14 +48,12 @@ export function DashboardWidgets() {
     );
   }
 
-  const { snapshot, charts, news } = dashboardData || {
-    snapshot: {},
-    charts: {},
-    news: {},
-  };
+  const snapshot = dashboardData?.snapshot ?? {};
+  const charts = dashboardData?.charts ?? {};
+  const news = dashboardData?.news ?? { market: [], impact: [] };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* 1. 核心 KPI 卡片 */}
       {!isHidden(WIDGET_IDS.SNAPSHOT) && (
         <SnapshotCard data={snapshot} loading={isLoading} />
@@ -74,6 +72,15 @@ export function DashboardWidgets() {
         <NewsFeed
           marketNews={news?.market || []}
           impactNews={news?.impact || []}
+          marketRawNews={news?.market_raw || []}
+          impactRawNews={news?.impact_raw || []}
+          rankingFormula={typeof news?.ranking_meta === 'object' ? (news.ranking_meta as { formula?: string }).formula : undefined}
+          rankingVersion={typeof news?.ranking_meta === 'object' ? (news.ranking_meta as { version?: string }).version : undefined}
+          rankingNotes={
+            typeof news?.ranking_meta === 'object' && Array.isArray((news.ranking_meta as { notes?: unknown[] }).notes)
+              ? ((news.ranking_meta as { notes?: string[] }).notes || [])
+              : []
+          }
           loading={isLoading}
         />
       )}

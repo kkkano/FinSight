@@ -43,6 +43,34 @@ def test_chat_supervisor_stream_uses_langgraph_stub_when_enabled():
     assert f"\"schema_version\": \"{SSE_EVENT_SCHEMA_VERSION}\"" in body
 
 
+def test_chat_supervisor_stream_respects_trace_raw_override_off():
+    app = _load_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/chat/supervisor/stream",
+        json={
+            "query": "分析影响",
+            "options": {"trace_raw_override": "off"},
+        },
+    )
+    assert resp.status_code == 200
+
+    events = []
+    for line in resp.text.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = json.loads(line[len("data: ") :])
+        events.append(payload)
+
+    assert events, "stream should include essential events"
+    # startup thinking is emitted before override filter path; node-level thinking should be filtered.
+    thinking_stages = [str(item.get("stage", "")) for item in events if item.get("type") == "thinking"]
+    assert set(thinking_stages).issubset({"langgraph_start"})
+    assert any(item.get("type") == "token" for item in events)
+    assert any(item.get("type") == "done" for item in events)
+
+
 def test_chat_supervisor_output_mode_option_overrides_default():
     app = _load_app()
     client = TestClient(app)
@@ -75,6 +103,19 @@ def test_chat_supervisor_default_output_mode_is_brief_and_trace_present():
     spans = trace.get("spans")
     assert isinstance(spans, list) and spans, "trace.spans should exist in LangGraph stub path"
     assert any(span.get("node") == "decide_output_mode" for span in spans)
+
+
+def test_chat_supervisor_trace_planner_runtime_contains_variant_field():
+    app = _load_app()
+    client = TestClient(app)
+
+    resp = client.post("/chat/supervisor", json={"query": "分析苹果影响"})
+    assert resp.status_code == 200
+    data = resp.json()
+
+    trace = (data.get("graph") or {}).get("trace") or {}
+    planner_runtime = trace.get("planner_runtime") or {}
+    assert planner_runtime.get("variant") in {"A", "B"}
 
 
 def test_chat_supervisor_stream_done_event_contains_graph_output_mode():

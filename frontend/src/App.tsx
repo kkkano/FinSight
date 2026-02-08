@@ -18,6 +18,7 @@ function ChatRoute() {
       dashboardSymbol={null}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
+      navigateToWorkbench={() => navigate('/workbench')}
     />
   );
 }
@@ -31,6 +32,20 @@ function DashboardRoute() {
       dashboardSymbol={decodeSymbolParam(symbol)}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
+      navigateToWorkbench={() => navigate('/workbench')}
+    />
+  );
+}
+
+function WorkbenchRoute() {
+  const navigate = useNavigate();
+  return (
+    <WorkspaceShell
+      view="workbench"
+      dashboardSymbol={null}
+      navigateToChat={() => navigate('/chat')}
+      navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
+      navigateToWorkbench={() => navigate('/workbench')}
     />
   );
 }
@@ -48,15 +63,24 @@ function RootRedirect() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<RootRedirect />} />
-      <Route path="/chat" element={<ChatRoute />} />
-      <Route path="/dashboard" element={<DashboardRoute />} />
-      <Route path="/dashboard/:symbol" element={<DashboardRoute />} />
-      <Route path="*" element={<Navigate to="/chat" replace />} />
-    </Routes>
+    <>
+      {/* Skip-navigation link: hidden by default, visible on keyboard focus */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-fin-primary focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-white"
+      >
+        跳转到主要内容
+      </a>
+      <Routes>
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="/chat" element={<ChatRoute />} />
+        <Route path="/workbench" element={<WorkbenchRoute />} />
+        <Route path="/dashboard" element={<DashboardRoute />} />
+        <Route path="/dashboard/:symbol" element={<DashboardRoute />} />
+        <Route path="*" element={<Navigate to="/chat" replace />} />
+      </Routes>
+    </>
   );
 }
 
 export default App;
-

@@ -14,6 +14,7 @@ from run_retrieval_eval import (
     compute_citation_coverage,
     compute_ndcg_at_k,
     compute_recall_at_k,
+    write_gate_summary,
 )
 
 
@@ -99,3 +100,58 @@ def test_drift_gate_fails_on_negative_quality_regression() -> None:
     assert drift.passed is False
     assert "recall_at_k_delta" in drift.failed_metrics
     assert "latency_p95_ms_delta" in drift.failed_metrics
+
+
+def test_write_gate_summary_creates_file(tmp_path: Path) -> None:
+    payload = {
+        "run_id": "retrieval-test-run",
+        "generated_at": "2026-02-08T12:00:00Z",
+        "backend": "memory",
+        "backend_requested": "memory",
+        "case_count": 2,
+        "overall_metrics": {
+            "recall_at_k": 1.0,
+            "ndcg_at_k": 1.0,
+            "citation_coverage": 1.0,
+            "latency_p95_ms": 0.5,
+        },
+    }
+    gate = _gate(
+        overall=payload["overall_metrics"],
+        thresholds={
+            "recall_at_k_min": 0.95,
+            "ndcg_at_k_min": 0.95,
+            "citation_coverage_min": 0.95,
+            "latency_p95_ms_max": 10.0,
+        },
+    )
+    drift_gate = _drift_gate(
+        overall=payload["overall_metrics"],
+        baseline_overall=payload["overall_metrics"],
+        thresholds={
+            "recall_at_k_delta_min": -0.03,
+            "ndcg_at_k_delta_min": -0.03,
+            "citation_coverage_delta_min": -0.03,
+            "latency_p95_ms_delta_max": 5.0,
+        },
+    )
+
+    json_report = tmp_path / "retrieval-test-run.json"
+    md_report = tmp_path / "retrieval-test-run.md"
+    json_report.write_text("{}", encoding="utf-8")
+    md_report.write_text("# report", encoding="utf-8")
+
+    output = write_gate_summary(
+        output_dir=tmp_path,
+        payload=payload,
+        gate=gate,
+        drift_gate=drift_gate,
+        json_report_path=json_report,
+        markdown_report_path=md_report,
+    )
+
+    assert output.exists()
+    assert output.name == "gate_summary.json"
+    content = output.read_text(encoding="utf-8")
+    assert '"run_id": "retrieval-test-run"' in content
+    assert '"passed": true' in content

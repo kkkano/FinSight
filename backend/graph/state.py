@@ -53,6 +53,46 @@ class Clarify(TypedDict):
     suggestions: list[str]
 
 
+class Policy(TypedDict, total=False):
+    """Policy gate output: budget limits and guardrails."""
+
+    max_tool_calls: int
+    max_rounds: int
+    max_seconds: int
+    allowed_agents: list[str]
+    denied_agents: list[str]
+    budget_label: str
+
+
+class PlanIR(TypedDict, total=False):
+    """Planner intermediate representation."""
+
+    steps: list[dict]
+    required_agents: list[str]
+    estimated_cost: str
+    rationale: str
+    prompt_variant: str
+
+
+class Artifacts(TypedDict, total=False):
+    """Executor output artifacts."""
+
+    evidence_pool: list[dict]
+    agent_outputs: dict
+    render_vars: dict
+    report: dict
+    response: str
+
+
+class Trace(TypedDict, total=False):
+    """Observability trace for the graph run."""
+
+    events: list[dict]
+    timings: dict
+    failures: list[dict]
+    runtime: dict
+
+
 class GraphState(MessagesState):
     """
     Extend MessagesState with FinSight-specific fields.
@@ -77,10 +117,20 @@ class GraphState(MessagesState):
     strict_selection: NotRequired[bool]
     clarify: NotRequired[Clarify]
 
-    policy: NotRequired[dict]
-    plan_ir: NotRequired[dict]
-    artifacts: NotRequired[dict]
-    trace: NotRequired[dict]
+    policy: NotRequired[Policy]
+    plan_ir: NotRequired[PlanIR]
+    artifacts: NotRequired[Artifacts]
+    trace: NotRequired[Trace]
 
 
-__all__ = ["GRAPH_STATE_SCHEMA_VERSION", "GraphState", "Subject", "Operation", "Clarify"]
+__all__ = [
+    "GRAPH_STATE_SCHEMA_VERSION",
+    "GraphState",
+    "Subject",
+    "Operation",
+    "Clarify",
+    "Policy",
+    "PlanIR",
+    "Artifacts",
+    "Trace",
+]

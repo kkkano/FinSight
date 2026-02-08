@@ -76,6 +76,8 @@ tmp/
 
 # --- Runtime Data ---
 data/langgraph/
+backend/data/*.sqlite
+backend/data/*.db
 
 # --- Agentic Tools ---
 .antigravity/
@@ -85,3 +87,5 @@ data/langgraph/
 # --- Windows reserved filenames ---
 nul
 NUL
+
+

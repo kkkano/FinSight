@@ -142,3 +142,61 @@ def test_build_report_payload_agent_status_exposes_evidence_quality_and_skip_rea
     assert macro.get("status") == "not_run"
     assert macro.get("skipped_reason") == "escalation_not_needed"
     assert macro.get("escalation_not_needed") is True
+
+
+def test_build_report_payload_adds_compare_and_conflict_hints_and_tags():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"]},
+        "policy": {"allowed_agents": ["fundamental_agent", "macro_agent"]},
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "kind": "agent", "name": "fundamental_agent"},
+                {"id": "s2", "kind": "agent", "name": "macro_agent"},
+            ]
+        },
+        "artifacts": {
+            "draft_markdown": "## Report\n",
+            "evidence_pool": [],
+            "errors": [],
+            "render_vars": {
+                "comparison_conclusion": "AAPL has better margin profile than MSFT in this window.",
+                "comparison_metrics": "- Gross margin spread\n- Revenue growth spread",
+            },
+            "step_results": {
+                "s1": {
+                    "output": {
+                        "summary": "ok",
+                        "confidence": 0.8,
+                        "data_sources": ["yfinance"],
+                        "evidence_quality": {"overall_score": 0.77, "has_conflicts": False},
+                    }
+                },
+                "s2": {
+                    "output": {
+                        "summary": "macro with conflict",
+                        "confidence": 0.6,
+                        "data_sources": ["fmp"],
+                        "evidence_quality": {"overall_score": 0.61, "has_conflicts": True},
+                    }
+                },
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="compare AAPL vs MSFT", thread_id="t-hints")
+    assert isinstance(report, dict)
+
+    tags = report.get("tags") or []
+    assert "compare" in tags
+    assert "conflict" in tags
+
+    hints = report.get("report_hints") or {}
+    assert hints.get("is_compare") is True
+    assert hints.get("has_conflict") is True
+    assert "macro_agent" in (hints.get("conflict_agents") or [])
+
+    meta_hints = ((report.get("meta") or {}).get("report_hints") or {})
+    assert meta_hints.get("is_compare") is True
+    assert meta_hints.get("has_conflict") is True

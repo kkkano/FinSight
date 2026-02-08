@@ -167,7 +167,7 @@ async def _create_async_postgres_bundle(dsn: str, *, pipeline: bool) -> Checkpoi
 
 def _build_sync_bundle() -> CheckpointerBundle:
     backend = _resolve_backend()
-    allow_fallback = _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", True)
+    allow_fallback = _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", False)
     try:
         if backend == "memory":
             bundle = _memory_bundle(reason=None, fallback_used=False)
@@ -197,7 +197,7 @@ def _build_sync_bundle() -> CheckpointerBundle:
 
 async def _build_async_bundle() -> CheckpointerBundle:
     backend = _resolve_backend()
-    allow_fallback = _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", True)
+    allow_fallback = _env_bool("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", False)
     try:
         if backend == "memory":
             bundle = _memory_bundle(reason=None, fallback_used=False)

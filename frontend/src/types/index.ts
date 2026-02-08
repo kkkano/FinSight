@@ -1,6 +1,7 @@
-export type Role = 'user' | 'assistant' | 'system';
+﻿export type Role = 'user' | 'assistant' | 'system';
 
-export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'unknown';
+export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'any';
+export type TraceViewMode = 'user' | 'expert' | 'dev';
 
 // 图表类型
 export type ChartType = 'line' | 'candlestick' | 'pie' | 'bar' | 'tree' | 'area' | 'scatter' | 'heatmap';
@@ -111,6 +112,13 @@ export interface ReportIR {
   citations: Citation[];
   risks?: string[];
   recommendation?: string;
+  tags?: string[];
+  report_hints?: {
+    is_compare?: boolean;
+    has_conflict?: boolean;
+    compare_basis?: string[];
+    conflict_agents?: string[];
+  };
   // Phase 2 扩展字段
   meta?: {
     agent_traces?: Record<string, any>;
@@ -223,7 +231,7 @@ export type RawEventType =
   | 'done'
   | 'error'
   // 未知类型兜底
-  | 'unknown';
+  | 'any';
 
 export interface RawSSEEvent {
   id: string;                    // 唯一标识
@@ -243,3 +251,6 @@ export interface ConsoleFilterOptions {
   autoScroll: boolean;           // 自动滚动
   maxEvents: number;             // 最大事件数
 }
+
+
+

@@ -1,17 +1,19 @@
-import logging
+﻿import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
+import re
 import sys
 import traceback
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dt_time, timezone
 from threading import Lock
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 from fastapi.responses import StreamingResponse, JSONResponse, Response
+from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.schemas import (
@@ -21,18 +23,27 @@ from backend.api.schemas import (
     SubscriptionListResponse, StockDataResponse, KlineResponse,
     ConfigResponse, ChartDetectResponse, ChartDataResponse,
 )
+from backend.api.chat_router import ChatRouterDeps, create_chat_router
+from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.dashboard_router import dashboard_router
+from backend.api.market_router import MarketRouterDeps, create_market_router
+from backend.api.report_router import ReportRouterDeps, create_report_router
+from backend.api.subscription_router import create_subscription_router
+from backend.api.system_router import SystemRouterDeps, create_system_router
+from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
 from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
 from backend.llm_config import create_llm  # Legacy test compatibility hook.
 from backend.orchestration.tools_bridge import get_global_orchestrator
+from backend.graph.nodes.planner import get_planner_ab_metrics
+from backend.services.report_index import get_report_index_store
 
 logger = logging.getLogger(__name__)
 
-# 将项目根目录添加到 sys.path
-# 这样可以确保 backend modules 等模块能被找到
+# 灏嗛」鐩牴鐩綍娣诲姞鍒?sys.path
+# 杩欐牱鍙互纭繚 backend modules 绛夋ā鍧楄兘琚壘鍒?
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -48,27 +59,27 @@ if not logging.getLogger().handlers:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-# 尝试导入核心工具
+# 灏濊瘯瀵煎叆鏍稿績宸ュ叿
 try:
     from backend.tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
     logger.info("[Init] Core tools imported successfully.")
 except ImportError as e:
-    # 如果 backend.tools 失败，尝试从根目录 tools 导入（兼容旧结构）
+    # 濡傛灉 backend.tools 澶辫触锛屽皾璇曚粠鏍圭洰褰?tools 瀵煎叆锛堝吋瀹规棫缁撴瀯锛?
     try:
         from tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
         logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
-        logger.info(f"❌ Error importing tools: {e2}")
+        logger.info(f"鉂?Error importing tools: {e2}")
 
-# 导入图表检测器
+# 瀵煎叆鍥捐〃妫€娴嬪櫒
 try:
     from backend.api.chart_detector import ChartTypeDetector
     logger.info("[Init] Chart detector imported successfully.")
 except ImportError as e:
-    logger.info(f"❌ Error importing chart detector: {e}")
+    logger.info(f"鉂?Error importing chart detector: {e}")
     ChartTypeDetector = None
 
-# 导入 MemoryService
+# 瀵煎叆 MemoryService
 try:
     from backend.services.memory import MemoryService, UserProfile
     memory_service = MemoryService()
@@ -81,22 +92,184 @@ agent = None  # Deprecated: kept for backward-compat tests/monkeypatch hooks onl
 
 _schedulers = []
 _reference_contexts: Dict[str, ContextManager] = {}
+_reference_context_last_access: Dict[str, float] = {}
 _reference_lock = Lock()
+
+_SESSION_PART_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_SENSITIVE_KEY_FRAGMENTS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "auth",
+    "token",
+    "cookie",
+    "password",
+    "secret",
+)
+_ESSENTIAL_SSE_TYPES = {"token", "done", "error"}
+
+
+def _mask_secret(value: str) -> str:
+    raw = str(value or "")
+    if len(raw) <= 8:
+        return "***"
+    return f"{raw[:3]}***{raw[-3:]}"
+
+
+def _redact_sensitive_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, inner in value.items():
+            key_text = str(key).lower()
+            if any(fragment in key_text for fragment in _SENSITIVE_KEY_FRAGMENTS):
+                redacted[key] = _mask_secret(str(inner)) if inner is not None else "***"
+                continue
+            redacted[key] = _redact_sensitive_payload(inner)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_payload(item) for item in value]
+    if isinstance(value, str):
+        # Best-effort key/token masking in free text.
+        masked = re.sub(r"(?i)(sk-[a-z0-9_-]{8,})", lambda m: _mask_secret(m.group(1)), value)
+        masked = re.sub(
+            r"(?i)(authorization\s*[:=]\s*bearer\s+)([a-z0-9._-]{8,})",
+            lambda m: f"{m.group(1)}{_mask_secret(m.group(2))}",
+            masked,
+        )
+        return masked
+    return value
+
+
+def _normalize_session_key(session_id: Optional[str]) -> str:
+    raw = (session_id or "").strip()
+    if not raw:
+        return f"public:anonymous:{uuid4()}"
+
+    parts = raw.split(":")
+    if len(parts) == 1:
+        parts = ["public", "anonymous", parts[0]]
+    elif len(parts) == 2:
+        parts = ["public", parts[0], parts[1]]
+    elif len(parts) != 3:
+        raise ValueError("session_id format invalid, expected tenant:user:thread")
+
+    normalized: list[str] = []
+    for idx, part in enumerate(parts):
+        text = (part or "").strip()
+        if not text:
+            raise ValueError("session_id contains empty segment")
+        if not _SESSION_PART_PATTERN.fullmatch(text):
+            raise ValueError(f"session_id segment[{idx}] contains illegal chars")
+        normalized.append(text)
+    return ":".join(normalized)
+
+
+def _resolve_trace_raw_enabled(request: ChatRequest) -> bool:
+    default_enabled = _env_bool("TRACE_RAW_ENABLED", "true")
+    override = None
+    if getattr(request, "options", None):
+        override = request.options.trace_raw_override
+    if override == "on":
+        return True
+    if override == "off":
+        return False
+    return default_enabled
+
+
+def _build_trace_digest(state: dict[str, Any] | None) -> dict[str, Any]:
+    payload = state if isinstance(state, dict) else {}
+    trace = payload.get("trace") if isinstance(payload.get("trace"), dict) else {}
+    spans = trace.get("spans") if isinstance(trace.get("spans"), list) else []
+    first_nodes: list[str] = []
+    for span in spans[:10]:
+        if not isinstance(span, dict):
+            continue
+        node = span.get("node")
+        if isinstance(node, str) and node:
+            first_nodes.append(node)
+    return {
+        "output_mode": payload.get("output_mode"),
+        "subject": payload.get("subject"),
+        "span_count": len(spans),
+        "first_nodes": first_nodes,
+    }
+
+
+def _index_report_async(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
+    try:
+        store = get_report_index_store()
+        store.upsert_report(
+            session_id=session_id,
+            report=report,
+            trace_digest=_build_trace_digest(state),
+        )
+    except Exception:
+        logger.exception("report index async upsert failed")
+
+
+def _schedule_report_index(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
+    if not (isinstance(report, dict) and report.get("report_id")):
+        return
+    try:
+        import asyncio as _asyncio
+
+        _asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: _index_report_async(session_id=session_id, report=report, state=state),
+        )
+    except Exception:
+        logger.exception("schedule async report indexing failed")
+
+
+def _is_raw_trace_event(payload: dict[str, Any]) -> bool:
+    event_type = str(payload.get("type") or "").strip().lower()
+    if not event_type:
+        return True
+    return event_type not in _ESSENTIAL_SSE_TYPES
 
 
 def _resolve_thread_id(session_id: Optional[str]) -> str:
-    resolved = (session_id or "").strip()
-    if resolved:
-        return resolved
-    return str(uuid4())
+    return _normalize_session_key(session_id)
+
+
+def _cleanup_session_contexts(now_ts: Optional[float] = None) -> None:
+    now = now_ts if now_ts is not None else time.time()
+    ttl_minutes = max(1, _env_int("SESSION_CONTEXT_TTL_MINUTES", 240))
+    ttl_seconds = ttl_minutes * 60
+    max_threads = max(16, _env_int("SESSION_CONTEXT_MAX_THREADS", 1000))
+
+    expired = [
+        sid
+        for sid, last_access in list(_reference_context_last_access.items())
+        if now - float(last_access) >= ttl_seconds
+    ]
+    for sid in expired:
+        _reference_contexts.pop(sid, None)
+        _reference_context_last_access.pop(sid, None)
+
+    current_size = len(_reference_contexts)
+    if current_size <= max_threads:
+        return
+
+    overflow = current_size - max_threads
+    oldest_first = sorted(
+        _reference_context_last_access.items(),
+        key=lambda item: item[1],
+    )
+    for sid, _ in oldest_first[:overflow]:
+        _reference_contexts.pop(sid, None)
+        _reference_context_last_access.pop(sid, None)
 
 
 def _get_session_context(session_id: str) -> ContextManager:
     with _reference_lock:
+        now = time.time()
+        _cleanup_session_contexts(now)
         manager = _reference_contexts.get(session_id)
         if manager is None:
             manager = ContextManager(max_turns=20)
             _reference_contexts[session_id] = manager
+        _reference_context_last_access[session_id] = now
         return manager
 
 
@@ -180,6 +353,26 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _parse_csv_env(key: str, default: str) -> list[str]:
+    raw = os.getenv(key, default)
+    values = [item.strip() for item in str(raw or "").split(",") if item.strip()]
+    return values
+
+
+def _cors_allow_origins() -> list[str]:
+    origins = _parse_csv_env("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def _cors_allow_credentials() -> bool:
+    allow_credentials = _env_bool("CORS_ALLOW_CREDENTIALS", "false")
+    origins = _cors_allow_origins()
+    if allow_credentials and "*" in origins:
+        logger.warning("CORS_ALLOW_CREDENTIALS=true with wildcard origin is invalid. Force disabling credentials.")
+        return False
+    return allow_credentials
+
+
 def _parse_api_keys() -> set[str]:
     raw = os.getenv("API_AUTH_KEYS") or os.getenv("API_AUTH_KEY") or ""
     return {item.strip() for item in raw.split(",") if item.strip()}
@@ -196,8 +389,26 @@ def _extract_api_key(request: Request) -> Optional[str]:
 
 
 def _is_allowlisted_path(path: str) -> bool:
-    allow_prefixes = ("/", "/docs", "/openapi.json", "/redoc", "/health", "/api/dashboard")
-    return path in allow_prefixes or path.startswith(("/docs", "/redoc", "/api/dashboard"))
+    defaults = "/health,/docs,/openapi.json,/redoc"
+    configured = _parse_csv_env("API_PUBLIC_PATHS", defaults)
+    exact_paths: set[str] = set()
+    prefix_paths: list[str] = []
+
+    for entry in configured:
+        normalized = entry if entry.startswith("/") else f"/{entry}"
+        if normalized.endswith("/*"):
+            base = normalized[:-2]
+            if base:
+                prefix_paths.append(base)
+        elif normalized in ("/docs", "/redoc"):
+            exact_paths.add(normalized)
+            prefix_paths.append(normalized)
+        else:
+            exact_paths.add(normalized)
+
+    if path in exact_paths:
+        return True
+    return any(path.startswith(prefix + "/") or path == prefix for prefix in prefix_paths)
 
 
 class SimpleRateLimiter:
@@ -307,26 +518,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.info(f"[Scheduler] shutdown error: {e}")
 
-# 初始化 FastAPI
+# 鍒濆鍖?FastAPI
 app = FastAPI(
     title="FinSight API",
-    description="FinSight 后端服务",
+    description="FinSight 鍚庣鏈嶅姟",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS 配置
+# CORS 閰嶇疆
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_cors_allow_origins(),
+    allow_credentials=_cors_allow_credentials(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 注册 Dashboard 路由
-app.include_router(dashboard_router)
-
 
 @app.middleware("http")
 async def security_gate(request: Request, call_next):
@@ -351,712 +558,84 @@ async def security_gate(request: Request, call_next):
 
     return await call_next(request)
 
-# === API 端点 ===
+# === API routers ===
 
-@app.get("/api/user/profile")
-async def get_user_profile(user_id: str = "default_user"):
-    """获取用户画像"""
-    if not memory_service:
-        return {"error": "MemoryService not initialized"}
-
-    try:
-        profile = memory_service.get_user_profile(user_id)
-        return {"success": True, "profile": profile.to_dict()}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/user/profile")
-async def update_user_profile(request: dict):
-    """更新用户画像"""
-    if not memory_service:
-        return {"error": "MemoryService not initialized"}
-
-    try:
-        user_id = request.get("user_id", "default_user")
-        profile_data = request.get("profile", {})
-
-        # 确保 user_id 一致
-        profile_data["user_id"] = user_id
-
-        profile = UserProfile.from_dict(profile_data)
-        success = memory_service.update_user_profile(profile)
-
-        return {"success": success}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/user/watchlist/add")
-async def add_watchlist(request: dict):
-    """添加关注"""
-    if not memory_service:
-        return {"error": "MemoryService not initialized"}
-
-    try:
-        user_id = request.get("user_id", "default_user")
-        ticker = request.get("ticker")
-
-        if not ticker:
-            return {"success": False, "error": "Ticker is required"}
-
-        success = memory_service.add_to_watchlist(user_id, ticker)
-        return {"success": success}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/user/watchlist/remove")
-async def remove_watchlist(request: dict):
-    """取消关注"""
-    if not memory_service:
-        return {"error": "MemoryService not initialized"}
-
-    try:
-        user_id = request.get("user_id", "default_user")
-        ticker = request.get("ticker")
-
-        if not ticker:
-            return {"success": False, "error": "Ticker is required"}
-
-        success = memory_service.remove_from_watchlist(user_id, ticker)
-        return {"success": success}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.get("/", response_model=RootResponse)
-def read_root():
-    """
-    根路径健康检查，附带简要说明。
-    """
-    return {
-        "status": "healthy",
-        "message": "FinSight API is running",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-
-
-@app.get("/health")
-def health_check():
-    """
-    增强健康检查端点 - LangGraph/Orchestrator/Memory 状态
-    """
-    status = "healthy"
-    components: Dict[str, Dict[str, Any]] = {}
-
-    components["langgraph_runner"] = {"status": "ok" if graph_runner_ready() else "initializing"}
-    checkpointer_info = get_graph_checkpointer_info()
-    checkpointer_status = "ok" if checkpointer_info.get("backend") != "unknown" else "initializing"
-    components["checkpointer"] = {"status": checkpointer_status, **checkpointer_info}
-
-    orchestrator = _get_orchestrator_safe()
-    if orchestrator:
-        components["orchestrator"] = {"status": "ok"}
-        has_cache = hasattr(orchestrator, "cache") and orchestrator.cache is not None
-        has_tools = hasattr(orchestrator, "tools_module") and orchestrator.tools_module is not None
-        components["cache"] = {"status": "ok" if has_cache else "unavailable"}
-        components["tools_module"] = {"status": "ok" if has_tools else "unavailable"}
-    else:
-        status = "degraded"
-        components["orchestrator"] = {"status": "error", "available": False}
-        components["cache"] = {"status": "unavailable"}
-        components["tools_module"] = {"status": "unavailable"}
-
-    components["memory"] = {"status": "ok" if memory_service else "unavailable"}
-
-    # Explicitly mark legacy agent as deprecated to prevent accidental reuse.
-    if agent:
-        components["legacy_agent"] = {"status": "deprecated", "available": True}
-    else:
-        components["legacy_agent"] = {"status": "deprecated", "available": False}
-
-    return {
-        "status": status,
-        "components": components,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-
-
-@app.get("/metrics")
-def metrics_endpoint():
-    """Prometheus metrics endpoint (optional)."""
-    if not METRICS_ENABLED:
-        raise HTTPException(status_code=404, detail="metrics disabled")
-    payload, content_type = metrics_payload()
-    return Response(content=payload, media_type=content_type)
-
-
-@app.get("/diagnostics/orchestrator", response_model=DiagnosticsResponse)
-def diagnostics_orchestrator():
-    """
-    返回 Orchestrator 的聚合健康信息：总请求、缓存命中、回退次数、按源统计。
-    供前端健康面板使用。
-    """
-    orchestrator = _get_orchestrator_safe()
-    if not orchestrator:
-        raise HTTPException(status_code=500, detail="Orchestrator not initialized")
-    try:
-        stats = orchestrator.get_stats()
-        return {
-            "status": "ok",
-            "data": stats,
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"orchestrator diagnostics failed: {exc}")
-
-@app.post("/chat/supervisor")
-async def chat_supervisor_endpoint(request: ChatRequest):
-    """
-    LangGraph 单入口对话接口（Phase 5：移除 legacy Supervisor/Router）。
-    """
-    try:
-        runner = await aget_graph_runner()
-        thread_id = _resolve_thread_id(request.session_id)
-        ui_context = _build_ui_context(request)
-
-        output_mode = None
-        strict_selection = None
-        if getattr(request, "options", None):
-            output_mode = request.options.output_mode
-            strict_selection = request.options.strict_selection
-
-        resolved_query = _resolve_query_reference(request.query, thread_id)
-
-        state = await runner.ainvoke(
-            thread_id=thread_id,
-            query=resolved_query,
-            ui_context=ui_context,
-            output_mode=output_mode,
-            strict_selection=strict_selection,
-        )
-        markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
-        report = None
-        try:
-            from backend.graph.report_builder import build_report_payload
-
-            report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-        except Exception:
-            report = None
-
-        _update_session_context(
-            thread_id=thread_id,
-            original_query=request.query,
-            response_markdown=markdown,
-            subject=state.get("subject"),
-        )
-        return {
-            "success": True,
-            "schema_version": CHAT_RESPONSE_SCHEMA_VERSION,
-            "contracts": _contract_info(),
-            "response": markdown,
-            "report": report,
-            "intent": "chat",
-            "classification": {"method": "langgraph", "confidence": 1.0},
-            "session_id": thread_id,
-            "graph": {
-                "subject": state.get("subject"),
-                "output_mode": state.get("output_mode"),
-                "trace": state.get("trace"),
-            },
-        }
-
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# 主入口流式端点
-@app.post("/chat/supervisor/stream")
-async def chat_supervisor_stream_endpoint(request: ChatRequest):
-    """
-    LangGraph 单入口流式接口（Phase 5：移除 legacy Supervisor/Router）。
-    """
-    import asyncio as _asyncio
-    import json as _json
-
-    from backend.graph.event_bus import reset_event_emitter, set_event_emitter
-
-    runner = await aget_graph_runner()
-    thread_id = _resolve_thread_id(request.session_id)
-    ui_context = _build_ui_context(request)
-
-    output_mode = None
-    strict_selection = None
-    if getattr(request, "options", None):
-        output_mode = request.options.output_mode
-        strict_selection = request.options.strict_selection
-
-    resolved_query = _resolve_query_reference(request.query, thread_id)
-
-    queue: "_asyncio.Queue[object]" = _asyncio.Queue()
-    _END = object()
-
-    async def _emit(payload: dict) -> None:
-        outgoing = dict(payload)
-        original_schema = outgoing.get("schema_version")
-        if isinstance(original_schema, str) and original_schema and original_schema != SSE_EVENT_SCHEMA_VERSION:
-            outgoing["trace_schema_version"] = original_schema
-        outgoing["schema_version"] = SSE_EVENT_SCHEMA_VERSION
-        await queue.put(outgoing)
-
-    async def _producer() -> None:
-        token = set_event_emitter(_emit)
-        try:
-            await queue.put(
-                {
-                    "schema_version": SSE_EVENT_SCHEMA_VERSION,
-                    "type": "thinking",
-                    "stage": "langgraph_start",
-                    "message": "LangGraph",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-
-            state = await runner.ainvoke(
-                thread_id=thread_id,
-                query=resolved_query,
-                ui_context=ui_context,
-                output_mode=output_mode,
-                strict_selection=strict_selection,
-            )
-            markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
-            report = None
-            try:
-                from backend.graph.report_builder import build_report_payload
-
-                report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-            except Exception:
-                report = None
-
-            _update_session_context(
-                thread_id=thread_id,
-                original_query=request.query,
-                response_markdown=markdown,
-                subject=state.get("subject"),
-            )
-
-            # Stream output chunks (best-effort). Node-level trace is streamed in real-time above.
-            chunk_size = 60
-            for i in range(0, len(markdown), chunk_size):
-                chunk = markdown[i : i + chunk_size]
-                if chunk:
-                    await queue.put({"schema_version": SSE_EVENT_SCHEMA_VERSION, "type": "token", "content": chunk})
-                await _asyncio.sleep(0)
-
-            await queue.put(
-                {
-                    "schema_version": SSE_EVENT_SCHEMA_VERSION,
-                    "type": "done",
-                    "contracts": _contract_info(),
-                    "intent": "chat",
-                    "session_id": thread_id,
-                    "response": markdown,
-                    "report": report,
-                    "graph": {
-                        "subject": state.get("subject"),
-                        "output_mode": state.get("output_mode"),
-                        "trace": state.get("trace"),
-                    },
-                }
-            )
-        except Exception as exc:
-            await queue.put({"schema_version": SSE_EVENT_SCHEMA_VERSION, "type": "error", "message": str(exc)})
-        finally:
-            reset_event_emitter(token)
-            await queue.put(_END)
-
-    producer_task = _asyncio.create_task(_producer())
-
-    async def _stream():
-        try:
-            while True:
-                try:
-                    item = await _asyncio.wait_for(queue.get(), timeout=5)
-                except _asyncio.TimeoutError:
-                    # SSE keep-alive comment to prevent idle timeouts in proxies/browsers.
-                    yield ": keep-alive\n\n"
-                    continue
-                if item is _END:
-                    break
-                yield f"data: {_json.dumps(item, ensure_ascii=False)}\n\n"
-        finally:
-            if not producer_task.done():
-                producer_task.cancel()
-                try:
-                    await producer_task
-                except Exception:
-                    pass
-
-    return StreamingResponse(
-        _stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+chat_router = create_chat_router(
+    ChatRouterDeps(
+        get_graph_runner=lambda: aget_graph_runner(),
+        resolve_thread_id=_resolve_thread_id,
+        build_ui_context=_build_ui_context,
+        resolve_query_reference=_resolve_query_reference,
+        schedule_report_index=_schedule_report_index,
+        update_session_context=_update_session_context,
+        contract_info=_contract_info,
+        resolve_trace_raw_enabled=_resolve_trace_raw_enabled,
+        is_raw_trace_event=_is_raw_trace_event,
+        redact_sensitive_payload=_redact_sensitive_payload,
+        get_session_context=_get_session_context,
+        chat_response_schema_version=CHAT_RESPONSE_SCHEMA_VERSION,
+        sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
     )
+)
 
+system_router = create_system_router(
+    SystemRouterDeps(
+        metrics_enabled=METRICS_ENABLED,
+        metrics_payload=metrics_payload,
+        graph_runner_ready=graph_runner_ready,
+        get_graph_checkpointer_info=get_graph_checkpointer_info,
+        get_orchestrator_safe=_get_orchestrator_safe,
+        get_planner_ab_metrics=get_planner_ab_metrics,
+        memory_service=memory_service,
+        logger=logger,
+        legacy_agent=agent,
+    )
+)
 
-# 保留旧流式端点兼容
-@app.post("/api/chat/add-chart-data", response_model=ChartDataResponse)
-async def add_chart_data(request: dict):
-    """
-    将图表数据摘要加入聊天上下文
-    前端在生成图表后调用此接口
-    """
-    try:
-        ticker = request.get('ticker')
-        summary = request.get('summary', '')
-        session_id = (request.get("session_id") or "").strip() or "default"
-        
-        if not ticker or not summary:
-            return {"success": False, "error": "Missing ticker or summary"}
-        
-        # 将图表数据摘要写入会话上下文（仅用于本进程内引用消解）
-        chart_message = f"[图表数据] {summary}"
-        _get_session_context(session_id).add_turn(
-            query=f"查看 {ticker} 的图表数据",
-            intent="chat",
-            response=chart_message,
-            metadata={"ticker": ticker, "tickers": [ticker], "chart_data": True}
-        )
-        
-        return {"success": True, "message": "Chart data added to context", "session_id": session_id}
-    except Exception as e:
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+user_router = create_user_router(
+    UserRouterDeps(
+        memory_service=memory_service,
+        user_profile_cls=UserProfile,
+    )
+)
 
-@app.get("/api/stock/price/{ticker}")
-def get_price(ticker: str):
-    """获取股票价格（带缓存，TTL=60秒）"""
-    try:
-        orchestrator = _get_orchestrator_safe()
-        # 尝试从缓存获取
-        if orchestrator:
-            cache_key = f"price:{ticker}"
-            cached_data = orchestrator.cache.get(cache_key)
-            if cached_data is not None:
-                logger.info(f"[API] 从缓存获取价格: {ticker}")
-                return {"ticker": ticker, "data": cached_data, "cached": True}
+market_router = create_market_router(
+    MarketRouterDeps(
+        get_orchestrator_safe=_get_orchestrator_safe,
+        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: {"error": "price tool unavailable"}),
+        get_company_news=globals().get("get_company_news") or (lambda _ticker: {"error": "news tool unavailable"}),
+        get_financial_statements=globals().get("get_financial_statements") or (lambda _ticker: {"error": "financials tool unavailable"}),
+        get_financial_statements_summary=globals().get("get_financial_statements_summary") or (lambda _ticker: {"error": "financials summary tool unavailable"}),
+        get_stock_historical_data=globals().get("get_stock_historical_data") or (lambda _ticker, **_kwargs: {"error": "history tool unavailable"}),
+        logger=logger,
+    )
+)
 
-        # 缓存未命中，调用工具获取
-        price_info = get_stock_price(ticker)
+subscription_router = create_subscription_router()
 
-        # 存入缓存（TTL=60秒）
-        if orchestrator and price_info:
-            orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
-            logger.info(f"[API] 价格已缓存: {ticker}")
+config_router = create_config_router(
+    ConfigRouterDeps(
+        project_root=project_root,
+        logger=logger,
+    )
+)
 
-        return {"ticker": ticker, "data": price_info}
-    except Exception as e:
-        return {"error": str(e)}
+report_router = create_report_router(
+    ReportRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_report_index_store=lambda: get_report_index_store(),
+    )
+)
 
-@app.get("/api/stock/news/{ticker}")
-def get_news(ticker: str):
-    try:
-        news = get_company_news(ticker)
-        return {"ticker": ticker, "data": news}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/api/financials/{ticker}")
-def get_financials(ticker: str):
-    """获取公司财务报表数据（完整数据，JSON格式）"""
-    try:
-        financials_data = get_financial_statements(ticker)
-        return financials_data
-    except Exception as e:
-        return {"ticker": ticker, "error": str(e)}
-
-@app.get("/api/financials/{ticker}/summary")
-def get_financials_summary(ticker: str):
-    """获取公司财务报表摘要（文本格式，便于阅读）"""
-    try:
-        summary = get_financial_statements_summary(ticker)
-        return {"ticker": ticker, "summary": summary}
-    except Exception as e:
-        return {"ticker": ticker, "error": str(e)}
-
-@app.get("/api/stock/kline/{ticker}", response_model=KlineResponse)
-def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
-    """
-    获取 K 线图数据
-    使用缓存机制避免重复请求
-    
-    Args:
-        ticker: 股票代码
-        period: 时间周期 (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
-        interval: 数据间隔 (1d, 1wk, 1mo)
-    """
-    try:
-        orchestrator = _get_orchestrator_safe()
-        # 尝试从全局 orchestrator 缓存获取
-        if orchestrator:
-            cache_key = f"kline:{ticker}:{period}:{interval}"
-            cached_data = orchestrator.cache.get(cache_key)
-            if cached_data is not None:
-                logger.info(f"[API] 从缓存获取 K 线数据: {ticker} ({period}, {interval})")
-                return {"ticker": ticker, "data": cached_data, "cached": True}
-        
-        # 如果缓存中没有，获取新数据
-        kline_data = get_stock_historical_data(ticker, period=period, interval=interval)
-        
-        # 如果成功获取，存入缓存（缓存 1 小时）
-        if "error" not in kline_data and orchestrator:
-            cache_key = f"kline:{ticker}:{period}:{interval}"
-            orchestrator.cache.set(cache_key, kline_data, ttl=3600)  # 1小时缓存
-            logger.info(f"[API] K 线数据已缓存: {ticker} ({period}, {interval})")
-        
-        # 确保返回格式符合前端期望：{ticker, data: {kline_data: [...] 或 error: "..."}}
-        return {
-            "ticker": ticker, 
-            "data": kline_data,  # kline_data 已经是 {kline_data: [...]} 或 {error: "..."}
-            "cached": False
-        }
-    except Exception as e:
-        return {"ticker": ticker, "data": {"error": str(e)}, "cached": False}
-
-@app.post("/api/subscribe")
-async def subscribe_email(request: SubscriptionRequest):
-    """
-    订阅股票提醒
-
-    请求体:
-    {
-        "email": "user@example.com",
-        "ticker": "AAPL",
-        "alert_types": ["price_change", "news"],  # 可选
-        "price_threshold": 5.0  # 可选，价格变动阈值（百分比）
-    }
-    """
-    try:
-        from backend.services.subscription_service import get_subscription_service
-
-        subscription_service = get_subscription_service()
-        if not subscription_service.is_valid_email(request.email):
-            raise HTTPException(status_code=400, detail="无效的邮箱地址")
-        success = subscription_service.subscribe(
-            email=request.email,
-            ticker=request.ticker,
-            alert_types=request.alert_types,
-            price_threshold=request.price_threshold,
-        )
-
-        if success:
-            return {
-                "success": True,
-                "message": f"已成功订阅 {request.ticker} 的提醒",
-                "email": request.email,
-                "ticker": request.ticker,
-            }
-        else:
-            raise HTTPException(status_code=500, detail="订阅失败")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/unsubscribe")
-async def unsubscribe_email(request: UnsubscribeRequest):
-    """
-    取消订阅
-    
-    请求体:
-    {
-        "email": "user@example.com",
-        "ticker": "AAPL"  # 可选，如果不提供则取消所有订阅
-    }
-    """
-    try:
-        from backend.services.subscription_service import get_subscription_service
-
-        subscription_service = get_subscription_service()
-
-        # email 在模型中必填，但仍做一次保护性校验，缺失时按 400 返回
-        if not request.email:
-            raise HTTPException(status_code=400, detail="email 是必需的")
-
-        success = subscription_service.unsubscribe(
-            email=request.email,
-            ticker=request.ticker,
-        )
-
-        if success:
-            return {
-                "success": True,
-                "message": "已成功取消订阅",
-                "email": request.email,
-                "ticker": request.ticker or "所有股票",
-            }
-        else:
-            raise HTTPException(status_code=404, detail="未找到订阅记录")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/subscriptions", response_model=SubscriptionListResponse)
-async def get_subscriptions(email: str = None):
-    """
-    获取订阅列表
-    
-    查询参数:
-    - email: 用户邮箱（可选，如果不提供则返回所有订阅）
-    """
-    try:
-        from backend.services.subscription_service import get_subscription_service
-        
-        subscription_service = get_subscription_service()
-        subscriptions = subscription_service.get_subscriptions(email=email)
-        
-        return {
-            "success": True,
-            "subscriptions": subscriptions,
-            "count": len(subscriptions)
-        }
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/subscription/toggle", response_model=SubscriptionResponse)
-async def toggle_subscription(request: ToggleSubscriptionRequest):
-    """
-    启用或禁用订阅
-
-    请求体:
-    {
-        "email": "用户邮箱",
-        "ticker": "股票代码",
-        "enabled": true/false
-    }
-    """
-    try:
-        from backend.services.subscription_service import get_subscription_service
-
-        subscription_service = get_subscription_service()
-        success = subscription_service.toggle_subscription(
-            email=request.email,
-            ticker=request.ticker,
-            enabled=request.enabled,
-        )
-
-        if success:
-            return {
-                "success": True,
-                "message": f"订阅已{'启用' if request.enabled else '禁用'}",
-                "email": request.email,
-                "ticker": request.ticker,
-            }
-        else:
-            raise HTTPException(status_code=404, detail="订阅未找到")
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/config", response_model=ConfigResponse)
-async def get_config():
-    """
-    获取用户配置（从 user_config.json 读取）
-    """
-    try:
-        import json
-        config_file = os.path.join(project_root, "user_config.json")
-
-        if os.path.exists(config_file):
-            with open(config_file, 'r', encoding='utf-8') as f:
-                saved_config = json.load(f)
-            return {"success": True, "config": saved_config}
-
-        # 文件不存在时返回默认配置
-        return {
-            "success": True,
-            "config": {
-                "llm_provider": None,
-                "llm_model": None,
-                "llm_api_key": None,
-                "llm_api_base": None,
-                "layout_mode": "centered",
-            }
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/config")
-async def save_config(request: dict):
-    """
-    保存用户配置（存储到本地文件）
-    """
-    try:
-        import json
-        config_file = os.path.join(project_root, "user_config.json")
-        
-        # 保存配置到文件
-        with open(config_file, 'w', encoding='utf-8') as f:
-            json.dump(request, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"[Config] 用户配置已保存到 {config_file}")
-        
-        return {"success": True, "message": "配置已保存"}
-    except Exception as e:
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/export/pdf")
-async def export_pdf(request: dict):
-    """
-    导出对话记录和图表到 PDF
-    
-    请求体:
-    {
-        "messages": [
-            {"role": "user", "content": "...", "timestamp": "..."},
-            {"role": "assistant", "content": "...", "timestamp": "..."}
-        ],
-        "charts": [  # 可选
-            {"ticker": "AAPL", "chart_type": "candlestick", "image_path": "..."}
-        ],
-        "title": "对话记录"  # 可选
-    }
-    """
-    try:
-        from backend.services.pdf_export import get_pdf_service
-        
-        pdf_service = get_pdf_service()
-        if not pdf_service:
-            raise HTTPException(status_code=503, detail="PDF 导出服务不可用（请安装 reportlab: pip install reportlab）")
-        
-        messages = request.get('messages', [])
-        charts = request.get('charts', [])
-        title = request.get('title', 'FinSight 对话记录')
-        
-        if not messages:
-            raise HTTPException(status_code=400, detail="messages 不能为空")
-        
-        # 生成 PDF
-        if charts:
-            pdf_bytes = pdf_service.export_with_charts(messages, charts, title=title)
-        else:
-            pdf_bytes = pdf_service.export_conversation(messages, title=title)
-        
-        if pdf_bytes:
-            from fastapi.responses import Response
-            return Response(
-                content=pdf_bytes,
-                media_type="application/pdf",
-                headers={
-                    "Content-Disposition": f"attachment; filename=finsight_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                }
-            )
-        else:
-            raise HTTPException(status_code=500, detail="PDF 生成失败")
-            
-    except ImportError as e:
-        raise HTTPException(status_code=503, detail=f"PDF 导出功能不可用: {str(e)}")
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-# 启动入口
+app.include_router(system_router)
+app.include_router(user_router)
+app.include_router(chat_router)
+app.include_router(market_router)
+app.include_router(subscription_router)
+app.include_router(config_router)
+app.include_router(report_router)
+app.include_router(dashboard_router)
+# 鍚姩鍏ュ彛
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
+

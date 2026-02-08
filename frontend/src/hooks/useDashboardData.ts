@@ -7,8 +7,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
 import type { DashboardResponse } from '../types/dashboard';
-
-const API_BASE = 'http://127.0.0.1:8000';
+import { buildApiUrl } from '../config/runtime';
 
 export function useDashboardData(symbol: string | null) {
   const {
@@ -35,10 +34,9 @@ export function useDashboardData(symbol: string | null) {
       setError(null);
 
       try {
-        const response = await fetch(
-          `${API_BASE}/api/dashboard?symbol=${encodeURIComponent(sym)}`,
-          { signal: controller.signal }
-        );
+        const response = await fetch(buildApiUrl(`/api/dashboard?symbol=${encodeURIComponent(sym)}`), {
+          signal: controller.signal,
+        });
 
         if (!response.ok) {
           const err = await response

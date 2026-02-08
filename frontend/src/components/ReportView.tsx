@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { normalizeMarkdown } from '../utils/markdown';
@@ -66,7 +66,7 @@ const ConfidenceMeter: React.FC<{ score: number }> = ({ score }) => {
           style={{ width: `${percent}%` }}
         />
       </div>
-      <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+      <div className="mt-2 text-2xs text-slate-400 dark:text-slate-500">
         <span className={`font-medium ${levelColor}`}>{level}置信度</span>
         <span className="mx-1">·</span>
         <span>综合 Price/News/Technical 等多源 Agent 分析结果</span>
@@ -80,7 +80,7 @@ const normalizeAnchor = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '-')
 /** Strip markdown syntax and count only actual content characters (Chinese chars + English words + numbers). */
 const countContentChars = (markdown: string): number => {
   if (!markdown) return 0;
-  let text = markdown
+  const text = markdown
     .replace(/```[\s\S]*?```/g, '')       // code blocks
     .replace(/`[^`]*`/g, '')              // inline code
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '') // images
@@ -94,7 +94,7 @@ const countContentChars = (markdown: string): number => {
     .replace(/---+|===+|\*\*\*+/g, '')    // horizontal rules
     .replace(/\|/g, '')                   // table pipes
     .replace(/https?:\/\/\S+/g, '')       // raw URLs (ignore for content length)
-    .replace(/[:\-]+/g, ' ');             // table alignment
+    .replace(/[:-]+/g, ' ');             // table alignment
   // Count Chinese characters + English words + numbers
   const chinese = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
   const words = (text.match(/[a-zA-Z0-9]+/g) || []).length;
@@ -118,7 +118,7 @@ const formatTable = (table: { headers?: string[]; rows?: string[][] }) => {
 const extractDomain = (url: string) => {
   try {
     return new URL(url).hostname.replace('www.', '');
-  } catch (error) {
+  } catch {
     return url;
   }
 };
@@ -402,7 +402,7 @@ const markdownPlugins = [remarkGfm];
 const safeJsonParse = (value: string) => {
   try {
     return JSON.parse(value);
-  } catch (error) {
+  } catch {
     return null;
   }
 };
@@ -535,21 +535,21 @@ const SectionRenderer: React.FC<{
             {/* Agent 来源标注 */}
             {agentName && (
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                <span className="text-2xs px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                   {agentName}
                 </span>
                 {status === 'not_run' && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
                     未运行
                   </span>
                 )}
                 {confidence !== undefined && confidence > 0 && (
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-2xs text-slate-400">
                     {Math.round(confidence * 100)}% 置信度
                   </span>
                 )}
                 {dataSources.length > 0 && (
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-2xs text-slate-400">
                     · {dataSources.join(', ')}
                   </span>
                 )}
@@ -681,7 +681,7 @@ const EvidencePool: React.FC<{
           {sourceSummary.map((item) => (
             <span
               key={item.domain}
-              className="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-300"
+              className="px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 text-2xs text-slate-500 dark:text-slate-300"
             >
               {item.domain} · {item.count}
             </span>
@@ -725,10 +725,10 @@ const EvidencePool: React.FC<{
                     {cit.snippet}
                   </div>
                   {cit.published_date && (
-                    <div className="text-slate-400 text-[10px] mt-1">{cit.published_date}</div>
+                    <div className="text-slate-400 text-2xs mt-1">{cit.published_date}</div>
                   )}
                   {(confidencePercent !== null || freshnessHours !== null) && (
-                    <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                    <div className="mt-1 flex flex-wrap gap-1.5 text-2xs">
                       {confidencePercent !== null && (
                         <span className={`px-1.5 py-0.5 rounded-full ${confidenceTone}`}>
                           Confidence {confidencePercent}%
@@ -779,6 +779,32 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const metricItems = useMemo(() => extractMetrics(report.sections), [report.sections]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
   const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
+  const reportHints = useMemo(() => {
+    const direct = (report as any).report_hints;
+    if (direct && typeof direct === 'object') {
+      return direct as {
+        is_compare?: boolean;
+        has_conflict?: boolean;
+        compare_basis?: string[];
+        conflict_agents?: string[];
+      };
+    }
+    const metaHints = (report as any)?.meta?.report_hints;
+    if (metaHints && typeof metaHints === 'object') {
+      return metaHints as {
+        is_compare?: boolean;
+        has_conflict?: boolean;
+        compare_basis?: string[];
+        conflict_agents?: string[];
+      };
+    }
+    return {
+      is_compare: false,
+      has_conflict: false,
+      compare_basis: [],
+      conflict_agents: [],
+    };
+  }, [report]);
   const agentDetailSections = useMemo(() => {
     const metaSummaries = (report.meta as any)?.agent_summaries;
     if (Array.isArray(metaSummaries) && metaSummaries.length > 0) {
@@ -827,7 +853,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
         <ul className="mt-2 list-disc list-inside space-y-1">
           {classifiedErrors.map((err, idx) => (
             <li key={`${err.text}-${idx}`} className="flex items-start gap-2">
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${err.tone}`}>{err.label}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-2xs ${err.tone}`}>{err.label}</span>
               <span className="flex-1">{err.text}</span>
             </li>
           ))}
@@ -962,7 +988,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       a.click();
       window.URL.revokeObjectURL(url);
       pushStatus('success', 'PDF exported');
-    } catch (error) {
+    } catch {
       pushStatus('error', 'PDF export failed');
     } finally {
       setActionState((prev) => ({ ...prev, exporting: false }));
@@ -983,7 +1009,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
         setWatchlisted(true);
         pushStatus('success', 'Saved to watchlist');
       }
-    } catch (error) {
+    } catch {
       pushStatus('error', 'Watchlist update failed');
     } finally {
       setActionState((prev) => ({ ...prev, watchlist: false }));
@@ -1010,7 +1036,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       });
       setSubscribed(true);
       pushStatus('success', 'Alerts subscribed');
-    } catch (error) {
+    } catch {
       pushStatus('error', 'Subscription failed');
     } finally {
       setActionState((prev) => ({ ...prev, subscribe: false }));
@@ -1069,7 +1095,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(report.summary)}</ReactMarkdown>
                   </div>
                   {sourceSummary.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+                    <div className="mt-3 flex flex-wrap gap-2 text-2xs">
                       {sourceSummary.map((item) => (
                         <span
                           key={item.domain}
@@ -1094,7 +1120,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
                       <span className="text-base">📋</span>
                       综合研究报告
-                      <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
+                      <span className="text-2xs font-normal text-blue-600 dark:text-blue-400 ml-auto">
                         {countContentChars((report as any).synthesis_report || '')} 字
                       </span>
                       {/* 展开/收起按钮 - 仅在全屏模式也提供 */}
@@ -1152,7 +1178,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                       Agent 分析详情
                     </span>
-                    <span className="text-[10px] text-slate-400 ml-auto">
+                    <span className="text-2xs text-slate-400 ml-auto">
                       {agentDetailSections.length} 个数据源
                     </span>
                   </summary>
@@ -1185,7 +1211,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                   <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
                     <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">证据池</span>
-                    <span className="text-[10px] text-slate-400 ml-auto">
+                    <span className="text-2xs text-slate-400 ml-auto">
                       {report.citations.length} 条来源
                     </span>
                   </summary>
@@ -1261,7 +1287,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
             <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(report.summary)}</ReactMarkdown>
           </div>
           {sourceSummary.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+            <div className="mt-3 flex flex-wrap gap-2 text-2xs">
               {sourceSummary.map((item) => (
                 <span
                   key={item.domain}
@@ -1270,6 +1296,26 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                   {item.domain} · {item.count}
                 </span>
               ))}
+            </div>
+          )}
+
+          {(reportHints.is_compare || reportHints.has_conflict) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+              {reportHints.is_compare && (
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                  对比报告
+                </span>
+              )}
+              {reportHints.has_conflict && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                  存在证据冲突，请重点复核
+                </span>
+              )}
+              {Array.isArray(reportHints.conflict_agents) && reportHints.conflict_agents.length > 0 && (
+                <span className="text-2xs text-slate-500 dark:text-slate-400">
+                  冲突来源：{reportHints.conflict_agents.join(', ')}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1305,7 +1351,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 return (
                   <div
                     key={key}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] ${isSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : isSkipped ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}
+                    className={`px-2 py-1.5 rounded-lg text-2xs ${isSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : isSkipped ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}
                   >
                     <div className="font-medium capitalize">{key}</div>
                     <div className="flex items-center gap-1">
@@ -1448,7 +1494,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                   <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
                     <span className="text-base">📋</span>
                     综合研究报告
-                    <span className="text-[10px] font-normal text-blue-600 dark:text-blue-400 ml-auto">
+                    <span className="text-2xs font-normal text-blue-600 dark:text-blue-400 ml-auto">
                       {countContentChars((report as any).synthesis_report || '')} 字
                     </span>
                     {/* 展开/收起按钮 */}
@@ -1506,7 +1552,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                   <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                     Agent 分析详情
                   </span>
-                  <span className="text-[10px] text-slate-400 ml-auto">
+                  <span className="text-2xs text-slate-400 ml-auto">
                     {agentDetailSections.length} 个数据源
                   </span>
                 </summary>
@@ -1539,7 +1585,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
                   <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
                   <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">证据池</span>
-                  <span className="text-[10px] text-slate-400 ml-auto">
+                  <span className="text-2xs text-slate-400 ml-auto">
                     {report.citations.length} 条来源
                   </span>
                 </summary>
@@ -1587,9 +1633,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           >
             {subscribed ? 'Subscribed' : 'Subscribe Alerts'}
           </button>
-          <span className="text-[10px] text-slate-400">ID: {report.report_id}</span>
+          <span className="text-2xs text-slate-400">ID: {report.report_id}</span>
         </div>
       </div>
     </div>
   );
 };
+
+

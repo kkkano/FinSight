@@ -61,6 +61,9 @@ python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 | 变量 | 默认值 | 作用 |
 |---|---:|---|
 | `LANGGRAPH_PLANNER_MODE` | `stub` | `stub` 为可测确定性规划；`llm` 为受约束 PlanIR 规划 |
+| `LANGGRAPH_PLANNER_AB_ENABLED` | `false` | 启用 Planner Prompt/Plan A/B 稳定分流（按会话/线程哈希） |
+| `LANGGRAPH_PLANNER_AB_SPLIT` | `50` | A 组流量百分比（0-100），剩余归 B |
+| `LANGGRAPH_PLANNER_AB_SALT` | `planner-ab-v1` | A/B 分桶盐值（用于稳定且可控的分组） |
 | `LANGGRAPH_SYNTHESIZE_MODE` | `stub` | `stub` 为确定性综合；`llm` 为校验后综合 |
 | `LANGGRAPH_EXECUTE_LIVE_TOOLS` | `false` | 是否执行真实工具/Agent |
 | `LANGGRAPH_SHOW_EVIDENCE` | `false` | 是否在 markdown 内输出证据链接 |
@@ -68,6 +71,12 @@ python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 | `LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK` | `true` | 后端异常时是否允许回退到内存 checkpointer |
 | `API_AUTH_ENABLED` | `false` | API Key 鉴权开关 |
 | `RATE_LIMIT_ENABLED` | `false` | HTTP 限流开关 |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | CORS 允许来源（逗号分隔） |
+| `CORS_ALLOW_CREDENTIALS` | `false` | 是否允许携带凭证的 CORS 请求 |
+| `API_PUBLIC_PATHS` | `/health,/docs,/openapi.json,/redoc` | 启用鉴权时的公开免认证路径 |
+| `SESSION_CONTEXT_TTL_MINUTES` | `240` | 会话引用上下文 TTL（分钟） |
+| `SESSION_CONTEXT_MAX_THREADS` | `1000` | 内存中最大会话上下文数（超出后 LRU 淘汰） |
+| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | 前端运行时后端基础 URL |
 
 ---
 
@@ -153,6 +162,7 @@ flowchart LR
 - `GET /health`
 - `GET /metrics`
 - `GET /diagnostics/orchestrator`
+- `GET /diagnostics/planner-ab`（别名：`/diagnostics/planner_ab`，返回 A/B 的 requests/fallback_rate/retry_attempts/avg_steps）
 
 ### 契约版本
 
