@@ -113,7 +113,64 @@
 - [ ] **docs/06 拆分**: 设计规范 + 变更日志 + 待办清单 三文件
 - [ ] **E2E 测试补充**: Workbench 页面 + 移动端 sidebar 的 Playwright 测试
 
-### Sprint 2 — 深度优化 (2 周)
+### Sprint 2 — 研报库 + 智能任务系统 (2 周)
+
+#### 研报库三层架构
+
+研报来源需要分层管理，不能只存 AI 对话研报：
+
+| 层级 | 来源 | 存储方式 | 内容 |
+|------|------|---------|------|
+| **AI 生成** | FinSight LangGraph 管线 | `report_index` SQLite/Postgres | 用户查询触发的分析研报 |
+| **官方公告** | SEC EDGAR / 港交所 / 交易所 | 定时爬取 + 向量化 | 10-K/10-Q/年报/中报/招股书 |
+| **第三方机构** | 券商研报 / 投行评级 | 用户上传 + RAG 索引 | 买卖评级、目标价、行业研究 |
+
+**数据模型设计**：
+```
+ReportEntry:
+  - id: UUID
+  - source_type: "ai_generated" | "official_filing" | "third_party"
+  - ticker: str
+  - title: str
+  - content: text / structured JSON
+  - embedding: vector (用于语义检索)
+  - confidence: float (AI 研报专属)
+  - filing_type: str (官方公告: 10-K/10-Q/8-K)
+  - publisher: str (第三方: 券商名称)
+  - created_at: datetime
+  - tags: list[str]
+```
+
+**前端展示**：Workbench 研报区新增 Tab 切换 `AI 分析 | 官方公告 | 机构研报`，支持交叉对比。
+
+#### 智能任务系统 (AI-Driven Daily Tasks)
+
+工作台"今日任务"应根据用户画像动态生成，不再硬编码：
+
+**输入信号**：
+| 信号 | 来源 | 示例 |
+|------|------|------|
+| 投资者类型 | `user_profile.risk_preference` | 保守型 / 稳健型 / 进取型 |
+| 持仓数据 | `portfolioPositions` | AAPL: 100股, TSLA: 50股 |
+| 长期记忆 | `session_context` + 历史对话 | 用户关注半导体板块、偏好技术分析 |
+| 市场事件 | `news_agent` 实时数据 | 美联储议息、财报季、重大并购 |
+| 研报时效 | `report_index` 最后更新时间 | AAPL 研报 5 天未更新 |
+
+**任务生成规则**：
+| 投资者类型 | 任务偏好 |
+|-----------|---------|
+| **保守型** | 强调风险提示、防御性配置建议、股息分析 |
+| **稳健型** | 平衡增长与风险、组合再平衡建议、行业轮动 |
+| **进取型** | 高波动标的机会、技术突破信号、事件驱动策略 |
+
+**实现方案**：
+1. 后端新增 `/api/tasks/daily` 端点
+2. 调用 LLM (Planner 模式) 基于用户画像 + 市场数据生成个性化任务列表
+3. 任务带 `priority` / `category` / `action_url` 字段
+4. 前端 TaskSection 消费 API，按优先级排序展示
+5. 用户可标记完成/跳过，反馈写入长期记忆
+
+#### 其他优化
 
 - [ ] **UI 组件迁移**: 逐步将现有内联 Tailwind 按钮/卡片替换为 `components/ui/` 共享组件
 - [ ] **Agent 日志面板增强**: 实时搜索/过滤, Agent 时间线可视化

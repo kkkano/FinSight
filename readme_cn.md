@@ -1,4 +1,4 @@
-﻿# FinSight AI：LangGraph 金融研究副驾
+﻿# FinSight AI — 智能金融分析平台
 
 [![LangChain](https://img.shields.io/badge/LangChain-1.2.7-green)](https://github.com/langchain-ai/langchain)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.0.7-blue)](https://github.com/langchain-ai/langgraph)
