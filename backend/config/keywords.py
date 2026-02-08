@@ -119,7 +119,7 @@ class KeywordsConfig:
 
     def get_boost_weight(self) -> float:
         """Get keyword boost weight (can be made configurable)"""
-        return 0.12
+        return 0.2
 
     def get_confidence_threshold(self) -> float:
         """Get confidence threshold for direct classification"""

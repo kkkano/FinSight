@@ -203,8 +203,9 @@ export const InlineChart: React.FC<InlineChartProps> = ({
       } catch (err) {
         console.error('Inline chart load failed:', err);
       } finally {
-        if (!active) return;
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -240,3 +241,5 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     </div>
   );
 };
+
+

@@ -129,6 +129,26 @@
       }
     },
     {
+      "id": "TC-007B",
+      "name": "新闻引用-Selection Context 深度分析",
+      "category": "news",
+      "input": {
+        "query": "TSLA 新闻",
+        "tickers": [
+          "TSLA"
+        ],
+        "context_summary": "[System Context]\n用户正在询问以下新闻:\n- [2026-02-01] Tesla Q4 earnings beat; gross margin up despite delivery drop.\n用户问题: 分析新闻可能带来的影响"
+      },
+      "expected": {
+        "intent": "news",
+        "success": true,
+        "response_contains": [
+          "新闻分析",
+          "影响"
+        ]
+      }
+    },
+    {
       "id": "TC-008",
       "name": "情绪查询",
       "category": "intent",

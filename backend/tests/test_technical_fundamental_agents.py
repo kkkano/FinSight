@@ -101,3 +101,42 @@ async def test_fundamental_agent_financials():
     assert result.agent_name == "fundamental"
     assert "Revenue" in result.summary
     assert result.evidence
+    revenue_item = next((item for item in result.evidence if item.meta.get("metric_key") == "revenue"), None)
+    assert revenue_item is not None
+    assert "yoy" in revenue_item.meta
+    assert "qoq" in revenue_item.meta
+    assert result.evidence_quality.get("overall_score", 0) > 0
+    assert result.evidence_quality.get("metric_coverage", 0) > 0
+
+
+@pytest.mark.asyncio
+async def test_fundamental_agent_quarterly_growth_consistency():
+    mock_llm = MagicMock()
+    cache = DummyCache()
+    tools = MagicMock()
+    tools.get_company_info = MagicMock(return_value="Company Profile (AAPL):\n- Name: Apple Inc\n")
+    tools.get_financial_statements = MagicMock(return_value={
+        "ticker": "AAPL",
+        "timestamp": "2026-01-10T00:00:00",
+        "financials": {
+            "columns": ["2025-12-31", "2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31"],
+            "index": ["Total Revenue", "Net Income"],
+            "data": [
+                {"2025-12-31": 125, "2025-09-30": 120, "2025-06-30": 118, "2025-03-31": 115, "2024-12-31": 110},
+                {"2025-12-31": 30, "2025-09-30": 28, "2025-06-30": 27, "2025-03-31": 25, "2024-12-31": 24},
+            ],
+        },
+        "balance_sheet": {"columns": [], "index": [], "data": []},
+        "cashflow": {"columns": [], "index": [], "data": []},
+        "error": None,
+    })
+
+    agent = FundamentalAgent(mock_llm, cache, tools)
+    result = await agent.research("fundamental analysis", "AAPL")
+
+    revenue_item = next((item for item in result.evidence if item.meta.get("metric_key") == "revenue"), None)
+    assert revenue_item is not None
+    assert revenue_item.meta.get("period_type") == "quarterly"
+    assert isinstance(revenue_item.meta.get("qoq"), float)
+    assert isinstance(revenue_item.meta.get("yoy"), float)
+    assert "QoQ" in result.summary and "YoY" in result.summary

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Activity, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient } from '../api/client';
 
@@ -36,7 +36,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClass
   }, []);
 
   const panelClass =
-    'absolute left-0 top-full mt-2 w-80 rounded-lg border border-fin-border bg-fin-panel/90 p-3 text-xs text-fin-muted shadow-lg z-50';
+    'absolute left-0 top-full mt-2 w-80 rounded-xl border border-fin-border bg-fin-panel/90 p-3 text-xs text-fin-muted shadow-lg z-50';
   const wrapperClass = wrapperClassName || 'relative inline-flex';
 
   return (
@@ -106,3 +106,5 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({ wrapperClass
     </div>
   );
 };
+
+

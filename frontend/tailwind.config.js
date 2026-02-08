@@ -7,6 +7,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontSize: {
+        '2xs': ['11px', { lineHeight: '16px' }],
+      },
       colors: {
         fin: {
           bg: 'var(--fin-bg)',
@@ -18,7 +21,7 @@ export default {
           text: 'var(--fin-text)',
           'text-secondary': 'var(--fin-text-secondary)',
           muted: 'var(--fin-muted)',
-          primary: 'var(--fin-primary)',
+          primary: 'rgb(var(--fin-primary) / <alpha-value>)',
           success: 'var(--fin-success)',
           danger: 'var(--fin-danger)',
           warning: 'var(--fin-warning)',

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
@@ -7,10 +7,10 @@ import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
 import { ThinkingProcess } from './ThinkingProcess';
-import { ReportView } from './ReportView';
+import { ReportView } from './report';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
-import type { KlineData, ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
+import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 
@@ -28,8 +28,8 @@ const shouldGenerateChart = async (
         chartType: response.chart_type || 'line',
       };
     }
-  } catch (error) {
-    console.error('Chart detection failed:', error);
+  } catch {
+    console.error('Chart detection failed');
   }
 
   const lowerQuery = query.toLowerCase();
@@ -68,7 +68,20 @@ const extractTicker = (text: string): string | null => {
 };
 
 export const ChatList: React.FC = () => {
-  const { messages, isChatLoading, statusMessage, statusSince, removeMessage, setStatus, setLoading, setTicker, addMessage, updateMessage } = useStore();
+  const {
+    messages,
+    isChatLoading,
+    statusMessage,
+    statusSince,
+    executionProgress,
+    currentStep,
+    removeMessage,
+    setStatus,
+    setLoading,
+    setTicker,
+    addMessage,
+    updateMessage,
+  } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsed, setElapsed] = useState<string>('0.0');
@@ -172,7 +185,7 @@ export const ChatList: React.FC = () => {
       if (response.current_focus || tickerToChart) {
         setTicker(response.current_focus || tickerToChart);
       }
-    } catch (error) {
+    } catch {
       updateMessage(messageId, {
         content: originalMsg.content,
         isLoading: false,
@@ -270,7 +283,7 @@ export const ChatList: React.FC = () => {
                       </span>
                       {msg.as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {msg.as_of}</span>}
                       {msg.tried_sources && msg.tried_sources.length > 0 && (
-                        <span className="text-[10px] text-fin-muted/70">
+                        <span className="text-2xs text-fin-muted/70">
                           尝试: {msg.tried_sources.join(' → ')}
                         </span>
                       )}
@@ -297,15 +310,29 @@ export const ChatList: React.FC = () => {
       {/* Loading Indicator */}
       {isChatLoading && (
         <div className="flex w-full justify-start animate-fade-in">
-          <div className="flex flex-row items-center ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 gap-2 shadow-sm">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 shadow-sm min-w-[280px] max-w-[420px]">
+            <div className="flex items-center gap-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+              <span className="text-xs text-fin-muted">
+                {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
+              </span>
             </div>
-            <span className="text-xs text-fin-muted">
-              {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
-            </span>
+            <div className="mt-2">
+              <div className="h-1.5 rounded-full bg-fin-border/70 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-fin-primary transition-all duration-300"
+                  style={{ width: `${Math.max(0, Math.min(100, executionProgress ?? 0))}%` }}
+                />
+              </div>
+              <div className="mt-1 flex items-center justify-between text-2xs text-fin-muted">
+                <span className="truncate">{currentStep || 'Preparing execution...'}</span>
+                <span>{Math.round(executionProgress ?? 0)}%</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -414,7 +441,7 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
       {urlMeta.domain ? <Link2 size={14} /> : <ExternalLink size={14} />}
       <span className="truncate max-w-[160px]">{displayText}</span>
       {urlMeta.domain && (
-        <span className="text-[10px] text-fin-muted/70">({urlMeta.domain})</span>
+        <span className="text-2xs text-fin-muted/70">({urlMeta.domain})</span>
       )}
     </a>
   );
@@ -541,3 +568,5 @@ const LoadingDots: React.FC = () => (
     <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '300ms' }} />
   </div>
 );
+
+

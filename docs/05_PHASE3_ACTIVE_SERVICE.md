@@ -1,74 +1,51 @@
-# FinSight 阶段3：主动服务与风控体系
+# FinSight Phase 3 历史归档（主动服务与风险体系）
 
-> **计划周期**: Week 7 - Week 8
-> **更新日期**: 2026-01-28
-> **核心目标**: 实现"全天候监控"与"风险管理"，完成智能合伙人拼图
->
-> **近期同步**:
-> - ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）
-> - News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）
-> - get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）
-> - SSRF 防护扩展至 DeepSearch + fetch_url_content（P1-2）
-> - pytest 收集 backend/tests + test/（不再标记 legacy）
-> - PlanIR + Executor 与 EvidencePolicy 落地（计划模板/执行 trace/引用校验）
-> - DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
-> - BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
-> - SecurityGate：鉴权 + 限流 + 免责声明模板落地（P0-29）
-> - Cache 抖动 + 负缓存，CircuitBreaker 支持分源阈值
-> - Trace 规范化输出 + /metrics 可观测性入口
-
-> - Split backend/tools.py into backend/tools/ (search/news/price/financial/macro/web); keep backend.tools compatibility
-> - Config entry unified: backend/llm_config.py uses user_config.json > .env; llm_service uses same source
-> - Core backend logging migrated from print to logging (API/Agents/Services/Orchestration)
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
----
-
-## 0.1 Recent Updates (2026-01-28)
-
-- Evidence pool now surfaces for external data usage (chat/report)
-- News pipeline adds summary + relevance filtering to avoid noise
-- Multi-ticker comparison auto renders multiple charts
-- Need-Agent Gate decision is traceable in UI
-
-## 0. 当前状态（2026-01-10）
-
-- AlertSystem/RiskAgent 仍为规划阶段，/subscribe 端点为占位实现
-- Phase 0 已具备 RSS/Finnhub 时效链路与熔断/缓存基础，可作为主动服务的数据底座
-
-## 1. 核心任务拆解
-
-### 1.1 风控专家 (RiskAgent)
-- [ ] **VaR 计算**: 引入 `numpy` / `pandas` 计算投资组合的在险价值。
-- [ ] **持仓诊断**: 分析用户 Watchlist 的集中度（"你 80% 的仓位都在科技股，这很危险"）。
-
-### 1.2 主动监控 (AlertSystem)
-- [ ] **后台轮询器**: 独立的守护进程，每 15 分钟轮询一次关注列表。
-- [ ] **官方新闻源**: Reuters/Bloomberg RSS + Finnhub 48h 作为新闻信号入口，过滤过期条目。
-- [ ] **异动检测**:
-    - 价格异动：涨跌幅 > 5%。
-    - 新闻异动：Sentiment Score 突变。
-- [ ] **推送服务**: 模拟 Webhook 推送或站内信。
+> **状态**: Archived (Reference Only)  
+> **最后更新**: 2026-02-07  
+> **实现依据**: 请以 `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` 为准
 
 ---
 
-## 2. 场景模拟
+## 1. 本阶段历史目标
 
-### 2.1 "黑天鹅"场景
-- **事件**: 某日凌晨，美联储意外加息 50bp。
-- **AlertSystem**: 监测到 Macro 数据剧烈波动。
-- **RiskAgent**: 立即评估用户持仓（假设持有大量纳指 ETF）。
-- **Action**: 在用户醒来前，生成一份"紧急早报"，建议"考虑对冲或减仓"。
+Phase 3 关注“主动服务”与“风险控制”：
 
-### 2.2 "财报季"场景
-- **事件**: 英伟达发布财报，超预期 20%。
-- **AlertSystem**: 捕捉到盘后价格暴涨。
-- **Orchestrator**: 唤醒 `FundamentalAgent` 解读财报。
-- **Action**: 推送消息："NVDA 业绩炸裂，目标价上调至 $XXX"。
+- 持续监控与订阅提醒
+- 风险度量与风险提示
+- 从被动问答向事件驱动服务演进
+
+当前该方向仍在演进中，已纳入 SSOT 的后续任务而非独立阶段文档驱动。
 
 ---
 
-## 3. 验收标准
+## 2. 当前落地状态（简版）
 
-1.  **无感监控**: 系统能在无用户交互的情况下，后台自动运行并产生日志。
-2.  **准确预警**: 只有"真正重要"的消息才推送，避免成为垃圾短信轰炸机。
-3.  **计算准确**: RiskAgent 的回撤计算误差在可接受范围内。
+| 能力 | 当前状态 | 说明 |
+|---|---|---|
+| 主动告警 | 部分落地 | 有基础能力与入口，但完整策略仍在演进 |
+| 风险分析 | 部分落地 | 可用风险相关工具与分析节点，完善中 |
+| 生产门禁 | 已落地 | 发布流程采用后端测试 + 前端构建 + e2e |
+
+---
+
+## 3. 已被替代或收口的内容
+
+- 本文不再维护“具体开发排期”。
+- 所有“下一步计划”统一迁移到 `docs/06` 的 11.x 小结。
+- 与当前代码冲突时，始终以 `docs/06` + 代码实现为准。
+
+---
+
+## 4. 与当前文档的关系
+
+- 当前架构：`docs/01_ARCHITECTURE.md`
+- 重构 SSOT：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`
+- 生产部署：`docs/11_PRODUCTION_RUNBOOK.md`
+
+---
+
+## 5. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-02-07 | 文档改为历史归档格式，移除过期阶段计划描述 |

@@ -1,122 +1,126 @@
-# FinSight RAG 架构升级计划 (ChromaDB + Sentence Transformers)
+# FinSight RAG v2 架构（当前有效）
 
-> 📅 **规划日期**: 2025-12-28
-> 📅 **更新日期**: 2026-01-20
-> 🎯 **核心目标**: 引入向量数据库与 RAG 技术，突破 Context 限制，赋予 Agent "阅读长文" 和 "长期记忆" 的能力。
-
-> 🧩 **近期同步**: ReportIR citations 增加 confidence / freshness_hours 字段（P0-2）。
-> 🧭 **近期同步**: News/Macro 回退结构化输出，避免 raw 文本进入报告（P0-3）。
-> 🧱 **近期同步**: get_company_news 改为结构化列表，NewsAgent/SupervisorAgent 同步适配（P1-1）。
-> 🛡️ **近期同步**: DeepSearch 加入 SSRF 防护与重试策略（P1-2）。
-> 🧪 **近期同步**: pytest 统一收集 backend/tests，test/ 目录标记为 legacy（P1-3）。
-> 🧠 **近期同步**: DeepSearch 查询模板动态化（P2-1）。
-> ✅ **近期同步**: PlanIR + Executor 与 EvidencePolicy 已落地（计划模板/执行 trace/引用校验/覆盖率统计）。
-> ✅ **近期同步**: DataContext 统一 as_of/currency/adjustment 并输出一致性告警（P0-27）
-> ✅ **近期同步**: BudgetManager 限制工具调用/轮次/耗时预算，预算快照可追溯（P0-28）
-> ✅ **近期同步**: API 鉴权 + 限流 + 免责声明模板落地，确保合规门禁（P0-29）
-> - SchemaToolRouter: one-shot LLM tool selection + schema validation + ClarifyTool templates; wired into /chat/supervisor & /chat/supervisor/stream; invalid JSON/unknown tool -> clarify
----
-
-## 0.1 Recent Updates (2026-01-28)
-
-- Evidence pool is returned for research outputs to make RAG evidence traceable
-- News outputs include summary + relevance filtering
-- Multi-ticker comparison auto renders multi charts
-- Need-Agent Gate decisions visible in trace (fast path vs agent path)
-
-
-## 0. 当前状态（2026-01-12）✅ 基础设施已完成
-
-- **VectorStore** (`backend/knowledge/vector_store.py`): ChromaDB 封装已完成
-- **RAGEngine** (`backend/knowledge/rag_engine.py`): 切片+检索引擎已完成
-- **Embedding**: 使用 `paraphrase-multilingual-MiniLM-L12-v2` 本地多语言模型
-- **依赖**: `chromadb>=0.4.0`, `sentence-transformers>=2.2.0` 已添加到 requirements.txt
-- 下一步：集成到 DeepSearchAgent 作为临时工作台
-
-## 1. 技术选型决策
-
-### 1.1 向量数据库：Chroma (本地模式)
-**决策理由**:
-1.  **隐私第一**: FinSight 定位为个人金融助手，用户的持仓、偏好及研报数据应尽可能留在本地 (`./data/chroma_db`)，避免敏感数据上云。
-2.  **轻量级**: 无需 Docker，`pip install chromadb` 即可运行，非常适合单体/小团队部署。
-3.  **生态友好**: 与 LangChain 和 LlamaIndex 集成成熟。
-
-### 1.2 Embedding 模型：Sentence Transformers (本地)
-**决策理由**:
-1.  **隐私优先**: 本地运行，无需调用外部 API，敏感金融数据不出本地。
-2.  **多语言支持**: `paraphrase-multilingual-MiniLM-L12-v2` 支持中英文混合场景。
-3.  **轻量高效**: 模型体积小，推理速度快，适合实时检索。
-
-### 1.3 RAG 引擎：自研 RAGEngine
-**决策理由**:
-1.  **简洁可控**: 不依赖 LlamaIndex 复杂抽象，代码可读性高。
-2.  **定制灵活**: 切片策略、检索参数可根据金融场景调优。
-3.  **依赖精简**: 仅需 `chromadb` + `sentence-transformers`，无额外框架。
+> **状态**: Active (Production-Oriented)  
+> **最后更新**: 2026-02-07  
+> **SSOT 对齐**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.10 / 11.11.2）
 
 ---
 
-## 2. 核心应用场景
+## 1. 目标
 
-我们将分两个阶段引入 RAG 能力：
+RAG v2 的目标不是“所有内容都入库”，而是让检索在正确场景下稳定提升结论质量：
 
-### 2.1 场景 A：DeepSearchAgent 的 "短期工作台" (Working Memory)
-*   **痛点**: 研报通常为 20+ 页的 PDF，直接通过 LLM 处理 Token 消耗巨大且易丢失细节。
-*   **流程**:
-    1.  `DeepSearchAgent` 抓取 PDF/URL。
-    2.  使用 **LlamaIndex** 解析并切片 (Chunking)。
-    3.  存入 **临时 Collection** (TTL = 任务周期)。
-    4.  Agent 针对具体问题 (Query) 检索相关片段 (Top-k)。
-    5.  LLM 基于检索内容生成观点。
-    6.  任务结束后**销毁**该 Collection，释放资源。
-
-### 2.2 场景 B：UserContext 的 "长期海马体" (Long-term Memory)
-*   **痛点**: 用户偏好散落在历史对话中，传统 Prompt 注入无法覆盖长周期的记忆。
-*   **流程**:
-    1.  将用户的关键陈述 ("我不喜欢白酒股"、"只关注美股科技") 向量化存入 **持久化 Collection**。
-    2.  每次生成投资建议前，根据当前 Ticker/Sector 检索相关的历史偏好。
-    3.  将检索到的 "Memory Highlights" 注入 System Prompt。
+- 历史/长文问题：提升召回与证据可追溯
+- 实时新闻问题：优先走 live tools，不被旧知识污染
+- 研报综合：检索结果进入 `rag_context` 再参与综合输出
 
 ---
 
-## 3. 实施路线图
+## 2. 架构图
 
-### 阶段 2.5 (穿插在当前阶段) ✅ 已完成
-- [x] 引入 `chromadb` 和 `sentence-transformers` 依赖
-- [x] 实现 `VectorStore` 单例封装 (`backend/knowledge/vector_store.py`)
-- [x] 实现 `RAGEngine` 切片+检索引擎 (`backend/knowledge/rag_engine.py`)
-
-### 阶段 2.6 (下一步)
-- [ ] 在 `DeepSearchAgent` 中集成 RAGEngine 作为临时工作台
-- [ ] 实现长文研报的向量化入库与检索
-
-### 阶段 3 (风控与主动服务)
-- [ ] 实现基于 Chroma 的长期记忆模块 `VectorMemoryService`
-
----
-
-## 4. 目录结构（已实现）
-
+```mermaid
+flowchart LR
+  EXEC[ExecutePlan Evidence Pool] --> INGEST[Hybrid Ingest]
+  INGEST --> STORE[(RAG Store\nMemory or Postgres)]
+  Q[Query + Subject + Operation] --> RETR[Hybrid Retrieve\nDense + Sparse]
+  STORE --> RETR
+  RETR --> RRF[RRF Fusion]
+  RRF --> OUTCTX[rag_context + rag_stats]
+  OUTCTX --> SYN[Synthesize]
+  SYN --> RESP[Final Response]
 ```
-backend/knowledge/
-├── __init__.py          # 模块导出 (VectorStore, RAGEngine)
-├── vector_store.py      # ChromaDB 单例封装
-│   ├── _get_chromadb()           # 延迟导入 ChromaDB
-│   ├── _get_embedding_model()    # 延迟导入 SentenceTransformer
-│   └── class VectorStore         # 单例模式
-│       ├── add_documents()       # 添加文档到集合
-│       ├── query()               # 相似度检索
-│       ├── delete_collection()   # 删除集合
-│       └── list_collections()    # 列出所有集合
-└── rag_engine.py        # RAG 引擎封装
-    └── class RAGEngine
-        ├── chunk_text()              # 智能切片（句子边界）
-        ├── ingest_document()         # 单文档入库
-        ├── ingest_documents()        # 批量入库
-        ├── query()                   # 检索相关片段
-        ├── query_with_context()      # 返回格式化上下文
-        ├── create_ephemeral_collection()  # 创建临时集合
-        ├── cleanup_collection()      # 清理集合
-        └── get_collection_stats()    # 获取统计信息
 
-data/chroma_db/          # ChromaDB 持久化存储目录
-```
+---
+
+## 3. 后端实现位置
+
+| 模块 | 文件 |
+|---|---|
+| RAG 服务 | `backend/rag/hybrid_service.py` |
+| 执行层写入/检索接入 | `backend/graph/nodes/execute_plan_stub.py` |
+| 综合层消费检索上下文 | `backend/graph/nodes/synthesize.py` |
+| 测试 | `backend/tests/test_rag_v2_service.py` |
+
+---
+
+## 4. 存储分层策略（存什么）
+
+| 数据类型 | 是否长期入库 | 建议内容 | 生命周期 |
+|---|---|---|---|
+| 财报/公告/电话会纪要 | 是 | 分块正文 + 元数据（ticker/period/section） | 长期 |
+| 内部研究文档 | 是 | 分块正文 + 版本信息 | 长期 |
+| 实时新闻全文 | 否（默认） | 标题/摘要/来源/时间 + embedding | TTL 7~30 天 |
+| DeepSearch 临时抓取 | 否（默认） | 会话级临时 chunk | 任务级 TTL |
+
+---
+
+## 4.1 研报库边界（最容易做错的点）
+
+结论：**不要把“生成的研报正文”作为主检索语料长期入库**。  
+RAG 主库应优先存“可追溯原始证据”，研报正文只适合作为会话产物或短期缓存。
+
+| 内容 | 是否建议入 RAG 主库 | 原因 |
+|---|---|---|
+| 财报原文、电话会纪要、公告、研究原文 | 是 | 事实稳定、可溯源、可复用 |
+| 实时新闻全文 | 默认否（摘要+元数据即可） | 时效衰减快，容易污染后续检索 |
+| LLM 生成的研报正文 | 否（默认） | 二次加工文本，易放大幻觉/偏差 |
+| 研报结构化摘要（结论+证据ID映射） | 可选（短 TTL） | 便于会话续写，不替代原始证据 |
+
+---
+
+## 4.2 推荐入库来源（先做可控闭环）
+
+1. SEC/交易所文件：10-K/10-Q/20-F、8-K、公告。
+2. 财报电话会文字稿：按 speaker turn 切分。
+3. 内部研究文档：版本化存储。
+4. 新闻只存结构化摘要：`title/summary/url/source/published_at`。
+5. DeepSearch 抓取文本：只做会话级临时库（ephemeral）。
+
+---
+
+## 5. 检索策略（怎么检）
+
+1. Dense + Sparse 混合召回
+2. RRF 融合排序
+3. 返回 `rag_context`（供综合）与 `rag_stats`（供 trace/诊断）
+4. 按场景选择优先级：
+   - `latest/news-now`：live tools first
+   - `history/filing/details`：RAG first
+
+---
+
+## 6. 后端选择与回退
+
+- `RAG_V2_BACKEND=auto`：有 Postgres DSN 时优先 Postgres，否则回退 memory
+- memory 模式用于本地开发和测试
+- Postgres 模式用于生产一致性与可运维性
+
+---
+
+## 7. 与主编排关系
+
+RAG v2 不单独暴露为入口服务，而是嵌入主编排：
+
+- Planner/Executor 产出的证据先入 RAG
+- 同请求内再检索回填 `rag_context`
+- Synthesize 使用 `rag_context` 生成最终回答
+
+这保证了“检索-综合”是同一条可观测链路。
+
+---
+
+## 8. 验收口径
+
+- 检索可返回可解释的 `rag_stats`
+- `rag_context` 在综合节点被消费
+- TTL 生效，过期内容不会长期污染
+- 与实时链路冲突时，实时链路优先
+
+---
+
+## 9. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-02-07 | 从旧 Chroma 规划文档重写为 RAG v2 当前实现与生产导向策略 |
+| 2026-02-07 | 新增“研报库边界”与“推荐入库来源”，明确生成研报不作为主检索语料 |

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useStore } from '../store/useStore';
 import { apiClient } from '../api/client';
@@ -71,7 +71,7 @@ export const StockChart: React.FC = () => {
           }
           // 检查是否有 kline_data
           else if (responseData.kline_data && Array.isArray(responseData.kline_data) && responseData.kline_data.length > 0) {
-            console.log(`[StockChart] ✅ 成功获取 ${responseData.kline_data.length} 条真实数据 (来源: ${responseData.source || 'unknown'})`);
+            console.log(`[StockChart] ✅ 成功获取 ${responseData.kline_data.length} 条真实数据 (来源: ${responseData.source || 'any'})`);
             const isIntraday = responseData.kline_data.some((item: KlineData) => (item.time || '').includes(':'));
             let processedData = responseData.kline_data;
 
@@ -199,7 +199,7 @@ export const StockChart: React.FC = () => {
             try {
               const date = new Date(data.axisValue);
               timeDisplay = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-            } catch (e) {
+            } catch {
               timeDisplay = data.axisValue;
             }
           }
@@ -505,3 +505,5 @@ const generateMockData = (_ticker: string, period: string = '1y'): KlineData[] =
 
   return data;
 };
+
+

@@ -14,7 +14,7 @@ user_config_*.json
 # --- Python ---
 __pycache__/
 *.py[cod]
-*$py.class
+*.class
 *.so
 .Python
 build/
@@ -74,7 +74,18 @@ logs/
 temp/
 tmp/
 
+# --- Runtime Data ---
+data/langgraph/
+backend/data/*.sqlite
+backend/data/*.db
+
 # --- Agentic Tools ---
 .antigravity/
 .cursor/
 .claude/
+
+# --- Windows reserved filenames ---
+nul
+NUL
+
+

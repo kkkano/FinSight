@@ -1,0 +1,39 @@
+{
+  "created_at_utc": "2026-02-08T05:18:33Z",
+  "entries": [
+    {
+      "source": "data\\langgraph\\checkpoints.sqlite",
+      "exists": true,
+      "snapshot": "data\\langgraph\\release_snapshots\\checkpoints.sqlite.20260208-051832.bak",
+      "size": 576602112,
+      "sha256": "4776855c3faeb8ef417d0d9643c5f69578330d6402dbc09751a1fe9308e5af00"
+    },
+    {
+      "source": "backend\\data\\report_index.sqlite",
+      "exists": true,
+      "snapshot": "data\\langgraph\\release_snapshots\\report_index.sqlite.20260208-051833.bak",
+      "size": 421888,
+      "sha256": "20b51c44b7025c42788a8aa1b5ef774bd81fb6f293da9006476ca9c84cfd9bb3"
+    },
+    {
+      "source": "checkpointer://postgresql://***@127.0.0.1:5432/finsight?connect_timeout=3",
+      "exists": true,
+      "snapshot": "D:/AgentProject/FinSight/docs/release_evidence/2026-02-08_go_live_drill/checkpointer_switch_drill.json",
+      "size": 1035,
+      "sha256": "84566ff684edd351b8648a466166cade735e09243305c66e3aa7e0ed24703e91",
+      "type": "checkpointer_cutover_drill",
+      "ok": false,
+      "finished_at": "2026-02-08T10:56:16.574111+00:00"
+    },
+    {
+      "source": "checkpointer://postgresql://***@127.0.0.1:5432/finsight",
+      "exists": true,
+      "snapshot": "D:/AgentProject/FinSight/docs/release_evidence/2026-02-08_go_live_drill/checkpointer_switch_drill.json",
+      "size": 1017,
+      "sha256": "a854194eedd9a23dcd3aa11fa6bd71bd3b762dc37b7bf415a6c529e56ebb3d95",
+      "type": "checkpointer_cutover_drill",
+      "ok": false,
+      "finished_at": "2026-02-08T11:00:21.216021+00:00"
+    }
+  ]
+}

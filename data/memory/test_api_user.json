@@ -1,8 +1,8 @@
 {
   "user_id": "test_api_user",
   "risk_tolerance": "medium",
-  "investment_style": "growth",
+  "investment_style": "balanced",
   "watchlist": [],
   "preferences": {},
-  "last_active": "2026-01-31T15:42:52.147090"
+  "last_active": "2026-02-03T00:00:00Z"
 }

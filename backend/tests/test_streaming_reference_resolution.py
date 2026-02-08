@@ -69,6 +69,15 @@ def test_chat_stream_resolves_reference(monkeypatch):
     client = TestClient(main.app)
     with client.stream("POST", "/chat/supervisor/stream", json={"query": "它的行情"}) as response:
         assert response.status_code == 200
-        _ = [line for line in response.iter_lines() if line]
+        events = []
+        for raw in response.iter_lines():
+            if not raw:
+                continue
+            line = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+            if not line.startswith("data: "):
+                continue
+            events.append(json.loads(line[len("data: ") :]))
 
-    assert stub_agent.router.last_query == "AAPL的行情"
+    assert stub_agent.context.resolved_calls == ["它的行情"]
+    rendered = "".join([e.get("content", "") for e in events if e.get("type") == "token"])
+    assert "AAPL的行情" in rendered

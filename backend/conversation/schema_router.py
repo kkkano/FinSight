@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Type
@@ -29,6 +30,21 @@ from backend.config.ticker_mapping import (
 )
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_WARNED = False
+
+
+def _warn_deprecated_once() -> None:
+    global _DEPRECATION_WARNED
+    if _DEPRECATION_WARNED:
+        return
+    _DEPRECATION_WARNED = True
+    warnings.warn(
+        "SchemaToolRouter is deprecated; use the LangGraph entry point (backend.graph) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning("[DEPRECATED] SchemaToolRouter is legacy; prefer LangGraph (backend.graph).")
 
 try:  # pragma: no cover - import guard
     from langchain_core.messages import SystemMessage, HumanMessage
@@ -366,6 +382,7 @@ class SchemaToolRouter:
         pending_ttl_seconds: int = 600,
         confidence_threshold: float = 0.7,
     ):
+        _warn_deprecated_once()
         self.llm = llm
         self.tool_specs = tool_specs or DEFAULT_TOOL_SPECS
         self.pending_ttl_seconds = pending_ttl_seconds

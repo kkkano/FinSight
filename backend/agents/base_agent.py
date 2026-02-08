@@ -25,6 +25,7 @@ class AgentOutput:
     confidence: float
     data_sources: List[str]
     as_of: str
+    evidence_quality: Dict[str, Any] = field(default_factory=dict)
     fallback_used: bool = False
     risks: List[str] = field(default_factory=list)
     trace: List[Dict[str, Any]] = field(default_factory=list)
@@ -196,7 +197,13 @@ class BaseFinancialAgent:
             )
             start_time = time.perf_counter()
 
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+
+            response = await ainvoke_with_rate_limit_retry(
+                self.llm,
+                [HumanMessage(content=prompt)],
+                acquire_token=False,
+            )
             text = response.content if hasattr(response, "content") else str(response)
 
             # 发射 LLM 调用结束事件
@@ -291,7 +298,13 @@ class BaseFinancialAgent:
             )
             start_time = time.perf_counter()
 
-            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+
+            response = await ainvoke_with_rate_limit_retry(
+                self.llm,
+                [HumanMessage(content=prompt)],
+                acquire_token=False,
+            )
             updated = response.content if hasattr(response, "content") else str(response)
 
             # 发射 LLM 调用结束事件

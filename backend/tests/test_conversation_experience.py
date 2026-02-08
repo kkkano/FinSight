@@ -93,7 +93,7 @@ def test_scenario_1_basic_price_queries():
     ]
     
     tester.run_scenario("基本价格查询", queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_2_report_requests():
@@ -108,7 +108,7 @@ def test_scenario_2_report_requests():
     ]
     
     tester.run_scenario("报告生成请求", queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_3_followup_questions():
@@ -125,7 +125,7 @@ def test_scenario_3_followup_questions():
     ]
     
     tester.run_scenario("追问对话", queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_4_context_switching():
@@ -150,7 +150,7 @@ def test_scenario_4_context_switching():
         f"焦点: {tester.agent.context.current_focus}"
     )
     
-    return tester
+    assert tester is not None
 
 
 def test_scenario_5_chinese_companies():
@@ -167,7 +167,7 @@ def test_scenario_5_chinese_companies():
     ]
     
     tester.run_scenario("中文公司名识别", chinese_queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_6_alert_requests():
@@ -182,7 +182,7 @@ def test_scenario_6_alert_requests():
     ]
     
     tester.run_scenario("监控提醒请求", queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_7_mixed_conversation():
@@ -200,7 +200,7 @@ def test_scenario_7_mixed_conversation():
     ]
     
     tester.run_scenario("混合对话流程", queries)
-    return tester
+    assert tester is not None
 
 
 def test_scenario_8_edge_cases():
@@ -253,7 +253,7 @@ def test_scenario_8_edge_cases():
         ""
     )
     
-    return tester
+    assert tester is not None
 
 
 def test_scenario_9_session_persistence():
@@ -306,7 +306,7 @@ def test_scenario_9_session_persistence():
         ""
     )
     
-    return tester
+    assert tester is not None
 
 
 def test_scenario_10_performance():
@@ -346,7 +346,7 @@ def test_scenario_10_performance():
         f"平均: {avg_time:.0f}ms"
     )
     
-    return tester
+    assert tester is not None
 
 
 def main():

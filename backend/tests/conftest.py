@@ -1,45 +1,64 @@
 # -*- coding: utf-8 -*-
-"""
-Test fixtures for backend tests.
-"""
-
-from __future__ import annotations
-
 import json
 from pathlib import Path
 
 import pytest
-import os
-
-
-@pytest.fixture(scope="session", autouse=True)
-def disable_llm_rate_limit() -> None:
-    """Disable global LLM rate limiter for deterministic tests."""
-    os.environ["LLM_RATE_LIMIT_ENABLED"] = "false"
-    try:
-        from backend.services.rate_limiter import LLMRateLimiter
-        LLMRateLimiter.reset_instance()
-    except Exception:
-        pass
 
 
 @pytest.fixture(autouse=True)
-def reset_test_api_user_profile() -> None:
-    """Keep test_api_user deterministic across test order."""
-    path = Path("data/memory/test_api_user.json")
-    if not path.exists():
-        return
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return
-    data["risk_tolerance"] = "medium"
-    if "investment_style" not in data:
-        data["investment_style"] = "balanced"
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+def _force_langgraph_deterministic_defaults(monkeypatch):
+    """
+    Tests must be deterministic and must NOT call external LLMs/tools by default.
+
+    Individual tests can override these env vars when explicitly testing LLM/tool modes.
+    """
+
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
+    monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
+    monkeypatch.setenv("ENABLE_LANGSMITH", "false")
 
 
-@pytest.fixture
-def ticker() -> str:
-    """Default ticker for integration tests."""
-    return "AAPL"
+@pytest.fixture(autouse=True)
+def _reset_api_memory_test_fixtures():
+    """
+    Some API tests persist user profiles/watchlists to `data/memory/*.json`.
+    Reset them before each test to avoid order-dependence and dirty working trees.
+    """
+
+    repo_root = Path(__file__).resolve().parents[2]
+    memory_dir = repo_root / "data" / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+
+    (memory_dir / "test_api_user.json").write_text(
+        json.dumps(
+            {
+                "user_id": "test_api_user",
+                "risk_tolerance": "medium",
+                "investment_style": "balanced",
+                "watchlist": [],
+                "preferences": {},
+                "last_active": "2026-02-03T00:00:00Z",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    (memory_dir / "test_api_user_wl.json").write_text(
+        json.dumps(
+            {
+                "user_id": "test_api_user_wl",
+                "risk_tolerance": "medium",
+                "investment_style": "balanced",
+                "watchlist": [],
+                "preferences": {},
+                "last_active": "2026-02-03T00:00:00Z",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+

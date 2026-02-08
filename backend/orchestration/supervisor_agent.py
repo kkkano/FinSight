@@ -7,6 +7,7 @@ Mature multi-Agent architecture: AgentIntent Classification → Supervisor Coord
 import logging
 import asyncio
 import time
+import warnings
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
 
@@ -17,6 +18,21 @@ from backend.orchestration.trace_emitter import get_trace_emitter
 from backend.agents.base_agent import AgentOutput
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_WARNED = False
+
+
+def _warn_deprecated_once() -> None:
+    global _DEPRECATION_WARNED
+    if _DEPRECATION_WARNED:
+        return
+    _DEPRECATION_WARNED = True
+    warnings.warn(
+        "SupervisorAgent is deprecated; use the LangGraph entry point (backend.graph) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning("[DEPRECATED] SupervisorAgent is legacy; prefer LangGraph (backend.graph).")
 
 
 @dataclass
@@ -51,6 +67,7 @@ class SupervisorAgent:
     """
 
     def __init__(self, llm, tools_module, cache, circuit_breaker=None):
+        _warn_deprecated_once()
         self.llm = llm
         self.tools_module = tools_module
         # Keep a reference to the original tools module so we can re-wrap
@@ -82,6 +99,34 @@ class SupervisorAgent:
 
         # Worker Agents (lazy initialization)
         self._agents = None
+
+    @staticmethod
+    def _is_news_analysis_requested(query: str, context_summary: str = None) -> bool:
+        """True when the user is asking for analysis/impact instead of a plain news list."""
+        text = f"{context_summary or ''}\n{query or ''}".lower()
+        keywords = [
+            # 中文
+            "分析", "影响", "解读", "评估", "怎么看", "意味着", "利好", "利空", "风险", "机会", "展望",
+            # 英文
+            "analyze", "analysis", "impact", "effect", "implication", "assess", "outlook", "forecast",
+        ]
+        return any(k in text for k in keywords)
+
+    @staticmethod
+    def _news_analysis_failure_response(reason: str, ticker: Optional[str], has_selection: bool) -> str:
+        t = ticker or "该标的"
+        sel_hint = "已检测到你引用了具体新闻。" if has_selection else ""
+        return (
+            "### ⚠️ 无法完成新闻影响分析\n"
+            f"- **原因**: {reason}\n"
+            f"- **上下文**: {sel_hint}\n"
+            "\n"
+            "### ✅ 下一步建议\n"
+            f"1. 直接说清分析目标：`分析 {t} 这条新闻对短期股价和中长期基本面的影响`\n"
+            "2. 如果是引用新闻：请在 Dashboard 点击“问这条”，确保带上 Selection Context\n"
+            "3. 或粘贴新闻链接/正文关键段落（避免只发 ticker）\n"
+            "4. 如果问题仍复现：把开发者控制台里的 `llm_start/llm_end` 事件发我，我可以继续定位\n"
+        )
 
     @property
     def agents(self):
@@ -252,7 +297,7 @@ class SupervisorAgent:
 
         # NEWS 意图：子意图分类 - 区分"查询新闻"和"分析新闻"
         if intent == AgentIntent.NEWS:
-            news_subintent = self._classify_news_subintent(query)
+            news_subintent = self._classify_news_subintent(query, context_summary)
             if news_subintent == "analyze":
                 # 分析类请求：走 NewsAgent + Forum 深度分析
                 return await self._handle_news_analysis(query, ticker, classification, context_summary)
@@ -407,7 +452,7 @@ class SupervisorAgent:
                 errors=[str(e)]
             )
 
-    def _classify_news_subintent(self, query: str) -> str:
+    def _classify_news_subintent(self, query: str, context_summary: str = None) -> str:
         """
         NEWS 意图的子分类：区分"查询新闻"和"分析新闻"
 
@@ -421,7 +466,14 @@ class SupervisorAgent:
         Returns:
             str: "analyze" 或 "fetch"
         """
-        query_lower = query.lower()
+        query_lower = (query or "").lower()
+
+        # 如果存在 Selection Context（用户引用具体新闻），且上下文/问题带有分析意图，优先走 analyze
+        if context_summary and "[System Context]" in context_summary:
+            if ("用户正在询问以下新闻" in context_summary) or ("引用新闻" in context_summary):
+                ctx_lower = context_summary.lower()
+                if any(k in ctx_lower for k in ["分析", "影响", "解读", "评估", "怎么看", "analyze", "impact", "assess"]):
+                    return "analyze"
 
         # 分析类关键词（中英文）
         analyze_keywords = [
@@ -448,6 +500,13 @@ class SupervisorAgent:
         trace_emitter = get_trace_emitter()
 
         try:
+            # ── Selection Context 优先处理 ──────────────────────────────
+            # 如果用户选中了特定新闻，统一走 _handle_news_analysis（保证分析链路只有一套实现与输出结构）
+            if context_summary and "[System Context]" in context_summary:
+                if "用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary:
+                    logger.info("[Supervisor] Selection Context detected in _handle_news - delegating to _handle_news_analysis")
+                    return await self._handle_news_analysis(query, ticker, classification, context_summary)
+
             # Prefer NewsAgent for reliability when ticker is available
             if ticker:
                 news_agent = self.agents.get("news")
@@ -572,6 +631,22 @@ class SupervisorAgent:
                     base_response = f"{base_response}\n\n{context_analysis}"
                 except Exception as e:
                     logger.info(f"[Supervisor] News context enhancement failed: {e}")
+                    if self._is_news_analysis_requested(query, context_summary):
+                        return self._result(
+                            success=False,
+                            intent=AgentIntent.NEWS,
+                            response=self._news_analysis_failure_response(
+                                reason=str(e),
+                                ticker=ticker,
+                                has_selection=(
+                                    bool(context_summary)
+                                    and "[System Context]" in context_summary
+                                    and ("用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary)
+                                ),
+                            ),
+                            classification=classification,
+                            errors=[str(e)],
+                        )
 
             return self._result(
                 success=True,
@@ -595,7 +670,7 @@ class SupervisorAgent:
         """
         return await self._handle_news(query, None, classification, context_summary)
 
-    async def _handle_news_analysis(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
+    async def _handle_news_analysis(self, query: str, ticker: Optional[str], classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """
         处理新闻分析请求 - 深度分析新闻影响
 
@@ -616,6 +691,72 @@ class SupervisorAgent:
         try:
             self._consume_round("tool:news_analysis")
             from langchain_core.messages import HumanMessage
+
+            # ── Selection Context 优先处理 ──────────────────────────────
+            # 如果用户选中了特定新闻，直接深度分析该新闻，不去获取新闻列表
+            if context_summary and "[System Context]" in context_summary:
+                if "用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary:
+                    logger.info("[Supervisor] Selection Context detected in news_analysis - analyzing selected news directly")
+                    try:
+                        analysis_prompt = f"""<role>资深金融新闻分析师</role>
+<task>深度分析用户引用的新闻及其市场影响</task>
+
+{context_summary}
+
+<user_query>{query}</user_query>
+
+<output_structure>
+### 📰 新闻摘要
+[2-3句核心事件总结]
+
+### 📊 市场影响
+- **短期**: [即时影响预判]
+- **中长期**: [持续性影响]
+
+### 🎯 投资启示
+- [对投资者的意义]
+- [后续关注点]
+
+### ⚠️ 风险提示
+- [隐含风险因素]
+- [不确定性警示]
+</output_structure>
+
+<rules>
+- 禁止开场白（不要说"好的"、"我来分析"等）
+- 直接按结构输出分析
+- 基于新闻内容进行专业深度分析
+- 结合{ticker or '相关标的'}的基本面给出见解
+- 观点具体，避免空泛表述
+- 保持客观中立，不构成投资建议
+</rules>"""
+
+                        # 发射 LLM 调用开始事件
+                        llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+                        trace_emitter.emit_llm_start(model=llm_model, prompt_preview=analysis_prompt[:150])
+                        llm_start_time = time.perf_counter()
+
+                        response = await self.llm.ainvoke([HumanMessage(content=analysis_prompt)])
+
+                        # 发射 LLM 调用结束事件
+                        llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
+                        analysis_result = response.content if hasattr(response, 'content') else str(response)
+                        trace_emitter.emit_llm_end(
+                            model=llm_model,
+                            duration_ms=llm_duration_ms,
+                            success=True,
+                            output_preview=analysis_result[:100] if analysis_result else None
+                        )
+
+                        return self._result(
+                            success=True,
+                            intent=AgentIntent.NEWS,
+                            response=analysis_result,
+                            classification=classification
+                        )
+                    except Exception as e:
+                        logger.error(f"[Supervisor] Selection context news analysis (deep) failed: {e}")
+                        # 降级到普通新闻分析流程
 
             # 1. 先获取原始新闻数据
             # 发射工具调用开始事件
@@ -724,8 +865,21 @@ class SupervisorAgent:
 
         except Exception as e:
             logger.info(f"[Supervisor] News analysis failed: {e}")
-            # Fallback: 返回原始新闻
-            return await self._handle_news(query, ticker, classification, context_summary)
+            return self._result(
+                success=False,
+                intent=AgentIntent.NEWS,
+                response=self._news_analysis_failure_response(
+                    reason=str(e),
+                    ticker=ticker,
+                    has_selection=(
+                        bool(context_summary)
+                        and "[System Context]" in context_summary
+                        and ("用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary)
+                    ),
+                ),
+                classification=classification,
+                errors=[str(e)],
+            )
 
     async def _handle_sentiment(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """
@@ -1307,8 +1461,15 @@ class SupervisorAgent:
             urls = re.findall(url_pattern, content)
             found_urls.extend(urls)
 
-            # 截断长内容
-            preview = content[:150] + "..." if len(content) > 150 else content
+            # 截断策略：
+            # - System Context（由 main.py 构建）：完整保留，因为它是精心设计的上下文
+            # - 用户/助手消息：截断到 150 字符，避免对话历史过长
+            if role == "system":
+                # System 消息完整保留（包含 Selection Context 等关键信息）
+                preview = content
+            else:
+                # 普通消息截断到 150 字符
+                preview = content[:150] + "..." if len(content) > 150 else content
             context_parts.append(f"{role}: {preview}")
 
         # 如果有 URL，尝试抓取并总结（最多 2 个）

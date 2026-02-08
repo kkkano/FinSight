@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-02-08T12:15:16Z",
+  "command": [
+    "D:\\Anaconda\\python.exe",
+    "-m",
+    "pytest",
+    "-q",
+    "backend/tests/test_security_gate_auth_rate_limit.py",
+    "backend/tests/test_trace_and_session_security.py",
+    "backend/tests/test_llm_rotation.py"
+  ],
+  "targets": [
+    "backend/tests/test_security_gate_auth_rate_limit.py",
+    "backend/tests/test_trace_and_session_security.py",
+    "backend/tests/test_llm_rotation.py"
+  ],
+  "exit_code": 0,
+  "pass": true,
+  "stdout_tail": ".....................                                                    [100%]\n============================== warnings summary ===============================\nbackend/tests/test_security_gate_auth_rate_limit.py::test_security_gate_rejects_missing_api_key_when_enabled\nbackend/tests/test_security_gate_auth_rate_limit.py::test_security_gate_returns_503_when_auth_enabled_without_keys\nbackend/tests/test_security_gate_auth_rate_limit.py::test_security_gate_allowlisted_path_bypasses_auth\nbackend/tests/test_security_gate_auth_rate_limit.py::test_security_gate_dashboard_requires_auth_by_default\nbackend/tests/test_security_gate_auth_rate_limit.py::test_security_gate_rate_limit_blocks_second_request\n  D:\\AgentProject\\FinSight\\backend\\services\\alert_scheduler.py:168: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n    now = datetime.utcnow()\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n21 passed, 5 warnings in 2.93s",
+  "stderr_tail": ""
+}

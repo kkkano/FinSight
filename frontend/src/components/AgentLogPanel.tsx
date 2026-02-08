@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+﻿import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../store/useStore';
-import type { RawSSEEvent, RawEventType } from '../types';
+import type { RawSSEEvent, RawEventType, TraceViewMode } from '../types';
 import {
   Terminal,
   ChevronDown,
@@ -47,7 +47,7 @@ const EVENT_TYPE_CONFIG: Record<string, { color: string; bg: string; label: stri
   agent_error:      { color: 'text-red-400',    bg: 'bg-red-500/10',    label: 'AGT✗',  icon: '✗' },
   forum_start:      { color: 'text-indigo-400', bg: 'bg-indigo-500/10', label: 'FRM▶',  icon: '▶' },
   forum_done:       { color: 'text-indigo-300', bg: 'bg-indigo-500/10', label: 'FRM■',  icon: '■' },
-  unknown:          { color: 'text-fin-muted',  bg: 'bg-fin-muted/10',  label: 'UNK',   icon: '?' },
+  any:          { color: 'text-fin-muted',  bg: 'bg-fin-muted/10',  label: 'UNK',   icon: '?' },
 };
 
 // 格式化时间戳 - 精确到毫秒
@@ -71,6 +71,166 @@ const formatSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 };
 
+
+const EXPORT_SENSITIVE_KEY_FRAGMENTS = [
+  'api_key',
+  'apikey',
+  'authorization',
+  'token',
+  'cookie',
+  'secret',
+  'password',
+  'set-cookie',
+];
+
+const maskSecret = (value: string): string => {
+  const text = String(value || '');
+  if (!text) return '***';
+  if (text.length <= 8) return '***';
+  return `${text.slice(0, 3)}***${text.slice(-3)}`;
+};
+
+const redactSensitiveText = (value: string): string => {
+  let masked = value;
+  masked = masked.replace(/\b(sk-[A-Za-z0-9._-]{8,})\b/g, (m) => maskSecret(m));
+  masked = masked.replace(/(authorization\s*[:=]\s*bearer\s+)([A-Za-z0-9._-]{6,})/gi, (_m, p1, p2) => `${p1}${maskSecret(p2)}`);
+  masked = masked.replace(/(api[_-]?key\s*[:=]\s*)([A-Za-z0-9._-]{6,})/gi, (_m, p1, p2) => `${p1}${maskSecret(p2)}`);
+  masked = masked.replace(/(token\s*[:=]\s*)([A-Za-z0-9._-]{6,})/gi, (_m, p1, p2) => `${p1}${maskSecret(p2)}`);
+  return masked;
+};
+
+const sanitizeForExport = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForExport(item));
+  }
+  if (value && typeof value === 'object') {
+    const payload = value as Record<string, any>;
+    const next: Record<string, any> = {};
+    for (const [key, inner] of Object.entries(payload)) {
+      const lowerKey = key.toLowerCase();
+      if (EXPORT_SENSITIVE_KEY_FRAGMENTS.some((fragment) => lowerKey.includes(fragment))) {
+        next[key] = maskSecret(String(inner ?? ''));
+      } else {
+        next[key] = sanitizeForExport(inner);
+      }
+    }
+    return next;
+  }
+  if (typeof value === 'string') {
+    return redactSensitiveText(value);
+  }
+  return value;
+};
+
+type ActionReasonResult = {
+  action: string;
+  reason: string;
+  result: string;
+};
+
+const toActionReasonResult = (event: RawSSEEvent): ActionReasonResult => {
+  const data = event.parsedData || {};
+  switch (event.eventType) {
+    case 'thinking': {
+      const stage = String(data.stage || 'thinking');
+      const action = stage;
+      const reason = String(
+        data.message ||
+          data.result?.summary ||
+          data.result?.decision_summary ||
+          data.result?.decision_type ||
+          'no_reason',
+      );
+      const result = String(
+        data.result?.status_reason ||
+          data.result?.selection_summary ||
+          data.result?.fallback_reason ||
+          data.result?.input_state ||
+          'in_progress',
+      );
+      return { action, reason, result };
+    }
+    case 'tool_start':
+      return {
+        action: `tool:${String(data.name || 'any')}`,
+        reason: String(data.message || 'executor_requested_tool'),
+        result: 'running',
+      };
+    case 'tool_end':
+      return {
+        action: `tool:${String(data.name || 'any')}`,
+        reason: String(data.message || 'tool_finished'),
+        result: String(data.success === false ? 'error' : 'done'),
+      };
+    case 'llm_start':
+      return {
+        action: `llm:${String(data.model || 'any')}`,
+        reason: String(data.message || 'planner_or_synthesizer_requested'),
+        result: 'running',
+      };
+    case 'llm_end':
+      return {
+        action: `llm:${String(data.model || 'any')}`,
+        reason: String(data.error || data.message || 'llm_completed'),
+        result: String(data.success === false ? 'error' : 'done'),
+      };
+    case 'error':
+      return {
+        action: 'pipeline:error',
+        reason: String(data.message || 'unknown_error'),
+        result: 'error',
+      };
+    case 'done':
+      return {
+        action: 'pipeline:done',
+        reason: String(data.intent || 'response_ready'),
+        result: 'done',
+      };
+    default:
+      return {
+        action: event.eventType,
+        reason: String(data.message || data.stage || 'n/a'),
+        result: String(data.status || 'ok'),
+      };
+  }
+};
+
+const formatActionReasonResult = (event: RawSSEEvent): string => {
+  const parts = toActionReasonResult(event);
+  return `动作:${parts.action} ｜ 原因:${parts.reason} ｜ 结果:${parts.result}`;
+};
+
+const getEventSummaryByMode = (event: RawSSEEvent, mode: TraceViewMode): string => {
+  if (mode === 'user') {
+    const data = event.parsedData || {};
+    if (event.eventType === 'thinking') {
+      return String(data.message || data.result?.summary || data.result?.decision_type || '处理中').slice(0, 160);
+    }
+    if (event.eventType === 'error') {
+      return String(data.message || '发生错误').slice(0, 160);
+    }
+    if (event.eventType === 'done') {
+      return '分析完成';
+    }
+    if (event.eventType === 'data_source') {
+      return `数据源: ${String(data.source || '?')}${data.fallback ? '（含回退）' : ''}`;
+    }
+    return getEventSummary(event);
+  }
+
+  if (mode === 'expert') {
+    const data = event.parsedData || {};
+    if (event.eventType === 'thinking') {
+      const decisionType = data.result?.decision_type ? ` type=${data.result.decision_type}` : '';
+      const summary = data.result?.summary || data.message || data.result?.decision_summary || 'n/a';
+      return `${summary}${decisionType}`.slice(0, 180);
+    }
+    return getEventSummary(event);
+  }
+
+  return getEventSummary(event);
+};
+
 // 获取事件摘要
 const getEventSummary = (event: RawSSEEvent): string => {
   const data = event.parsedData;
@@ -78,22 +238,27 @@ const getEventSummary = (event: RawSSEEvent): string => {
     case 'token':
       return `"${(data.content || '').slice(0, 80)}${(data.content || '').length > 80 ? '...' : ''}"`;
     case 'thinking':
-      return `[${data.stage || '?'}] ${data.message || ''}`.slice(0, 120);
+      return formatActionReasonResult(event).slice(0, 180);
     case 'tool_start':
-      return `→ ${data.name || 'unknown_tool'}`;
+      return formatActionReasonResult(event);
     case 'tool_end':
-      return `← tool execution complete`;
-    case 'tool_call':
-      return `${data.name || '?'}(${JSON.stringify(data.input || {}).slice(0, 80)})`;
+      return formatActionReasonResult(event);
+    case 'tool_call': {
+      const toolName = data.name || '?';
+      const input = data.input;
+      const inputIsEmptyObject = input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).length === 0;
+      if (!input || inputIsEmptyObject) {
+        return `${toolName}()`;
+      }
+      return `${toolName}(${JSON.stringify(input).slice(0, 80)})`;
+    }
     case 'llm_call':
       return `model=${data.model || '?'} tokens=${data.tokens || '?'}`;
     // 新增: TraceEmitter 事件类型摘要
     case 'llm_start':
-      return `🧠 LLM 调用开始${data.model ? ` (${data.model})` : ''}`;
+      return formatActionReasonResult(event);
     case 'llm_end':
-      const llmStatus = data.success ? '✓' : '✗';
-      const llmDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
-      return `🧠 LLM ${llmStatus}${llmDuration}${data.error ? ` - ${data.error}` : ''}`;
+      return formatActionReasonResult(event);
     case 'cache_hit':
       return `📦 缓存命中: ${data.key || '?'}`;
     case 'cache_miss':
@@ -101,14 +266,22 @@ const getEventSummary = (event: RawSSEEvent): string => {
     case 'cache_set':
       return `📦 缓存写入: ${data.key || '?'}${data.ttl ? ` (TTL: ${data.ttl}s)` : ''}`;
     case 'data_source':
-      const dsStatus = data.success ? '✓' : '✗';
-      const dsFallback = data.fallback ? ' [回退]' : '';
-      const dsDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
-      return `📊 ${data.source || '?'}: ${data.query_type || '?'}${data.ticker ? ` (${data.ticker})` : ''} ${dsStatus}${dsFallback}${dsDuration}`;
+      {
+        const dsStatus = data.success ? '✓' : '✗';
+        const dsFallback = data.fallback ? ' [回退]' : '';
+        const dsDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
+        const triedSources = Array.isArray(data.tried_sources)
+          ? data.tried_sources.filter((item: unknown) => typeof item === 'string' && item.trim().length > 0)
+          : [];
+        const fallbackPath = triedSources.length > 0 ? ` [路径:${triedSources.join(' -> ')}]` : '';
+        return `📊 ${data.source || '?'}: ${data.query_type || '?'}${data.ticker ? ` (${data.ticker})` : ''} ${dsStatus}${dsFallback}${dsDuration}${fallbackPath}`;
+      }
     case 'api_call':
-      const apiStatus = data.status ? ` → ${data.status}` : '';
-      const apiDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
-      return `🌐 ${data.method || 'GET'} ${data.endpoint || '?'}${apiStatus}${apiDuration}`;
+      {
+        const apiStatus = data.status ? ` → ${data.status}` : '';
+        const apiDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
+        return `🌐 ${data.method || 'GET'} ${data.endpoint || '?'}${apiStatus}${apiDuration}`;
+      }
     case 'agent_step':
       return `◈ ${data.agent || '?'}: ${data.step || '?'}`;
     case 'system':
@@ -123,8 +296,10 @@ const getEventSummary = (event: RawSSEEvent): string => {
     case 'agent_start':
       return `${data.agent || '?'} Agent started${data.query ? ` - ${data.query.slice(0, 50)}...` : ''}`;
     case 'agent_done':
-      const agentDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
-      return `${data.agent || '?'} Agent completed${agentDuration}`;
+      {
+        const agentDuration = data.duration_ms ? ` [${data.duration_ms}ms]` : '';
+        return `${data.agent || '?'} Agent completed${agentDuration}`;
+      }
     case 'agent_error':
       return `${data.agent || '?'} Agent error: ${data.message || ''}`;
     case 'forum_start':
@@ -180,7 +355,7 @@ const JsonBlock: React.FC<{ data: any; label?: string; defaultExpanded?: boolean
         className="flex items-center justify-between px-2 py-1 bg-fin-bg cursor-pointer hover:bg-fin-hover"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center gap-2 text-[10px]">
+        <div className="flex items-center gap-2 text-2xs">
           <span className="text-fin-muted">{expanded ? '▼' : '▶'}</span>
           {label && <span className="text-fin-text-secondary font-medium">{label}</span>}
           {!expanded && (
@@ -213,8 +388,9 @@ const EventRow: React.FC<{
   onClick: () => void;
   showTokens: boolean;
   index: number;
-}> = ({ event, isSelected, onClick, showTokens, index }) => {
-  const config = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.unknown;
+  traceViewMode: TraceViewMode;
+}> = ({ event, isSelected, onClick, showTokens, index, traceViewMode }) => {
+  const config = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.any;
 
   // token 事件默认隐藏
   if (event.eventType === 'token' && !showTokens) return null;
@@ -232,15 +408,15 @@ const EventRow: React.FC<{
       `}
     >
       {/* 序号 */}
-      <span className="w-8 shrink-0 text-[10px] text-fin-muted text-right pr-2">{index}</span>
+      <span className="w-8 shrink-0 text-2xs text-fin-muted text-right pr-2">{index}</span>
 
       {/* 时间戳 */}
-      <span className="w-[78px] shrink-0 text-[10px] text-fin-muted font-mono">
+      <span className="w-[78px] shrink-0 text-2xs text-fin-muted font-mono">
         {formatTs(event.timestamp)}
       </span>
 
       {/* 事件类型标签 */}
-      <span className={`w-[50px] shrink-0 text-[10px] font-bold ${config.color}`}>
+      <span className={`w-[50px] shrink-0 text-2xs font-bold ${config.color}`}>
         <span className={`inline-flex items-center gap-0.5 px-1 py-[1px] rounded ${config.bg}`}>
           {config.icon} {config.label}
         </span>
@@ -248,11 +424,11 @@ const EventRow: React.FC<{
 
       {/* 摘要 */}
       <span className="flex-1 truncate text-fin-text pl-2">
-        {getEventSummary(event)}
+        {getEventSummaryByMode(event, traceViewMode)}
       </span>
 
       {/* 大小 */}
-      <span className="w-12 shrink-0 text-right text-[10px] text-fin-muted">
+      <span className="w-12 shrink-0 text-right text-2xs text-fin-muted">
         {formatSize(event.size)}
       </span>
     </div>
@@ -263,7 +439,7 @@ const EventRow: React.FC<{
 const EventDetail: React.FC<{ event: RawSSEEvent; onClose: () => void }> = ({ event, onClose }) => {
   const [activeTab, setActiveTab] = useState<'parsed' | 'raw' | 'headers'>('parsed');
   const [copied, setCopied] = useState(false);
-  const config = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.unknown;
+  const config = EVENT_TYPE_CONFIG[event.eventType] || EVENT_TYPE_CONFIG.any;
 
   const handleCopyAll = async () => {
     await navigator.clipboard.writeText(event.rawData);
@@ -276,11 +452,11 @@ const EventDetail: React.FC<{ event: RawSSEEvent; onClose: () => void }> = ({ ev
       {/* 详情头部 */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-fin-bg border-b border-fin-border">
         <div className="flex items-center gap-3">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>
+          <span className={`text-2xs font-bold px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>
             {config.icon} {event.eventType}
           </span>
-          <span className="text-[10px] text-fin-muted">{formatTs(event.timestamp)}</span>
-          <span className="text-[10px] text-fin-muted">{formatSize(event.size)}</span>
+          <span className="text-2xs text-fin-muted">{formatTs(event.timestamp)}</span>
+          <span className="text-2xs text-fin-muted">{formatSize(event.size)}</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -381,7 +557,16 @@ const EventDetail: React.FC<{ event: RawSSEEvent; onClose: () => void }> = ({ ev
 
 // 主控制台组件
 export const AgentLogPanel: React.FC = () => {
-  const { rawEvents, clearRawEvents, isConsoleOpen, setConsoleOpen, agentStatuses } = useStore();
+  const {
+    rawEvents,
+    clearRawEvents,
+    isConsoleOpen,
+    setConsoleOpen,
+    agentStatuses,
+    traceViewMode,
+    traceRawShowRawJson,
+    setTraceRawShowRawJson,
+  } = useStore();
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -459,15 +644,19 @@ export const AgentLogPanel: React.FC = () => {
     setIsPaused(!isPaused);
   }, [isPaused, rawEvents]);
 
-  // 导出日志
+  // ???????????????
   const handleExport = useCallback(() => {
-    const exportData = filteredEvents.map(e => ({
-      timestamp: e.timestamp,
-      type: e.eventType,
-      data: e.parsedData,
-      size: e.size,
+    const exportData = filteredEvents.map((event) => ({
+      timestamp: event.timestamp,
+      type: event.eventType,
+      data: sanitizeForExport(event.parsedData),
+      size: event.size,
     }));
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+
+    const firstPass = JSON.stringify(exportData, null, 2);
+    const secondPass = redactSensitiveText(firstPass);
+
+    const blob = new Blob([secondPass], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -518,11 +707,11 @@ export const AgentLogPanel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           {runningAgents > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 animate-pulse font-mono">
+            <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 animate-pulse font-mono">
               {runningAgents} active
             </span>
           )}
-          <span className="text-[10px] text-fin-muted font-mono">{rawEvents.length} events</span>
+          <span className="text-2xs text-fin-muted font-mono">{rawEvents.length} events</span>
           <ChevronDown size={12} className="text-fin-muted group-hover:text-fin-text" />
         </div>
       </button>
@@ -547,17 +736,21 @@ export const AgentLogPanel: React.FC = () => {
           </button>
 
           {isPaused && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-fin-danger/15 text-fin-danger font-bold animate-pulse">
+            <span className="text-2xs px-1.5 py-0.5 rounded bg-fin-danger/15 text-fin-danger font-bold animate-pulse">
               PAUSED
             </span>
           )}
 
           {runningAgents > 0 && !isPaused && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-fin-success/15 text-fin-success flex items-center gap-1">
+            <span className="text-2xs px-1.5 py-0.5 rounded bg-fin-success/15 text-fin-success flex items-center gap-1">
               <Zap size={9} className="animate-pulse" />
               {runningAgents} active
             </span>
           )}
+
+          <span className="text-2xs px-1.5 py-0.5 rounded bg-fin-panel border border-fin-border/60 text-fin-muted">
+            {traceViewMode === 'user' ? '用户视图' : traceViewMode === 'expert' ? '专家视图' : '开发视图'}
+          </span>
         </div>
 
         {/* 右侧工具按钮 */}
@@ -571,7 +764,7 @@ export const AgentLogPanel: React.FC = () => {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Filter..."
-              className="w-24 focus:w-36 transition-all bg-fin-panel border border-fin-border rounded text-[10px] text-fin-text pl-5 pr-1.5 py-0.5 focus:outline-none focus:border-fin-primary/50 placeholder-fin-muted"
+              className="w-24 focus:w-36 transition-all bg-fin-panel border border-fin-border rounded text-2xs text-fin-text pl-5 pr-1.5 py-0.5 focus:outline-none focus:border-fin-primary/50 placeholder-fin-muted"
             />
             {searchText && (
               <button
@@ -586,10 +779,19 @@ export const AgentLogPanel: React.FC = () => {
           {/* Token 开关 */}
           <button
             onClick={() => setShowTokens(!showTokens)}
-            className={`p-1 rounded text-[10px] transition-colors ${showTokens ? 'text-fin-text bg-fin-hover' : 'text-fin-muted hover:text-fin-text'}`}
+            className={`p-1 rounded text-2xs transition-colors ${showTokens ? 'text-fin-text bg-fin-hover' : 'text-fin-muted hover:text-fin-text'}`}
             title={showTokens ? 'Hide token events' : 'Show token events'}
           >
             {showTokens ? <Eye size={11} /> : <EyeOff size={11} />}
+          </button>
+
+          {/* Raw JSON 显示开关 */}
+          <button
+            onClick={() => setTraceRawShowRawJson(!traceRawShowRawJson)}
+            className={`p-1 rounded text-2xs transition-colors ${traceRawShowRawJson ? 'text-fin-text bg-fin-hover' : 'text-fin-muted hover:text-fin-text'}`}
+            title={traceRawShowRawJson ? 'Hide raw JSON payload' : 'Show raw JSON payload'}
+          >
+            {traceRawShowRawJson ? <Eye size={11} /> : <EyeOff size={11} />}
           </button>
 
           {/* 暂停/继续 */}
@@ -604,7 +806,7 @@ export const AgentLogPanel: React.FC = () => {
           {/* 自动滚动 */}
           <button
             onClick={() => setAutoScroll(!autoScroll)}
-            className={`p-1 rounded text-[10px] font-bold transition-colors ${autoScroll ? 'text-fin-primary bg-fin-primary/10' : 'text-fin-muted hover:text-fin-text'}`}
+            className={`p-1 rounded text-2xs font-bold transition-colors ${autoScroll ? 'text-fin-primary bg-fin-primary/10' : 'text-fin-muted hover:text-fin-text'}`}
             title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
           >
             ↓
@@ -643,7 +845,7 @@ export const AgentLogPanel: React.FC = () => {
       <div className="flex items-center gap-1 px-2 py-1 bg-fin-panel border-b border-fin-border/50 overflow-x-auto scrollbar-none">
         <span className="text-[9px] text-fin-muted shrink-0">TYPE:</span>
         {Object.entries(EVENT_TYPE_CONFIG)
-          .filter(([key]) => key !== 'unknown')
+          .filter(([key]) => key !== 'any')
           .map(([key, cfg]) => {
             const count = stats.typeCounts[key] || 0;
             const isActive = typeFilter.size === 0 || typeFilter.has(key as RawEventType);
@@ -690,7 +892,7 @@ export const AgentLogPanel: React.FC = () => {
                   : 'No matching events'
                 }
               </p>
-              <p className="text-[10px] text-fin-muted/70">
+              <p className="text-2xs text-fin-muted/70">
                 {rawEvents.length === 0
                   ? 'Send a message to see raw SSE event stream'
                   : `${rawEvents.length} events hidden by filters`
@@ -706,13 +908,14 @@ export const AgentLogPanel: React.FC = () => {
                 isSelected={event.id === selectedEventId}
                 onClick={() => setSelectedEventId(event.id === selectedEventId ? null : event.id)}
                 showTokens={showTokens}
+                traceViewMode={traceViewMode}
               />
             ))
           )}
         </div>
 
         {/* 右侧详情面板 */}
-        {selectedEvent && (
+        {selectedEvent && traceRawShowRawJson && (
           <div className="w-1/2 overflow-hidden">
             <EventDetail event={selectedEvent} onClose={() => setSelectedEventId(null)} />
           </div>
@@ -720,9 +923,9 @@ export const AgentLogPanel: React.FC = () => {
       </div>
 
       {/* ═══════ 底部状态栏 ═══════ */}
-      <div className="flex items-center justify-between px-2 py-1 bg-fin-bg border-t border-fin-border text-[10px] text-fin-muted">
+      <div className="flex items-center justify-between px-2 py-1 bg-fin-bg border-t border-fin-border text-2xs text-fin-muted">
         <div className="flex items-center gap-3">
-          <span>{stats.filtered}/{stats.total} events</span>
+          <span data-testid="agent-log-event-count">{stats.filtered}/{stats.total} events</span>
           <span>{formatSize(stats.totalBytes)}</span>
           {!showTokens && stats.typeCounts['token'] > 0 && (
             <span className="text-fin-muted/70">({stats.typeCounts['token']} tokens hidden)</span>
@@ -753,3 +956,5 @@ export const AgentLogPanel: React.FC = () => {
 
   return consoleContent;
 };
+
+

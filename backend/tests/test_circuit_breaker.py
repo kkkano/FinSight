@@ -30,7 +30,6 @@ def test_open_after_threshold():
     assert cb.can_call("alpha") is False, "OPEN 状态下应短路调用"
 
     print("[OK] 达到阈值后进入 OPEN 状态")
-    return True
 
 
 def test_recover_after_timeout():
@@ -48,7 +47,6 @@ def test_recover_after_timeout():
     assert cb.can_call("beta")
 
     print("[OK] 超时后探测成功自动关闭")
-    return True
 
 
 def test_reset_on_success():
@@ -63,7 +61,6 @@ def test_reset_on_success():
     assert cb.can_call("gamma")
 
     print("[OK] 成功调用后状态重置")
-    return True
 
 
 def run_all_tests():
@@ -82,7 +79,8 @@ def run_all_tests():
     results = {}
     for name, func in tests:
         try:
-            results[name] = func()
+            func()
+            results[name] = True
         except Exception as exc:
             print(f"[FAIL] {name} 失败: {exc}")
             import traceback

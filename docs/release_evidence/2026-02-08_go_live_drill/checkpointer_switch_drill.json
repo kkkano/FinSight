@@ -1,0 +1,36 @@
+{
+  "ok": false,
+  "started_at": "2026-02-08T10:53:51.034373+00:00",
+  "finished_at": "2026-02-08T11:00:21.216021+00:00",
+  "config": {
+    "sqlite_path": "data/langgraph/checkpoints.sqlite",
+    "postgres_dsn": "postgresql://***@127.0.0.1:5432/finsight",
+    "pipeline": false,
+    "allow_fallback": false
+  },
+  "steps": [
+    {
+      "step": "sqlite_precheck",
+      "status": "pass",
+      "backend": "sqlite",
+      "persistent": true,
+      "fallback_used": false,
+      "fallback_reason": null,
+      "location": "D:\\AgentProject\\FinSight\\data\\langgraph\\checkpoints.sqlite"
+    },
+    {
+      "step": "postgres_cutover",
+      "status": "failed",
+      "error": "connection timeout expired"
+    },
+    {
+      "step": "sqlite_rollback",
+      "status": "pass",
+      "backend": "sqlite",
+      "persistent": true,
+      "fallback_used": false,
+      "fallback_reason": null,
+      "location": "D:\\AgentProject\\FinSight\\data\\langgraph\\checkpoints.sqlite"
+    }
+  ]
+}

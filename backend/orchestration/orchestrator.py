@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-ToolOrchestrator - 工具编排器
-负责数据源管理、多源回退、缓存集成、数据验证
+ToolOrchestrator utilities for data source orchestration,
+fallback handling, caching, validation, and trace metadata.
 """
 
 import sys
@@ -11,9 +11,8 @@ from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
-import os
 
-# 添加项目根目录到路径
+# 娣诲姞椤圭洰鏍圭洰褰曞埌璺緞
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -35,11 +34,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DataSource:
-    """数据源定义"""
+    """Data source definition."""
     name: str
     fetch_func: Callable
-    priority: int  # 优先级，数字越小越优先
-    rate_limit: int  # 每分钟请求限制
+    priority: int  # 浼樺厛绾э紝鏁板瓧瓒婂皬瓒婁紭鍏?
+    rate_limit: int  # 姣忓垎閽熻姹傞檺鍒?
     last_success: Optional[datetime] = None
     consecutive_failures: int = 0
     total_calls: int = 0
@@ -50,7 +49,7 @@ class DataSource:
 
 @dataclass
 class FetchResult:
-    """获取结果"""
+    """鑾峰彇缁撴灉"""
     success: bool
     data: Any = None
     source: str = ""
@@ -62,7 +61,7 @@ class FetchResult:
     currency: Optional[str] = None
     adjustment: Optional[str] = None
     data_context: Optional[Dict[str, Any]] = None
-    # 新增：辅助可观测性的字段
+    # 鏂板锛氳緟鍔╁彲瑙傛祴鎬х殑瀛楁
     fallback_used: bool = False
     tried_sources: List[str] = field(default_factory=list)
     trace: Dict[str, Any] = field(default_factory=dict)
@@ -88,23 +87,15 @@ class FetchResult:
 
 class ToolOrchestrator:
     """
-    工具编排器
-    
-    功能：
-    - 多数据源管理与优先级排序
-    - 智能回退（失败自动切换数据源）
-    - 缓存集成（避免重复请求）
-    - 数据验证（确保数据质量）
-    - 调用统计
+    Orchestrates multi-source data retrieval with:
+    - priority-aware source selection
+    - fallback when primary sources fail
+    - caching and validation
+    - source statistics and trace metadata
     """
     
     def __init__(self, tools_module=None, circuit_breaker: Optional[CircuitBreaker] = None):
-        """
-        初始化编排器
-        
-        Args:
-            tools_module: 工具模块（如 backend.tools），如果不提供则延迟加载
-        """
+        """Initialize orchestrator and optional tool module."""
         self.cache = DataCache()
         self.validator = DataValidator()
         self.sources: Dict[str, List[DataSource]] = {}
@@ -121,22 +112,22 @@ class ToolOrchestrator:
             'total_failures': 0,
             'sources': {},  # name -> {'calls': int, 'success': int, 'fail': int}
         }
-        # 健康阈值默认值（可在 _init_sources 时用 ENV 覆盖）
+        # 鍋ュ悍闃堝€奸粯璁ゅ€硷紙鍙湪 _init_sources 鏃剁敤 ENV 瑕嗙洊锛?
         self.health_fail_rate_threshold = 0.6
         self.health_min_calls = 3
         self.health_skip_seconds = 300
         self.health_latency_threshold_ms = int(os.getenv("PRICE_HEALTH_LATENCY_MS", "5000"))
         
-        # 如果提供了工具模块，立即初始化数据源
+        # 濡傛灉鎻愪緵浜嗗伐鍏锋ā鍧楋紝绔嬪嵆鍒濆鍖栨暟鎹簮
         if tools_module:
             self._init_sources()
     
     def _init_sources(self):
-        """初始化数据源优先级映射"""
+        """Initialize source priority mappings."""
         if not self.tools_module:
             return
         
-        # 健康阈值（用于跳过坏源 / 动态优先级）
+        # 鍋ュ悍闃堝€硷紙鐢ㄤ簬璺宠繃鍧忔簮 / 鍔ㄦ€佷紭鍏堢骇锛?
         self.health_fail_rate_threshold = float(os.getenv("PRICE_HEALTH_FAIL_RATE", "0.6"))
         self.health_min_calls = int(os.getenv("PRICE_HEALTH_MIN_CALLS", "3"))
         self.health_skip_seconds = int(os.getenv("PRICE_HEALTH_SKIP_SECONDS", "300"))
@@ -161,10 +152,10 @@ class ToolOrchestrator:
             val = getattr(self.tools_module, key_attr, "") if self.tools_module else ""
             return bool(val)
         
-        # 从 backend.tools 中获取各个数据获取函数
-        # 注意：这里使用 getattr 安全获取，避免模块中不存在某函数时报错
+        # 浠?backend.tools 涓幏鍙栧悇涓暟鎹幏鍙栧嚱鏁?
+        # 娉ㄦ剰锛氳繖閲屼娇鐢?getattr 瀹夊叏鑾峰彇锛岄伩鍏嶆ā鍧椾腑涓嶅瓨鍦ㄦ煇鍑芥暟鏃舵姤閿?
         
-        # 股价数据源
+        # 鑲′环鏁版嵁婧?
         self.sources['price'] = []
         price_funcs = [
             ('index_price', getattr(self.tools_module, '_fetch_index_price', None), _cfg_int('PRICE_PRIORITY_INDEX', 1), _cfg_int('PRICE_RATE_INDEX', 10), _cfg_int('PRICE_COOLDOWN_INDEX', 0)),
@@ -182,7 +173,7 @@ class ToolOrchestrator:
                 self.sources['price'].append(DataSource(name, func, priority, rate_limit, cooldown_seconds=cooldown))
     
     def set_tools_module(self, tools_module):
-        """设置工具模块并初始化数据源"""
+        """Set tools module and reinitialize sources."""
         self.tools_module = tools_module
         self._init_sources()
     
@@ -215,23 +206,23 @@ class ToolOrchestrator:
         **kwargs
     ) -> FetchResult:
         """
-        获取数据，带智能回退
+        鑾峰彇鏁版嵁锛屽甫鏅鸿兘鍥為€€
         
         Args:
-            data_type: 数据类型（price, company_info, news 等）
-            ticker: 股票代码
-            force_refresh: 是否强制刷新（忽略缓存）
-            **kwargs: 传递给数据源函数的额外参数
+            data_type: 鏁版嵁绫诲瀷锛坧rice, company_info, news 绛夛級
+            ticker: 鑲＄エ浠ｇ爜
+            force_refresh: 鏄惁寮哄埗鍒锋柊锛堝拷鐣ョ紦瀛橈級
+            **kwargs: 浼犻€掔粰鏁版嵁婧愬嚱鏁扮殑棰濆鍙傛暟
             
         Returns:
-            FetchResult 获取结果
+            FetchResult 鑾峰彇缁撴灉
         """
         self._stats['total_requests'] += 1
         start_time = time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
         trace_emitter = get_trace_emitter()
 
-        # 1. 检查缓存（除非强制刷新）
+        # 1. 妫€鏌ョ紦瀛橈紙闄ら潪寮哄埗鍒锋柊锛?
         if not force_refresh:
             cache_key = f"{data_type}:{ticker}"
             cached_data = self.cache.get(cache_key)
@@ -268,27 +259,27 @@ class ToolOrchestrator:
                     },
                 )
         
-        # 2. 按优先级尝试数据源
+        # 2. 鎸変紭鍏堢骇灏濊瘯鏁版嵁婧?
         sources = self.sources.get(data_type, [])
         if not sources:
-            # 没有配置数据源，尝试直接调用工具模块的函数
+            # 娌℃湁閰嶇疆鏁版嵁婧愶紝灏濊瘯鐩存帴璋冪敤宸ュ叿妯″潡鐨勫嚱鏁?
             trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
             return self._fallback_direct_call(data_type, ticker, start_time)
         
-        # 动态排序：按失败率 / 连续失败 / 手工优先级
+        # 鍔ㄦ€佹帓搴忥細鎸夊け璐ョ巼 / 杩炵画澶辫触 / 鎵嬪伐浼樺厛绾?
         def _fail_rate(src: DataSource) -> float:
             if src.total_calls == 0:
                 return 0.0
             return 1.0 - (src.total_successes / src.total_calls)
         
         def _latency_penalty(src: DataSource) -> float:
-            # 简化：用平均耗时（如果有 trace 中记录的话）; 这里保留接口，暂不改变排序
+            # 绠€鍖栵細鐢ㄥ钩鍧囪€楁椂锛堝鏋滄湁 trace 涓褰曠殑璇濓級; 杩欓噷淇濈暀鎺ュ彛锛屾殏涓嶆敼鍙樻帓搴?
             return 0.0
         
         now_dt = datetime.now()
         sorted_sources = []
         for src in sources:
-            # 健康跳过：达到最小调用数且失败率过高，且仍在 skip 窗口
+            # 鍋ュ悍璺宠繃锛氳揪鍒版渶灏忚皟鐢ㄦ暟涓斿け璐ョ巼杩囬珮锛屼笖浠嶅湪 skip 绐楀彛
             fr = _fail_rate(src)
             if (
                 src.total_calls >= self.health_min_calls
@@ -299,7 +290,7 @@ class ToolOrchestrator:
                 continue
             sorted_sources.append((fr, src.consecutive_failures, src.priority, src))
         
-        # 如果全部被跳过，退回原列表
+        # 濡傛灉鍏ㄩ儴琚烦杩囷紝閫€鍥炲師鍒楄〃
         if not sorted_sources:
             sorted_sources = [( _fail_rate(s), s.consecutive_failures, s.priority, s) for s in sources]
         
@@ -308,11 +299,11 @@ class ToolOrchestrator:
         tried_sources = []
         last_error = None
 
-        # 缓存未命中，开始尝试数据源
+        # 缂撳瓨鏈懡涓紝寮€濮嬪皾璇曟暟鎹簮
         trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
 
         for i, source in enumerate(sources):
-            # 冷却期跳过
+            # 鍐峰嵈鏈熻烦杩?
             if source.cooldown_seconds > 0 and source.last_fail:
                 elapsed = (datetime.now() - source.last_fail).total_seconds()
                 if elapsed < source.cooldown_seconds:
@@ -326,11 +317,11 @@ class ToolOrchestrator:
             self._stats['sources'].setdefault(source.name, {'calls': 0, 'success': 0, 'fail': 0})
             self._stats['sources'][source.name]['calls'] += 1
 
-            # 发射数据源调用开始事件
+            # 鍙戝皠鏁版嵁婧愯皟鐢ㄥ紑濮嬩簨浠?
             source_start_time = time.time()
             trace_emitter.emit_data_source_query(
                 source.name, data_type, ticker=ticker,
-                success=True, fallback=(i > 0)
+                success=True, fallback=(i > 0), tried_sources=list(tried_sources)
             )
 
             try:
@@ -348,20 +339,20 @@ class ToolOrchestrator:
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
                         success=False, duration_ms=source_duration_ms,
-                        error="返回空结果", fallback=(i > 0)
+                        error="empty_result", fallback=(i > 0), tried_sources=list(tried_sources)
                     )
                     continue
 
-                # 3. 验证数据
+                # 3. 楠岃瘉鏁版嵁
                 validation = self.validator.validate(data_type, result)
                 
                 if validation.is_valid:
-                    # 4. 更新缓存
+                    # 4. 鏇存柊缂撳瓨
                     cache_key = f"{data_type}:{ticker}"
                     self.cache.set(cache_key, result, data_type=data_type)
                     trace_emitter.emit_cache_set(cache_key)
 
-                    # 更新统计
+                    # 鏇存柊缁熻
                     source.last_success = datetime.now()
                     source.consecutive_failures = 0
                     source.total_successes += 1
@@ -381,11 +372,11 @@ class ToolOrchestrator:
                     )
                     duration = (time.time() - start_time) * 1000
 
-                    # 发射数据源成功事件
+                    # 鍙戝皠鏁版嵁婧愭垚鍔熶簨浠?
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
                         success=True, duration_ms=source_duration_ms,
-                        fallback=(i > 0)
+                        fallback=(i > 0), tried_sources=list(tried_sources)
                     )
 
                     observe_orch_latency(data_type, duration)
@@ -409,7 +400,7 @@ class ToolOrchestrator:
                         },
                     )
                 else:
-                    logger.info(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
+                    logger.info(f"[Orchestrator] {source.name} 鏁版嵁楠岃瘉澶辫触: {validation.issues}")
                     last_error = f"Validation failed: {validation.issues}"
                     source.consecutive_failures += 1
                     source.last_fail = datetime.now()
@@ -421,7 +412,7 @@ class ToolOrchestrator:
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
                         success=False, duration_ms=source_duration_ms,
-                        error=f"验证失败: {validation.issues}", fallback=(i > 0)
+                        error=f"楠岃瘉澶辫触: {validation.issues}", fallback=(i > 0), tried_sources=list(tried_sources)
                     )
 
             except Exception as e:
@@ -437,12 +428,12 @@ class ToolOrchestrator:
                 trace_emitter.emit_data_source_query(
                     source.name, data_type, ticker=ticker,
                     success=False, duration_ms=source_duration_ms,
-                    error=str(e), fallback=(i > 0)
+                    error=str(e), fallback=(i > 0), tried_sources=list(tried_sources)
                 )
-                logger.info(f"[Orchestrator] {source.name} 失败: {e}")
+                logger.info(f"[Orchestrator] {source.name} 澶辫触: {e}")
                 continue
             
-            # 短暂延迟，避免请求过快
+            # 鐭殏寤惰繜锛岄伩鍏嶈姹傝繃蹇?
             time.sleep(0.3)
         duration = (time.time() - start_time) * 1000
         observe_orch_latency(data_type, duration)
@@ -458,7 +449,7 @@ class ToolOrchestrator:
 
         return FetchResult(
             success=False,
-            error=f"所有数据源均失败: {last_error}",
+            error=f"鎵€鏈夋暟鎹簮鍧囧け璐? {last_error}",
             source=f"tried: {', '.join(tried_sources)}",
             duration_ms=duration,
             as_of=now_iso,
@@ -490,18 +481,18 @@ class ToolOrchestrator:
         return any(token in lower for token in tokens)
 
     def _try_source(self, source: DataSource, ticker: str, **kwargs) -> Optional[Any]:
-        """尝试单个数据源"""
+        """Try fetching from a single source."""
         source.total_calls += 1
         
         try:
             result = source.fetch_func(ticker, **kwargs) if kwargs else source.fetch_func(ticker)
             
-            # 检查是否为有效结果
+            # 妫€鏌ユ槸鍚︿负鏈夋晥缁撴灉
             if result is None:
                 return None
             
             if isinstance(result, str):
-                # 字符串结果检查错误标记
+                # 瀛楃涓茬粨鏋滄鏌ラ敊璇爣璁?
                 if "Error" in result or "error" in result.lower():
                     if "rate limit" in result.lower() or "too many requests" in result.lower():
                         logger.info(f"[Orchestrator] {source.name} rate limited")
@@ -639,7 +630,7 @@ class ToolOrchestrator:
             )
 
     def get_stats(self) -> Dict[str, Any]:
-        """获取统计信息"""
+        """鑾峰彇缁熻淇℃伅"""
         cache_stats = self.cache.get_stats()
         now_dt = datetime.now()
         
@@ -689,7 +680,7 @@ class ToolOrchestrator:
         }
     
     def reset_stats(self):
-        """重置统计"""
+        """閲嶇疆缁熻"""
         self._stats = {
             'total_requests': 0,
             'cache_hits': 0,
@@ -702,4 +693,6 @@ class ToolOrchestrator:
                 source.total_calls = 0
                 source.total_successes = 0
                 source.consecutive_failures = 0
+
+
 

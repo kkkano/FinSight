@@ -1,6 +1,7 @@
-export type Role = 'user' | 'assistant' | 'system';
+﻿export type Role = 'user' | 'assistant' | 'system';
 
-export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'unknown';
+export type Intent = 'chat' | 'report' | 'alert' | 'followup' | 'clarify' | 'any';
+export type TraceViewMode = 'user' | 'expert' | 'dev';
 
 // 图表类型
 export type ChartType = 'line' | 'candlestick' | 'pie' | 'bar' | 'tree' | 'area' | 'scatter' | 'heatmap';
@@ -10,6 +11,15 @@ export interface ThinkingStep {
   message?: string;
   result?: any;
   timestamp: string;
+}
+
+// Evidence item for citations/sources
+export interface EvidenceItem {
+  title?: string;
+  source?: string;
+  url?: string;
+  snippet?: string;
+  confidence?: number;
 }
 
 export interface Message {
@@ -29,6 +39,8 @@ export interface Message {
   fallback_used?: boolean;
   tried_sources?: string[];
   report?: ReportIR;  // Phase 2: 深度研报数据
+  evidence_pool?: EvidenceItem[];  // Evidence/citations pool
+  via?: 'main' | 'mini';  // 消息来源入口：主聊天区 or 右侧面板 MiniChat
 }
 
 export interface KlineData {
@@ -100,13 +112,33 @@ export interface ReportIR {
   citations: Citation[];
   risks?: string[];
   recommendation?: string;
+  tags?: string[];
+  report_hints?: {
+    is_compare?: boolean;
+    has_conflict?: boolean;
+    compare_basis?: string[];
+    conflict_agents?: string[];
+  };
   // Phase 2 扩展字段
   meta?: {
     agent_traces?: Record<string, any>;
     data_context?: Record<string, any>;
     [key: string]: any;
   };
-  agent_status?: Record<string, { status: string; confidence?: number; error?: string }>;
+  agent_status?: Record<string, {
+    status: string;
+    confidence?: number;
+    error?: string;
+    skipped_reason?: string;
+    escalation_not_needed?: boolean;
+    evidence_quality?: {
+      overall_score?: number;
+      source_diversity?: number;
+      has_conflicts?: boolean;
+      [key: string]: any;
+    };
+    data_sources?: string[];
+  }>;
 }
 
 export interface KlineResponse {
@@ -199,7 +231,7 @@ export type RawEventType =
   | 'done'
   | 'error'
   // 未知类型兜底
-  | 'unknown';
+  | 'any';
 
 export interface RawSSEEvent {
   id: string;                    // 唯一标识
@@ -219,3 +251,6 @@ export interface ConsoleFilterOptions {
   autoScroll: boolean;           // 自动滚动
   maxEvents: number;             // 最大事件数
 }
+
+
+

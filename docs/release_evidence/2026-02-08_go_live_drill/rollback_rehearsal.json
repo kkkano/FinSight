@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-02-08T12:15:12Z",
+  "db_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite",
+  "backup_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite.pre_migration.bak",
+  "migration": {
+    "ok": true,
+    "db_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite",
+    "backup_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite.pre_migration.bak",
+    "backup_created": false,
+    "migrated_at": "2026-02-08T12:15:12.053732+00:00",
+    "tables": [
+      {
+        "table": "report_index",
+        "added_columns": []
+      },
+      {
+        "table": "citation_index",
+        "added_columns": []
+      }
+    ]
+  },
+  "rollback": {
+    "ok": true,
+    "db_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite",
+    "backup_path": "D:\\AgentProject\\FinSight\\docs\\release_evidence\\2026-02-08_go_live_drill\\report_index_release_drill.sqlite.pre_migration.bak",
+    "restored_from_backup": true,
+    "rolled_back_at": "2026-02-08T12:15:12.054758+00:00"
+  },
+  "verification": {
+    "table_names": [
+      "legacy_state"
+    ],
+    "legacy_rows": [
+      [
+        "before-migrate"
+      ]
+    ],
+    "pass_data_restore": true,
+    "pass_schema_rollback": true
+  },
+  "pass": true
+}

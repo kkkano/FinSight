@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-02-08T12:15:12Z",
+  "first_selected": "primary",
+  "selected_after_primary_failure": "backup",
+  "recovery_window": [
+    "primary",
+    "primary",
+    "backup",
+    "primary",
+    "primary",
+    "primary"
+  ],
+  "available_after_recovery": [
+    "backup",
+    "primary"
+  ],
+  "pass_failover": true,
+  "pass_recovery": true,
+  "pass": true
+}

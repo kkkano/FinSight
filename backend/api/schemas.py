@@ -3,8 +3,10 @@ FinSight API Pydantic Schemas
 Pydantic V2 models for request validation and response documentation.
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 from datetime import datetime
+
+from backend.contracts import CHAT_REQUEST_SCHEMA_VERSION, CHAT_RESPONSE_SCHEMA_VERSION
 
 
 # ============== Request Models ==============
@@ -15,13 +17,76 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="消息内容")
 
 
+class SelectionContext(BaseModel):
+    """选中对象的上下文（用于 MiniChat 引用特定新闻/报告）"""
+    type: Literal["news", "filing", "doc", "report"] = Field(
+        ...,
+        description="对象类型: news/filing/doc（兼容旧值 report，会自动归一为 doc）",
+    )
+    id: str = Field(..., description="对象ID（hash）")
+    title: str = Field(..., description="标题")
+    url: Optional[str] = Field(None, description="链接")
+    source: Optional[str] = Field(None, description="来源")
+    ts: Optional[str] = Field(None, description="时间戳")
+    snippet: Optional[str] = Field(None, description="摘要/前100字")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type(cls, v):
+        if not isinstance(v, str):
+            return v
+        lowered = v.strip().lower()
+        # Legacy compatibility: `report` used to mean "input document". Normalize to `doc`.
+        if lowered == "report":
+            return "doc"
+        return lowered
+
+class ChatContext(BaseModel):
+    """临时上下文（仅本次请求生效，不入库）"""
+    active_symbol: Optional[str] = Field(None, description="当前关注的股票代码")
+    view: Optional[str] = Field(None, description="当前视图: chat/dashboard")
+    selection: Optional[SelectionContext] = Field(None, description="当前选中的 news/filing/doc 引用")
+    selections: Optional[list[SelectionContext]] = Field(None, description="当前多选的 news/filing/doc 引用列表")
+
+
+class ChatOptions(BaseModel):
+    """前端可控参数（不写入长期记忆，仅本次请求生效）"""
+
+    output_mode: Optional[Literal["chat", "brief", "investment_report"]] = Field(
+        None,
+        description="输出模式：chat/brief/investment_report（研报必须显式选择或强词触发）",
+    )
+    strict_selection: Optional[bool] = Field(
+        None,
+        description="是否强制围绕 selection（默认 False，更自由）",
+    )
+    locale: Optional[str] = Field(None, description="语言/区域，例如 zh-CN")
+    trace_raw_override: Optional[Literal["on", "off", "inherit"]] = Field(
+        None,
+        description="Raw Trace 可见性覆盖：on/off/inherit（inherit=沿用服务端默认）",
+    )
+
+
 class ChatRequest(BaseModel):
     """聊天请求"""
+    schema_version: str = Field(
+        default=CHAT_REQUEST_SCHEMA_VERSION,
+        description="请求契约版本（默认 chat.request.v1）",
+    )
     query: str = Field(..., min_length=1, description="用户查询内容")
     session_id: Optional[str] = Field(None, description="会话ID")
     history: Optional[list[ChatMessage]] = Field(None, description="对话历史(后端按 CHAT_HISTORY_MAX_MESSAGES 截断)")
+    context: Optional[ChatContext] = Field(None, description="临时上下文（不入库，仅当次请求生效）")
+    options: Optional[ChatOptions] = Field(None, description="输出/路由选项（仅本次请求生效）")
 
     model_config = {"extra": "ignore"}
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def normalize_schema_version(cls, v):
+        if not isinstance(v, str) or not v.strip():
+            return CHAT_REQUEST_SCHEMA_VERSION
+        return v.strip()
 
 
 class AnalysisRequest(BaseModel):
@@ -103,6 +168,7 @@ class ConfigRequest(BaseModel):
     llm_model: Optional[str] = None
     llm_api_key: Optional[str] = None
     llm_api_base: Optional[str] = None
+    llm_endpoints: Optional[list[dict[str, Any]]] = None
     layout_mode: str = Field("centered", description="布局模式")
 
     model_config = {"extra": "allow"}
@@ -144,6 +210,7 @@ class ThinkingStep(BaseModel):
 
 class ChatResponse(BaseResponse):
     """聊天响应"""
+    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="响应契约版本")
     response: str = Field(..., description="AI回复内容")
     intent: Optional[str] = Field(None, description="识别的意图")
     current_focus: Optional[str] = Field(None, description="当前关注股票")
@@ -158,6 +225,7 @@ class ChatResponse(BaseResponse):
 
 class SupervisorResponse(BaseResponse):
     """Supervisor模式响应"""
+    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="响应契约版本")
     response: str = Field(..., description="AI回复内容")
     intent: Optional[str] = Field(None, description="识别的意图")
     classification: Optional[ClassificationInfo] = Field(None, description="分类信息")

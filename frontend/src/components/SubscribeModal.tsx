@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Bell, RefreshCw, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
@@ -35,16 +35,7 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
   });
   const [subSubmitting, setSubSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadSubscriptions();
-      if (subscriptionEmail && subscriptionEmail !== subForm.email) {
-        setSubForm((prev) => ({ ...prev, email: subscriptionEmail }));
-      }
-    }
-  }, [isOpen]);
-
-  const loadSubscriptions = async () => {
+  const loadSubscriptions = useCallback(async () => {
     setSubsLoading(true);
     setSubsError(null);
     try {
@@ -60,7 +51,16 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
     } finally {
       setSubsLoading(false);
     }
-  };
+  }, [subForm.email, subscriptionEmail]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadSubscriptions();
+      if (subscriptionEmail && subscriptionEmail !== subForm.email) {
+        setSubForm((prev) => ({ ...prev, email: subscriptionEmail }));
+      }
+    }
+  }, [isOpen, loadSubscriptions, subForm.email, subscriptionEmail]);
 
   const handleSubChange = (key: string, value: any) => {
     setSubForm((prev) => ({ ...prev, [key]: value }));
@@ -291,12 +291,12 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                           {sub.ticker}
                         </span>
                         {isDisabled && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-400 font-medium">
+                          <span className="px-1.5 py-0.5 rounded text-2xs bg-red-500/20 text-red-400 font-medium">
                             已禁用
                           </span>
                         )}
                         {hasError && !isDisabled && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400 font-medium flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded text-2xs bg-amber-500/20 text-amber-400 font-medium flex items-center gap-1">
                             <AlertTriangle size={10} />
                             失败 {sub.alert_failures ?? 0} 次
                           </span>
@@ -307,12 +307,12 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                         {sub.alert_types?.join(', ')} | 阈值 {sub.price_threshold ?? '-'}%
                       </div>
                       {sub.last_alert_error && (
-                        <div className="text-[10px] text-red-400 truncate" title={sub.last_alert_error}>
+                        <div className="text-2xs text-red-400 truncate" title={sub.last_alert_error}>
                           错误: {sub.last_alert_error}
                         </div>
                       )}
                       {(sub.last_alert_at || sub.last_news_at) && (
-                        <div className="text-[10px] text-fin-muted">
+                        <div className="text-2xs text-fin-muted">
                           {sub.last_alert_at && <>最后价格提醒: {new Date(sub.last_alert_at).toLocaleString()}</>}
                           {sub.last_news_at && (
                             <>

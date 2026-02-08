@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent } from '../types';
+import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
@@ -24,6 +24,48 @@ const getInitialSubscriptionEmail = (): string => {
   return window.localStorage.getItem('finsight-subscription-email') || '';
 };
 
+const buildSessionId = (): string => {
+  const randomPart =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `public:anonymous:${randomPart}`;
+};
+
+const getInitialSessionId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem('finsight-session-id');
+  if (!raw) {
+    const generated = buildSessionId();
+    window.localStorage.setItem('finsight-session-id', generated);
+    return generated;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    const generated = buildSessionId();
+    window.localStorage.setItem('finsight-session-id', generated);
+    return generated;
+  }
+  return trimmed;
+};
+
+const getInitialTraceRawEnabled = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  const raw = window.localStorage.getItem('finsight-trace-raw-enabled');
+  if (raw === null) return true;
+  return raw === 'true';
+};
+const getInitialTraceRawShowRawJson = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  const raw = window.localStorage.getItem('finsight-trace-raw-show-json');
+  if (raw === null) return true;
+  return raw === 'true';
+};
+const getInitialTraceViewMode = (): TraceViewMode => {
+  if (typeof window === 'undefined') return 'expert';
+  const raw = window.localStorage.getItem('finsight-trace-view-mode');
+  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'expert';
+};
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {
   if (typeof window === 'undefined') return {};
@@ -40,7 +82,7 @@ const getInitialPortfolioPositions = (): PortfolioPositions => {
       }
       return acc;
     }, {});
-  } catch (error) {
+  } catch {
     return {};
   }
 };
@@ -60,7 +102,11 @@ const applyThemeClass = (theme: Theme) => {
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
+const initialSessionId = getInitialSessionId() || buildSessionId();
 const initialPortfolioPositions = getInitialPortfolioPositions();
+const initialTraceRawEnabled = getInitialTraceRawEnabled();
+const initialTraceViewMode = getInitialTraceViewMode();
+const initialTraceRawShowRawJson = getInitialTraceRawShowRawJson();
 applyThemeClass(initialTheme);
 
 interface AppState {
@@ -73,7 +119,11 @@ interface AppState {
   isChatLoading: boolean;
   statusMessage: string | null;
   statusSince: number | null;
+  executionProgress: number | null;
+  currentStep: string | null;
   setStatus: (message: string | null) => void;
+  setExecutionState: (step: string | null, progress?: number | null) => void;
+  resetExecutionState: () => void;
   abortController: AbortController | null;
   setAbortController: (controller: AbortController | null) => void;
   currentTicker: string | null;
@@ -86,6 +136,8 @@ interface AppState {
   draft: string;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
+  sessionId: string;
+  setSessionId: (sessionId: string) => void;
   portfolioPositions: PortfolioPositions;
   setPortfolioPosition: (ticker: string, shares: number) => void;
   removePortfolioPosition: (ticker: string) => void;
@@ -103,27 +155,66 @@ interface AppState {
   clearRawEvents: () => void;
   isConsoleOpen: boolean;
   setConsoleOpen: (open: boolean) => void;
+  traceRawEnabled: boolean;
+  setTraceRawEnabled: (enabled: boolean) => void;
+  traceViewMode: TraceViewMode;
+  setTraceViewMode: (mode: TraceViewMode) => void;
+  traceRawShowRawJson: boolean;
+  setTraceRawShowRawJson: (show: boolean) => void;
 }
 
+const WELCOME_MESSAGE: Message = {
+  id: 'welcome',
+  role: 'assistant',
+  content:
+    '您好，我是 FinSight AI 金融助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用实时数据和图表帮你分析。',
+  timestamp: Date.now(),
+};
+
+const MESSAGES_STORAGE_KEY = 'finsight-messages';
+const MAX_PERSISTED_MESSAGES = 100;
+
+const getInitialMessages = (): Message[] => {
+  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
+  try {
+    const raw = window.localStorage.getItem(MESSAGES_STORAGE_KEY);
+    if (!raw) return [WELCOME_MESSAGE];
+    const parsed = JSON.parse(raw) as Message[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return [WELCOME_MESSAGE];
+    // Strip loading states from restored messages
+    return parsed.map((m) => ({ ...m, isLoading: false }));
+  } catch {
+    return [WELCOME_MESSAGE];
+  }
+};
+
+const persistMessages = (messages: Message[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    // Only persist user/assistant text messages, skip transient state
+    const toSave = messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-MAX_PERSISTED_MESSAGES);
+    window.localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(toSave));
+  } catch {
+    // localStorage full or unavailable — silently ignore
+  }
+};
+
 export const useStore = create<AppState>((set) => ({
-  messages: [
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content:
-        '您好，我是 FinSight AI 金融助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用实时数据和图表帮你分析。',
-      timestamp: Date.now(),
-    },
-  ],
+  messages: getInitialMessages(),
   isChatLoading: false,
   statusMessage: null,
   statusSince: null,
+  executionProgress: null,
+  currentStep: null,
   currentTicker: null,
   abortController: null,
   draft: '',
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
+  sessionId: initialSessionId,
   portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
@@ -145,36 +236,56 @@ export const useStore = create<AppState>((set) => ({
   // Raw SSE Events 初始状态
   rawEvents: [],
   isConsoleOpen: true,
+  traceRawEnabled: initialTraceRawEnabled,
+  traceViewMode: initialTraceViewMode,
+  traceRawShowRawJson: initialTraceRawShowRawJson,
 
   addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-    })),
+    set((state) => {
+      const next = [...state.messages, message];
+      persistMessages(next);
+      return { messages: next };
+    }),
 
   updateMessage: (id, patch) =>
-    set((state) => ({
-      messages: state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    })),
+    set((state) => {
+      const next = state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
+      // Only persist when message finishes loading (avoid thrashing during streaming)
+      if (patch.isLoading === false) persistMessages(next);
+      return { messages: next };
+    }),
 
   updateLastMessage: (content) =>
     set((state) => {
-      const newMessages = [...state.messages];
-      if (newMessages.length > 0) {
-        newMessages[newMessages.length - 1].content = content;
-      }
-      return { messages: newMessages };
+      if (state.messages.length === 0) return {};
+      const next = state.messages.map((m, i) =>
+        i === state.messages.length - 1 ? { ...m, content } : m,
+      );
+      return { messages: next };
     }),
 
   removeMessage: (id) =>
-    set((state) => ({
-      messages: state.messages.filter((m) => m.id !== id),
-    })),
+    set((state) => {
+      const next = state.messages.filter((m) => m.id !== id);
+      persistMessages(next);
+      return { messages: next };
+    }),
 
   setLoading: (loading) => set({ isChatLoading: loading }),
   setStatus: (message) =>
     set(() => ({
       statusMessage: message,
       statusSince: message ? Date.now() : null,
+    })),
+  setExecutionState: (step, progress = null) =>
+    set(() => ({
+      currentStep: step,
+      executionProgress: progress === null ? null : Math.max(0, Math.min(100, progress)),
+    })),
+  resetExecutionState: () =>
+    set(() => ({
+      currentStep: null,
+      executionProgress: null,
     })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
   setAbortController: (controller) => set({ abortController: controller }),
@@ -201,6 +312,14 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-subscription-email', email);
       }
       return { subscriptionEmail: email };
+    }),
+
+  setSessionId: (sessionId) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', sessionId);
+      }
+      return { sessionId };
     }),
 
   setPortfolioPosition: (ticker, shares) =>
@@ -275,4 +394,37 @@ export const useStore = create<AppState>((set) => ({
 
   setConsoleOpen: (open) =>
     set(() => ({ isConsoleOpen: open })),
+
+  setTraceRawEnabled: (enabled) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-trace-raw-enabled', String(Boolean(enabled)));
+      }
+      return { traceRawEnabled: Boolean(enabled) };
+    }),
+
+
+  setTraceViewMode: (mode) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-trace-view-mode', mode);
+      }
+      return { traceViewMode: mode };
+    }),
+  setTraceRawShowRawJson: (show) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-trace-raw-show-json', String(Boolean(show)));
+      }
+      return { traceRawShowRawJson: Boolean(show) };
+    }),
 }));
+
+
+
+
+
+
+
+
+

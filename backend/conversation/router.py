@@ -17,11 +17,27 @@ Handles intent recognition and mode dispatch
 """
 
 import logging
+import warnings
 from enum import Enum
 from typing import Tuple, Dict, Any, Optional, List, Callable
 import re
 
 logger = logging.getLogger(__name__)
+
+_DEPRECATION_WARNED = False
+
+
+def _warn_deprecated_once() -> None:
+    global _DEPRECATION_WARNED
+    if _DEPRECATION_WARNED:
+        return
+    _DEPRECATION_WARNED = True
+    warnings.warn(
+        "ConversationRouter is deprecated; use the LangGraph entry point (backend.graph) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning("[DEPRECATED] ConversationRouter is legacy; prefer LangGraph (backend.graph).")
 
 
 # Import shared ticker mapping
@@ -79,6 +95,7 @@ class ConversationRouter:
         Args:
             llm: LLM instance for complex intent classification (optional)
         """
+        _warn_deprecated_once()
         self.llm = llm
         self._handlers: Dict[Intent, Callable] = {}
         self._schema_router = None
