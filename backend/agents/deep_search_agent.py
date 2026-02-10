@@ -792,7 +792,10 @@ queries要求：
 </constraints>"""
 
         result = await self._call_llm(prompt)
-        return result.strip() if result else "Summary unavailable."
+        if result and result.strip():
+            return result.strip()
+        # Degraded fallback: build summary from doc titles and snippets
+        return self._build_degraded_summary(docs)
 
     async def _call_llm(self, prompt: str) -> str:
         try:
@@ -828,6 +831,34 @@ queries要求：
             return json.loads(match.group(0))
         except json.JSONDecodeError:
             return {}
+
+    def _build_degraded_summary(self, docs: List[Dict[str, Any]]) -> str:
+        """Build a degraded summary from doc titles/snippets when LLM is unavailable."""
+        if not docs:
+            return "No deep research sources found."
+        lines: List[str] = []
+        lines.append("## 核心发现")
+        lines.append("*（LLM 摘要暂不可用，以下为检索源原始摘要）*\n")
+        for idx, doc in enumerate(docs[:6], 1):
+            title = str(doc.get("title") or "").strip()
+            snippet = str(doc.get("snippet") or doc.get("content", "")[:200]).strip()
+            url = str(doc.get("url") or "").strip()
+            if not title and not snippet:
+                continue
+            source_tag = f"[{title}]({url})" if url and title else (title or url or "")
+            # Trim snippet to first 200 chars
+            if len(snippet) > 200:
+                snippet = snippet[:200] + "..."
+            lines.append(f"[{idx}] **{source_tag}**")
+            if snippet and snippet != title:
+                lines.append(f"   {snippet}")
+            lines.append("")
+        if len(lines) <= 2:
+            titles = ", ".join(str(doc.get("title", "")).strip() for doc in docs[:3] if doc.get("title"))
+            return f"Deep research sources found: {titles}." if titles else "No deep research sources found."
+        lines.append("## 信息缺口")
+        lines.append("- LLM 摘要服务暂时不可用，以上为原始检索结果，建议稍后重试以获取完整分析。")
+        return "\n".join(lines)
 
     def _estimate_confidence(self, docs: Any) -> float:
         if not isinstance(docs, list) or not docs:

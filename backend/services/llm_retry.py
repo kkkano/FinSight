@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import re
 from typing import Any, Callable, Optional
 
 from backend.llm_config import report_llm_failure, report_llm_success
@@ -53,6 +54,55 @@ def is_rate_limit_error(exc: BaseException) -> bool:
             "resource_exhausted",
         )
     )
+
+
+def _extract_http_status_code(text: str) -> int | None:
+    match = re.search(r"\b([1-5]\d{2})\b", text)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+
+def is_endpoint_retryable_error(exc: BaseException) -> bool:
+    """
+    Errors that should trigger endpoint rotation when multiple endpoints exist.
+
+    We keep this intentionally broader than rate-limit only:
+    - auth/provider routing failures on one endpoint (401/403/404)
+    - transient infra failures (408/429/5xx, timeout, connection reset, ssl eof)
+    """
+    text = str(exc).lower()
+
+    if is_rate_limit_error(exc):
+        return True
+
+    status = _extract_http_status_code(text)
+    if status in {401, 403, 404, 408, 409, 425, 429, 500, 502, 503, 504}:
+        return True
+
+    transient_tokens = (
+        "unauthorized",
+        "forbidden",
+        "authentication",
+        "invalid api key",
+        "invalid token",
+        "no available channel",
+        "service unavailable",
+        "gateway timeout",
+        "bad gateway",
+        "connection",
+        "timed out",
+        "timeout",
+        "ssl",
+        "eof",
+        "无效的令牌",
+        "该令牌额度已用尽",
+        "无可用渠道",
+    )
+    return any(token in text for token in transient_tokens)
 
 
 async def ainvoke_with_rate_limit_retry(
@@ -130,22 +180,41 @@ async def ainvoke_with_rate_limit_retry(
         except Exception as exc:
             last_exc = exc
             report_llm_failure(current_llm, exc)
-            if not is_rate_limit_error(exc) or attempt >= max_attempts:
+
+            retryable = (
+                is_endpoint_retryable_error(exc)
+                if llm_factory is not None
+                else is_rate_limit_error(exc)
+            )
+
+            if not retryable or attempt >= max_attempts:
                 raise
+
             # Rotate to next endpoint when factory is available
             if llm_factory is not None:
                 try:
                     current_llm = llm_factory()
                 except Exception:
                     pass  # factory failed; keep current_llm for next attempt
-            wait = float(sleep_seconds) + random.uniform(0, float(jitter_seconds))
+
+            # For multi-endpoint rotation, switch immediately by default.
+            # Single-endpoint mode still uses backoff.
+            if llm_factory is not None:
+                wait = 0.0
+            else:
+                wait = float(sleep_seconds) + random.uniform(0, float(jitter_seconds))
             if on_retry:
                 on_retry(attempt, exc)
-            await asyncio.sleep(wait)
+            if wait > 0:
+                await asyncio.sleep(wait)
 
     if last_exc:
         raise last_exc
     raise RuntimeError("llm_call_failed")
 
 
-__all__ = ["ainvoke_with_rate_limit_retry", "is_rate_limit_error"]
+__all__ = [
+    "ainvoke_with_rate_limit_retry",
+    "is_rate_limit_error",
+    "is_endpoint_retryable_error",
+]

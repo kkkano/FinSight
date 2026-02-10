@@ -34,6 +34,12 @@ interface UserConfig {
 
 const DEFAULT_COOLDOWN_SEC = 90;
 
+const isMaskedSecret = (value: string): boolean => {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  return raw.includes('***') || /^\*+$/.test(raw);
+};
+
 const createDefaultEndpoint = (): LlmEndpointConfig => ({
   name: '',
   provider: 'openai_compatible',
@@ -94,13 +100,14 @@ const sanitizeEndpointsForSave = (endpoints: LlmEndpointConfig[] | undefined): L
   const rows = Array.isArray(endpoints) ? endpoints : [];
   return rows
     .map((endpoint, index) => {
-      const apiKey = String(endpoint.api_key || '').trim();
+      const apiKeyRaw = String(endpoint.api_key || '').trim();
+      const apiKey = isMaskedSecret(apiKeyRaw) ? '' : apiKeyRaw;
       const apiBase = String(endpoint.api_base || '').trim();
       const model = String(endpoint.model || '').trim();
       const name = String(endpoint.name || '').trim();
 
       return {
-        _hasKey: Boolean(apiKey),
+        _hasKey: Boolean(apiKey || apiKeyRaw),
         value: {
           name: name || `endpoint-${index + 1}`,
           provider: String(endpoint.provider || 'openai_compatible').trim() || 'openai_compatible',
@@ -220,7 +227,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         payload.llm_provider = primary.provider;
         payload.llm_model = primary.model;
         payload.llm_api_base = primary.api_base;
-        payload.llm_api_key = primary.api_key;
+        payload.llm_api_key = primary.api_key || '';
       }
 
       await apiClient.saveConfig(payload);
@@ -687,6 +694,5 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     </div>
   );
 };
-
 
 

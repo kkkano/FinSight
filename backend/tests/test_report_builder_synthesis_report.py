@@ -51,7 +51,10 @@ def test_synthesis_report_does_not_include_evidence_overview_or_duplicate_query(
     assert isinstance(synthesis_report, str)
 
     assert "证据池概览" not in synthesis_report
-    assert unique_url not in synthesis_report
+    # URL may appear in the "引用来源" citation section, but should NOT appear
+    # duplicated in the main body above it.
+    body_before_citations = synthesis_report.split("## 引用来源")[0] if "## 引用来源" in synthesis_report else synthesis_report
+    assert unique_url not in body_before_citations
     assert synthesis_report.count(query) == 1
 
 

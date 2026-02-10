@@ -28,7 +28,6 @@ from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.dashboard_router import dashboard_router
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
-from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
 from backend.api.user_router import UserRouterDeps, create_user_router
@@ -608,6 +607,7 @@ market_router = create_market_router(
         get_financial_statements=globals().get("get_financial_statements") or (lambda _ticker: {"error": "financials tool unavailable"}),
         get_financial_statements_summary=globals().get("get_financial_statements_summary") or (lambda _ticker: {"error": "financials summary tool unavailable"}),
         get_stock_historical_data=globals().get("get_stock_historical_data") or (lambda _ticker, **_kwargs: {"error": "history tool unavailable"}),
+        detect_chart_type=(ChartTypeDetector.detect_chart_type if ChartTypeDetector else None),
         logger=logger,
     )
 )
@@ -636,15 +636,6 @@ app.include_router(subscription_router)
 app.include_router(config_router)
 app.include_router(report_router)
 app.include_router(dashboard_router)
-
-task_router = create_task_router(
-    TaskRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_report_index_store=lambda: get_report_index_store(),
-    )
-)
-app.include_router(task_router)
 # 鍚姩鍏ュ彛
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
-

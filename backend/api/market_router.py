@@ -17,11 +17,73 @@ class MarketRouterDeps:
     get_financial_statements: Callable[[str], Any]
     get_financial_statements_summary: Callable[[str], Any]
     get_stock_historical_data: Callable[..., Any]
+    detect_chart_type: Callable[[str, str | None], dict[str, Any]] | None
     logger: Any
 
 
 def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Market"])
+
+    @router.post("/api/chart/detect")
+    def detect_chart(payload: dict[str, Any]):
+        query = str(payload.get("query") or "").strip()
+        ticker = payload.get("ticker")
+        ticker_value = str(ticker).strip() if ticker is not None else None
+
+        if not query:
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": "empty_query",
+            }
+
+        if deps.detect_chart_type is None:
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": "chart_detector_unavailable",
+            }
+
+        try:
+            detected = deps.detect_chart_type(query, ticker_value or None)
+            chart_type = detected.get("chart_type") if isinstance(detected, dict) else None
+            data_dimension = detected.get("data_dimension") if isinstance(detected, dict) else None
+            confidence_raw = detected.get("confidence") if isinstance(detected, dict) else 0.0
+            try:
+                confidence = float(confidence_raw)
+            except Exception:
+                confidence = 0.0
+            confidence = max(0.0, min(1.0, confidence))
+            reason = (
+                str(detected.get("reason") or "")
+                if isinstance(detected, dict)
+                else "invalid_detector_response"
+            )
+            should_generate = bool(chart_type) and confidence >= 0.35
+            return {
+                "success": True,
+                "should_generate": should_generate,
+                "chart_type": chart_type,
+                "data_dimension": data_dimension,
+                "confidence": confidence,
+                "reason": reason,
+            }
+        except Exception as exc:
+            deps.logger.warning("[ChartDetect] failed: %s", exc)
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": str(exc),
+            }
 
     @router.get("/api/stock/price/{ticker}")
     def get_price(ticker: str):
@@ -129,4 +191,3 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return router
-

@@ -364,7 +364,7 @@ def create_llm(
     provider: str = "gemini_proxy",
     model: str | None = None,
     temperature: float = 0.3,
-    max_tokens: int = 65536,
+    max_tokens: int | None = None,
     request_timeout: int = 600,
 ):
     from langchain_openai import ChatOpenAI
@@ -374,6 +374,11 @@ def create_llm(
     api_base = cfg.get("api_base")
     model_name = cfg.get("model")
     endpoint_name = str(cfg.get("endpoint_name") or "unknown")
+
+    resolved_max_tokens = max_tokens
+    if resolved_max_tokens is None:
+        resolved_max_tokens = _env_int("LLM_MAX_TOKENS", 8192)
+    resolved_max_tokens = max(256, int(resolved_max_tokens))
 
     if not api_key:
         raise ValueError(f"API key not found for provider '{provider}'")
@@ -392,7 +397,7 @@ def create_llm(
         openai_api_key=api_key,
         openai_api_base=api_base,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_tokens=resolved_max_tokens,
         request_timeout=request_timeout,
         max_retries=3,
     )
@@ -416,4 +421,3 @@ __all__ = [
     "report_llm_failure",
     "report_llm_success",
 ]
-

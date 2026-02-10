@@ -148,6 +148,16 @@ def _build_filing_section_citations(citations: list[dict[str, Any]]) -> list[dic
     return [{"section": section, "source_ids": source_ids} for section, source_ids in ordered]
 
 
+def _safe_confidence(value: Any, default: float = 0.7) -> float:
+    """Convert confidence to float safely — handles 'high'/'medium'/'low' strings."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBuild:
     citations: list[dict[str, Any]] = []
     id_by_url: dict[str, str] = {}
@@ -172,7 +182,7 @@ def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBui
                 "url": url,
                 "snippet": _safe_str(item.get("snippet") or "")[:400],
                 "published_date": _safe_str(item.get("published_date") or ""),
-                "confidence": float(item.get("confidence", 0.7) or 0.7),
+                "confidence": _safe_confidence(item.get("confidence", 0.7)),
                 "freshness_hours": _freshness_hours(item.get("published_date")),
                 "section_ref": _detect_filing_section_ref(item),
             }
@@ -406,7 +416,6 @@ def _build_long_synthesis_report(
     agent_summaries: list[dict[str, Any]],
     citations: list[dict[str, Any]],
     base_markdown: str,
-    min_chars: int = 800,
 ) -> str:
     parts: list[str] = []
     title = f"{ticker_label} 综合研究报告"
@@ -445,141 +454,40 @@ def _build_long_synthesis_report(
         parts.append(summary or "（无输出）")
         parts.append("")
 
-    # 4) If still too short, append a relevant checklist (not generic filler).
-    report = "\n".join([p for p in parts if p is not None]).strip() + "\n"
-
-    appendices: list[tuple[str, list[str]]] = [
-        (
-            "## 附录：核对清单（用于自检/补数据）",
-            [
-                "- 业务：收入结构、关键产品周期、竞争格局与定价权",
-                "- 财务：收入/利润/现金流的增长质量；毛利率/费用率趋势；回购与分红政策",
-                "- 估值：当前估值倍数 vs 历史区间 vs 同业；市场预期与兑现路径",
-                "- 风险：监管/诉讼、供应链、宏观敏感性、关键客户/渠道变化",
-                "- 催化：财报与指引、产品发布、政策变化、行业景气度拐点",
-                "- 交易：关键价位、波动率、回撤容忍度与仓位管理",
-            ],
-        ),
-        (
-            "## 附录：情景分析（Scenario）",
-            [
-                "| 情景 | 触发条件 | 核心假设 | 关键验证指标 | 可能的市场反应 |",
-                "|---|---|---|---|---|",
-                "| 乐观 | 超预期财报/指引、产品周期上行 | 增长/利润率上修 | 收入增速、毛利率、指引 | 估值上修、波动率下降 |",
-                "| 基准 | 财报符合预期 | 维持现有预期 | 订单/出货、费用率 | 区间震荡 |",
-                "| 悲观 | 指引下调、监管/诉讼升级、需求转弱 | 增长下修、风险溢价上升 | ASP、库存、政策进展 | 回撤扩大、估值压缩 |",
-                "",
-                "- 用法：把本轮 Agent 结论映射到“触发条件/验证指标”，再决定仓位与止损/止盈规则。",
-            ],
-        ),
-        (
-            "## 附录：估值与预期拆解（Valuation）",
-            [
-                "- 核心思路：价格=盈利预期×估值倍数；短期波动多来自“预期”变化而非事实本身。",
-                "- 三步法：",
-                "  1) 识别市场一致预期（增长/利润率/资本开支/回购）。",
-                "  2) 找到可能打破一致预期的变量（供需、竞争、监管、产品周期）。",
-                "  3) 给出验证窗口与指标（财报/渠道数据/宏观数据）。",
-                "- 常见误区：只看 PE 不看增长质量；只看收入不看现金流；忽略资本开支与股东回报。",
-            ],
-        ),
-        (
-            "## 附录：监控清单（Monitoring）",
-            [
-                "- 财报：营收/利润/指引是否偏离预期？偏离的原因来自价格、销量还是结构？",
-                "- 新闻：重大事件是否改变长期叙事？是否只是短期情绪？",
-                "- 技术/交易：关键支撑/阻力位、成交量、波动率是否异常？",
-                "- 风险：监管进展、诉讼、供应链、地缘政治是否升级？",
-                "- 复盘：本轮判断与后续事实不一致时，应明确“哪条假设错了”。",
-            ],
-        ),
-        (
-            "## 附录：风险拆解（Risk Breakdown）",
-            [
-                "- 业务风险：需求不及预期、产品周期走弱、关键地区/渠道变化",
-                "- 竞争风险：替代品崛起、价格战、生态迁移导致的粘性下降",
-                "- 执行风险：新品发布延迟、供应链瓶颈、质量/召回事件",
-                "- 政策/监管：反垄断、数据/隐私、出口管制与合规成本上升",
-                "- 财务风险：利润率下行、费用率上升、资本开支/回购节奏变化",
-                "- 估值风险：估值倍数回落、市场风险偏好下降、流动性收紧",
-                "- 宏观风险：利率上行、通胀反复、汇率波动、地缘冲突升级",
-                "- 黑天鹅：重大诉讼/罚款、重大安全事件、系统性金融风险",
-                "",
-                "### 如何把风险变成“可验证项”",
-                "- 把每条风险写成：触发条件 → 观察指标 → 反应动作（加仓/减仓/观望）",
-                "- 为每条风险设置一个时间窗口：本周/本月/下个财季/1 年",
-                "- 为每条风险设置一个“反证信号”：出现即降低该风险权重",
-            ],
-        ),
-        (
-            "## 附录：仓位与风控（Positioning & Risk）",
-            [
-                "- 先定义风险预算：单笔最大回撤容忍度、组合波动上限、相关性约束",
-                "- 头寸分层：试探仓 → 核心仓 → 加仓仓；每层都有加减仓条件",
-                "- 止损不是价格点位而是“假设失效点”：关键指标/事件与预期背离",
-                "- 使用“分批/时间分散”降低单点误差：定投、分批建仓、事件后确认",
-                "- 当证据不足时，仓位应自动变小（与证据覆盖率/置信度联动）",
-            ],
-        ),
-        (
-            "## 附录：关键指标字典（Metrics）",
-            [
-                "- 收入（Revenue）：增长质量看“量/价/结构”，不要只看同比。",
-                "- 毛利率（Gross Margin）：产品结构与定价权的直观反映。",
-                "- 费用率（Opex Ratio）：增长换利润/利润换增长的选择。",
-                "- 自由现金流（FCF）：利润“含金量”，长期回报的核心来源之一。",
-                "- 回购/分红：股东回报与资本配置能力（也可能是缺乏再投资机会）。",
-                "- 资本开支（CapEx）：增长投资强度，需结合 ROI 与折旧摊销理解。",
-                "- 指引（Guidance）：市场最敏感的变量；通常比“已经发生的结果”更影响估值。",
-            ],
-        ),
-        (
-            "## 附录：数据需求清单（Data Requests）",
-            [
-                "- 价格：现价/涨跌幅、52 周高低、近 1Y 回报、最大回撤与回撤持续时间",
-                "- 财务：最近 8 季度营收/利润/毛利率/经营现金流/自由现金流",
-                "- 指引：下一季/全年指引的上修/下修幅度与历史兑现情况",
-                "- 分部：分产品/分地区收入与增长（识别结构性变化）",
-                "- 估值：PE/EV-Sales/FCF Yield vs 历史区间 vs 同业",
-                "- 资本回报：回购金额、股数变化、分红率、净负债变化",
-                "- 研发与 CapEx：投入强度、产出节奏、是否存在“投入但回报滞后”风险",
-                "- 竞争：主要竞争对手份额变化、定价/促销策略、替代品渗透率",
-                "- 监管：关键地区政策/诉讼进展、潜在罚款区间与时间线",
-                "- 宏观：利率路径、通胀与就业、汇率、关键市场需求景气指标",
-                "- 交易：波动率、成交量结构、资金流向、关键技术位",
-                "",
-                "### 最小可行数据集（MVP）",
-                "- 至少包含：现价+近 1Y 回报、最新财报摘要、1-2 条高质量新闻链接。",
-                "- 如果缺失：建议先跑 live tools，再生成“可引用”的研报版本。",
-            ],
-        ),
-        (
-            "## 附录：行动计划（Action Plan）",
-            [
-                "- 第 1 步（本周）：补齐 MVP 数据（现价/1Y 回报/最新财报摘要/2 条高质量新闻）。",
-                "- 第 2 步（本周）：把结论拆成 3-5 条可验证假设（每条包含验证指标与时间窗口）。",
-                "- 第 3 步（本周）：为每条假设定义“反证信号”，并写清楚触发后的动作（减仓/退出/观望）。",
-                "- 第 4 步（本月）：把估值拆解为“预期×倍数”，明确预期变化来自哪里（销量/价格/结构/成本）。",
-                "- 第 5 步（本月）：建立监控面板：财报/新闻/政策/技术面四类信号的阈值与提醒。",
-                "- 第 6 步（持续）：每次重大事件后复盘：哪条假设被证伪？下一轮需要补什么证据？",
-                "",
-                "### 模板（可直接复制）",
-                "- 我的核心假设是：______；验证指标：______；验证窗口：______；反证信号：______；行动：______。",
-                "- 如果未来 1-2 个财季出现：______，则说明假设成立/不成立，我会：______。",
-            ],
-        ),
-    ]
-
-    i = 0
-    while _count_content_chars(report) < min_chars and i < len(appendices):
-        header, lines = appendices[i]
-        parts.append(header)
-        parts.append("\n".join(lines))
+    # 4) Citation references (only when citations exist — real data, not filler).
+    if citations:
+        parts.append("## 引用来源")
+        for c in citations[:12]:
+            if not isinstance(c, dict):
+                continue
+            cid = _safe_str(c.get("source_id") or "")
+            title = _safe_str(c.get("title") or c.get("url") or "")[:120]
+            url = _safe_str(c.get("url") or "")
+            if url:
+                parts.append(f"[{cid}] [{title}]({url})")
+            elif title:
+                parts.append(f"[{cid}] {title}")
         parts.append("")
-        report = "\n".join([p for p in parts if p is not None]).strip() + "\n"
-        i += 1
 
-    return report
+    # 5) Brief data coverage note (never generic template filler).
+    success_agents = [
+        item for item in agent_summaries
+        if isinstance(item, dict) and item.get("status") == "success"
+    ]
+    not_run_agents = [
+        item for item in agent_summaries
+        if isinstance(item, dict) and item.get("status") in ("not_run", "error")
+    ]
+    if not_run_agents:
+        parts.append("---")
+        parts.append(
+            "*注：以下模块本轮未触发或执行失败，如需更全面分析可尝试启用 live tools 或调整查询关键词：*"
+        )
+        names = [_safe_str(a.get("title") or a.get("agent_name") or "") for a in not_run_agents]
+        parts.append(f"*{', '.join(n for n in names if n)}*")
+        parts.append("")
+
+    return "\n".join([p for p in parts if p is not None]).strip() + "\n"
 
 
 def _derive_report_tags_and_hints(
@@ -690,20 +598,61 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
     )
 
     # Section list: show each agent summary as its own section for rendering.
+    # Build agent_name → evidence URLs mapping for citation bridging.
+    steps_by_agent: dict[str, str] = {}
+    for step in plan_steps:
+        if not isinstance(step, dict):
+            continue
+        if step.get("kind") == "agent" and isinstance(step.get("name"), str) and isinstance(step.get("id"), str):
+            steps_by_agent[step["name"].strip()] = step["id"].strip()
+
+    def _get_agent_citation_refs(agent_name: str) -> list[str]:
+        """Match agent evidence URLs against citation id_by_url."""
+        sid = steps_by_agent.get(agent_name)
+        if not sid:
+            return []
+        raw = step_results.get(sid) if isinstance(step_results, dict) else None
+        output = raw.get("output") if isinstance(raw, dict) else None
+        if not isinstance(output, dict):
+            return []
+        evidence = output.get("evidence")
+        if not isinstance(evidence, list):
+            return []
+        refs: list[str] = []
+        for ev in evidence:
+            if not isinstance(ev, dict):
+                continue
+            url = ev.get("url")
+            if not isinstance(url, str) or not url.strip():
+                continue
+            source_id = citation_build.id_by_url.get(url.strip())
+            if source_id and source_id not in refs:
+                refs.append(source_id)
+        return refs
+
     sections: list[dict[str, Any]] = []
     section_order = 1
     for item in agent_summaries:
         title = _safe_str(item.get("title") or "")
         if not title:
             continue
+        agent_name = item.get("agent_name") or ""
+        refs = _get_agent_citation_refs(agent_name)
         sections.append(
             {
                 "title": title,
                 "order": section_order,
-                "agent_name": item.get("agent_name"),
+                "agent_name": agent_name,
                 "confidence": item.get("confidence"),
                 "data_sources": item.get("data_sources", []),
-                "contents": [{"type": "text", "content": _safe_str(item.get("summary") or "")}],
+                "contents": [
+                    {
+                        "type": "text",
+                        "content": _safe_str(item.get("summary") or ""),
+                        "citation_refs": refs,
+                        "metadata": {},
+                    }
+                ],
             }
         )
         section_order += 1
@@ -770,7 +719,6 @@ def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -
         agent_summaries=agent_summaries,
         citations=citations,
         base_markdown=draft_markdown,
-        min_chars=2000,
     )
 
     # Title by subject type

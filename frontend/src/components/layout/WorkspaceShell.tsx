@@ -9,7 +9,7 @@ import { useStore } from '../../store/useStore';
 import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
 import { useToast } from '../ui/Toast';
-import { apiClient } from '../../api/client';
+import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import Workbench from '../../pages/Workbench';
@@ -55,7 +55,7 @@ export function WorkspaceShell({
   useEffect(() => {
     const checkDryRun = async () => {
       try {
-        const res = await fetch(`${apiClient['baseUrl'] || 'http://127.0.0.1:8000'}/health`);
+        const res = await fetch(`${API_BASE_URL}/health`);
         const data = await res.json();
         if (data?.components?.live_tools?.status === 'dry_run') {
           toast({

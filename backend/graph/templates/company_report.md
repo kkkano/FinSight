@@ -10,6 +10,14 @@ $investment_summary
 
 $company_overview
 
+## 价格快照
+
+$price_snapshot
+
+## 技术面
+
+$technical_snapshot
+
 ## 关键催化剂（含新闻/事件）
 
 $catalysts

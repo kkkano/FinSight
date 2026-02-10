@@ -600,7 +600,7 @@ def _is_market_index(ticker: str) -> bool:
     return False
 
 
-def _get_index_news(ticker: str) -> List[Dict[str, Any]]:
+def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     """
     专门为市场指数获取新闻的方法（结构化输出）。
     策略：通过搜索获取宏观市场新闻和指数分析。
@@ -749,7 +749,7 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             logger.info(f"yfinance index news error for {ticker}: {e}")
 
         # 再退回搜索策略
-        return _get_index_news(ticker)
+        return _get_index_news(ticker, limit=limit)
     
     # --- 以下是原有的公司新闻获取逻辑 ---
     

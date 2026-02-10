@@ -173,6 +173,10 @@ def planner_stub(state: GraphState) -> dict:
             selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
 
         # In report mode, run score-selected expert agents for richer cards (ReportView).
+        # All report agents share the same parallel_group so the executor
+        # runs them concurrently via asyncio.gather.
+        agent_parallel_group = "report_agents" if len(selected_agents) > 1 else None
+
         for agent_name in selected_agents:
             if agent_name not in allowed_agents:
                 continue
@@ -182,6 +186,7 @@ def planner_stub(state: GraphState) -> dict:
                     "kind": "agent",
                     "name": agent_name,
                     "inputs": {"query": query, "ticker": primary_ticker},
+                    "parallel_group": agent_parallel_group,
                     "why": f"研报模式：运行 {agent_name} 产出结构化摘要+证据（用于卡片展示）",
                     "optional": True,
                 }

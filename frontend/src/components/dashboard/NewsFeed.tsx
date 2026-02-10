@@ -1,13 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ExternalLink, MessageCircleQuestion, Newspaper, TrendingUp } from 'lucide-react';
 
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { NewsItem, NewsModeType, SelectionItem } from '../../types/dashboard';
 import { generateNewsId } from '../../utils/hash';
-// 共享 UI 组件
-import { Badge } from '../ui/Badge';
-import { Card } from '../ui/Card';
-import { useToast } from '../ui/Toast';
 
 interface NewsFeedProps {
   marketNews: NewsItem[];
@@ -31,25 +27,8 @@ export function NewsFeed({
   loading,
 }: NewsFeedProps) {
   const { activeAsset, newsMode, setNewsMode } = useDashboardStore();
-  const { toast } = useToast();
-  const degradedNotified = useRef(false);
   const [localMode, setLocalMode] = useState<NewsModeType>(newsMode);
   const [displayMode, setDisplayMode] = useState<'ranked' | 'raw'>('ranked');
-
-  // 新闻数据源降级检测：所有来源为空时 Toast 通知
-  useEffect(() => {
-    if (loading || degradedNotified.current) return;
-    const allEmpty = marketNews.length === 0 && impactNews.length === 0;
-    if (allEmpty) {
-      degradedNotified.current = true;
-      toast({
-        type: 'warning',
-        title: '数据源降级',
-        message: '新闻数据源暂时不可用，部分分析结果可能不完整。',
-        duration: 6000,
-      });
-    }
-  }, [loading, marketNews.length, impactNews.length, toast]);
 
   const handleModeChange = (mode: NewsModeType) => {
     setLocalMode(mode);
@@ -83,8 +62,7 @@ export function NewsFeed({
 
   if (loading) {
     return (
-      // 加载骨架屏 — 使用共享 Card 组件
-      <Card className="p-4">
+      <div className="bg-fin-card border border-fin-border rounded-xl p-4">
         <div className="h-4 bg-fin-border rounded w-24 mb-4" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -94,13 +72,12 @@ export function NewsFeed({
             </div>
           ))}
         </div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    // 主内容区 — 使用共享 Card 组件
-    <Card className="p-4">
+    <div className="bg-fin-card border border-fin-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3 pb-3 border-b border-fin-border/60">
         <h3 className="text-sm font-semibold text-fin-text">新闻动态</h3>
         <div className="flex bg-fin-bg-secondary rounded-lg p-0.5">
@@ -182,7 +159,7 @@ export function NewsFeed({
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -273,8 +250,7 @@ function NewsItemCard({ news, formatTime, showRanking = false }: NewsItemCardPro
             {showRanking && typeof news.ranking_score === 'number' ? (
               <>
                 <span>·</span>
-                {/* 排名分数 — 使用共享 Badge info 变体 */}
-                <Badge variant="info">score {news.ranking_score.toFixed(2)}</Badge>
+                <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
               </>
             ) : null}
           </div>

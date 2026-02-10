@@ -2,10 +2,13 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
 import asyncio
+import logging
 import time
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.orchestration.trace_schema import create_trace_event
 from backend.orchestration.trace_emitter import get_trace_emitter
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class EvidenceItem:
@@ -81,7 +84,7 @@ class BaseFinancialAgent:
                         "timestamp": datetime.now().isoformat()
                     })
                 except Exception:
-                    pass
+                    logger.debug("[%s] on_event callback failed", self.AGENT_NAME, exc_info=True)
 
         _log_event("agent_start", {"query": query, "ticker": ticker})
 
@@ -93,7 +96,7 @@ class BaseFinancialAgent:
                     "agent": self.AGENT_NAME, 
                     "details": {"message": f"正在搜索: {query[:30]}..."}
                 })
-            except: pass
+            except: logger.debug("[%s] on_event callback error in search notification", self.AGENT_NAME, exc_info=True)
             
         results = await self._initial_search(query, ticker)
         result_count = None
@@ -119,7 +122,7 @@ class BaseFinancialAgent:
             
             if on_event:
                 try: on_event({"event": "agent_action", "agent": self.AGENT_NAME, "details": {"message": f"发现信息缺口，进行第 {i+1} 轮补充搜索..."}})
-                except: pass
+                except: logger.debug("[%s] on_event callback error in search notification", self.AGENT_NAME, exc_info=True)
 
             _log_event("reflection_gap", {"round": i + 1, "gaps": gaps})
             new_data = await self._targeted_search(gaps, ticker)

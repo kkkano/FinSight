@@ -29,6 +29,10 @@
   - Note: `API_AUTH_ENABLED=false` 为默认值, 生产部署必须开启
   - File: `backend/api/main.py:538-559`
 
+- [x] **chat_router 错误信息泄露**: HTTP/SSE endpoint 返回 `str(exc)` 给客户端
+  - Fix: 替换为 `"Internal server error"` + 服务端 `_logger.error()`
+  - File: `backend/api/chat_router.py`
+
 ### Bugs
 
 - [x] **编码损坏 — docs/06**: 已清除 9 个 PUA (Private Use Area) 无效字符
@@ -39,6 +43,30 @@
 
 - [x] **编码损坏 — client.ts 注释**: 已修复全部 30+ 行乱码注释为正确中文
   - File: `frontend/src/api/client.ts`
+
+- [x] **`parse_operation` "ma" 子串误匹配**: `_match_any` 使用 `t in lowered`，"ma" 匹配 "macro"/"market"
+  - Fix: 对 <=3 字符的 ASCII token 使用 `re.search(r"\b...\b")` 单词边界
+  - File: `backend/graph/nodes/parse_operation.py:22-32`
+
+- [x] **`decide_output_mode` 正则双重转义**: `r"\\b(report)\\b"` 匹配字面反斜杠而非单词边界
+  - Fix: 改为 `r"\b(report)\b"`
+  - File: `backend/graph/nodes/decide_output_mode.py:37`
+
+- [x] **`confidence='high'` 导致报告崩溃**: `float("high")` 抛出 ValueError
+  - Fix: `_safe_confidence()` 辅助函数 try/except 兜底
+  - File: `backend/graph/report_builder.py:151-175`
+
+- [x] **代词替换破坏英文单词**: "it"/"that" 子串替换把 "with" 变成 "wAAPLh"
+  - Fix: 英文代词改用 `re.sub(r'\b...\b')` 单词边界
+  - File: `backend/conversation/context.py:516-543`
+
+- [x] **macro_agent / technical_agent 不触发**: company + investment_report 只要求 3 个 agent
+  - Fix: 自动加入 macro_agent + technical_agent
+  - File: `backend/graph/capability_registry.py:176-180`
+
+- [x] **Markdown prose 无样式**: `@tailwindcss/typography` 插件缺失
+  - Fix: 安装插件 + tailwind.config.js plugins 配置
+  - File: `frontend/tailwind.config.js`
 
 ### Architecture
 
@@ -58,6 +86,30 @@
 
 - [x] **Auth/Rate-limit 默认关闭**: `.env.example` 已添加 PRODUCTION 警告注释
   - File: `.env.example` — 生产部署必须开启 `API_AUTH_ENABLED=true`
+
+### Backend — Data & Timing
+
+- [x] **新闻数据解析丢失元数据**: `_parse_news_text()` 仅 split lines，丢失 url/source/ts
+  - Fix: 使用正则提取日期、markdown 链接、来源、摘要
+  - File: `backend/dashboard/data_service.py:460-510`
+
+- [x] **`_get_index_news()` NameError**: 函数引用 `limit` 变量但未声明参数
+  - Fix: 添加 `limit: int = 5` 参数
+  - File: `backend/tools/news.py:603,752`
+
+- [x] **chat_router 无 `response_time_ms`**: HTTP 响应缺少计时字段
+  - Fix: `_time.perf_counter()` 计时 + 响应字段
+  - File: `backend/api/chat_router.py:40,85,95`
+
+- [x] **report build 失败静默吞异常**: `except Exception: report = None` 无日志
+  - Fix: `_logger.warning(..., exc_info=True)`
+  - File: `backend/api/chat_router.py:72-74,177-179`
+
+### Frontend — Rendering & Config
+
+- [x] **WorkspaceShell 健康检查 URL 硬编码**: `apiClient['baseUrl']` 永远 undefined
+  - Fix: 改用 `API_BASE_URL` from config/runtime
+  - File: `frontend/src/components/layout/WorkspaceShell.tsx:12,59`
 
 ### Frontend — Design System
 

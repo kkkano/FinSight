@@ -17,6 +17,7 @@
 - `docs/ISSUE_TRACKER.md`：全量问题追踪清单（P0/P1/P2 checkbox）
 - `docs/V1_RELEASE_SUMMARY.md`：v1.0.0 发布总结
 - `docs/SPRINT2_DEVLOG.md`：Sprint 2 开发日志（v1.1.0 任务清单 + 变更记录）
+- `docs/feature_logs/2026-02-10_sprint2_bugfix_batch.md`：Sprint 2 批量修复日志（13 项 bug 修复详情）
 - `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
 - `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
 - `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策

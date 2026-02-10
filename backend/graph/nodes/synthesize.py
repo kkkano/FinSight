@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -15,6 +16,8 @@ from backend.graph.failure import append_failure, build_runtime, utc_now_iso
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+
+logger = logging.getLogger(__name__)
 
 
 def _env_str(key: str, default: str) -> str:
@@ -249,18 +252,41 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 return output
         return None
 
+    def _get_agent_output(agent_name: str) -> dict[str, Any] | None:
+        """Read a successful agent's output dict from step_results."""
+        if not isinstance(step_results, dict) or not step_results:
+            return None
+        for step_id, item in step_results.items():
+            if not isinstance(item, dict):
+                continue
+            output = item.get("output")
+            if isinstance(output, dict) and output.get("skipped"):
+                continue
+            step = step_index.get(step_id) or {}
+            if step.get("kind") == "agent" and step.get("name") == agent_name:
+                return output if isinstance(output, dict) else None
+        return None
+
     def _fmt_price_snapshot() -> str:
         out = _get_tool_output("get_stock_price")
-        if out is None:
-            return "- （暂无价格数据；如需可启用 live tools）"
-        if isinstance(out, (dict, list)):
-            return f"- {json_dumps_safe(out, ensure_ascii=False)[:800]}"
-        text = str(out).strip()
-        return f"- {text}" if text else "- （价格数据为空）"
+        if out is not None:
+            if isinstance(out, (dict, list)):
+                return f"- {json_dumps_safe(out, ensure_ascii=False)[:800]}"
+            text = str(out).strip()
+            return f"- {text}" if text else "- （价格数据为空）"
+        # Fallback: use price_agent output when tool not scheduled directly
+        agent_out = _get_agent_output("price_agent")
+        if isinstance(agent_out, dict) and agent_out.get("summary"):
+            return f"- {str(agent_out['summary']).strip()[:500]}"
+        return "- （暂无价格数据；如需可启用 live tools）"
 
     def _fmt_technical_snapshot() -> str:
         out = _get_tool_output("get_technical_snapshot")
         if out is None:
+            # Fallback: use technical_agent output when tool not scheduled directly
+            agent_out = _get_agent_output("technical_agent")
+            if isinstance(agent_out, dict) and agent_out.get("summary"):
+                return f"- {str(agent_out['summary']).strip()[:600]}"
             return "- （暂无技术指标；如需可启用 live tools）"
 
         if isinstance(out, str):
@@ -383,6 +409,119 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
 
         tickers = subject.get("tickers") if isinstance(subject, dict) else None
         tickers = tickers if isinstance(tickers, list) else []
+
+        # --- Agent data extraction helpers (stub-mode enrichment) ---
+        def _build_investment_summary_from_agents() -> str:
+            lines: list[str] = []
+            price_out = _get_agent_output("price_agent")
+            if isinstance(price_out, dict) and price_out.get("summary"):
+                lines.append(f"- {str(price_out['summary']).strip()[:300]}")
+            fund_out = _get_agent_output("fundamental_agent")
+            if isinstance(fund_out, dict) and fund_out.get("summary"):
+                lines.append(f"- {str(fund_out['summary']).strip()[:400]}")
+            tech_out = _get_agent_output("technical_agent")
+            if isinstance(tech_out, dict) and tech_out.get("summary"):
+                lines.append(f"- {str(tech_out['summary']).strip()[:300]}")
+            if not lines:
+                lines = [
+                    '- 研报为结构化交付物：会更长、更全面，但不等于\u201c必须跑全家桶\u201d。',
+                    '- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。',
+                ]
+            return "\n".join(lines)
+
+        def _build_company_overview_from_agents() -> str:
+            # Try get_company_info tool output first
+            info_out = _get_tool_output("get_company_info")
+            if isinstance(info_out, dict):
+                name = info_out.get("name") or info_out.get("shortName") or ""
+                sector = info_out.get("sector") or ""
+                industry = info_out.get("industry") or ""
+                mkt_cap = info_out.get("marketCap") or info_out.get("market_cap") or ""
+                desc = info_out.get("longBusinessSummary") or info_out.get("description") or ""
+                lines: list[str] = []
+                if name:
+                    header_parts = [name]
+                    if sector:
+                        header_parts.append(sector)
+                    if industry:
+                        header_parts.append(industry)
+                    lines.append("- " + " | ".join(header_parts))
+                if mkt_cap:
+                    lines.append(f"- Market Cap: {mkt_cap}")
+                if desc:
+                    lines.append(f"- {str(desc).strip()[:500]}")
+                if lines:
+                    return "\n".join(lines)
+            elif isinstance(info_out, str) and info_out.strip():
+                # Tool returned a formatted string (e.g. "Company Profile (AAPL):\n...")
+                text = info_out.strip()[:800]
+                # Convert each line to bullet format if not already
+                lines = []
+                for ln in text.splitlines():
+                    ln = ln.strip()
+                    if not ln:
+                        continue
+                    if ln.startswith("- "):
+                        lines.append(ln)
+                    elif ln.startswith("Company Profile"):
+                        continue  # skip header line
+                    else:
+                        lines.append(f"- {ln}")
+                if lines:
+                    return "\n".join(lines)
+            # Fallback: use fundamental_agent summary
+            fund_out = _get_agent_output("fundamental_agent")
+            if isinstance(fund_out, dict) and fund_out.get("summary"):
+                return f"- {str(fund_out['summary']).strip()[:600]}"
+            return "- 公司概况：暂无数据。"
+
+        def _build_catalysts_from_agents() -> str:
+            news_out = _get_agent_output("news_agent")
+            if isinstance(news_out, dict) and news_out.get("summary"):
+                return f"- {str(news_out['summary']).strip()[:600]}"
+            return "\n".join([
+                "- 可能催化：财报、产品发布、政策变化、行业景气度变化。",
+                "- 将基于新闻/财报证据进一步细化。",
+            ])
+
+        def _build_valuation_from_agents() -> str:
+            fund_out = _get_agent_output("fundamental_agent")
+            if isinstance(fund_out, dict):
+                # Prefer structured evidence for clean line items
+                evidence = fund_out.get("evidence")
+                if isinstance(evidence, list) and evidence:
+                    lines: list[str] = []
+                    for ev in evidence:
+                        if not isinstance(ev, dict):
+                            continue
+                        text = str(ev.get("text") or "").strip()
+                        if not text:
+                            continue
+                        meta = ev.get("meta") if isinstance(ev.get("meta"), dict) else {}
+                        yoy = meta.get("yoy")
+                        if isinstance(yoy, (int, float)):
+                            text += f" (YoY {yoy:+.1%})"
+                        lines.append(f"- {text}")
+                    if lines:
+                        return "\n".join(lines[:10])
+                # Fallback to summary but filter out company header
+                summary = str(fund_out.get("summary") or "").strip()
+                if summary:
+                    lines = []
+                    for part in summary.split(". "):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        # Skip company header parts (name | sector | industry)
+                        if "|" in part and any(kw in part for kw in ("Technology", "Consumer", "Healthcare", "Financial")):
+                            continue
+                        lines.append(f"- {part}")
+                    if lines:
+                        return "\n".join(lines[:8])
+            return "\n".join([
+                "- 估值与财务：暂无数据。",
+                "- 常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。",
+            ])
 
         if operation == "fetch":
             trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
@@ -576,41 +715,58 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 risks=base_risks,
             ).model_dump()
 
+        # --- Build conclusion from agent insights ---
+        def _build_conclusion_from_agents() -> str:
+            lines: list[str] = []
+            # Confidence overview
+            conf_parts: list[str] = []
+            for aname in ("fundamental_agent", "price_agent", "news_agent", "technical_agent"):
+                a_out = _get_agent_output(aname)
+                if isinstance(a_out, dict) and a_out.get("confidence"):
+                    conf_parts.append(f"{aname.replace('_agent','')}: {float(a_out['confidence']):.0%}")
+            if conf_parts:
+                lines.append(f"- 数据覆盖：{', '.join(conf_parts)}")
+            # Technical signal
+            tech_out = _get_agent_output("technical_agent")
+            if isinstance(tech_out, dict) and tech_out.get("summary"):
+                ts = str(tech_out["summary"]).strip()
+                if "overbought" in ts.lower():
+                    lines.append("- 技术面提示：RSI 进入超买区域，短期回撤风险上升。")
+                elif "oversold" in ts.lower():
+                    lines.append("- 技术面提示：RSI 进入超卖区域，存在反弹可能。")
+            # Note
+            lines.append("- 以上为多维度数据汇总，不构成投资建议。具体操作请结合个人风险偏好。")
+            return "\n".join(lines) if lines else "\n".join([
+                f"- {report_hint} 查询：{query or 'N/A'}",
+                "- 如果你提供/选择了新闻或财报，可以把结论做得更具体。",
+            ])
+
+        # --- Build risks from agent outputs ---
+        def _build_risks_from_agents() -> str:
+            risk_lines: list[str] = []
+            for aname in ("fundamental_agent", "technical_agent", "news_agent", "macro_agent"):
+                a_out = _get_agent_output(aname)
+                if not isinstance(a_out, dict):
+                    continue
+                agent_risks = a_out.get("risks")
+                if isinstance(agent_risks, list):
+                    for r in agent_risks:
+                        r_text = str(r).strip()[:150]
+                        if r_text and r_text not in risk_lines:
+                            risk_lines.append(r_text)
+            if risk_lines:
+                return "\n".join([f"- {r}" for r in risk_lines[:6]]) + "\n- 注：以上仅供参考，不构成投资建议。"
+            return base_risks
+
         return RenderVars(
-            conclusion="\n".join(
-                [
-                    f"- {report_hint} 你想要：{query or 'N/A'}",
-                    "- 如果你提供/选择了新闻或财报，我可以把结论与证据链做得更具体。",
-                    "- 可选：点击“生成研报”获得更完整章节（可能触发更多工具）。",
-                ]
-            ),
+            conclusion=_build_conclusion_from_agents(),
             price_snapshot=price_snapshot,
             technical_snapshot=technical_snapshot,
-            investment_summary="\n".join(
-                [
-                    "- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。",
-                    "- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。",
-                ]
-            ),
-            company_overview="\n".join(
-                [
-                    "- 公司概况：当前未拉取公司信息工具输出；可启用 live tools 补齐。",
-                    "- 建议补齐：主营/地区/行业、关键产品、商业模式与主要风险。",
-                ]
-            ),
-            catalysts="\n".join(
-                [
-                    "- 可能催化：财报、产品发布、政策变化、行业景气度变化。",
-                    "- 将基于新闻/财报证据进一步细化。",
-                ]
-            ),
-            valuation="\n".join(
-                [
-                    "- 估值与财务：未执行实时价格/财务工具；如需可启用 live tools。",
-                    "- 常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。",
-                ]
-            ),
-            risks=base_risks,
+            investment_summary=_build_investment_summary_from_agents(),
+            company_overview=_build_company_overview_from_agents(),
+            catalysts=_build_catalysts_from_agents(),
+            valuation=_build_valuation_from_agents(),
+            risks=_build_risks_from_agents(),
         ).model_dump()
 
     if subject_type in ("filing", "research_doc"):
@@ -655,6 +811,7 @@ async def synthesize(state: GraphState) -> dict:
     trace = state.get("trace") or {}
 
     if mode != "llm":
+        logger.info("[Synthesize] Running in STUB mode (set LANGGRAPH_SYNTHESIZE_MODE=llm for LLM synthesis)")
         render_vars = _stub_render_vars(state)
         trace.update(
             {
@@ -835,6 +992,10 @@ summary, highlights, analysis.
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
+        logger.warning(
+            "[Synthesize] LLM call FAILED (retryable=%s, attempts=%d): %s — falling back to stub",
+            retryable, retry_attempts, exc,
+        )
         append_failure(
             trace,
             node="synthesize",

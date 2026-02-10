@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import traceback
+import time as _time
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, Awaitable, Callable, Optional
@@ -31,9 +33,11 @@ class ChatRouterDeps:
 
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
+    _logger = logging.getLogger("chat_router")
 
     @router.post("/chat/supervisor")
     async def chat_supervisor_endpoint(request: ChatRequest):
+        _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
             try:
@@ -65,7 +69,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 from backend.graph.report_builder import build_report_payload
 
                 report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-            except Exception:
+            except Exception as _report_exc:
+                _logger.warning("[chat/supervisor] report build failed: %s", _report_exc, exc_info=True)
                 report = None
 
             deps.schedule_report_index(session_id=thread_id, report=report, state=state)
@@ -77,6 +82,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 subject=state.get("subject"),
             )
 
+            _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
             return {
                 "success": True,
                 "schema_version": deps.chat_response_schema_version,
@@ -86,6 +92,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 "intent": "chat",
                 "classification": {"method": "langgraph", "confidence": 1.0},
                 "session_id": thread_id,
+                "response_time_ms": _elapsed_ms,
                 "graph": {
                     "subject": state.get("subject"),
                     "output_mode": state.get("output_mode"),
@@ -96,7 +103,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             raise
         except Exception as exc:
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     @router.post("/chat/supervisor/stream")
     async def chat_supervisor_stream_endpoint(request: ChatRequest):
@@ -167,7 +174,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     from backend.graph.report_builder import build_report_payload
 
                     report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-                except Exception:
+                except Exception as _report_exc:
+                    _logger.warning("[chat/supervisor/stream] report build failed: %s", _report_exc, exc_info=True)
                     report = None
 
                 deps.schedule_report_index(session_id=thread_id, report=report, state=state)
@@ -209,12 +217,13 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     }
                 )
             except Exception as exc:
+                _logger.error("[chat/supervisor/stream] unhandled: %s", exc, exc_info=True)
                 await queue.put(
                     deps.redact_sensitive_payload(
                         {
                             "schema_version": deps.sse_event_schema_version,
                             "type": "error",
-                            "message": str(exc),
+                            "message": "Internal server error",
                         }
                     )
                 )

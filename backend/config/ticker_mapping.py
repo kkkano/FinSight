@@ -90,16 +90,174 @@ KNOWN_TICKERS = {
 
 # Common words to filter out (not tickers)
 COMMON_WORDS = {
-    'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS', 'PE', 'EPS', 'MACD', 'RSI', 'KDJ',
-    'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HAD', 'HER', 'WAS', 'ONE', 'OUR', 'OUT',
-    'HAS', 'HIS', 'HOW', 'ITS', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'WAY', 'WHO', 'BOY', 'DID', 'GET', 'HIM',
-    'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE', 'DAY', 'BIG', 'HIGH', 'LOW', 'UP', 'DOWN', 'IN', 'ON', 'AT',
-    'IS', 'IT', 'OF', 'TO', 'AS', 'BE', 'BY', 'DO', 'GO', 'IF', 'ME', 'MY', 'NO', 'OR', 'SO', 'WE',
-    'BUY', 'SELL', 'HOLD', 'LONG', 'SHORT', 'CALL', 'BULL', 'BEAR', 'RISK', 'GAIN', 'LOSS', 'CASH',
-    'BOND', 'FUND', 'LOAN', 'DEBT', 'RATE', 'TERM', 'YEAR', 'WEEK', 'MONTH', 'PRICE', 'VALUE', 'COST',
-    'NEWS', 'INFO', 'DATA', 'CHART', 'TREND', 'STOCK', 'SHARE', 'TRADE', 'ORDER', 'LIMIT', 'STOP',
-    'WHAT', 'WHEN', 'WHERE', 'WHY', 'WHICH', 'ABOUT', 'SHOW', 'TELL', 'GIVE', 'FIND', 'LOOK', 'HELP',
-    'GOLD', 'OIL',
+    # Single/two-letter
+    'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'UP', 'DOWN', 'IN', 'ON', 'AT',
+    'IS', 'IT', 'OF', 'TO', 'AS', 'BE', 'BY', 'DO', 'GO', 'IF', 'ME', 'MY',
+    'NO', 'OR', 'SO', 'WE', 'AN', 'HE',
+    # Finance abbreviations (not ticker symbols)
+    'CEO', 'IPO', 'ETF', 'VS', 'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'ROI',
+    'ROE', 'ROA', 'GDP', 'CPI', 'PPI', 'EBIT', 'SEC', 'FED', 'FOMC', 'YTD',
+    'QOQ', 'YOY', 'NAV', 'AUM', 'OTC', 'ATH', 'ATL', 'APR', 'APY', 'CAGR',
+    # Common English words (3+ letters)
+    'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HAD',
+    'HER', 'WAS', 'ONE', 'OUR', 'OUT', 'HAS', 'HIS', 'HOW', 'ITS', 'MAY',
+    'NEW', 'NOW', 'OLD', 'SEE', 'WAY', 'WHO', 'BOY', 'DID', 'GET', 'HIM',
+    'LET', 'PUT', 'SAY', 'SHE', 'TOO', 'USE', 'DAY', 'BIG', 'RUN', 'GOT',
+    'SET', 'TOP', 'TRY', 'END', 'FAR', 'OWN', 'ASK', 'MEN', 'ODD', 'ADD',
+    'AGE', 'AGO', 'AID', 'AIM', 'AIR', 'ARM', 'ART', 'BAD', 'BAR', 'BED',
+    'BIT', 'BOX', 'BUS', 'CUT', 'DIE', 'DOG', 'DRY', 'DUE', 'EAR', 'EAT',
+    'ERA', 'EYE', 'FAN', 'FAT', 'FEW', 'FIT', 'FLY', 'FOR', 'GAS', 'GUN',
+    'GUY', 'HAT', 'HIT', 'HOT', 'ICE', 'ILL', 'JOB', 'JOY', 'KEY', 'KID',
+    'LAW', 'LAY', 'LED', 'LEG', 'LIE', 'LOT', 'LOW', 'MAP', 'MIX', 'MOM',
+    'MUD', 'NET', 'NOR', 'NUT', 'OIL', 'PAY', 'PAN', 'PEN', 'PER', 'PIE',
+    'PIN', 'PIT', 'RAW', 'RED', 'RID', 'ROW', 'SAD', 'SAT', 'SEA', 'SIT',
+    'SIX', 'SKI', 'SKY', 'SON', 'SUM', 'SUN', 'TAX', 'TEN', 'THE', 'TIE',
+    'TIP', 'TON', 'TWO', 'VAN', 'WAR', 'WEB', 'WET', 'WIN', 'WON', 'YET',
+    'YES', 'ZIP',
+    # 4-letter common English words — the primary source of false positives
+    'ABLE', 'ALSO', 'AREA', 'ARMY', 'AWAY', 'BABY', 'BACK', 'BALL', 'BAND',
+    'BANK', 'BASE', 'BATH', 'BEAN', 'BEAT', 'BEEN', 'BEST', 'BILL', 'BIRD',
+    'BLOW', 'BLUE', 'BOAT', 'BODY', 'BOMB', 'BONE', 'BOOK', 'BORN', 'BOSS',
+    'BOTH', 'BURN', 'BUSY', 'CAKE', 'CAME', 'CAMP', 'CARD', 'CARE', 'CASE',
+    'CAST', 'CELL', 'CHAT', 'CHIP', 'CITY', 'CLUB', 'COAT', 'CODE', 'COLD',
+    'COME', 'COOK', 'COOL', 'COPY', 'CORE', 'CREW', 'CROP', 'DARK', 'DATE',
+    'DEAD', 'DEAL', 'DEAR', 'DEEP', 'DENY', 'DESK', 'DIAL', 'DIRT', 'DISH',
+    'DOCK', 'DOES', 'DONE', 'DOOR', 'DOSE', 'DOWN', 'DRAG', 'DRAW', 'DREW',
+    'DROP', 'DRUG', 'DRUM', 'DUAL', 'DULL', 'DUMP', 'DUST', 'DUTY', 'EACH',
+    'EARN', 'EASE', 'EAST', 'EASY', 'EDGE', 'EDIT', 'ELSE', 'EVEN', 'EVER',
+    'EVIL', 'EXAM', 'EXEC', 'EXIT', 'FACE', 'FACT', 'FAIL', 'FAIR', 'FALL',
+    'FAME', 'FARM', 'FAST', 'FATE', 'FEAR', 'FEED', 'FEEL', 'FEET', 'FELL',
+    'FILE', 'FILL', 'FILM', 'FIND', 'FINE', 'FIRE', 'FIRM', 'FISH', 'FLAG',
+    'FLAT', 'FLED', 'FLEW', 'FLIP', 'FLOW', 'FOLD', 'FOLK', 'FOOD', 'FOOL',
+    'FOOT', 'FORM', 'FORT', 'FOUL', 'FOUR', 'FREE', 'FROM', 'FUEL', 'FULL',
+    'GAIN', 'GAME', 'GANG', 'GATE', 'GAVE', 'GEAR', 'GENE', 'GIFT', 'GIRL',
+    'GLAD', 'GOES', 'GOLD', 'GOLF', 'GONE', 'GOOD', 'GRAB', 'GRAY', 'GREW',
+    'GREY', 'GRIP', 'GROW', 'GULF', 'GURU', 'GUYS', 'HALF', 'HALL', 'HAND',
+    'HANG', 'HARD', 'HARM', 'HATE', 'HAVE', 'HEAD', 'HEAL', 'HEAR', 'HEAT',
+    'HELD', 'HERE', 'HERO', 'HIDE', 'HINT', 'HIRE', 'HITS', 'HOLE', 'HOME',
+    'HOPE', 'HOST', 'HOUR', 'HUGE', 'HUNG', 'HUNT', 'HURT', 'ICON', 'IDEA',
+    'INTO', 'IRON', 'ITEM', 'JACK', 'JAIL', 'JANE', 'JEAN', 'JOBS', 'JOIN',
+    'JOKE', 'JUMP', 'JURY', 'JUST', 'KEEN', 'KEEP', 'KEPT', 'KICK', 'KILL',
+    'KIND', 'KING', 'KNEE', 'KNEW', 'KNOT', 'KNOW', 'LACK', 'LADY', 'LAID',
+    'LAKE', 'LAND', 'LANE', 'LAST', 'LATE', 'LEAD', 'LEAN', 'LEFT', 'LEND',
+    'LESS', 'LIES', 'LIFE', 'LIFT', 'LIKE', 'LINE', 'LINK', 'LIST', 'LIVE',
+    'LOAD', 'LOCK', 'LOGO', 'LONE', 'LOOK', 'LORD', 'LOSE', 'LOSS', 'LOST',
+    'LOTS', 'LOVE', 'LUCK', 'LUNG', 'MADE', 'MAIL', 'MAIN', 'MAKE', 'MALE',
+    'MAMA', 'MANY', 'MARK', 'MASS', 'MATE', 'MATH', 'MEAL', 'MEAN', 'MEAT',
+    'MEET', 'MENU', 'MERE', 'MESS', 'MILD', 'MILE', 'MILK', 'MIND', 'MINE',
+    'MISS', 'MODE', 'MOOD', 'MOON', 'MORE', 'MOST', 'MOVE', 'MUCH', 'MUST',
+    'MYTH', 'NAIL', 'NAME', 'NEAR', 'NEAT', 'NECK', 'NEED', 'NEXT', 'NICE',
+    'NINE', 'NODE', 'NONE', 'NOSE', 'NOTE', 'NOUN', 'ODDS', 'OKAY', 'ONCE',
+    'ONLY', 'ONTO', 'OPEN', 'ORAL', 'OURS', 'OVER', 'PACE', 'PACK', 'PAGE',
+    'PAID', 'PAIN', 'PAIR', 'PALE', 'PALM', 'PAPA', 'PARK', 'PART', 'PASS',
+    'PAST', 'PATH', 'PEAK', 'PEER', 'PICK', 'PILE', 'PINE', 'PINK', 'PIPE',
+    'PLAN', 'PLAY', 'PLOT', 'PLUG', 'PLUS', 'POEM', 'POET', 'POLL', 'POND',
+    'POOL', 'POOR', 'POPE', 'PORK', 'PORT', 'POSE', 'POST', 'POUR', 'PRAY',
+    'PULL', 'PUMP', 'PURE', 'PUSH', 'QUIT', 'RACE', 'RAIN', 'RANK', 'RAPE',
+    'RARE', 'READ', 'REAL', 'REAR', 'RELY', 'RENT', 'REST', 'RICE', 'RICH',
+    'RIDE', 'RING', 'RISE', 'ROAD', 'ROCK', 'RODE', 'ROLE', 'ROLL', 'ROOF',
+    'ROOM', 'ROOT', 'ROPE', 'ROSE', 'RULE', 'RUSH', 'RUTH', 'SAFE', 'SAID',
+    'SAKE', 'SALE', 'SALT', 'SAME', 'SAND', 'SANG', 'SAVE', 'SEAL', 'SEAT',
+    'SEED', 'SEEK', 'SEEM', 'SEEN', 'SELF', 'SELL', 'SEND', 'SENT', 'SEPT',
+    'SHIP', 'SHOP', 'SHOT', 'SHOW', 'SHUT', 'SICK', 'SIDE', 'SIGN', 'SILK',
+    'SINK', 'SITE', 'SIZE', 'SKIN', 'SLIM', 'SLIP', 'SLOT', 'SLOW', 'SNAP',
+    'SNOW', 'SOAR', 'SOFT', 'SOIL', 'SOLD', 'SOLE', 'SOME', 'SONG', 'SOON',
+    'SORT', 'SOUL', 'SPAN', 'SPIN', 'SPOT', 'STAR', 'STAY', 'STEM', 'STEP',
+    'STIR', 'STOP', 'SUCH', 'SUIT', 'SURE', 'SWIM', 'TAIL', 'TAKE', 'TALE',
+    'TALK', 'TALL', 'TANK', 'TAPE', 'TASK', 'TEAM', 'TEAR', 'TECH', 'TEEN',
+    'TELL', 'TEND', 'TENT', 'TERM', 'TEST', 'TEXT', 'THAN', 'THAT', 'THEM',
+    'THEN', 'THEY', 'THIN', 'THIS', 'THUS', 'TIDE', 'TIED', 'TIER', 'TILL',
+    'TIME', 'TINY', 'TIRE', 'TOAD', 'TOLD', 'TOLL', 'TOMB', 'TONE', 'TOOK',
+    'TOOL', 'TOPS', 'TORE', 'TORN', 'TOUR', 'TOWN', 'TRAP', 'TREE', 'TRIM',
+    'TRIO', 'TRIP', 'TRUE', 'TUBE', 'TUCK', 'TUNE', 'TURN', 'TWIN', 'TYPE',
+    'UGLY', 'UNDO', 'UNIT', 'UPON', 'URGE', 'USED', 'USER', 'VAIN', 'VARY',
+    'VAST', 'VERB', 'VERY', 'VICE', 'VIEW', 'VINE', 'VISA', 'VOID', 'VOLT',
+    'VOTE', 'WADE', 'WAGE', 'WAIT', 'WAKE', 'WALK', 'WALL', 'WANT', 'WARD',
+    'WARM', 'WARN', 'WASH', 'WAVE', 'WEAK', 'WEAR', 'WEED', 'WELL', 'WENT',
+    'WERE', 'WEST', 'WHAT', 'WHEN', 'WHOM', 'WIDE', 'WIFE', 'WILD', 'WILL',
+    'WIND', 'WINE', 'WING', 'WIRE', 'WISE', 'WISH', 'WITH', 'WOOD', 'WOOL',
+    'WORD', 'WORE', 'WORK', 'WORM', 'WORN', 'WRAP', 'YARD', 'YEAH', 'ZERO',
+    'ZONE',
+    # 5-letter common words
+    'ABOUT', 'ABOVE', 'ADDED', 'AFTER', 'AGAIN', 'AGREE', 'AHEAD', 'AIMED',
+    'ALARM', 'ALLOW', 'ALONE', 'ALONG', 'AMONG', 'ANGLE', 'ANGRY', 'APART',
+    'APPLY', 'ARISE', 'ASIDE', 'AUDIO', 'AVOID', 'AWARD', 'AWARE', 'BASED',
+    'BASIC', 'BASIS', 'BEGIN', 'BEING', 'BELOW', 'BIRTH', 'BLACK', 'BLADE',
+    'BLAME', 'BLANK', 'BLAST', 'BLAZE', 'BLEED', 'BLEND', 'BLIND', 'BLOCK',
+    'BLOOD', 'BLOWN', 'BOARD', 'BONUS', 'BOOST', 'BOUND', 'BRAIN', 'BRAND',
+    'BRAVE', 'BREAD', 'BREAK', 'BRIEF', 'BRING', 'BROAD', 'BROKE', 'BROWN',
+    'BUILD', 'BUILT', 'BURST', 'BUYER', 'CARRY', 'CATCH', 'CAUSE', 'CHAIN',
+    'CHAIR', 'CHEAP', 'CHECK', 'CHIEF', 'CHILD', 'CHINA', 'CHOSE', 'CIVIL',
+    'CLAIM', 'CLASS', 'CLEAN', 'CLEAR', 'CLIMB', 'CLOCK', 'CLOSE', 'CLOTH',
+    'CLOUD', 'COACH', 'COAST', 'COLOR', 'COUCH', 'COULD', 'COUNT', 'COURT',
+    'COVER', 'CRACK', 'CRAFT', 'CRASH', 'CRAZY', 'CREAM', 'CRIME', 'CROSS',
+    'CROWD', 'CROWN', 'CRUDE', 'CURVE', 'CYCLE', 'DAILY', 'DANCE', 'DEATH',
+    'DEBUT', 'DELAY', 'DEPTH', 'DIRTY', 'DOUBT', 'DOZEN', 'DRAFT', 'DRAIN',
+    'DRAMA', 'DRANK', 'DRAWN', 'DREAM', 'DRESS', 'DRIED', 'DRINK', 'DRIVE',
+    'DROVE', 'DYING', 'EAGER', 'EARLY', 'EARTH', 'EIGHT', 'ELECT', 'ELITE',
+    'EMPTY', 'ENEMY', 'ENJOY', 'ENTER', 'ENTRY', 'EQUAL', 'ERROR', 'EVENT',
+    'EVERY', 'EXACT', 'EXIST', 'EXTRA', 'FAITH', 'FALSE', 'FANCY', 'FATAL',
+    'FAULT', 'FAVOR', 'FENCE', 'FEWER', 'FIBER', 'FIELD', 'FIFTH', 'FIFTY',
+    'FIGHT', 'FINAL', 'FIRST', 'FIXED', 'FLAME', 'FLASH', 'FLESH', 'FLOAT',
+    'FLOOD', 'FLOOR', 'FLOUR', 'FOCUS', 'FORCE', 'FORTH', 'FOUND', 'FRAME',
+    'FRANK', 'FRAUD', 'FRESH', 'FRONT', 'FRUIT', 'FUNNY', 'GIVEN', 'GLASS',
+    'GLOBE', 'GONNA', 'GRACE', 'GRADE', 'GRAIN', 'GRAND', 'GRANT', 'GRASS',
+    'GRAVE', 'GREAT', 'GREEN', 'GROSS', 'GROUP', 'GROWN', 'GUARD', 'GUESS',
+    'GUEST', 'GUIDE', 'GUILT', 'HAPPY', 'HARSH', 'HEARD', 'HEART', 'HEAVY',
+    'HENCE', 'HORSE', 'HOTEL', 'HOUSE', 'HUMAN', 'HUMOR', 'HURRY', 'IDEAL',
+    'IMAGE', 'IMPLY', 'INDEX', 'INDIA', 'INNER', 'INPUT', 'ISSUE', 'IVORY',
+    'JAPAN', 'JOINT', 'JUDGE', 'JUICE', 'KNIFE', 'KNOCK', 'KNOWN', 'LABEL',
+    'LABOR', 'LARGE', 'LATER', 'LAUGH', 'LAYER', 'LEARN', 'LEASE', 'LEAST',
+    'LEAVE', 'LEGAL', 'LEVEL', 'LIGHT', 'LIMIT', 'LITER', 'LIVES', 'LOCAL',
+    'LOGIC', 'LOOSE', 'LOVER', 'LOWER', 'LUCKY', 'LUNCH', 'LYING', 'MAGIC',
+    'MAJOR', 'MAKER', 'MARCH', 'MATCH', 'MAYOR', 'MAYBE', 'MEDIA', 'MERGE',
+    'MERIT', 'METAL', 'METER', 'MICRO', 'MIGHT', 'MINOR', 'MINUS', 'MIXED',
+    'MODEL', 'MONEY', 'MONTH', 'MORAL', 'MOUNT', 'MOUSE', 'MOUTH', 'MOVED',
+    'MOVIE', 'MUSIC', 'NAMED', 'NERVE', 'NEVER', 'NEWLY', 'NIGHT', 'NINTH',
+    'NOISE', 'NORTH', 'NOTED', 'NOVEL', 'NURSE', 'OCCUR', 'OCEAN', 'OFFER',
+    'OFTEN', 'ONSET', 'OPERA', 'ORBIT', 'OTHER', 'OUGHT', 'OUTER', 'OWNED',
+    'OWNER', 'OXIDE', 'PAINT', 'PANEL', 'PANIC', 'PAPER', 'PARTY', 'PATCH',
+    'PAUSE', 'PEACE', 'PENNY', 'PHASE', 'PHONE', 'PHOTO', 'PIANO', 'PIECE',
+    'PILOT', 'PITCH', 'PIXEL', 'PLACE', 'PLAIN', 'PLANE', 'PLANT', 'PLATE',
+    'PLAZA', 'PLEAD', 'PLUMB', 'POINT', 'POUND', 'POWER', 'PRESS', 'PRIDE',
+    'PRIME', 'PRINT', 'PRIOR', 'PRIZE', 'PROOF', 'PROUD', 'PROVE', 'PULSE',
+    'PUNCH', 'PUPIL', 'QUEEN', 'QUEST', 'QUEUE', 'QUICK', 'QUIET', 'QUITE',
+    'QUOTA', 'QUOTE', 'RADAR', 'RADIO', 'RAISE', 'RALLY', 'RANGE', 'RAPID',
+    'RATIO', 'REACH', 'REACT', 'READY', 'REALM', 'REBEL', 'REFER', 'REIGN',
+    'RELAX', 'REPLY', 'RIDER', 'RIGHT', 'RIGID', 'RISKY', 'RIVAL', 'RIVER',
+    'ROBOT', 'ROGER', 'ROMAN', 'ROUGH', 'ROUND', 'ROUTE', 'ROYAL', 'RULED',
+    'RULER', 'RURAL', 'SADLY', 'SAINT', 'SCALE', 'SCENE', 'SCOPE', 'SCORE',
+    'SENSE', 'SERVE', 'SETUP', 'SEVEN', 'SHALL', 'SHAME', 'SHAPE', 'SHARP',
+    'SHEET', 'SHELF', 'SHELL', 'SHIFT', 'SHINE', 'SHIRT', 'SHOCK', 'SHOOT',
+    'SHORT', 'SHOUT', 'SIGHT', 'SINCE', 'SIXTH', 'SIXTY', 'SIZED', 'SKILL',
+    'SLEEP', 'SLICE', 'SLIDE', 'SMALL', 'SMART', 'SMELL', 'SMILE', 'SMOKE',
+    'SOLID', 'SOLVE', 'SORRY', 'SOUND', 'SOUTH', 'SPACE', 'SPARE', 'SPEAK',
+    'SPEED', 'SPEND', 'SPENT', 'SPLIT', 'SPOKE', 'SPRAY', 'STACK', 'STAFF',
+    'STAGE', 'STAIN', 'STAKE', 'STALE', 'STALL', 'STAMP', 'STAND', 'STARK',
+    'START', 'STATE', 'STEAL', 'STEAM', 'STEEL', 'STEEP', 'STEER', 'STERN',
+    'STICK', 'STIFF', 'STILL', 'STONE', 'STOOD', 'STORE', 'STORM', 'STORY',
+    'STRIP', 'STUCK', 'STUDY', 'STUFF', 'STYLE', 'SUGAR', 'SUITE', 'SUPER',
+    'SURGE', 'SWEAR', 'SWEEP', 'SWEET', 'SWEPT', 'SWING', 'TABLE', 'TAKEN',
+    'TASTE', 'TEACH', 'TEETH', 'TEMPO', 'THANK', 'THEME', 'THERE', 'THICK',
+    'THING', 'THINK', 'THIRD', 'THREE', 'THREW', 'THROW', 'THUMB', 'TIGHT',
+    'TIRED', 'TITLE', 'TODAY', 'TOKEN', 'TOPIC', 'TOTAL', 'TOUCH', 'TOUGH',
+    'TOWER', 'TOXIC', 'TRACE', 'TRACK', 'TRAIL', 'TRAIN', 'TRAIT', 'TREAT',
+    'TREND', 'TRIAL', 'TRIBE', 'TRICK', 'TRIED', 'TROOP', 'TRUCK', 'TRULY',
+    'TRUMP', 'TRUNK', 'TRUST', 'TRUTH', 'TUMOR', 'TWICE', 'TWIST', 'ULTRA',
+    'UNCLE', 'UNDER', 'UNION', 'UNITE', 'UNITY', 'UNTIL', 'UPPER', 'UPSET',
+    'URBAN', 'USAGE', 'USUAL', 'UTTER', 'VALID', 'VALUE', 'VIDEO', 'VIGOR',
+    'VIRAL', 'VIRUS', 'VISIT', 'VITAL', 'VIVID', 'VOCAL', 'VOICE', 'VOTER',
+    'WASTE', 'WATCH', 'WATER', 'WEIGH', 'WEIRD', 'WHEEL', 'WHERE', 'WHICH',
+    'WHILE', 'WHITE', 'WHOLE', 'WHOSE', 'WIDER', 'WOMAN', 'WOMEN', 'WORLD',
+    'WORRY', 'WORSE', 'WORST', 'WORTH', 'WOULD', 'WOUND', 'WRITE', 'WRONG',
+    'WROTE', 'YIELD', 'YOUNG', 'YOUTH',
+    # Finance/trading terms that look like tickers but aren't
+    'HIGH', 'LOW', 'BUY', 'SELL', 'HOLD', 'LONG', 'SHORT', 'CALL', 'BULL',
+    'BEAR', 'RISK', 'GAIN', 'LOSS', 'CASH', 'BOND', 'FUND', 'LOAN', 'DEBT',
+    'RATE', 'TERM', 'YEAR', 'WEEK', 'MONTH', 'PRICE', 'VALUE', 'COST',
+    'NEWS', 'INFO', 'DATA', 'CHART', 'TREND', 'STOCK', 'SHARE', 'TRADE',
+    'ORDER', 'LIMIT', 'STOP', 'WHAT', 'WHEN', 'WHERE', 'WHY', 'WHICH',
+    'ABOUT', 'SHOW', 'TELL', 'GIVE', 'FIND', 'LOOK', 'HELP', 'GOLD', 'OIL',
 }
 
 
@@ -148,12 +306,14 @@ def extract_tickers(query: str) -> Dict[str, Any]:
                 metadata['company_names'].append(alias)
 
     # 2. Match English tickers
-    potential_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{2,5})(?![A-Za-z])', query)
+    # Keep original case to distinguish user-typed TICKER from ordinary words
+    raw_matches = re.findall(r'(?<![A-Za-z])([A-Za-z]{2,5})(?![A-Za-z])', query)
+    originally_upper = {m for m in raw_matches if m == m.upper() and len(m) >= 2}
     index_tickers = re.findall(r'(\^[A-Za-z]{3,})', query)
-    potential_tickers.extend(index_tickers)
+    raw_matches.extend(index_tickers)
     dotted_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{1,5}[.-][A-Za-z]{1,4})(?![A-Za-z])', query)
-    potential_tickers.extend(dotted_tickers)
-    potential_tickers = [t.upper() for t in potential_tickers]
+    raw_matches.extend(dotted_tickers)
+    potential_tickers = [t.upper() for t in raw_matches]
 
     for ticker in potential_tickers:
         if not is_probably_ticker(ticker):
@@ -166,7 +326,11 @@ def extract_tickers(query: str) -> Dict[str, Any]:
             if real_ticker and real_ticker not in metadata['tickers']:
                 metadata['tickers'].append(real_ticker)
         else:
-            if ticker not in metadata['tickers']:
+            # Only accept unknown tickers if they appeared in ALL CAPS in
+            # the original query — this filters out ordinary English words
+            # (e.g. "with", "view") while preserving user-typed symbols
+            # (e.g. "PLTR", "SOFI").
+            if ticker in originally_upper and ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
 
     # 3. Match Chinese company names

@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import time
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
+
+logger = logging.getLogger(__name__)
 
 
 AsyncInvoker = Callable[[dict[str, Any]], Awaitable[Any]]
@@ -351,6 +354,12 @@ async def execute_plan(
                 "retry_attempts": 0,
             }
             artifacts["errors"].append(err)
+            logger.warning(
+                "[Executor] step %s (%s:%s) FAILED%s: %s",
+                step_id, kind, name,
+                " (optional, continuing)" if optional else " (REQUIRED, aborting)",
+                exc,
+            )
             exec_events.append(
                 {"event": "executor.step_failed", "step_id": step_id, "duration_ms": int((time.perf_counter() - start) * 1000), "error": str(exc), "optional": optional}
             )

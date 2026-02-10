@@ -458,13 +458,85 @@ def _to_news_item(item: Any) -> dict[str, Any]:
 
 
 def _parse_news_text(text: str) -> list[dict[str, Any]]:
+    """Parse formatted headline text returned by get_market_news_headlines().
+
+    Expected line formats:
+      1. [2026-02-10] [Tag] [Title](url) (Source) - Snippet
+      2. [2026-02-10] Title (Source) - Snippet
+      3. plain title text
+    """
+    import re as _re
+
     rows: list[dict[str, Any]] = []
     if not text:
         return rows
+
+    # Patterns for structured extraction
+    date_pat = _re.compile(r"\[(\d{4}-\d{2}-\d{2})\]")
+    link_pat = _re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+    source_pat = _re.compile(r"\(([A-Za-z][A-Za-z0-9 .&'-]{0,40})\)")
+
     for line in text.strip().splitlines():
         stripped = line.strip()
-        if stripped and len(stripped) > 10:
-            rows.append({"title": stripped, "url": "", "source": "", "ts": "", "summary": ""})
+        # Skip header lines and very short lines
+        if not stripped or len(stripped) < 12:
+            continue
+        # Skip header-like lines (e.g. "最近48小时市场要闻(RSS):")
+        if stripped.endswith(":") and ("要闻" in stripped or "热点" in stripped):
+            continue
+        # Remove leading numbering "1. ", "2. " etc.
+        stripped = _re.sub(r"^\d+\.\s*", "", stripped).strip()
+        if not stripped:
+            continue
+
+        # Extract date
+        ts = ""
+        dm = date_pat.search(stripped)
+        if dm:
+            ts = dm.group(1)
+
+        # Extract markdown link [title](url)
+        title = ""
+        url = ""
+        lm = link_pat.search(stripped)
+        if lm:
+            title = lm.group(1).strip()
+            url = lm.group(2).strip()
+
+        # Extract source (word in parentheses, not a URL)
+        source = ""
+        for sm in source_pat.finditer(stripped):
+            candidate = sm.group(1).strip()
+            # Skip if it looks like a URL or is a date
+            if "http" in candidate or _re.match(r"^\d{4}-", candidate):
+                continue
+            source = candidate
+            break
+
+        # Extract snippet (text after " - ")
+        summary = ""
+        dash_idx = stripped.find(" - ", (lm.end() if lm else 0))
+        if dash_idx > 0:
+            summary = stripped[dash_idx + 3:].strip()
+
+        # Fallback title: use the whole line (cleaned)
+        if not title:
+            # Remove date bracket, tags, source
+            fallback = stripped
+            fallback = date_pat.sub("", fallback)
+            fallback = _re.sub(r"\[[A-Za-z/]+\]\s*", "", fallback)
+            fallback = source_pat.sub("", fallback)
+            fallback = fallback.strip(" -")
+            title = fallback[:160] if fallback else stripped[:160]
+
+        if title:
+            rows.append({
+                "title": title,
+                "url": url,
+                "source": source,
+                "ts": ts,
+                "summary": summary[:200],
+            })
     return rows
 
 

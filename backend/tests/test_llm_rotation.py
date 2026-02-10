@@ -311,6 +311,95 @@ def test_retry_rotates_endpoint_on_429(monkeypatch):
     assert llm_initial.call_count == 1
 
 
+def test_retry_rotates_endpoint_on_401_with_factory(monkeypatch):
+    """With llm_factory, auth/provider errors should also rotate endpoints."""
+    import backend.services.llm_retry as llm_retry
+
+    sleep_calls: list[float] = []
+
+    async def _sleep_recorder(seconds: float):
+        sleep_calls.append(seconds)
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _sleep_recorder)
+
+    factory_calls: list[int] = []
+
+    class _FakeLLM:
+        def __init__(self, name: str):
+            self.name = name
+            self.call_count = 0
+
+        async def ainvoke(self, messages):
+            self.call_count += 1
+            if self.name == 'llm-1':
+                raise RuntimeError("Error code: 401 - {'error': {'message': '无效的令牌'}}")
+            return {'ok': True, 'from': self.name}
+
+    llm_initial = _FakeLLM('llm-1')
+
+    def _factory():
+        factory_calls.append(1)
+        return _FakeLLM('llm-2')
+
+    result = asyncio.run(
+        llm_retry.ainvoke_with_rate_limit_retry(
+            llm_initial,
+            messages=[{'role': 'user', 'content': 'hello'}],
+            llm_factory=_factory,
+            max_attempts=3,
+            sleep_seconds=5,
+            jitter_seconds=1,
+            acquire_token=False,
+        )
+    )
+
+    assert result == {'ok': True, 'from': 'llm-2'}
+    assert len(factory_calls) == 1
+    assert llm_initial.call_count == 1
+    assert sleep_calls == []
+
+
+def test_retry_rotates_non_429_until_attempts_exhausted(monkeypatch):
+    """With llm_factory, non-429 endpoint failures should still rotate and retry."""
+    import backend.services.llm_retry as llm_retry
+
+    async def _no_sleep(_seconds: float):
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _no_sleep)
+
+    factory_calls: list[int] = []
+
+    class _AlwaysFailLLM:
+        async def ainvoke(self, messages):
+            raise RuntimeError('503 Service Unavailable: no available channel')
+
+    def _factory():
+        factory_calls.append(1)
+        return _AlwaysFailLLM()
+
+    with pytest.raises(RuntimeError) as exc:
+        asyncio.run(
+            llm_retry.ainvoke_with_rate_limit_retry(
+                _AlwaysFailLLM(),
+                messages=[{'role': 'user', 'content': 'hello'}],
+                llm_factory=_factory,
+                max_attempts=3,
+                sleep_seconds=0,
+                jitter_seconds=0,
+                acquire_token=False,
+            )
+        )
+
+    assert '503' in str(exc.value)
+    assert len(factory_calls) == 2
+
+
 def test_retry_fallback_without_factory(monkeypatch):
     """When llm_factory is None, retry should reuse the same LLM (backward compat)."""
     import backend.services.llm_retry as llm_retry
@@ -362,4 +451,3 @@ def test_raw_url_preserved():
     assert result_default != full_url
     assert result_default.endswith('/v1')
     assert '/chat/completions' not in result_default
-

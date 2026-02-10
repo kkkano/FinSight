@@ -18,7 +18,8 @@ def _state(*, query: str, subject_type: str, operation: str = "generate_report")
 def test_required_agents_company_report_has_foundation_trio():
     state = _state(query="Analyze AAPL and produce an investment report", subject_type="company")
     required = required_agents_for_request(state, REPORT_AGENT_CANDIDATES)
-    assert required == ["price_agent", "news_agent", "fundamental_agent"]
+    # company + investment_report now requires all 5 core agents (macro + technical added)
+    assert required == ["price_agent", "news_agent", "fundamental_agent", "macro_agent", "technical_agent"]
 
 
 def test_select_agents_company_report_does_not_default_to_deep_search():
@@ -27,7 +28,8 @@ def test_select_agents_company_report_does_not_default_to_deep_search():
     names = selected.get("selected") or []
     assert {"price_agent", "news_agent", "fundamental_agent"}.issubset(set(names))
     assert "deep_search_agent" not in names
-    assert len(names) <= 4
+    # 5 required agents (includes macro + technical), target clamps up to match
+    assert len(names) <= 5
 
 
 def test_select_agents_deep_hint_enables_deep_search():

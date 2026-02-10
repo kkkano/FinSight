@@ -174,7 +174,9 @@ def test_chat_supervisor_returns_report_in_investment_report_mode():
     assert isinstance(synthesis, str)
     from backend.graph import report_builder as report_builder_mod
 
-    assert report_builder_mod._count_content_chars(synthesis) >= 2000
+    # No longer require 2000 chars — appendix padding was removed in favour of
+    # real agent content.  A healthy stub report produces ~300-600 content chars.
+    assert report_builder_mod._count_content_chars(synthesis) >= 200
 
 
 def test_chat_supervisor_stream_done_event_contains_report_in_investment_report_mode():

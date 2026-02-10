@@ -472,7 +472,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                     "kind": "agent",
                     "name": agent_name,
                     "inputs": agent_inputs,
-                    "parallel_group": None,
+                    "parallel_group": "report_agents",
                     "why": f"Report mode: run {agent_name} to output explainable cards and evidence.",
                     "optional": not force_escalation and not is_required_agent,
                 },
