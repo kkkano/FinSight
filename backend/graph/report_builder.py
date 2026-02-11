@@ -422,7 +422,9 @@ def _build_long_synthesis_report(
     parts.append(f"## {title}")
     parts.append("")
 
-    # 1) Use the existing rendered markdown as the core narrative.
+    # 1) Use the existing rendered markdown (from template) as the core narrative.
+    #    The template already contains: 综合投资观点, 公司与业务, 价格快照, 技术面,
+    #    催化剂, 财务与估值, 风险, 结论与展望, 免责声明.
     core = (base_markdown or "").strip()
     if core:
         parts.append(core)
@@ -431,30 +433,7 @@ def _build_long_synthesis_report(
         parts.append(f"**问题**：{query}")
         parts.append("")
 
-    # 2) Agent summaries as structured appendix (high signal, non-duplicative).
-    parts.append("## Agent 摘要（结构化）")
-    for item in agent_summaries:
-        if not isinstance(item, dict):
-            continue
-        title = _safe_str(item.get("title") or item.get("agent_name") or "Agent")[:80]
-        summary = _safe_str(item.get("summary") or "")[:4000]
-        confidence = item.get("confidence")
-        try:
-            conf_pct = int(round(float(confidence) * 100)) if confidence is not None else None
-        except Exception:
-            conf_pct = None
-        meta_bits = []
-        if conf_pct is not None:
-            meta_bits.append(f"{conf_pct}%")
-        status = _safe_str(item.get("status") or "")
-        if status:
-            meta_bits.append(status)
-        meta = " / ".join([x for x in meta_bits if x])
-        parts.append(f"### {title}" + (f"（{meta}）" if meta else ""))
-        parts.append(summary or "（无输出）")
-        parts.append("")
-
-    # 4) Citation references (only when citations exist — real data, not filler).
+    # 2) Citation references (only when citations exist — real data, not filler).
     if citations:
         parts.append("## 引用来源")
         for c in citations[:12]:
@@ -469,11 +448,7 @@ def _build_long_synthesis_report(
                 parts.append(f"[{cid}] {title}")
         parts.append("")
 
-    # 5) Brief data coverage note (never generic template filler).
-    success_agents = [
-        item for item in agent_summaries
-        if isinstance(item, dict) and item.get("status") == "success"
-    ]
+    # 3) Brief data coverage note (never generic template filler).
     not_run_agents = [
         item for item in agent_summaries
         if isinstance(item, dict) and item.get("status") in ("not_run", "error")
