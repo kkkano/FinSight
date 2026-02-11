@@ -161,9 +161,11 @@ class BaseFinancialAgent:
             return []
         query = self._current_query or ""
         ticker = self._current_ticker or ""
-        prompt = f"""<role>金融分析师-信息缺口检测器</role>
+        prompt = f"""<role>金融分析师 — 信息缺口检测器</role>
 
-<task>识别摘要中缺失的关键信息，输出可搜索的查询短语</task>
+<task>
+评估以下摘要相对于用户查询的信息完整性，识别关键缺失信息并输出可搜索的查询短语。
+</task>
 
 <input>
 <query>{query}</query>
@@ -171,17 +173,26 @@ class BaseFinancialAgent:
 <summary>{summary}</summary>
 </input>
 
-<rules>
-- 仅输出1-4条搜索短语，每行一条
-- 短语需具体、可搜索，包含股票代码或公司名
-- 聚焦：财务数据、风险因素、行业对比、近期事件
-- 若信息完整，输出：无缺口
-</rules>
+<evaluation_dimensions>
+逐一检查以下维度是否已覆盖：
+- 关键财务数据（营收、利润、估值指标如 PE/PB）
+- 风险因素（公司特有风险 + 行业/系统性风险）
+- 行业对比（竞争格局、市场份额）
+- 时效性信息（最新财报、近期公告、重大事件）
+- 用户查询的核心关注点是否已回答
+</evaluation_dimensions>
+
+<output_rules>
+- 仅输出 1-4 条搜索短语，每行一条
+- 短语必须具体、可搜索，包含股票代码或公司名
+- 优先补充与用户查询最相关的缺失信息
+- 若信息已充分覆盖用户查询，输出：无缺口
+</output_rules>
 
 <constraints>
-- 禁止：开场白、解释、编号、标点符号
-- 禁止：重复摘要已有信息
-- 直接输出短语，无需任何前缀
+- 禁止：开场白、解释、编号前缀、标点符号
+- 禁止：重复摘要已有信息的搜索词
+- 直接输出搜索短语，每行一条
 </constraints>"""
         try:
             from langchain_core.messages import HumanMessage
@@ -261,9 +272,9 @@ class BaseFinancialAgent:
     async def _update_summary(self, summary: str, new_data: Any) -> str:
         if not new_data or not self.llm:
             return summary
-        prompt = f"""<role>金融分析师-信息整合专家</role>
+        prompt = f"""<role>金融分析师 — 信息整合专家</role>
 
-<task>将新信息整合到现有摘要中</task>
+<task>将新检索到的信息有机整合到现有摘要中，提升摘要的完整性和分析深度。</task>
 
 <current_summary>
 {summary}
@@ -273,17 +284,21 @@ class BaseFinancialAgent:
 {new_data}
 </new_information>
 
-<requirements>
-- 直接输出整合后的摘要内容，禁止任何标题、前缀、开场白
-- 保持简洁，不超过原摘要1.5倍长度
-- 仅整合有价值的新信息，无价值则返回原摘要
-- 禁止编造数据
-- 禁止输出"更新后的摘要"、"整合后的内容"等元信息
-</requirements>
+<integration_rules>
+- 仅整合有实质价值的新信息（新数据点、新视角、新风险）
+- 新旧信息冲突时，优先采用更新、更权威的数据，并标注更新
+- 保持原摘要的结构和逻辑框架
+- 整合后总长度不超过原摘要的 1.5 倍
+- 无有价值的新信息时，原样返回现有摘要
+</integration_rules>
 
-<output_format>
-直接输出摘要正文，无需任何格式标记
-</output_format>"""
+<constraints>
+- 直接输出整合后的摘要正文
+- 禁止任何标题、前缀、开场白
+- 禁止"更新后的摘要"、"整合后的内容"等元信息
+- 禁止编造数据
+- 禁止任何格式标记
+</constraints>"""
         try:
             from langchain_core.messages import HumanMessage
             from backend.services.rate_limiter import acquire_llm_token

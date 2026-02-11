@@ -440,31 +440,38 @@ class IntentClassifier:
             top3 = sorted(candidates.items(), key=lambda x: x[1], reverse=True)[:3]
             candidate_hint = f"\nCandidate intents (by similarity): {', '.join([f'{k}({v:.2f})' for k, v in top3])}"
 
-        prompt = f"""You are an intent classifier for a financial assistant. Select the most appropriate intent for the user's query.
-Always respond in Chinese.
+        prompt = f"""<role>金融助手意图分类器</role>
 
-Available intents:
-- PRICE: Price/quote query
-- NEWS: News and updates
-- SENTIMENT: Market sentiment
-- TECHNICAL: Technical analysis
-- FUNDAMENTAL: Fundamental analysis
-- MACRO: Macroeconomic data
-- REPORT: In-depth analysis report (only when user explicitly requests detailed analysis)
-- COMPARISON: Comparative analysis
-- SEARCH: General search
-- CLARIFY: Question unclear, needs clarification
-- OFF_TOPIC: Non-financial topic
+<task>为用户查询选择最准确的意图标签。仅输出意图名称，禁止任何解释。</task>
 
-User query: {query}
-Detected tickers: {tickers or 'None'}{candidate_hint}
+<available_intents>
+- PRICE: 价格/报价查询（如"XX多少钱"、"现价"、"股价"）
+- NEWS: 新闻资讯（如"最新消息"、"近况"、"发生了什么"）
+- SENTIMENT: 市场情绪（如"市场情绪"、"恐慌贪婪指数"）
+- TECHNICAL: 技术分析（如"K线"、"MACD"、"技术面"、"支撑位"）
+- FUNDAMENTAL: 基本面分析（如"财报"、"PE"、"营收"、"利润"）
+- MACRO: 宏观经济（如"CPI"、"加息"、"GDP"、"失业率"）
+- REPORT: 深度分析报告（仅当用户明确要求"详细分析"、"投资报告"、"研报"时）
+- COMPARISON: 对比分析（如"A和B对比"、"哪个好"）
+- SEARCH: 通用搜索（不属于以上类别的金融信息查询）
+- CLARIFY: 查询不明确或缺少关键信息，需要澄清
+- OFF_TOPIC: 非金融话题
+</available_intents>
 
-Important rules:
-1. Use lightweight intents for simple queries, avoid REPORT
-2. Only use REPORT when user explicitly requests "detailed analysis" or "investment report"
-3. Return OFF_TOPIC for non-financial questions
+<input>
+用户查询: {query}
+检测到的股票代码: {tickers or '无'}{candidate_hint}
+</input>
 
-Return only the intent name (e.g., PRICE):"""
+<classification_rules>
+1. 简单查询优先使用轻量意图（PRICE/NEWS/SENTIMENT），避免过度触发 REPORT
+2. REPORT 仅在用户明确使用"分析"、"研报"、"投资报告"等词时触发
+3. 非金融问题（如"写个冒泡排序"、"今天天气"）→ OFF_TOPIC
+4. 涉及多个股票对比 → COMPARISON
+5. 查询模糊且无股票代码 → CLARIFY
+</classification_rules>
+
+仅输出意图名称（如 PRICE）："""
 
         try:
             # 使用 asyncio.wait_for 设置 15 秒超时（如果在异步上下文中）

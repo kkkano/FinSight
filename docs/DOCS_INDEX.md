@@ -11,7 +11,7 @@
 - `docs/TEAM_EXECUTION_MEMORY.md`：会话丢失后的执行恢复锚点（流程/证据/devlog 约束）
 - `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
 - `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
-- `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档（含 Mermaid 图）
+- `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档l（含 Mermaid 图）
 - `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 全流程深度拆解（12 张 Mermaid 图 + 详细表格 + 端到端数据流）
 - `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
 - `docs/WORKBENCH_ROADMAP.md`：工作台开发路线图（Sprint 1-4）
@@ -19,6 +19,7 @@
 - `docs/V1_RELEASE_SUMMARY.md`：v1.0.0 发布总结
 - `docs/SPRINT2_DEVLOG.md`：Sprint 2 开发日志（v1.1.0 任务清单 + 变更记录）
 - `docs/feature_logs/2026-02-10_sprint2_bugfix_batch.md`：Sprint 2 批量修复日志（13 项 bug 修复详情）
+- `docs/PROMPT_OPTIMIZATION_CHANGELOG.md`：全项目 18 个 LLM 提示词优化前后对比报告
 - `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
 - `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
 - `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策

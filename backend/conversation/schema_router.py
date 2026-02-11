@@ -581,21 +581,22 @@ class SchemaToolRouter:
         )
 
         system_prompt = (
-            "You are a financial assistant tool router. Return JSON only:\n"
-            '{"tool_name": "...", "args": {...}, "confidence": 0.0-1.0}\n\n'
-            "Rules:\n"
-            '- Uncertain/ambiguous → tool_name="clarify", confidence<0.5\n'
-            "- Unknown required args → set to null\n"
-            '- "分析股票" without ticker → "clarify"\n'
-            '- get_market_sentiment ONLY for explicit "市场情绪/恐慌贪婪/fear & greed"\n'
-            '- Analysis requests → prefer "analyze_stock"\n\n'
-            f"Tools:\n{tool_lines}"
+            "你是金融助手工具路由器。仅返回 JSON，禁止任何其他内容。\n"
+            '格式: {"tool_name": "...", "args": {...}, "confidence": 0.0-1.0}\n\n'
+            "路由规则:\n"
+            '- 查询不确定/模糊 → tool_name="clarify", confidence<0.5\n'
+            "- 必需参数未知 → 对应值设为 null\n"
+            '- "分析股票"但无股票代码 → "clarify"\n'
+            '- get_market_sentiment 仅用于明确的"市场情绪/恐慌贪婪/fear & greed"查询\n'
+            '- 分析类请求 → 优先路由到 "analyze_stock"\n'
+            '- 优先匹配最具体的工具，避免泛化\n\n'
+            f"可用工具:\n{tool_lines}"
         )
 
         user_prompt = (
-            f"User Query: {query}\n"
-            f"Context: {context_summary or 'None'}\n"
-            "Return JSON only."
+            f"用户查询: {query}\n"
+            f"对话上下文: {context_summary or '无'}\n"
+            "仅返回 JSON。"
         )
 
         try:

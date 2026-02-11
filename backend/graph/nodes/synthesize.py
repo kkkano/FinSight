@@ -1067,11 +1067,11 @@ async def synthesize(state: GraphState) -> dict:
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
 
-    prompt = f"""<role>FinSight Synthesis</role>
+    prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
 
 <task>
-Fill template variables for the finance assistant response.
-Return JSON ONLY. No markdown, no commentary.
+根据输入数据填充报告模板变量。仅返回 JSON 对象，禁止 markdown 或注释。
+所有文本值必须为简体中文。
 </task>
 
 <inputs>
@@ -1079,7 +1079,7 @@ Return JSON ONLY. No markdown, no commentary.
 </inputs>
 
 <output_format>
-Return a single JSON object. Keys should be a subset of:
+返回 JSON 对象，键为以下模板变量的子集：
 news_summary, impact_analysis, next_watch, risks,
 conclusion, investment_summary, company_overview, catalysts, valuation,
 price_snapshot, technical_snapshot,
@@ -1087,13 +1087,25 @@ comparison_conclusion, comparison_metrics,
 summary, highlights, analysis.
 </output_format>
 
+<field_quality_guidelines>
+每个字段的质量要求：
+- company_overview: 2-3 句话概括公司主营、市场地位、核心竞争力
+- catalysts: 列出 3-5 个近期催化剂，每条含事件+潜在影响
+- valuation: 包含关键估值指标（PE/PB/PS）及与历史/同业对比
+- risks: 3-5 条风险要点，区分系统性风险和个股风险
+- conclusion: 综合各维度给出明确的方向性判断，附条件和置信度
+- news_summary: 提炼核心新闻事件，侧重影响而非事件本身
+- investment_summary: 一段话浓缩投资核心逻辑（多/空/中性 + 理由）
+</field_quality_guidelines>
+
 <constraints>
-1) Use rag_context/evidence_pool/step_results when available; if insufficient, state assumptions explicitly.
-2) Do NOT include raw tool outputs / search dumps / trace-like logs in any field.
-3) Avoid repeating disclaimers; put at most 1 short disclaimer in `risks`.
-4) Keep each field concise (<= 6 bullet lines when possible).
-5) Do NOT include placeholder phrases like "待实现".
-6) Output must be valid JSON object.
+1) 优先使用 evidence_pool/rag_context/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
+2) 禁止输出原始工具数据、搜索日志、trace 信息。
+3) 免责声明最多在 risks 字段末尾出现 1 次，其他字段禁止重复。
+4) 每个字段控制在 6 条要点以内，追求信息密度而非长度。
+5) 禁止使用"待实现"、"暂无数据"等占位短语；无数据时输出"[数据缺失]"。
+6) 输出必须为合法 JSON 对象。
+7) 禁止开场白、寒暄。直接输出 JSON。
 </constraints>
 """
 

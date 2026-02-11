@@ -231,36 +231,38 @@ class DeepSearchAgent(BaseFinancialAgent):
         if not self.llm:
             return []
 
-        prompt = f"""<role>金融深度研究Self-RAG控制器</role>
+        prompt = f"""<role>金融深度研究 Self-RAG 控制器</role>
 
-<task>评估当前摘要的信息完整性，决定是否需要补充检索</task>
+<task>评估当前研究摘要的信息完整性，决定是否需要补充检索轮次。</task>
 
 <current_summary>
 {summary}
 </current_summary>
 
 <evaluation_criteria>
-需要补充检索的情况（needs_more=true）：
-- 关键财务数据缺失（营收、利润、估值指标）
-- 风险因素分析不完整
-- 竞争格局描述模糊
-- 缺乏时效性信息（最新财报、公告）
-- 论点缺乏数据支撑
+需要补充检索 (needs_more=true) 的情况：
+- 关键财务指标缺失（营收增长率、利润率、估值 PE/PB/PS）
+- 风险因素分析不完整（仅提到 1 类风险或无具体数据支撑）
+- 竞争格局描述模糊（缺乏市场份额或对手对比）
+- 缺乏时效性信息（无最近 1 个月的财报/公告/事件）
+- 核心投资论点缺乏 2 个以上独立数据源支撑
 
-信息充足的情况（needs_more=false）：
-- 核心投资逻辑清晰
-- 关键数据点完整
-- 风险与机会均有覆盖
+信息充足 (needs_more=false) 的情况：
+- 核心投资逻辑清晰，有数据支撑
+- 至少覆盖 3 个分析维度（估值/基本面/技术面/宏观/情绪）
+- 风险与机会均有实质性覆盖
+- 关键数据点有来源引用
 </evaluation_criteria>
 
 <output_format>
-仅返回JSON，禁止任何解释或前言：
+仅返回 JSON，禁止任何解释、前言或 markdown：
 {{"needs_more": true/false, "queries": ["具体检索词1", "具体检索词2"]}}
 
-queries要求：
-- 最多3个，每个需具体明确
-- 使用中英文混合检索词提高召回
-- 聚焦摘要中明确缺失的信息点
+queries 要求：
+- 最多 3 个，每个需具体明确
+- 中英文混合以提高召回率（如"AAPL 2024年Q4财报 revenue growth"）
+- 聚焦摘要中已识别的具体信息缺口
+- 禁止宽泛查询（如"公司近况"），必须针对性
 </output_format>"""
         raw = await self._call_llm(prompt)
         payload = self._extract_json(raw)
@@ -755,9 +757,9 @@ queries要求：
             return f"Deep research sources found: {titles}."
 
         prev_section = f"\n<previous_summary>\n{previous_summary}\n</previous_summary>" if previous_summary else ""
-        prompt = f"""<role>资深金融研究分析师</role>
+        prompt = f"""<role>资深金融研究分析师 — 深度研究备忘录撰写</role>
 
-<task>基于检索源撰写深度研究备忘录</task>
+<task>基于多源检索结果撰写结构化深度研究备忘录，提供可操作的投资洞察。</task>
 {prev_section}
 <sources>
 {bundle}
@@ -765,30 +767,35 @@ queries要求：
 
 <requirements>
 - 语言：简体中文
-- 输出4-6条核心洞察（事实+影响），每条需有数据或来源支撑
-- 引用格式：[1]、[2]（对应源编号）
-- 标注1-2条不确定性/风险点
-- 明确标注信息缺口（如有）
+- 输出 4-6 条核心洞察，每条包含：
+  · 事实发现（含具体数据点）
+  · 影响判断（对标的/行业的潜在影响）
+  · 来源引用 [1]、[2]（对应源编号）
+- 标注 1-2 条不确定性或风险点，附置信度评估
+- 明确标注信息缺口（如有），指明还需要什么数据
+- 若有前次摘要，需与新信息交叉验证，标注一致/冲突
 </requirements>
 
 <output_format>
 ## 核心发现
-[编号要点列表，每条含数据引用与一句影响判断]
+1. [发现] — [影响判断] [1]
+2. ...
 
 ## 影响与解读
-[2-3句综合解读，强调对标的/行业的潜在影响]
+[2-3 句综合解读，强调跨源信息的交叉印证，以及对投资决策的具体含义]
 
 ## 风险提示
-[关键风险因素]
+- [风险描述] [置信度: High/Medium/Low]
 
 ## 信息缺口
-[尚需补充的信息，无则写“暂无”]
+[尚需补充的具体信息，无则写"暂无明显缺口"]
 </output_format>
 
 <constraints>
 - 禁止开场白、寒暄、总结性陈述
 - 直接输出结构化内容
-- 专业商务语气
+- 专业商务语气，避免口语化表达
+- 数据冲突时必须标注并说明哪个更可信
 </constraints>"""
 
         result = await self._call_llm(prompt)

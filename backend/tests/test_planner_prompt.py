@@ -14,7 +14,7 @@ def test_planner_prompt_includes_allowlists_and_operation():
     assert "allowed_tools" in prompt
     assert "analyze_impact" in prompt
     assert "news_agent" in prompt
-    assert "FIRST step MUST summarize selection" in prompt
+    assert "FIRST step MUST summarize selection" in prompt or "第一步必须为 summarize_selection" in prompt
 
 
 def test_planner_prompt_variant_a_and_b_are_distinct_and_tagged():
