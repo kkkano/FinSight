@@ -12,6 +12,7 @@
 - `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
 - `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
 - `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档（含 Mermaid 图）
+- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 全流程深度拆解（12 张 Mermaid 图 + 详细表格 + 端到端数据流）
 - `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
 - `docs/WORKBENCH_ROADMAP.md`：工作台开发路线图（Sprint 1-4）
 - `docs/ISSUE_TRACKER.md`：全量问题追踪清单（P0/P1/P2 checkbox）
