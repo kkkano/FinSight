@@ -3,7 +3,7 @@
 > **状态**：Living Doc（持续更新）
 > **更新日期**：2026-02-06
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
-> **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `06c_LANGGRAPH_TODO.md`。
+> **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### 0.1 本文档的「小步」更新流程
 
-- 任何与 LangGraph 重构相关的实现、测试、接口、UI 变动，均须登记在 `06c_LANGGRAPH_TODO.md` 的 **TODOLIST** 中作为目标（优先查找目标再写代码）。
+- 任何与 LangGraph 重构相关的实现、测试、接口、UI 变动，均须登记在 `AGENTIC_SPRINT_TODOLIST.md` 的 **TODOLIST** 中作为目标（优先查找目标再写代码）。
 - 每完成一个 **小步**（一个可独立合并并验证的单元），须更新 TODOLIST：
   - 标记应更新为 `TODO` → `DOING` → `DONE`（含规格 + 日期 + PR/commit 标注）
   - 必须附带验证证据（截图/日志关键字/ trace 记录）
@@ -71,7 +71,7 @@ flowchart LR
 2. `session_id` 必须前端稳定透传，缺失时服务端生成 UUID，严禁固定默认传入。
 3. 上下文容器须按 `session_id` 隔离，禁止全局上下文容器渲染。
 4. 文档的「完成」只以验证为准：跑过 `pytest` + 前端 `build` + 必要的 e2e。
-5. 所有重构工作须统一登记到 `06c_LANGGRAPH_TODO.md`，同步写入 Worklog。
+5. 所有重构工作须统一登记到 `AGENTIC_SPRINT_TODOLIST.md`，同步写入 Worklog。
 
 ---
 

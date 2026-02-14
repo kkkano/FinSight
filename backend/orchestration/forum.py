@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import logging
+import os
 from backend.agents.base_agent import AgentOutput
 from backend.prompts.system_prompts import FORUM_SYNTHESIS_PROMPT
 
@@ -112,16 +113,40 @@ class ForumHost:
 
         try:
             from langchain_core.messages import HumanMessage
+            from backend.services.llm_retry import ainvoke_with_rate_limit_retry
             
             # 在 LLM 调用前获取速率限制令牌
             from backend.services.rate_limiter import acquire_llm_token
-            token_acquired = await acquire_llm_token(timeout=120.0)
+            token_acquired = await acquire_llm_token(timeout=120.0, agent_name="forum_synthesis")
             if not token_acquired:
                 self.logger.warning("[Forum] Rate limit timeout, using fallback synthesis")
                 consensus = self._fallback_synthesis(context_parts)
             else:
-                response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-                consensus = response.content if hasattr(response, 'content') else str(response)
+                llm_factory = None
+                try:
+                    from backend.llm_config import create_llm
+
+                    llm_provider = os.getenv("LLM_PROVIDER", "openai_compatible")
+                    llm_temperature = float(os.getenv("FORUM_LLM_TEMPERATURE", "0.3"))
+                    llm_timeout = int(os.getenv("FORUM_LLM_REQUEST_TIMEOUT", "600"))
+                    llm_factory = lambda: create_llm(  # noqa: E731
+                        provider=llm_provider,
+                        temperature=llm_temperature,
+                        request_timeout=llm_timeout,
+                    )
+                except Exception:
+                    llm_factory = None
+
+                max_attempts = max(1, int(os.getenv("FORUM_LLM_MAX_ATTEMPTS", "4")))
+                response = await ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [HumanMessage(content=prompt)],
+                    llm_factory=llm_factory,
+                    max_attempts=max_attempts,
+                    acquire_token=False,
+                )
+                consensus_raw = response.content if hasattr(response, 'content') else str(response)
+                consensus = str(consensus_raw or "").strip() or self._fallback_synthesis(context_parts)
         except Exception as e:
             # 如果 LLM 调用失败，使用简单的规则合成
             import traceback
@@ -221,4 +246,3 @@ class ForumHost:
             sections.append(context_parts["technical"][:300])
 
         return "\n".join(sections)
-

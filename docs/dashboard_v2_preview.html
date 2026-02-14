@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSight Dashboard V2 Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b12;
+      --bg-soft: #0e1522;
+      --card: #0f1928;
+      --card-2: #131f31;
+      --line: #22324a;
+      --text: #e8f1ff;
+      --text-dim: #9db1cc;
+      --primary: #66a6ff;
+      --primary-2: #61e1ff;
+      --good: #29d38d;
+      --warn: #ffbe58;
+      --bad: #ff6f73;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 10px 24px rgba(0,0,0,.36);
+      --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 560px at 80% -15%, rgba(91, 165, 255, .15), transparent 62%),
+        radial-gradient(800px 600px at -10% 20%, rgba(97, 225, 255, .10), transparent 66%),
+        var(--bg);
+    }
+
+    .shell {
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .topbar {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(165deg, rgba(20,30,47,.94), rgba(13,20,33,.95));
+      box-shadow: var(--shadow);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .title-wrap { display: grid; gap: 6px; }
+
+    .crumb {
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(22px, 3vw, 30px);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      line-height: 1.1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid;
+      padding: 4px 10px;
+      font-size: 12px;
+      gap: 6px;
+    }
+    .badge.good { color: #d6ffea; background: rgba(41,211,141,.15); border-color: rgba(41,211,141,.55); }
+    .badge.warn { color: #ffe4b2; background: rgba(255,190,88,.15); border-color: rgba(255,190,88,.55); }
+    .badge.bad { color: #ffd6d8; background: rgba(255,111,115,.15); border-color: rgba(255,111,115,.55); }
+
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #1a2740, #172338);
+      color: var(--text);
+      font-size: 12px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: .2s ease;
+    }
+    .tab:hover { transform: translateY(-1px); border-color: #436190; }
+    .tab.active { border-color: var(--primary-2); color: #d8f9ff; box-shadow: 0 0 0 1px rgba(97,225,255,.38) inset; }
+
+    .hero {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.5fr 1fr;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(18,27,43,.96), rgba(12,19,32,.97));
+      box-shadow: var(--shadow);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .price-main {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .price {
+      font-size: clamp(34px, 4.6vw, 48px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: .01em;
+    }
+    .chg {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    .up { color: var(--good); }
+    .down { color: var(--bad); }
+
+    .spark {
+      width: 100%;
+      height: 90px;
+      border: 1px solid #273a58;
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(10,18,30,.85), rgba(8,14,24,.9));
+      padding: 8px;
+    }
+
+    .spark svg { width: 100%; height: 100%; }
+
+    .meta {
+      color: var(--text-dim);
+      font-size: 12px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .summary-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(15,24,39,.86);
+      display: grid;
+      gap: 5px;
+    }
+
+    .metric .label { color: var(--text-dim); font-size: 12px; }
+    .metric .value { font-size: 21px; font-weight: 700; }
+    .metric .sub { color: var(--text-dim); font-size: 12px; }
+
+    .main-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.7fr 1fr;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dim { color: var(--text-dim); font-size: 12px; font-weight: 500; }
+
+    .chart {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(11,19,32,.95), rgba(10,16,26,.98));
+      height: 320px;
+      padding: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .grid-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: rgba(51,74,110,.35);
+    }
+
+    .chart svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 14px 10px;
+    }
+
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); }
+    .legend i {
+      width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px;
+    }
+
+    .list { display: grid; gap: 8px; }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(14,22,34,.8);
+      display: grid;
+      gap: 4px;
+    }
+    .item .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .item .sub { color: var(--text-dim); font-size: 12px; }
+
+    .kpi-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .gauge {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      margin: 0 auto;
+      background: conic-gradient(var(--primary) calc(var(--val) * 1%), #22324a 0);
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    .gauge::after {
+      content: "";
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #0f1a2a;
+      border: 1px solid #283a57;
+      position: absolute;
+    }
+    .gauge span {
+      position: relative;
+      z-index: 1;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .band {
+      display: grid;
+      gap: 8px;
+    }
+    .band-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid #2a3c5c;
+      background: #101a2b;
+      overflow: hidden;
+    }
+    .bar span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #4f89ff, #6ee0ff);
+      width: 58%;
+    }
+
+    .bottom-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.2fr 1fr;
+    }
+
+    .feed {
+      max-height: 260px;
+      overflow: auto;
+      display: grid;
+      gap: 9px;
+      padding-right: 4px;
+    }
+
+    .news {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(14,22,35,.82);
+      display: grid;
+      gap: 6px;
+    }
+
+    .news .headline { font-size: 13px; line-height: 1.4; }
+    .news .meta { font-size: 12px; color: var(--text-dim); }
+
+    .calendar {
+      display: grid;
+      gap: 8px;
+    }
+
+    .event {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(13,21,34,.82);
+      display: grid;
+      gap: 5px;
+    }
+    .event .time { color: var(--text-dim); font-size: 12px; }
+    .event .txt { font-size: 13px; }
+
+    .footer {
+      text-align: right;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1160px) {
+      .hero, .main-grid, .bottom-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 12px; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div class="title-wrap">
+        <span class="crumb">finsight / dashboard</span>
+        <h1 class="title">AAPL 仪表盘 <span id="trendBadge" class="badge good">趋势偏强</span></h1>
+        <span class="dim" id="updatedAt">数据时间：2026-02-11 23:58</span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="时间周期">
+        <button class="tab active" data-range="1D">1D</button>
+        <button class="tab" data-range="1W">1W</button>
+        <button class="tab" data-range="1M">1M</button>
+        <button class="tab" data-range="3M">3M</button>
+        <button class="tab" data-range="1Y">1Y</button>
+      </div>
+    </section>
+
+    <section class="hero">
+      <article class="card">
+        <div class="price-main">
+          <span class="price" id="price">$210.42</span>
+          <span class="chg up" id="change">+3.26 (+1.57%)</span>
+        </div>
+        <div class="meta">
+          <span>盘后：$211.08</span>
+          <span>成交额：$8.6B</span>
+          <span>振幅：2.9%</span>
+          <span>状态：正常交易</span>
+        </div>
+        <div class="spark">
+          <svg viewBox="0 0 500 90" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#6ee0ff" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#6ee0ff" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path id="sparkArea" d="M0,72 L40,68 L80,64 L120,61 L160,54 L200,50 L240,48 L280,45 L320,42 L360,38 L400,34 L440,30 L500,24 L500,90 L0,90 Z" fill="url(#sparkFill)" />
+            <path id="sparkLine" d="M0,72 L40,68 L80,64 L120,61 L160,54 L200,50 L240,48 L280,45 L320,42 L360,38 L400,34 L440,30 L500,24" stroke="#6ee0ff" stroke-width="2.2" fill="none" />
+          </svg>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3>关键指标快照 <span class="dim">实时更新</span></h3>
+        <div class="summary-grid" id="summaryGrid"></div>
+      </article>
+    </section>
+
+    <section class="main-grid">
+      <article class="card">
+        <h3>价格走势与成交结构 <span class="dim">价量+趋势</span></h3>
+        <div class="chart">
+          <div class="grid-line" style="top: 24%;"></div>
+          <div class="grid-line" style="top: 50%;"></div>
+          <div class="grid-line" style="top: 76%;"></div>
+          <svg viewBox="0 0 900 300" preserveAspectRatio="none">
+            <polyline id="mainLine" points="10,220 80,205 150,210 220,185 290,190 360,172 430,165 500,148 570,152 640,135 710,122 780,108 850,96" fill="none" stroke="#66a6ff" stroke-width="3" />
+            <polyline id="maLine" points="10,226 80,216 150,206 220,197 290,187 360,178 430,170 500,161 570,151 640,142 710,132 780,122 850,112" fill="none" stroke="#ffbe58" stroke-width="2" stroke-dasharray="6 6" />
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i style="background:#66a6ff;"></i>价格</span>
+          <span><i style="background:#ffbe58;"></i>MA20</span>
+          <span><i style="background:#61e1ff;"></i>趋势斜率 +</span>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3>市场状态 & 告警 <span class="dim">优先级排序</span></h3>
+        <div class="list" id="alertList"></div>
+      </article>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="card">
+        <h3>估值带宽 <span class="dim">PE TTM</span></h3>
+        <div class="band">
+          <div class="band-row"><span>历史低位</span><strong>17.4x</strong></div>
+          <div class="bar"><span id="valuationBar"></span></div>
+          <div class="band-row"><span>当前</span><strong id="valuationNow">24.8x</strong></div>
+          <div class="band-row"><span>历史高位</span><strong>31.2x</strong></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h3>技术强度 <span class="dim">RSI / 趋势</span></h3>
+        <div class="gauge" id="techGauge" style="--val:74"><span id="techVal">74</span></div>
+        <div class="dim" style="text-align:center;">短中期趋势偏强，未到极端超买</div>
+      </article>
+
+      <article class="card">
+        <h3>情绪热度 <span class="dim">新闻 + 资金</span></h3>
+        <div class="gauge" id="sentGauge" style="--val:68"><span id="sentVal">68</span></div>
+        <div class="dim" style="text-align:center;">正向新闻占比 62%，资金净流入</div>
+      </article>
+
+      <article class="card">
+        <h3>风险温度 <span class="dim">波动/冲突</span></h3>
+        <div class="gauge" id="riskGauge" style="--val:41"><span id="riskVal">41</span></div>
+        <div class="dim" style="text-align:center;">中等风险，可控但需关注宏观窗口</div>
+      </article>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="card">
+        <h3>新闻流（已排序） <span class="dim">可点击追问</span></h3>
+        <div class="feed" id="newsFeed"></div>
+      </article>
+
+      <article class="card">
+        <h3>催化日历 <span class="dim">影响强度</span></h3>
+        <div class="calendar" id="calendarList"></div>
+      </article>
+    </section>
+
+    <div class="footer">Dashboard preview only · UI concept for FinSight</div>
+  </main>
+
+  <script>
+    const dataByRange = {
+      '1D': {
+        price: '$210.42',
+        change: '+3.26 (+1.57%)',
+        trendBadge: ['趋势偏强', 'good'],
+        spark: 'M0,72 L40,68 L80,64 L120,61 L160,54 L200,50 L240,48 L280,45 L320,42 L360,38 L400,34 L440,30 L500,24',
+        main: '10,220 80,205 150,210 220,185 290,190 360,172 430,165 500,148 570,152 640,135 710,122 780,108 850,96',
+        ma: '10,226 80,216 150,206 220,197 290,187 360,178 430,170 500,161 570,151 640,142 710,132 780,122 850,112',
+        summary: [
+          ['成交量', '42.6M', '较昨 +12%', 'up'],
+          ['换手率', '0.88%', '流动性正常', ''],
+          ['52W区间', '$164 - $237', '处于中高位', ''],
+          ['一致目标价', '$232', '+10.2% 空间', 'up']
+        ],
+        alerts: [
+          ['资金净流入增强', '机构净买入持续第 3 日', 'good'],
+          ['宏观事件窗口', '明晚 CPI 公布，波动可能放大', 'warn'],
+          ['证据源状态', 'DeepSearch 含少量 PDF 降级', 'warn']
+        ],
+        news: [
+          ['AAPL 供应链订单韧性超预期，短期出货预估上修', 'Reuters · 18m 前 · score 0.92', 'good'],
+          ['机构上调目标价，维持 Buy，关注毛利率弹性', 'Bloomberg · 35m 前 · score 0.87', 'good'],
+          ['市场等待通胀数据，科技股波动率小幅抬升', 'WSJ · 1h 前 · score 0.71', 'warn']
+        ],
+        calendar: [
+          ['明日 20:30', '美国 CPI 公布 · 高影响'],
+          ['2 天后', '供应链月度数据更新 · 中高影响'],
+          ['5 天后', '机构策略会观点更新 · 中影响']
+        ],
+        kpi: { tech: 74, sent: 68, risk: 41, val: '24.8x', valWidth: '58%' }
+      },
+      '1W': {
+        price: '$208.16',
+        change: '+4.92 (+2.42%)',
+        trendBadge: ['震荡上行', 'good'],
+        spark: 'M0,78 L40,76 L80,73 L120,68 L160,66 L200,60 L240,63 L280,57 L320,52 L360,48 L400,44 L440,38 L500,34',
+        main: '10,235 80,228 150,216 220,204 290,208 360,192 430,178 500,182 570,169 640,160 710,145 780,138 850,126',
+        ma: '10,242 80,234 150,226 220,217 290,207 360,198 430,188 500,178 570,168 640,159 710,149 780,139 850,130',
+        summary: [
+          ['周涨跌', '+2.42%', '相对行业 +0.8%', 'up'],
+          ['波动率', '23.7%', '中位水平', ''],
+          ['资金面', '净流入', '连续 4 日', 'up'],
+          ['一致目标价', '$230', '+10.5% 空间', 'up']
+        ],
+        alerts: [
+          ['趋势保持健康', 'MA20 上穿 MA60 后延续', 'good'],
+          ['估值接近上沿', '追涨性价比下降', 'warn'],
+          ['风险提示', '短线拥挤度抬升', 'warn']
+        ],
+        news: [
+          ['AI 终端需求预期回暖，相关产业链走强', 'CNBC · 2h 前 · score 0.81', 'good'],
+          ['外资增持大盘科技，防御与成长再平衡', 'FT · 4h 前 · score 0.76', 'good'],
+          ['部分分析师提示估值压力，建议等待回踩', 'MarketWatch · 5h 前 · score 0.66', 'warn']
+        ],
+        calendar: [
+          ['本周五', '期权到期日 · 高波动'],
+          ['下周一', '行业会议发言 · 中影响'],
+          ['下周三', '宏观就业数据 · 中高影响']
+        ],
+        kpi: { tech: 71, sent: 65, risk: 47, val: '25.4x', valWidth: '63%' }
+      },
+      '1M': {
+        price: '$204.72',
+        change: '-1.22 (-0.59%)',
+        trendBadge: ['高位震荡', 'warn'],
+        spark: 'M0,55 L40,50 L80,47 L120,40 L160,36 L200,34 L240,30 L280,32 L320,34 L360,38 L400,42 L440,48 L500,52',
+        main: '10,180 80,162 150,150 220,130 290,118 360,110 430,100 500,108 570,116 640,130 710,148 780,160 850,172',
+        ma: '10,192 80,178 150,166 220,154 290,142 360,132 430,124 500,120 570,122 640,128 710,138 780,150 850,162',
+        summary: [
+          ['月涨跌', '-0.59%', '回撤可控', 'down'],
+          ['波动率', '28.2%', '高于均值', 'warn'],
+          ['资金面', '分化', '北向与内资分歧', 'warn'],
+          ['一致目标价', '$224', '+9.4% 空间', 'up']
+        ],
+        alerts: [
+          ['趋势信号转弱', '短周期均线走平', 'warn'],
+          ['估值压力增加', 'PE 接近历史 75 分位', 'bad'],
+          ['证据冲突上升', '宏观与基本面叙事分化', 'warn']
+        ],
+        news: [
+          ['市场关注高估值资产回撤风险，科技板块承压', 'Reuters · 3h 前 · score 0.69', 'warn'],
+          ['公司回购计划仍在推进，底部支撑仍存', 'Bloomberg · 6h 前 · score 0.72', 'good'],
+          ['机构建议降低仓位杠杆，等待下个确认点', 'WSJ · 8h 前 · score 0.63', 'warn']
+        ],
+        calendar: [
+          ['本月中旬', '财报前瞻更新 · 高影响'],
+          ['本月下旬', '供应链库存数据 · 中影响'],
+          ['月底', '市场风格再平衡窗口 · 中高影响']
+        ],
+        kpi: { tech: 59, sent: 57, risk: 62, val: '27.2x', valWidth: '71%' }
+      },
+      '3M': {
+        price: '$198.80',
+        change: '+12.3 (+6.6%)',
+        trendBadge: ['中期上行', 'good'],
+        spark: 'M0,82 L40,78 L80,74 L120,70 L160,62 L200,58 L240,52 L280,46 L320,40 L360,37 L400,34 L440,32 L500,30',
+        main: '10,260 80,250 150,238 220,220 290,210 360,196 430,182 500,168 570,152 640,144 710,132 780,124 850,116',
+        ma: '10,268 80,258 150,246 220,232 290,220 360,208 430,196 500,182 570,168 640,156 710,146 780,136 850,126',
+        summary: [
+          ['3M涨跌', '+6.6%', '相对纳指 +1.9%', 'up'],
+          ['波动率', '24.9%', '健康区间', ''],
+          ['资金面', '净流入', '中期资金偏多', 'up'],
+          ['一致目标价', '$236', '+18.7% 空间', 'up']
+        ],
+        alerts: [
+          ['中期结构良好', '低点抬升，趋势完整', 'good'],
+          ['关注宏观扰动', '利率路径仍是核心变量', 'warn'],
+          ['数据质量', '整体稳定，个别源降级', 'warn']
+        ],
+        news: [
+          ['中期需求稳定，机构维持乐观评级', 'FT · 4h 前 · score 0.79', 'good'],
+          ['供应链成本压力边际缓和', 'Nikkei · 7h 前 · score 0.73', 'good'],
+          ['市场分歧集中在估值可持续性', 'Barrons · 9h 前 · score 0.68', 'warn']
+        ],
+        calendar: [
+          ['下月初', '行业景气度验证 · 高影响'],
+          ['下月中', '财报窗口 · 高影响'],
+          ['下月末', '回购执行披露 · 中影响']
+        ],
+        kpi: { tech: 77, sent: 70, risk: 44, val: '25.1x', valWidth: '61%' }
+      },
+      '1Y': {
+        price: '$186.10',
+        change: '+34.4 (+22.7%)',
+        trendBadge: ['长期偏多', 'good'],
+        spark: 'M0,88 L40,84 L80,80 L120,76 L160,71 L200,66 L240,60 L280,56 L320,50 L360,46 L400,42 L440,38 L500,34',
+        main: '10,282 80,272 150,258 220,244 290,228 360,212 430,196 500,182 570,168 640,156 710,144 780,132 850,120',
+        ma: '10,290 80,280 150,268 220,254 290,240 360,226 430,212 500,198 570,184 640,170 710,158 780,146 850,134',
+        summary: [
+          ['年内涨幅', '+22.7%', '相对大盘领先', 'up'],
+          ['最大回撤', '-14.2%', '风险可控', ''],
+          ['资金面', '持续净流入', '机构配置提升', 'up'],
+          ['一致目标价', '$242', '+30.0% 空间', 'up']
+        ],
+        alerts: [
+          ['长期趋势完好', '上升通道维持', 'good'],
+          ['估值位于中高分位', '需关注增速兑现', 'warn'],
+          ['结构性风险', '单一叙事依赖需分散', 'warn']
+        ],
+        news: [
+          ['长期资本开支与回购计划支撑估值中枢', 'Bloomberg · 5h 前 · score 0.82', 'good'],
+          ['行业周期中后段，关注增速切换节奏', 'Reuters · 7h 前 · score 0.71', 'warn'],
+          ['机构建议：长期持有+波段管理仓位', 'WSJ · 10h 前 · score 0.69', 'warn']
+        ],
+        calendar: [
+          ['未来 1 季度', '宏观与财报双窗口 · 高影响'],
+          ['未来 2 季度', '产品周期验证 · 高影响'],
+          ['未来 3 季度', '估值中枢重估 · 中高影响']
+        ],
+        kpi: { tech: 79, sent: 72, risk: 46, val: '24.2x', valWidth: '56%' }
+      }
+    };
+
+    const summaryGrid = document.getElementById('summaryGrid');
+    const alertList = document.getElementById('alertList');
+    const newsFeed = document.getElementById('newsFeed');
+    const calendarList = document.getElementById('calendarList');
+    const tabs = document.querySelectorAll('[data-range]');
+
+    function metricHtml([label, value, sub, trend]) {
+      return `
+        <div class="metric">
+          <span class="label">${label}</span>
+          <span class="value ${trend || ''}">${value}</span>
+          <span class="sub">${sub}</span>
+        </div>
+      `;
+    }
+
+    function alertHtml([title, sub, tone]) {
+      const cls = tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'warn';
+      const tag = tone === 'good' ? '正常' : tone === 'bad' ? '高风险' : '关注';
+      return `
+        <div class="item">
+          <div class="top"><strong>${title}</strong><span class="badge ${cls}">${tag}</span></div>
+          <div class="sub">${sub}</div>
+        </div>
+      `;
+    }
+
+    function newsHtml([headline, meta, tone]) {
+      return `
+        <div class="news">
+          <div class="headline">${headline}</div>
+          <div class="meta">${meta} · <span class="${tone === 'good' ? 'up' : tone === 'warn' ? '' : 'down'}">${tone === 'good' ? '偏多' : tone === 'warn' ? '中性' : '偏空'}</span></div>
+        </div>
+      `;
+    }
+
+    function eventHtml([time, text]) {
+      return `
+        <div class="event">
+          <div class="time">${time}</div>
+          <div class="txt">${text}</div>
+        </div>
+      `;
+    }
+
+    function setRange(range) {
+      const d = dataByRange[range];
+      if (!d) return;
+
+      document.getElementById('price').textContent = d.price;
+      const ch = document.getElementById('change');
+      ch.textContent = d.change;
+      ch.className = `chg ${d.change.startsWith('-') ? 'down' : 'up'}`;
+
+      const trendBadge = document.getElementById('trendBadge');
+      trendBadge.textContent = d.trendBadge[0];
+      trendBadge.className = `badge ${d.trendBadge[1]}`;
+
+      document.getElementById('sparkLine').setAttribute('d', d.spark);
+      document.getElementById('sparkArea').setAttribute('d', `${d.spark} L500,90 L0,90 Z`);
+      document.getElementById('mainLine').setAttribute('points', d.main);
+      document.getElementById('maLine').setAttribute('points', d.ma);
+
+      summaryGrid.innerHTML = d.summary.map(metricHtml).join('');
+      alertList.innerHTML = d.alerts.map(alertHtml).join('');
+      newsFeed.innerHTML = d.news.map(newsHtml).join('');
+      calendarList.innerHTML = d.calendar.map(eventHtml).join('');
+
+      document.getElementById('techVal').textContent = d.kpi.tech;
+      document.getElementById('sentVal').textContent = d.kpi.sent;
+      document.getElementById('riskVal').textContent = d.kpi.risk;
+      document.getElementById('techGauge').style.setProperty('--val', d.kpi.tech);
+      document.getElementById('sentGauge').style.setProperty('--val', d.kpi.sent);
+      document.getElementById('riskGauge').style.setProperty('--val', d.kpi.risk);
+      document.getElementById('valuationNow').textContent = d.kpi.val;
+      document.getElementById('valuationBar').style.width = d.kpi.valWidth;
+
+      document.getElementById('updatedAt').textContent = `数据时间：2026-02-11 23:58 · ${range}`;
+    }
+
+    tabs.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        btn.classList.add('active');
+        setRange(btn.dataset.range);
+      });
+    });
+
+    setRange('1D');
+  </script>
+</body>
+</html>
+

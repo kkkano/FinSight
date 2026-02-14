@@ -161,6 +161,12 @@ interface AppState {
   setTraceViewMode: (mode: TraceViewMode) => void;
   traceRawShowRawJson: boolean;
   setTraceRawShowRawJson: (show: boolean) => void;
+  requestMetrics: {
+    llmTotalCalls: number;
+    toolTotalCalls: number;
+    updatedAt: string | null;
+  };
+  setRequestMetrics: (metrics: Partial<{ llmTotalCalls: number; toolTotalCalls: number; updatedAt: string | null }>) => void;
   // 右侧面板全局可见性 - 供快捷键切换
   showRightPanel: boolean;
   setShowRightPanel: (show: boolean) => void;
@@ -243,6 +249,11 @@ export const useStore = create<AppState>((set) => ({
   traceRawEnabled: initialTraceRawEnabled,
   traceViewMode: initialTraceViewMode,
   traceRawShowRawJson: initialTraceRawShowRawJson,
+  requestMetrics: {
+    llmTotalCalls: 0,
+    toolTotalCalls: 0,
+    updatedAt: null,
+  },
   // 右侧面板默认展开
   showRightPanel: true,
 
@@ -425,13 +436,20 @@ export const useStore = create<AppState>((set) => ({
       return { traceRawShowRawJson: Boolean(show) };
     }),
 
+  setRequestMetrics: (metrics) =>
+    set((state) => ({
+      requestMetrics: {
+        ...state.requestMetrics,
+        ...metrics,
+      },
+    })),
+
   setShowRightPanel: (show) =>
     set(() => ({ showRightPanel: show })),
 
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
-
 
 
 

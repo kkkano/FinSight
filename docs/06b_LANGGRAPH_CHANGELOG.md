@@ -1,7 +1,7 @@
 # FinSight LangGraph 变更记录（Changelog / Patch Notes / Worklog）
 
 > 本文件记录 LangGraph 重构过程中的所有变更条目、补丁说明和实施日志。
-> 设计规范见 `06a_LANGGRAPH_DESIGN_SPEC.md`，TODO/路线图见 `06c_LANGGRAPH_TODO.md`。
+> 设计规范见 `06a_LANGGRAPH_DESIGN_SPEC.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
 
 ---
 

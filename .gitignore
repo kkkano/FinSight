@@ -74,10 +74,19 @@ logs/
 temp/
 tmp/
 
+# --- Lint / CI / Test Artifacts ---
+eslint_report.json
+eslint_remaining.json
+lint_output.txt
+scripts/test_*_output.json
+scripts/test_*_state.json
+scripts/test_*_report.json
+
 # --- Runtime Data ---
 data/langgraph/
 backend/data/*.sqlite
 backend/data/*.db
+backend/data/*.bak
 
 # --- Agentic Tools ---
 .antigravity/

@@ -228,7 +228,7 @@ class LangChainFinancialAgent:
 
     def __init__(
         self,
-        provider: str = "gemini_proxy",
+        provider: str = "openai_compatible",
         model: Optional[str] = None,
         verbose: bool = True,
         max_iterations: int = 10,  # 降低迭代次数防止死循环
@@ -605,7 +605,7 @@ class LangChainFinancialAgent:
 
 
 def create_financial_agent(
-    provider: str = "gemini_proxy",
+    provider: str = "openai_compatible",
     model: Optional[str] = None,
     verbose: bool = True,
     max_iterations: int = 20,

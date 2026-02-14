@@ -1,10 +1,13 @@
 import { Moon, Sun } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
 import { ContextPanelShell } from './ContextPanelShell';
 import type { MarketQuote } from '../../hooks/useMarketQuotes';
+import { apiClient } from '../../api/client';
+import { useStore } from '../../store/useStore';
 
 type ChatWorkspaceProps = {
   isMobile: boolean;
@@ -20,6 +23,7 @@ type ChatWorkspaceProps = {
     onSubscribeClick: () => void;
   };
   marketQuotes: MarketQuote[];
+  initialReportId?: string | null;
 };
 
 const formatChangePct = (value?: number) => {
@@ -35,7 +39,41 @@ export function ChatWorkspace({
   onDashboardRequest,
   contextPanel,
   marketQuotes,
+  initialReportId,
 }: ChatWorkspaceProps) {
+  // --- P0-2: report_id replay ---
+  const replayLoadedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!initialReportId) return;
+    // Prevent double-loading if the same reportId is already loaded
+    if (replayLoadedRef.current === initialReportId) return;
+    replayLoadedRef.current = initialReportId;
+
+    const sessionId = useStore.getState().sessionId;
+    if (!sessionId) return;
+
+    apiClient
+      .getReportReplay({ sessionId, reportId: initialReportId })
+      .then((data) => {
+        if (data.success && data.report) {
+          const { addMessage } = useStore.getState();
+          addMessage({
+            id: `replay-${initialReportId}-${Date.now()}`,
+            role: 'assistant',
+            content: data.report.title || 'Report replay',
+            timestamp: Date.now(),
+            report: data.report,
+          });
+          // Clear the URL param to prevent reload on refresh
+          window.history.replaceState({}, '', '/chat');
+        }
+      })
+      .catch((err) => {
+        console.error('[ChatWorkspace] Report replay failed:', err);
+      });
+  }, [initialReportId]);
+
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
       <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:px-3">

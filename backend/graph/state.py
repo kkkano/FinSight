@@ -54,14 +54,23 @@ class Clarify(TypedDict):
 
 
 class Policy(TypedDict, total=False):
-    """Policy gate output: budget limits and guardrails."""
+    """Policy gate output: budget limits and guardrails.
 
-    max_tool_calls: int
-    max_rounds: int
-    max_seconds: int
+    Actual structure produced by policy_gate node:
+    - budget: nested dict with max_rounds, max_tools, max_seconds, etc.
+    - allowed_tools: list of tool name strings
+    - tool_schemas: dict mapping tool name -> JSON schema
+    - allowed_agents: list of agent name strings
+    - agent_selection: dict with required/max_agents/min_agents
+    - agent_schemas: dict mapping agent name -> JSON schema
+    """
+
+    budget: dict
+    allowed_tools: list[str]
+    tool_schemas: dict
     allowed_agents: list[str]
-    denied_agents: list[str]
-    budget_label: str
+    agent_selection: dict
+    agent_schemas: dict
 
 
 class PlanIR(TypedDict, total=False):

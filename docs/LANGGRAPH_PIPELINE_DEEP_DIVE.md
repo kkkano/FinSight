@@ -891,17 +891,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    CALL[LLM 调用] --> TRY[尝试当前端点]
-    TRY -->|成功| SUCCESS[report_llm_success<br/>重置权重]
-    TRY -->|失败| DETECT{错误类型?}
+    CALL["LLM 调用"] --> TRY["尝试当前端点"]
+    TRY -->|成功| SUCCESS["report_llm_success\n重置权重"]
+    TRY -->|失败| DETECT{"错误类型?"}
 
-    DETECT -->|rate_limit / transient| RETRY{有 llm_factory?}
-    DETECT -->|permanent| FAIL[抛出异常]
+    DETECT -->|rate_limit / transient| RETRY{"有 llm_factory?"}
+    DETECT -->|permanent| FAIL["抛出异常"]
 
-    RETRY -->|是| ROTATE[llm_factory()<br/>创建新 LLM 实例<br/>绑定下一端点]
-    RETRY -->|否| BACKOFF[sleep + jitter<br/>原地重试]
+    RETRY -->|是| ROTATE["llm_factory()\n创建新 LLM 实例\n绑定下一端点"]
+    RETRY -->|否| BACKOFF["sleep + jitter\n原地重试"]
 
-    ROTATE --> TRY2[立即重试<br/>wait=0]
+    ROTATE --> TRY2["立即重试\nwait=0"]
     BACKOFF --> TRY
 
     TRY2 -->|达到 max_attempts| FAIL

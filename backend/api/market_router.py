@@ -101,7 +101,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
             return {"ticker": ticker, "data": price_info}
         except Exception as exc:
-            return {"error": str(exc)}
+            deps.logger.warning("[API] get_price failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 价格数据") from exc
 
     @router.get("/api/stock/news/{ticker}")
     def get_news(ticker: str):
@@ -109,7 +110,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             news = deps.get_company_news(ticker)
             return {"ticker": ticker, "data": news}
         except Exception as exc:
-            return {"error": str(exc)}
+            deps.logger.warning("[API] get_news failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 新闻数据") from exc
 
     @router.get("/api/financials/{ticker}")
     def get_financials(ticker: str):
@@ -117,7 +119,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             financials_data = deps.get_financial_statements(ticker)
             return financials_data
         except Exception as exc:
-            return {"ticker": ticker, "error": str(exc)}
+            deps.logger.warning("[API] get_financials failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 财务数据") from exc
 
     @router.get("/api/financials/{ticker}/summary")
     def get_financials_summary(ticker: str):
@@ -125,7 +128,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             summary = deps.get_financial_statements_summary(ticker)
             return {"ticker": ticker, "summary": summary}
         except Exception as exc:
-            return {"ticker": ticker, "error": str(exc)}
+            deps.logger.warning("[API] get_financials_summary failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 财务摘要") from exc
 
     @router.get("/api/stock/kline/{ticker}", response_model=KlineResponse)
     def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):

@@ -25,6 +25,16 @@ def _env_str(key: str, default: str) -> str:
     return raw.strip() if isinstance(raw, str) and raw.strip() else default
 
 
+def _env_int(key: str, default: int) -> int:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return default
+
+
 def _extract_json_object(text: str) -> str:
     if not text:
         raise ValueError("empty model output")
@@ -56,12 +66,58 @@ _DISALLOWED_SNIPPET_MARKERS = (
 _DISCLAIMER_PHRASES = ("不构成投资建议", "仅供参考", "历史不代表未来", "非投资建议")
 
 
+def _normalize_llm_section_line(line: str) -> str:
+    cleaned = str(line or "").strip()
+    if not cleaned:
+        return ""
+
+    if cleaned.startswith("- "):
+        cleaned = cleaned[2:].strip()
+
+    if cleaned.startswith("{") and cleaned.endswith("}"):
+        try:
+            obj = json.loads(cleaned)
+        except Exception:
+            obj = None
+        if isinstance(obj, dict):
+            event = str(obj.get("event") or "").strip()
+            impact = str(obj.get("impact") or "").strip()
+            if event and impact:
+                return f"{event}：{impact}"
+
+            risk = str(obj.get("risk") or "").strip()
+            detail = str(obj.get("detail") or "").strip()
+            if risk and detail:
+                return f"{risk}：{detail}"
+
+            title = str(obj.get("title") or obj.get("name") or "").strip()
+            desc = str(obj.get("summary") or obj.get("reason") or obj.get("value") or "").strip()
+            if title and desc:
+                return f"{title}：{desc}"
+
+            pairs: list[str] = []
+            for key, value in obj.items():
+                key_text = str(key).strip()
+                value_text = str(value).strip()
+                if not key_text or not value_text:
+                    continue
+                if any(phrase in value_text for phrase in _DISCLAIMER_PHRASES):
+                    continue
+                pairs.append(f"{key_text}: {value_text}")
+                if len(pairs) >= 3:
+                    break
+            if pairs:
+                return "；".join(pairs)
+
+    return cleaned
+
+
 def _sanitize_llm_section(text: str, *, max_lines: int = 8, max_chars: int = 900) -> str:
     if not isinstance(text, str):
         return ""
     cleaned_lines: list[str] = []
     for raw in text.splitlines():
-        line = raw.strip()
+        line = _normalize_llm_section_line(raw)
         if not line:
             continue
         if any(marker in line for marker in _DISALLOWED_SNIPPET_MARKERS):
@@ -77,6 +133,27 @@ def _sanitize_llm_section(text: str, *, max_lines: int = 8, max_chars: int = 900
     if len(normalized) > max_chars:
         normalized = normalized[:max_chars].rstrip()
     return normalized
+
+
+def _section_limits(output_mode: str, key: str) -> tuple[int, int]:
+    if output_mode == "investment_report" and key in {
+        "investment_thesis",
+        "investment_summary",
+        "company_overview",
+        "catalysts",
+        "valuation",
+        "conclusion",
+        "impact_analysis",
+        "next_watch",
+        "analysis",
+        "highlights",
+        "summary",
+        "comparison_conclusion",
+    }:
+        max_lines = max(10, _env_int("LANGGRAPH_SYNTHESIZE_LONGFORM_MAX_LINES", 18))
+        max_chars = max(1200, _env_int("LANGGRAPH_SYNTHESIZE_LONGFORM_MAX_CHARS", 3200))
+        return max_lines, max_chars
+    return 8, 900
 
 
 def _coerce_payload_to_strings(payload: dict[str, Any]) -> dict[str, Any]:
@@ -197,6 +274,7 @@ class RenderVars(BaseModel):
 
     # common-ish
     risks: str = ""
+    conflict_disclosure: str = ""
 
     # news
     news_summary: str = ""
@@ -267,6 +345,131 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             if step.get("kind") == "agent" and step.get("name") == agent_name:
                 return output if isinstance(output, dict) else None
         return None
+
+    # --- Cross-agent conflict collection & arbitration ---
+    # Comparable-claim matrix: pairs of agents whose outputs can logically conflict.
+    # Each tuple: (agent_a, agent_b, comparable_topic)
+    _COMPARABLE_PAIRS: list[tuple[str, str, str]] = [
+        ("technical_agent", "fundamental_agent", "方向判断"),
+        ("technical_agent", "news_agent", "价格动量 vs 事件冲击"),
+        ("technical_agent", "price_agent", "技术信号 vs 实际走势"),
+        ("fundamental_agent", "news_agent", "基本面 vs 事件影响"),
+        ("fundamental_agent", "macro_agent", "个股基本面 vs 宏观环境"),
+        ("news_agent", "macro_agent", "事件情绪 vs 宏观周期"),
+        ("price_agent", "news_agent", "价格走势 vs 新闻情绪"),
+        ("macro_agent", "technical_agent", "宏观趋势 vs 技术信号"),
+    ]
+
+    def _collect_conflict_disclosure() -> str:
+        """
+        Trigger formula:
+          detect = deep_report || (success_agents >= 2 && comparable_claims >= 1)
+
+        - deep_report: output_mode == 'investment_report'
+        - success_agents: agents that returned non-skipped dict output
+        - comparable_claims: number of comparable agent pairs with both sides successful
+
+        Edge cases:
+        - 0 successful agents  → skip entirely
+        - 1 successful agent   → if deep_report, emit "冲突检测降级（证据不足）"
+        - Single price query   → skip (handled by success_agents < 2)
+        """
+        all_agent_names = ("price_agent", "news_agent", "fundamental_agent", "technical_agent", "macro_agent")
+
+        # 1) Count successful agents and collect their outputs
+        success_outputs: dict[str, dict[str, Any]] = {}
+        for aname in all_agent_names:
+            a_out = _get_agent_output(aname)
+            if isinstance(a_out, dict) and a_out.get("summary"):
+                success_outputs[aname] = a_out
+        success_count = len(success_outputs)
+
+        # 2) Count comparable claims (pairs where both sides succeeded)
+        comparable_claims_count = 0
+        comparable_topics: list[str] = []
+        for agent_a, agent_b, topic in _COMPARABLE_PAIRS:
+            if agent_a in success_outputs and agent_b in success_outputs:
+                comparable_claims_count += 1
+                comparable_topics.append(topic)
+
+        # 3) Determine if this is a deep report
+        is_deep_report = output_mode == "investment_report"
+
+        # 4) Apply trigger formula: detect = deep_report || (success >= 2 && comparable >= 1)
+        should_detect = is_deep_report or (success_count >= 2 and comparable_claims_count >= 1)
+
+        if not should_detect:
+            return ""
+
+        # 5) Edge case: deep report with only 1 agent → degraded mode
+        if is_deep_report and success_count <= 1:
+            return (
+                "**冲突检测降级（证据不足）：**\n\n"
+                f"仅 {success_count} 个智能体成功返回数据，"
+                "无法执行跨维度交叉验证。建议：\n"
+                "- 检查数据源连通性（API Key、网络）\n"
+                "- 重试以获取更多智能体输出\n"
+                "- 当前结论仅基于单一维度，可信度受限\n"
+            )
+
+        # 6) Collect actual conflict_flags and conflicting_claims from successful agents
+        all_flags: list[str] = []
+        all_claims: list[dict[str, Any]] = []
+        for aname, a_out in success_outputs.items():
+            flags = a_out.get("conflict_flags")
+            if isinstance(flags, list):
+                for f in flags:
+                    if isinstance(f, str) and f.strip():
+                        all_flags.append(f"[{aname.replace('_agent', '')}] {f.strip()}")
+            claims = a_out.get("conflicting_claims")
+            if isinstance(claims, list):
+                for c in claims:
+                    if isinstance(c, dict):
+                        all_claims.append({**c, "_agent": aname})
+
+        # 7) Build disclosure text
+        lines: list[str] = []
+
+        # Header with detection context
+        detection_basis = "深度研报模式" if is_deep_report else f"{success_count} 个智能体成功 + {comparable_claims_count} 组可比命题"
+        lines.append(f"**冲突检测（{detection_basis}）：**")
+        lines.append("")
+
+        if not all_claims:
+            # No conflicts found — positive signal
+            lines.append(f"✅ 已完成 {comparable_claims_count} 组跨维度交叉验证，未发现显著数据冲突。")
+            if comparable_topics:
+                lines.append(f"   验证维度：{', '.join(comparable_topics[:6])}")
+            return "\n".join(lines)
+
+        lines[0] = f"**跨智能体数据冲突（共 {len(all_claims)} 项，检测基础：{detection_basis}）：**"
+        lines.append("")
+
+        for idx, claim in enumerate(all_claims[:8], 1):
+            agent_label = str(claim.get("_agent", "")).replace("_agent", "")
+            topic = claim.get("claim", "未知")
+            src_a = claim.get("source_a", "?")
+            val_a = claim.get("value_a", "?")
+            src_b = claim.get("source_b", "?")
+            val_b = claim.get("value_b", "?")
+            severity = claim.get("severity", "medium")
+            resolved = claim.get("resolved", False)
+            resolution = claim.get("resolution", "")
+
+            severity_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+            status = f"✅ {resolution}" if resolved and resolution else "❓ 待进一步验证"
+
+            lines.append(f"{idx}. {severity_icon} **{topic}**（{agent_label}）")
+            lines.append(f"   - {src_a}: {val_a}")
+            lines.append(f"   - {src_b}: {val_b}")
+            lines.append(f"   - 裁决: {status}")
+            lines.append("")
+
+        unresolved = [c for c in all_claims if not c.get("resolved", False)]
+        if unresolved:
+            lines.append(f"⚠️ {len(unresolved)} 项冲突未裁决，结论可信度需打折。建议关注后续数据更新。")
+
+        return "\n".join(lines)
 
     def _fmt_price_snapshot() -> str:
         out = _get_tool_output("get_stock_price")
@@ -417,13 +620,13 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             lines: list[str] = []
             price_out = _get_agent_output("price_agent")
             if isinstance(price_out, dict) and price_out.get("summary"):
-                lines.append(f"- {str(price_out['summary']).strip()[:300]}")
+                lines.append(f"- {str(price_out['summary']).strip()[:800]}")
             fund_out = _get_agent_output("fundamental_agent")
             if isinstance(fund_out, dict) and fund_out.get("summary"):
-                lines.append(f"- {str(fund_out['summary']).strip()[:400]}")
+                lines.append(f"- {str(fund_out['summary']).strip()[:800]}")
             tech_out = _get_agent_output("technical_agent")
             if isinstance(tech_out, dict) and tech_out.get("summary"):
-                lines.append(f"- {str(tech_out['summary']).strip()[:300]}")
+                lines.append(f"- {str(tech_out['summary']).strip()[:800]}")
             if not lines:
                 lines = [
                     '- 研报为结构化交付物：会更长、更全面，但不等于\u201c必须跑全家桶\u201d。',
@@ -505,14 +708,14 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             if isinstance(macro_out, dict) and macro_out.get("summary"):
                 ms = str(macro_out["summary"]).strip()
                 if ms and len(ms) > 20:
-                    neutral_notes.append(f"宏观环境：{ms[:200]}")
+                    neutral_notes.append(f"宏观环境：{ms[:600]}")
 
             # News agent
             news_out = _get_agent_output("news_agent")
             if isinstance(news_out, dict) and news_out.get("summary"):
                 ns = str(news_out["summary"]).strip()
                 if ns and len(ns) > 20:
-                    neutral_notes.append(f"近期事件：{ns[:200]}")
+                    neutral_notes.append(f"近期事件：{ns[:600]}")
 
             # --- 2. Determine directional view ---
             bull_count = len(bullish_factors)
@@ -618,13 +821,13 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             # Fallback: use fundamental_agent summary
             fund_out = _get_agent_output("fundamental_agent")
             if isinstance(fund_out, dict) and fund_out.get("summary"):
-                return f"- {str(fund_out['summary']).strip()[:600]}"
+                return f"- {str(fund_out['summary']).strip()[:1200]}"
             return "- 公司概况：暂无数据。"
 
         def _build_catalysts_from_agents() -> str:
             news_out = _get_agent_output("news_agent")
             if isinstance(news_out, dict) and news_out.get("summary"):
-                return f"- {str(news_out['summary']).strip()[:600]}"
+                return f"- {str(news_out['summary']).strip()[:1200]}"
             return "\n".join([
                 "- 可能催化：财报、产品发布、政策变化、行业景气度变化。",
                 "- 将基于新闻/财报证据进一步细化。",
@@ -912,7 +1115,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             if isinstance(macro_out, dict) and macro_out.get("summary"):
                 ms = str(macro_out["summary"]).strip()
                 if ms and len(ms) > 20:
-                    lines.append(f"**宏观环境**：{ms[:250]}")
+                    lines.append(f"**宏观环境**：{ms[:600]}")
 
             # 2) Action items / watch points
             watch_items: list[str] = []
@@ -948,7 +1151,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 agent_risks = a_out.get("risks")
                 if isinstance(agent_risks, list):
                     for r in agent_risks:
-                        r_text = str(r).strip()[:150]
+                        r_text = str(r).strip()[:300]
                         if r_text and r_text not in risk_lines:
                             risk_lines.append(r_text)
             if risk_lines:
@@ -965,6 +1168,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             catalysts=_build_catalysts_from_agents(),
             valuation=_build_valuation_from_agents(),
             risks=_build_risks_from_agents(),
+            conflict_disclosure=_collect_conflict_disclosure(),
         ).model_dump()
 
     if subject_type in ("filing", "research_doc"):
@@ -997,6 +1201,289 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
     ).model_dump()
 
 
+async def _generate_narrative_draft(
+    state: GraphState,
+    render_vars: dict[str, str],
+    trace: dict[str, Any],
+) -> str:
+    """
+    Call LLM to produce a complete markdown research report (narrative mode).
+
+    Returns the markdown string on success, or empty string on failure
+    (caller falls back to template-rendered draft_markdown).
+    """
+    try:
+        from backend.llm_config import create_llm
+
+        _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.3"))
+        llm = create_llm(temperature=_synth_temp)
+        llm_factory = lambda: create_llm(temperature=_synth_temp)  # noqa: E731
+    except Exception as exc:
+        logger.warning("[Synthesize/narrative] LLM init failed: %s", exc)
+        return ""
+
+    artifacts = state.get("artifacts") or {}
+    step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
+    evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
+    query = (state.get("query") or "").strip()
+    subject = state.get("subject") or {}
+    tickers = subject.get("tickers") if isinstance(subject, dict) else []
+    tickers = tickers if isinstance(tickers, list) else []
+    ticker_label = ", ".join(str(t) for t in tickers) if tickers else "标的"
+
+    # -- Collect agent summaries and evidence for the prompt context --
+    agent_sections: list[str] = []
+    if isinstance(step_results, dict):
+        plan_ir = state.get("plan_ir") or {}
+        steps = plan_ir.get("steps") if isinstance(plan_ir, dict) else None
+        step_index = {s.get("id"): s for s in (steps or []) if isinstance(s, dict) and s.get("id")}
+
+        for step_id, item in step_results.items():
+            if not isinstance(item, dict):
+                continue
+            output = item.get("output")
+            if isinstance(output, dict) and output.get("skipped"):
+                continue
+            step_meta = step_index.get(step_id) or {}
+            agent_name = step_meta.get("name") or step_id
+            kind = step_meta.get("kind") or "unknown"
+
+            section_lines = [f"### {agent_name} ({kind})"]
+            if isinstance(output, dict):
+                summary = output.get("summary")
+                if summary:
+                    section_lines.append(f"摘要: {str(summary).strip()[:2000]}")
+                evidence = output.get("evidence")
+                if isinstance(evidence, list):
+                    for ev in evidence[:15]:
+                        if isinstance(ev, dict):
+                            ev_text = str(ev.get("text") or "").strip()
+                            if ev_text:
+                                section_lines.append(f"- {ev_text[:400]}")
+                        elif isinstance(ev, str) and ev.strip():
+                            section_lines.append(f"- {ev.strip()[:400]}")
+                risks = output.get("risks")
+                if isinstance(risks, list):
+                    for r in risks[:6]:
+                        section_lines.append(f"- [风险] {str(r).strip()[:300]}")
+            elif output is not None:
+                section_lines.append(str(output).strip()[:1500])
+
+            agent_sections.append("\n".join(section_lines))
+
+    # -- Collect cross-agent conflict information for narrative context --
+    # Apply same trigger formula: deep_report || (success >= 2 && comparable >= 1)
+    _NARRATIVE_COMPARABLE_PAIRS = [
+        ("technical_agent", "fundamental_agent"),
+        ("technical_agent", "news_agent"),
+        ("technical_agent", "price_agent"),
+        ("fundamental_agent", "news_agent"),
+        ("fundamental_agent", "macro_agent"),
+        ("news_agent", "macro_agent"),
+        ("price_agent", "news_agent"),
+        ("macro_agent", "technical_agent"),
+    ]
+    narrative_success_agents: set[str] = set()
+    if isinstance(step_results, dict):
+        for step_id, item in step_results.items():
+            if not isinstance(item, dict):
+                continue
+            output = item.get("output")
+            if not isinstance(output, dict) or output.get("skipped"):
+                continue
+            a_name = (step_index.get(step_id) or {}).get("name") or ""
+            if a_name and isinstance(output.get("summary"), str) and output["summary"].strip():
+                narrative_success_agents.add(a_name)
+
+    narrative_comparable_count = sum(
+        1 for a, b in _NARRATIVE_COMPARABLE_PAIRS
+        if a in narrative_success_agents and b in narrative_success_agents
+    )
+    output_mode_raw = state.get("output_mode") or ""
+    is_narrative_deep = output_mode_raw == "investment_report"
+    should_collect_conflicts = is_narrative_deep or (
+        len(narrative_success_agents) >= 2 and narrative_comparable_count >= 1
+    )
+
+    conflict_context_lines: list[str] = []
+    if should_collect_conflicts and isinstance(step_results, dict):
+        for step_id, item in step_results.items():
+            if not isinstance(item, dict):
+                continue
+            output = item.get("output")
+            if not isinstance(output, dict):
+                continue
+            a_name = (step_index.get(step_id) or {}).get("name") or step_id
+            flags = output.get("conflict_flags")
+            claims = output.get("conflicting_claims")
+            if isinstance(flags, list):
+                for f in flags:
+                    if isinstance(f, str) and f.strip():
+                        conflict_context_lines.append(f"- [{a_name}] {f.strip()}")
+            if isinstance(claims, list):
+                for c in claims:
+                    if isinstance(c, dict):
+                        claim_text = c.get("claim", "")
+                        src_a = c.get("source_a", "?")
+                        val_a = c.get("value_a", "?")
+                        src_b = c.get("source_b", "?")
+                        val_b = c.get("value_b", "?")
+                        resolved = c.get("resolved", False)
+                        resolution = c.get("resolution", "")
+                        status = f"已裁决: {resolution}" if resolved else "未裁决"
+                        conflict_context_lines.append(
+                            f"- [{a_name}] {claim_text}: {src_a}={val_a} vs {src_b}={val_b} ({status})"
+                        )
+        # Edge case: deep report with ≤1 agent → add degraded notice to prompt
+        if is_narrative_deep and len(narrative_success_agents) <= 1:
+            conflict_context_lines.insert(
+                0, f"- [系统] 冲突检测降级：仅 {len(narrative_success_agents)} 个智能体成功，无法交叉验证"
+            )
+    conflict_context = "\n".join(conflict_context_lines) if conflict_context_lines else ""
+
+    evidence_text = ""
+    if isinstance(evidence_pool, list) and evidence_pool:
+        ev_lines: list[str] = []
+        for ev in evidence_pool[:20]:
+            if isinstance(ev, dict):
+                text = str(ev.get("text") or "").strip()
+                source = str(ev.get("source") or "").strip()
+                if text:
+                    ev_lines.append(f"- [{source}] {text[:400]}" if source else f"- {text[:400]}")
+            elif isinstance(ev, str) and ev.strip():
+                ev_lines.append(f"- {ev.strip()[:400]}")
+        if ev_lines:
+            evidence_text = "\n".join(ev_lines)
+
+    prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
+
+<task>
+基于以下多个分析智能体的输出，撰写一份完整、深度的中文 Markdown 投资研究报告。
+查询: {query}
+标的: {ticker_label}
+</task>
+
+<agent_outputs>
+{chr(10).join(agent_sections) if agent_sections else "(无智能体输出)"}
+</agent_outputs>
+
+{"<evidence_pool>" + chr(10) + evidence_text + chr(10) + "</evidence_pool>" if evidence_text else ""}
+
+{"<cross_agent_conflicts>" + chr(10) + conflict_context + chr(10) + "</cross_agent_conflicts>" if conflict_context else ""}
+
+<report_structure>
+严格按以下结构撰写，使用 Markdown 标题。每个章节必须包含实质性分析段落，禁止仅列出数据点：
+
+## 投资论点
+2-3 段话。第一段给出核心判断（偏多/偏空/中性），附置信度和关键驱动因素。第二段阐述投资逻辑链条：事件 → 基本面影响 → 估值变化 → 价格预期。如有分歧信号，需明确说明矛盾点和权衡逻辑。
+
+## 基本面分析
+3-4 段话。必须涵盖：
+- 盈利能力：营收规模、增速（YoY/QoQ）、利润率趋势
+- 财务健康：杠杆率、现金流状况、资本配置
+- 增长质量：增长驱动来源（量价/新业务/并购）、可持续性评估
+- 与同业或历史水平的对比。每个论点引用具体数字。
+
+## 技术面分析
+2-3 段话。必须涵盖：
+- 趋势判断：均线系统（MA20/MA50/MA200）排列与价格位置
+- 动量指标：RSI 区间判断、MACD 信号方向
+- 关键价位：支撑位与阻力位，以及触及后的操作含义
+- 技术面与基本面信号的一致性/背离分析
+
+## 催化剂与风险
+分别列出催化剂和风险，各 2-4 条。每条必须包含：
+1. 事件描述（具体事件/日期/来源）
+2. 影响路径（事件 → 预期/情绪 → 业绩预期 → 估值/价格）
+3. 概率和影响程度评估
+
+## 结论
+2 段话。第一段综合研判，给出明确的操作建议框架（观望/逢低关注/逢高减仓等，附前提条件）。第二段列出 3-5 个关键观察指标和触发条件变更信号。
+</report_structure>
+
+<constraints>
+1) 总长度 4000-6000 字符。这是严格要求，不可少于 4000 字符。
+2) 每句话必须有数据支撑或逻辑推导，禁止空洞套话和模板化表述。
+3) 跨智能体交叉引用：技术面与基本面信号对比、新闻事件与价格走势关联、宏观环境对个股的传导路径。
+4) **冲突处理（关键）**：如 <cross_agent_conflicts> 中存在未裁决冲突，必须在相关章节中：(a) 明确说明冲突点和双方数据来源；(b) 给出裁决依据（优先采信哪方、为什么）；(c) 标注剩余不确定性。已裁决冲突也需简要提及裁决结论。
+5) 有证据来源时标注引用编号 [1][2]。
+6) 数据不足时明确标注"[数据缺失]"，不编造数字。
+7) 直接输出 Markdown，禁止 JSON 包装、代码块包裹或开场白。
+8) 末尾附一行免责声明："*以上内容仅供参考，不构成投资建议。*"
+9) 禁止出现"补充分析"、"核心发现"等附录性标题，所有内容必须融入上述五大章节中。
+</constraints>"""
+
+    retry_attempts = 0
+
+    def _on_retry(attempt: int, _exc: BaseException) -> None:
+        nonlocal retry_attempts
+        retry_attempts = max(retry_attempts, int(attempt))
+
+    try:
+        await emit_event(
+            {
+                "type": "thinking",
+                "stage": "llm_call_start",
+                "message": "synthesize_narrative",
+                "timestamp": utc_now_iso(),
+            }
+        )
+        resp = await ainvoke_with_rate_limit_retry(
+            llm,
+            [HumanMessage(content=prompt)],
+            llm_factory=llm_factory,
+            acquire_token=True,
+            on_retry=_on_retry,
+        )
+        await emit_event(
+            {
+                "type": "thinking",
+                "stage": "llm_call_done",
+                "message": "synthesize_narrative",
+                "timestamp": utc_now_iso(),
+            }
+        )
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        draft = str(content).strip()
+
+        # Strip accidental code-fence wrapping
+        draft = re.sub(r"^```(?:markdown|md)?\s*", "", draft, flags=re.IGNORECASE)
+        draft = re.sub(r"\s*```$", "", draft)
+        draft = draft.strip()
+
+        if len(draft) < 500:
+            logger.warning("[Synthesize/narrative] LLM output too short (%d chars), discarding", len(draft))
+            return ""
+
+        logger.info("[Synthesize/narrative] Generated %d-char narrative draft (retries=%d)", len(draft), retry_attempts)
+        return draft
+
+    except Exception as exc:
+        retryable = is_rate_limit_error(exc)
+        logger.warning(
+            "[Synthesize/narrative] LLM call FAILED (retryable=%s, attempts=%d): %s — will use template fallback",
+            retryable, retry_attempts, exc,
+        )
+        append_failure(
+            trace,
+            node="synthesize",
+            stage="narrative_llm_call",
+            error=str(exc),
+            fallback="template_draft",
+            retryable=retryable,
+            retry_attempts=retry_attempts,
+        )
+        await emit_event(
+            {
+                "type": "thinking",
+                "stage": "llm_call_error",
+                "message": "synthesize_narrative failed; fallback to template",
+                "timestamp": utc_now_iso(),
+            }
+        )
+        return ""
+
+
 async def synthesize(state: GraphState) -> dict:
     """
     Phase 4.4 Synthesize node.
@@ -1004,10 +1491,30 @@ async def synthesize(state: GraphState) -> dict:
     Modes:
     - LANGGRAPH_SYNTHESIZE_MODE=stub (default): deterministic render_vars
     - LANGGRAPH_SYNTHESIZE_MODE=llm: LLM fills render_vars JSON; validate; fallback to stub
+    - LANGGRAPH_SYNTHESIZE_MODE=narrative: LLM writes full markdown report; render_vars kept for cards
     """
     mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
     trace = state.get("trace") or {}
 
+    # ── narrative mode: LLM writes full markdown report; render_vars kept for cards ──
+    if mode == "narrative":
+        logger.info("[Synthesize] Running in NARRATIVE mode — LLM writes full report draft")
+        render_vars = _stub_render_vars(state)
+
+        draft_markdown = await _generate_narrative_draft(state, render_vars, trace)
+
+        trace.update({
+            "synthesize_runtime": {
+                **build_runtime(mode="narrative", fallback=not bool(draft_markdown)),
+                "keys": sorted(render_vars.keys()),
+            }
+        })
+        artifacts = {**(state.get("artifacts") or {}), "render_vars": render_vars}
+        if draft_markdown:
+            artifacts["draft_markdown"] = draft_markdown
+        return {"artifacts": artifacts, "trace": trace}
+
+    # ── stub mode (default): deterministic render_vars ──
     if mode != "llm":
         logger.info("[Synthesize] Running in STUB mode (set LANGGRAPH_SYNTHESIZE_MODE=llm for LLM synthesis)")
         render_vars = _stub_render_vars(state)
@@ -1021,6 +1528,7 @@ async def synthesize(state: GraphState) -> dict:
         )
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 
+    # ── llm mode: LLM fills render_vars JSON ──
     try:
         from backend.llm_config import create_llm
 
@@ -1096,6 +1604,7 @@ summary, highlights, analysis.
 - conclusion: 综合各维度给出明确的方向性判断，附条件和置信度
 - news_summary: 提炼核心新闻事件，侧重影响而非事件本身
 - investment_summary: 一段话浓缩投资核心逻辑（多/空/中性 + 理由）
+- investment_thesis: 投资主线需包含判断、依据、触发条件、证伪条件与执行建议
 </field_quality_guidelines>
 
 <constraints>
@@ -1167,6 +1676,7 @@ summary, highlights, analysis.
                 "impact_analysis",
                 "next_watch",
                 "investment_summary",
+                "investment_thesis",
                 "company_overview",
                 "catalysts",
                 "valuation",
@@ -1175,7 +1685,8 @@ summary, highlights, analysis.
                 "analysis",
             ):
                 if isinstance(candidate, str) and candidate.strip():
-                    sanitized = _sanitize_llm_section(candidate, max_lines=8)
+                    max_lines, max_chars = _section_limits(output_mode, key)
+                    sanitized = _sanitize_llm_section(candidate, max_lines=max_lines, max_chars=max_chars)
                     render_vars[key] = sanitized if sanitized else stub_value
                 else:
                     render_vars[key] = stub_value

@@ -1,11 +1,53 @@
 # -*- coding: utf-8 -*-
 
-from backend.graph.report_builder import _count_content_chars, build_report_payload
+from backend.graph.report_builder import (
+    _count_content_chars,
+    _is_suspicious_citation_item,
+    _sanitize_deep_search_summary,
+    build_report_payload,
+)
 
 
 def test_count_content_chars_ignores_raw_urls():
     markdown = "Hello https://example.com/path/to/resource\n"
     assert _count_content_chars(markdown) == 1
+
+
+def test_sanitize_deep_search_summary_rewrites_noisy_raw_content():
+    noisy = (
+        "SummaryRatingsFinancialsTechnicals MarketWatch "
+        "Revenue expected to grow 8% YoY with gross margin expansion."
+    )
+
+    sanitized = _sanitize_deep_search_summary(noisy, "deep_search_agent")
+
+    assert "质量保护模式" in sanitized
+    assert "SummaryRatingsFinancialsTechnicals" not in sanitized
+    assert "Revenue expected to grow" in sanitized
+
+
+def test_suspicious_citation_filter_blocks_api_redirect_and_cc_domain():
+    assert _is_suspicious_citation_item(
+        {
+            "url": "https://finnhub.io/api/news?id=abc123",
+            "title": "news item",
+            "snippet": "sample",
+        }
+    )
+    assert _is_suspicious_citation_item(
+        {
+            "url": "https://wikiwiki.mtevfryb.cc/tag/finance",
+            "title": "untrusted",
+            "snippet": "sample",
+        }
+    )
+    assert not _is_suspicious_citation_item(
+        {
+            "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm",
+            "title": "Apple 10-K",
+            "snippet": "SEC filing",
+        }
+    )
 
 
 def test_synthesis_report_does_not_include_evidence_overview_or_duplicate_query():
@@ -203,3 +245,143 @@ def test_build_report_payload_adds_compare_and_conflict_hints_and_tags():
     meta_hints = ((report.get("meta") or {}).get("report_hints") or {})
     assert meta_hints.get("is_compare") is True
     assert meta_hints.get("has_conflict") is True
+
+
+def test_harden_report_payload_flattens_json_like_section_lines():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["news_agent"]},
+        "plan_ir": {"steps": [{"id": "s1", "kind": "agent", "name": "news_agent"}]},
+        "artifacts": {
+            "draft_markdown": "## Report\n",
+            "evidence_pool": [],
+            "errors": [],
+            "render_vars": {},
+            "step_results": {
+                "s1": {
+                    "output": {
+                        "summary": '{"event":"AI launch","impact":"drives demand"}',
+                        "confidence": 0.7,
+                        "data_sources": ["search"],
+                    }
+                }
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-harden")
+    assert isinstance(report, dict)
+
+    sections = report.get("sections") or []
+    assert sections
+    content_text = ""
+    for section in sections:
+        for content in section.get("contents") or []:
+            if content.get("type") == "text":
+                content_text += str(content.get("content") or "") + "\n"
+
+    assert "{" not in content_text
+    assert "}" not in content_text
+
+
+def test_synthesis_report_does_not_append_professional_section_when_core_template_exists():
+    query = "请做 Apple 深度投资报告"
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {
+            "allowed_agents": [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent",
+            ]
+        },
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": (
+                "## 投资研报：AAPL\n\n"
+                "**问题**：请做 Apple 深度投资报告\n\n"
+                "## 综合投资观点\n- 中性\n\n"
+                "## 公司与业务\n- Apple\n\n"
+                "## 价格快照\n- 价格...\n\n"
+                "## 技术面\n- 技术...\n\n"
+                "## 关键催化剂（含新闻/事件）\n- 催化...\n\n"
+                "## 财务与估值\n- 估值...\n\n"
+                "## 风险\n- 风险...\n\n"
+                "## 结论与展望\n- 结论...\n"
+            ),
+            "evidence_pool": [
+                {
+                    "title": "Yahoo AAPL",
+                    "url": "https://finance.yahoo.com/quote/AAPL/",
+                    "snippet": "AAPL quote",
+                    "source": "unit-test",
+                    "published_date": "2026-02-05T00:00:00Z",
+                    "confidence": 0.8,
+                }
+            ],
+            "step_results": {},
+            "errors": [],
+            "render_vars": {},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query=query, thread_id="t-no-dup-prof")
+    synthesis_report = report.get("synthesis_report") or ""
+
+    assert synthesis_report.count("## 执行摘要（专业版）") == 0
+    assert synthesis_report.count("## 综合投资观点") == 1
+
+
+def test_synthesis_report_source_titles_are_not_hard_truncated_when_short():
+    long_title = "A" * 175
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["news_agent"]},
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n## 综合投资观点\n- 观点\n",
+            "evidence_pool": [
+                {
+                    "title": long_title,
+                    "url": "https://example.com/aapl-source",
+                    "snippet": "snippet",
+                    "source": "unit-test",
+                    "published_date": "2026-02-05T00:00:00Z",
+                    "confidence": 0.8,
+                }
+            ],
+            "step_results": {},
+            "errors": [],
+            "render_vars": {},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-source-no-trunc")
+    synthesis_report = report.get("synthesis_report") or ""
+
+    assert long_title in synthesis_report
+
+
+def test_sanitize_deep_search_summary_collapses_repeated_round_blocks():
+    noisy_repeat = (
+        "深度补充说明（第1轮）\n"
+        "围绕 AAPL 的研究建议坚持“假设-验证-修正”闭环。\n"
+        "\n"
+        "深度补充说明（第2轮）\n"
+        "围绕 AAPL 的研究建议坚持“假设-验证-修正”闭环。\n"
+    )
+
+    cleaned = _sanitize_deep_search_summary(noisy_repeat, "deep_search_agent")
+
+    assert cleaned.count("深度补充说明") <= 1
+    assert "第1轮" not in cleaned
+    assert "第2轮" not in cleaned

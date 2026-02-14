@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2 } from 'lucide-react';
+import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 // 共享 UI 组件
@@ -51,15 +51,64 @@ const createDefaultEndpoint = (): LlmEndpointConfig => ({
   cooldown_sec: DEFAULT_COOLDOWN_SEC,
 });
 
+const PRIMARY_ENDPOINT_NAME = 'legacy-single';
+
+const ensurePrimaryEndpoint = (
+  endpoints: LlmEndpointConfig[],
+  base?: Partial<UserConfig>,
+): { endpoints: LlmEndpointConfig[]; index: number } => {
+  const rows = Array.isArray(endpoints) ? [...endpoints] : [];
+  let idx = rows.findIndex((item) => String(item?.name || '').trim() === PRIMARY_ENDPOINT_NAME);
+
+  if (idx < 0) {
+    rows.unshift({
+      ...createDefaultEndpoint(),
+      name: PRIMARY_ENDPOINT_NAME,
+      provider: String(base?.llm_provider || 'openai_compatible').trim() || 'openai_compatible',
+      api_base: String(base?.llm_api_base || '').trim(),
+      api_key: String(base?.llm_api_key || '').trim(),
+      model: String(base?.llm_model || '').trim(),
+      enabled: true,
+    });
+    idx = 0;
+  }
+
+  return { endpoints: rows, index: idx };
+};
+
+const resolvePrimaryEndpointIndex = (endpoints: LlmEndpointConfig[]): number => {
+  const rows = Array.isArray(endpoints) ? endpoints : [];
+  if (rows.length === 0) return -1;
+  const enabledIdx = rows.findIndex((item) => item?.enabled !== false);
+  return enabledIdx >= 0 ? enabledIdx : 0;
+};
+
 const normalizeLoadedConfig = (input: UserConfig): UserConfig => {
   const baseConfig = input || {};
   const currentEndpoints = Array.isArray(baseConfig.llm_endpoints)
     ? baseConfig.llm_endpoints
     : [];
 
+  const primaryEndpoint =
+    currentEndpoints.find((item) => String(item?.name || '').trim() === PRIMARY_ENDPOINT_NAME) ||
+    currentEndpoints.find((item) => item?.enabled !== false) ||
+    currentEndpoints[0];
+  const mergedLegacy = primaryEndpoint
+    ? {
+        llm_provider: primaryEndpoint.provider || baseConfig.llm_provider,
+        llm_model: primaryEndpoint.model || baseConfig.llm_model,
+        llm_api_base: primaryEndpoint.api_base || baseConfig.llm_api_base,
+      }
+    : {
+        llm_provider: baseConfig.llm_provider,
+        llm_model: baseConfig.llm_model,
+        llm_api_base: baseConfig.llm_api_base,
+      };
+
   if (currentEndpoints.length > 0) {
     return {
       ...baseConfig,
+      ...mergedLegacy,
       llm_endpoints: currentEndpoints.map((item) => ({
         ...createDefaultEndpoint(),
         ...item,
@@ -74,10 +123,11 @@ const normalizeLoadedConfig = (input: UserConfig): UserConfig => {
   if ((baseConfig.llm_api_key || '').trim()) {
     return {
       ...baseConfig,
+      ...mergedLegacy,
       llm_endpoints: [
         {
           ...createDefaultEndpoint(),
-          name: 'legacy-single',
+          name: PRIMARY_ENDPOINT_NAME,
           provider: baseConfig.llm_provider || 'openai_compatible',
           api_base: baseConfig.llm_api_base || '',
           api_key: baseConfig.llm_api_key || '',
@@ -92,6 +142,7 @@ const normalizeLoadedConfig = (input: UserConfig): UserConfig => {
 
   return {
     ...baseConfig,
+    ...mergedLegacy,
     llm_endpoints: [],
   };
 };
@@ -107,7 +158,7 @@ const sanitizeEndpointsForSave = (endpoints: LlmEndpointConfig[] | undefined): L
       const name = String(endpoint.name || '').trim();
 
       return {
-        _hasKey: Boolean(apiKey || apiKeyRaw),
+        _hasPersistableConfig: Boolean(apiKey || apiKeyRaw || apiBase || model || name),
         value: {
           name: name || `endpoint-${index + 1}`,
           provider: String(endpoint.provider || 'openai_compatible').trim() || 'openai_compatible',
@@ -120,7 +171,7 @@ const sanitizeEndpointsForSave = (endpoints: LlmEndpointConfig[] | undefined): L
         },
       };
     })
-    .filter((item) => item._hasKey)
+    .filter((item) => item._hasPersistableConfig)
     .map((item) => item.value);
 };
 
@@ -128,6 +179,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [config, setConfig] = useState<UserConfig>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showLegacyApiKey, setShowLegacyApiKey] = useState(false);
+  const [showEndpointApiKeys, setShowEndpointApiKeys] = useState<Record<number, boolean>>({});
 
   const {
     theme,
@@ -172,8 +225,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         ...current,
         ...patch,
       };
+
+      const primaryByName = next.findIndex((item) => String(item?.name || '').trim() === PRIMARY_ENDPOINT_NAME);
+      const primaryIdx = primaryByName >= 0 ? primaryByName : resolvePrimaryEndpointIndex(next);
+      const primary = primaryIdx >= 0 ? next[primaryIdx] : undefined;
       return {
         ...prev,
+        llm_provider: primary?.provider || prev.llm_provider,
+        llm_model: primary?.model || prev.llm_model,
+        llm_api_base: primary?.api_base || prev.llm_api_base,
+        llm_api_key: primary?.api_key || prev.llm_api_key,
         llm_endpoints: next,
       };
     });
@@ -191,6 +252,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       ...prev,
       llm_endpoints: (prev.llm_endpoints || []).filter((_, idx) => idx !== index),
     }));
+    setShowEndpointApiKeys((prev) => {
+      const next: Record<number, boolean> = {};
+      Object.keys(prev).forEach((key) => {
+        const idx = Number(key);
+        if (Number.isNaN(idx) || idx === index) return;
+        const nextIdx = idx > index ? idx - 1 : idx;
+        next[nextIdx] = prev[idx];
+      });
+      return next;
+    });
   };
 
   const loadDiagnostics = async () => {
@@ -207,7 +278,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   };
 
   const handleChange = (key: keyof UserConfig, value: string) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+    setConfig((prev) => {
+      const nextState: UserConfig = { ...prev, [key]: value };
+
+      if (key === 'llm_provider' || key === 'llm_model' || key === 'llm_api_base' || key === 'llm_api_key') {
+        const ensured = ensurePrimaryEndpoint(prev.llm_endpoints || [], prev);
+        const endpoints = ensured.endpoints;
+        const primaryIdx = ensured.index;
+        if (primaryIdx >= 0) {
+          const current = endpoints[primaryIdx] || createDefaultEndpoint();
+          const nextPrimary: LlmEndpointConfig = {
+            ...current,
+            name: PRIMARY_ENDPOINT_NAME,
+            enabled: true,
+          };
+          if (key === 'llm_provider') nextPrimary.provider = value;
+          if (key === 'llm_model') nextPrimary.model = value;
+          if (key === 'llm_api_base') nextPrimary.api_base = value;
+          if (key === 'llm_api_key') nextPrimary.api_key = value;
+          endpoints[primaryIdx] = nextPrimary;
+        }
+
+        nextState.llm_endpoints = endpoints;
+      }
+
+      return nextState;
+    });
+
     if (key === 'layout_mode') {
       const mode = (value || 'centered') as 'centered' | 'full';
       setLayoutMode(mode);
@@ -217,18 +314,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const handleSave = async () => {
     setLoading(true);
     try {
-      const normalizedEndpoints = sanitizeEndpointsForSave(config.llm_endpoints);
+      const legacyProvider = String(config.llm_provider || '').trim();
+      const legacyModel = String(config.llm_model || '').trim();
+      const legacyApiBase = String(config.llm_api_base || '').trim();
+      const legacyApiKeyRaw = String(config.llm_api_key || '').trim();
+      const legacyApiKey = isMaskedSecret(legacyApiKeyRaw) ? '' : legacyApiKeyRaw;
+
+      const ensured = ensurePrimaryEndpoint(config.llm_endpoints || [], config);
+      const endpointsWithPrimary = [...ensured.endpoints];
+      const currentPrimary = endpointsWithPrimary[ensured.index] || createDefaultEndpoint();
+      endpointsWithPrimary[ensured.index] = {
+        ...currentPrimary,
+        name: PRIMARY_ENDPOINT_NAME,
+        provider: legacyProvider || String(currentPrimary.provider || '').trim() || 'openai_compatible',
+        api_base: legacyApiBase || String(currentPrimary.api_base || '').trim(),
+        api_key: legacyApiKey || String(currentPrimary.api_key || '').trim(),
+        model: legacyModel || String(currentPrimary.model || '').trim(),
+        enabled: true,
+      };
+
+      const normalizedEndpoints = sanitizeEndpointsForSave(endpointsWithPrimary);
+
       const payload: UserConfig = {
         ...config,
         llm_endpoints: normalizedEndpoints,
+        llm_provider: legacyProvider || 'openai_compatible',
+        llm_model: legacyModel,
+        llm_api_base: legacyApiBase,
+        llm_api_key: legacyApiKey,
       };
-      if (normalizedEndpoints.length > 0) {
-        const primary = normalizedEndpoints[0];
-        payload.llm_provider = primary.provider;
-        payload.llm_model = primary.model;
-        payload.llm_api_base = primary.api_base;
-        payload.llm_api_key = primary.api_key || '';
-      }
 
       await apiClient.saveConfig(payload);
       setSaved(true);
@@ -311,14 +425,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
               {/* API Key — 使用共享 Input 组件 */}
               <div className="md:col-span-2">
-                <Input
-                  label="API Key"
-                  type="password"
-                  value={config.llm_api_key || ''}
-                  onChange={(e) => handleChange('llm_api_key', e.target.value)}
-                  placeholder="留空使用默认配置"
-                  className="py-2 rounded"
-                />
+                <label className="block text-xs text-fin-muted mb-1">API Key</label>
+                <div className="relative">
+                  <input
+                    type={showLegacyApiKey ? 'text' : 'password'}
+                    value={config.llm_api_key || ''}
+                    onChange={(e) => handleChange('llm_api_key', e.target.value)}
+                    placeholder="留空使用默认配置"
+                    className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 pr-10 text-fin-text text-sm focus:border-fin-primary outline-none"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showLegacyApiKey ? '隐藏 API Key' : '显示 API Key'}
+                    onClick={() => setShowLegacyApiKey((v) => !v)}
+                    className="absolute inset-y-0 right-2 flex items-center text-fin-muted hover:text-fin-primary"
+                  >
+                    {showLegacyApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
             </div>
           </Card>
@@ -415,15 +539,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       />
 
                       {/* API Key — 使用共享 Input 组件 */}
-                      <Input
-                        label="API Key"
-                        type="password"
-                        data-testid={`settings-endpoint-api-key-${index}`}
-                        value={endpoint.api_key || ''}
-                        onChange={(e) => updateEndpoint(index, { api_key: e.target.value })}
-                        placeholder="sk-***"
-                        className="py-2 rounded"
-                      />
+                      <div>
+                        <label className="block text-xs text-fin-muted mb-1">API Key</label>
+                        <div className="relative">
+                          <input
+                            type={showEndpointApiKeys[index] ? 'text' : 'password'}
+                            data-testid={`settings-endpoint-api-key-${index}`}
+                            value={endpoint.api_key || ''}
+                            onChange={(e) => updateEndpoint(index, { api_key: e.target.value })}
+                            placeholder="sk-***"
+                            className="w-full bg-fin-bg border border-fin-border rounded px-3 py-2 pr-10 text-fin-text text-sm focus:border-fin-primary outline-none"
+                          />
+                          <button
+                            type="button"
+                            aria-label={showEndpointApiKeys[index] ? '隐藏 Endpoint API Key' : '显示 Endpoint API Key'}
+                            onClick={() =>
+                              setShowEndpointApiKeys((prev) => ({
+                                ...prev,
+                                [index]: !prev[index],
+                              }))
+                            }
+                            className="absolute inset-y-0 right-2 flex items-center text-fin-muted hover:text-fin-primary"
+                          >
+                            {showEndpointApiKeys[index] ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
 
                       {/* 权重 — 使用共享 Input 组件 */}
                       <Input
@@ -466,7 +607,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             )}
 
             <p className="text-xs text-fin-muted mt-3">
-              保存时会写入 `llm_endpoints[]`。若有配置，首条 endpoint 会同时回填到 legacy 字段以保持兼容。
+              保存时会写入 `llm_endpoints[]`。主用 endpoint（优先启用中的第一个）会同步回填到 legacy 字段以保持兼容。
             </p>
           </Card>
 
@@ -694,5 +835,3 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     </div>
   );
 };
-
-

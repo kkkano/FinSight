@@ -29,9 +29,9 @@ _CONFIG_ALLOWED_KEYS = frozenset({
 
 def _mask_value(value: str) -> str:
     raw = str(value or "")
-    if len(raw) <= 8:
-        return "***"
-    return f"{raw[:3]}***{raw[-3:]}"
+    if not raw:
+        return ""
+    return "*" * len(raw)
 
 
 def _redact_config(obj: Any) -> Any:
@@ -40,7 +40,7 @@ def _redact_config(obj: Any) -> Any:
         for key, val in obj.items():
             key_lower = str(key).lower()
             if any(frag in key_lower for frag in _SENSITIVE_FRAGMENTS):
-                redacted[key] = _mask_value(str(val)) if val else "***"
+                redacted[key] = _mask_value(str(val))
             elif isinstance(val, (dict, list)):
                 redacted[key] = _redact_config(val)
             else:

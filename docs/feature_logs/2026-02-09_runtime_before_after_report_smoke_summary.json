@@ -1,0 +1,75 @@
+{
+  "query": "?????????????? AAPL ???????????????????????????????????????",
+  "timestamp": "2026-02-09 23:38:42",
+  "before": {
+    "case": "before_simulation",
+    "status_code": 200,
+    "elapsed_seconds": 32.71,
+    "fallback": true,
+    "fallback_reason": "llm_output_invalid",
+    "retry_attempts": 0,
+    "trace_failures": 2,
+    "http_counts": {
+      "http_400": 0,
+      "http_403": 0,
+      "http_401": 0
+    },
+    "agent_stats": {
+      "total": 4,
+      "success": 4,
+      "error": 0,
+      "not_run": 0,
+      "success_agents": [
+        "fundamental_agent",
+        "price_agent",
+        "news_agent",
+        "technical_agent"
+      ],
+      "error_agents": []
+    },
+    "report_title": "AAPL 分析报告",
+    "report_summary": "- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。\n- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。",
+    "synthesis_chars": 4335,
+    "synthesis_preview": "## AAPL 综合研究报告\n\n## 投资研报：AAPL\n\n**问题**：?????????????? AAPL ???????????????????????????????????????\n\n## 投资摘要\n\n- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。\n- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。\n\n## 公司与业务\n\n- 公司概况：当前未拉取公司信息工具输出；可启用 live tools 补齐。\n- 建议补齐：主营/地区/行业、关键产品、商业模式与主要风险。\n\n## 关键催化剂（含新闻/事件）\n\n- 可能催化：财报、产品发布、政策变化、行业景气度变化。\n- 将基于新闻/财报证据进一步细化。\n\n## 财务与估值\n\n- 估值与财务：未执行实时价格/财务工具；如需可启用 live tools。\n- 常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。\n\n## 风险\n\n- 注：以上仅供参考，不构成投资建议。\n\n## 结论（非投资建议声明）\n\n- （研报模式） 你想要：?????????????? AAPL ???????????????????????????????????????\n- 如果你提供/选择了新闻或财报，我可以把结论与证据链做得更具体。\n- 可选：点击“生成研报”获得更完整章节（可能触发更多工具）。\n\n## Agent 摘要（结构化）\n### 基本面分析（92% / success）\nApple Inc. | Technology | Consumer Electronics | $4,018,118,852,608 Latest period: 2025-09-30 (annual). Revenue $220.96B (YoY 5.0%). Net income $112.01B (YoY 19.5%). Operating income $144.75B (YoY 7.5%). Operating cash flow $111.48B (YoY -5.7%). Liabilities / Assets 79.5%.\n\n### 价格分析（100% / success）\nAAPL Current Price: $273.48 | Change: $-4.64 (-1.67%). Day change -1.67% (down).\n\n### 新闻分析（80% / success）\nRecent news includes: Ring doorbell founder: Advanced AI assistants can help secure your home; Do you think you're saving enough for retirement? Vote in our poll; ",
+    "response_preview": "## 投资研报：AAPL\n\n**问题**：?????????????? AAPL ???????????????????????????????????????\n\n## 投资摘要\n\n- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。\n- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。\n\n## 公司与业务\n\n- 公司概况：当前未拉取公司信息工具输出；可启用 live tools 补齐。\n- 建议补齐：主营/地区/行业、关键产品、商业模式与主要风险。\n\n## 关键催化剂（含新闻/事件）\n\n- 可能催化：财报、产品发布、政策变化、行业景气度变化。\n- 将基于新闻/财报证据进一步细化。\n\n## 财务与估值\n\n- 估值与财务：未执行实时价格/财务工具；如需可启用 live tools。\n- 常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。\n\n## 风险\n\n- 注：以上仅供参考，不构成投资建议。\n\n## 结论（非投资建议声明）\n\n- （研报模式） 你想要：?????????????? AAPL ??????????????????????????????????"
+  },
+  "after": {
+    "case": "after_current_fix",
+    "status_code": 200,
+    "elapsed_seconds": 318.51,
+    "fallback": false,
+    "fallback_reason": null,
+    "retry_attempts": 0,
+    "trace_failures": 0,
+    "http_counts": {
+      "http_400": 0,
+      "http_403": 0,
+      "http_401": 0
+    },
+    "agent_stats": {
+      "total": 4,
+      "success": 4,
+      "error": 0,
+      "not_run": 0,
+      "success_agents": [
+        "fundamental_agent",
+        "price_agent",
+        "news_agent",
+        "technical_agent"
+      ],
+      "error_agents": []
+    },
+    "report_title": "AAPL 分析报告",
+    "report_summary": "- AAPL presents a strong fundamental picture driven by the AI-led hardware upgrade cycle (iPhone 17) and robust Services growth. However, technical indicators suggest the stock is currently overbought (RSI > 80), implying potential short-term volatility or a pullback before resuming its upward trajectory. Institutional interest remains high, with contrarian AI bets favoring Apple over crowded semi names.",
+    "synthesis_chars": 5212,
+    "synthesis_preview": "## AAPL 综合研究报告\n\n## 投资研报：AAPL\n\n**问题**：?????????????? AAPL ???????????????????????????????????????\n\n## 投资摘要\n\n- AAPL presents a strong fundamental picture driven by the AI-led hardware upgrade cycle (iPhone 17) and robust Services growth. However, technical indicators suggest the stock is currently overbought (RSI > 80), implying potential short-term volatility or a pullback before resuming its upward trajectory. Institutional interest remains high, with contrarian AI bets favoring Apple over crowded semi names.\n\n## 公司与业务\n\n- Apple Inc. (AAPL) is a $4.02T Technology giant in Consumer Electronics. It designs and markets iPhones, Macs, wearables, and services. FY2025 revenue reached $416.16B with $112.01B net income. The company recently regained top market share in China driven by iPhone 17 and Apple Intelligence features.\n\n## 关键催化剂（含新闻/事件）\n\n- iPhone 17 supercycle driven by Apple Intelligence features.\n- Recovery in China market share (sales +37% in Oct 2025).\n- Continued double-digit growth in high-margin Services segment.\n\n## 财务与估值\n\n- Market Cap: ~$4.02T. FY2026 Consensus EPS estimate is ~$8.45. The stock trades at a premium valuation justified by its ecosystem lock-in and cash flow g",
+    "response_preview": "## 投资研报：AAPL\n\n**问题**：?????????????? AAPL ???????????????????????????????????????\n\n## 投资摘要\n\n- AAPL presents a strong fundamental picture driven by the AI-led hardware upgrade cycle (iPhone 17) and robust Services growth. However, technical indicators suggest the stock is currently overbought (RSI > 80), implying potential short-term volatility or a pullback before resuming its upward trajectory. Institutional interest remains high, with contrarian AI bets favoring Apple over crowded semi names.\n\n"
+  },
+  "delta": {
+    "elapsed_seconds_delta": 285.8,
+    "fallback_rate_change": "1 -> 0",
+    "http_400_change": "0 -> 0",
+    "http_403_change": "0 -> 0",
+    "http_401_change": "0 -> 0"
+  }
+}

@@ -1,0 +1,56 @@
+[
+  {
+    "query": "???? AAPL???????????RSI/MACD?????????????",
+    "agent_status": {
+      "technical_agent": "success",
+      "price_agent": "success",
+      "fundamental_agent": "success",
+      "news_agent": "success",
+      "macro_agent": "not_run",
+      "deep_search_agent": "success"
+    },
+    "failure_count": 0,
+    "failures": [],
+    "has_deep_section": true,
+    "deep_contains_degraded_banner": false,
+    "deep_len": 1505,
+    "confidence_score": 0.892,
+    "report_len": 3154
+  },
+  {
+    "query": "??NVDA??????????????????????????????",
+    "agent_status": {
+      "fundamental_agent": "success",
+      "price_agent": "success",
+      "news_agent": "success",
+      "technical_agent": "success",
+      "macro_agent": "success",
+      "deep_search_agent": "not_run"
+    },
+    "failure_count": 0,
+    "failures": [],
+    "has_deep_section": true,
+    "deep_contains_degraded_banner": false,
+    "deep_len": 16,
+    "confidence_score": 0.89,
+    "report_len": 2538
+  },
+  {
+    "query": "MSFT????????+???+??+??+????????????",
+    "agent_status": {
+      "fundamental_agent": "success",
+      "price_agent": "success",
+      "news_agent": "success",
+      "technical_agent": "success",
+      "macro_agent": "success",
+      "deep_search_agent": "not_run"
+    },
+    "failure_count": 0,
+    "failures": [],
+    "has_deep_section": true,
+    "deep_contains_degraded_banner": false,
+    "deep_len": 16,
+    "confidence_score": 0.89,
+    "report_len": 2440
+  }
+]

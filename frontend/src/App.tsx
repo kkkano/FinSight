@@ -16,10 +16,15 @@ const decodeSymbolParam = (raw?: string): string | null => {
 
 function ChatRoute() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const reportId = searchParams.get('report_id') || null;
+
   return (
     <WorkspaceShell
       view="chat"
       dashboardSymbol={null}
+      initialReportId={reportId}
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}

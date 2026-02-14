@@ -21,6 +21,7 @@ export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
 type WorkspaceShellProps = {
   view: WorkspaceView;
   dashboardSymbol: string | null;
+  initialReportId?: string | null;
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
   navigateToWorkbench: () => void;
@@ -36,6 +37,7 @@ const clampPanelWidth = (value: number) => Math.max(MIN_PANEL_WIDTH, Math.min(MA
 export function WorkspaceShell({
   view,
   dashboardSymbol,
+  initialReportId,
   navigateToChat,
   navigateToDashboard,
   navigateToWorkbench,
@@ -211,6 +213,7 @@ export function WorkspaceShell({
           onDashboardRequest={openDashboard}
           contextPanel={contextPanelProps}
           marketQuotes={marketQuotes}
+          initialReportId={initialReportId}
         />
       )}
 

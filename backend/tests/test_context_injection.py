@@ -5,6 +5,7 @@ from backend.services.memory import UserProfile
 from backend.orchestration.forum import ForumHost, ForumOutput, AgentOutput
 from backend.orchestration.supervisor_agent import SupervisorAgent
 from backend.orchestration.intent_classifier import ClassificationResult, AgentIntent
+import backend.services.llm_retry as llm_retry
 
 @pytest.mark.asyncio
 async def test_forum_host_context_injection():
@@ -96,3 +97,51 @@ async def test_supervisor_pass_profile():
 if __name__ == "__main__":
     asyncio.run(test_forum_host_context_injection())
     asyncio.run(test_supervisor_pass_profile())
+
+
+@pytest.mark.asyncio
+async def test_forum_host_uses_retry_and_fallback_on_empty_response(monkeypatch):
+    host = ForumHost(MagicMock())
+
+    async def _ok_token(timeout: float = 0.0):
+        return True
+
+    class _Resp:
+        content = "   "
+
+    async def _fake_retry(*args, **kwargs):
+        return _Resp()
+
+    monkeypatch.setattr("backend.services.rate_limiter.acquire_llm_token", _ok_token)
+    monkeypatch.setattr(llm_retry, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    outputs = {
+        "price": AgentOutput(
+            agent_name="PriceAgent",
+            summary="AAPL price stable",
+            evidence=[],
+            confidence=0.8,
+            data_sources=["test"],
+            as_of="2026-01-01",
+        )
+    }
+
+    result = await host.synthesize(outputs)
+    assert isinstance(result, ForumOutput)
+    assert isinstance(result.consensus, str)
+    assert len(result.consensus.strip()) > 0
+
+
+def test_supervisor_url_summary_no_sync_llm_needed():
+    mock_llm = MagicMock()
+    mock_tools = MagicMock()
+    mock_cache = MagicMock()
+    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
+
+    mock_tools.fetch_url_content = MagicMock(return_value="x " * 400)
+    summary = supervisor._fetch_and_summarize_url("https://example.com/a")
+
+    assert isinstance(summary, str)
+    assert len(summary) > 0
+    assert len(summary) <= 300
+    assert not mock_llm.invoke.called

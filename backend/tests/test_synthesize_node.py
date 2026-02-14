@@ -313,3 +313,18 @@ def test_synthesize_llm_mode_formats_risks_dict(monkeypatch):
     assert "AAPL" in risks and "MSFT" in risks
     assert "{" not in risks and "}" not in risks
     assert "不构成投资建议" in risks
+
+
+def test_sanitize_llm_section_flattens_json_lines():
+    from backend.graph.nodes.synthesize import _sanitize_llm_section
+
+    raw = """
+{"event": "iPhone 17 AI 换机周期", "impact": "Q4 iPhone 营收增长 6%"}
+{"risk": "技术面回调风险", "detail": "RSI > 80，短期存在均值回归压力"}
+""".strip()
+
+    out = _sanitize_llm_section(raw)
+
+    assert "iPhone 17 AI 换机周期：Q4 iPhone 营收增长 6%" in out
+    assert "技术面回调风险：RSI > 80，短期存在均值回归压力" in out
+    assert "{" not in out and "}" not in out

@@ -143,10 +143,193 @@ Backend:    11/11 tests passed     ✅
 
 ---
 
-## 下一步 (Sprint 3 建议)
+## 下一步 → Agentic Sprint (P0 基础设施)
 
-- [ ] 研报库前端 UI（筛选/批量/动态任务卡片）
-- [ ] 深度分析入口（Workbench 一键发起）
-- [ ] 对比视图（多 ticker 并排）
-- [ ] 笔记/收藏/快捷键扩展
-- [ ] CI/CD pipeline (GitHub Actions)
+> Sprint 2 完成后，项目进入 **Agentic Sprint** 阶段。
+> 详细 TodoList 见 `docs/AGENTIC_SPRINT_TODOLIST.md`。
+> 以下为 Phase 0 (P0-1 ~ P0-4) 的实施记录。
+
+---
+
+### P0-1: 抽取公共执行服务 ✅
+
+**目标**: `/api/execute` 和 `/chat/supervisor/stream` 共享同一套 producer 逻辑，避免分叉。
+
+**变更文件**:
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `backend/services/execution_service.py` | **新建** | 抽取 `run_graph_pipeline()` 公共函数，含 event_bus 设置、GraphRunner 调用、markdown 分块、report 构建与持久化 |
+| `backend/api/chat_router.py` | 改 | `POST /chat/supervisor/stream` 委托给 `execution_service.run_graph_pipeline()`，移除内联 `_producer()` |
+| `backend/api/execution_router.py` | **新建** | `POST /api/execute` — 接受 `{query, tickers, output_mode, agents?, budget?, source}`，SSE 格式与 chat 一致 |
+| `backend/api/main.py` | 改 | 挂载 `execution_router` |
+| `frontend/src/api/client.ts` | 改 | 新增 `executeAgent()` 方法 + 抽取 `parseSSEStream()` 公共 SSE 解析函数 |
+
+**架构决策 (ADR-003)**:
+- 先抽 `execution_service.py`，两个 API 入口都调用它
+- SSE 响应格式完全统一，前端只需一套解析逻辑
+
+---
+
+### P0-2: report_id 回放闭环 ✅
+
+**目标**: TaskSection / ReportSection 点击 → 跳转 `/chat?report_id=xxx` → 自动加载报告。
+
+**变更文件**:
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `frontend/src/App.tsx` | 改 | ChatRoute 解析 `?report_id=` 查询参数，传入 ChatWorkspace |
+| `frontend/src/components/layout/ChatWorkspace.tsx` | 改 | 接收 `report_id` prop，调用 `getReportReplay()` 获取报告并插入消息流 |
+| `frontend/src/components/ChatInput.tsx` | 改 | 联动 report_id 加载状态 |
+
+**流程**:
+```
+用户点击报告卡片 → navigate('/chat?report_id=xxx')
+  → App.tsx 读取 searchParams → ChatWorkspace 接收 prop
+  → 调用 apiClient.getReportReplay(id) → 渲染 ReportView
+  → 清除 URL 参数（避免刷新重复加载）
+```
+
+---
+
+### P0-3: fallback_reason 细分 + 可观测性 ✅ (部分)
+
+**目标**: 前端区分"限流等待" vs "真实错误"，为后续 Agent 可操作化提供基础。
+
+**已完成 (P0-3a/b/d)**:
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `backend/graph/adapters/agent_adapter.py` | 改 | `_classify_exception()` → 返回 `(fallback_reason, retryable, error_stage)` 元组 |
+| `backend/graph/adapters/agent_adapter.py` | 改 | `_build_agent_fallback_output()` 新增 `fallback_reason/retryable/error_stage` 字段 |
+| `backend/graph/report_builder.py` | 改 | report payload 新增 `agent_diagnostics` 字段（每 agent 的 status/reason/stage/duration） |
+
+**fallback_reason 枚举值**:
+| 枚举值 | 含义 | retryable |
+|--------|------|-----------|
+| `rate_limit_timeout` | 限流超时 | ✅ True |
+| `execution_error` | 执行异常 | ❌ False |
+| `confidence_skip` | 置信度不足跳过 | ❌ False |
+| `budget_exceeded` | 预算超限 | ❌ False |
+
+**error_stage 枚举值**: `token_acquire` / `llm_invoke` / `parse` / `tool` / `unknown`
+
+**未完成**:
+- P0-3c: `execute_plan_stub.py` 写入 evidence_pool (依赖 Phase 1)
+- P0-3e: 前端 ReportView 展示降级原因 (依赖 Phase 1 UI)
+
+---
+
+### P0-4: 限流策略统一 — 全局桶 + 每 Agent 保底配额 ✅
+
+**目标**: 解决高并发场景下部分 Agent（尤其 DeepSearch）被饿死的问题。
+
+**架构决策 (ADR-004)**: 全局令牌桶 + 每 Agent 保底配额 MIN_TOKENS=8。
+
+**核心变更 — `backend/services/rate_limiter.py` (全量重写)**:
+
+```
+LLMRateLimiter (单例)
+├── 全局令牌桶: RPM=60, burst=15
+├── per-agent 滑动窗口追踪: _agent_usage: dict[str, list[float]]
+├── 保底配额: MIN_TOKENS_PER_AGENT=8 / 60s 窗口
+└── 三路 acquire 逻辑:
+    1. 全局桶有令牌 → 扣减 (优先)
+    2. 全局桶空 + agent 保底配额可用 → 绕过全局桶 (guaranteed grant)
+    3. 全局桶空 + 保底配额已用完 → 等待全局桶补充
+```
+
+**调用方改造**:
+
+| 文件 | 改动 | agent_name 值 |
+|------|------|---------------|
+| `backend/agents/base_agent.py` | `_identify_gaps()` + `_update_summary()` | `self.AGENT_NAME` |
+| `backend/agents/deep_search_agent.py` | `_call_llm()` | `self.AGENT_NAME` |
+| `backend/orchestration/forum.py` | `synthesize()` | `"forum_synthesis"` |
+| `backend/services/llm_retry.py` | 新增 `agent_name` 参数 + 透传 | 由调用方传入 |
+
+**日志分级 (P0-4c)**:
+- 限流重试 → `logger.info("[LLM] Rate limit retry ...")` (正常行为，不报警)
+- 执行错误 → `logger.warning("[LLM] Execution error retry ...")` (需要关注)
+
+**测试 (P0-4d)** — `backend/tests/test_rate_limiter_quota.py` (10 测试全通过):
+- `test_global_bucket_basic_acquire` — 基础令牌获取
+- `test_disabled_limiter_always_succeeds` — 禁用时始终成功
+- `test_agent_name_none_backward_compatible` — 向后兼容
+- `test_guaranteed_quota_bypasses_empty_global_bucket` — 全局空时保底配额生效
+- `test_multiple_agents_each_get_guaranteed_quota` — 6 agent 并发公平性
+- `test_global_bucket_preferred_over_guaranteed` — 全局优先于保底
+- `test_guaranteed_quota_window_expiry` — 窗口过期后配额重置
+- `test_snapshot_includes_agent_stats` — 快照含 per-agent 统计
+- `test_acquire_llm_token_passes_agent_name` — 便捷函数透传
+- `test_acquire_llm_token_backward_compat` — 便捷函数向后兼容
+
+**全量测试结果**: 367 passed, 28 failed (均为先前存在的测试问题)
+
+---
+
+---
+
+### 研报质量修复 + 可观测性 (5 项) ✅
+
+| 编号 | 改动 | 文件 | 说明 |
+|------|------|------|------|
+| Q-1 | report_builder 灌水逻辑重写 | `report_builder.py` | `_extend_synthesis_report_if_short` 从 310 行→70 行；移除全部硬编码模板段（执行摘要专业版/情景展望/监控清单/研究方法/执行复盘/来源复核/证据摘录/深度补充分析）；`min_chars` 4000→800；仅保留 agent summary 数据驱动补充 + 引用来源 |
+| Q-2 | Synthesize narrative 模式 | `synthesize.py` | 新增 `LANGGRAPH_SYNTHESIZE_MODE=narrative`；LLM 直接输出完整 markdown 研报（2000-3000 字），写入 `draft_markdown`；stub render_vars 仍保留供前端 AgentCard 使用 |
+| Q-3 | emit_event 全链路补全 | `agent_adapter.py` `executor.py` `planner.py` | agent_start/agent_done/agent_error 事件；step_start/step_done/step_error 替代原 thinking 事件；plan_ready 事件广播 plan_ir |
+| Q-4 | LangFuse 集成 | `langfuse_tracer.py` `llm_config.py` `main.py` | 可选依赖，懒初始化；`LANGFUSE_ENABLED=true` 启用；shutdown 时 flush；不影响未安装环境 |
+| Q-5 | citation 标题截断修复 | `report_builder.py` | `_build_long_synthesis_report` 引用标题截断 120→180，与 `_build_citations` 保持一致 |
+
+**测试结果**: 45/45 直接受影响测试全部通过（report_builder × 13, synthesize × 7, executor × 10, planner × 10, agents × 5）
+
+---
+
+### 文档修复 (3 项) ✅
+
+| 修复项 | 说明 |
+|--------|------|
+| DOCS_INDEX SSOT 统一 | `06a_LANGGRAPH_DESIGN_SPEC.md` 确立为唯一 SSOT，`06` 标记为 DEPRECATED |
+| 06c 断链修复 | 4 处 `06c_LANGGRAPH_TODO.md` 引用 → `AGENTIC_SPRINT_TODOLIST.md` |
+| PROJECT_STRUCTURE 归档 | 添加 ARCHIVED 警告头，标注为 v1.0 ConversationAgent 时代产物 |
+
+---
+
+### Tool-Aware Reflection 架构升级 ✅
+
+**目标**: 从"假架构"升级为真正的工具感知反射系统，让 Agent 反射时能自主选择调用哪个专用工具。
+
+**核心变更**:
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `backend/agents/base_agent.py` | 改 | +`_get_tool_registry()` 基类方法；重写 `_identify_gaps()` 输出 JSON 格式（带 tool 字段）；重写 `_targeted_search()` 按注册表分发工具调用 |
+| `backend/agents/news_agent.py` | 改 | +`_get_tool_registry()`: search + get_company_news + get_news_sentiment |
+| `backend/agents/fundamental_agent.py` | 改 | +`_get_tool_registry()`: search + get_financial_statements + get_company_info；重写 `_first_summary()` 为真 2-step CoT 链 |
+| `backend/agents/technical_agent.py` | 改 | +`_get_tool_registry()`: search + get_stock_historical_data |
+| `backend/agents/macro_agent.py` | 改 | +`_get_tool_registry()`: search + get_fred_data + get_market_sentiment + get_economic_events |
+| `backend/agents/price_agent.py` | 改 | +`_get_tool_registry()`: search (价格数据通过 _initial_search 获取) |
+
+**架构决策**:
+- JSON 解析失败退回纯文本 → search (100% 向后兼容)
+- 工具名不在注册表 → 降级到 search
+- 每次工具调用通过 trace_emitter 发射事件 → 前端 AgentLogPanel 可见
+
+**测试结果**: 383 passed (5 agent tests + 全套后端测试)，22 failed (均为预先存在的环境问题)
+
+---
+
+### LangFuse 配置补全 ✅
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `.env.example` | 改 | +LANGFUSE_ENABLED/PUBLIC_KEY/SECRET_KEY/HOST 配置模板 |
+| `requirements.txt` | 改 | langfuse 加版本上限: `>=2.0.0,<4.0.0` |
+
+---
+
+### 架构文档更新 ✅
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `docs/AGENT_ARCHITECTURE_DESIGN.md` | 改 | v2.0→v2.1；新增 §3.2 工具注册表系统 + §3.3 工具感知反射流程；更新 §4 各 Agent 架构描述为真实现；新增 §8 LangFuse 链路追踪；新增 ADR-006/007 |

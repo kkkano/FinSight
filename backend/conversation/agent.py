@@ -1257,7 +1257,6 @@ def create_agent(
         try:
             from backend.llm_config import create_llm
             llm = create_llm(
-                provider="gemini_proxy",
                 temperature=0.3,
                 max_tokens=4000,
                 request_timeout=300,

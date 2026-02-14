@@ -958,3 +958,442 @@ if (onRawEvent) {
 ---
 
 *本文档由 FinSight 开发团队维护*
+
+---
+
+# 附录: TradingKey 风格改造规划 (Phase 2)
+
+> 最后更新: 2026-02-13
+> 依赖: AGENTIC_SPRINT_TODOLIST.md Phase 2 (P2-1 ~ P2-8)
+> 前置条件: P1-3 (Dashboard 卡片可操作化) 完成后启动
+> 参考设计: [TradingKey](https://www.tradingkey.com/) 暗色分析面板风格
+
+---
+
+## P2-1: 设计 Token 与主题系统
+
+### 色板定义
+
+```typescript
+// frontend/src/styles/tradingkey-theme.ts
+
+export const tradingKeyTheme = {
+  // 背景层次 (从深到浅)
+  bg: {
+    base:    '#181a1f',   // 页面底色
+    surface: '#1e2025',   // 卡片/面板
+    raised:  '#24282f',   // 悬浮/弹出层
+    subtle:  '#2b3139',   // 次级背景
+    muted:   '#363d47',   // 禁用/占位
+  },
+
+  // 强调色
+  accent: {
+    primary:  '#fa8019',  // 主橙色 (Tab 下划线、按钮、高亮)
+    positive: '#0cad92',  // 涨/利好/健康
+    negative: '#f74f5c',  // 跌/利空/错误
+    info:     '#5b8def',  // 信息/链接
+    warning:  '#f0b429',  // 警告
+  },
+
+  // 文本
+  text: {
+    primary:   '#e8eaed',  // 主文本
+    secondary: '#9ca3af',  // 次文本
+    tertiary:  '#6b7280',  // 三级文本
+    disabled:  '#4b5563',  // 禁用文本
+  },
+
+  // 边框
+  border: {
+    default: '#2d3748',
+    subtle:  '#374151',
+    active:  '#fa8019',
+  },
+
+  // 圆角与阴影
+  radius: '10px',
+  shadow: '0 4px 20px 2px rgba(0,0,0,.4)',
+
+  // 字体族
+  fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif',
+} as const
+```
+
+### Tailwind 集成
+
+`frontend/tailwind.config.js` 新增 TradingKey token 映射:
+
+```javascript
+theme: {
+  extend: {
+    colors: {
+      tk: {
+        base:     '#181a1f',
+        surface:  '#1e2025',
+        raised:   '#24282f',
+        subtle:   '#2b3139',
+        muted:    '#363d47',
+        orange:   '#fa8019',
+        green:    '#0cad92',
+        red:      '#f74f5c',
+        blue:     '#5b8def',
+      },
+    },
+    fontSize: {
+      '2xs': ['11px', { lineHeight: '16px' }],
+    },
+  },
+}
+```
+
+---
+
+## P2-2: Dashboard 布局重构 (6-Tab)
+
+### 路由设计
+
+```
+/dashboard/:symbol?tab=overview|financial|technical|news|research|peers
+```
+
+### 页面结构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Stock Header                                                    │
+│  [AAPL Logo] Apple Inc. | NASDAQ | $198.50 ▲2.3% | 盘后 $199.10 │
+│  [★ 关注] [🤖 快速分析]                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Metrics Bar (7 列关键指标)                                       │
+│  市值 $3.1T | PE 33.2 | PB 52.1 | EPS $6.73 | ...              │
+├─────────────────────────────────────────────────────────────────┤
+│  Tab Bar (TradingKey 风格，橙色下划线)                              │
+│  综合分析 | 财务报表 | 技术面 | 新闻动态 | 深度研究 | 同行对比       │
+├─────────────────────────────────────────────────────────────────┤
+│  Tab Content (根据选中 tab 渲染)                                  │
+│                                                                  │
+│  ...                                                             │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Stock Header 组件
+
+**新建**: `frontend/src/components/dashboard/StockHeader.tsx`
+
+| 元素 | 数据源 | 说明 |
+|------|--------|------|
+| Logo | 本地映射或 CDN | 主流股票 logo |
+| 名称 + 交易所 | `/api/dashboard` snapshot | `company_name`, `exchange` |
+| 实时价格 + 涨跌 | snapshot.market | `current_price`, `change`, `change_percent` |
+| 盘后数据 | snapshot.after_hours | 可选，非交易时段显示 |
+| 关注按钮 | watchlist API | 切换 watchlist 状态 |
+| 快速分析按钮 | `useExecuteAgent()` | 触发全 Agent 分析 |
+
+### Metrics Bar 组件
+
+**新建**: `frontend/src/components/dashboard/MetricsBar.tsx`
+
+7 列指标卡:
+
+| 指标 | 字段 | 格式 |
+|------|------|------|
+| 市值 | `market_cap` | 缩写 ($3.1T) |
+| PE | `pe_ratio` | 1 位小数 |
+| PB | `pb_ratio` | 1 位小数 |
+| EPS | `eps` | 2 位小数 |
+| 股息率 | `dividend_yield` | 百分比 |
+| 52周区间 | `week_52_low` / `week_52_high` | 范围条 |
+| Beta | `beta` | 2 位小数 |
+
+---
+
+## P2-3: Tab 1 — 综合分析 (Overview)
+
+布局为 2x3 + 1 网格:
+
+```
+┌──────────────────┬──────────────────┐
+│ 综合评分环         │ 分析师评级卡       │
+│ (Score Ring)      │ (Analyst Rating)  │
+├──────────────────┼──────────────────┤
+│ 目标价格卡         │ 公司亮点与风险      │
+│ (Target Price)    │ (Highlights)      │
+├──────────────────┼──────────────────┤
+│ 维度评分雷达图      │ 关键洞察卡         │
+│ (Radar Chart)     │ (AI Insights)     │
+├──────────────────┴──────────────────┤
+│ 风险指标卡 (Risk Metrics)            │
+└─────────────────────────────────────┘
+```
+
+### 组件清单
+
+| 组件 | 文件 | 数据源 | 说明 |
+|------|------|--------|------|
+| **ScoreRing** | `ScoreRing.tsx` | synthesize → `investment_score` | SVG 环形图 + 数字评分 (0-100) + 星级 (1-5) |
+| **AnalystRating** | `AnalystRatingCard.tsx` | fundamental → `analyst_consensus` | 共识评级条 (Strong Buy/Buy/Hold/Sell/Strong Sell) + 目标上涨空间 |
+| **TargetPrice** | `TargetPriceCard.tsx` | fundamental → `target_prices` | 最低/平均/最高 + 渐变范围条 + 当前价格标记线 |
+| **Highlights** | `HighlightsCard.tsx` | synthesize → `highlights/risks` | 🟢 利好点列表 + 🔴 利空点列表 |
+| **RadarChart** | `DimensionRadar.tsx` | all agents → scores | SVG 五边形雷达图 (基本面/技术面/新闻/深度/宏观) |
+| **AIInsights** | `AIInsightsCard.tsx` | synthesize → `investment_summary` | AI 生成的结构化摘要 (markdown 渲染) |
+| **RiskMetrics** | `RiskMetricsCard.tsx` | price → risk indicators | Beta/波动率/夏普/最大回撤 + 4 条风险告警 |
+
+---
+
+## P2-4: Tab 2 — 财务报表 (Financial)
+
+数据源: `FundamentalAgent` 输出 → `/api/dashboard` 的 `fundamental_data`
+
+### 组件清单
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| **IncomeStatement** | `IncomeStatementTable.tsx` | 5 年年度数据表 (营收/毛利/EBITDA/净利/EPS)，行高亮变化 |
+| **ProfitabilityChart** | `ProfitabilityChart.tsx` | 毛利率/净利率柱状图 (ECharts) + 同比变化 |
+| **ValuationGrid** | `ValuationGrid.tsx` | 四宫格: PE / PEG / EV-EBITDA / FCF Yield |
+| **BalanceSheet** | `BalanceSheetSummary.tsx` | 核心行项目 (总资产/总负债/净资产/现金) + 同比变化 |
+
+### 数据映射
+
+```typescript
+interface FinancialTabData {
+  income_statement: {
+    years: string[]                    // ['2022', '2023', '2024', '2025', '2026E']
+    revenue: number[]                  // 每年营收
+    gross_profit: number[]
+    net_income: number[]
+    eps: number[]
+  }
+  profitability: {
+    gross_margin: number[]
+    net_margin: number[]
+    roe: number[]
+  }
+  valuation: {
+    pe: number
+    peg: number
+    ev_ebitda: number
+    fcf_yield: number
+  }
+  balance_sheet: {
+    total_assets: number
+    total_liabilities: number
+    shareholders_equity: number
+    cash_and_equivalents: number
+    yoy_change: Record<string, number> // 同比变化百分比
+  }
+}
+```
+
+---
+
+## P2-5: Tab 3 — 技术面 (Technical)
+
+数据源: `TechnicalAgent` + `PriceAgent` 输出
+
+### 组件清单
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| **CandlestickPlaceholder** | `CandlestickChart.tsx` | K 线图占位 (后续接入 TechnicalAgent 实时数据) |
+| **TechnicalSummary** | `TechnicalSummary.tsx` | 综合评估: 评分 + 均线信号总览 + 震荡信号总览 |
+| **MovingAverages** | `MovingAveragesTable.tsx` | MA5/10/20/50/100/200 + EMA12/EMA26，每行: 值 + 信号 (买入/卖出/中性) |
+| **Oscillators** | `OscillatorsTable.tsx` | RSI/Stoch/MACD/ADX/CCI/Williams，每行: 值 + 信号 |
+| **SupportResistance** | `SupportResistance.tsx` | R3→R1 / 当前价 / S1→S3 可视化条 |
+| **BollingerVolume** | `BollingerVolume.tsx` | 上中下轨 + 日均成交量 vs 今日成交量 |
+
+### 技术指标信号编码
+
+```typescript
+type Signal = 'strong_buy' | 'buy' | 'neutral' | 'sell' | 'strong_sell'
+
+// 样式映射
+const signalStyles: Record<Signal, { bg: string; text: string }> = {
+  strong_buy: { bg: 'bg-tk-green/20', text: 'text-tk-green' },
+  buy:        { bg: 'bg-tk-green/10', text: 'text-tk-green' },
+  neutral:    { bg: 'bg-tk-muted/20', text: 'text-gray-400' },
+  sell:       { bg: 'bg-tk-red/10',   text: 'text-tk-red' },
+  strong_sell:{ bg: 'bg-tk-red/20',   text: 'text-tk-red' },
+}
+```
+
+---
+
+## P2-6: Tab 4 — 新闻动态 (News)
+
+数据源: `NewsAgent` 输出 + `/api/market/news`
+
+### 组件清单
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| **SentimentStats** | `SentimentStatsCards.tsx` | 三卡: 正面/中性/负面百分比 + 彩色进度条 |
+| **NewsFilters** | `NewsFilterPills.tsx` | 筛选 Pills: 全部/利好/中性/利空/财报/产品/监管 |
+| **NewsList** | `NewsListTimeline.tsx` | 情绪标签 + 标题摘要 + 来源 + 时间，点击展开详情 |
+| **AISummary** | `AINewsSummaryCard.tsx` | NewsAgent 综合分析摘要 (markdown 渲染) |
+
+### 情绪标签样式
+
+| 情绪 | 标签 | 样式 |
+|------|------|------|
+| 正面 | 利好 | `bg-tk-green/15 text-tk-green border-tk-green/30` |
+| 中性 | 中性 | `bg-tk-muted/15 text-gray-400 border-gray-600` |
+| 负面 | 利空 | `bg-tk-red/15 text-tk-red border-tk-red/30` |
+
+---
+
+## P2-7: Tab 5 — 深度研究 (Research)
+
+数据源: `DeepSearchAgent` 输出
+
+### 组件清单
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| **ResearchMeta** | `ResearchMetaBar.tsx` | 信心度环形图 / 引用数 / 证据质量评分 / 冲突数量 |
+| **ExecutiveSummary** | `ExecutiveSummaryCard.tsx` | DeepSearch synthesis 摘要 (markdown 渲染) |
+| **CoreFindings** | `CoreFindingsPanel.tsx` | 分节展示核心发现，每节含引文证据块 (来源URL + 引述文字) |
+| **ConflictPanel** | `ConflictPanel.tsx` | 乐观 vs 悲观双列对照面板，左右对比展示 |
+| **References** | `ReferencesList.tsx` | 参考文献列表，含可信度评分和来源类型标签 |
+
+### 深度研究数据接口
+
+```typescript
+interface DeepResearchData {
+  confidence: number           // 0-1
+  citation_count: number
+  evidence_quality: 'high' | 'medium' | 'low'
+  conflict_count: number
+
+  executive_summary: string    // markdown
+  findings: Array<{
+    title: string
+    content: string            // markdown
+    citations: Array<{
+      source: string
+      url: string
+      excerpt: string
+      credibility: number      // 0-1
+    }>
+  }>
+  conflicts: Array<{
+    topic: string
+    bullish_view: string
+    bearish_view: string
+    sources: { bull: string[]; bear: string[] }
+  }>
+  references: Array<{
+    title: string
+    url: string
+    source_type: 'news' | 'research' | 'sec_filing' | 'social'
+    credibility: number
+  }>
+}
+```
+
+---
+
+## P2-8: Tab 6 — 同行对比 (Peers)
+
+数据源: 后端 `/api/dashboard` 的 `peer_comparison` 字段 (需新增)
+
+### 组件清单
+
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| **PeerScoreCards** | `PeerScoreCards.tsx` | 6 公司圆形评分卡，当前股票高亮橙色边框 |
+| **PeerComparisonTable** | `PeerComparisonTable.tsx` | 12+ 列对比表 (PE/PEG/PB/EV-EBITDA/净利率/ROE/营收增速/股息率/评分) |
+| **ValuationBars** | `ValuationBars.tsx` | 估值水平横向条形图 (当前股票 vs 行业中位数) |
+| **GrowthBars** | `GrowthBars.tsx` | 营收增速横向条形图 |
+| **PeerAISummary** | `PeerAISummaryCard.tsx` | AI 同行分析摘要 (相对优势/劣势/适合投资者类型) |
+
+### 对比数据接口
+
+```typescript
+interface PeerComparison {
+  target_ticker: string                // 当前股票
+  peers: Array<{
+    ticker: string
+    name: string
+    score: number                      // 综合评分 0-100
+    pe: number
+    peg: number
+    pb: number
+    ev_ebitda: number
+    net_margin: number
+    roe: number
+    revenue_growth: number
+    dividend_yield: number
+  }>
+  industry_median: Record<string, number>  // 行业中位数
+  ai_summary: string                       // AI 分析摘要
+}
+```
+
+---
+
+## 组件目录结构
+
+```
+frontend/src/components/dashboard/
+├── DashboardTabs.tsx              # Tab 容器 + 路由
+├── StockHeader.tsx                # 股票信息头部
+├── MetricsBar.tsx                 # 7 列关键指标
+│
+├── overview/                      # Tab 1: 综合分析
+│   ├── ScoreRing.tsx
+│   ├── AnalystRatingCard.tsx
+│   ├── TargetPriceCard.tsx
+│   ├── HighlightsCard.tsx
+│   ├── DimensionRadar.tsx
+│   ├── AIInsightsCard.tsx
+│   └── RiskMetricsCard.tsx
+│
+├── financial/                     # Tab 2: 财务报表
+│   ├── IncomeStatementTable.tsx
+│   ├── ProfitabilityChart.tsx
+│   ├── ValuationGrid.tsx
+│   └── BalanceSheetSummary.tsx
+│
+├── technical/                     # Tab 3: 技术面
+│   ├── CandlestickChart.tsx
+│   ├── TechnicalSummary.tsx
+│   ├── MovingAveragesTable.tsx
+│   ├── OscillatorsTable.tsx
+│   ├── SupportResistance.tsx
+│   └── BollingerVolume.tsx
+│
+├── news/                          # Tab 4: 新闻动态
+│   ├── SentimentStatsCards.tsx
+│   ├── NewsFilterPills.tsx
+│   ├── NewsListTimeline.tsx
+│   └── AINewsSummaryCard.tsx
+│
+├── research/                      # Tab 5: 深度研究
+│   ├── ResearchMetaBar.tsx
+│   ├── ExecutiveSummaryCard.tsx
+│   ├── CoreFindingsPanel.tsx
+│   ├── ConflictPanel.tsx
+│   └── ReferencesList.tsx
+│
+└── peers/                         # Tab 6: 同行对比
+    ├── PeerScoreCards.tsx
+    ├── PeerComparisonTable.tsx
+    ├── ValuationBars.tsx
+    ├── GrowthBars.tsx
+    └── PeerAISummaryCard.tsx
+```
+
+### Agent 数据 → Tab 映射
+
+| Agent | Tab 1 综合 | Tab 2 财务 | Tab 3 技术 | Tab 4 新闻 | Tab 5 深度 | Tab 6 同行 |
+|-------|-----------|-----------|-----------|-----------|-----------|-----------|
+| PriceAgent | ✅ 价格+风险 | | ✅ K线数据 | | | |
+| NewsAgent | ✅ 亮点摘要 | | | ✅ 全部 | | |
+| FundamentalAgent | ✅ 评分+评级 | ✅ 全部 | | | | ✅ 对比数据 |
+| TechnicalAgent | ✅ 雷达图 | | ✅ 全部 | | | |
+| MacroAgent | ✅ 雷达图 | | | | | |
+| DeepSearchAgent | ✅ AI洞察 | | | | ✅ 全部 | |
+| Synthesize | ✅ 综合评分 | | | | | ✅ AI摘要 |

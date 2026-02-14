@@ -26,67 +26,69 @@ def get_financial_statements(ticker: str) -> dict:
     """
     try:
         stock = yf.Ticker(ticker)
-        
+
         result = {
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),
             'financials': None,
             'balance_sheet': None,
             'cashflow': None,
-            'error': None
+            'error': None,
+            'warnings': [],
         }
-        
-        # 1. 获取损益表（Income Statement）
-        try:
-            financials = stock.financials
-            if not financials.empty:
-                # 转换为字典格式，便于JSON序列化
-                result['financials'] = {
-                    'columns': financials.columns.tolist(),
-                    'index': financials.index.tolist(),
-                    'data': financials.to_dict('records')
-                }
-                logger.info(f"[Financials] ✅ 成功获取 {ticker} 损益表数据")
-        except Exception as e:
-            logger.info(f"[Financials] 获取损益表失败: {e}")
-            result['error'] = f"获取损益表失败: {str(e)}"
-        
-        # 2. 获取资产负债表（Balance Sheet）
-        try:
-            balance_sheet = stock.balance_sheet
-            if not balance_sheet.empty:
-                result['balance_sheet'] = {
-                    'columns': balance_sheet.columns.tolist(),
-                    'index': balance_sheet.index.tolist(),
-                    'data': balance_sheet.to_dict('records')
-                }
-                logger.info(f"[Financials] ✅ 成功获取 {ticker} 资产负债表数据")
-        except Exception as e:
-            logger.info(f"[Financials] 获取资产负债表失败: {e}")
-            if not result['error']:
-                result['error'] = f"获取资产负债表失败: {str(e)}"
-        
-        # 3. 获取现金流量表（Cash Flow）
-        try:
-            cashflow = stock.cashflow
-            if not cashflow.empty:
-                result['cashflow'] = {
-                    'columns': cashflow.columns.tolist(),
-                    'index': cashflow.index.tolist(),
-                    'data': cashflow.to_dict('records')
-                }
-                logger.info(f"[Financials] ✅ 成功获取 {ticker} 现金流量表数据")
-        except Exception as e:
-            logger.info(f"[Financials] 获取现金流量表失败: {e}")
-            if not result['error']:
-                result['error'] = f"获取现金流量表失败: {str(e)}"
-        
-        # 如果所有数据都获取失败，返回错误
+
+        def _to_payload(table: Any) -> dict | None:
+            if table is None:
+                return None
+            try:
+                if table.empty:
+                    return None
+            except Exception:
+                return None
+
+            columns = [str(col) for col in table.columns.tolist()]
+            index = [str(idx) for idx in table.index.tolist()]
+            return {
+                'columns': columns,
+                'index': index,
+                'data': table.to_dict('records'),
+            }
+
+        def _fetch_with_fallbacks(table_label: str, attr_candidates: list[str]) -> dict | None:
+            for attr in attr_candidates:
+                try:
+                    table = getattr(stock, attr)
+                    payload = _to_payload(table)
+                    if payload:
+                        logger.info(f"[Financials] ✅ 成功获取 {ticker} {table_label} 数据 ({attr})")
+                        return payload
+                except Exception as exc:
+                    msg = f"{table_label}:{attr}:{exc}"
+                    result['warnings'].append(msg)
+                    logger.info(f"[Financials] 获取 {table_label} 失败 ({attr}): {exc}")
+            return None
+
+        result['financials'] = _fetch_with_fallbacks(
+            '损益表',
+            ['financials', 'income_stmt', 'quarterly_financials', 'quarterly_income_stmt'],
+        )
+        result['balance_sheet'] = _fetch_with_fallbacks(
+            '资产负债表',
+            ['balance_sheet', 'quarterly_balance_sheet'],
+        )
+        result['cashflow'] = _fetch_with_fallbacks(
+            '现金流量表',
+            ['cashflow', 'quarterly_cashflow'],
+        )
+
         if not result['financials'] and not result['balance_sheet'] and not result['cashflow']:
             result['error'] = "无法获取任何财报数据，请检查股票代码是否正确"
-        
+        else:
+            # 只要拿到任意一张主表，就不把局部失败升级为全局 error
+            result['error'] = None
+
         return result
-        
+
     except Exception as e:
         logger.info(f"[Financials] 获取财报数据失败: {e}")
         return {
@@ -95,7 +97,8 @@ def get_financial_statements(ticker: str) -> dict:
             'financials': None,
             'balance_sheet': None,
             'cashflow': None,
-            'error': f"获取财报数据失败: {str(e)}"
+            'error': f"获取财报数据失败: {str(e)}",
+            'warnings': [str(e)],
         }
 
 

@@ -1,0 +1,155 @@
+{
+  "price": {
+    "case": "price",
+    "query": "AAPL price now",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.44,
+        "report_id": "lg_b414d2d63c",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 597
+      }
+    ]
+  },
+  "news": {
+    "case": "news",
+    "query": "AAPL latest news",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.42,
+        "report_id": "lg_37c0d148b9",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 599
+      }
+    ]
+  },
+  "sentiment": {
+    "case": "sentiment",
+    "query": "AAPL market sentiment today",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.43,
+        "report_id": "lg_9d43818aa8",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 610
+      }
+    ]
+  },
+  "technical": {
+    "case": "technical",
+    "query": "AAPL technical analysis RSI MACD",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.42,
+        "report_id": "lg_ad607f845a",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 615
+      }
+    ]
+  },
+  "fundamental": {
+    "case": "fundamental",
+    "query": "AAPL valuation PE EPS revenue",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.43,
+        "report_id": "lg_f3ef7b5dd5",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 612
+      }
+    ]
+  },
+  "macro": {
+    "case": "macro",
+    "query": "AAPL macro impact of CPI and rates",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.43,
+        "report_id": "lg_6d7eed89ce",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 617
+      }
+    ]
+  },
+  "report": {
+    "case": "report",
+    "query": "Deep analysis report on AAPL with macro and technical",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.23,
+        "report_id": "lg_d08426fd43",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 2418
+      }
+    ]
+  },
+  "comparison": {
+    "case": "comparison",
+    "query": "Compare AAPL and MSFT fundamentals and technicals",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.42,
+        "report_id": "lg_e34382c1c8",
+        "summary_len": 125,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 528
+      }
+    ]
+  },
+  "search": {
+    "case": "search",
+    "query": "What happened to Nvidia yesterday",
+    "status": "pass",
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "ok",
+        "elapsed_s": 1.43,
+        "report_id": "lg_b49b3d4c52",
+        "summary_len": 63,
+        "sections": 6,
+        "citations": 0,
+        "synthesis_len": 616
+      }
+    ]
+  }
+}

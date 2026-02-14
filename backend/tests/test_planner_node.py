@@ -65,6 +65,104 @@ def test_planner_runtime_contains_variant_when_llm_init_fails(monkeypatch):
     assert runtime.get("variant") in {"A", "B"}
 
 
+def test_planner_llm_mode_retries_on_invalid_json_then_recovers(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        async def ainvoke(self, _messages):
+            self.calls += 1
+            if self.calls == 1:
+                return _Resp(
+                    "{ goal: 'demo', output_mode: 'brief', subject: {'subject_type':'company','tickers':['AAPL']},"
+                    " steps: [], budget: {'max_rounds': 3, 'max_tools': 2}, synthesis: {'style':'concise','sections': []}, }"
+                )
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "brief",
+                  "steps": [],
+                  "budget": {"max_rounds": 3, "max_tools": 2},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    fake = _FakeLLM()
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: fake)
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "Analyze AAPL",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 2}, "allowed_tools": ["search"], "allowed_agents": []},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+    parse_info = runtime.get("json_parse") or {}
+    assert parse_info.get("json_retry_used") is True
+    assert fake.calls >= 2
+
+
+def test_planner_llm_mode_records_json_error_context_when_retry_still_invalid(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _AlwaysInvalidLLM:
+        async def ainvoke(self, _messages):
+            return _Resp("{ goal: 'demo', steps: [ }")
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _AlwaysInvalidLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "Analyze AAPL",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 2}, "allowed_tools": ["search"], "allowed_agents": []},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("fallback") is True
+
+    json_error = runtime.get("json_parse_error") or {}
+    assert json_error.get("json_retry_used") is True
+    assert isinstance(json_error.get("first_attempt"), dict)
+    assert isinstance(json_error.get("second_attempt"), dict)
+
+    failures = (out.get("trace") or {}).get("failures") or []
+    assert failures and isinstance(failures, list)
+    metadata = (failures[-1] or {}).get("metadata") or {}
+    assert isinstance(metadata.get("json_parse_error"), dict)
+
+
 def test_planner_llm_mode_falls_back_when_llm_unavailable(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 
@@ -212,6 +310,8 @@ def test_planner_llm_mode_sanitizes_extra_fields_and_avoids_validation_errors(mo
 
 def test_planner_llm_mode_investment_report_enforces_scored_agent_subset(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "4")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "2")
 
     class _Resp:
         def __init__(self, content):
@@ -285,6 +385,8 @@ def test_planner_llm_mode_investment_report_enforces_scored_agent_subset(monkeyp
 
 def test_planner_investment_report_budget_prioritizes_selected_agents_over_tools(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "4")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "2")
 
     class _Resp:
         def __init__(self, content):

@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
+import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -18,6 +20,8 @@ from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
 from backend.graph.nodes.planner_stub import planner_stub
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+
+logger = logging.getLogger(__name__)
 
 
 def _env_str(key: str, default: str) -> str:
@@ -135,6 +139,118 @@ def _extract_json_object(text: str) -> str:
     return cleaned[start : end + 1]
 
 
+def _extract_error_snippet(text: str, pos: int, *, radius: int = 220) -> str:
+    raw = str(text or "")
+    idx = max(0, min(len(raw), int(pos or 0)))
+    start = max(0, idx - radius)
+    end = min(len(raw), idx + radius)
+    return raw[start:end].strip()
+
+
+def _build_parse_error_info(raw_output: str, exc: BaseException) -> dict[str, Any]:
+    payload: dict[str, Any] = {"error": str(exc)}
+    raw = str(raw_output or "")
+
+    try:
+        json_candidate = _extract_json_object(raw)
+    except Exception:
+        json_candidate = raw
+
+    payload["output_preview"] = json_candidate[:1200]
+    if isinstance(exc, json.JSONDecodeError):
+        payload["line"] = int(exc.lineno)
+        payload["column"] = int(exc.colno)
+        payload["pos"] = int(exc.pos)
+        payload["snippet"] = _extract_error_snippet(json_candidate, exc.pos)
+    else:
+        payload["snippet"] = json_candidate[:320]
+    return payload
+
+
+def _repair_json_text(text: str) -> str:
+    repaired = str(text or "")
+    if not repaired:
+        return repaired
+
+    repaired = repaired.replace("\ufeff", "")
+    repaired = repaired.translate(
+        str.maketrans(
+            {
+                "“": '"',
+                "”": '"',
+                "‘": "'",
+                "’": "'",
+                "，": ",",
+                "：": ":",
+            }
+        )
+    )
+    repaired = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", repaired)
+    repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
+    repaired = re.sub(r"([{,]\s*)'([^'\\]+?)'(\s*:)", r'\1"\2"\3', repaired)
+    repaired = re.sub(r"([{,]\s*)([A-Za-z_][A-Za-z0-9_\-]*)(\s*:)", r'\1"\2"\3', repaired)
+
+    def _replace_single_quoted_value(match: re.Match[str]) -> str:
+        body = match.group(1).replace('\\"', '"').replace("\\'", "'")
+        escaped = json.dumps(body, ensure_ascii=False)
+        return f": {escaped}{match.group(2)}"
+
+    repaired = re.sub(r":\s*'([^'\\]*(?:\\.[^'\\]*)*)'(\s*[,}])", _replace_single_quoted_value, repaired)
+    return repaired
+
+
+def _load_json_with_repair(json_text: str) -> tuple[Any, dict[str, Any]]:
+    raw = str(json_text or "")
+    attempts: list[tuple[str, str]] = [("raw", raw)]
+
+    sanitized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", raw)
+    if sanitized != raw:
+        attempts.append(("control_char_sanitized", sanitized))
+
+    repaired = _repair_json_text(sanitized)
+    if repaired != sanitized:
+        attempts.append(("syntax_repaired", repaired))
+
+    last_exc: BaseException | None = None
+    for mode, candidate in attempts:
+        try:
+            return json.loads(candidate, strict=False), {"parse_mode": mode}
+        except Exception as exc:  # noqa: PERF203
+            last_exc = exc
+
+    if last_exc is not None:
+        raise last_exc
+    raise ValueError("json_parse_failed")
+
+
+def _build_json_retry_prompt(
+    *,
+    base_prompt: str,
+    parse_error: dict[str, Any],
+    invalid_output: str,
+) -> str:
+    line = parse_error.get("line")
+    col = parse_error.get("column")
+    position = f"line={line}, col={col}" if line and col else "unknown"
+    snippet = str(parse_error.get("snippet") or "")[:800]
+    preview = str(invalid_output or "")[:3200]
+    return (
+        f"{base_prompt}\n\n"
+        "[FORMAT_RECOVERY]\n"
+        "Your previous output was not valid JSON.\n"
+        f"- Parse error: {parse_error.get('error')}\n"
+        f"- Parse position: {position}\n"
+        f"- Error snippet: {snippet}\n\n"
+        "Return ONLY a valid JSON object. Do not include markdown/code fences/explanations.\n"
+        "Rules:\n"
+        "1) Use double quotes for every key and string value.\n"
+        "2) No trailing commas.\n"
+        "3) Output must be parseable by Python json.loads.\n\n"
+        "[PREVIOUS_INVALID_OUTPUT]\n"
+        f"{preview}\n"
+    )
+
+
 _HIGH_COST_AGENTS: set[str] = {"macro_agent", "deep_search_agent"}
 
 
@@ -217,12 +333,14 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     safe_budget = PlanBudget.model_validate(budget or {"max_rounds": 3, "max_tools": 4}).model_dump()
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
     selected_agent_order: list[str] = []
+    report_agent_cap: int | None = None
     if output_mode == "investment_report" and allowed_agents:
         try:
             report_max_agents = int(_env_str("LANGGRAPH_REPORT_MAX_AGENTS", "4"))
         except Exception:
             report_max_agents = 4
         report_max_agents = max(1, min(report_max_agents, len(allowed_agents)))
+        report_agent_cap = report_max_agents
         try:
             report_min_agents = int(_env_str("LANGGRAPH_REPORT_MIN_AGENTS", "2"))
         except Exception:
@@ -434,6 +552,17 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         agent_order = [name for name in selected_agent_order if name in allowed_agents]
     else:
         agent_order = [name for name in default_agent_order if name in allowed_agents]
+    if isinstance(report_agent_cap, int) and report_agent_cap > 0:
+        agent_order = agent_order[:report_agent_cap]
+    if output_mode == "investment_report" and has_deep_hint and "deep_search_agent" in allowed_agents:
+        if "deep_search_agent" not in agent_order:
+            if isinstance(report_agent_cap, int) and report_agent_cap > 0 and len(agent_order) >= report_agent_cap:
+                if report_agent_cap == 1:
+                    agent_order = ["deep_search_agent"]
+                else:
+                    agent_order = agent_order[: report_agent_cap - 1] + ["deep_search_agent"]
+            else:
+                agent_order.append("deep_search_agent")
 
     # In report mode, enforce a deterministic score-selected agent baseline.
     if output_mode == "investment_report" and primary_ticker:
@@ -635,6 +764,8 @@ async def planner(state: GraphState) -> dict:
 
     prompt = build_planner_prompt(state, variant=planner_variant)
     retry_attempts = 0
+    last_output_preview = ""
+    parse_error_info: dict[str, Any] | None = None
 
     def _on_retry(attempt: int, _exc: BaseException) -> None:
         nonlocal retry_attempts
@@ -665,8 +796,83 @@ async def planner(state: GraphState) -> dict:
             }
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
-        json_text = _extract_json_object(str(content))
-        payload = json.loads(json_text)
+        raw_text = str(content)
+        last_output_preview = raw_text[:1200]
+        parse_meta: dict[str, Any] = {}
+        try:
+            json_text = _extract_json_object(raw_text)
+            payload, parse_meta = _load_json_with_repair(json_text)
+        except Exception as first_parse_exc:
+            parse_error_info = _build_parse_error_info(raw_text, first_parse_exc)
+            logger.warning(
+                "[Planner] invalid JSON from first LLM output: %s (line=%s col=%s)",
+                parse_error_info.get("error"),
+                parse_error_info.get("line"),
+                parse_error_info.get("column"),
+            )
+            await emit_event(
+                {
+                    "type": "thinking",
+                    "stage": "llm_output_invalid_json",
+                    "message": f"planner_json_invalid: {parse_error_info.get('error')}",
+                    "timestamp": utc_now_iso(),
+                }
+            )
+            await emit_event(
+                {
+                    "type": "thinking",
+                    "stage": "llm_call_retry_start",
+                    "message": "planner_json_repair",
+                    "timestamp": utc_now_iso(),
+                }
+            )
+            repair_prompt = _build_json_retry_prompt(
+                base_prompt=prompt,
+                parse_error=parse_error_info,
+                invalid_output=raw_text,
+            )
+            retry_resp = await ainvoke_with_rate_limit_retry(
+                llm,
+                [HumanMessage(content=repair_prompt)],
+                llm_factory=llm_factory,
+                acquire_token=True,
+                on_retry=_on_retry,
+            )
+            await emit_event(
+                {
+                    "type": "thinking",
+                    "stage": "llm_call_retry_done",
+                    "message": "planner_json_repair",
+                    "timestamp": utc_now_iso(),
+                }
+            )
+            retry_content = retry_resp.content if hasattr(retry_resp, "content") else str(retry_resp)
+            retry_text = str(retry_content)
+            last_output_preview = retry_text[:1200]
+            try:
+                retry_json_text = _extract_json_object(retry_text)
+                payload, parse_meta = _load_json_with_repair(retry_json_text)
+                parse_meta["json_retry_used"] = True
+                parse_meta["first_parse_error"] = {
+                    "error": parse_error_info.get("error"),
+                    "line": parse_error_info.get("line"),
+                    "column": parse_error_info.get("column"),
+                    "snippet": parse_error_info.get("snippet"),
+                }
+            except Exception as second_parse_exc:
+                second_error_info = _build_parse_error_info(retry_text, second_parse_exc)
+                parse_error_info = {
+                    "json_retry_used": True,
+                    "first_attempt": parse_error_info,
+                    "second_attempt": second_error_info,
+                }
+                logger.warning(
+                    "[Planner] invalid JSON after retry: %s (line=%s col=%s)",
+                    second_error_info.get("error"),
+                    second_error_info.get("line"),
+                    second_error_info.get("column"),
+                )
+                raise
         if not isinstance(payload, dict):
             raise ValueError("PlanIR payload must be a JSON object")
         payload, budget_assertions = _enforce_policy(payload, state)
@@ -678,6 +884,7 @@ async def planner(state: GraphState) -> dict:
                     "variant": planner_variant,
                     "steps": len(plan.steps),
                     "budget_assertions": budget_assertions,
+                    "json_parse": parse_meta,
                 }
             }
         )
@@ -687,6 +894,13 @@ async def planner(state: GraphState) -> dict:
             retry_attempts=retry_attempts,
             steps=len(plan.steps),
         )
+        await emit_event({
+            "type": "plan_ready",
+            "plan_steps": len(plan.steps),
+            "agents": [s.name for s in plan.steps if s.kind == "agent"],
+            "has_parallel": any(s.parallel_group for s in plan.steps),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
         return {"plan_ir": plan.model_dump(), "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
@@ -698,6 +912,10 @@ async def planner(state: GraphState) -> dict:
             fallback="planner_stub",
             retryable=retryable,
             retry_attempts=retry_attempts,
+            metadata={
+                "json_parse_error": parse_error_info or {},
+                "last_output_preview": last_output_preview,
+            },
         )
         await emit_event(
             {
@@ -715,7 +933,10 @@ async def planner(state: GraphState) -> dict:
                     reason=str(exc),
                     retry_attempts=retry_attempts,
                 )
-                | {"variant": planner_variant}
+                | {
+                    "variant": planner_variant,
+                    "json_parse_error": parse_error_info or {},
+                }
             }
         )
         out = {**planner_stub(state), "trace": trace}
@@ -727,4 +948,3 @@ async def planner(state: GraphState) -> dict:
             steps=steps,
         )
         return out
-

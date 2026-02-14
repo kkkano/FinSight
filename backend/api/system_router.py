@@ -19,7 +19,6 @@ class SystemRouterDeps:
     get_planner_ab_metrics: Callable[[], Dict[str, Any]]
     memory_service: Any
     logger: Any
-    legacy_agent: Any
 
 
 def create_system_router(deps: SystemRouterDeps) -> APIRouter:
@@ -60,10 +59,6 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
 
         live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
         components["live_tools"] = {"status": "active" if live_tools else "dry_run"}
-        components["legacy_agent"] = {
-            "status": "deprecated",
-            "available": bool(deps.legacy_agent),
-        }
 
         return {
             "status": status,

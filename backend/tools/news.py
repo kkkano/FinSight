@@ -286,11 +286,14 @@ def _build_news_item(
 ) -> Dict[str, Any]:
     if not title:
         return {}
+    normalized_url = (url or "").strip()
+    if "finnhub.io/api/news" in normalized_url.lower():
+        normalized_url = ""
     published_date = _normalize_published_date(published_at)
     return {
         "headline": title,
         "title": title,
-        "url": url or "",
+        "url": normalized_url,
         "source": source or "Unknown",
         "snippet": snippet or "",
         "published_at": published_date,

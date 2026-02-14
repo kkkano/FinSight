@@ -38,7 +38,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
   const [expandedSections, setExpandedSections] = useState<Record<string | number, boolean>>({
     ...report.sections.reduce((acc, sec) => ({ ...acc, [sec.order]: true }), {}),
-    synthesis: false,
+    synthesis: true,
   });
   const [activeSection, setActiveSection] = useState<number | null>(null);
   const [activeCitation, setActiveCitation] = useState<string | null>(null);
@@ -57,11 +57,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     const date = new Date(report.generated_at);
     return Number.isNaN(date.getTime()) ? report.generated_at : date.toLocaleDateString();
   }, [report.generated_at]);
-
-  const citationMap = useMemo(
-    () => new Map(report.citations.map((c) => [c.source_id, c])),
-    [report.citations],
-  );
 
   const catalystItems = useMemo(() => extractCatalystItems(report.sections), [report.sections]);
   const metricItems = useMemo(() => extractMetrics(report.sections), [report.sections]);
@@ -346,11 +341,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               <ReportAgentCard
                 agentDetailSections={agentDetailSections as ReportSectionType[]}
                 expandedSections={expandedSections}
-                activeSection={activeSection}
-                anchorPrefix={anchorPrefix}
-                citationMap={citationMap}
                 onToggleSection={toggleSection}
-                onCitationJump={handleJumpToCitation}
               />
 
               <ReportEvidencePoolSection
@@ -486,11 +477,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
             <ReportAgentCard
               agentDetailSections={agentDetailSections as ReportSectionType[]}
               expandedSections={expandedSections}
-              activeSection={activeSection}
-              anchorPrefix={anchorPrefix}
-              citationMap={citationMap}
               onToggleSection={toggleSection}
-              onCitationJump={handleJumpToCitation}
             />
 
             <ReportEvidencePoolSection

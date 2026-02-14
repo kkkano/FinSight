@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinSight Dashboard — TradingKey 风格原型</title>
+<style>
+/* ========== Reset & Base ========== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f172a;
+  --bg2: #1e293b;
+  --card: #1e293b;
+  --card-hover: #283548;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #cbd5e1;
+  --muted: #64748b;
+  --primary: #3b82f6;
+  --primary-soft: rgba(59,130,246,.12);
+  --success: #10b981;
+  --success-soft: rgba(16,185,129,.12);
+  --danger: #ef4444;
+  --danger-soft: rgba(239,68,68,.12);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245,158,11,.12);
+  --purple: #a78bfa;
+  --purple-soft: rgba(167,139,250,.12);
+  --orange: #fb923c;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,.25);
+}
+html { font-size: 14px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ========== Layout ========== */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  padding: 16px 0;
+  position: sticky; top: 0; height: 100vh;
+  overflow-y: auto;
+}
+.main { flex: 1; overflow-x: hidden; }
+
+/* ===== Sidebar ===== */
+.sidebar-logo {
+  padding: 0 20px 20px;
+  font-size: 18px; font-weight: 700;
+  color: var(--primary);
+  display: flex; align-items: center; gap: 8px;
+}
+.sidebar-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.sidebar-nav { list-style: none; padding: 0 8px; }
+.sidebar-nav li a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  color: var(--text2); font-size: 13px; transition: all .15s;
+}
+.sidebar-nav li a:hover { background: var(--card-hover); color: var(--text); text-decoration: none; }
+.sidebar-nav li a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.sidebar-nav li a .icon { width: 18px; text-align: center; opacity: .7; }
+.sidebar-section-title {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; padding: 16px 20px 6px; font-weight: 600;
+}
+.watchlist-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; font-size: 12px; cursor: pointer; transition: background .15s;
+}
+.watchlist-item:hover { background: var(--card-hover); }
+.watchlist-item .ticker { font-weight: 600; color: var(--text); }
+.watchlist-item .price { color: var(--text2); }
+.watchlist-item .change { font-weight: 600; font-size: 11px; }
+.change.up { color: var(--success); }
+.change.down { color: var(--danger); }
+
+/* ===== Top Bar ===== */
+.topbar {
+  height: 52px; background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px;
+  position: sticky; top: 0; z-index: 50;
+}
+.breadcrumb { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.breadcrumb span { color: var(--text2); }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
+.topbar-btn {
+  background: var(--card-hover); border: 1px solid var(--border);
+  color: var(--text2); border-radius: var(--radius-sm);
+  padding: 6px 12px; font-size: 12px; cursor: pointer; transition: all .15s;
+}
+.topbar-btn:hover { background: var(--border); color: var(--text); }
+
+/* ===== Stock Header ===== */
+.stock-header {
+  padding: 24px 32px;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.stock-identity { display: flex; align-items: center; gap: 16px; }
+.stock-logo {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: linear-gradient(135deg, #555, #888);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: #fff;
+}
+.stock-name { font-size: 22px; font-weight: 700; }
+.stock-name .exchange { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 8px; }
+.stock-price-block { display: flex; align-items: baseline; gap: 12px; margin-top: 4px; }
+.stock-price { font-size: 36px; font-weight: 800; letter-spacing: -.02em; }
+.stock-change { font-size: 16px; font-weight: 600; }
+.stock-change.up { color: var(--success); }
+.stock-change.down { color: var(--danger); }
+.stock-market-status {
+  font-size: 11px; color: var(--muted); margin-top: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; }
+.stock-actions { display: flex; gap: 8px; align-items: flex-start; }
+.btn {
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid transparent; transition: all .15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text2); }
+.btn-ghost:hover { background: var(--card-hover); color: var(--text); }
+
+/* ===== Metrics Panel ===== */
+.metrics-panel {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.metric-item {
+  background: var(--bg2);
+  padding: 14px 16px;
+  text-align: center;
+}
+.metric-item .label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.metric-item .value { font-size: 14px; font-weight: 600; color: var(--text); }
+
+/* ===== Content Area ===== */
+.content { padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+.content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.content-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.full-width { grid-column: 1 / -1; }
+
+/* ===== Card ===== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.card-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 8px;
+  border-radius: 10px; display: inline-block;
+}
+.badge-blue { background: var(--primary-soft); color: var(--primary); }
+.badge-green { background: var(--success-soft); color: var(--success); }
+.badge-red { background: var(--danger-soft); color: var(--danger); }
+.badge-orange { background: var(--warning-soft); color: var(--warning); }
+.badge-purple { background: var(--purple-soft); color: var(--purple); }
+.card-body { padding: 20px; }
+
+/* ===== Equity Score ===== */
+.score-overview {
+  display: flex; align-items: center; gap: 32px;
+}
+.score-ring {
+  position: relative; width: 140px; height: 140px; flex-shrink: 0;
+}
+.score-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.score-ring .bg-ring { fill: none; stroke: var(--border); stroke-width: 8; }
+.score-ring .fg-ring { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+.score-ring .score-text {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.score-ring .score-value { font-size: 32px; font-weight: 800; }
+.score-ring .score-label { font-size: 11px; color: var(--muted); }
+.score-dimensions { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.score-dim {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg); border-radius: var(--radius-sm);
+}
+.score-dim .dim-bar-outer {
+  flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.score-dim .dim-bar-inner { height: 100%; border-radius: 3px; transition: width .6s ease; }
+.score-dim .dim-name { font-size: 12px; color: var(--text2); width: 64px; flex-shrink: 0; }
+.score-dim .dim-val { font-size: 12px; font-weight: 700; width: 28px; text-align: right; flex-shrink: 0; }
+
+/* ===== Radar Chart (CSS-only approximation) ===== */
+.radar-container {
+  width: 240px; height: 240px; position: relative; flex-shrink: 0;
+}
+.radar-container svg { width: 100%; height: 100%; }
+.radar-label {
+  position: absolute; font-size: 11px; color: var(--text2); font-weight: 600;
+  transform: translate(-50%, -50%);
+}
+
+/* ===== Key Insights ===== */
+.insight-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.insight-item {
+  padding: 12px 16px; background: var(--bg);
+  border-radius: var(--radius-sm); border-left: 3px solid var(--primary);
+  font-size: 13px; line-height: 1.7; color: var(--text2);
+}
+.insight-item strong { color: var(--text); }
+.insight-item .source { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ===== Technical Signals ===== */
+.signal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.signal-card {
+  padding: 16px; background: var(--bg); border-radius: var(--radius-sm);
+  text-align: center;
+}
+.signal-card .signal-name { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.signal-card .signal-value { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.signal-card .signal-tag {
+  display: inline-block; padding: 2px 10px;
+  border-radius: 10px; font-size: 11px; font-weight: 700;
+}
+.tag-buy { background: var(--success-soft); color: var(--success); }
+.tag-sell { background: var(--danger-soft); color: var(--danger); }
+.tag-neutral { background: rgba(100,116,139,.15); color: var(--muted); }
+
+/* ===== Financial Bars ===== */
+.fin-bars { display: flex; flex-direction: column; gap: 14px; }
+.fin-bar-row { display: flex; align-items: center; gap: 12px; }
+.fin-bar-label { width: 80px; font-size: 12px; color: var(--text2); text-align: right; flex-shrink: 0; }
+.fin-bar-outer {
+  flex: 1; height: 24px; background: var(--bg);
+  border-radius: 6px; overflow: hidden; position: relative;
+}
+.fin-bar-inner {
+  height: 100%; border-radius: 6px; transition: width .6s ease;
+  display: flex; align-items: center; padding-left: 8px;
+  font-size: 11px; font-weight: 700; color: #fff;
+  min-width: 40px;
+}
+.fin-bar-change { width: 70px; font-size: 12px; font-weight: 600; text-align: right; flex-shrink: 0; }
+
+/* ===== Sentiment Gauge ===== */
+.sentiment-gauge { display: flex; align-items: center; gap: 24px; }
+.gauge-visual {
+  width: 200px; height: 110px; position: relative; overflow: hidden;
+}
+.gauge-visual svg { width: 100%; height: 100%; }
+.gauge-text {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  text-align: center;
+}
+.gauge-text .gauge-value { font-size: 28px; font-weight: 800; }
+.gauge-text .gauge-label { font-size: 11px; color: var(--muted); }
+.sentiment-bars { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.sbar-row { display: flex; align-items: center; gap: 8px; }
+.sbar-label { width: 48px; font-size: 11px; color: var(--muted); text-align: right; }
+.sbar-outer { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.sbar-inner { height: 100%; border-radius: 4px; }
+.sbar-pct { width: 32px; font-size: 11px; color: var(--text2); }
+
+/* ===== Risk Section ===== */
+.risk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.risk-card {
+  background: var(--bg); border-radius: var(--radius-sm);
+  padding: 14px; text-align: center;
+}
+.risk-card .risk-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.risk-card .risk-value { font-size: 20px; font-weight: 700; }
+
+/* ===== Peer Comparison ===== */
+.peer-table { width: 100%; border-collapse: collapse; }
+.peer-table th {
+  font-size: 11px; color: var(--muted); font-weight: 600;
+  text-align: left; padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.peer-table td {
+  padding: 12px; font-size: 13px; border-bottom: 1px solid var(--border);
+}
+.peer-table tr:hover td { background: var(--card-hover); }
+.peer-ticker { font-weight: 700; color: var(--primary); }
+.mini-score {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%;
+  font-size: 11px; font-weight: 700;
+}
+
+/* ===== MiniChat ===== */
+.minichat {
+  position: fixed; bottom: 20px; right: 20px; z-index: 100;
+}
+.minichat-toggle {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--primary); color: #fff;
+  border: none; cursor: pointer;
+  font-size: 22px; display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-lg); transition: transform .15s;
+}
+.minichat-toggle:hover { transform: scale(1.08); }
+.minichat-panel {
+  display: none; position: absolute; bottom: 60px; right: 0;
+  width: 360px; height: 480px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  overflow: hidden; flex-direction: column;
+}
+.minichat-panel.open { display: flex; }
+.minichat-header {
+  padding: 12px 16px; background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.minichat-header .close-btn {
+  background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 18px;
+}
+.minichat-messages {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+.msg-ai { background: var(--bg); color: var(--text2); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg-user { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.minichat-input {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px;
+}
+.minichat-input input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+  color: var(--text); font-size: 13px; outline: none;
+}
+.minichat-input input:focus { border-color: var(--primary); }
+.minichat-input button {
+  background: var(--primary); color: #fff; border: none;
+  border-radius: var(--radius-sm); padding: 8px 14px;
+  font-size: 13px; cursor: pointer; font-weight: 600;
+}
+
+/* ===== Tabs ===== */
+.tabs { display: flex; gap: 4px; padding: 0 32px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.tab {
+  padding: 12px 16px; font-size: 13px; font-weight: 600;
+  color: var(--muted); cursor: pointer; position: relative;
+  transition: color .15s; border: none; background: none;
+}
+.tab:hover { color: var(--text2); }
+.tab.active { color: var(--primary); }
+.tab.active::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px; background: var(--primary); border-radius: 1px 1px 0 0;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.card { animation: fadeIn .4s ease both; }
+.content-grid .card:nth-child(2) { animation-delay: .08s; }
+.content-grid .card:nth-child(3) { animation-delay: .16s; }
+.content-grid .card:nth-child(4) { animation-delay: .24s; }
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+  .sidebar { display: none; }
+  .metrics-panel { grid-template-columns: repeat(4, 1fr); }
+  .content-grid { grid-template-columns: 1fr; }
+  .content-grid-3 { grid-template-columns: 1fr 1fr; }
+  .stock-header { padding: 16px; }
+  .content { padding: 16px; }
+  .risk-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="dot"></span> FinSight
+    </div>
+    <ul class="sidebar-nav">
+      <li><a href="#"><span class="icon">💬</span> 智能对话</a></li>
+      <li><a href="#" class="active"><span class="icon">📊</span> 仪表盘</a></li>
+      <li><a href="#"><span class="icon">📋</span> 工作台</a></li>
+      <li><a href="#"><span class="icon">🔔</span> 订阅管理</a></li>
+      <li><a href="#"><span class="icon">⚙️</span> 偏好设置</a></li>
+    </ul>
+    <div class="sidebar-section-title">我的关注</div>
+    <div class="watchlist-item">
+      <span class="ticker">AAPL</span>
+      <span class="price">$227.63</span>
+      <span class="change up">+1.24%</span>
+    </div>
+    <div class="watchlist-item">
+      <span class="ticker">NVDA</span>
+      <span class="price">$131.28</span>
+      <span class="change up">+3.67%</span>
+    </div>
+    <div class="watchlist-item">
+      <span class="ticker">TSLA</span>
+      <span class="price">$352.56</span>
+      <span class="change down">-1.82%</span>
+    </div>
+    <div class="watchlist-item">
+      <span class="ticker">MSFT</span>
+      <span class="price">$411.22</span>
+      <span class="change up">+0.53%</span>
+    </div>
+    <div class="watchlist-item">
+      <span class="ticker">GOOGL</span>
+      <span class="price">$185.43</span>
+      <span class="change down">-0.71%</span>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="breadcrumb">
+        市场 <span>›</span> 美股 <span>›</span> <span style="color:var(--text)">AAPL — Apple Inc.</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="topbar-btn">🔍 搜索</button>
+        <button class="topbar-btn">🌙 暗色</button>
+      </div>
+    </div>
+
+    <!-- Stock Header -->
+    <div class="stock-header">
+      <div>
+        <div class="stock-identity">
+          <div class="stock-logo">🍎</div>
+          <div>
+            <div class="stock-name">Apple Inc. <span class="exchange">NASDAQ: AAPL</span></div>
+            <div class="stock-price-block">
+              <span class="stock-price">$227.63</span>
+              <span class="stock-change up">+$2.79 (+1.24%)</span>
+            </div>
+            <div class="stock-market-status">
+              <span class="status-dot"></span>
+              盘后: $227.80 <span style="color:var(--success)">+$0.17 (+0.07%)</span> · 2026-02-11 16:00 EST
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stock-actions">
+        <button class="btn btn-ghost">☆ 关注</button>
+        <button class="btn btn-primary">⚡ 快速分析</button>
+      </div>
+    </div>
+
+    <!-- Metrics Panel -->
+    <div class="metrics-panel">
+      <div class="metric-item">
+        <div class="label">市值</div>
+        <div class="value">$3.42T</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">市盈率 (TTM)</div>
+        <div class="value">34.47</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">市净率</div>
+        <div class="value">62.14</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">每股收益</div>
+        <div class="value">$6.97</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">股息率</div>
+        <div class="value">0.44%</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">52 周区间</div>
+        <div class="value">$169 - $260</div>
+      </div>
+      <div class="metric-item">
+        <div class="label">Beta</div>
+        <div class="value">1.24</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active">综合分析</button>
+      <button class="tab">财务报表</button>
+      <button class="tab">技术面</button>
+      <button class="tab">新闻</button>
+      <button class="tab">深度研究</button>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+      <!-- Row 1: Score + Insights -->
+      <div class="content-grid">
+
+        <!-- Equity Score -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📊 综合评分</div>
+            <span class="card-badge badge-blue">AI 驱动</span>
+          </div>
+          <div class="card-body">
+            <div class="score-overview">
+              <div class="score-ring">
+                <svg viewBox="0 0 120 120">
+                  <circle class="bg-ring" cx="60" cy="60" r="52"/>
+                  <circle class="fg-ring" cx="60" cy="60" r="52"
+                    stroke="var(--success)" stroke-dasharray="327"
+                    stroke-dashoffset="60"/>
+                </svg>
+                <div class="score-text">
+                  <span class="score-value" style="color:var(--success)">7.8</span>
+                  <span class="score-label">/ 10 分</span>
+                </div>
+              </div>
+              <div class="score-dimensions">
+                <div class="score-dim">
+                  <span class="dim-name">基本面</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:82%;background:var(--success)"></div></div>
+                  <span class="dim-val" style="color:var(--success)">8.2</span>
+                </div>
+                <div class="score-dim">
+                  <span class="dim-name">技术面</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:71%;background:var(--primary)"></div></div>
+                  <span class="dim-val" style="color:var(--primary)">7.1</span>
+                </div>
+                <div class="score-dim">
+                  <span class="dim-name">新闻情绪</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:85%;background:var(--success)"></div></div>
+                  <span class="dim-val" style="color:var(--success)">8.5</span>
+                </div>
+                <div class="score-dim">
+                  <span class="dim-name">宏观环境</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:65%;background:var(--warning)"></div></div>
+                  <span class="dim-val" style="color:var(--warning)">6.5</span>
+                </div>
+                <div class="score-dim">
+                  <span class="dim-name">深度研究</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:78%;background:var(--primary)"></div></div>
+                  <span class="dim-val" style="color:var(--primary)">7.8</span>
+                </div>
+                <div class="score-dim">
+                  <span class="dim-name">风险控制</span>
+                  <div class="dim-bar-outer"><div class="dim-bar-inner" style="width:73%;background:var(--primary)"></div></div>
+                  <span class="dim-val" style="color:var(--primary)">7.3</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Insights -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">💡 AI 关键洞察</div>
+            <span class="card-badge badge-green">DeepSearch</span>
+          </div>
+          <div class="card-body">
+            <ul class="insight-list">
+              <li class="insight-item" style="border-left-color:var(--success)">
+                <strong>营收强劲反弹</strong> — Apple Q4 营收 4,161 亿美元，同比增长 6.4%，EPS 超预期。服务业务占比持续提升，毛利率改善显著。
+                <div class="source">来源: FundamentalAgent · 置信度 92%</div>
+              </li>
+              <li class="insight-item" style="border-left-color:var(--success)">
+                <strong>AI 战略商业化验证</strong> — Apple Intelligence 正驱动 Services 收入增长，AI 整合被市场视为新增长引擎。分析师共识目标价 $250。
+                <div class="source">来源: DeepSearchAgent · 置信度 85%</div>
+              </li>
+              <li class="insight-item" style="border-left-color:var(--warning)">
+                <strong>估值压力</strong> — PE 34.47 高于历史中位数 28.5，中美贸易摩擦可能影响供应链。建议关注 2 月下旬指引更新。
+                <div class="source">来源: MacroAgent + NewsAgent · 置信度 78%</div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Technical + Financial -->
+      <div class="content-grid">
+
+        <!-- Technical Indicators -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📈 技术指标</div>
+            <span class="card-badge badge-green">偏多</span>
+          </div>
+          <div class="card-body">
+            <div class="signal-grid">
+              <div class="signal-card">
+                <div class="signal-name">RSI (14)</div>
+                <div class="signal-value">62.4</div>
+                <span class="signal-tag tag-neutral">中性</span>
+              </div>
+              <div class="signal-card">
+                <div class="signal-name">MACD</div>
+                <div class="signal-value">1.85</div>
+                <span class="signal-tag tag-buy">买入</span>
+              </div>
+              <div class="signal-card">
+                <div class="signal-name">信号线</div>
+                <div class="signal-value">1.23</div>
+                <span class="signal-tag tag-buy">多头</span>
+              </div>
+              <div class="signal-card">
+                <div class="signal-name">MA20</div>
+                <div class="signal-value">$223.8</div>
+                <span class="signal-tag tag-buy">价格在上</span>
+              </div>
+              <div class="signal-card">
+                <div class="signal-name">MA50</div>
+                <div class="signal-value">$219.4</div>
+                <span class="signal-tag tag-buy">价格在上</span>
+              </div>
+              <div class="signal-card">
+                <div class="signal-name">MA200</div>
+                <div class="signal-value">$212.1</div>
+                <span class="signal-tag tag-buy">价格在上</span>
+              </div>
+            </div>
+            <div style="margin-top:16px;padding:12px 16px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text2)">
+              <strong style="color:var(--success)">趋势: 上升趋势</strong> — 均线多头排列（收盘 > MA20 > MA50 > MA200），MACD 金叉延续。短期支撑 $223，阻力 $235。
+            </div>
+          </div>
+        </div>
+
+        <!-- Financial Health -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🏦 财务健康</div>
+            <span class="card-badge badge-blue">最新财报</span>
+          </div>
+          <div class="card-body">
+            <div class="fin-bars">
+              <div class="fin-bar-row">
+                <span class="fin-bar-label">营收</span>
+                <div class="fin-bar-outer">
+                  <div class="fin-bar-inner" style="width:88%;background:linear-gradient(90deg,var(--primary),#60a5fa)">$4,161 亿</div>
+                </div>
+                <span class="fin-bar-change" style="color:var(--success)">+6.4%</span>
+              </div>
+              <div class="fin-bar-row">
+                <span class="fin-bar-label">净利润</span>
+                <div class="fin-bar-outer">
+                  <div class="fin-bar-inner" style="width:72%;background:linear-gradient(90deg,var(--success),#34d399)">$937 亿</div>
+                </div>
+                <span class="fin-bar-change" style="color:var(--success)">+7.1%</span>
+              </div>
+              <div class="fin-bar-row">
+                <span class="fin-bar-label">营业利润</span>
+                <div class="fin-bar-outer">
+                  <div class="fin-bar-inner" style="width:68%;background:linear-gradient(90deg,#818cf8,var(--purple))">$1,208 亿</div>
+                </div>
+                <span class="fin-bar-change" style="color:var(--success)">+5.8%</span>
+              </div>
+              <div class="fin-bar-row">
+                <span class="fin-bar-label">经营现金流</span>
+                <div class="fin-bar-outer">
+                  <div class="fin-bar-inner" style="width:65%;background:linear-gradient(90deg,var(--warning),#fbbf24)">$1,183 亿</div>
+                </div>
+                <span class="fin-bar-change" style="color:var(--success)">+9.2%</span>
+              </div>
+              <div class="fin-bar-row">
+                <span class="fin-bar-label">负债/资产</span>
+                <div class="fin-bar-outer">
+                  <div class="fin-bar-inner" style="width:82%;background:linear-gradient(90deg,var(--danger),#f87171)">82.3%</div>
+                </div>
+                <span class="fin-bar-change" style="color:var(--muted)">持平</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Sentiment + Risk -->
+      <div class="content-grid">
+
+        <!-- Market Sentiment -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🌡️ 市场情绪</div>
+            <span class="card-badge badge-orange">宏观环境</span>
+          </div>
+          <div class="card-body">
+            <div class="sentiment-gauge">
+              <div class="gauge-visual">
+                <svg viewBox="0 0 200 110">
+                  <!-- Background arc -->
+                  <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round"/>
+                  <!-- Colored segments -->
+                  <path d="M 20 100 A 80 80 0 0 1 60 35" fill="none" stroke="var(--danger)" stroke-width="14" stroke-linecap="round" opacity=".6"/>
+                  <path d="M 65 33 A 80 80 0 0 1 100 20" fill="none" stroke="var(--warning)" stroke-width="14" stroke-linecap="round" opacity=".6"/>
+                  <path d="M 105 20 A 80 80 0 0 1 140 33" fill="none" stroke="#a3e635" stroke-width="14" stroke-linecap="round" opacity=".6"/>
+                  <path d="M 145 38 A 80 80 0 0 1 180 100" fill="none" stroke="var(--success)" stroke-width="14" stroke-linecap="round" opacity=".6"/>
+                  <!-- Needle -->
+                  <line x1="100" y1="100" x2="140" y2="45" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+                  <circle cx="100" cy="100" r="5" fill="var(--text)"/>
+                </svg>
+                <div class="gauge-text">
+                  <div class="gauge-value" style="color:var(--success)">65</div>
+                  <div class="gauge-label">贪婪</div>
+                </div>
+              </div>
+              <div class="sentiment-bars">
+                <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">CNN 恐惧与贪婪指数</div>
+                <div class="sbar-row">
+                  <span class="sbar-label">极度贪婪</span>
+                  <div class="sbar-outer"><div class="sbar-inner" style="width:15%;background:var(--success)"></div></div>
+                  <span class="sbar-pct">15%</span>
+                </div>
+                <div class="sbar-row">
+                  <span class="sbar-label">贪婪</span>
+                  <div class="sbar-outer"><div class="sbar-inner" style="width:40%;background:#a3e635"></div></div>
+                  <span class="sbar-pct">40%</span>
+                </div>
+                <div class="sbar-row">
+                  <span class="sbar-label">中性</span>
+                  <div class="sbar-outer"><div class="sbar-inner" style="width:25%;background:var(--warning)"></div></div>
+                  <span class="sbar-pct">25%</span>
+                </div>
+                <div class="sbar-row">
+                  <span class="sbar-label">恐惧</span>
+                  <div class="sbar-outer"><div class="sbar-inner" style="width:15%;background:var(--orange)"></div></div>
+                  <span class="sbar-pct">15%</span>
+                </div>
+                <div class="sbar-row">
+                  <span class="sbar-label">极度恐惧</span>
+                  <div class="sbar-outer"><div class="sbar-inner" style="width:5%;background:var(--danger)"></div></div>
+                  <span class="sbar-pct">5%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Risk Indicators -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚠️ 风险指标</div>
+          </div>
+          <div class="card-body">
+            <div class="risk-grid">
+              <div class="risk-card">
+                <div class="risk-label">Beta</div>
+                <div class="risk-value" style="color:var(--warning)">1.24</div>
+              </div>
+              <div class="risk-card">
+                <div class="risk-label">波动率 (30D)</div>
+                <div class="risk-value" style="color:var(--text)">18.7%</div>
+              </div>
+              <div class="risk-card">
+                <div class="risk-label">夏普比率</div>
+                <div class="risk-value" style="color:var(--success)">1.82</div>
+              </div>
+              <div class="risk-card">
+                <div class="risk-label">最大回撤</div>
+                <div class="risk-value" style="color:var(--danger)">-12.6%</div>
+              </div>
+            </div>
+            <div style="margin-top:16px;">
+              <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text2)">风险评估</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="padding:8px 12px;background:var(--warning-soft);border-radius:6px;font-size:12px;color:var(--warning);display:flex;align-items:center;gap:8px;">
+                  ⚡ PE 34.47 高于行业中位数 28.5，估值偏高
+                </div>
+                <div style="padding:8px 12px;background:var(--danger-soft);border-radius:6px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;">
+                  🌐 中美贸易政策不确定性可能影响供应链
+                </div>
+                <div style="padding:8px 12px;background:var(--success-soft);border-radius:6px;font-size:12px;color:var(--success);display:flex;align-items:center;gap:8px;">
+                  ✅ 技术信号暂无明显风险，均线多头排列
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: Peer Comparison -->
+      <div class="card full-width">
+        <div class="card-header">
+          <div class="card-title">🔄 同行对比</div>
+          <span class="card-badge badge-purple">科技板块</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          <table class="peer-table">
+            <thead>
+              <tr>
+                <th>股票代码</th>
+                <th>公司名称</th>
+                <th>价格</th>
+                <th>涨跌幅</th>
+                <th>市值</th>
+                <th>PE (TTM)</th>
+                <th style="text-align:center">综合评分</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="peer-ticker">AAPL</span></td>
+                <td>Apple Inc.</td>
+                <td>$227.63</td>
+                <td style="color:var(--success)">+1.24%</td>
+                <td>$3.42T</td>
+                <td>34.47</td>
+                <td style="text-align:center"><span class="mini-score" style="background:var(--success-soft);color:var(--success)">7.8</span></td>
+              </tr>
+              <tr>
+                <td><span class="peer-ticker">MSFT</span></td>
+                <td>Microsoft Corp.</td>
+                <td>$411.22</td>
+                <td style="color:var(--success)">+0.53%</td>
+                <td>$3.06T</td>
+                <td>33.21</td>
+                <td style="text-align:center"><span class="mini-score" style="background:var(--success-soft);color:var(--success)">8.1</span></td>
+              </tr>
+              <tr>
+                <td><span class="peer-ticker">GOOGL</span></td>
+                <td>Alphabet Inc.</td>
+                <td>$185.43</td>
+                <td style="color:var(--danger)">-0.71%</td>
+                <td>$2.27T</td>
+                <td>22.15</td>
+                <td style="text-align:center"><span class="mini-score" style="background:var(--success-soft);color:var(--success)">8.3</span></td>
+              </tr>
+              <tr>
+                <td><span class="peer-ticker">AMZN</span></td>
+                <td>Amazon.com Inc.</td>
+                <td>$228.68</td>
+                <td style="color:var(--success)">+1.05%</td>
+                <td>$2.42T</td>
+                <td>36.89</td>
+                <td style="text-align:center"><span class="mini-score" style="background:var(--primary-soft);color:var(--primary)">7.2</span></td>
+              </tr>
+              <tr>
+                <td><span class="peer-ticker">META</span></td>
+                <td>Meta Platforms</td>
+                <td>$719.73</td>
+                <td style="color:var(--success)">+2.18%</td>
+                <td>$1.83T</td>
+                <td>26.44</td>
+                <td style="text-align:center"><span class="mini-score" style="background:var(--success-soft);color:var(--success)">8.5</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Row 5: Recent News -->
+      <div class="card full-width">
+        <div class="card-header">
+          <div class="card-title">📰 近期新闻</div>
+          <span class="card-badge badge-green">NewsAgent</span>
+        </div>
+        <div class="card-body" style="padding:12px 20px;">
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--success-soft);color:var(--success);font-weight:700;flex-shrink:0">利好</span>
+              <span style="font-size:13px;color:var(--text);flex:1">Apple Q1 FY2026 营收超预期，iPhone 销售额创纪录，AI 功能推动服务收入增长</span>
+              <span style="font-size:11px;color:var(--muted);flex-shrink:0;width:110px;text-align:right">Reuters · 2h ago</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--success-soft);color:var(--success);font-weight:700;flex-shrink:0">利好</span>
+              <span style="font-size:13px;color:var(--text);flex:1">华尔街分析师上调 AAPL 目标价至 $260，AI 整合为核心催化剂</span>
+              <span style="font-size:11px;color:var(--muted);flex-shrink:0;width:110px;text-align:right">Bloomberg · 5h ago</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+              <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--warning-soft);color:var(--warning);font-weight:700;flex-shrink:0">中性</span>
+              <span style="font-size:13px;color:var(--text);flex:1">Apple 扩大印度制造布局，应对中美贸易不确定性，供应链多元化加速</span>
+              <span style="font-size:11px;color:var(--muted);flex-shrink:0;width:110px;text-align:right">WSJ · 8h ago</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 0;">
+              <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-weight:700;flex-shrink:0">利空</span>
+              <span style="font-size:13px;color:var(--text);flex:1">欧盟反垄断调查扩展至 Apple Intelligence，可能面临数字市场法合规挑战</span>
+              <span style="font-size:11px;color:var(--muted);flex-shrink:0;width:110px;text-align:right">FT · 12h ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="text-align:center;padding:24px 0;color:var(--muted);font-size:11px;">
+        FinSight v1.1.0 · 数据仅供参考，不构成投资建议 · 数据来源: yfinance · FRED · Finnhub · Tavily
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MiniChat -->
+<div class="minichat">
+  <div class="minichat-panel" id="chatPanel">
+    <div class="minichat-header">
+      <span>💬 FinSight AI</span>
+      <button class="close-btn" onclick="toggleChat()">✕</button>
+    </div>
+    <div class="minichat-messages">
+      <div class="msg msg-ai">你好！我是 FinSight AI 助手。你可以问我任何关于 AAPL 的分析问题 📊</div>
+      <div class="msg msg-user">AAPL 现在可以买入吗？</div>
+      <div class="msg msg-ai">基于综合分析：<br><br>✅ <strong>利好因素</strong>：营收超预期、AI 战略验证、均线多头排列<br>⚠️ <strong>风险因素</strong>：PE 34.47 偏高、贸易政策不确定性<br><br>综合评分 7.8/10，技术面偏多，但建议分批建仓控制估值风险。</div>
+    </div>
+    <div class="minichat-input">
+      <input type="text" placeholder="输入你的问题..." />
+      <button>发送</button>
+    </div>
+  </div>
+  <button class="minichat-toggle" onclick="toggleChat()" id="chatToggle">💬</button>
+</div>
+
+<script>
+function toggleChat() {
+  const panel = document.getElementById('chatPanel');
+  panel.classList.toggle('open');
+}
+</script>
+
+</body>
+</html>

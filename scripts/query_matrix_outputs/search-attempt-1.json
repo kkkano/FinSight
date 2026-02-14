@@ -1,0 +1,1908 @@
+{
+  "report_id": "lg_31dbfe45c4",
+  "ticker": "NVDA",
+  "company_name": "NVDA",
+  "title": "NVDA 分析报告",
+  "summary": "- NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)。日内变动 +0.80%（上涨）。\n- NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债/资产 28.9%。\n- NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。",
+  "sentiment": "neutral",
+  "confidence_score": 0.775,
+  "sections": [
+    {
+      "title": "基本面分析",
+      "order": 1,
+      "contents": [
+        {
+          "type": "text",
+          "content": "NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债/资产 28.9%。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.92,
+      "agent_name": "fundamental_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "价格分析",
+      "order": 2,
+      "contents": [
+        {
+          "type": "text",
+          "content": "NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)。日内变动 +0.80%（上涨）。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 1.0,
+      "agent_name": "price_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "新闻分析",
+      "order": 3,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; Tech, Online Sales Practices Roil Asian Stock Markets; 3 Key Updates Apple Just Gave Investors",
+          "citation_refs": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.8,
+      "agent_name": "news_agent",
+      "data_sources": [
+        "Yahoo"
+      ]
+    },
+    {
+      "title": "技术分析",
+      "order": 4,
+      "contents": [
+        {
+          "type": "text",
+          "content": "NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.85,
+      "agent_name": "technical_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "宏观分析",
+      "order": 5,
+      "contents": [
+        {
+          "type": "text",
+          "content": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.88,
+      "agent_name": "macro_agent",
+      "data_sources": [
+        "CNN Fear & Greed",
+        "Economic Calendar",
+        "FRED",
+        "Web Search"
+      ]
+    },
+    {
+      "title": "深度搜索",
+      "order": 6,
+      "contents": [
+        {
+          "type": "text",
+          "content": "## 核心发现\n- 当前深度研究摘要触发质量保护（原文噪声较高）：deep_search_agent 已降级：NVDA 的分析暂不可用，系统已返回最小可用结果（query=What happened to Nvidia yesterday）。\n\n## 风险提示\n- 建议结合财报、公告或权威媒体原文复核关键结论。\n\n## 信息缺口\n- 需要补充高质量可解析来源后再生成正式深度研究结论。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.2,
+      "agent_name": "deep_search_agent",
+      "data_sources": [
+        "agent_fallback"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "source_id": "1",
+      "title": "news_agent evidence 1",
+      "url": "https://finnhub.io/api/news?id=65f98d8bcf4b8c86aeba53b60f5321252810ecd53674bf3419beb2c0ce64a724",
+      "snippet": "Is Joby Aviation Stock Yesterday's News?​",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.87070748388889
+    },
+    {
+      "source_id": "2",
+      "title": "news_agent evidence 2",
+      "url": "https://finnhub.io/api/news?id=ee60d8d21b1be2b198d76900e8a00daede1b9125be63dd4c13d5cbcc0cd7bd05",
+      "snippet": "Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.870707486666667
+    },
+    {
+      "source_id": "3",
+      "title": "news_agent evidence 3",
+      "url": "https://finnhub.io/api/news?id=69dfc102c88035a5324b976c88eaafd125347f8f2a508709763b8197b5f0e794",
+      "snippet": "2 Cryptocurrency Investments to Buy Hand Over Fist in February",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.870707488055555
+    },
+    {
+      "source_id": "4",
+      "title": "news_agent evidence 4",
+      "url": "https://finnhub.io/api/news?id=9715e8daa37a45377574edadff46db52e138a26d469414d36184010529a8a45c",
+      "snippet": "Tech, Online Sales Practices Roil Asian Stock Markets",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.87070748944444
+    },
+    {
+      "source_id": "5",
+      "title": "news_agent evidence 5",
+      "url": "https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7",
+      "snippet": "3 Key Updates Apple Just Gave Investors",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.870707490555553
+    }
+  ],
+  "risks": [
+    "基本面数据未见重大风险信号。",
+    "技术信号暂无明显风险。",
+    "多源宏观数据存在冲突，建议以权威源为准。",
+    "证据覆盖率或引用数量不足，结论可信度下降，请谨慎参考。"
+  ],
+  "recommendation": "HOLD",
+  "generated_at": "2026-02-12T12:52:14.547039+00:00",
+  "meta": {
+    "source": "langgraph",
+    "thread_id": "query-matrix-search-1",
+    "subject_type": "company",
+    "agent_summaries": [
+      {
+        "title": "基本面分析",
+        "order": 1,
+        "agent_name": "fundamental_agent",
+        "status": "success",
+        "summary": "NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债/资产 28.9%。",
+        "confidence": 0.92,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {
+          "overall_score": 1.0,
+          "metric_coverage": 1.0,
+          "growth_coverage": 1.0,
+          "source_diversity": 1,
+          "has_conflicts": false
+        }
+      },
+      {
+        "title": "价格分析",
+        "order": 2,
+        "agent_name": "price_agent",
+        "status": "success",
+        "summary": "NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)。日内变动 +0.80%（上涨）。",
+        "confidence": 1.0,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "新闻分析",
+        "order": 3,
+        "agent_name": "news_agent",
+        "status": "success",
+        "summary": "Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; Tech, Online Sales Practices Roil Asian Stock Markets; 3 Key Updates Apple Just Gave Investors",
+        "confidence": 0.8,
+        "data_sources": [
+          "Yahoo"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "技术分析",
+        "order": 4,
+        "agent_name": "technical_agent",
+        "status": "success",
+        "summary": "NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。",
+        "confidence": 0.85,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "宏观分析",
+        "order": 5,
+        "agent_name": "macro_agent",
+        "status": "success",
+        "summary": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+        "confidence": 0.88,
+        "data_sources": [
+          "CNN Fear & Greed",
+          "Economic Calendar",
+          "FRED",
+          "Web Search"
+        ],
+        "evidence_quality": {
+          "overall_score": 0.88,
+          "coverage_score": 1.0,
+          "source_diversity": 4,
+          "source_health_score": 1.0,
+          "has_conflicts": true,
+          "conflict_count": 1
+        }
+      },
+      {
+        "title": "深度搜索",
+        "order": 6,
+        "agent_name": "deep_search_agent",
+        "status": "success",
+        "summary": "## 核心发现\n- 当前深度研究摘要触发质量保护（原文噪声较高）：deep_search_agent 已降级：NVDA 的分析暂不可用，系统已返回最小可用结果（query=What happened to Nvidia yesterday）。\n\n## 风险提示\n- 建议结合财报、公告或权威媒体原文复核关键结论。\n\n## 信息缺口\n- 需要补充高质量可解析来源后再生成正式深度研究结论。",
+        "confidence": 0.2,
+        "data_sources": [
+          "agent_fallback"
+        ],
+        "evidence_quality": {
+          "overall_score": 0.0,
+          "fallback": true
+        }
+      }
+    ],
+    "filing_section_citations": [],
+    "report_hints": {
+      "is_compare": false,
+      "has_conflict": true,
+      "compare_basis": [],
+      "conflict_agents": [
+        "macro_agent"
+      ]
+    },
+    "graph_trace": {
+      "schema_version": "trace.v1",
+      "routing_chain": [
+        "langgraph"
+      ],
+      "spans": [
+        {
+          "schema_version": "trace.v1",
+          "node": "build_initial_state",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.817159+00:00"
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "normalize_ui_context",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.817519+00:00",
+          "data": {
+            "selections": {
+              "count": 0,
+              "types": []
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "decide_output_mode",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.817786+00:00",
+          "data": {
+            "output_mode": "investment_report"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "resolve_subject",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.818121+00:00",
+          "data": {
+            "subject_type": "company",
+            "tickers": [
+              "NVDA"
+            ],
+            "selection_types": []
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "clarify",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.818381+00:00",
+          "data": {
+            "needed": false,
+            "reason": "",
+            "question": ""
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "parse_operation",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.818964+00:00",
+          "data": {
+            "operation": "qa",
+            "confidence": 0.4,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "policy_gate",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:44:19.820014+00:00",
+          "data": {
+            "decision_type": "policy_gate",
+            "summary": "selected=6 required=5 tools=7",
+            "fallback_reason": "none",
+            "budget": {
+              "max_rounds": 6,
+              "max_tools": 8
+            },
+            "allowed_tools": [
+              "get_stock_price",
+              "get_technical_snapshot",
+              "get_company_info",
+              "get_company_news",
+              "analyze_historical_drawdowns",
+              "get_current_datetime",
+              "search"
+            ],
+            "allowed_tools_count": 7,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.subject.tickers"
+            ],
+            "selection_summary": "selected=6 required=5 tools=7",
+            "agent_selection": {
+              "selected": [
+                "fundamental_agent",
+                "price_agent",
+                "news_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent"
+              ],
+              "required": [
+                "fundamental_agent",
+                "price_agent",
+                "news_agent",
+                "technical_agent",
+                "macro_agent"
+              ],
+              "scored": [
+                {
+                  "agent": "fundamental_agent",
+                  "score": 1.0,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.60",
+                    "output:investment_report=+0.35"
+                  ]
+                },
+                {
+                  "agent": "price_agent",
+                  "score": 0.9,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.55",
+                    "output:investment_report=+0.30"
+                  ]
+                },
+                {
+                  "agent": "news_agent",
+                  "score": 0.75,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.45",
+                    "output:investment_report=+0.25"
+                  ]
+                },
+                {
+                  "agent": "technical_agent",
+                  "score": 0.75,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.50",
+                    "output:investment_report=+0.20"
+                  ]
+                },
+                {
+                  "agent": "macro_agent",
+                  "score": 0.65,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.35",
+                    "output:investment_report=+0.25"
+                  ]
+                },
+                {
+                  "agent": "deep_search_agent",
+                  "score": 0.45,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.10",
+                    "operation:qa=+0.20",
+                    "output:investment_report=+0.10"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "planner",
+          "duration_ms": 8352,
+          "ts": "2026-02-12T12:44:28.172491+00:00",
+          "data": {
+            "decision_type": "planner",
+            "summary": "plan=9 steps, first=get_company_info",
+            "fallback_reason": "Your request was blocked.",
+            "planner_runtime": {
+              "mode": "llm",
+              "fallback": true,
+              "retry_attempts": 3,
+              "failure_strategy_version": "failure.v1",
+              "reason": "Your request was blocked.",
+              "variant": "A"
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "kind": "tool",
+                "name": "get_company_info",
+                "why": "补齐公司基础信息，便于解释新闻/财务信息的语境",
+                "parallel_group": null
+              },
+              {
+                "id": "s2",
+                "kind": "tool",
+                "name": "get_stock_price",
+                "why": "研报模式补充当前价格与估值/风险叙述的锚点",
+                "parallel_group": null
+              },
+              {
+                "id": "s3",
+                "kind": "tool",
+                "name": "analyze_historical_drawdowns",
+                "why": "研报模式补充历史回撤信息用于风险章节",
+                "parallel_group": null
+              },
+              {
+                "id": "s4",
+                "kind": "agent",
+                "name": "fundamental_agent",
+                "why": "研报模式：运行 fundamental_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s5",
+                "kind": "agent",
+                "name": "price_agent",
+                "why": "研报模式：运行 price_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s6",
+                "kind": "agent",
+                "name": "news_agent",
+                "why": "研报模式：运行 news_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s7",
+                "kind": "agent",
+                "name": "technical_agent",
+                "why": "研报模式：运行 technical_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s8",
+                "kind": "agent",
+                "name": "macro_agent",
+                "why": "研报模式：运行 macro_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s9",
+                "kind": "agent",
+                "name": "deep_search_agent",
+                "why": "研报模式：运行 deep_search_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              }
+            ],
+            "step_count": 9,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ],
+            "decision_summary": "plan=9 steps, first=get_company_info"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "execute_plan",
+          "duration_ms": 404468,
+          "ts": "2026-02-12T12:51:12.641850+00:00",
+          "data": {
+            "decision_type": "execute_plan",
+            "summary": "steps=9 done=9 skipped=0",
+            "fallback_reason": "none",
+            "executor": {
+              "type": "live_tools",
+              "ran_steps": 9,
+              "error_count": 0,
+              "failure_strategy_version": "failure.v1",
+              "events": [
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s1",
+                  "kind": "tool",
+                  "name": "get_company_info"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s1",
+                  "cached": false,
+                  "duration_ms": 802
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s2",
+                  "kind": "tool",
+                  "name": "get_stock_price"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s2",
+                  "cached": false,
+                  "duration_ms": 1071
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s3",
+                  "kind": "tool",
+                  "name": "analyze_historical_drawdowns"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s3",
+                  "cached": false,
+                  "duration_ms": 1911
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s4",
+                  "kind": "agent",
+                  "name": "fundamental_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s5",
+                  "kind": "agent",
+                  "name": "price_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s5",
+                  "cached": false,
+                  "duration_ms": 125
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s6",
+                  "kind": "agent",
+                  "name": "news_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s7",
+                  "kind": "agent",
+                  "name": "technical_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s8",
+                  "kind": "agent",
+                  "name": "macro_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s9",
+                  "kind": "agent",
+                  "name": "deep_search_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s7",
+                  "cached": false,
+                  "duration_ms": 275029
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s8",
+                  "cached": false,
+                  "duration_ms": 276263
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s4",
+                  "cached": false,
+                  "duration_ms": 300465
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s6",
+                  "cached": false,
+                  "duration_ms": 300253
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s9",
+                  "cached": false,
+                  "duration_ms": 377934
+                }
+              ]
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "name": "get_company_info",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 802,
+                "output_preview": "Company Profile (NVDA):\n- Name: NVIDIA Corporation\n- Sector: Technology\n- Industry: Semiconductors\n- Market Cap: $4,627,147,784,192\n- Website: https://www.nvidia.com\n- Description: NVIDIA Corporation, a computing infrastructure company, pro…"
+              },
+              {
+                "id": "s2",
+                "name": "get_stock_price",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 1071,
+                "output_preview": "NVDA Current Price: $190.05 | Change: +1.51 (+0.80%) | Suggested ladder: $188.15 / $186.25 (+/-1% / +/-2% from current)"
+              },
+              {
+                "id": "s3",
+                "name": "analyze_historical_drawdowns",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 1911,
+                "output_preview": "Top 3 Historical Drawdowns for NVDA (coverage 1999-01-22 to 2026-02-11 (~27.1y)):\n\n- Drawdown: -89.72% (from 2002-01-03 to 2002-10-09)\n  Duration to trough: 279 days. Recovery time: 1496 days."
+              },
+              {
+                "id": "s5",
+                "name": "price_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 125,
+                "output_preview": {
+                  "agent_name": "price_agent",
+                  "summary": "NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)。日内变动 +0.80%（上涨）。",
+                  "evidence": [
+                    {
+                      "text": "NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-12T20:44:33.466196",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 1.0,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T20:44:33.466196",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:44:33.340751",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "query": "What happened to Nvidia yesterday",
+                        "ticker": "NVDA"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:44:33.466168",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "result_count": 52,
+                        "result_type": "str"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:44:33.466188",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "summary_preview": "NVDA Current Price: $190.05 | Change: $1.51 (+0.80%)",
+                        "summary_length": 52
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:44:33.466213",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "confidence": 1.0,
+                        "evidence_count": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s7",
+                "name": "technical_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 275029,
+                "output_preview": {
+                  "agent_name": "technical_agent",
+                  "summary": "NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。",
+                  "evidence": [
+                    {
+                      "text": "MA20 185.33 | MA50 184.24",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-11 00:00",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "RSI(14) 55.02 | MACD 0.2974 | 信号线 -0.0859",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-11 00:00",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.85,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T20:49:11.070581",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [
+                    "技术信号暂无明显风险。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:47:54.511067",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "query": "What happened to Nvidia yesterday",
+                        "ticker": "NVDA"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:47:54.511096",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "result_count": 5,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:47:54.512115",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "summary_preview": "NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。",
+                        "summary_length": 130
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:49:11.070593",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "confidence": 0.85,
+                        "evidence_count": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s8",
+                "name": "macro_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 276263,
+                "output_preview": {
+                  "agent_name": "macro_agent",
+                  "summary": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+                  "evidence": [
+                    {
+                      "text": "联邦基金利率: 3.64%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "fed_rate",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 3.64,
+                            "priority": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "CPI 通胀率: 326.03%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "cpi",
+                        "conflict_flag": true,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 326.03,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 0.3,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "失业率: 4.30%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "unemployment",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.3,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 4.3,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "GDP 增长率: 4.40%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "gdp_growth",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.4,
+                            "priority": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "10年期国债收益率: 4.16%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "treasury_10y",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.16,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 4.173,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "10Y-2Y 利差: 0.66%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "yield_spread",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 0.66,
+                            "priority": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "市场情绪监测: CNN Fear & Greed Index: 49.2 (neutral)",
+                      "source": "CNN Fear & Greed",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.65,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "经济日历: 📊 AI摘要:\nThe major upcoming US economic events in February 2026 include the Employment Report on February 6 and the CPI on February 11. The Federal Reserve's FOMC meeting is scheduled for March 18. The jobs report is released on the first Fr",
+                      "source": "Economic Calendar",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.6,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.88,
+                  "data_sources": [
+                    "CNN Fear & Greed",
+                    "Economic Calendar",
+                    "FRED",
+                    "Web Search"
+                  ],
+                  "as_of": "2026-02-12T12:49:12.441747+00:00",
+                  "evidence_quality": {
+                    "overall_score": 0.88,
+                    "coverage_score": 1.0,
+                    "source_diversity": 4,
+                    "source_health_score": 1.0,
+                    "has_conflicts": true,
+                    "conflict_count": 1
+                  },
+                  "fallback_used": false,
+                  "risks": [
+                    "多源宏观数据存在冲突，建议以权威源为准。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:47:54.513350",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "query": "What happened to Nvidia yesterday",
+                        "ticker": "NVDA"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:48:12.626496",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "result_count": 25,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:48:12.626526",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "summary_preview": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+                        "summary_length": 147
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:49:12.441762",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "confidence": 0.88,
+                        "evidence_count": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s4",
+                "name": "fundamental_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 300465,
+                "output_preview": {
+                  "agent_name": "fundamental_agent",
+                  "summary": "NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债/资产 28.9%。",
+                  "evidence": [
+                    {
+                      "text": "营收: $32.64B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "revenue",
+                        "period_type": "annual",
+                        "yoy": 0.9637205944287347,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    },
+                    {
+                      "text": "净利润: $72.88B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "net_income",
+                        "period_type": "annual",
+                        "yoy": 1.4489247311827957,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    },
+                    {
+                      "text": "营业利润: $86.14B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "operating_income",
+                        "period_type": "annual",
+                        "yoy": 1.4207346204648288,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    },
+                    {
+                      "text": "经营现金流: $64.09B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "operating_cash_flow",
+                        "period_type": "annual",
+                        "yoy": 1.281559273762905,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    },
+                    {
+                      "text": "总资产: $111.60B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "total_assets",
+                        "period_type": "annual",
+                        "yoy": 0.6979217380720545,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    },
+                    {
+                      "text": "总负债: $32.27B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-01-31",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "total_liabilities",
+                        "period_type": "annual",
+                        "yoy": 0.4186373626373626,
+                        "qoq": null,
+                        "latest_period": "2025-01-31",
+                        "comparison_period": "2024-01-31"
+                      }
+                    }
+                  ],
+                  "confidence": 0.92,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T12:49:32.425847+00:00",
+                  "evidence_quality": {
+                    "overall_score": 1.0,
+                    "metric_coverage": 1.0,
+                    "growth_coverage": 1.0,
+                    "source_diversity": 1,
+                    "has_conflicts": false
+                  },
+                  "fallback_used": false,
+                  "risks": [
+                    "基本面数据未见重大风险信号。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:47:31.969710",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "query": "What happened to Nvidia yesterday",
+                        "ticker": "NVDA"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:47:31.969756",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "result_count": 4,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:47:31.969802",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "summary_preview": "NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债",
+                        "summary_length": 210
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:48:12.630161",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "NVDA stock news yesterday",
+                          "Nvidia stock price movement yesterday",
+                          "reasons for NVDA stock volatility yesterday"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:48:33.201129",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nAs of February 12, 2026, NVDA stock is trading at $192.38, up by $1.89 from the previous close. The company is a major player in graphics processors and AI technology. For the most current and detailed information, check financial news websites.\n\n\n搜索结果:\n\n1. NVIDIA: NVDA Stock Price Quote & N"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:49:12.652802",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "NVIDIA Corporation | Technology | Semiconductors | $4,627,147,784,192 最新报告期: 2025-01-31（annual）。 营收 $32.64B (同比 96.4%). 净利润 $72.88B (同比 144.9%). 营业利润 $86.14B (同比 142.1%). 经营现金流 $64.09B (同比 128.2%). 负债",
+                        "summary_length": 210
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:49:32.425861",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "confidence": 0.92,
+                        "evidence_count": 6
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s6",
+                "name": "news_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 300253,
+                "output_preview": {
+                  "agent_name": "news_agent",
+                  "summary": "Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; Tech, Online Sales Practices Roil Asian …",
+                  "evidence": [
+                    {
+                      "text": "Is Joby Aviation Stock Yesterday's News?​",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=65f98d8bcf4b8c86aeba53b60f5321252810ecd53674bf3419beb2c0ce64a724",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=ee60d8d21b1be2b198d76900e8a00daede1b9125be63dd4c13d5cbcc0cd7bd05",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "2 Cryptocurrency Investments to Buy Hand Over Fist in February",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=69dfc102c88035a5324b976c88eaafd125347f8f2a508709763b8197b5f0e794",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "Tech, Online Sales Practices Roil Asian Stock Markets",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=9715e8daa37a45377574edadff46db52e138a26d469414d36184010529a8a45c",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "3 Key Updates Apple Just Gave Investors",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.8,
+                  "data_sources": [
+                    "Yahoo"
+                  ],
+                  "as_of": "2026-02-12T20:49:33.719816",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:47:33.467807",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "query": "What happened to Nvidia yesterday",
+                        "ticker": "NVDA"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:47:33.467855",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "result_count": 5,
+                        "result_type": "list"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:47:33.467875",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "summary_preview": "Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; ",
+                        "summary_length": 294
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:48:33.203282",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "Nvidia stock news yesterday",
+                          "NVDA stock price movement reason",
+                          "Nvidia recent major announcements"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:48:52.194515",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nAs of February 12, 2026, NVDA stock is up 0.80% to $190.05, trading near its 52-week high. The company is also preparing for its Q4 fiscal 2026 earnings release on February 25.\n\n\n搜索结果:\n\n1. NVIDIA: NVDA Stock Price Quote & News - Robinhood (相关性: 0.78)\n   NVIDIA(NVDA) shares are trading with a"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:49:13.026980",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; ",
+                        "summary_length": 294
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:49:33.719822",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "confidence": 0.8,
+                        "evidence_count": 5
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "convergence_check",
+                      "timestamp": "2026-02-12T20:49:33.719803",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round_num": 1,
+                        "new_docs_count": 5,
+                        "unique_docs_count": 5,
+                        "info_gain": 0.9,
+                        "cumulative_gain": 0.9,
+                        "should_stop": false,
+                        "reason": "continue"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s9",
+                "name": "deep_search_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 377934,
+                "output_preview": {
+                  "agent_name": "deep_search_agent",
+                  "summary": "deep_search_agent 已降级：NVDA 的分析暂不可用，系统已返回最小可用结果（query=What happened to Nvidia yesterday）。",
+                  "confidence": 0.2,
+                  "as_of": null,
+                  "evidence_quality": {
+                    "overall_score": 0.0,
+                    "fallback": true
+                  },
+                  "data_sources": [
+                    "agent_fallback"
+                  ],
+                  "fallback_used": true,
+                  "risks": [
+                    "当前 Agent 执行失败，结果已降级，请稍后重试。",
+                    "错误摘要: TimeoutError: "
+                  ],
+                  "trace": [
+                    {
+                      "event": "agent_fallback",
+                      "agent": "deep_search_agent",
+                      "error": "TimeoutError: "
+                    }
+                  ],
+                  "evidence": []
+                }
+              }
+            ],
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "synthesize",
+          "duration_ms": 61902,
+          "ts": "2026-02-12T12:52:14.544939+00:00",
+          "data": {
+            "decision_type": "synthesize",
+            "summary": "render_vars=17",
+            "fallback_reason": "llm_output_invalid",
+            "synthesize_runtime": {
+              "mode": "llm",
+              "fallback": true,
+              "retry_attempts": 3,
+              "failure_strategy_version": "failure.v1",
+              "reason": "llm_output_invalid"
+            },
+            "render_vars_keys": [
+              "analysis",
+              "catalysts",
+              "company_overview",
+              "comparison_conclusion",
+              "comparison_metrics",
+              "conclusion",
+              "highlights",
+              "impact_analysis",
+              "investment_summary",
+              "investment_thesis",
+              "news_summary",
+              "next_watch",
+              "price_snapshot",
+              "risks",
+              "summary",
+              "technical_snapshot"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "render",
+          "duration_ms": 1,
+          "ts": "2026-02-12T12:52:14.546536+00:00",
+          "data": {
+            "draft_markdown_len": 2225,
+            "draft_markdown_preview": "## 投资研报：NVDA\n\n**问题**：What happened to Nvidia yesterday\n\n## 综合投资观点\n\n**NVDA 综合研判：偏多（Bullish）**\n\n多数维度信号偏积极。以下为多维度交叉验证结论：\n\n**利多因素：**\n- ✅ 近期股价呈上行…"
+          }
+        }
+      ],
+      "clarify": {
+        "needed": false,
+        "subject_type": "company"
+      },
+      "policy": {
+        "output_mode": "investment_report",
+        "subject_type": "company",
+        "budget": {
+          "max_rounds": 6,
+          "max_tools": 8
+        },
+        "allowed_tools": [
+          "get_stock_price",
+          "get_technical_snapshot",
+          "get_company_info",
+          "get_company_news",
+          "analyze_historical_drawdowns",
+          "get_current_datetime",
+          "search"
+        ],
+        "allowed_agents": [
+          "fundamental_agent",
+          "price_agent",
+          "news_agent",
+          "technical_agent",
+          "macro_agent",
+          "deep_search_agent"
+        ],
+        "agent_selection": {
+          "required": [
+            "fundamental_agent",
+            "price_agent",
+            "news_agent",
+            "technical_agent",
+            "macro_agent"
+          ],
+          "max_agents": 6,
+          "min_agents": 2
+        }
+      },
+      "failure_strategy_version": "failure.v1",
+      "failures": [
+        {
+          "schema_version": "failure.v1",
+          "ts": "2026-02-12T12:44:28.172317+00:00",
+          "node": "planner",
+          "stage": "llm_call",
+          "error": "Your request was blocked.",
+          "fallback": "planner_stub",
+          "retryable": false,
+          "retry_attempts": 3,
+          "metadata": {}
+        },
+        {
+          "schema_version": "failure.v1",
+          "ts": "2026-02-12T12:52:14.544804+00:00",
+          "node": "synthesize",
+          "stage": "llm_call",
+          "error": "Error code: 429 - {'error': {'message': '[{\\n  \"error\": {\\n    \"code\": 429,\\n    \"message\": \"You have exhausted your gemini-3-pro-high quota. Please try again later.\",\\n    \"status\": \"RESOURCE_EXHAUSTED\",\\n    \"details\": [\\n      {\\n        \"@type\": \"***.***.com/***.***.ErrorInfo\",\\n        \"reason\": \"QUOTA_EXHAUSTED\",\\n        \"domain\": \"***.***.com\",\\n        \"metadata\": {\\n          \"model\": \"gemini-3-pro-high\",\\n          \"uiMessage\": \"true\",\\n          \"quotaResetDelay\": \"623.70722ms\",\\n          \"quotaResetTimeStamp\": \"2026-02-12T12:52:16Z\"\\n        }\\n      },\\n      {\\n        \"@type\": \"***.***.com/***.***.LocalizedMessage\",\\n        \"locale\": \"en-US\",\\n        \"message\": \"You have exhausted your gemini-3-pro-high quota. Please try again later.\"\\n      },\\n      {\\n        \"@type\": \"***.***.com/***.***.RetryInfo\",\\n        \"retryDelay\": \"0.623707220s\"\\n      }\\n    ]\\n  }\\n}\\n]', 'type': 'bad_response_status_code', 'param': '', 'code': 'bad_response_status_code'}}",
+          "fallback": "synthesize_stub",
+          "retryable": true,
+          "retry_attempts": 3,
+          "metadata": {}
+        }
+      ],
+      "planner_runtime": {
+        "mode": "llm",
+        "fallback": true,
+        "retry_attempts": 3,
+        "failure_strategy_version": "failure.v1",
+        "reason": "Your request was blocked.",
+        "variant": "A"
+      },
+      "planner": {
+        "type": "stub",
+        "validated": true,
+        "steps": 9,
+        "operation": "qa"
+      },
+      "executor": {
+        "type": "live_tools",
+        "ran_steps": 9,
+        "error_count": 0,
+        "failure_strategy_version": "failure.v1",
+        "events": [
+          {
+            "event": "executor.step_started",
+            "step_id": "s1",
+            "kind": "tool",
+            "name": "get_company_info"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s1",
+            "cached": false,
+            "duration_ms": 802
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s2",
+            "kind": "tool",
+            "name": "get_stock_price"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s2",
+            "cached": false,
+            "duration_ms": 1071
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s3",
+            "kind": "tool",
+            "name": "analyze_historical_drawdowns"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s3",
+            "cached": false,
+            "duration_ms": 1911
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s4",
+            "kind": "agent",
+            "name": "fundamental_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s5",
+            "kind": "agent",
+            "name": "price_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s5",
+            "cached": false,
+            "duration_ms": 125
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s6",
+            "kind": "agent",
+            "name": "news_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s7",
+            "kind": "agent",
+            "name": "technical_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s8",
+            "kind": "agent",
+            "name": "macro_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s9",
+            "kind": "agent",
+            "name": "deep_search_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s7",
+            "cached": false,
+            "duration_ms": 275029
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s8",
+            "cached": false,
+            "duration_ms": 276263
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s4",
+            "cached": false,
+            "duration_ms": 300465
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s6",
+            "cached": false,
+            "duration_ms": 300253
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s9",
+            "cached": false,
+            "duration_ms": 377934
+          }
+        ]
+      },
+      "rag": {
+        "enabled": true,
+        "backend": "memory",
+        "collection": "session:query-matrix-search-1",
+        "indexed": 31,
+        "hits": 6,
+        "top_k": 6
+      },
+      "synthesize_runtime": {
+        "mode": "llm",
+        "fallback": true,
+        "retry_attempts": 3,
+        "failure_strategy_version": "failure.v1",
+        "reason": "llm_output_invalid"
+      }
+    },
+    "evidence_policy": {
+      "status": "warning",
+      "coverage": 0.1667,
+      "covered_blocks": 1,
+      "total_blocks": 6,
+      "unique_sources": 5,
+      "min_coverage": 0.8,
+      "min_sources": 2,
+      "min_key_section_sources": 2,
+      "invalid_refs": [],
+      "key_section_issues": [],
+      "meets_coverage": false,
+      "meets_min_sources": true
+    }
+  },
+  "synthesis_report": "## NVDA 综合研究报告\n\n## 投资研报：NVDA\n\n**问题**：What happened to Nvidia yesterday\n\n## 综合投资观点\n\n**NVDA 综合研判：偏多（Bullish）**\n\n多数维度信号偏积极。以下为多维度交叉验证结论：\n\n**利多因素：**\n- ✅ 近期股价呈上行趋势\n- ✅ 营收同比增长 +96.4%，增长动能良好\n- ✅ 净利润同比增长 +144.9%，盈利能力改善\n\n**背景与参考：**\n- 宏观环境：美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.\n- 近期事件：Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; \n\n**数据置信度：** fundamental 92% | price 100% | news 80% | technical 85% | macro 88%\n\n\n## 公司与业务\n\n- Name: NVIDIA Corporation\n- Sector: Technology\n- Industry: Semiconductors\n- Market Cap: $4,627,147,784,192\n- Website: https://www.nvidia.com\n- Description: NVIDIA Corporation, a computing infrastructure company, provides graphics and compute and networking solutions in the United States, Singapore, Taiwan, China, Hong Kong, and internationally. The Compu...\n\n## 价格快照\n\n- NVDA Current Price: $190.05 | Change: +1.51 (+0.80%) | Suggested ladder: $188.15 / $186.25 (+/-1% / +/-2% from current)\n\n## 技术面\n\n- NVDA 技术快照: 收盘价 190.05。 MA20 185.33 MA50 184.24 MA200 暂无 RSI(14) 55.02（中性）。 MACD 0.2974 vs 信号线 -0.0859（多头）。 趋势: 上升趋势。 均线呈多头排列，趋势偏强。\n\n## 关键催化剂（含新闻/事件）\n\n- Recent news includes: Is Joby Aviation Stock Yesterday's News?​; Think the AI Boom Is Slowing Down? Alphabet's Earnings Say Otherwise.; 2 Cryptocurrency Investments to Buy Hand Over Fist in February; Tech, Online Sales Practices Roil Asian Stock Markets; 3 Key Updates Apple Just Gave Investors\n\n## 财务与估值\n\n- 营收: $32.64B (YoY +96.4%)\n- 净利润: $72.88B (YoY +144.9%)\n- 营业利润: $86.14B (YoY +142.1%)\n- 经营现金流: $64.09B (YoY +128.2%)\n- 总资产: $111.60B (YoY +69.8%)\n- 总负债: $32.27B (YoY +41.9%)\n\n## 风险\n\n- 基本面数据未见重大风险信号。\n- 技术信号暂无明显风险。\n- 多源宏观数据存在冲突，建议以权威源为准。\n\n## 结论与展望\n\n**基本面**：关键财务指标 — 营收 (YoY +96.4%); 净利润 (YoY +144.9%); 营业利润 (YoY +142.1%)。整体增长态势良好。\n**宏观环境**：美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.\n\n**后续关注：**\n- 关注下一财报季的营收指引和利润率变化\n- 跟踪行业政策和竞争格局变化\n\n---\n\n*免责声明：以上内容基于公开数据自动生成，仅供研究参考，不构成任何投资建议。投资决策请结合个人风险偏好及专业顾问意见。*\n\n## 引用来源\n[1] [news_agent evidence 1](https://finnhub.io/api/news?id=65f98d8bcf4b8c86aeba53b60f5321252810ecd53674bf3419beb2c0ce64a724)\n[2] [news_agent evidence 2](https://finnhub.io/api/news?id=ee60d8d21b1be2b198d76900e8a00daede1b9125be63dd4c13d5cbcc0cd7bd05)\n[3] [news_agent evidence 3](https://finnhub.io/api/news?id=69dfc102c88035a5324b976c88eaafd125347f8f2a508709763b8197b5f0e794)\n[4] [news_agent evidence 4](https://finnhub.io/api/news?id=9715e8daa37a45377574edadff46db52e138a26d469414d36184010529a8a45c)\n[5] [news_agent evidence 5](https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7)\n",
+  "agent_status": {
+    "fundamental_agent": {
+      "status": "success",
+      "confidence": 0.92,
+      "evidence_quality": {
+        "overall_score": 1.0,
+        "metric_coverage": 1.0,
+        "growth_coverage": 1.0,
+        "source_diversity": 1,
+        "has_conflicts": false
+      },
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "price_agent": {
+      "status": "success",
+      "confidence": 1.0,
+      "evidence_quality": {},
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "news_agent": {
+      "status": "success",
+      "confidence": 0.8,
+      "evidence_quality": {},
+      "data_sources": [
+        "Yahoo"
+      ]
+    },
+    "technical_agent": {
+      "status": "success",
+      "confidence": 0.85,
+      "evidence_quality": {},
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "macro_agent": {
+      "status": "success",
+      "confidence": 0.88,
+      "evidence_quality": {
+        "overall_score": 0.88,
+        "coverage_score": 1.0,
+        "source_diversity": 4,
+        "source_health_score": 1.0,
+        "has_conflicts": true,
+        "conflict_count": 1
+      },
+      "data_sources": [
+        "CNN Fear & Greed",
+        "Economic Calendar",
+        "FRED",
+        "Web Search"
+      ]
+    },
+    "deep_search_agent": {
+      "status": "success",
+      "confidence": 0.2,
+      "evidence_quality": {
+        "overall_score": 0.0,
+        "fallback": true
+      },
+      "data_sources": [
+        "agent_fallback"
+      ]
+    }
+  },
+  "report_hints": {
+    "is_compare": false,
+    "has_conflict": true,
+    "compare_basis": [],
+    "conflict_agents": [
+      "macro_agent"
+    ]
+  },
+  "tags": [
+    "conflict"
+  ]
+}

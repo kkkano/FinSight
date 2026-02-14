@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinSight Workbench V2 Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080b12;
+      --bg-soft: #0d1320;
+      --card: #111a2a;
+      --card-2: #0f1826;
+      --line: #1e2a40;
+      --text: #e6efff;
+      --text-dim: #9fb3d1;
+      --good: #27d38d;
+      --warn: #ffbf59;
+      --bad: #ff6c6c;
+      --primary: #69a7ff;
+      --primary-2: #72e5ff;
+      --shadow: 0 10px 28px rgba(0, 0, 0, .35);
+      --radius: 14px;
+      --radius-sm: 10px;
+      --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(73, 145, 255, .14), transparent 60%),
+        radial-gradient(700px 500px at -5% 20%, rgba(114, 229, 255, .12), transparent 65%),
+        var(--bg);
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 26px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .topbar {
+      background: linear-gradient(160deg, rgba(20, 33, 53, .92), rgba(13, 21, 35, .88));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .title-wrap { display: grid; gap: 6px; }
+
+    .kicker {
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(22px, 3.4vw, 30px);
+      font-weight: 700;
+      line-height: 1.1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      font-size: 12px;
+      padding: 5px 11px;
+      border: 1px solid;
+    }
+
+    .badge.good { color: #ccffe7; background: rgba(39, 211, 141, .18); border-color: rgba(39, 211, 141, .5); }
+    .badge.warn { color: #ffe3ad; background: rgba(255, 191, 89, .18); border-color: rgba(255, 191, 89, .5); }
+    .badge.bad { color: #ffd5d5; background: rgba(255, 108, 108, .18); border-color: rgba(255, 108, 108, .5); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #1a2842, #16243b);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 13px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: .2s ease;
+    }
+
+    .btn:hover { border-color: #3e5f94; transform: translateY(-1px); }
+    .btn.active { border-color: var(--primary-2); color: #d9f9ff; box-shadow: 0 0 0 1px rgba(114, 229, 255, .4) inset; }
+
+    .grid-summary {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, rgba(15, 25, 42, .88), rgba(12, 21, 34, .9));
+      padding: 12px;
+      min-height: 76px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .summary-item .label { color: var(--text-dim); font-size: 12px; }
+    .summary-item .value { font-size: 22px; font-weight: 700; line-height: 1; }
+    .summary-item .meta { font-size: 12px; color: var(--text-dim); }
+
+    .up { color: var(--good); }
+    .down { color: var(--bad); }
+
+    .layout {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1.2fr 1fr .9fr;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(18, 28, 45, .92), rgba(13, 21, 35, .95));
+      box-shadow: var(--shadow);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dim { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+
+    .thesis {
+      border: 1px solid rgba(105, 167, 255, .35);
+      border-radius: var(--radius-sm);
+      background: rgba(105, 167, 255, .09);
+      padding: 12px;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(17, 27, 43, .82);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .score-list { display: grid; gap: 10px; }
+    .score-row { display: grid; gap: 5px; }
+    .score-row .top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+    .bar {
+      height: 10px;
+      background: #0e1523;
+      border: 1px solid #20304c;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+    }
+
+    .health-list { display: grid; gap: 8px; }
+    .health-row {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(12, 20, 32, .72);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .dot.good { background: var(--good); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--bad); }
+
+    .layout-2 {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
+    }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: var(--card-2);
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .box h4 {
+      margin: 0;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    ul { margin: 0; padding-left: 16px; display: grid; gap: 8px; }
+    li { color: #d7e6ff; line-height: 1.35; font-size: 13px; }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+      max-height: 220px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .event {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: rgba(12, 19, 31, .75);
+      display: grid;
+      gap: 5px;
+    }
+
+    .event .time { color: var(--text-dim); font-size: 12px; }
+    .event .headline { font-size: 13px; line-height: 1.4; }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .action {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(14, 22, 35, .85);
+      display: grid;
+      gap: 8px;
+    }
+
+    .action h5 { margin: 0; font-size: 14px; }
+    .action p { margin: 0; color: var(--text-dim); font-size: 12px; min-height: 34px; }
+
+    .foot {
+      color: var(--text-dim);
+      font-size: 12px;
+      text-align: right;
+      opacity: .9;
+    }
+
+    @media (max-width: 1100px) {
+      .grid-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .layout { grid-template-columns: 1fr 1fr; }
+      .layout .card:last-child { grid-column: span 2; }
+      .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 14px; }
+      .grid-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .layout, .layout-2, .matrix { grid-template-columns: 1fr; }
+      .layout .card:last-child { grid-column: auto; }
+      .actions { grid-template-columns: 1fr; }
+      .controls { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="topbar">
+      <div class="title-wrap">
+        <span class="kicker">finsight / workbench v2 preview</span>
+        <h1 class="title">
+          AAPL 决策工作台
+          <span id="signalBadge" class="badge good">偏多 · 高置信</span>
+        </h1>
+        <span class="dim" id="lastUpdated">更新于 2026-02-11 23:40 · 多 Agent 汇总</span>
+      </div>
+      <div class="controls" role="tablist" aria-label="情景切换">
+        <button class="btn active" data-scenario="base">基准情景</button>
+        <button class="btn" data-scenario="risk">风险情景</button>
+        <button class="btn" data-scenario="bull">乐观情景</button>
+      </div>
+    </section>
+
+    <section class="grid-summary" id="summaryStrip"></section>
+
+    <section class="layout">
+      <article class="card">
+        <h3>核心投资结论 <span class="dim" id="confidenceText">置信度 78%</span></h3>
+        <div class="thesis" id="thesisText"></div>
+        <div class="chips" id="evidenceChips"></div>
+      </article>
+
+      <article class="card">
+        <h3>多维评分 <span class="dim">0 - 100</span></h3>
+        <div class="score-list" id="scoreList"></div>
+      </article>
+
+      <article class="card">
+        <h3>数据健康与兜底 <span class="dim">Fallback 可见化</span></h3>
+        <div class="health-list" id="healthList"></div>
+      </article>
+    </section>
+
+    <section class="layout-2">
+      <article class="card">
+        <h3>多空观点矩阵 <span class="dim">可直接用于写报告</span></h3>
+        <div class="matrix" id="thesisMatrix"></div>
+      </article>
+      <article class="card">
+        <h3>事件催化时间线 <span class="dim">按对价格影响排序</span></h3>
+        <div class="timeline" id="timeline"></div>
+      </article>
+    </section>
+
+    <section class="card">
+      <h3>行动中心 <span class="dim">把“看内容”变成“做动作”</span></h3>
+      <div class="actions">
+        <div class="action">
+          <h5>继续深挖估值分歧</h5>
+          <p>自动发起“DCF 假设冲突”追问，并绑定当前证据池。</p>
+          <button class="btn">立即追问</button>
+        </div>
+        <div class="action">
+          <h5>重跑 DeepSearch</h5>
+          <p>优先抓取非 PDF 来源，避免低文本密度导致摘要空洞。</p>
+          <button class="btn">重跑任务</button>
+        </div>
+        <div class="action">
+          <h5>与 NVDA/MSFT 对比</h5>
+          <p>生成同口径横向对比，重点比较增长质量与估值溢价。</p>
+          <button class="btn">生成对比</button>
+        </div>
+        <div class="action">
+          <h5>设置风险预警</h5>
+          <p>当 EPS 修正下调 > 5% 或情绪转负时自动提醒。</p>
+          <button class="btn">创建预警</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="foot">Demo for interaction direction only · Not investment advice</div>
+  </main>
+
+  <script>
+    const scenarios = {
+      base: {
+        signal: { text: '偏多 · 高置信', tone: 'good' },
+        updated: '更新于 2026-02-11 23:40 · 多 Agent 汇总',
+        confidence: 78,
+        summary: [
+          ['综合评分', '78', '+4.2 vs 昨日', 'up'],
+          ['12M 目标价', '$232', '现价 $210 · +10.5%', 'up'],
+          ['风险等级', '中等', '波动率 24.1%', ''],
+          ['估值区间', '24.8x', 'PE TTM · 行业 26.2x', ''],
+          ['催化密度', '3 事项', '财报 / 回购 / 产品节奏', 'up']
+        ],
+        thesis: '结论偏多：盈利质量仍在改善区间，AI 相关出货维持高景气，短期估值并未过热。若宏观利率不超预期上行，回调更偏向仓位优化窗口。',
+        evidence: ['财报电话会[Q4]', '卖方一致预期上修', '资金流向连续净流入', '技术面趋势保持'],
+        scores: [
+          ['基本面', 82],
+          ['估值', 69],
+          ['技术面', 75],
+          ['宏观暴露', 61],
+          ['情绪/资金', 84]
+        ],
+        health: [
+          ['新闻源', '正常', 'good'],
+          ['DeepSearch 文档抓取', '部分降级（含 PDF）', 'warn'],
+          ['LLM 汇总', '正常', 'good'],
+          ['证据冲突检测', '1 处轻微冲突', 'warn']
+        ],
+        matrix: {
+          bull: ['利润率改善快于预期，EPS 上修持续', '大客户订单能见度提升，库存风险可控', '回购节奏稳定，估值下沿有支撑'],
+          bear: ['宏观利率上行压缩成长股估值', '供应链扰动或拉低短期出货节奏', 'AI 叙事兑现不及预期引发回撤']
+        },
+        timeline: [
+          ['T+1', '机构上调目标价，预期差继续扩大'],
+          ['T+5', '供应链数据显示高端机型订单韧性'],
+          ['T+12', '宏观数据公布，利率路径成为波动主因'],
+          ['T+20', '管理层路演，关注毛利率指引口径']
+        ]
+      },
+      risk: {
+        signal: { text: '中性偏谨慎 · 中置信', tone: 'warn' },
+        updated: '更新于 2026-02-11 23:45 · 风险信号增强',
+        confidence: 62,
+        summary: [
+          ['综合评分', '62', '-8.5 vs 基准', 'down'],
+          ['12M 目标价', '$205', '较现价 -2.3%', 'down'],
+          ['风险等级', '中高', '波动率 31.7%', 'down'],
+          ['估值区间', '27.1x', '高于历史中位', 'down'],
+          ['催化密度', '2 事项', '风险事件占比上升', 'down']
+        ],
+        thesis: '结论转向谨慎：估值与宏观利率敏感性抬升，若下次指引略弱于预期，短线可能出现估值与情绪共振回撤。建议降低追高仓位，等待确定性重建。',
+        evidence: ['期权隐波抬升', '市场拥挤度上行', '海外需求数据分化', '部分证据源降级'],
+        scores: [
+          ['基本面', 74],
+          ['估值', 52],
+          ['技术面', 58],
+          ['宏观暴露', 45],
+          ['情绪/资金', 61]
+        ],
+        health: [
+          ['新闻源', '正常', 'good'],
+          ['DeepSearch 文档抓取', '多条 PDF 降级', 'bad'],
+          ['LLM 汇总', '正常', 'good'],
+          ['证据冲突检测', '2 处冲突待核验', 'bad']
+        ],
+        matrix: {
+          bull: ['长期现金流稳定，回购可缓冲回撤', '产品生态粘性高，护城河仍稳'],
+          bear: ['短期估值缺乏安全边际', '若指引下修，市场会快速重定价', '高拥挤交易易触发技术性踩踏']
+        },
+        timeline: [
+          ['T+1', '隐含波动率快速走高，短线情绪转弱'],
+          ['T+6', '关键数据发布窗口，预期分歧扩大'],
+          ['T+10', '卖方报告出现观点两极化']
+        ]
+      },
+      bull: {
+        signal: { text: '强势偏多 · 中高置信', tone: 'good' },
+        updated: '更新于 2026-02-11 23:48 · 乐观情景推演',
+        confidence: 84,
+        summary: [
+          ['综合评分', '84', '+6.1 vs 基准', 'up'],
+          ['12M 目标价', '$248', '较现价 +18.1%', 'up'],
+          ['风险等级', '中等', '波动率 22.6%', 'up'],
+          ['估值区间', '25.3x', '成长性可覆盖溢价', 'up'],
+          ['催化密度', '4 事项', '正向事件主导', 'up']
+        ],
+        thesis: '结论强化偏多：若盈利持续超预期且回购力度维持，当前估值可被增长消化，趋势端有望进入“回调即买入”阶段。',
+        evidence: ['EPS 上修加速', '资金净流入扩大', '新产品反馈积极', '行业景气同步回升'],
+        scores: [
+          ['基本面', 87],
+          ['估值', 73],
+          ['技术面', 82],
+          ['宏观暴露', 63],
+          ['情绪/资金', 88]
+        ],
+        health: [
+          ['新闻源', '正常', 'good'],
+          ['DeepSearch 文档抓取', '轻度降级可接受', 'warn'],
+          ['LLM 汇总', '正常', 'good'],
+          ['证据冲突检测', '无显著冲突', 'good']
+        ],
+        matrix: {
+          bull: ['增长与利润率共振，估值可提升', '回购+现金流形成双重支撑', '市场风险偏好回升利好大盘科技'],
+          bear: ['高预期背景下，任何 miss 都会放大波动', '监管或地缘变量不可忽视']
+        },
+        timeline: [
+          ['T+2', '机构调研密度上行，正反馈强化'],
+          ['T+7', '产业链补库证据增强'],
+          ['T+14', '财报预期继续上修']
+        ]
+      }
+    };
+
+    const summaryStrip = document.getElementById('summaryStrip');
+    const signalBadge = document.getElementById('signalBadge');
+    const lastUpdated = document.getElementById('lastUpdated');
+    const confidenceText = document.getElementById('confidenceText');
+    const thesisText = document.getElementById('thesisText');
+    const evidenceChips = document.getElementById('evidenceChips');
+    const scoreList = document.getElementById('scoreList');
+    const healthList = document.getElementById('healthList');
+    const thesisMatrix = document.getElementById('thesisMatrix');
+    const timeline = document.getElementById('timeline');
+    const buttons = document.querySelectorAll('[data-scenario]');
+
+    function renderSummary(items) {
+      summaryStrip.innerHTML = items.map(([label, value, meta, trend]) => `
+        <div class="summary-item">
+          <span class="label">${label}</span>
+          <span class="value ${trend || ''}">${value}</span>
+          <span class="meta">${meta}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderScores(items) {
+      scoreList.innerHTML = items.map(([name, score]) => `
+        <div class="score-row">
+          <div class="top"><span>${name}</span><strong>${score}</strong></div>
+          <div class="bar"><span style="width:${score}%"></span></div>
+        </div>
+      `).join('');
+    }
+
+    function renderHealth(items) {
+      healthList.innerHTML = items.map(([name, status, tone]) => `
+        <div class="health-row">
+          <span>${name}</span>
+          <span><i class="dot ${tone}"></i>${status}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderMatrix(matrix) {
+      thesisMatrix.innerHTML = `
+        <div class="box">
+          <h4>多头逻辑 <span class="badge good">Bull</span></h4>
+          <ul>${matrix.bull.map(item => `<li>${item}</li>`).join('')}</ul>
+        </div>
+        <div class="box">
+          <h4>空头逻辑 <span class="badge bad">Bear</span></h4>
+          <ul>${matrix.bear.map(item => `<li>${item}</li>`).join('')}</ul>
+        </div>
+      `;
+    }
+
+    function renderTimeline(items) {
+      timeline.innerHTML = items.map(([time, headline]) => `
+        <div class="event">
+          <span class="time">${time}</span>
+          <span class="headline">${headline}</span>
+        </div>
+      `).join('');
+    }
+
+    function applyScenario(key) {
+      const data = scenarios[key];
+      if (!data) return;
+
+      signalBadge.textContent = data.signal.text;
+      signalBadge.className = `badge ${data.signal.tone}`;
+      lastUpdated.textContent = data.updated;
+      confidenceText.textContent = `置信度 ${data.confidence}%`;
+      thesisText.textContent = data.thesis;
+
+      evidenceChips.innerHTML = data.evidence.map(item => `<span class="chip">${item}</span>`).join('');
+
+      renderSummary(data.summary);
+      renderScores(data.scores);
+      renderHealth(data.health);
+      renderMatrix(data.matrix);
+      renderTimeline(data.timeline);
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        buttons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyScenario(btn.dataset.scenario);
+      });
+    });
+
+    applyScenario('base');
+  </script>
+</body>
+</html>
+

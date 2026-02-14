@@ -433,6 +433,8 @@ class IntentClassifier:
         """LLM precise classification"""
         from langchain_core.messages import HumanMessage
         import asyncio
+        import os
+        from backend.services.llm_retry import ainvoke_with_rate_limit_retry
 
         # Build candidate hint
         candidate_hint = ""
@@ -476,8 +478,17 @@ class IntentClassifier:
         try:
             # 使用 asyncio.wait_for 设置 15 秒超时（如果在异步上下文中）
             # 同步调用时，依赖 LLM 自身的超时机制
-            response = self.llm.invoke([HumanMessage(content=prompt)])
-            intent_str = response.content.strip().upper()
+            response = asyncio.run(
+                ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [HumanMessage(content=prompt)],
+                    llm_factory=None,
+                    max_attempts=max(1, int(os.getenv("INTENT_LLM_MAX_ATTEMPTS", "3"))),
+                    acquire_token=True,
+                )
+            )
+            response_text = response.content if hasattr(response, "content") else str(response)
+            intent_str = response_text.strip().upper()
 
             intent_map = {
                 "PRICE": AgentIntent.PRICE,

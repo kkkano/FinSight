@@ -68,7 +68,7 @@ python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix local
 | `LANGGRAPH_EXECUTE_LIVE_TOOLS` | `false` | Execute real tools/agents in executor |
 | `LANGGRAPH_SHOW_EVIDENCE` | `false` | Show evidence links in markdown output |
 | `LANGGRAPH_CHECKPOINTER_BACKEND` | `sqlite` | `sqlite` or `postgres` checkpointer backend |
-| `LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK` | `true` | Allow fallback to memory checkpointer on backend failures |
+| `LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK` | `false` | Allow fallback to memory checkpointer on backend failures |
 | `API_AUTH_ENABLED` | `false` | Enable API-key auth |
 | `RATE_LIMIT_ENABLED` | `false` | Enable HTTP rate limiting |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | CORS allow origins (comma-separated) |

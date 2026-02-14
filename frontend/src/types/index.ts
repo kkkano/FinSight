@@ -219,6 +219,8 @@ export type RawEventType =
   | 'agent_done'
   | 'agent_step'
   | 'agent_error'
+  // Executor completion stage
+  | 'step_done'
   // Supervisor 执行
   | 'supervisor_start'
   | 'supervisor_done'
@@ -251,6 +253,5 @@ export interface ConsoleFilterOptions {
   autoScroll: boolean;           // 自动滚动
   maxEvents: number;             // 最大事件数
 }
-
 
 
