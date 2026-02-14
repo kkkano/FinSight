@@ -21,6 +21,8 @@ def test_langgraph_runner_import_and_invoke():
     spans = trace.get("spans") or []
     assert [s.get("node") for s in spans] == [
         "build_initial_state",
+        "trim_history",
+        "summarize_history",
         "normalize_ui_context",
         "decide_output_mode",
         "resolve_subject",

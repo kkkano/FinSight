@@ -12,9 +12,13 @@ from backend.graph.nodes.planner_stub import planner_stub
 from backend.graph.nodes.render_stub import render_stub
 from backend.graph.nodes.resolve_subject import resolve_subject
 from backend.graph.nodes.synthesize import synthesize
+from backend.graph.nodes.trim_conversation_history import trim_conversation_history
+from backend.graph.nodes.summarize_history import summarize_history
 
 __all__ = [
     "build_initial_state",
+    "trim_conversation_history",
+    "summarize_history",
     "normalize_ui_context",
     "decide_output_mode",
     "resolve_subject",

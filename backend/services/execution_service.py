@@ -160,9 +160,12 @@ async def run_graph_pipeline(
                 }
             )
 
-            # 2. Run the graph
+            # 2. Run the graph（通过 Langfuse Trace 入口）
             runner = await deps.get_graph_runner()
-            state = await runner.ainvoke(
+
+            from backend.graph.runner import run_graph_traced
+            state = await run_graph_traced(
+                runner,
                 thread_id=thread_id,
                 query=query,
                 ui_context=ui_context or {},

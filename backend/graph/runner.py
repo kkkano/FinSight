@@ -22,8 +22,11 @@ from backend.graph.nodes import (
     resolve_subject,
     synthesize,
 )
+from backend.graph.nodes.trim_conversation_history import trim_conversation_history
+from backend.graph.nodes.summarize_history import summarize_history
 from backend.graph.state import GraphState
 from backend.graph.trace import with_node_trace
+from backend.services.langfuse_tracer import langfuse_observe
 
 _graph_runner: Optional["GraphRunner"] = None
 _graph_runner_lock: Optional[asyncio.Lock] = None
@@ -37,6 +40,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
     """
     graph = StateGraph(GraphState)
     graph.add_node("build_initial_state", with_node_trace("build_initial_state", build_initial_state))
+    graph.add_node("trim_history", with_node_trace("trim_history", trim_conversation_history))
+    graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
     graph.add_node("decide_output_mode", with_node_trace("decide_output_mode", decide_output_mode))
     graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
@@ -49,7 +54,9 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("render", with_node_trace("render", render_stub))
 
     graph.add_edge(START, "build_initial_state")
-    graph.add_edge("build_initial_state", "normalize_ui_context")
+    graph.add_edge("build_initial_state", "trim_history")
+    graph.add_edge("trim_history", "summarize_history")
+    graph.add_edge("summarize_history", "normalize_ui_context")
     graph.add_edge("normalize_ui_context", "decide_output_mode")
     graph.add_edge("decide_output_mode", "resolve_subject")
     graph.add_edge("resolve_subject", "clarify")
@@ -155,4 +162,56 @@ def reset_graph_runner() -> None:
     _graph_runner_loop_id = None
 
 
-__all__ = ["GraphRunner", "aget_graph_runner", "get_graph_runner", "graph_runner_ready", "reset_graph_runner"]
+# ==================== Langfuse Trace 入口 ====================
+
+def _update_langfuse_trace(*, thread_id: str, query: str, output_mode: str | None) -> None:
+    """安全地设置当前 Trace 的 session / input 元数据。"""
+    try:
+        from backend.services.langfuse_tracer import get_langfuse_client_safe
+        lf = get_langfuse_client_safe()
+        if lf is not None:
+            lf.update_current_trace(
+                name=f"research:{query[:80]}",
+                session_id=thread_id,
+                input={"query": query, "output_mode": output_mode or "auto"},
+                metadata={"thread_id": thread_id},
+            )
+    except Exception:
+        pass
+
+
+@langfuse_observe(name="graph_pipeline")
+async def run_graph_traced(
+    runner: GraphRunner,
+    *,
+    thread_id: str,
+    query: str,
+    ui_context: dict | None = None,
+    output_mode: str | None = None,
+    strict_selection: bool | None = None,
+) -> dict:
+    """
+    带 Langfuse Trace 的图执行入口。
+
+    @observe 装饰器自动创建 Trace（最外层）/ Span（嵌套场景），
+    后续 with_node_trace 中的 langfuse_span 会自动嵌套在此 Trace 下，
+    create_llm 中的 CallbackHandler 会自动捕获 LLM Generation。
+    """
+    _update_langfuse_trace(thread_id=thread_id, query=query, output_mode=output_mode)
+    return await runner.ainvoke(
+        thread_id=thread_id,
+        query=query,
+        ui_context=ui_context,
+        output_mode=output_mode,
+        strict_selection=strict_selection,
+    )
+
+
+__all__ = [
+    "GraphRunner",
+    "aget_graph_runner",
+    "get_graph_runner",
+    "graph_runner_ready",
+    "reset_graph_runner",
+    "run_graph_traced",
+]

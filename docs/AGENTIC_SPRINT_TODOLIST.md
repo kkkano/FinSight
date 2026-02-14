@@ -331,7 +331,7 @@
 
 ---
 
-## 执行顺序总览
+## 执行顺序总览（旧版，含记忆模块版请见 Phase M 章节末尾）
 
 ```
 Phase 0 (基础设施) ← 必须先完成
@@ -361,6 +361,218 @@ Phase 4 (产品打磨) ← 可并行
 
 ---
 
+## Phase M: 记忆/上下文管理模块（LangGraph 原生方案）
+
+> **为什么需要**: 当前对话全堆在窗口里，LLM 每次执行都是无上下文的单轮对话。
+> **技术选型 (2026-02-15)**: 全部使用 LangGraph 原生能力，不造轮子。
+>
+> **现状审计 (2026-02-15)**:
+>
+> | 组件 | 状态 | 说明 |
+> |------|------|------|
+> | `checkpointer.py` (SQLite/Postgres/Memory) | ✅ 已实现 | 支持三种后端，`runner.py` 已 `compile(checkpointer=...)` |
+> | `GraphState.messages` + `add_messages` reducer | ✅ 已定义 | 同一 thread_id 下 messages **自动累积追加** |
+> | `runner.ainvoke()` 传 `thread_id` | ✅ 已传 | `config={"configurable": {"thread_id": thread_id}}` |
+> | `trim_messages()` (langchain-core 1.2.7) | ✅ 已装 | **但从未使用** — messages 无限增长无裁剪 |
+> | `tiktoken==0.12.0` | ✅ 已装 | **但从未 import** |
+> | pipeline 节点读取 messages 历史 | 🔴 未实现 | planner/synthesize 完全不看 messages，只读 query |
+> | graph 出口追加 AIMessage | 🔴 未实现 | AI 回复未写回 messages，checkpointer 只存 HumanMessage |
+> | `conversation/context.py` (ContextManager) | 🟡 遗留 | 仅 main.py 用于指代消解，应迁移到 graph 层 |
+> | `services/memory.py` (MemoryService) | 🟡 孤立 | 仅服务 user_router API，graph pipeline 不读取 |
+> | `LangGraph Store API` | ⏳ PM1-0 升级后可用 | 最新 langgraph 已提供，升级后用于替代 MemoryService |
+>
+> **三层漏斗策略**:
+> ```
+> ┌──────────────────────────────────────────────────────┐
+> │              Context Window 预算分配                  │
+> │                                                      │
+> │  System Prompt              ~2k tokens (固定)        │
+> │  用户画像 (MemoryService)    ~200 tokens (长期记忆)  │
+> │  历史摘要 (压缩后)           ~500 tokens (老对话)    │
+> │  最近 6 轮原文               ~3-6k tokens (保真)     │
+> │  当前 query                  ~100-500 tokens         │
+> │  Agent 证据 (动态)           ~10-30k tokens (核心)   │
+> │  输出预算                    8192 tokens             │
+> │  安全余量 10%                                        │
+> │                                                      │
+> │  总计: ~50k tokens / 128k window (~40% 使用率)       │
+> └──────────────────────────────────────────────────────┘
+> ```
+>
+> **压缩触发**:
+> - messages ≤ 12 条 (6 轮) → 全量保留，仅 `trim_messages()` 兜底
+> - messages > 12 条 → 触发 `summarize_history` 节点压缩老消息
+> - 跨会话 (新 thread) → 从 MemoryService 加载用户画像注入 system prompt
+
+### PM0: LangGraph 原生记忆接入（~80 行改动）
+
+> **前置条件**: 无，可立即开始。与 Phase 0/1 并行。
+> **为什么最高优先**: checkpointer 已在工作，只差节点接线。
+> **原则**: 用 LangGraph 自带能力，不手写持久化/裁剪逻辑。
+> **执行状态**: ✅ 全部完成 (2026-02-15)
+
+- [x] **PM0-1a** 验证 checkpointer 实际工作
+  - 文件: `backend/tests/test_checkpointer_messages.py`
+  - 确认: add_messages reducer 正确累积 HumanMessage，thread_id 隔离正确
+  - 测试: 3 个测试全部通过 — 累积、隔离、内容验证
+- [x] **PM0-1b** graph 出口节点追加 AIMessage
+  - 文件: `backend/graph/nodes/render_stub.py`
+  - 新增: `_build_ai_reply_message()` 函数，从 draft_markdown 提取摘要写入 AIMessage
+  - 所有 3 个返回路径均追加 AIMessage — checkpointer 内 messages 交替包含 Human/AI
+  - 测试: `backend/tests/test_ai_message_persistence.py` — 3 个测试全部通过
+- [x] **PM0-1c** planner 节点注入对话历史
+  - 文件: `backend/graph/planner_prompt.py`
+  - 新增: `_format_conversation_history()` 函数，从 state["messages"] 提取最近 12 条消息
+  - 格式化为 `<conversation_history>` XML 块注入 prompt，constraints 增加第 7 条
+  - 测试: 15 个 planner 回归测试全部通过
+- [x] **PM0-1d** synthesize 节点注入对话历史
+  - 文件: `backend/graph/nodes/synthesize.py`
+  - 新增: `_format_conversation_history_for_synth()` 函数，注入到 narrative 和 llm mode prompt
+  - 测试: 7 个 synthesize 回归测试全部通过
+- [x] **PM0-2a** 加入 `trim_messages()` 安全兜底
+  - 新建: `backend/graph/nodes/trim_conversation_history.py`
+  - 使用 `RemoveMessage` (LangGraph 原生) + `trim_messages()` + `tiktoken` token 计数
+  - 在 graph 中插入 `build_initial_state → trim_history → ...`
+  - 默认预算: 8000 tokens (env: `LANGGRAPH_MAX_HISTORY_TOKENS`)
+  - 测试: `backend/tests/test_trim_conversation_history.py` — 5 个测试全部通过
+- [x] **PM0-2b** 添加 `summarize_history` 条件节点
+  - 新建: `backend/graph/nodes/summarize_history.py`
+  - 使用 `RemoveMessage` 删除旧消息 + `SystemMessage` 存储确定性摘要
+  - 阈值: 12 条消息 (env: `LANGGRAPH_SUMMARIZE_THRESHOLD`)，保留最近 6 条
+  - 在 graph 中插入: `trim_history → summarize_history → normalize_ui_context`
+  - 测试: `backend/tests/test_summarize_history.py` — 6 个测试全部通过
+- [x] **PM0-3** 清理硬编码模型名 (安全保守策略)
+  - `cli_app.py`: 3 处硬编码 "gemini-2.5-flash" → 改为空字符串，由 llm_config 统一管理
+  - `langchain_agent.py`: 2 处硬编码 "gemini-2.5-flash" → 改为空字符串
+  - `conversation/` 目录: 标记为 deprecated 但**未删除** (api/main.py/streaming.py 仍在使用)
+  - `llm_config.py` fallback defaults: 保留不动 (这是配置系统本身)
+  - 验收: 69 个核心测试全部通过，22 个预先存在的环境问题失败 (sqlite 模块缺失 + auth 配置)
+
+### PM1: LangGraph Store + 长期记忆
+
+> **前置条件**: PM0 完成 + langgraph 升级至最新版
+> **技术选型**: 使用 LangGraph Store API (跨 thread 长期记忆)，替代 MemoryService (JSON 文件)
+> **长期记忆内容**: 用户画像 + 持仓 + 分析历史 + 偏好
+
+- [ ] **PM1-0** 升级 langgraph/langchain 至最新稳定版
+  - `pip install --upgrade langgraph langgraph-checkpoint langgraph-checkpoint-sqlite langchain-core`
+  - 更新 `requirements.txt`
+  - 验证: `from langgraph.store.memory import InMemoryStore` 可用
+  - 验证: 现有 graph pipeline 运行正常 (回归测试)
+- [ ] **PM1-1a** 配置 LangGraph Store
+  - 新建: `backend/graph/store.py` (类似 checkpointer.py 的 store 管理)
+  - `graph = builder.compile(checkpointer=checkpointer, store=store)`
+  - Store 数据分 namespace: `("user", user_id, "profile")`, `("user", user_id, "portfolio")`, `("user", user_id, "analyses")`
+  - 验收: graph 节点可通过 `store` 参数读写数据
+- [ ] **PM1-1b** 迁移 MemoryService → Store
+  - 将 `UserProfile` 数据写入 Store: risk_tolerance, investment_style, watchlist
+  - **新增持仓数据**: `portfolioPositions` (ticker → shares/avg_cost) 写入 Store namespace `("user", user_id, "portfolio")`
+  - 前端 portfolio 变更时通过 API → Store 同步
+  - 保留 `user_router.py` API 接口，后端改为读写 Store
+  - 验收: `/api/user/profile` 和 `/api/user/watchlist` 仍正常工作
+- [ ] **PM1-2a** build_initial_state 从 Store 注入用户画像 + 持仓
+  - 文件: `backend/graph/nodes/build_initial_state.py`
+  - 从 Store 读取用户画像 + 当前持仓
+  - 注入到 `state["ui_context"]["user_profile"]` 和 `state["ui_context"]["portfolio"]`
+  - 验收: planner/synthesize 能看到用户持仓和风险偏好
+- [ ] **PM1-2b** planner/synthesize prompt 消费用户画像 + 持仓
+  - 文件: `planner_prompt.py`, `synthesize.py`
+  - 在 prompt 中加入:
+    ```xml
+    <user_profile>
+      风险偏好: 激进型 | 关注列表: AAPL, TSLA, NVDA
+      持仓: AAPL 100股@$150, TSLA 50股@$220
+      投资风格: 成长型
+    </user_profile>
+    ```
+  - 验收: 分析报告能说"考虑到您持有 AAPL 100 股..."
+- [ ] **PM1-3a** 对话摘要生成 — graph 出口自动生成
+  - 文件: `backend/graph/nodes/finalize_response.py` (PM0-1b 建的)
+  - 每次分析完成后，用 LLM 生成结构化摘要:
+    ```json
+    {"ticker": "AAPL", "sentiment": "bullish", "key_point": "...", "date": "2026-02-15"}
+    ```
+  - 写入 Store namespace `("user", user_id, "analyses")`
+  - 验收: Store 中能查到历史分析记录
+- [ ] **PM1-3b** 新会话自动加载上次焦点
+  - 文件: `build_initial_state.py`
+  - 如果 messages 为空 (新 thread)，从 Store 搜索最近 5 次分析摘要
+  - 注入为 SystemMessage: "用户最近分析: AAPL(看涨,2/14), TSLA(中性,2/13)"
+  - 验收: 新会话中 LLM 知道用户历史
+- [ ] **PM1-4** Checkpointer 后端确认为 SQLite + Store 持久化
+  - 确保 `LANGGRAPH_CHECKPOINTER_BACKEND=sqlite`
+  - Store 配置持久化后端 (如支持 SQLite/Postgres)
+  - 验收: 重启后端后，对话记忆 + 用户画像 + 持仓均不丢失
+- [ ] **PM1-5** 删除旧 MemoryService
+  - 迁移完成后删除 `backend/services/memory.py`
+  - 删除 `data/memory/` JSON 文件存储
+  - 更新所有 import
+  - 验收: 无 memory.py 引用残留
+
+### PM2: 智能记忆（进阶）
+
+> **前置条件**: PM1 完成 + Phase 2 仪表盘改造后启动
+> **为什么低优先**: 属于产品差异化功能，基础记忆完善后再做。
+
+- [ ] **PM2-1** 向量化长期记忆 — 历史对话/报告摘要写入向量数据库
+  - 使用 Chroma/Qdrant 存储历史对话 embedding
+  - 用户问"上次分析 TSLA 说了什么"时可检索
+  - 与 DASHBOARD_DEVELOPMENT_GUIDE 中 RAG 数据入库策略对齐
+- [ ] **PM2-2** 分析偏好学习 — 自动提取用户行为偏好
+  - 从操作历史中提取: 偏好哪些 agent、关注技术面 vs 基本面
+  - 持久化到 MemoryService
+  - 验收: 分析自动侧重用户关注的维度
+- [ ] **PM2-3** 跨会话上下文传递 — 新会话自动加载上次焦点
+  - 新会话自动加载: 上次聚焦的 ticker、关键结论、未完成任务
+  - 验收: 新开对话窗口自动提示"上次在分析 AAPL"
+- [ ] **PM2-4** 上下文窗口自适应 — 根据请求类型动态调整 history 长度
+  - 简单问答: 只要 3 轮 history
+  - 深度分析: 需要 10+ 轮 history
+  - 优化 token 消耗，按任务类型动态裁剪
+
+---
+
+## 执行顺序总览（含记忆模块 + 死代码清理）
+
+```
+Phase 0 剩余 (基础设施) ← P0-3c/3e + P0-5
+  P0-3c → P0-3e (fallback 展示)
+  P0-5a → P0-5b → P0-5c → P0-5d (TaskSection 接后端)
+
+Phase M0 (LangGraph 原生记忆) ← 与 Phase 0/1 并行，投入产出比最高
+  PM0-1a (验证 checkpointer) ✅
+  → PM0-1b (AI 回复写回 messages) ✅
+  → PM0-1c/1d (planner+synthesize 读历史) [可并行] ✅
+  → PM0-2a (trim_messages 兜底) ✅
+  → PM0-2b (summarize_history 条件节点) ✅
+  → PM0-3 (清理硬编码模型名) ✅
+
+Phase 1 (前端状态 + 体验) ← 依赖 Phase 0
+  P1-1 ~ P1-6
+
+Phase 2 (TradingKey 改造) ← 依赖 P1-3
+  P2-1 → P2-2 → P2-3 → P2-4 → P2-5 → P2-6 → P2-7 → P2-8
+
+Phase M1 (LangGraph Store + 长期记忆) ← 依赖 PM0 + langgraph 升级
+  PM1-0 (升级 langgraph)
+  → PM1-1a/1b (配置 Store + 迁移 MemoryService + 持仓)
+  → PM1-2a/2b (用户画像+持仓注入 pipeline)
+  → PM1-3a/3b (对话摘要 + 焦点加载)
+  → PM1-4 (持久化确认)
+  → PM1-5 (删除旧 MemoryService)
+
+Phase 3 (工作台 Mission Control) ← 依赖 P0-5 + P1-1
+  P3-1 → P3-2 → P3-3
+
+Phase 4 (产品打磨) ← 可并行
+  P4-1 → P4-2 → P4-3 → P4-4 → P4-5
+
+Phase M2 (智能记忆) ← 依赖 PM1 + Phase 2
+  PM2-1 → PM2-2 → PM2-3 → PM2-4
+```
+
+---
+
 ## 关键 ADR 记录
 
 ### ADR-001: SSE > WebSocket
@@ -382,3 +594,18 @@ Phase 4 (产品打磨) ← 可并行
 ### ADR-005: fallback_reason 含 retryable + error_stage
 - **决策**: 不只区分 reason，还加 retryable 和 error_stage
 - **原因**: 前端需要知道"能不能重试"和"在哪一步挂的"才能真正可观测（主人的建议 ✓）
+
+### ADR-006: 记忆模块全部使用 LangGraph 原生能力
+- **决策**: Checkpointer + trim_messages + Store，不手写持久化/裁剪
+- **原因**: 项目已用 LangGraph，checkpointer 已配好只差接线；langchain-core 自带 trim_messages；最新 langgraph 提供 Store API
+- **现状审计 (2026-02-15)**: checkpointer 已工作但 AI 回复未写回 messages、pipeline 节点不读 messages、无 trim
+
+### ADR-007: 升级 langgraph/langchain 至最新版
+- **决策**: 全量升级 langgraph + langchain-core + langchain 生态至最新稳定版
+- **原因**: 解锁 LangGraph Store API (跨 thread 长期记忆)，避免在旧版上造轮子
+- **影响**: PM1 可用 Store 替代 MemoryService (JSON文件)，更统一
+
+### ADR-008: MemoryService 迁移到 LangGraph Store
+- **决策**: 将 MemoryService (用户画像 JSON 文件) 迁移到 LangGraph Store
+- **原因**: Store 与 graph pipeline 天然集成，节点可直接 store.search/put；消除孤立系统
+- **前提**: langgraph 升级完成，Store API 可用

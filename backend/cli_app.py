@@ -228,8 +228,8 @@ def run_conversation_mode(use_orchestrator: bool = True):
 
 # === 报告模式 (原有功能) ===
 
-def run_report_mode(query: str, provider: str = "gemini_proxy", 
-                    model: str = "gemini-2.5-flash"):
+def run_report_mode(query: str, provider: str = "gemini_proxy",
+                    model: str = ""):
     """运行报告生成模式"""
     if not LANGCHAIN_AVAILABLE:
         print("❌ LangChain Agent 不可用")
@@ -260,7 +260,7 @@ def run_report_mode(query: str, provider: str = "gemini_proxy",
 
 
 def run_interactive_report_mode(provider: str = "gemini_proxy",
-                                 model: str = "gemini-2.5-flash"):
+                                 model: str = ""):
     """运行交互式报告模式"""
     if not LANGCHAIN_AVAILABLE:
         print("❌ LangChain Agent 不可用")
@@ -331,8 +331,8 @@ def main():
                        help="禁用数据源编排器")
     parser.add_argument("--provider", default="gemini_proxy",
                        help="LLM 提供商 (报告模式)")
-    parser.add_argument("--model", default="gemini-2.5-flash",
-                       help="模型名称 (报告模式)")
+    parser.add_argument("--model", default="",
+                       help="模型名称 (报告模式，留空则使用系统配置)")
     
     args = parser.parse_args()
     
