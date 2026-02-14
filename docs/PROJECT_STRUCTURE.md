@@ -1,5 +1,10 @@
 # FinSight 项目结构说明（最新）
 
+> ⚠️ **ARCHIVED (v1.0 — ConversationAgent 时代)**
+> 本文件描述的是 v1.0 ConversationAgent + Supervisor-Forum 架构下的目录结构。
+> 当前生产架构已全面迁移至 LangGraph Pipeline，请以
+> [`06a_LANGGRAPH_DESIGN_SPEC.md`](./06a_LANGGRAPH_DESIGN_SPEC.md) 为准。
+
 > **更新日期**: 2026-01-31
 > 本文件同步了当前重构后的实际目录结构，方便你和后续合作者快速理解：
 > 哪些代码在"用"、哪些已经归档，以及前后端分别放在哪里。

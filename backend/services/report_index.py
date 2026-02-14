@@ -89,6 +89,9 @@ class ReportIndexStore:
                     is_favorite INTEGER NOT NULL DEFAULT 0,
                     trace_digest_json TEXT,
                     report_json TEXT NOT NULL,
+                    source_type TEXT NOT NULL DEFAULT 'ai_generated',
+                    filing_type TEXT,
+                    publisher TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -96,6 +99,7 @@ class ReportIndexStore:
                 CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id);
                 CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker);
                 CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at);
+                CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type);
 
                 CREATE TABLE IF NOT EXISTS citation_index (
                     row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,11 +223,13 @@ class ReportIndexStore:
         date_to: str | None = None,
         tag: str | None = None,
         favorite_only: bool = False,
+        source_type: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT report_id, session_id, ticker, title, summary, generated_at,
-                   confidence_score, is_favorite, tags_json, created_at, updated_at
+                   confidence_score, is_favorite, tags_json, source_type,
+                   filing_type, publisher, created_at, updated_at
             FROM report_index
             WHERE session_id = ?
         """
@@ -246,6 +252,9 @@ class ReportIndexStore:
         if tag:
             sql += " AND tags_json LIKE ?"
             args.append(f'%"{tag.strip()}"%')
+        if source_type:
+            sql += " AND source_type = ?"
+            args.append(source_type.strip())
         sql += " ORDER BY generated_at DESC LIMIT ?"
         args.append(max(1, min(500, int(limit))))
 
@@ -272,6 +281,9 @@ class ReportIndexStore:
                         "confidence_score": row["confidence_score"],
                         "is_favorite": bool(row["is_favorite"]),
                         "tags": tags,
+                        "source_type": row["source_type"],
+                        "filing_type": row["filing_type"],
+                        "publisher": row["publisher"],
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
                     }

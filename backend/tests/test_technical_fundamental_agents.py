@@ -99,7 +99,7 @@ async def test_fundamental_agent_financials():
     result = await agent.research("fundamental analysis", "AAPL")
 
     assert result.agent_name == "fundamental"
-    assert "Revenue" in result.summary
+    assert "营收" in result.summary or "Revenue" in result.summary
     assert result.evidence
     revenue_item = next((item for item in result.evidence if item.meta.get("metric_key") == "revenue"), None)
     assert revenue_item is not None
@@ -139,4 +139,4 @@ async def test_fundamental_agent_quarterly_growth_consistency():
     assert revenue_item.meta.get("period_type") == "quarterly"
     assert isinstance(revenue_item.meta.get("qoq"), float)
     assert isinstance(revenue_item.meta.get("yoy"), float)
-    assert "QoQ" in result.summary and "YoY" in result.summary
+    assert ("QoQ" in result.summary or "环比" in result.summary) and ("YoY" in result.summary or "同比" in result.summary)

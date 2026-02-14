@@ -30,7 +30,7 @@ class DashboardCache:
     # ── TTL 配置（秒） ──────────────────────────────────
     TTL_SNAPSHOT = 60    # KPI 快照
     TTL_CHARTS = 300     # 图表数据
-    TTL_NEWS = 30        # 新闻数据
+    TTL_NEWS = 300       # 新闻数据（5 分钟，多源回退链较慢）
     TTL_SEGMENT_MIX = 86400    # 分部收入（FMP 数据更新频率低）
     TTL_SECTOR_WEIGHTS = 3600  # 板块权重
     TTL_CONSTITUENTS = 3600    # 成分股

@@ -43,6 +43,35 @@ def test_single_endpoint_selection_and_config(monkeypatch):
     assert cfg['model'] == 'gemini-2.5-flash'
 
 
+def test_get_llm_config_uses_env_default_provider(monkeypatch):
+    llm_config = _reload_llm_config()
+    monkeypatch.setenv('LLM_PROVIDER', 'openai_compatible')
+
+    ep = llm_config.EndpointConfig(
+        name='env-default',
+        provider='openai_compatible',
+        api_base='https://api.example.com/v1',
+        api_key='sk-test-1234567890',
+        model='model-from-env-default',
+        weight=1,
+        enabled=True,
+        cooldown_sec=10,
+    )
+
+    seen: dict[str, str] = {}
+
+    def _fake_resolver(provider, model):
+        seen['provider'] = provider
+        return [ep]
+
+    monkeypatch.setattr(llm_config, '_resolve_endpoints', _fake_resolver)
+
+    cfg = llm_config.get_llm_config(provider=None, model=None)
+    assert seen['provider'] == 'openai_compatible'
+    assert cfg['endpoint_name'] == 'env-default'
+    assert cfg['model'] == 'model-from-env-default'
+
+
 def test_weighted_round_robin_order():
     llm_config = _reload_llm_config()
     ep_a = llm_config.EndpointConfig(
@@ -311,6 +340,144 @@ def test_retry_rotates_endpoint_on_429(monkeypatch):
     assert llm_initial.call_count == 1
 
 
+def test_retry_rotates_endpoint_on_401_with_factory(monkeypatch):
+    """With llm_factory, auth/provider errors should also rotate endpoints."""
+    import backend.services.llm_retry as llm_retry
+
+    sleep_calls: list[float] = []
+
+    async def _sleep_recorder(seconds: float):
+        sleep_calls.append(seconds)
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _sleep_recorder)
+
+    factory_calls: list[int] = []
+
+    class _FakeLLM:
+        def __init__(self, name: str):
+            self.name = name
+            self.call_count = 0
+
+        async def ainvoke(self, messages):
+            self.call_count += 1
+            if self.name == 'llm-1':
+                raise RuntimeError("Error code: 401 - {'error': {'message': '无效的令牌'}}")
+            return {'ok': True, 'from': self.name}
+
+    llm_initial = _FakeLLM('llm-1')
+
+    def _factory():
+        factory_calls.append(1)
+        return _FakeLLM('llm-2')
+
+    result = asyncio.run(
+        llm_retry.ainvoke_with_rate_limit_retry(
+            llm_initial,
+            messages=[{'role': 'user', 'content': 'hello'}],
+            llm_factory=_factory,
+            max_attempts=3,
+            sleep_seconds=5,
+            jitter_seconds=1,
+            acquire_token=False,
+        )
+    )
+
+    assert result == {'ok': True, 'from': 'llm-2'}
+    assert len(factory_calls) == 1
+    assert llm_initial.call_count == 1
+    # With factory, rotation uses small delay (0.8-1.3s range) instead of 0
+    assert len(sleep_calls) == 1
+    assert 0.5 <= sleep_calls[0] <= 2.0
+
+
+def test_retry_rotates_non_429_until_attempts_exhausted(monkeypatch):
+    """With llm_factory, non-429 endpoint failures should still rotate and retry."""
+    import backend.services.llm_retry as llm_retry
+
+    async def _no_sleep(_seconds: float):
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _no_sleep)
+
+    factory_calls: list[int] = []
+
+    class _AlwaysFailLLM:
+        async def ainvoke(self, messages):
+            raise RuntimeError('503 Service Unavailable: no available channel')
+
+    def _factory():
+        factory_calls.append(1)
+        return _AlwaysFailLLM()
+
+    with pytest.raises(RuntimeError) as exc:
+        asyncio.run(
+            llm_retry.ainvoke_with_rate_limit_retry(
+                _AlwaysFailLLM(),
+                messages=[{'role': 'user', 'content': 'hello'}],
+                llm_factory=_factory,
+                max_attempts=3,
+                sleep_seconds=0,
+                jitter_seconds=0,
+                acquire_token=False,
+            )
+        )
+
+    assert '503' in str(exc.value)
+    assert len(factory_calls) == 2
+
+
+def test_retry_rotates_on_blocked_error_with_factory(monkeypatch):
+    """Provider-level blocked responses should be treated as retryable for endpoint rotation."""
+    import backend.services.llm_retry as llm_retry
+
+    async def _no_sleep(_seconds: float):
+        return None
+
+    monkeypatch.setattr(llm_retry, 'report_llm_success', lambda llm: None)
+    monkeypatch.setattr(llm_retry, 'report_llm_failure', lambda llm, error=None: None)
+    monkeypatch.setattr(llm_retry.asyncio, 'sleep', _no_sleep)
+
+    factory_calls: list[int] = []
+
+    class _FakeLLM:
+        def __init__(self, name: str):
+            self.name = name
+            self.call_count = 0
+
+        async def ainvoke(self, messages):
+            self.call_count += 1
+            if self.name == 'llm-1':
+                raise RuntimeError('Your request was blocked.')
+            return {'ok': True, 'from': self.name}
+
+    llm_initial = _FakeLLM('llm-1')
+
+    def _factory():
+        factory_calls.append(1)
+        return _FakeLLM('llm-2')
+
+    result = asyncio.run(
+        llm_retry.ainvoke_with_rate_limit_retry(
+            llm_initial,
+            messages=[{'role': 'user', 'content': 'hello'}],
+            llm_factory=_factory,
+            max_attempts=3,
+            sleep_seconds=0,
+            jitter_seconds=0,
+            acquire_token=False,
+        )
+    )
+
+    assert result == {'ok': True, 'from': 'llm-2'}
+    assert len(factory_calls) == 1
+    assert llm_initial.call_count == 1
+
+
 def test_retry_fallback_without_factory(monkeypatch):
     """When llm_factory is None, retry should reuse the same LLM (backward compat)."""
     import backend.services.llm_retry as llm_retry
@@ -359,7 +526,35 @@ def test_raw_url_preserved():
     assert result == full_url
 
     result_default = llm_config._normalize_api_base(full_url, raw=False)
-    assert result_default != full_url
-    assert result_default.endswith('/v1')
-    assert '/chat/completions' not in result_default
+    assert result_default == full_url
 
+
+def test_auto_detect_full_chat_completions_url_without_raw_flag():
+    """When URL already contains /v1/chat/completions, keep it as full endpoint automatically."""
+    llm_config = _reload_llm_config()
+
+    full_url = 'https://x666.me/v1/chat/completions'
+    result = llm_config._normalize_api_base(full_url, raw=False)
+    assert result == full_url
+
+
+def test_parse_user_endpoints_auto_sets_raw_url_for_full_endpoint():
+    llm_config = _reload_llm_config()
+
+    payload = {
+        'llm_endpoints': [
+            {
+                'name': 'primary',
+                'provider': 'openai_compatible',
+                'api_base': 'https://x666.me/v1/chat/completions',
+                'api_key': 'sk-test-1234567890',
+                'model': 'gemini-3-pro-high',
+                'enabled': True,
+            }
+        ]
+    }
+
+    endpoints = llm_config._parse_user_endpoints(payload, 'openai_compatible', None)
+    assert len(endpoints) == 1
+    assert endpoints[0].raw_url is True
+    assert endpoints[0].api_base == 'https://x666.me/v1/chat/completions'

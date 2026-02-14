@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FinSight — AAPL 股票分析</title>
+<style>
+/*═══ Reset ═══*/
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;-webkit-font-smoothing:antialiased}
+
+/*═══ TradingKey Dark Palette ═══*/
+:root{
+  --w1:#181a1f;--w2:#1e2025;--w3:#24282f;--w4:#2b3139;--w5:#363d47;
+  --t1:hsla(0,0%,100%,.9);--t2:rgba(235,239,245,.6);--t3:rgba(235,239,245,.3);--t4:rgba(235,239,245,.12);
+  --o1:#fa8019;--o2:#ffab5c;--o3:rgba(250,128,25,.12);
+  --g1:#2b3949;--g2:#535d69;
+  --profit:#0cad92;--profit-bg:rgba(12,173,146,.12);
+  --loss:#f74f5c;--loss-bg:rgba(247,79,92,.12);
+  --star:#ff9500;
+  --shadow:0 4px 20px 2px rgba(0,0,0,.4);
+  --r:10px;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--w1);color:var(--t1);line-height:1.6;min-height:100vh;
+}
+a{color:var(--o1);text-decoration:none}
+
+/*═══ Shell ═══*/
+.shell{display:flex;min-height:100vh}
+.sidebar{width:230px;min-width:230px;background:var(--w2);border-right:1px solid var(--w4);position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;padding:20px 0}
+.main{flex:1;min-width:0}
+
+/*═══ Sidebar ═══*/
+.logo{padding:0 20px 24px;font-size:17px;font-weight:700;color:var(--o1);display:flex;align-items:center;gap:8px}
+.logo i{width:8px;height:8px;border-radius:50%;background:var(--profit)}
+.nav{list-style:none;padding:0 10px}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;color:var(--t2);font-size:13px;transition:.15s}
+.nav a:hover{background:var(--w3);color:var(--t1)}
+.nav a.on{background:var(--o3);color:var(--o1);font-weight:600}
+.nav-icon{width:18px;text-align:center;font-style:normal}
+.sec-title{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:20px 20px 6px;font-weight:700}
+.wl{display:flex;align-items:center;justify-content:space-between;padding:7px 20px;font-size:12px;cursor:pointer;transition:.12s}
+.wl:hover{background:var(--w3)}
+.wl b{color:var(--t1);font-weight:600}
+.wl .p{color:var(--t2)}
+.up{color:var(--profit)}.dn{color:var(--loss)}
+
+/*═══ Topbar ═══*/
+.topbar{height:48px;background:var(--w2);border-bottom:1px solid var(--w4);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50}
+.bc{font-size:12px;color:var(--t3)}
+.bc em{font-style:normal;color:var(--t2);margin:0 5px}
+.bc strong{color:var(--t1);font-weight:500}
+.tb-r{display:flex;gap:8px}
+.tb-btn{background:var(--w3);border:1px solid var(--w4);color:var(--t2);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;transition:.12s}
+.tb-btn:hover{background:var(--w5);color:var(--t1)}
+
+/*═══ Stock Header (TradingKey style) ═══*/
+.stk-hd{padding:20px 28px 16px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid var(--w4)}
+.stk-id{display:flex;gap:14px;align-items:center}
+.stk-ico{width:44px;height:44px;border-radius:var(--r);background:linear-gradient(135deg,#555,#999);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.stk-nm{font-size:20px;font-weight:700}
+.stk-ex{font-size:12px;color:var(--t3);font-weight:400;margin-left:8px}
+.stk-pr{display:flex;align-items:baseline;gap:10px;margin-top:2px}
+.stk-pr .big{font-size:38px;font-weight:800;letter-spacing:-.03em;font-family:"Helvetica Neue",-apple-system,sans-serif}
+.stk-pr .chg{font-size:16px;font-weight:700}
+.stk-st{font-size:11px;color:var(--t3);margin-top:2px;display:flex;align-items:center;gap:5px}
+.stk-st i{width:6px;height:6px;border-radius:50%;background:var(--profit);display:inline-block}
+.stk-acts{display:flex;gap:8px}
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.12s;display:inline-flex;align-items:center;gap:6px}
+.btn-o{background:var(--o1);color:#fff}.btn-o:hover{background:var(--o2)}
+.btn-g{background:var(--w3);border:1px solid var(--w4);color:var(--t2)}.btn-g:hover{background:var(--w5);color:var(--t1)}
+
+/*═══ Metrics (7-col) ═══*/
+.metrics{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--w4);border-bottom:1px solid var(--w4)}
+.mi{background:var(--w2);padding:12px 14px;text-align:center}
+.mi .l{font-size:11px;color:var(--t3);margin-bottom:2px}
+.mi .v{font-size:14px;font-weight:600}
+
+/*═══ Tabs (TradingKey orange underline) ═══*/
+.tabs{display:flex;gap:0;padding:0 28px;background:var(--w2);border-bottom:.5px solid var(--w4);overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:14px 0;margin-right:28px;font-size:15px;font-weight:400;color:var(--t3);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;white-space:nowrap;transition:.12s;font-family:inherit}
+.tab:hover{color:var(--t2)}
+.tab.on{color:var(--o1);font-weight:600;border-bottom-color:var(--o1)}
+
+/*═══ Content ═══*/
+.cnt{max-width:1400px;margin:0 auto;padding:20px 28px 40px}
+
+/*═══ Card (TK style) ═══*/
+.card{background:var(--w2);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.card-h{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--w4)}
+.card-t{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card-b{padding:24px}
+.badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:100px}
+.b-o{background:var(--o3);color:var(--o1)}
+.b-g{background:var(--profit-bg);color:var(--profit)}
+.b-r{background:var(--loss-bg);color:var(--loss)}
+.b-p{background:rgba(167,139,250,.12);color:#a78bfa}
+
+/*═══ Equity Score — 3-column TradingKey ═══*/
+.eq-row{display:grid;grid-template-columns:320px 1fr 360px;gap:20px;margin-bottom:20px}
+.eq-left{display:flex;flex-direction:column;gap:20px}
+
+/* Score Ring */
+.ring-wrap{display:flex;flex-direction:column;align-items:center;padding:32px 24px}
+.ring{position:relative;width:160px;height:160px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .bg{fill:none;stroke:var(--w4);stroke-width:10}
+.ring .fg{fill:none;stroke-width:10;stroke-linecap:round}
+.ring-txt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-val{font-size:36px;font-weight:800;font-family:"Helvetica Neue",sans-serif}
+.ring-lab{font-size:12px;color:var(--t3);margin-top:2px}
+.ring-sub{font-size:13px;color:var(--t2);margin-top:16px;font-weight:600}
+.ring-stars{color:var(--star);margin-top:4px;font-size:16px;letter-spacing:2px}
+
+/* Related Info */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.info-item .ik{font-size:11px;color:var(--t3);margin-bottom:2px}
+.info-item .iv{font-size:14px;font-weight:500}
+
+/* Center col */
+.eq-center{display:flex;flex-direction:column;gap:20px}
+.eq-pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+/* Analyst Rating */
+.ar-row{display:flex;justify-content:space-between;margin-top:16px;background:var(--w3);border-radius:var(--r);padding:14px 20px}
+.ar-it{text-align:center}
+.ar-it:first-child{text-align:left}
+.ar-it:last-child{text-align:right}
+.ar-v{font-size:22px;font-weight:700;line-height:1.3}
+.ar-l{font-size:11px;color:var(--t3)}
+.ar-bar{display:flex;height:14px;border-radius:8px;overflow:hidden;margin-top:14px;background:var(--w3)}
+.ar-bar span{transition:width .4s ease}
+.ar-desc{font-size:12px;color:var(--t2);margin-top:12px;line-height:1.6}
+
+/* Price Target */
+.pt-vals{display:flex;justify-content:space-between;margin-top:14px}
+.pt-v{text-align:center}
+.pt-v .n{font-size:22px;font-weight:700}
+.pt-v .lb{font-size:11px;color:var(--t3);margin-top:2px}
+.pt-range{position:relative;height:8px;background:var(--w3);border-radius:4px;margin:20px 0 10px}
+.pt-fill{position:absolute;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--loss),var(--o1),var(--profit))}
+.pt-cur{position:absolute;top:-6px;width:3px;height:20px;background:var(--t1);border-radius:2px}
+.pt-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--t3)}
+
+/* Highlights */
+.hl-list{display:flex;flex-direction:column;gap:0}
+.hl-item{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--w4)}
+.hl-item:last-child{border:none}
+.hl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.hl-text{font-size:14px;line-height:1.7;color:var(--t2)}
+
+/* Radar */
+.radar-wrap{display:flex;align-items:center;justify-content:center;padding:20px}
+.radar-wrap svg{width:300px;height:280px}
+
+/*═══ Key Insights (TK lightbulb style) ═══*/
+.insight-card{margin-bottom:20px}
+.insight-body{font-size:15px;line-height:1.8;color:var(--t2)}
+.insight-body strong{color:var(--t1)}
+
+/*═══ Two-col grid ═══*/
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+
+/*═══ Accordion (TK Financial Health) ═══*/
+.acc{margin-bottom:20px}
+.acc-hd{background:var(--w2);padding:18px 24px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-radius:var(--r);box-shadow:var(--shadow);transition:.15s}
+.acc-hd:hover{background:var(--w3)}
+.acc-hd .acc-left{display:flex;align-items:center;gap:10px}
+.acc-hd .acc-arrow{font-size:14px;color:var(--t3);transition:transform .3s}
+.acc-hd.open .acc-arrow{transform:rotate(45deg)}
+.acc-hd .acc-title{font-size:18px;font-weight:600}
+.acc-hd .acc-score{font-size:18px;font-weight:600;display:flex;align-items:center;gap:6px}
+.acc-hd .acc-stars{color:var(--star);font-size:14px}
+.acc-bd{overflow:hidden;max-height:0;transition:max-height .35s ease}
+.acc-bd.open{max-height:600px}
+.acc-inner{padding:4px 24px 24px}
+
+/* Sub-accordion */
+.sub-acc{background:var(--w3);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+.sub-hd{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:.12s}
+.sub-hd:hover{background:var(--o3)}
+.sub-hd .sub-t{font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px}
+.sub-hd .sub-s{font-size:14px;font-weight:600;display:flex;align-items:center;gap:4px}
+.sub-hd .sub-stars{color:var(--o1);font-size:12px}
+.sub-bd{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.sub-bd.open{max-height:400px}
+.sub-inner{padding:0 18px 18px}
+
+/* Chart placeholder bars */
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:100px;padding-top:10px}
+.chart-bar{flex:1;border-radius:4px 4px 0 0;transition:height .5s ease;position:relative}
+.chart-bar::after{content:attr(data-label);position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--t3);white-space:nowrap}
+.chart-line{display:flex;align-items:flex-end;gap:6px;height:100px;margin-top:20px;border-bottom:1px solid var(--w4);padding-bottom:4px}
+
+/*═══ Signal Grid ═══*/
+.sig-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sig{background:var(--w3);border-radius:var(--r);padding:16px;text-align:center}
+.sig .sn{font-size:12px;color:var(--t3);margin-bottom:4px}
+.sig .sv{font-size:20px;font-weight:700;margin-bottom:6px;font-family:"Helvetica Neue",sans-serif}
+.sig .st{display:inline-block;padding:3px 12px;border-radius:100px;font-size:11px;font-weight:700}
+.t-buy{background:var(--profit-bg);color:var(--profit)}
+.t-sell{background:var(--loss-bg);color:var(--loss)}
+.t-hold{background:var(--w4);color:var(--t3)}
+
+/* Trend summary box */
+.trend-box{margin-top:14px;padding:14px 18px;background:var(--w3);border-radius:var(--r);font-size:13px;color:var(--t2);line-height:1.7}
+.trend-box b{color:var(--profit)}
+
+/*═══ Sentiment Gauge ═══*/
+.gauge-wrap{display:flex;align-items:center;gap:28px}
+.gauge{width:200px;height:115px;position:relative;flex-shrink:0}
+.gauge svg{width:100%;height:100%}
+.gauge-txt{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}
+.gauge-v{font-size:30px;font-weight:800;font-family:"Helvetica Neue",sans-serif}
+.gauge-l{font-size:11px;color:var(--t3)}
+.s-bars{flex:1;display:flex;flex-direction:column;gap:7px}
+.sb{display:flex;align-items:center;gap:8px}
+.sb .sl{width:56px;font-size:11px;color:var(--t3);text-align:right}
+.sb .so{flex:1;height:7px;background:var(--w3);border-radius:4px;overflow:hidden}
+.sb .si{height:100%;border-radius:4px}
+.sb .sp{width:30px;font-size:11px;color:var(--t2)}
+
+/*═══ Risk ═══*/
+.risk-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.rk{background:var(--w3);border-radius:var(--r);padding:16px;text-align:center}
+.rk .rl{font-size:11px;color:var(--t3);margin-bottom:4px}
+.rk .rv{font-size:22px;font-weight:700;font-family:"Helvetica Neue",sans-serif}
+.risk-alerts{display:flex;flex-direction:column;gap:8px}
+.ra{padding:10px 14px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;line-height:1.5}
+
+/*═══ News ═══*/
+.news-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--w4)}
+.news-row:last-child{border:none}
+.news-tag{font-size:10px;padding:3px 10px;border-radius:100px;font-weight:700;flex-shrink:0}
+.news-txt{flex:1;font-size:13px;line-height:1.5}
+.news-src{font-size:11px;color:var(--t3);flex-shrink:0;width:100px;text-align:right}
+
+/*═══ Peer Table ═══*/
+.ptbl{width:100%;border-collapse:collapse}
+.ptbl th{font-size:11px;color:var(--t3);font-weight:600;text-align:left;padding:10px 14px;border-bottom:1px solid var(--w4)}
+.ptbl td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--w4)}
+.ptbl tr:hover td{background:var(--w3)}
+.ptbl .tk{font-weight:700;color:var(--o1)}
+.ms{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;font-size:12px;font-weight:700}
+
+/*═══ MiniChat ═══*/
+.mc{position:fixed;bottom:20px;right:20px;z-index:100}
+.mc-tog{width:50px;height:50px;border-radius:50%;background:var(--o1);color:#fff;border:none;cursor:pointer;font-size:20px;box-shadow:var(--shadow);transition:transform .15s}
+.mc-tog:hover{transform:scale(1.06)}
+.mc-p{display:none;position:absolute;bottom:58px;right:0;width:350px;height:460px;background:var(--w2);border:1px solid var(--w4);border-radius:var(--r);box-shadow:var(--shadow);flex-direction:column;overflow:hidden}
+.mc-p.open{display:flex}
+.mc-ph{padding:12px 16px;background:var(--w3);border-bottom:1px solid var(--w4);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.mc-ph button{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px}
+.mc-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:82%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5}
+.m-ai{background:var(--w3);color:var(--t2);align-self:flex-start;border-bottom-left-radius:4px}
+.m-u{background:var(--o1);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.mc-in{padding:10px 14px;border-top:1px solid var(--w4);display:flex;gap:8px}
+.mc-in input{flex:1;background:var(--w3);border:1px solid var(--w4);border-radius:8px;padding:8px 12px;color:var(--t1);font-size:13px;outline:none}
+.mc-in input:focus{border-color:var(--o1)}
+.mc-in button{background:var(--o1);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600}
+
+/*═══ Footer ═══*/
+.ft{text-align:center;padding:20px 0 32px;color:var(--t3);font-size:11px}
+
+/*═══ Anim ═══*/
+@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.card,.acc{animation:fi .35s ease both}
+
+/*═══ Responsive ═══*/
+@media(max-width:1200px){
+  .eq-row{grid-template-columns:1fr;}.eq-pair{grid-template-columns:1fr 1fr}
+}
+@media(max-width:960px){
+  .sidebar{display:none}.metrics{grid-template-columns:repeat(4,1fr)}
+  .grid2,.eq-pair{grid-template-columns:1fr}.risk-grid{grid-template-columns:repeat(2,1fr)}
+  .cnt{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ═══ Sidebar ═══ -->
+<aside class="sidebar">
+  <div class="logo"><i></i>FinSight</div>
+  <ul class="nav">
+    <li><a href="#"><span class="nav-icon">💬</span>智能对话</a></li>
+    <li><a href="#" class="on"><span class="nav-icon">📊</span>仪表盘</a></li>
+    <li><a href="#"><span class="nav-icon">📋</span>工作台</a></li>
+    <li><a href="#"><span class="nav-icon">🔔</span>订阅管理</a></li>
+    <li><a href="#"><span class="nav-icon">⚙️</span>偏好设置</a></li>
+  </ul>
+  <div class="sec-title">我的关注</div>
+  <div class="wl"><b>AAPL</b><span class="p">$227.63</span><span class="up">+1.24%</span></div>
+  <div class="wl"><b>NVDA</b><span class="p">$131.28</span><span class="up">+3.67%</span></div>
+  <div class="wl"><b>TSLA</b><span class="p">$352.56</span><span class="dn">-1.82%</span></div>
+  <div class="wl"><b>MSFT</b><span class="p">$411.22</span><span class="up">+0.53%</span></div>
+  <div class="wl"><b>GOOGL</b><span class="p">$185.43</span><span class="dn">-0.71%</span></div>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="bc">市场<em>›</em>美股<em>›</em><strong>AAPL — Apple Inc.</strong></div>
+  <div class="tb-r"><button class="tb-btn">🔍 搜索</button><button class="tb-btn">🌙</button></div>
+</div>
+
+<!-- Stock Header -->
+<div class="stk-hd">
+  <div class="stk-id">
+    <div class="stk-ico">🍎</div>
+    <div>
+      <div class="stk-nm">Apple Inc.<span class="stk-ex">NASDAQ: AAPL</span></div>
+      <div class="stk-pr">
+        <span class="big">$227.63</span>
+        <span class="chg up">+$2.79 (+1.24%)</span>
+      </div>
+      <div class="stk-st"><i></i>盘后 $227.80 <span class="up" style="margin-left:4px">+$0.17 (+0.07%)</span><span style="margin-left:8px">2026-02-11 16:00 EST</span></div>
+    </div>
+  </div>
+  <div class="stk-acts">
+    <button class="btn btn-g">☆ 关注</button>
+    <button class="btn btn-o">⚡ 快速分析</button>
+  </div>
+</div>
+
+<!-- Metrics -->
+<div class="metrics">
+  <div class="mi"><div class="l">市值</div><div class="v">$3.42T</div></div>
+  <div class="mi"><div class="l">市盈率 (TTM)</div><div class="v">34.47</div></div>
+  <div class="mi"><div class="l">市净率</div><div class="v">62.14</div></div>
+  <div class="mi"><div class="l">每股收益</div><div class="v">$6.97</div></div>
+  <div class="mi"><div class="l">股息率</div><div class="v">0.44%</div></div>
+  <div class="mi"><div class="l">52 周区间</div><div class="v">$169 – $260</div></div>
+  <div class="mi"><div class="l">Beta</div><div class="v">1.24</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab on">综合分析</button>
+  <button class="tab">财务报表</button>
+  <button class="tab">技术面</button>
+  <button class="tab">新闻动态</button>
+  <button class="tab">深度研究</button>
+  <button class="tab">同行对比</button>
+</div>
+
+<div class="cnt">
+
+<!-- ═══ Key Insights ═══ -->
+<div class="card insight-card" style="margin-bottom:20px">
+  <div class="card-h">
+    <div class="card-t">💡 关键洞察</div>
+    <span class="badge b-o">AI 生成</span>
+  </div>
+  <div class="card-b">
+    <div class="insight-body">
+      <strong>Apple Q1 FY2026 营收 $1,243 亿，同比增长 6.4%，EPS $2.42 超市场预期。</strong>服务业务收入占比提升至 24.7%，AI 功能（Apple Intelligence）驱动下 iPhone 出货量环比回暖。分析师共识上调目标价至 $250，但 PE 34.47 仍高于 5 年中位数 28.5，中美贸易政策不确定性为主要下行风险。技术面均线多头排列，短期趋势偏强。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Equity Score 3-col (TradingKey layout) ═══ -->
+<div class="eq-row">
+
+  <!-- Left: Score Ring + Company Info -->
+  <div class="eq-left">
+    <div class="card">
+      <div class="card-h"><div class="card-t">综合评分</div></div>
+      <div class="ring-wrap">
+        <div class="ring">
+          <svg viewBox="0 0 120 120">
+            <circle class="bg" cx="60" cy="60" r="50"/>
+            <circle class="fg" cx="60" cy="60" r="50" stroke="var(--profit)" stroke-dasharray="314" stroke-dashoffset="69"/>
+          </svg>
+          <div class="ring-txt">
+            <span class="ring-val" style="color:var(--profit)">7.8</span>
+            <span class="ring-lab">/ 10</span>
+          </div>
+        </div>
+        <div class="ring-sub">偏多 · 建议持有</div>
+        <div class="ring-stars">★★★★☆</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><div class="card-t">相关信息</div></div>
+      <div class="card-b">
+        <div class="info-grid">
+          <div class="info-item"><div class="ik">板块</div><div class="iv">信息技术</div></div>
+          <div class="info-item"><div class="ik">行业</div><div class="iv">消费电子</div></div>
+          <div class="info-item"><div class="ik">市值</div><div class="iv">$3.42T</div></div>
+          <div class="info-item"><div class="ik">员工数</div><div class="iv">164,000</div></div>
+          <div class="info-item"><div class="ik">上市日期</div><div class="iv">1980-12-12</div></div>
+          <div class="info-item"><div class="ik">总部</div><div class="iv">库比蒂诺, CA</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Analyst + Price Target + Highlights -->
+  <div class="eq-center">
+    <div class="eq-pair">
+      <!-- Analyst Rating -->
+      <div class="card">
+        <div class="card-h"><div class="card-t">分析师评级</div><span style="font-size:12px;color:var(--t3)">32 位分析师</span></div>
+        <div class="card-b">
+          <div class="ar-row">
+            <div class="ar-it"><div class="ar-v" style="color:var(--profit)">买入</div><div class="ar-l">共识评级</div></div>
+            <div class="ar-it"><div class="ar-v">$249.80</div><div class="ar-l">平均目标价</div></div>
+            <div class="ar-it"><div class="ar-v up">+9.7%</div><div class="ar-l">上涨空间</div></div>
+          </div>
+          <div class="ar-bar">
+            <span style="width:47%;background:var(--profit)"></span>
+            <span style="width:28%;background:#34d399"></span>
+            <span style="width:16%;background:var(--w5)"></span>
+            <span style="width:6%;background:#f97316"></span>
+            <span style="width:3%;background:var(--loss)"></span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:var(--t3)">
+            <span>强烈买入 47%</span><span>买入 28%</span><span>持有 16%</span><span>卖出 6%</span><span>强烈卖出 3%</span>
+          </div>
+        </div>
+      </div>
+      <!-- Price Target -->
+      <div class="card">
+        <div class="card-h"><div class="card-t">目标价格</div></div>
+        <div class="card-b">
+          <div class="pt-vals">
+            <div class="pt-v"><div class="n dn">$185</div><div class="lb">最低</div></div>
+            <div class="pt-v"><div class="n" style="color:var(--o1)">$250</div><div class="lb">平均</div></div>
+            <div class="pt-v"><div class="n up">$300</div><div class="lb">最高</div></div>
+          </div>
+          <div class="pt-range">
+            <div class="pt-fill" style="left:0;width:100%"></div>
+            <div class="pt-cur" style="left:37%"></div>
+          </div>
+          <div class="pt-labels">
+            <span>$185</span>
+            <span style="color:var(--t1)">当前 $227.63</span>
+            <span>$300</span>
+          </div>
+          <div style="margin-top:14px;font-size:12px;color:var(--t2);line-height:1.6">
+            平均目标价 $249.80 意味着 <strong style="color:var(--profit)">+9.7%</strong> 的上涨空间。近 3 个月内 5 位分析师上调目标价。
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Company Highlights -->
+    <div class="card">
+      <div class="card-h"><div class="card-t">公司亮点与风险</div></div>
+      <div class="card-b" style="padding:12px 24px">
+        <div class="hl-list">
+          <div class="hl-item"><div class="hl-dot" style="background:var(--profit)"></div><div class="hl-text"><strong>营收增长恢复</strong> — Q4 营收同比 +6.4%，连续两个季度增速回暖，服务业务成为核心引擎</div></div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--profit)"></div><div class="hl-text"><strong>AI 战略落地</strong> — Apple Intelligence 功能带动 iPhone 换机周期启动，Gen AI 生态系统竞争力增强</div></div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--profit)"></div><div class="hl-text"><strong>现金流充裕</strong> — 经营现金流 $1,183 亿，自由现金流率 28.4%，支撑高股息与回购</div></div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--loss)"></div><div class="hl-text"><strong>估值偏高</strong> — PE 34.47 高于 5 年中位数 28.5，隐含增长预期较高</div></div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--loss)"></div><div class="hl-text"><strong>地缘风险</strong> — 中美贸易不确定性可能影响供应链和中国区销售</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Radar Chart -->
+  <div>
+    <div class="card" style="height:100%">
+      <div class="card-h"><div class="card-t">维度评分</div><span class="badge b-p">6 Agent</span></div>
+      <div class="radar-wrap">
+        <svg viewBox="0 0 300 280">
+          <!-- Grid pentagons -->
+          <polygon points="150,30 258,108 217,238 83,238 42,108" fill="none" stroke="var(--w4)" stroke-width="1"/>
+          <polygon points="150,64 230,120 206,211 94,211 70,120" fill="none" stroke="var(--w4)" stroke-width=".5" stroke-dasharray="3"/>
+          <polygon points="150,98 202,133 185,185 115,185 98,133" fill="none" stroke="var(--w4)" stroke-width=".5" stroke-dasharray="3"/>
+          <polygon points="150,132 175,148 168,168 132,168 125,148" fill="none" stroke="var(--w4)" stroke-width=".5" stroke-dasharray="3"/>
+          <!-- Data polygon -->
+          <polygon points="150,44 245,115 190,228 95,218 55,115" fill="rgba(12,173,146,.15)" stroke="var(--profit)" stroke-width="2"/>
+          <!-- Data points -->
+          <circle cx="150" cy="44" r="4" fill="var(--profit)"/>
+          <circle cx="245" cy="115" r="4" fill="var(--profit)"/>
+          <circle cx="190" cy="228" r="4" fill="var(--profit)"/>
+          <circle cx="95" cy="218" r="4" fill="var(--profit)"/>
+          <circle cx="55" cy="115" r="4" fill="var(--profit)"/>
+          <!-- Labels -->
+          <text x="150" y="18" text-anchor="middle" fill="var(--t2)" font-size="12" font-weight="600">基本面 8.2</text>
+          <text x="272" y="112" text-anchor="start" fill="var(--t2)" font-size="12" font-weight="600">技术面 7.1</text>
+          <text x="222" y="250" text-anchor="middle" fill="var(--t2)" font-size="12" font-weight="600">新闻 8.5</text>
+          <text x="78" y="250" text-anchor="middle" fill="var(--t2)" font-size="12" font-weight="600">深度 7.8</text>
+          <text x="28" y="112" text-anchor="end" fill="var(--t2)" font-size="12" font-weight="600">宏观 6.5</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Financial Health Accordion ═══ -->
+<div class="acc">
+  <div class="acc-hd open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+    <div class="acc-left"><span class="acc-arrow">＋</span><span class="acc-title">财务健康</span></div>
+    <div class="acc-score"><span class="acc-stars">★★★★☆</span> 8.2</div>
+  </div>
+  <div class="acc-bd open">
+    <div class="acc-inner">
+      <!-- Sub: 盈利能力 -->
+      <div class="sub-acc">
+        <div class="sub-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div class="sub-t">📊 盈利能力</div>
+          <div class="sub-s"><span class="sub-stars">★★★★☆</span> 8.5</div>
+        </div>
+        <div class="sub-bd open">
+          <div class="sub-inner">
+            <div class="chart-bars">
+              <div class="chart-bar" style="height:65%;background:var(--profit)" data-label="FY22"></div>
+              <div class="chart-bar" style="height:60%;background:var(--profit)" data-label="FY23"></div>
+              <div class="chart-bar" style="height:72%;background:var(--profit)" data-label="FY24"></div>
+              <div class="chart-bar" style="height:80%;background:var(--profit)" data-label="FY25"></div>
+              <div class="chart-bar" style="height:88%;background:var(--profit);opacity:.7;border:2px dashed var(--profit)" data-label="FY26E"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:28px;font-size:12px;color:var(--t2)">
+              <span>毛利率 <b style="color:var(--t1)">46.2%</b></span>
+              <span>净利率 <b style="color:var(--t1)">25.3%</b></span>
+              <span>ROE <b style="color:var(--t1)">157%</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Sub: 成长性 -->
+      <div class="sub-acc">
+        <div class="sub-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div class="sub-t">📈 成长性</div>
+          <div class="sub-s"><span class="sub-stars">★★★☆☆</span> 7.0</div>
+        </div>
+        <div class="sub-bd">
+          <div class="sub-inner">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)">
+              <span>营收增速 <b class="up">+6.4%</b></span>
+              <span>净利润增速 <b class="up">+7.1%</b></span>
+              <span>EPS 增速 <b class="up">+10.2%</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Sub: 偿债能力 -->
+      <div class="sub-acc">
+        <div class="sub-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div class="sub-t">🏦 偿债能力</div>
+          <div class="sub-s"><span class="sub-stars">★★★☆☆</span> 6.8</div>
+        </div>
+        <div class="sub-bd">
+          <div class="sub-inner">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t2)">
+              <span>负债/资产 <b style="color:var(--loss)">82.3%</b></span>
+              <span>流动比率 <b style="color:var(--t1)">0.99</b></span>
+              <span>利息覆盖 <b class="up">29.4x</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Technical + Sentiment ═══ -->
+<div class="grid2">
+
+  <!-- Technical -->
+  <div class="card">
+    <div class="card-h">
+      <div class="card-t">📈 技术指标</div>
+      <span class="badge b-g">偏多</span>
+    </div>
+    <div class="card-b">
+      <div class="sig-grid">
+        <div class="sig"><div class="sn">RSI (14)</div><div class="sv">62.4</div><span class="st t-hold">中性</span></div>
+        <div class="sig"><div class="sn">MACD</div><div class="sv">1.85</div><span class="st t-buy">买入</span></div>
+        <div class="sig"><div class="sn">信号线</div><div class="sv">1.23</div><span class="st t-buy">多头</span></div>
+        <div class="sig"><div class="sn">MA20</div><div class="sv">$223.8</div><span class="st t-buy">价格在上</span></div>
+        <div class="sig"><div class="sn">MA50</div><div class="sv">$219.4</div><span class="st t-buy">价格在上</span></div>
+        <div class="sig"><div class="sn">MA200</div><div class="sv">$212.1</div><span class="st t-buy">价格在上</span></div>
+      </div>
+      <div class="trend-box"><b>趋势: 上升趋势</b> — 均线多头排列（收盘 > MA20 > MA50 > MA200），MACD 金叉延续，短期支撑 $223，阻力 $235。</div>
+    </div>
+  </div>
+
+  <!-- Sentiment -->
+  <div class="card">
+    <div class="card-h">
+      <div class="card-t">🌡️ 市场情绪</div>
+      <span class="badge b-o">MacroAgent</span>
+    </div>
+    <div class="card-b">
+      <div class="gauge-wrap">
+        <div class="gauge">
+          <svg viewBox="0 0 200 115">
+            <defs>
+              <linearGradient id="grd" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="var(--loss)"/>
+                <stop offset="30%" stop-color="#f97316"/>
+                <stop offset="50%" stop-color="#facc15"/>
+                <stop offset="70%" stop-color="#a3e635"/>
+                <stop offset="100%" stop-color="var(--profit)"/>
+              </linearGradient>
+            </defs>
+            <path d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="var(--w4)" stroke-width="16" stroke-linecap="round"/>
+            <path d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="url(#grd)" stroke-width="16" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="70"/>
+            <line x1="100" y1="105" x2="142" y2="50" stroke="var(--t1)" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="100" cy="105" r="5" fill="var(--t1)"/>
+          </svg>
+          <div class="gauge-txt"><div class="gauge-v" style="color:var(--profit)">65</div><div class="gauge-l">贪婪</div></div>
+        </div>
+        <div class="s-bars">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">CNN 恐惧与贪婪指数</div>
+          <div class="sb"><span class="sl">极度贪婪</span><div class="so"><div class="si" style="width:12%;background:var(--profit)"></div></div><span class="sp">12%</span></div>
+          <div class="sb"><span class="sl">贪婪</span><div class="so"><div class="si" style="width:38%;background:#a3e635"></div></div><span class="sp">38%</span></div>
+          <div class="sb"><span class="sl">中性</span><div class="so"><div class="si" style="width:28%;background:#facc15"></div></div><span class="sp">28%</span></div>
+          <div class="sb"><span class="sl">恐惧</span><div class="so"><div class="si" style="width:16%;background:#f97316"></div></div><span class="sp">16%</span></div>
+          <div class="sb"><span class="sl">极度恐惧</span><div class="so"><div class="si" style="width:6%;background:var(--loss)"></div></div><span class="sp">6%</span></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:12px 16px;background:var(--w3);border-radius:var(--r);font-size:12px;color:var(--t2)">
+        联邦基金利率 <b>4.50%</b> · CPI 通胀率 <b>2.9%</b> · 失业率 <b>4.0%</b> · 10Y 国债 <b>4.28%</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Risk ═══ -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-h"><div class="card-t">⚠️ 风险指标</div></div>
+  <div class="card-b">
+    <div class="risk-grid">
+      <div class="rk"><div class="rl">Beta</div><div class="rv" style="color:var(--o1)">1.24</div></div>
+      <div class="rk"><div class="rl">30 日波动率</div><div class="rv">18.7%</div></div>
+      <div class="rk"><div class="rl">夏普比率</div><div class="rv" style="color:var(--profit)">1.82</div></div>
+      <div class="rk"><div class="rl">最大回撤</div><div class="rv" style="color:var(--loss)">-12.6%</div></div>
+    </div>
+    <div class="risk-alerts">
+      <div class="ra" style="background:var(--profit-bg);color:var(--profit)">✅ 均线多头排列，技术面暂无明显风险信号</div>
+      <div class="ra" style="background:rgba(250,204,21,.1);color:#facc15">⚡ PE 34.47 高于行业中位数 28.5，估值面临回调压力</div>
+      <div class="ra" style="background:var(--loss-bg);color:var(--loss)">🌐 中美贸易政策不确定性可能影响供应链及中国区收入</div>
+      <div class="ra" style="background:rgba(250,128,25,.1);color:var(--o1)">📊 负债/资产比率 82.3%，高杠杆需关注利率变动风险</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ News ═══ -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-h"><div class="card-t">📰 近期新闻</div><span class="badge b-g">NewsAgent</span></div>
+  <div class="card-b" style="padding:8px 24px">
+    <div class="news-row">
+      <span class="news-tag" style="background:var(--profit-bg);color:var(--profit)">利好</span>
+      <span class="news-txt">Apple Q1 FY2026 营收超预期，iPhone 销售额创纪录，服务收入同比增长 18%</span>
+      <span class="news-src">Reuters · 2h</span>
+    </div>
+    <div class="news-row">
+      <span class="news-tag" style="background:var(--profit-bg);color:var(--profit)">利好</span>
+      <span class="news-txt">华尔街分析师上调 AAPL 目标价至 $260，Apple Intelligence 为核心催化剂</span>
+      <span class="news-src">Bloomberg · 5h</span>
+    </div>
+    <div class="news-row">
+      <span class="news-tag" style="background:rgba(250,204,21,.1);color:#facc15">中性</span>
+      <span class="news-txt">Apple 扩大印度制造布局，应对中美贸易不确定性，供应链多元化持续推进</span>
+      <span class="news-src">WSJ · 8h</span>
+    </div>
+    <div class="news-row">
+      <span class="news-tag" style="background:var(--loss-bg);color:var(--loss)">利空</span>
+      <span class="news-txt">欧盟反垄断调查扩展至 Apple Intelligence，数字市场法合规成本或增加</span>
+      <span class="news-src">FT · 12h</span>
+    </div>
+    <div class="news-row">
+      <span class="news-tag" style="background:var(--profit-bg);color:var(--profit)">利好</span>
+      <span class="news-txt">苹果宣布 $1100 亿新回购计划，股东回报力度加码，自由现金流创新高</span>
+      <span class="news-src">CNBC · 1d</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Peer Comparison ═══ -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-h"><div class="card-t">🔄 同行对比</div><span class="badge b-p">科技板块</span></div>
+  <div class="card-b" style="padding:0">
+    <table class="ptbl">
+      <thead><tr><th>股票</th><th>公司</th><th>价格</th><th>涨跌</th><th>市值</th><th>PE</th><th>PB</th><th>股息率</th><th style="text-align:center">评分</th></tr></thead>
+      <tbody>
+        <tr><td class="tk">AAPL</td><td>Apple Inc.</td><td>$227.63</td><td class="up">+1.24%</td><td>$3.42T</td><td>34.47</td><td>62.1</td><td>0.44%</td><td style="text-align:center"><span class="ms" style="background:var(--profit-bg);color:var(--profit)">7.8</span></td></tr>
+        <tr><td class="tk">MSFT</td><td>Microsoft</td><td>$411.22</td><td class="up">+0.53%</td><td>$3.06T</td><td>33.21</td><td>11.8</td><td>0.72%</td><td style="text-align:center"><span class="ms" style="background:var(--profit-bg);color:var(--profit)">8.1</span></td></tr>
+        <tr><td class="tk">GOOGL</td><td>Alphabet</td><td>$185.43</td><td class="dn">-0.71%</td><td>$2.27T</td><td>22.15</td><td>7.3</td><td>0.46%</td><td style="text-align:center"><span class="ms" style="background:var(--profit-bg);color:var(--profit)">8.3</span></td></tr>
+        <tr><td class="tk">AMZN</td><td>Amazon</td><td>$228.68</td><td class="up">+1.05%</td><td>$2.42T</td><td>36.89</td><td>8.4</td><td>—</td><td style="text-align:center"><span class="ms" style="background:rgba(59,130,246,.12);color:#60a5fa">7.2</span></td></tr>
+        <tr><td class="tk">META</td><td>Meta</td><td>$719.73</td><td class="up">+2.18%</td><td>$1.83T</td><td>26.44</td><td>9.1</td><td>0.32%</td><td style="text-align:center"><span class="ms" style="background:var(--profit-bg);color:var(--profit)">8.5</span></td></tr>
+        <tr><td class="tk">NVDA</td><td>NVIDIA</td><td>$131.28</td><td class="up">+3.67%</td><td>$3.21T</td><td>48.92</td><td>52.3</td><td>0.03%</td><td style="text-align:center"><span class="ms" style="background:var(--profit-bg);color:var(--profit)">8.7</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="ft">FinSight v1.1.0 · 数据仅供参考，不构成投资建议 · 来源: yfinance · FRED · Finnhub · Tavily · DeepSearch</div>
+
+</div><!-- /cnt -->
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- ═══ MiniChat ═══ -->
+<div class="mc">
+  <div class="mc-p" id="cp">
+    <div class="mc-ph"><span>💬 FinSight AI</span><button onclick="tc()">✕</button></div>
+    <div class="mc-msgs">
+      <div class="m m-ai">你好！我是 FinSight AI 助手，可以回答关于 AAPL 的任何分析问题 📊</div>
+      <div class="m m-u">AAPL 当前估值合理吗？</div>
+      <div class="m m-ai">
+        <b>AAPL 估值分析：</b><br><br>
+        📊 PE 34.47 高于 5 年中位数 28.5，<span style="color:var(--loss)">偏贵</span><br>
+        📈 但 EPS 增速 +10.2%、服务营收占比提升支撑溢价<br>
+        💡 PEG 约 1.6，合理范围内<br><br>
+        <b>结论</b>：短期估值偏高，长期 AI 催化下可接受。建议在 $215-220 区间分批建仓。
+      </div>
+    </div>
+    <div class="mc-in"><input placeholder="输入你的问题..."/><button>发送</button></div>
+  </div>
+  <button class="mc-tog" onclick="tc()" id="ct">💬</button>
+</div>
+
+<script>function tc(){document.getElementById('cp').classList.toggle('open')}</script>
+</body>
+</html>

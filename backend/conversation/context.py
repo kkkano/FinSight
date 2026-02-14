@@ -516,31 +516,41 @@ class ContextManager:
     def resolve_reference(self, query: str) -> str:
         """
         解析指代词
-        
+
         将"它"、"这个股票"等指代词替换为当前关注的股票
-        
+
         Args:
             query: 原始查询
-            
+
         Returns:
             解析后的查询
         """
         if not self.current_focus:
             return query
-        
-        pronouns = [
+
+        import re as _re
+
+        # Chinese pronouns — safe to do substring replacement (no word boundaries)
+        cn_pronouns = [
             '它', '那个', '这个', '该股票', '这支股票', '那支股票', '该股', '这只', '那只',
             '这家公司', '该公司', '那家公司', '这家', '那家',
-            'it', 'that', 'this stock', 'the stock', 'this company', 'the company'
         ]
-        
+
         resolved = query
-        for pronoun in pronouns:
-            if pronoun in query.lower():
-                # 用股票代码替换
+        for pronoun in cn_pronouns:
+            if pronoun in resolved:
                 resolved = resolved.replace(pronoun, self.current_focus)
-                resolved = resolved.replace(pronoun.capitalize(), self.current_focus)
-        
+
+        # English pronouns — must use word boundary to avoid breaking words
+        # like "with" (contains "it"), "capital" (contains "it"), "that's" etc.
+        en_pronouns = [
+            'this stock', 'the stock', 'this company', 'the company',
+            'it', 'that',
+        ]
+        for pronoun in en_pronouns:
+            pattern = r'\b' + _re.escape(pronoun) + r'\b'
+            resolved = _re.sub(pattern, self.current_focus, resolved, flags=_re.IGNORECASE)
+
         return resolved
     
     def cache_data(self, key: str, data: Any) -> None:

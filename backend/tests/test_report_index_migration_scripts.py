@@ -50,7 +50,16 @@ def test_report_index_migrate_script_creates_tables_and_backup(tmp_path):
         report_cols = {row[1] for row in conn.execute('PRAGMA table_info(report_index)').fetchall()}
         citation_cols = {row[1] for row in conn.execute('PRAGMA table_info(citation_index)').fetchall()}
 
-    assert {'report_id', 'session_id', 'report_json', 'created_at', 'updated_at'}.issubset(report_cols)
+    assert {
+        'report_id',
+        'session_id',
+        'report_json',
+        'source_type',
+        'filing_type',
+        'publisher',
+        'created_at',
+        'updated_at',
+    }.issubset(report_cols)
     assert {'report_id', 'session_id', 'source_id', 'citation_json', 'created_at'}.issubset(citation_cols)
 
 

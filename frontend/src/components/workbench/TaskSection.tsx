@@ -48,9 +48,10 @@ function TaskSection({ symbol, latestReports, newsItems }: TaskSectionProps) {
   const tasks = useMemo(() => {
     const result: TaskItem[] = [];
 
-    // Task: review latest reports
-    for (const report of latestReports) {
-      if (result.length >= MAX_TASKS) break;
+    // ── 1. 最新研报（最多 2 条，避免挤占其他类别） ──
+    const MAX_REPORT_TASKS = 2;
+    const recentReports = latestReports.slice(0, MAX_REPORT_TASKS);
+    for (const report of recentReports) {
       const ticker = report.ticker || symbol;
       const time = report.generated_at
         ? formatRelativeTime(report.generated_at)
@@ -66,8 +67,8 @@ function TaskSection({ symbol, latestReports, newsItems }: TaskSectionProps) {
       });
     }
 
-    // Task: unread news items
-    if (newsItems.length > 0 && result.length < MAX_TASKS) {
+    // ── 2. 未读快讯 ──
+    if (newsItems.length > 0) {
       result.push({
         id: 'unread-news',
         icon: 'news',
@@ -77,25 +78,27 @@ function TaskSection({ symbol, latestReports, newsItems }: TaskSectionProps) {
       });
     }
 
-    // Task: stale reports (older than 3 days)
-    for (const report of latestReports) {
-      if (result.length >= MAX_TASKS) break;
-      const dateStr = report.generated_at || report.created_at || '';
-      const days = daysBetween(dateStr);
-      if (days >= 3) {
-        const ticker = report.ticker || symbol;
-        result.push({
-          id: `stale-${report.report_id}`,
-          icon: 'stale',
-          text: `${ticker} 研报已 ${String(days)} 天未更新 -- 建议刷新`,
-          action: () => {
-            navigate('/chat');
-          },
-        });
-      }
+    // ── 3. 过期研报提醒（最多 1 条） ──
+    const staleReport = latestReports.find((r) => {
+      const dateStr = r.generated_at || r.created_at || '';
+      return daysBetween(dateStr) >= 3;
+    });
+    if (staleReport && result.length < MAX_TASKS) {
+      const ticker = staleReport.ticker || symbol;
+      const days = daysBetween(
+        staleReport.generated_at || staleReport.created_at || '',
+      );
+      result.push({
+        id: `stale-${staleReport.report_id}`,
+        icon: 'stale',
+        text: `${ticker} 研报已 ${String(days)} 天未更新 -- 建议刷新`,
+        action: () => {
+          navigate('/chat');
+        },
+      });
     }
 
-    // Always: generate new deep analysis
+    // ── 4. 生成新分析（常驻） ──
     if (result.length < MAX_TASKS) {
       result.push({
         id: 'generate-new',

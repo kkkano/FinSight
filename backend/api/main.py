@@ -17,19 +17,17 @@ from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.schemas import (
-    ChatRequest, SubscriptionRequest, UnsubscribeRequest, ToggleSubscriptionRequest,
-    ChatResponse, SupervisorResponse, HealthResponse, RootResponse,
-    DiagnosticsResponse, UserProfileResponse, SubscriptionResponse,
-    SubscriptionListResponse, StockDataResponse, KlineResponse,
-    ConfigResponse, ChartDetectResponse, ChartDataResponse,
+    ChatRequest,
 )
 from backend.api.chat_router import ChatRouterDeps, create_chat_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.dashboard_router import dashboard_router
+from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
+from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
@@ -38,6 +36,7 @@ from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_
 from backend.llm_config import create_llm  # Legacy test compatibility hook.
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
+from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.report_index import get_report_index_store
 
 logger = logging.getLogger(__name__)
@@ -88,7 +87,6 @@ except Exception as e:
     logger.info(f"[Init] Error initializing MemoryService: {e}")
     memory_service = None
 
-agent = None  # Deprecated: kept for backward-compat tests/monkeypatch hooks only.
 
 _schedulers = []
 _reference_contexts: Dict[str, ContextManager] = {}
@@ -274,12 +272,6 @@ def _get_session_context(session_id: str) -> ContextManager:
 
 
 def _resolve_query_reference(query: str, thread_id: str) -> str:
-    # Backward compatibility for tests still monkeypatching `main.agent.context.resolve_reference`.
-    if agent and getattr(agent, "context", None) and hasattr(agent.context, "resolve_reference"):
-        try:
-            return agent.context.resolve_reference(query)
-        except Exception:
-            pass
     try:
         return _get_session_context(thread_id).resolve_reference(query)
     except Exception:
@@ -511,6 +503,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         try:
+            flush_langfuse()
+            shutdown_langfuse()
+        except Exception:
+            logger.debug("[LangFuse] flush/shutdown error on shutdown (ignored)")
+        try:
             for sched in _schedulers:
                 sched.shutdown(wait=False)
             if _schedulers:
@@ -588,7 +585,6 @@ system_router = create_system_router(
         get_planner_ab_metrics=get_planner_ab_metrics,
         memory_service=memory_service,
         logger=logger,
-        legacy_agent=agent,
     )
 )
 
@@ -607,6 +603,7 @@ market_router = create_market_router(
         get_financial_statements=globals().get("get_financial_statements") or (lambda _ticker: {"error": "financials tool unavailable"}),
         get_financial_statements_summary=globals().get("get_financial_statements_summary") or (lambda _ticker: {"error": "financials summary tool unavailable"}),
         get_stock_historical_data=globals().get("get_stock_historical_data") or (lambda _ticker, **_kwargs: {"error": "history tool unavailable"}),
+        detect_chart_type=(ChartTypeDetector.detect_chart_type if ChartTypeDetector else None),
         logger=logger,
     )
 )
@@ -627,6 +624,26 @@ report_router = create_report_router(
     )
 )
 
+task_router = create_task_router(
+    TaskRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_report_index_store=lambda: get_report_index_store(),
+    )
+)
+
+execution_router = create_execution_router(
+    ExecutionRouterDeps(
+        get_graph_runner=lambda: aget_graph_runner(),
+        resolve_thread_id=_resolve_thread_id,
+        schedule_report_index=_schedule_report_index,
+        update_session_context=_update_session_context,
+        redact_sensitive_payload=_redact_sensitive_payload,
+        is_raw_trace_event=_is_raw_trace_event,
+        contract_info=_contract_info,
+        sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
+    )
+)
+
 app.include_router(system_router)
 app.include_router(user_router)
 app.include_router(chat_router)
@@ -634,8 +651,9 @@ app.include_router(market_router)
 app.include_router(subscription_router)
 app.include_router(config_router)
 app.include_router(report_router)
+app.include_router(task_router)
+app.include_router(execution_router)
 app.include_router(dashboard_router)
 # 鍚姩鍏ュ彛
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
-

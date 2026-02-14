@@ -12,6 +12,8 @@ from typing import Any, Optional
 
 from dotenv import load_dotenv
 
+from backend.services.langfuse_tracer import get_langfuse_callback
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,16 +38,41 @@ def _canonical_provider(provider: str | None) -> str:
     return PROVIDER_ALIASES.get(key, key)
 
 
+def _default_provider() -> str:
+    return _canonical_provider(os.getenv("LLM_PROVIDER") or "openai_compatible")
+
+
+def _looks_full_chat_completions_url(api_base: str | None) -> bool:
+    if not api_base:
+        return False
+    normalized = str(api_base).strip().rstrip("/").lower()
+    return normalized.endswith("/v1/chat/completions") or normalized.endswith("/chat/completions")
+
+
+def _to_chatopenai_base(api_base: str | None) -> str | None:
+    """Convert full chat-completions endpoint to ChatOpenAI-compatible base URL.
+
+    ChatOpenAI expects a base URL (typically ending with /v1) and appends
+    /chat/completions internally. If caller provides a full endpoint URL,
+    we normalize it here to avoid duplicated path segments.
+    """
+    if not api_base:
+        return api_base
+    normalized = str(api_base).strip().rstrip("/")
+    if normalized.endswith("/v1/chat/completions"):
+        return normalized[: -len("/chat/completions")]
+    if normalized.endswith("/chat/completions"):
+        base = normalized[: -len("/chat/completions")]
+        return base if base.endswith("/v1") else (base + "/v1")
+    return normalized
+
+
 def _normalize_api_base(api_base: str | None, *, raw: bool = False) -> str | None:
     if not api_base:
         return api_base
     normalized = str(api_base).strip().rstrip("/")
-    if raw:
+    if raw or _looks_full_chat_completions_url(normalized):
         return normalized
-    for suffix in ("/chat/completions", "/v1/chat/completions"):
-        if normalized.endswith(suffix):
-            normalized = normalized[: -len(suffix)]
-            break
     if normalized and not normalized.endswith("/v1"):
         normalized = normalized + "/v1"
     return normalized
@@ -223,8 +250,9 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
                 continue
 
             api_key = str(raw.get("api_key") or "").strip()
-            is_raw_url = bool(raw.get("raw_url", False))
-            api_base = _normalize_api_base(str(raw.get("api_base") or "").strip(), raw=is_raw_url)
+            raw_api_base = str(raw.get("api_base") or "").strip()
+            is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
+            api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
             endpoint_model = str(raw.get("model") or model or "gpt-4o-mini").strip()
             if not api_key:
                 continue
@@ -250,16 +278,19 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
     # Legacy single-endpoint compatibility (llm_api_key/base/model)
     legacy_key = str(user_config.get("llm_api_key") or "").strip()
     if legacy_key:
+        legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
+        legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
         endpoints.append(
             EndpointConfig(
                 name="legacy-single",
                 provider=_canonical_provider(user_config.get("llm_provider") or provider),
-                api_base=_normalize_api_base(user_config.get("llm_api_base") or ""),
+                api_base=_normalize_api_base(legacy_api_base, raw=legacy_raw_url),
                 api_key=legacy_key,
                 model=str(user_config.get("llm_model") or model or "gpt-4o-mini").strip(),
                 weight=1,
                 enabled=True,
                 cooldown_sec=default_cooldown,
+                raw_url=legacy_raw_url,
             )
         )
     return endpoints
@@ -273,7 +304,9 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
         api_key = str(os.getenv(key_env, "") or "").strip()
         if not api_key:
             return
-        api_base = _normalize_api_base(os.getenv(base_env, "")) if base_env else None
+        raw_api_base = str(os.getenv(base_env, "") or "").strip() if base_env else ""
+        is_raw_url = _looks_full_chat_completions_url(raw_api_base)
+        api_base = _normalize_api_base(raw_api_base, raw=is_raw_url) if base_env else None
         endpoints.append(
             EndpointConfig(
                 name=name,
@@ -284,6 +317,7 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
                 weight=1,
                 enabled=True,
                 cooldown_sec=_env_int("LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC", 90),
+                raw_url=is_raw_url,
             )
         )
 
@@ -317,8 +351,18 @@ def _resolve_endpoints(provider: str, model: str | None) -> list[EndpointConfig]
     )
 
 
-def get_llm_config(provider: str = "gemini_proxy", model: str | None = None) -> dict:
-    canonical = _canonical_provider(provider)
+def load_user_endpoints(provider: str | None = None, model: str | None = None) -> list[EndpointConfig]:
+    """Compatibility helper for diagnostics scripts.
+
+    Returns resolved endpoint list from `user_config.json` or env fallback,
+    without selecting/rotating any endpoint.
+    """
+    canonical = _canonical_provider(provider or _default_provider())
+    return _resolve_endpoints(canonical, model)
+
+
+def get_llm_config(provider: str | None = None, model: str | None = None) -> dict:
+    canonical = _canonical_provider(provider or _default_provider())
     endpoints = _resolve_endpoints(canonical, model)
     _ENDPOINT_MANAGER._sync_if_changed(endpoints)
     selected = _ENDPOINT_MANAGER.select()
@@ -361,10 +405,10 @@ def report_llm_failure(llm: Any, error: BaseException | str | None = None) -> No
 
 
 def create_llm(
-    provider: str = "gemini_proxy",
+    provider: str | None = None,
     model: str | None = None,
     temperature: float = 0.3,
-    max_tokens: int = 65536,
+    max_tokens: int | None = None,
     request_timeout: int = 600,
 ):
     from langchain_openai import ChatOpenAI
@@ -372,29 +416,43 @@ def create_llm(
     cfg = get_llm_config(provider=provider, model=model)
     api_key = cfg.get("api_key")
     api_base = cfg.get("api_base")
+    sdk_api_base = _to_chatopenai_base(api_base)
     model_name = cfg.get("model")
     endpoint_name = str(cfg.get("endpoint_name") or "unknown")
 
+    resolved_max_tokens = max_tokens
+    if resolved_max_tokens is None:
+        resolved_max_tokens = _env_int("LLM_MAX_TOKENS", 8192)
+    resolved_max_tokens = max(256, int(resolved_max_tokens))
+
     if not api_key:
-        raise ValueError(f"API key not found for provider '{provider}'")
+        resolved_provider = str(cfg.get("provider") or provider or _default_provider())
+        raise ValueError(f"API key not found for provider '{resolved_provider}'")
 
     logger.info(
-        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s timeout=%ss",
+        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s sdk_api_base=%s timeout=%ss",
         endpoint_name,
         cfg.get("provider"),
         model_name,
         api_base,
+        sdk_api_base,
         request_timeout,
     )
+
+    callbacks = []
+    langfuse_cb = get_langfuse_callback()
+    if langfuse_cb is not None:
+        callbacks.append(langfuse_cb)
 
     llm = ChatOpenAI(
         model=model_name,
         openai_api_key=api_key,
-        openai_api_base=api_base,
+        openai_api_base=sdk_api_base,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_tokens=resolved_max_tokens,
         request_timeout=request_timeout,
         max_retries=3,
+        callbacks=callbacks or None,
     )
     bind_llm_instance(llm, endpoint_name)
     return llm
@@ -411,9 +469,9 @@ LANGSMITH_CONFIG = {
 __all__ = [
     "LLM_CONFIGS",
     "LANGSMITH_CONFIG",
+    "load_user_endpoints",
     "get_llm_config",
     "create_llm",
     "report_llm_failure",
     "report_llm_success",
 ]
-

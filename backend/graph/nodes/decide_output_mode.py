@@ -34,7 +34,7 @@ def decide_output_mode(state: GraphState) -> dict:
         if any(token.lower() in lowered for token in _REPORT_TRIGGERS):
             return {"output_mode": "investment_report"}
         # Avoid mapping generic "分析" to report.
-        if re.search(r"\\b(report)\\b", lowered) and "analysis" not in lowered:
+        if re.search(r"\b(report)\b", lowered) and "analysis" not in lowered:
             return {"output_mode": "investment_report"}
 
     return {"output_mode": "brief"}

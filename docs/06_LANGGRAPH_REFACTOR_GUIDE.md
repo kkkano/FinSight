@@ -1582,3 +1582,70 @@ erDiagram
   - `npm run test:e2e --prefix frontend` -> `7 passed`
 
 | 2026-02-08 | 11.16.6 T5-3 Prompt/Plan A/B + diagnostics | Delivered deterministic planner A/B varianting, variant-aware planner prompt, trace runtime variant field, and diagnostics endpoint for A/B metrics | `backend/tests/test_planner_prompt.py` + `backend/tests/test_planner_node.py` + `backend/tests/test_system_planner_ab_diagnostics.py` + full gate command outputs | T5-3 complete and fully validated |
+
+#### 11.16.7 Config Secret Preservation (2026-02-09)
+- [x] Root-cause fixed: masked secrets from `GET /api/config` are no longer written back as real API keys.
+- [x] Backend guard added (`backend/api/config_router.py`):
+  - preserve existing `llm_api_key` when incoming value is masked (`***`) or empty.
+  - preserve `llm_endpoints[].api_key` by endpoint name (fallback by index) when incoming key is masked/empty.
+- [x] Frontend guard added (`frontend/src/components/SettingsModal.tsx`):
+  - detect masked key placeholders and avoid submitting them as real `api_key`.
+  - keep endpoint row during save while sending empty key field so backend can preserve old secret.
+- [x] Regression tests added:
+  - `backend/tests/test_config_router_secret_merge.py`
+- [x] Validation:
+  - `pytest -q backend/tests/test_config_router_secret_merge.py backend/tests/test_llm_rotation.py` -> `15 passed`
+  - `npm run lint --prefix frontend` -> pass
+  - `npm run build --prefix frontend` -> failed on pre-existing TS error in `frontend/src/components/layout/WorkspaceShell.tsx` (`apiClient['baseUrl']` not in type), unrelated to this fix.
+
+| 2026-02-09 | 11.16.7 config secret preservation | Fixed masked-key overwrite bug across backend config save merge and frontend settings submit path; added regression coverage to prevent secret corruption in endpoint rotation pool. | `backend/tests/test_config_router_secret_merge.py` + `backend/tests/test_llm_rotation.py` + `npm run lint --prefix frontend` | `npm run build --prefix frontend` still blocked by unrelated pre-existing TS7053 in `WorkspaceShell.tsx`. |
+
+#### 11.16.8 LLM Rotation Retry Hardening (2026-02-09)
+- [x] Root-cause fixed: multi-endpoint retry previously only rotated on rate-limit (`429/quota`) errors, so `401/503/timeout` could fail fast without trying the next healthy endpoint.
+- [x] Retry policy updated (`backend/services/llm_retry.py`):
+  - added endpoint-level retryability classifier for auth/provider/transient failures (`401/403/404/408/429/5xx`, timeout/connection/SSL EOF, common provider messages such as `无效的令牌` / `无可用渠道`).
+  - when `llm_factory` exists (multi-endpoint mode), retry now rotates on the broader retryable set instead of `429` only.
+  - rotation retries switch endpoint immediately (`wait=0`) to avoid per-hop backoff amplification.
+  - single-endpoint backward compatibility preserved: still only retries rate-limit class with configured sleep+jitter.
+- [x] Regression coverage extended (`backend/tests/test_llm_rotation.py`):
+  - `test_retry_rotates_endpoint_on_401_with_factory`
+  - `test_retry_rotates_non_429_until_attempts_exhausted`
+- [x] Validation:
+  - `pytest -q backend/tests/test_llm_rotation.py backend/tests/test_config_router_secret_merge.py` -> `17 passed`
+
+| 2026-02-09 | 11.16.8 LLM retry/rotation hardening | Expanded retry classification from 429-only to endpoint-level retryable failures and enforced immediate endpoint handoff in multi-endpoint mode; added regression tests for 401/503 paths. | `backend/services/llm_retry.py` + `backend/tests/test_llm_rotation.py` + `pytest -q backend/tests/test_llm_rotation.py backend/tests/test_config_router_secret_merge.py` | Same-request failover now tries next endpoint immediately; all-endpoints-failed path still respects existing cooldown policy. |
+
+#### 11.16.9 Hotfix — endpoint quarantine + report_index migration + chart detect route (2026-02-09)
+- [x] Endpoint quarantine applied (temporary): disabled blocked endpoints in `user_config.json` (`name=2`, `name=https://api.freestyle.cc.cd/v1/chat/completions`), keep `legacy-single` only to stabilize runtime.
+- [x] Report index migration fixed:
+  - `scripts/report_index_migrate.py` now also ensures `report_index.source_type / filing_type / publisher` and index `idx_report_index_source_type`.
+  - migration executed on runtime db: `python scripts/report_index_migrate.py --db backend/data/report_index.sqlite`.
+- [x] 404 noise cleanup for chart detect:
+  - added backend route `POST /api/chart/detect` in `backend/api/market_router.py`.
+  - wired detector dependency from `backend/api/main.py` into `MarketRouterDeps`.
+- [x] LLM argument compatibility hardening:
+  - `backend/llm_config.py:create_llm` no longer defaults to `max_tokens=65536`; now env-driven `LLM_MAX_TOKENS` with safe default `8192`.
+
+- [x] Validation evidence:
+  - `pytest -q backend/tests/test_report_index_migration_scripts.py backend/tests/test_report_index_api.py backend/tests/test_llm_rotation.py` -> `18 passed`.
+  - smoke: `POST /api/chart/detect` -> `200` with structured payload.
+  - smoke: `POST /chat/supervisor` -> `200`, `trace.synthesize_runtime.fallback=false` (LLM synthesis path succeeds).
+
+| 2026-02-09 | 11.16.9 runtime hotfixes | Quarantined blocked endpoints, migrated report_index schema to include `source_type` lineage fields, restored `/api/chart/detect` backend route, and hardened default `max_tokens` to avoid INVALID_ARGUMENT 400 on proxy providers. | `user_config.json` + `scripts/report_index_migrate.py` + `backend/api/market_router.py` + `backend/api/main.py` + `backend/llm_config.py` + validation commands | Runtime now avoids 403-only endpoint churn, removes chart detect 404 noise, and clears report_index async upsert schema error. |
+
+#### 11.16.10 Deep report smoke A/B (before/after) (2026-02-09)
+- [x] Executed one real deep-report query (`AAPL`) in two runtime modes:
+  - before simulation: `LLM_MAX_TOKENS=65536` + blocked endpoints re-enabled.
+  - after current fix: `LLM_MAX_TOKENS=8192` + blocked endpoints quarantined.
+- [x] KPI snapshot (same query / same route `/chat/supervisor`):
+  - response latency: `32.71s -> 318.51s`
+  - synthesize fallback rate: `1 -> 0`
+  - `400/403/401` counts (this run): `0/0/0 -> 0/0/0`
+  - started agents: both runs `4` (`fundamental_agent`, `price_agent`, `news_agent`, `technical_agent`) and all success.
+- [x] Output quality check:
+  - after-fix run produced non-fallback synthesis (`trace.synthesize_runtime.fallback=false`) with richer investment summary and evidence-backed sections.
+- [x] Evidence files:
+  - `docs/feature_logs/2026-02-09_runtime_before_after_report_smoke_summary.json`
+  - `docs/feature_logs/2026-02-09_runtime_before_after_report_smoke_raw.json`
+
+| 2026-02-09 | 11.16.10 deep report smoke A/B | Ran one real investment-report query under before/after runtime modes, captured latency/fallback/http-code deltas, and archived raw+summary payloads for replay/inspection. | `docs/feature_logs/2026-02-09_runtime_before_after_report_smoke_summary.json` + `docs/feature_logs/2026-02-09_runtime_before_after_report_smoke_raw.json` | After-fix run no longer falls back in synthesize path; quality improves while latency now mainly depends on upstream capacity/tool-chain duration. |

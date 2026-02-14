@@ -1131,17 +1131,28 @@ class ChatHandler:
             
             # 使用 LLM 整理搜索结果
             if self.llm and LANGCHAIN_AVAILABLE:
-                prompt = f"""You are a professional financial analyst with expertise in stock market indices and their compositions. The user is asking about the composition/holdings of {ticker}.
+                prompt = f"""<role>专业金融分析师 — 指数/基金成分股专家</role>
 
-User Question: {query}
-Search Results: {search_result[:3000]}
+<task>基于搜索结果，整理 {ticker} 的完整成分股/持仓列表。</task>
 
-**CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY**:
-1. Extract EVERY constituent/holding mentioned in the search results.
-2. For each constituent, include: Full company name (e.g., "苹果公司"), Stock ticker symbol (e.g., AAPL), and Weight percentage if mentioned (e.g., "约12.5%").
-3. Organize: List top holdings first (by weight if available). Use clear numbering or bullet points.
-4. DO NOT provide a summary - provide a COMPREHENSIVE LIST.
-5. Response must be in Chinese.
+<input>
+用户问题: {query}
+搜索结果: {search_result[:3000]}
+</input>
+
+<requirements>
+1. 提取搜索结果中提到的每一个成分股/持仓
+2. 每个成分列出：公司全称（如"苹果公司"）、股票代码（如 AAPL）、权重占比（如有）
+3. 按权重从高到低排列，使用清晰的编号或要点格式
+4. 提供完整列表，不要只给摘要
+5. 搜索结果中未提及的信息不要编造
+</requirements>
+
+<constraints>
+- 使用简体中文输出
+- 禁止开场白，直接输出列表
+- 权重数据缺失时标注"权重未披露"
+</constraints>
 """
                 response = self.llm.invoke([HumanMessage(content=prompt)])
                 
@@ -1200,13 +1211,27 @@ Search Results: {search_result[:3000]}
                 context_info += f"\n{ticker2} Current Price: {price_info2}"
                 
                 # 使用 LLM 生成对比分析
-                prompt = f"""You are a professional financial analyst. The user wants to understand the differences between {ticker1} and {ticker2}.
+                prompt = f"""<role>专业金融分析师 — 对比分析专家</role>
 
-User Question: {query}
+<task>对比分析 {ticker1} 和 {ticker2}，为用户提供有决策价值的差异解读。</task>
+
+<input>
+用户问题: {query}
 {context_info}
+</input>
 
-Please provide a detailed comparison analysis, including: Key Differences (composition, sector distribution, risk) and Investment Characteristics.
-Requirements: Respond in Chinese, professional but easy to understand.
+<analysis_framework>
+1. **核心差异**: 投资标的类型、行业分布、风险特征
+2. **投资特性**: 适合的投资者类型、持有策略、预期收益/风险比
+3. **关键数据对比**: 近期表现、估值水平、波动率（基于已有数据）
+4. **适用场景**: 什么情况下选 A，什么情况下选 B
+</analysis_framework>
+
+<constraints>
+- 使用简体中文，专业但易懂
+- 基于已有数据分析，数据不足时坦诚说明
+- 禁止开场白，直接输出对比分析
+</constraints>
 """
                 response = self.llm.invoke([HumanMessage(content=prompt)])
                 
@@ -1263,18 +1288,30 @@ Requirements: Respond in Chinese, professional but easy to understand.
                 context_info += f"\nCurrently Focused Asset: {context.current_focus}"
             
             # 使用 LLM 生成建议
-            prompt = f"""You are a professional financial investment advisor. The user is asking for investment advice regarding {ticker}.
+            prompt = f"""<role>专业金融投资顾问</role>
 
-User Question: {query}
+<task>基于用户问题和已有数据，为 {ticker} 提供具体、可操作的投资建议。</task>
+
+<input>
+用户问题: {query}
 {context_info}
+</input>
 
-**CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY**:
-1. Understand User AgentIntent (already invested vs preparing to invest).
-2. Provide specific, actionable investment advice (e.g., continue holding, add positions, invest in 3-5 batches). 
-3. Include a brief Market Analysis (2-3 sentences).
-4. Include a clear Risk Warning at the end.
-5. **Response MUST be in Chinese**, friendly and helpful tone.
-6. Add the following required text at the end exactly: \n\n⚠️ **AI生成建议提示**：以上建议由AI生成，仅供参考，不构成投资建议。投资有风险，请根据自身情况谨慎决策。
+<requirements>
+1. 判断用户意图（已持仓 vs 准备入场），针对性建议
+2. 提供具体可执行的操作建议（如"建议分 3-5 批建仓"、"持有观望"）
+3. 附 2-3 句简明市场分析，引用具体数据点
+4. 末尾包含风险提示
+</requirements>
+
+<constraints>
+- 使用简体中文，友好专业的语气
+- 禁止开场白，直接输出建议
+- 建议必须具体，避免"建议关注"等模糊表述
+- 末尾必须附加以下文字:
+
+⚠️ **AI生成建议提示**：以上建议由AI生成，仅供参考，不构成投资建议。投资有风险，请根据自身情况谨慎决策。
+</constraints>
 """
             response = self.llm.invoke([HumanMessage(content=prompt)])
             
@@ -1338,16 +1375,27 @@ User Question: {query}
             search_result = self.tools_module.search(query)
 
             if self.llm and LANGCHAIN_AVAILABLE:
-                prompt = f"""You are a helpful financial assistant. Please answer the user's question based on the provided search results.
+                prompt = f"""<role>金融信息助手</role>
 
-User Question: {query}
-Search Results: {search_result[:3000]}
+<task>基于搜索结果，准确回答用户的金融相关问题。</task>
 
-**CRITICAL REQUIREMENTS**:
-1. Provide a concise and accurate answer based ONLY on the information in the search results.
-2. If the search results do not contain an answer, state that you couldn't find the information.
-3. Organize the information clearly.
-4. Respond in Chinese.
+<input>
+用户问题: {query}
+搜索结果: {search_result[:3000]}
+</input>
+
+<requirements>
+1. 仅基于搜索结果中的信息作答，不编造
+2. 搜索结果无法回答时，坦诚说明"未找到相关信息"
+3. 信息组织清晰，按逻辑分点
+4. 优先提取关键数据点和结论
+</requirements>
+
+<constraints>
+- 使用简体中文
+- 禁止开场白，直接输出答案
+- 简洁有力，避免冗余
+</constraints>
 """
                 response = self.llm.invoke([HumanMessage(content=prompt)])
                 
@@ -1422,17 +1470,23 @@ Search Results: {search_result[:3000]}
     # --- LLM 增强方法（保留，但通常 handle 方法已覆盖） ---
     def _build_llm_enhance_prompt(self, query: str, raw_response: str) -> str:
         """Build the prompt used for LLM-enhanced chat responses."""
-        return f"""你是专业金融助手。基于以下数据，用中文简洁回答用户问题。
+        return f"""<role>专业金融助手</role>
 
+<task>基于以下数据，用简体中文简洁回答用户问题。</task>
+
+<input>
 用户问题: {query}
 数据:
 {raw_response}
+</input>
 
-要求:
-1) 直接回答，2-4句话，包含关键数字和日期
-2) 不要说"根据数据"、"检索结果"等
-3) 如果数据中有URL链接，在末尾用markdown格式列出；没有链接就不要提链接
-4) 语气专业友好
+<requirements>
+1) 直接回答，2-4 句话，突出关键数字和时间节点
+2) 禁止使用"根据数据"、"根据检索结果"等元表述
+3) 数据中含 URL 链接时，在末尾用 markdown 格式列出参考链接；无链接则不提
+4) 语气专业友好，如同资深分析师面对面解答
+5) 禁止开场白
+</requirements>
 """
 
     def handle_with_llm(

@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
-_DASHBOARD_FETCH_TIMEOUT_SECONDS = 4.5
+_DASHBOARD_FETCH_TIMEOUT_SECONDS = 15.0
 
 
 async def _run_blocking(name: str, fn, *args, timeout: float = _DASHBOARD_FETCH_TIMEOUT_SECONDS, **kwargs):

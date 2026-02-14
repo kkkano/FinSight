@@ -1,0 +1,2022 @@
+{
+  "report_id": "lg_ceb16f26ec",
+  "ticker": "AAPL",
+  "company_name": "AAPL",
+  "title": "AAPL 分析报告",
+  "summary": "- 中性偏多。基本面强劲（净利润同比+19.5%）与技术面多头排列（价格 > MA20/50）提供支撑。然而，当前估值处于历史高位（PE ~35x），且 RSI 指标显示严重超买（>82），短期回调风险显著，建议等待回撤后再行布局。",
+  "sentiment": "neutral",
+  "confidence_score": 0.775,
+  "sections": [
+    {
+      "title": "基本面分析",
+      "order": 1,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Apple Inc. | Technology | Consumer Electronics | $4,049,278,599,168 最新报告期: 2025-09-30（annual）。 营收 $220.96B (同比 5.0%). 净利润 $112.01B (同比 19.5%). 营业利润 $144.75B (同比 7.5%). 经营现金流 $111.48B (同比 -5.7%). 负债/资产 79.5%。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.92,
+      "agent_name": "fundamental_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "价格分析",
+      "order": 2,
+      "contents": [
+        {
+          "type": "text",
+          "content": "AAPL Current Price: $275.50 | Change: $1.82 (+0.67%)。日内变动 +0.67%（上涨）。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 1.0,
+      "agent_name": "price_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "新闻分析",
+      "order": 3,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 LIVE: Stocks higher as GDP figures paint mixed picture of growth; The Allure of Chinese Tech Stocks. A Pro Picks 7 Names.",
+          "citation_refs": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+          ],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.8,
+      "agent_name": "news_agent",
+      "data_sources": [
+        "Yahoo"
+      ]
+    },
+    {
+      "title": "技术分析",
+      "order": 4,
+      "contents": [
+        {
+          "type": "text",
+          "content": "AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.85,
+      "agent_name": "technical_agent",
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    {
+      "title": "宏观分析",
+      "order": 5,
+      "contents": [
+        {
+          "type": "text",
+          "content": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.88,
+      "agent_name": "macro_agent",
+      "data_sources": [
+        "CNN Fear & Greed",
+        "Economic Calendar",
+        "FRED",
+        "Web Search"
+      ]
+    },
+    {
+      "title": "深度搜索",
+      "order": 6,
+      "contents": [
+        {
+          "type": "text",
+          "content": "## 核心发现\n- 当前深度研究摘要触发质量保护（原文噪声较高）：deep_search_agent 已降级：AAPL 的分析暂不可用，系统已返回最小可用结果（query=AAPL valuation PE EPS revenue）。\n\n## 风险提示\n- 建议结合财报、公告或权威媒体原文复核关键结论。\n\n## 信息缺口\n- 需要补充高质量可解析来源后再生成正式深度研究结论。",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.2,
+      "agent_name": "deep_search_agent",
+      "data_sources": [
+        "agent_fallback"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "source_id": "1",
+      "title": "news_agent evidence 1",
+      "url": "https://finnhub.io/api/news?id=f46298a231a5bf72fa26f4065f47ccb9902fb005e8d918d5faf706c7a1520278",
+      "snippet": "They lost thousands after fake love connection with these stars",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.58956379333333
+    },
+    {
+      "source_id": "2",
+      "title": "news_agent evidence 2",
+      "url": "https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7",
+      "snippet": "3 Key Updates Apple Just Gave Investors",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.58956379611111
+    },
+    {
+      "source_id": "3",
+      "title": "news_agent evidence 3",
+      "url": "https://finnhub.io/api/news?id=24679916fab8ff32f69ef03e8e0726849f08564355de3f9a6b421e5346a7dc91",
+      "snippet": "Bitcoin price steadies but fresh fears suggest slide to $52k",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.589563797222223
+    },
+    {
+      "source_id": "4",
+      "title": "news_agent evidence 4",
+      "url": "https://finnhub.io/api/news?id=2098830223df8d9813a4a5d15a18a0466dcd775e9c9cd3434ce80ab3ee1d7c74",
+      "snippet": "FTSE 100 LIVE: Stocks higher as GDP figures paint mixed picture of growth",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.589563798333334
+    },
+    {
+      "source_id": "5",
+      "title": "news_agent evidence 5",
+      "url": "https://finnhub.io/api/news?id=eea01cd8d636e193fda1313b0e5b3e575a0e97f391e43eee63b1e2c5ef0fb095",
+      "snippet": "The Allure of Chinese Tech Stocks. A Pro Picks 7 Names.",
+      "published_date": "2026-02-12",
+      "confidence": 0.8,
+      "freshness_hours": 20.58956379972222
+    }
+  ],
+  "risks": [
+    "技术面回调：RSI 高达 82.42，处于极度超买区间，短期均值回归压力大。",
+    "估值溢价：高市盈率意味着对业绩容错率低，任何不及预期的增长都可能引发杀估值。",
+    "财务杠杆：负债/资产比率约为 79.5%，杠杆率相对较高。",
+    "宏观不确定性：通胀数据存在冲突且 10 年期美债收益率维持在 4.16%，可能压制科技股估值。",
+    "杠杆率偏高（负债/资产 = 79% > 60%），偿债压力较大。",
+    "RSI 进入超买区间，短期存在回调风险。",
+    "多源宏观数据存在冲突，建议以权威源为准。",
+    "证据覆盖率或引用数量不足，结论可信度下降，请谨慎参考。"
+  ],
+  "recommendation": "HOLD",
+  "generated_at": "2026-02-12T12:35:22.429752+00:00",
+  "meta": {
+    "source": "langgraph",
+    "thread_id": "query-matrix-fundamental-1",
+    "subject_type": "company",
+    "agent_summaries": [
+      {
+        "title": "基本面分析",
+        "order": 1,
+        "agent_name": "fundamental_agent",
+        "status": "success",
+        "summary": "Apple Inc. | Technology | Consumer Electronics | $4,049,278,599,168 最新报告期: 2025-09-30（annual）。 营收 $220.96B (同比 5.0%). 净利润 $112.01B (同比 19.5%). 营业利润 $144.75B (同比 7.5%). 经营现金流 $111.48B (同比 -5.7%). 负债/资产 79.5%。",
+        "confidence": 0.92,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {
+          "overall_score": 1.0,
+          "metric_coverage": 1.0,
+          "growth_coverage": 1.0,
+          "source_diversity": 1,
+          "has_conflicts": false
+        }
+      },
+      {
+        "title": "价格分析",
+        "order": 2,
+        "agent_name": "price_agent",
+        "status": "success",
+        "summary": "AAPL Current Price: $275.50 | Change: $1.82 (+0.67%)。日内变动 +0.67%（上涨）。",
+        "confidence": 1.0,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "新闻分析",
+        "order": 3,
+        "agent_name": "news_agent",
+        "status": "success",
+        "summary": "Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 LIVE: Stocks higher as GDP figures paint mixed picture of growth; The Allure of Chinese Tech Stocks. A Pro Picks 7 Names.",
+        "confidence": 0.8,
+        "data_sources": [
+          "Yahoo"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "技术分析",
+        "order": 4,
+        "agent_name": "technical_agent",
+        "status": "success",
+        "summary": "AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。",
+        "confidence": 0.85,
+        "data_sources": [
+          "yfinance"
+        ],
+        "evidence_quality": {}
+      },
+      {
+        "title": "宏观分析",
+        "order": 5,
+        "agent_name": "macro_agent",
+        "status": "success",
+        "summary": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+        "confidence": 0.88,
+        "data_sources": [
+          "CNN Fear & Greed",
+          "Economic Calendar",
+          "FRED",
+          "Web Search"
+        ],
+        "evidence_quality": {
+          "overall_score": 0.88,
+          "coverage_score": 1.0,
+          "source_diversity": 4,
+          "source_health_score": 1.0,
+          "has_conflicts": true,
+          "conflict_count": 1
+        }
+      },
+      {
+        "title": "深度搜索",
+        "order": 6,
+        "agent_name": "deep_search_agent",
+        "status": "success",
+        "summary": "## 核心发现\n- 当前深度研究摘要触发质量保护（原文噪声较高）：deep_search_agent 已降级：AAPL 的分析暂不可用，系统已返回最小可用结果（query=AAPL valuation PE EPS revenue）。\n\n## 风险提示\n- 建议结合财报、公告或权威媒体原文复核关键结论。\n\n## 信息缺口\n- 需要补充高质量可解析来源后再生成正式深度研究结论。",
+        "confidence": 0.2,
+        "data_sources": [
+          "agent_fallback"
+        ],
+        "evidence_quality": {
+          "overall_score": 0.0,
+          "fallback": true
+        }
+      }
+    ],
+    "filing_section_citations": [],
+    "report_hints": {
+      "is_compare": false,
+      "has_conflict": true,
+      "compare_basis": [],
+      "conflict_agents": [
+        "macro_agent"
+      ]
+    },
+    "graph_trace": {
+      "schema_version": "trace.v1",
+      "routing_chain": [
+        "langgraph"
+      ],
+      "spans": [
+        {
+          "schema_version": "trace.v1",
+          "node": "build_initial_state",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.081605+00:00"
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "normalize_ui_context",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.082089+00:00",
+          "data": {
+            "selections": {
+              "count": 0,
+              "types": []
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "decide_output_mode",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.082407+00:00",
+          "data": {
+            "output_mode": "investment_report"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "resolve_subject",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.082799+00:00",
+          "data": {
+            "subject_type": "company",
+            "tickers": [
+              "AAPL"
+            ],
+            "selection_types": []
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "clarify",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.083124+00:00",
+          "data": {
+            "needed": false,
+            "reason": "",
+            "question": ""
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "parse_operation",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:28:18.084006+00:00",
+          "data": {
+            "operation": "qa",
+            "confidence": 0.4,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "policy_gate",
+          "duration_ms": 1,
+          "ts": "2026-02-12T12:28:18.085469+00:00",
+          "data": {
+            "decision_type": "policy_gate",
+            "summary": "selected=6 required=5 tools=7",
+            "fallback_reason": "none",
+            "budget": {
+              "max_rounds": 6,
+              "max_tools": 8
+            },
+            "allowed_tools": [
+              "get_stock_price",
+              "get_technical_snapshot",
+              "get_company_info",
+              "get_company_news",
+              "analyze_historical_drawdowns",
+              "get_current_datetime",
+              "search"
+            ],
+            "allowed_tools_count": 7,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers"
+            ],
+            "selection_summary": "selected=6 required=5 tools=7",
+            "agent_selection": {
+              "selected": [
+                "fundamental_agent",
+                "price_agent",
+                "news_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent"
+              ],
+              "required": [
+                "fundamental_agent",
+                "price_agent",
+                "news_agent",
+                "technical_agent",
+                "macro_agent"
+              ],
+              "scored": [
+                {
+                  "agent": "fundamental_agent",
+                  "score": 1.25,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.60",
+                    "output:investment_report=+0.35",
+                    "keyword:+0.25"
+                  ]
+                },
+                {
+                  "agent": "price_agent",
+                  "score": 0.9,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.55",
+                    "output:investment_report=+0.30"
+                  ]
+                },
+                {
+                  "agent": "news_agent",
+                  "score": 0.75,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.45",
+                    "output:investment_report=+0.25"
+                  ]
+                },
+                {
+                  "agent": "technical_agent",
+                  "score": 0.75,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.50",
+                    "output:investment_report=+0.20"
+                  ]
+                },
+                {
+                  "agent": "macro_agent",
+                  "score": 0.65,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.35",
+                    "output:investment_report=+0.25"
+                  ]
+                },
+                {
+                  "agent": "deep_search_agent",
+                  "score": 0.45,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.10",
+                    "operation:qa=+0.20",
+                    "output:investment_report=+0.10"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "planner",
+          "duration_ms": 8700,
+          "ts": "2026-02-12T12:28:26.786756+00:00",
+          "data": {
+            "decision_type": "planner",
+            "summary": "plan=9 steps, first=get_company_info",
+            "fallback_reason": "Your request was blocked.",
+            "planner_runtime": {
+              "mode": "llm",
+              "fallback": true,
+              "retry_attempts": 3,
+              "failure_strategy_version": "failure.v1",
+              "reason": "Your request was blocked.",
+              "variant": "A"
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "kind": "tool",
+                "name": "get_company_info",
+                "why": "补齐公司基础信息，便于解释新闻/财务信息的语境",
+                "parallel_group": null
+              },
+              {
+                "id": "s2",
+                "kind": "tool",
+                "name": "get_stock_price",
+                "why": "研报模式补充当前价格与估值/风险叙述的锚点",
+                "parallel_group": null
+              },
+              {
+                "id": "s3",
+                "kind": "tool",
+                "name": "analyze_historical_drawdowns",
+                "why": "研报模式补充历史回撤信息用于风险章节",
+                "parallel_group": null
+              },
+              {
+                "id": "s4",
+                "kind": "agent",
+                "name": "fundamental_agent",
+                "why": "研报模式：运行 fundamental_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s5",
+                "kind": "agent",
+                "name": "price_agent",
+                "why": "研报模式：运行 price_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s6",
+                "kind": "agent",
+                "name": "news_agent",
+                "why": "研报模式：运行 news_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s7",
+                "kind": "agent",
+                "name": "technical_agent",
+                "why": "研报模式：运行 technical_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s8",
+                "kind": "agent",
+                "name": "macro_agent",
+                "why": "研报模式：运行 macro_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s9",
+                "kind": "agent",
+                "name": "deep_search_agent",
+                "why": "研报模式：运行 deep_search_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              }
+            ],
+            "step_count": 9,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ],
+            "decision_summary": "plan=9 steps, first=get_company_info"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "execute_plan",
+          "duration_ms": 391366,
+          "ts": "2026-02-12T12:34:58.154237+00:00",
+          "data": {
+            "decision_type": "execute_plan",
+            "summary": "steps=9 done=9 skipped=0",
+            "fallback_reason": "none",
+            "executor": {
+              "type": "live_tools",
+              "ran_steps": 9,
+              "error_count": 0,
+              "failure_strategy_version": "failure.v1",
+              "events": [
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s1",
+                  "kind": "tool",
+                  "name": "get_company_info"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s1",
+                  "cached": false,
+                  "duration_ms": 1164
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s2",
+                  "kind": "tool",
+                  "name": "get_stock_price"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s2",
+                  "cached": false,
+                  "duration_ms": 1342
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s3",
+                  "kind": "tool",
+                  "name": "analyze_historical_drawdowns"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s3",
+                  "cached": false,
+                  "duration_ms": 2470
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s4",
+                  "kind": "agent",
+                  "name": "fundamental_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s5",
+                  "kind": "agent",
+                  "name": "price_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s5",
+                  "cached": false,
+                  "duration_ms": 324
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s6",
+                  "kind": "agent",
+                  "name": "news_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s7",
+                  "kind": "agent",
+                  "name": "technical_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s8",
+                  "kind": "agent",
+                  "name": "macro_agent"
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s9",
+                  "kind": "agent",
+                  "name": "deep_search_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s6",
+                  "cached": false,
+                  "duration_ms": 160989
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s4",
+                  "cached": false,
+                  "duration_ms": 163336
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s8",
+                  "cached": false,
+                  "duration_ms": 157784
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s7",
+                  "cached": false,
+                  "duration_ms": 158367
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s9",
+                  "cached": false,
+                  "duration_ms": 360017
+                }
+              ]
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "name": "get_company_info",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 1164,
+                "output_preview": "Company Profile (AAPL):\n- Name: Apple Inc.\n- Sector: Technology\n- Industry: Consumer Electronics\n- Market Cap: $4,049,278,599,168\n- Website: https://www.apple.com\n- Description: Apple Inc. designs, manufactures, and markets smartphones, per…"
+              },
+              {
+                "id": "s2",
+                "name": "get_stock_price",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 1342,
+                "output_preview": "AAPL Current Price: $275.50 | Change: +1.82 (+0.67%) | Suggested ladder: $272.75 / $269.99 (+/-1% / +/-2% from current)"
+              },
+              {
+                "id": "s3",
+                "name": "analyze_historical_drawdowns",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 2470,
+                "output_preview": "Top 3 Historical Drawdowns for AAPL (coverage 1980-12-12 to 2026-02-11 (~45.2y)):\n\n- Drawdown: -81.80% (from 2000-03-22 to 2003-04-17)\n  Duration to trough: 1121 days. Recovery time: 650 days."
+              },
+              {
+                "id": "s5",
+                "name": "price_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 324,
+                "output_preview": {
+                  "agent_name": "price_agent",
+                  "summary": "AAPL Current Price: $275.50 | Change: $1.82 (+0.67%)。日内变动 +0.67%（上涨）。",
+                  "evidence": [
+                    {
+                      "text": "AAPL Current Price: $275.50 | Change: $1.82 (+0.67%)",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-12T20:28:34.007939",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 1.0,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T20:28:34.007939",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:28:33.683643",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "query": "AAPL valuation PE EPS revenue",
+                        "ticker": "AAPL"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:28:34.007903",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "result_count": 52,
+                        "result_type": "str"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:28:34.007928",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "summary_preview": "AAPL Current Price: $275.50 | Change: $1.82 (+0.67%)",
+                        "summary_length": 52
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:28:34.007958",
+                      "duration_ms": null,
+                      "agent": "PriceAgent",
+                      "metadata": {
+                        "confidence": 1.0,
+                        "evidence_count": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s6",
+                "name": "news_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 160989,
+                "output_preview": {
+                  "agent_name": "news_agent",
+                  "summary": "Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 LIVE: Stocks higher as GDP figures paint …",
+                  "evidence": [
+                    {
+                      "text": "They lost thousands after fake love connection with these stars",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=f46298a231a5bf72fa26f4065f47ccb9902fb005e8d918d5faf706c7a1520278",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "3 Key Updates Apple Just Gave Investors",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "Bitcoin price steadies but fresh fears suggest slide to $52k",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=24679916fab8ff32f69ef03e8e0726849f08564355de3f9a6b421e5346a7dc91",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "FTSE 100 LIVE: Stocks higher as GDP figures paint mixed picture of growth",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=2098830223df8d9813a4a5d15a18a0466dcd775e9c9cd3434ce80ab3ee1d7c74",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "The Allure of Chinese Tech Stocks. A Pro Picks 7 Names.",
+                      "source": "Yahoo",
+                      "url": "https://finnhub.io/api/news?id=eea01cd8d636e193fda1313b0e5b3e575a0e97f391e43eee63b1e2c5ef0fb095",
+                      "timestamp": "2026-02-12",
+                      "confidence": 0.8,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.8,
+                  "data_sources": [
+                    "Yahoo"
+                  ],
+                  "as_of": "2026-02-12T20:31:14.996983",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:28:34.008105",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "query": "AAPL valuation PE EPS revenue",
+                        "ticker": "AAPL"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:28:37.477512",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "result_count": 5,
+                        "result_type": "list"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:28:37.477538",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "summary_preview": "Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 L",
+                        "summary_length": 320
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:29:21.619975",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "AAPL PE ratio valuation",
+                          "AAPL revenue EPS latest earnings",
+                          "Apple stock financial analysis"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:29:43.632447",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nApple's (AAPL) current P/E ratio is 35.12 as of February 6, 2026. This is higher than its 3-year average of 32.25. The highest P/E ratio in the last ten years was 40.44 in December 2024.\n\n\n搜索结果:\n\n1. Apple (AAPL) P/E Ratio: Current & Historical Analysis (相关性: 1.00)\n   Maximum35.19\n\n35.19\n\n0.2"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:30:54.736574",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 L",
+                        "summary_length": 320
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:31:14.996992",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "confidence": 0.8,
+                        "evidence_count": 5
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "convergence_check",
+                      "timestamp": "2026-02-12T20:31:14.996966",
+                      "duration_ms": null,
+                      "agent": "NewsAgent",
+                      "metadata": {
+                        "round_num": 1,
+                        "new_docs_count": 5,
+                        "unique_docs_count": 5,
+                        "info_gain": 0.9,
+                        "cumulative_gain": 0.9,
+                        "should_stop": false,
+                        "reason": "continue"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s4",
+                "name": "fundamental_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 163336,
+                "output_preview": {
+                  "agent_name": "fundamental_agent",
+                  "summary": "Apple Inc. | Technology | Consumer Electronics | $4,049,278,599,168 最新报告期: 2025-09-30（annual）。 营收 $220.96B (同比 5.0%). 净利润 $112.01B (同比 19.5%). 营业利润 $144.75B (同比 7.5%). 经营现金流 $111.48B (同比 -5.7%). 负债/资产 79.5%。",
+                  "evidence": [
+                    {
+                      "text": "营收: $220.96B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "revenue",
+                        "period_type": "annual",
+                        "yoy": 0.050429755837833726,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    },
+                    {
+                      "text": "净利润: $112.01B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "net_income",
+                        "period_type": "annual",
+                        "yoy": 0.19495177946573355,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    },
+                    {
+                      "text": "营业利润: $144.75B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "operating_income",
+                        "period_type": "annual",
+                        "yoy": 0.07490661735766109,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    },
+                    {
+                      "text": "经营现金流: $111.48B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "operating_cash_flow",
+                        "period_type": "annual",
+                        "yoy": -0.05726656180763441,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    },
+                    {
+                      "text": "总资产: $359.24B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "total_assets",
+                        "period_type": "annual",
+                        "yoy": -0.015724149268453065,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    },
+                    {
+                      "text": "总负债: $285.51B",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2025-09-30",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {
+                        "metric_key": "total_liabilities",
+                        "period_type": "annual",
+                        "yoy": -0.07311625491023602,
+                        "qoq": null,
+                        "latest_period": "2025-09-30",
+                        "comparison_period": "2024-09-30"
+                      }
+                    }
+                  ],
+                  "confidence": 0.92,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T12:31:15.102936+00:00",
+                  "evidence_quality": {
+                    "overall_score": 1.0,
+                    "metric_coverage": 1.0,
+                    "growth_coverage": 1.0,
+                    "source_diversity": 1,
+                    "has_conflicts": false
+                  },
+                  "fallback_used": false,
+                  "risks": [
+                    "杠杆率偏高（负债/资产 = 79% > 60%），偿债压力较大。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:28:31.766900",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "query": "AAPL valuation PE EPS revenue",
+                        "ticker": "AAPL"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:28:33.683230",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "result_count": 4,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:28:33.683270",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "summary_preview": "Apple Inc. | Technology | Consumer Electronics | $4,049,278,599,168 最新报告期: 2025-09-30（annual）。 营收 $220.96B (同比 5.0%). 净利润 $112.01B (同比 19.5%). 营业利润 $144.75B (同比 7.5%). 经营现金流 $111.48B (同比 -5.7%). 负债/资产",
+                        "summary_length": 207
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:30:00.933533",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "AAPL PE ratio TTM forward",
+                          "AAPL EPS earnings per share",
+                          "AAPL valuation metrics analysis"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:30:18.408153",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nApple's forward PE ratio is 32.42 as of February 2026. The trailing PE ratio is 34.60. The PE ratio reflects market price relative to earnings.\n\n\n搜索结果:\n\n1. Apple (AAPL) Forward PE Ratio - GuruFocus (相关性: 0.92)\n   # Apple (AAPL) Forward PE Ratio : 32.42 (As of Feb. 05, 2026)\n\n  \n\nView and exp"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:30:54.944131",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "Apple Inc. | Technology | Consumer Electronics | $4,049,278,599,168 最新报告期: 2025-09-30（annual）。 营收 $220.96B (同比 5.0%). 净利润 $112.01B (同比 19.5%). 营业利润 $144.75B (同比 7.5%). 经营现金流 $111.48B (同比 -5.7%). 负债/资产",
+                        "summary_length": 207
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:31:15.102947",
+                      "duration_ms": null,
+                      "agent": "fundamental",
+                      "metadata": {
+                        "confidence": 0.92,
+                        "evidence_count": 6
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s8",
+                "name": "macro_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 157784,
+                "output_preview": {
+                  "agent_name": "macro_agent",
+                  "summary": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+                  "evidence": [
+                    {
+                      "text": "联邦基金利率: 3.64%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "fed_rate",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 3.64,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 3.75,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "CPI 通胀率: 326.03%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "cpi",
+                        "conflict_flag": true,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 326.03,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 2.7,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "失业率: 4.30%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "unemployment",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.3,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 4.3,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "GDP 增长率: 4.40%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "gdp_growth",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.4,
+                            "priority": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "10年期国债收益率: 4.16%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "treasury_10y",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 4.16,
+                            "priority": 1
+                          },
+                          {
+                            "source": "search_cross_check",
+                            "value": 4.17,
+                            "priority": 4
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "10Y-2Y 利差: 0.66%",
+                      "source": "FRED",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.9,
+                      "title": null,
+                      "meta": {
+                        "indicator_key": "yield_spread",
+                        "conflict_flag": false,
+                        "candidates": [
+                          {
+                            "source": "fred",
+                            "value": 0.66,
+                            "priority": 1
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "text": "市场情绪监测: CNN Fear & Greed Index: 49.2 (neutral)",
+                      "source": "CNN Fear & Greed",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.65,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "经济日历: 📊 AI摘要:\nThe key upcoming US economic events in February 2026 are the FOMC meeting on February 18, CPI on February 11, and the jobs report on February 6. These events will influence Federal Reserve policy and market expectations.\n\n\n搜索结果:\n\n1.",
+                      "source": "Economic Calendar",
+                      "url": null,
+                      "timestamp": null,
+                      "confidence": 0.6,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.88,
+                  "data_sources": [
+                    "CNN Fear & Greed",
+                    "Economic Calendar",
+                    "FRED",
+                    "Web Search"
+                  ],
+                  "as_of": "2026-02-12T12:31:15.722810+00:00",
+                  "evidence_quality": {
+                    "overall_score": 0.88,
+                    "coverage_score": 1.0,
+                    "source_diversity": 4,
+                    "source_health_score": 1.0,
+                    "has_conflicts": true,
+                    "conflict_count": 1
+                  },
+                  "fallback_used": false,
+                  "risks": [
+                    "多源宏观数据存在冲突，建议以权威源为准。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:28:37.938886",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "query": "AAPL valuation PE EPS revenue",
+                        "ticker": "AAPL"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:28:58.132454",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "result_count": 25,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:28:58.132482",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "summary_preview": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+                        "summary_length": 147
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:30:18.408799",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "AAPL PE ratio valuation",
+                          "AAPL revenue EPS latest earnings",
+                          "AAPL valuation analysis"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:30:34.323025",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nApple's (AAPL) current P/E ratio is 35.12 as of February 6, 2026. This is higher than its 3-year average of 32.25. The highest P/E ratio in the last ten years was 40.44 in December 2024.\n\n\n搜索结果:\n\n1. Apple (AAPL) P/E Ratio: Current & Historical Analysis (相关性: 1.00)\n   Maximum35.19\n\n35.19\n\n0.2"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:30:55.458017",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.",
+                        "summary_length": 147
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:31:15.722824",
+                      "duration_ms": null,
+                      "agent": "macro",
+                      "metadata": {
+                        "confidence": 0.88,
+                        "evidence_count": 8
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s7",
+                "name": "technical_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 158367,
+                "output_preview": {
+                  "agent_name": "technical_agent",
+                  "summary": "AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。",
+                  "evidence": [
+                    {
+                      "text": "MA20 262.10 | MA50 268.28",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-11 00:00",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    },
+                    {
+                      "text": "RSI(14) 82.42 | MACD 3.2643 | 信号线 0.9031",
+                      "source": "yfinance",
+                      "url": null,
+                      "timestamp": "2026-02-11 00:00",
+                      "confidence": 1.0,
+                      "title": null,
+                      "meta": {}
+                    }
+                  ],
+                  "confidence": 0.85,
+                  "data_sources": [
+                    "yfinance"
+                  ],
+                  "as_of": "2026-02-12T20:31:15.844915",
+                  "evidence_quality": {},
+                  "fallback_used": false,
+                  "risks": [
+                    "RSI 进入超买区间，短期存在回调风险。"
+                  ],
+                  "trace": [
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_start",
+                      "timestamp": "2026-02-12T20:28:37.477854",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "query": "AAPL valuation PE EPS revenue",
+                        "ticker": "AAPL"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "search_result",
+                      "timestamp": "2026-02-12T20:28:37.937574",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "result_count": 5,
+                        "result_type": "dict"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_init",
+                      "timestamp": "2026-02-12T20:28:37.938579",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "summary_preview": "AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。",
+                        "summary_length": 134
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_gap",
+                      "timestamp": "2026-02-12T20:29:43.638646",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "round": 1,
+                        "gaps": [
+                          "AAPL PE ratio valuation",
+                          "AAPL EPS revenue data",
+                          "AAPL latest earnings report financials"
+                        ]
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "reflection_search",
+                      "timestamp": "2026-02-12T20:30:00.933248",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "round": 1,
+                        "new_data_preview": "📊 AI摘要:\nApple's (AAPL) current P/E ratio is 35.12 as of February 6, 2026. This is higher than its 3-year average of 32.25. The highest P/E ratio in the last ten years was 40.44 in December 2024.\n\n\n搜索结果:\n\n1. Apple (AAPL) P/E Ratio: Current & Historical Analysis (相关性: 1.00)\n   Maximum35.19\n\n35.19\n\n0.2"
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "summary_update",
+                      "timestamp": "2026-02-12T20:30:55.736792",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "round": 1,
+                        "summary_preview": "AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。",
+                        "summary_length": 134
+                      }
+                    },
+                    {
+                      "schema_version": "v1",
+                      "event_type": "agent_end",
+                      "timestamp": "2026-02-12T20:31:15.844930",
+                      "duration_ms": null,
+                      "agent": "technical",
+                      "metadata": {
+                        "confidence": 0.85,
+                        "evidence_count": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "s9",
+                "name": "deep_search_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": false,
+                "status_reason": "done",
+                "duration_ms": 360017,
+                "output_preview": {
+                  "agent_name": "deep_search_agent",
+                  "summary": "deep_search_agent 已降级：AAPL 的分析暂不可用，系统已返回最小可用结果（query=AAPL valuation PE EPS revenue）。",
+                  "confidence": 0.2,
+                  "as_of": null,
+                  "evidence_quality": {
+                    "overall_score": 0.0,
+                    "fallback": true
+                  },
+                  "data_sources": [
+                    "agent_fallback"
+                  ],
+                  "fallback_used": true,
+                  "risks": [
+                    "当前 Agent 执行失败，结果已降级，请稍后重试。",
+                    "错误摘要: TimeoutError: "
+                  ],
+                  "trace": [
+                    {
+                      "event": "agent_fallback",
+                      "agent": "deep_search_agent",
+                      "error": "TimeoutError: "
+                    }
+                  ],
+                  "evidence": []
+                }
+              }
+            ],
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "synthesize",
+          "duration_ms": 24273,
+          "ts": "2026-02-12T12:35:22.427956+00:00",
+          "data": {
+            "decision_type": "synthesize",
+            "summary": "render_vars=17",
+            "fallback_reason": "none",
+            "synthesize_runtime": {
+              "mode": "llm",
+              "fallback": false,
+              "retry_attempts": 0,
+              "failure_strategy_version": "failure.v1",
+              "keys": [
+                "analysis",
+                "catalysts",
+                "company_overview",
+                "comparison_conclusion",
+                "comparison_metrics",
+                "conclusion",
+                "highlights",
+                "impact_analysis",
+                "investment_summary",
+                "investment_thesis",
+                "news_summary",
+                "next_watch",
+                "price_snapshot",
+                "risks",
+                "summary",
+                "technical_snapshot",
+                "valuation"
+              ]
+            },
+            "render_vars_keys": [
+              "analysis",
+              "catalysts",
+              "company_overview",
+              "comparison_conclusion",
+              "comparison_metrics",
+              "conclusion",
+              "highlights",
+              "impact_analysis",
+              "investment_summary",
+              "investment_thesis",
+              "news_summary",
+              "next_watch",
+              "price_snapshot",
+              "risks",
+              "summary",
+              "technical_snapshot"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "render",
+          "duration_ms": 0,
+          "ts": "2026-02-12T12:35:22.429252+00:00",
+          "data": {
+            "draft_markdown_len": 1775,
+            "draft_markdown_preview": "## 投资研报：AAPL\n\n**问题**：AAPL valuation PE EPS revenue\n\n## 综合投资观点\n\n**AAPL 综合研判：偏多（Bullish）**\n\n多数维度信号偏积极。以下为多维度交叉验证结论：\n\n**利多因素：**\n- ✅ 近期股价呈上行趋势\n-…"
+          }
+        }
+      ],
+      "clarify": {
+        "needed": false,
+        "subject_type": "company"
+      },
+      "policy": {
+        "output_mode": "investment_report",
+        "subject_type": "company",
+        "budget": {
+          "max_rounds": 6,
+          "max_tools": 8
+        },
+        "allowed_tools": [
+          "get_stock_price",
+          "get_technical_snapshot",
+          "get_company_info",
+          "get_company_news",
+          "analyze_historical_drawdowns",
+          "get_current_datetime",
+          "search"
+        ],
+        "allowed_agents": [
+          "fundamental_agent",
+          "price_agent",
+          "news_agent",
+          "technical_agent",
+          "macro_agent",
+          "deep_search_agent"
+        ],
+        "agent_selection": {
+          "required": [
+            "fundamental_agent",
+            "price_agent",
+            "news_agent",
+            "technical_agent",
+            "macro_agent"
+          ],
+          "max_agents": 6,
+          "min_agents": 2
+        }
+      },
+      "failure_strategy_version": "failure.v1",
+      "failures": [
+        {
+          "schema_version": "failure.v1",
+          "ts": "2026-02-12T12:28:26.786562+00:00",
+          "node": "planner",
+          "stage": "llm_call",
+          "error": "Your request was blocked.",
+          "fallback": "planner_stub",
+          "retryable": false,
+          "retry_attempts": 3,
+          "metadata": {}
+        }
+      ],
+      "planner_runtime": {
+        "mode": "llm",
+        "fallback": true,
+        "retry_attempts": 3,
+        "failure_strategy_version": "failure.v1",
+        "reason": "Your request was blocked.",
+        "variant": "A"
+      },
+      "planner": {
+        "type": "stub",
+        "validated": true,
+        "steps": 9,
+        "operation": "qa"
+      },
+      "executor": {
+        "type": "live_tools",
+        "ran_steps": 9,
+        "error_count": 0,
+        "failure_strategy_version": "failure.v1",
+        "events": [
+          {
+            "event": "executor.step_started",
+            "step_id": "s1",
+            "kind": "tool",
+            "name": "get_company_info"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s1",
+            "cached": false,
+            "duration_ms": 1164
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s2",
+            "kind": "tool",
+            "name": "get_stock_price"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s2",
+            "cached": false,
+            "duration_ms": 1342
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s3",
+            "kind": "tool",
+            "name": "analyze_historical_drawdowns"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s3",
+            "cached": false,
+            "duration_ms": 2470
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s4",
+            "kind": "agent",
+            "name": "fundamental_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s5",
+            "kind": "agent",
+            "name": "price_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s5",
+            "cached": false,
+            "duration_ms": 324
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s6",
+            "kind": "agent",
+            "name": "news_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s7",
+            "kind": "agent",
+            "name": "technical_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s8",
+            "kind": "agent",
+            "name": "macro_agent"
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s9",
+            "kind": "agent",
+            "name": "deep_search_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s6",
+            "cached": false,
+            "duration_ms": 160989
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s4",
+            "cached": false,
+            "duration_ms": 163336
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s8",
+            "cached": false,
+            "duration_ms": 157784
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s7",
+            "cached": false,
+            "duration_ms": 158367
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s9",
+            "cached": false,
+            "duration_ms": 360017
+          }
+        ]
+      },
+      "rag": {
+        "enabled": true,
+        "backend": "memory",
+        "collection": "session:query-matrix-fundamental-1",
+        "indexed": 31,
+        "hits": 6,
+        "top_k": 6
+      },
+      "synthesize_runtime": {
+        "mode": "llm",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "keys": [
+          "analysis",
+          "catalysts",
+          "company_overview",
+          "comparison_conclusion",
+          "comparison_metrics",
+          "conclusion",
+          "highlights",
+          "impact_analysis",
+          "investment_summary",
+          "investment_thesis",
+          "news_summary",
+          "next_watch",
+          "price_snapshot",
+          "risks",
+          "summary",
+          "technical_snapshot",
+          "valuation"
+        ]
+      }
+    },
+    "evidence_policy": {
+      "status": "warning",
+      "coverage": 0.1667,
+      "covered_blocks": 1,
+      "total_blocks": 6,
+      "unique_sources": 5,
+      "min_coverage": 0.8,
+      "min_sources": 2,
+      "min_key_section_sources": 2,
+      "invalid_refs": [],
+      "key_section_issues": [],
+      "meets_coverage": false,
+      "meets_min_sources": true
+    }
+  },
+  "synthesis_report": "## AAPL 综合研究报告\n\n## 投资研报：AAPL\n\n**问题**：AAPL valuation PE EPS revenue\n\n## 综合投资观点\n\n**AAPL 综合研判：偏多（Bullish）**\n\n多数维度信号偏积极。以下为多维度交叉验证结论：\n\n**利多因素：**\n- ✅ 近期股价呈上行趋势\n- ✅ 营收同比增长 +5.0%，增长动能良好\n- ✅ 净利润同比增长 +19.5%，盈利能力改善\n\n**背景与参考：**\n- 宏观环境：美国宏观快照:. 联邦基金利率 3.64%. CPI 326.0%. 失业率 4.3%. GDP 增长 4.4%. 10Y 国债 4.16%. 10Y-2Y 利差 0.66%. 市场情绪: CNN Fear & Greed Index: 49.2 (neutral). 多源数据冲突: cpi.\n- 近期事件：Recent news includes: They lost thousands after fake love connection with these stars; 3 Key Updates Apple Just Gave Investors; Bitcoin price steadies but fresh fears suggest slide to $52k; FTSE 100 L\n\n**数据置信度：** fundamental 92% | price 100% | news 80% | technical 85% | macro 88%\n\n\n## 公司与业务\n\n- Apple Inc. (AAPL) 是全球领先的消费电子与科技公司，核心产品包括 iPhone、Mac、iPad 及可穿戴设备，并拥有强大的服务生态系统。作为市值超 4 万亿美元的行业巨头，公司具备极宽的护城河与卓越的品牌忠诚度。\n\n## 价格快照\n\n- AAPL Current Price: $275.50 | Change: +1.82 (+0.67%) | Suggested ladder: $272.75 / $269.99 (+/-1% / +/-2% from current)\n\n## 技术面\n\n- AAPL 技术快照: 收盘价 275.50。 MA20 262.10 MA50 268.28 MA200 暂无 RSI(14) 82.42（超买）。 MACD 3.2643 vs 信号线 0.9031（多头）。 趋势: 横盘震荡。 RSI进入超买区，短期回撤风险上升。\n\n## 关键催化剂（含新闻/事件）\n\n- 近期投资者更新：公司近期发布的关键业务更新可能提振市场信心。\n- 宏观经济支撑：美国 GDP 增长 4.4%，强劲的经济环境有利于消费电子支出。\n- 盈利能力提升：净利润同比增长 19.5%，显示出色的成本控制与高利润率服务业务的增长动力。\n\n## 财务与估值\n\n- 当前股价 $275.50。静态市盈率 (Trailing PE) 约为 35.12，远期市盈率 (Forward PE) 约为 32.42。当前估值高于 3 年平均水平 (32.25)，接近 10 年历史高点 (40.44)，显示市场已计入较高增长预期，安全边际较低。\n\n## 风险\n\n- 技术面回调：RSI 高达 82.42，处于极度超买区间，短期均值回归压力大。\n- 估值溢价：高市盈率意味着对业绩容错率低，任何不及预期的增长都可能引发杀估值。\n- 财务杠杆：负债/资产比率约为 79.5%，杠杆率相对较高。\n- 宏观不确定性：通胀数据存在冲突且 10 年期美债收益率维持在 4.16%，可能压制科技股估值。\n- 杠杆率偏高（负债/资产 = 79% > 60%），偿债压力较大。\n- RSI 进入超买区间，短期存在回调风险。\n- 多源宏观数据存在冲突，建议以权威源为准。\n\n## 结论与展望\n\n- 短期建议谨慎持有或逢高减仓，长期维持看好。虽然公司基本面稳健且处于上升趋势，但过热的技术指标和高估值透支了短期上涨空间。建议关注 $268 (MA50) 附近的支撑位作为潜在的再介入点。置信度：中。\n\n---\n\n*免责声明：以上内容基于公开数据自动生成，仅供研究参考，不构成任何投资建议。投资决策请结合个人风险偏好及专业顾问意见。*\n\n## 引用来源\n[1] [news_agent evidence 1](https://finnhub.io/api/news?id=f46298a231a5bf72fa26f4065f47ccb9902fb005e8d918d5faf706c7a1520278)\n[2] [news_agent evidence 2](https://finnhub.io/api/news?id=1a1d1468b36bec6b69de2aa006683eae7d56cfe6eefbde8474b37b746d82b7f7)\n[3] [news_agent evidence 3](https://finnhub.io/api/news?id=24679916fab8ff32f69ef03e8e0726849f08564355de3f9a6b421e5346a7dc91)\n[4] [news_agent evidence 4](https://finnhub.io/api/news?id=2098830223df8d9813a4a5d15a18a0466dcd775e9c9cd3434ce80ab3ee1d7c74)\n[5] [news_agent evidence 5](https://finnhub.io/api/news?id=eea01cd8d636e193fda1313b0e5b3e575a0e97f391e43eee63b1e2c5ef0fb095)\n",
+  "agent_status": {
+    "fundamental_agent": {
+      "status": "success",
+      "confidence": 0.92,
+      "evidence_quality": {
+        "overall_score": 1.0,
+        "metric_coverage": 1.0,
+        "growth_coverage": 1.0,
+        "source_diversity": 1,
+        "has_conflicts": false
+      },
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "price_agent": {
+      "status": "success",
+      "confidence": 1.0,
+      "evidence_quality": {},
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "news_agent": {
+      "status": "success",
+      "confidence": 0.8,
+      "evidence_quality": {},
+      "data_sources": [
+        "Yahoo"
+      ]
+    },
+    "technical_agent": {
+      "status": "success",
+      "confidence": 0.85,
+      "evidence_quality": {},
+      "data_sources": [
+        "yfinance"
+      ]
+    },
+    "macro_agent": {
+      "status": "success",
+      "confidence": 0.88,
+      "evidence_quality": {
+        "overall_score": 0.88,
+        "coverage_score": 1.0,
+        "source_diversity": 4,
+        "source_health_score": 1.0,
+        "has_conflicts": true,
+        "conflict_count": 1
+      },
+      "data_sources": [
+        "CNN Fear & Greed",
+        "Economic Calendar",
+        "FRED",
+        "Web Search"
+      ]
+    },
+    "deep_search_agent": {
+      "status": "success",
+      "confidence": 0.2,
+      "evidence_quality": {
+        "overall_score": 0.0,
+        "fallback": true
+      },
+      "data_sources": [
+        "agent_fallback"
+      ]
+    }
+  },
+  "report_hints": {
+    "is_compare": false,
+    "has_conflict": true,
+    "compare_basis": [],
+    "conflict_agents": [
+      "macro_agent"
+    ]
+  },
+  "tags": [
+    "conflict"
+  ]
+}

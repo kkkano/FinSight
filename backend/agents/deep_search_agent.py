@@ -38,6 +38,7 @@ class DeepSearchAgent(BaseFinancialAgent):
     MAX_DOCS = int(os.getenv("DEEPSEARCH_MAX_DOCS", "4"))
     MIN_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MIN_TEXT_CHARS", "400"))
     MAX_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MAX_TEXT_CHARS", "12000"))
+    LLM_TOKEN_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_TOKEN_TIMEOUT_SECONDS", "500"))
     _POSITIVE_SIGNAL_TERMS = (
         "beat",
         "strong",
@@ -64,6 +65,68 @@ class DeepSearchAgent(BaseFinancialAgent):
         "wsj.com",
         "ft.com",
         "investor.",
+    )
+    _TRUSTED_FINANCE_DOMAIN_HINTS = (
+        "sec.gov",
+        "investor.",
+        "reuters.com",
+        "bloomberg.com",
+        "wsj.com",
+        "ft.com",
+        "finance.yahoo.com",
+        "marketwatch.com",
+        "fool.com",
+        "cnbc.com",
+        "seekingalpha.com",
+        "nasdaq.com",
+    )
+    _TRUSTED_FINANCE_DOMAINS = (
+        "sec.gov",
+        "www.sec.gov",
+        "reuters.com",
+        "www.reuters.com",
+        "bloomberg.com",
+        "www.bloomberg.com",
+        "wsj.com",
+        "www.wsj.com",
+        "ft.com",
+        "www.ft.com",
+        "finance.yahoo.com",
+        "www.finance.yahoo.com",
+        "marketwatch.com",
+        "www.marketwatch.com",
+        "fool.com",
+        "www.fool.com",
+        "cnbc.com",
+        "www.cnbc.com",
+        "seekingalpha.com",
+        "www.seekingalpha.com",
+        "nasdaq.com",
+        "www.nasdaq.com",
+        "investor.apple.com",
+        "apple.com",
+        "www.apple.com",
+    )
+    _BLOCKED_DOMAIN_HINTS = (
+        "tangxin93.com",
+        "hinrijv.cc",
+        "xqdyzgc.com",
+        "yumiok.com",
+        "playfulsoul.net",
+        "mtevfryb.cc",
+        "ewfvsve.cc",
+        "maoyanqing.com",
+    )
+    _BLOCKED_TLDS = (".cc", ".xyz", ".top", ".vip", ".club", ".porn", ".sex")
+    _BLOCKED_CONTENT_HINTS = (
+        "成人视频",
+        "乱伦",
+        "群p",
+        "群p",
+        "porn",
+        "xxx",
+        "casino",
+        "betting",
     )
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
@@ -211,15 +274,23 @@ class DeepSearchAgent(BaseFinancialAgent):
         for q in queries:
             logger.info(f"[DeepSearch] search: {q}")
             results.extend(self._search_web(q))
-            if len(results) >= self.MAX_RESULTS:
-                break
 
-        results = self._dedupe_results(results)[:self.MAX_RESULTS]
+        results = self._dedupe_results(results)
+        results = self._filter_results(results, query=query, ticker=ticker)[:self.MAX_RESULTS]
         docs = await asyncio.to_thread(self._fetch_documents, results)
         if docs:
             sources = sorted({doc.get("source", "web") for doc in docs if isinstance(doc, dict)})
             pdf_count = sum(1 for doc in docs if doc.get("is_pdf"))
             logger.info(f"[DeepSearch] fetched docs={len(docs)} pdfs={pdf_count} sources={sources}")
+
+        # 降级策略：如果文档抓取全部失败但搜索有结果，用搜索 snippet 构建降级文档
+        if not docs and results:
+            logger.warning(
+                f"[DeepSearch] All {len(results)} document fetches failed, "
+                "falling back to search snippets"
+            )
+            docs = self._build_snippet_docs(results)
+
         if docs:
             self.cache.set(cache_key, docs, ttl=self.CACHE_TTL)
         return docs
@@ -231,36 +302,38 @@ class DeepSearchAgent(BaseFinancialAgent):
         if not self.llm:
             return []
 
-        prompt = f"""<role>金融深度研究Self-RAG控制器</role>
+        prompt = f"""<role>金融深度研究 Self-RAG 控制器</role>
 
-<task>评估当前摘要的信息完整性，决定是否需要补充检索</task>
+<task>评估当前研究摘要的信息完整性，决定是否需要补充检索轮次。</task>
 
 <current_summary>
 {summary}
 </current_summary>
 
 <evaluation_criteria>
-需要补充检索的情况（needs_more=true）：
-- 关键财务数据缺失（营收、利润、估值指标）
-- 风险因素分析不完整
-- 竞争格局描述模糊
-- 缺乏时效性信息（最新财报、公告）
-- 论点缺乏数据支撑
+需要补充检索 (needs_more=true) 的情况：
+- 关键财务指标缺失（营收增长率、利润率、估值 PE/PB/PS）
+- 风险因素分析不完整（仅提到 1 类风险或无具体数据支撑）
+- 竞争格局描述模糊（缺乏市场份额或对手对比）
+- 缺乏时效性信息（无最近 1 个月的财报/公告/事件）
+- 核心投资论点缺乏 2 个以上独立数据源支撑
 
-信息充足的情况（needs_more=false）：
-- 核心投资逻辑清晰
-- 关键数据点完整
-- 风险与机会均有覆盖
+信息充足 (needs_more=false) 的情况：
+- 核心投资逻辑清晰，有数据支撑
+- 至少覆盖 3 个分析维度（估值/基本面/技术面/宏观/情绪）
+- 风险与机会均有实质性覆盖
+- 关键数据点有来源引用
 </evaluation_criteria>
 
 <output_format>
-仅返回JSON，禁止任何解释或前言：
+仅返回 JSON，禁止任何解释、前言或 markdown：
 {{"needs_more": true/false, "queries": ["具体检索词1", "具体检索词2"]}}
 
-queries要求：
-- 最多3个，每个需具体明确
-- 使用中英文混合检索词提高召回
-- 聚焦摘要中明确缺失的信息点
+queries 要求：
+- 最多 3 个，每个需具体明确
+- 中英文混合以提高召回率（如"AAPL 2024年Q4财报 revenue growth"）
+- 聚焦摘要中已识别的具体信息缺口
+- 禁止宽泛查询（如"公司近况"），必须针对性
 </output_format>"""
         raw = await self._call_llm(prompt)
         payload = self._extract_json(raw)
@@ -284,9 +357,13 @@ queries要求：
         for gap in gaps:
             query = f"{ticker} {gap}".strip()
             results.extend(self._search_web(query))
-            if len(results) >= self.MAX_RESULTS:
-                break
-        results = self._dedupe_results(results)[:self.MAX_RESULTS]
+        results = self._dedupe_results(results)
+        synthesized_query = f"{ticker} {' '.join([str(g).strip() for g in gaps if str(g).strip()])}".strip()
+        results = self._filter_results(
+            results,
+            query=synthesized_query or ticker,
+            ticker=ticker,
+        )[:self.MAX_RESULTS]
         return await asyncio.to_thread(self._fetch_documents, results)
 
     async def _update_summary(self, summary: str, new_data: Any) -> str:
@@ -306,6 +383,7 @@ queries要求：
         fallback_used = False
         evidence_quality = evidence_quality or {}
         has_conflicts = bool(evidence_quality.get("has_conflicts"))
+        all_degraded = True
 
         if isinstance(raw_data, list):
             for item in raw_data:
@@ -313,6 +391,9 @@ queries要求：
                 data_sources.append(source)
                 title = item.get("title") or ""
                 snippet = item.get("snippet") or item.get("content", "")[:240]
+                degraded = bool(item.get("degraded"))
+                if not degraded:
+                    all_degraded = False
                 doc_quality = self._doc_quality_score(item)
                 evidence.append(EvidenceItem(
                     text=snippet,
@@ -323,6 +404,8 @@ queries要求：
                     title=title,
                     meta={
                         "is_pdf": item.get("is_pdf", False),
+                        "degraded": degraded,
+                        "degrade_reason": item.get("degrade_reason"),
                         "doc_quality": doc_quality,
                         "evidence_quality": {
                             "overall_score": float(evidence_quality.get("overall_score", 0.0)),
@@ -332,16 +415,18 @@ queries要求：
                         "conflict_flag": has_conflicts,
                     },
                 ))
+        else:
+            all_degraded = False
 
         data_sources = sorted(set(data_sources)) if data_sources else ["web"]
-        if not raw_data:
+        if not raw_data or (isinstance(raw_data, list) and raw_data and all_degraded):
             fallback_used = True
         confidence = self._estimate_confidence(raw_data)
-        risks = ["Sources may contain subjective analysis."]
+        risks = ["研究来源可能包含主观分析，请结合多方信息判断。"]
         if fallback_used:
-            risks.append("Limited deep research sources; results may be incomplete.")
+            risks.append("深度研究数据源有限，结果可能不完整。")
         if has_conflicts:
-            risks.append("Evidence signals conflict across sources; verify with primary filings/calls.")
+            risks.append("多源证据信号存在冲突，建议核实原始财报或电话会议。")
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
@@ -393,6 +478,8 @@ queries要求：
         avg_doc_quality = sum(doc_scores) / max(1, len(doc_scores))
         freshness_score = sum(freshness_scores) / max(1, len(freshness_scores))
         has_conflicts = self._detect_conflicts(valid_docs)
+        degraded_docs = sum(1 for doc in valid_docs if doc.get("degraded"))
+        degraded_ratio = degraded_docs / max(1, len(valid_docs))
 
         overall = (
             avg_doc_quality * 0.45
@@ -400,6 +487,7 @@ queries要求：
             + diversity_score * 0.20
             + (0.10 if not has_conflicts else 0.0)
         )
+        overall -= min(0.35, degraded_ratio * 0.35)
         overall = max(0.0, min(1.0, overall))
 
         return {
@@ -407,6 +495,8 @@ queries要求：
             "source_diversity": source_diversity,
             "avg_doc_quality": round(avg_doc_quality, 4),
             "freshness_score": round(freshness_score, 4),
+            "degraded_docs": degraded_docs,
+            "degraded_ratio": round(degraded_ratio, 4),
             "has_conflicts": bool(has_conflicts),
             "overall_score": round(overall, 4),
         }
@@ -422,7 +512,11 @@ queries要求：
     def _source_reliability_score(self, doc: Dict[str, Any]) -> float:
         source = str(doc.get("source") or "").strip().lower()
         url = str(doc.get("url") or "").strip().lower()
+        content = str(doc.get("content") or doc.get("snippet") or "")
+        degraded = bool(doc.get("degraded"))
         if doc.get("is_pdf"):
+            if degraded or len(content) < self.MIN_TEXT_CHARS:
+                return 0.55
             return 0.9
         for hint in self._HIGH_RELIABILITY_SOURCE_HINTS:
             if hint in source or hint in url:
@@ -517,6 +611,17 @@ queries要求：
             base = f"{ticker} {base}".strip()
 
         query_lower = query.lower()
+        if self._is_finance_research_intent(query):
+            filing_queries = [
+                f"site:sec.gov {ticker} 10-K annual report",
+                f"site:sec.gov {ticker} 10-Q quarterly report",
+                f"{ticker} earnings call transcript Reuters Bloomberg",
+            ]
+            return [q.strip() for q in filing_queries if q.strip()][:3]
+
+        enable_pdf_bias = os.getenv("DEEPSEARCH_ENABLE_PDF_QUERY_BIAS", "0").strip().lower() in (
+            "1", "true", "yes", "on"
+        )
         topics: List[str] = []
         if any(k in query_lower for k in ["risk", "downside", "bear", "风险", "利空"]):
             topics.append("risk factors")
@@ -530,14 +635,18 @@ queries要求：
             topics.append("industry report")
 
         if not topics:
+            # 混合策略：1 条 HTML 倾向 + 1 条中性 + 1 条 PDF 倾向（如果 pypdf 可用）
             topics = [
-                "investment thesis pdf",
-                "earnings transcript analysis",
-                "competitive landscape risks",
+                "latest analysis report",
+                "earnings analysis outlook",
             ]
+            if PdfReader is not None and enable_pdf_bias:
+                topics.append("investment thesis filetype:pdf")
+            else:
+                topics.append("investment thesis")
         else:
-            if "investment thesis pdf" not in topics:
-                topics.append("investment thesis pdf")
+            if "latest analysis report" not in topics:
+                topics.append("latest analysis report")
 
         seen: set[str] = set()
         queries: List[str] = []
@@ -616,6 +725,123 @@ queries要求：
 
         return results
 
+    def _is_finance_research_intent(self, query: str) -> bool:
+        q = str(query or "").lower()
+        signals = (
+            "10-k",
+            "10q",
+            "10-q",
+            "filing",
+            "earnings",
+            "transcript",
+            "investment report",
+            "deep report",
+            "longform",
+            "财报",
+            "业绩",
+            "研报",
+            "电话会",
+        )
+        return any(token in q for token in signals)
+
+    def _normalized_domain_from_url(self, url: str) -> str:
+        try:
+            host = urlparse(str(url or "").strip().lower()).netloc
+        except Exception:
+            host = ""
+        return host.lstrip("www.")
+
+    def _is_trusted_finance_domain(self, domain: str) -> bool:
+        host = str(domain or "").strip().lower().lstrip("www.")
+        if not host:
+            return False
+        trusted_exact = {d.lower().lstrip("www.") for d in self._TRUSTED_FINANCE_DOMAINS}
+        if host in trusted_exact:
+            return True
+        if any(hint in host for hint in self._TRUSTED_FINANCE_DOMAIN_HINTS):
+            return True
+        return False
+
+    def _is_blocked_result(self, item: Dict[str, Any]) -> bool:
+        url = str(item.get("url") or "").strip().lower()
+        title = str(item.get("title") or "").strip().lower()
+        snippet = str(item.get("snippet") or "").strip().lower()
+        domain = self._normalized_domain_from_url(url)
+        parsed = urlparse(url) if url else None
+        path = parsed.path.lower() if parsed else ""
+        if not url.startswith(("http://", "https://")):
+            return True
+        if domain == "finnhub.io" and path.startswith("/api/news"):
+            return True
+        if domain and any(domain.endswith(suffix) for suffix in self._BLOCKED_TLDS):
+            if not self._is_trusted_finance_domain(domain):
+                return True
+        if any(hint in url for hint in self._BLOCKED_DOMAIN_HINTS):
+            return True
+        text = " ".join((url, title, snippet))
+        return any(token in text for token in self._BLOCKED_CONTENT_HINTS)
+
+    def _result_relevance_score(self, item: Dict[str, Any], *, query: str, ticker: str) -> float:
+        url = str(item.get("url") or "").strip().lower()
+        title = str(item.get("title") or "").strip().lower()
+        snippet = str(item.get("snippet") or "").strip().lower()
+        domain = self._normalized_domain_from_url(url)
+        text = f"{title} {snippet} {url}"
+        score = 0.0
+
+        if self._is_trusted_finance_domain(domain):
+            score += 4.0
+        if "sec.gov" in url:
+            score += 2.0
+        if ".pdf" in url:
+            score += 0.8
+
+        ticker_lower = str(ticker or "").strip().lower()
+        if ticker_lower and ticker_lower in text:
+            score += 1.5
+
+        query_tokens = [
+            token.strip().lower()
+            for token in re.findall(r"[A-Za-z0-9\-\._]{3,}", str(query or ""))
+            if token.strip()
+        ]
+        for token in query_tokens[:8]:
+            if token in text:
+                score += 0.4
+
+        return score
+
+    def _filter_results(self, results: List[Dict[str, Any]], *, query: str, ticker: str) -> List[Dict[str, Any]]:
+        if not isinstance(results, list) or not results:
+            return []
+
+        finance_intent = self._is_finance_research_intent(query)
+        strict_finance_sources = str(
+            os.getenv("DEEPSEARCH_STRICT_FINANCE_SOURCES", "true")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        scored: List[Tuple[float, Dict[str, Any]]] = []
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            if self._is_blocked_result(item):
+                continue
+            domain = self._normalized_domain_from_url(item.get("url") or "")
+            if finance_intent and strict_finance_sources and not self._is_trusted_finance_domain(domain):
+                continue
+            score = self._result_relevance_score(item, query=query, ticker=ticker)
+            if finance_intent and score < 2.4:
+                continue
+            scored.append((score, item))
+
+        if not scored:
+            return []
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        output: List[Dict[str, Any]] = []
+        for _, item in scored:
+            output.append(item)
+        return output
+
     def _parse_search_text(self, text: str) -> List[Dict[str, Any]]:
         if not text:
             return []
@@ -646,15 +872,65 @@ queries要求：
             deduped.append(item)
         return deduped
 
+    def _build_snippet_docs(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """当文档抓取全部失败时，从搜索 snippet 构建降级文档。"""
+        docs: List[Dict[str, Any]] = []
+        for item in results[: self.MAX_DOCS]:
+            snippet = str(item.get("snippet") or "").strip()
+            title = str(item.get("title") or "").strip()
+            if not snippet and not title:
+                continue
+            content = f"{title}\n{snippet}" if title else snippet
+            docs.append({
+                "title": title,
+                "url": item.get("url", ""),
+                "snippet": snippet,
+                "content": content,
+                "source": item.get("source", "web"),
+                "published_date": item.get("published_date"),
+                "is_pdf": False,
+                "confidence": 0.5,  # 降级文档置信度较低
+                "degraded": True,
+                "degrade_reason": "snippet_only",
+            })
+        return docs
+
     def _fetch_documents(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         docs: List[Dict[str, Any]] = []
+        degraded_docs: List[Dict[str, Any]] = []
         for item in results[: self.MAX_DOCS]:
             doc = self._fetch_document(item)
             if not doc:
                 continue
-            if len(doc.get("content", "")) < self.MIN_TEXT_CHARS:
+
+            content = str(doc.get("content") or "").strip()
+            if len(content) < self.MIN_TEXT_CHARS:
+                snippet = str(doc.get("snippet") or item.get("snippet") or "").strip()
+                title = str(doc.get("title") or item.get("title") or "").strip()
+
+                if doc.get("is_pdf") and (snippet or title):
+                    fallback_text = f"{title}\n{snippet}".strip() if title else snippet
+                    if fallback_text:
+                        degraded_doc = dict(doc)
+                        degraded_doc["content"] = fallback_text
+                        degraded_doc["snippet"] = snippet or fallback_text[:240]
+                        degraded_doc["confidence"] = min(float(doc.get("confidence", 0.7)), 0.45)
+                        degraded_doc["degraded"] = True
+                        degraded_doc["degrade_reason"] = "pdf_parse_or_short_content"
+                        degraded_docs.append(degraded_doc)
                 continue
+
             docs.append(doc)
+
+        if docs:
+            return docs
+
+        if degraded_docs:
+            return degraded_docs
+
+        if results:
+            return self._build_snippet_docs(results)
+
         return docs
 
     def _fetch_document(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -681,22 +957,38 @@ queries要求：
         content_type = response.headers.get("Content-Type", "").lower()
         is_pdf = url.lower().endswith(".pdf") or "application/pdf" in content_type
         text = ""
+        used_snippet_fallback = False
         if is_pdf:
             text = self._extract_pdf_text(response.content)
         else:
             text = self._extract_html_text(response.text)
 
         text = self._trim_text(text)
-        snippet = item.get("snippet") or text[:240]
+        title = item.get("title") or self._infer_title(url)
+        snippet = str(item.get("snippet") or "").strip()
+
+        if not text and snippet:
+            text = f"{title}\n{snippet}".strip()
+            used_snippet_fallback = True
+
+        if not snippet:
+            snippet = text[:240]
+
+        confidence = 0.85 if is_pdf else 0.7
+        if used_snippet_fallback:
+            confidence = min(confidence, 0.45)
+
         return {
-            "title": item.get("title") or self._infer_title(url),
+            "title": title,
             "url": url,
             "snippet": snippet,
             "content": text,
             "source": item.get("source", self._infer_source(url)),
             "published_date": item.get("published_date"),
             "is_pdf": is_pdf,
-            "confidence": 0.85 if is_pdf else 0.7,
+            "confidence": confidence,
+            "degraded": used_snippet_fallback,
+            "degrade_reason": "empty_content_use_snippet" if used_snippet_fallback else None,
         }
 
     def _extract_pdf_text(self, data: bytes) -> str:
@@ -739,7 +1031,7 @@ queries要求：
 
     async def _summarize_docs(self, docs: List[Dict[str, Any]], previous_summary: Optional[str] = None) -> str:
         if not docs:
-            return "No deep research sources found."
+            return "未找到深度研究数据源。"
 
         chunks = []
         for idx, doc in enumerate(docs, 1):
@@ -752,12 +1044,12 @@ queries要求：
 
         if not self.llm:
             titles = ", ".join([doc.get("title", "") for doc in docs[:3]])
-            return f"Deep research sources found: {titles}."
+            return f"已检索到深度研究来源: {titles}。"
 
         prev_section = f"\n<previous_summary>\n{previous_summary}\n</previous_summary>" if previous_summary else ""
-        prompt = f"""<role>资深金融研究分析师</role>
+        prompt = f"""<role>资深金融研究分析师 — 深度研究备忘录撰写</role>
 
-<task>基于检索源撰写深度研究备忘录</task>
+<task>基于多源检索结果撰写结构化深度研究备忘录，提供可操作的投资洞察。</task>
 {prev_section}
 <sources>
 {bundle}
@@ -765,58 +1057,91 @@ queries要求：
 
 <requirements>
 - 语言：简体中文
-- 输出4-6条核心洞察（事实+影响），每条需有数据或来源支撑
-- 引用格式：[1]、[2]（对应源编号）
-- 标注1-2条不确定性/风险点
-- 明确标注信息缺口（如有）
+- 输出 4-6 条核心洞察，每条包含：
+  · 事实发现（含具体数据点）
+  · 影响判断（对标的/行业的潜在影响）
+  · 来源引用 [1]、[2]（对应源编号）
+- 标注 1-2 条不确定性或风险点，附置信度评估
+- 明确标注信息缺口（如有），指明还需要什么数据
+- 若有前次摘要，需与新信息交叉验证，标注一致/冲突
 </requirements>
 
 <output_format>
 ## 核心发现
-[编号要点列表，每条含数据引用与一句影响判断]
+1. [发现] — [影响判断] [1]
+2. ...
 
 ## 影响与解读
-[2-3句综合解读，强调对标的/行业的潜在影响]
+[2-3 句综合解读，强调跨源信息的交叉印证，以及对投资决策的具体含义]
 
 ## 风险提示
-[关键风险因素]
+- [风险描述] [置信度: High/Medium/Low]
 
 ## 信息缺口
-[尚需补充的信息，无则写“暂无”]
+[尚需补充的具体信息，无则写"暂无明显缺口"]
 </output_format>
 
 <constraints>
 - 禁止开场白、寒暄、总结性陈述
 - 直接输出结构化内容
-- 专业商务语气
+- 专业商务语气，避免口语化表达
+- 数据冲突时必须标注并说明哪个更可信
 </constraints>"""
 
         result = await self._call_llm(prompt)
-        return result.strip() if result else "Summary unavailable."
+        if result and result.strip():
+            return result.strip()
+        # Degraded fallback: build summary from doc titles and snippets
+        return self._build_degraded_summary(docs)
 
     async def _call_llm(self, prompt: str) -> str:
-        try:
-            # 获取速率限制令牌
-            from backend.services.rate_limiter import acquire_llm_token
-            if not await acquire_llm_token(timeout=60.0):
-                logger.warning("[DeepSearch] Rate limit timeout, skipping LLM call")
-                return ""
-            
-            message = HumanMessage(content=prompt)
-            if hasattr(self.llm, "ainvoke"):
-                from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+        """Call LLM with outer retry layer for DeepSearch resilience.
 
-                response = await ainvoke_with_rate_limit_retry(
-                    self.llm,
-                    [message],
-                    acquire_token=False,
+        DeepSearch runs after other agents in the concurrent pipeline, so
+        external rate-limit windows may already be hot.  The outer retry
+        gives endpoints extra time to recover.
+        """
+        max_outer_retries = 3
+        for outer in range(max_outer_retries):
+            try:
+                from backend.services.rate_limiter import acquire_llm_token
+                token_timeout = max(1.0, float(self.LLM_TOKEN_TIMEOUT_SECONDS))
+                if not await acquire_llm_token(timeout=token_timeout, agent_name=self.AGENT_NAME):
+                    logger.warning(
+                        "[DeepSearch] Rate limit timeout after %.1fs, skipping LLM call",
+                        token_timeout,
+                    )
+                    return ""
+
+                message = HumanMessage(content=prompt)
+                if hasattr(self.llm, "ainvoke"):
+                    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+                    from backend.llm_config import create_llm
+
+                    _temp = getattr(self.llm, "temperature", 0.3)
+                    llm_factory = lambda: create_llm(temperature=_temp)
+
+                    response = await ainvoke_with_rate_limit_retry(
+                        self.llm,
+                        [message],
+                        acquire_token=False,
+                        llm_factory=llm_factory,
+                    )
+                else:
+                    response = await asyncio.to_thread(self.llm.invoke, [message])
+                return getattr(response, "content", "") if response is not None else ""
+            except Exception as exc:
+                logger.warning(
+                    "[DeepSearch] LLM call attempt %d/%d failed (%s): %s",
+                    outer + 1, max_outer_retries, type(exc).__name__, exc,
                 )
-            else:
-                response = await asyncio.to_thread(self.llm.invoke, [message])
-            return getattr(response, "content", "") if response is not None else ""
-        except Exception as exc:
-            logger.info(f"[DeepSearch] LLM call failed: {exc}")
-            return ""
+                if outer < max_outer_retries - 1:
+                    backoff = 5.0 * (outer + 1)
+                    logger.info("[DeepSearch] Waiting %.1fs before outer retry...", backoff)
+                    await asyncio.sleep(backoff)
+                else:
+                    logger.error("[DeepSearch] All %d outer retries exhausted", max_outer_retries)
+        return ""
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         if not text:
@@ -829,10 +1154,124 @@ queries要求：
         except json.JSONDecodeError:
             return {}
 
+    def _clean_degraded_text(self, text: str) -> str:
+        cleaned = str(text or "")
+        cleaned = re.sub(r"https?://\S+", "", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        noise_tokens = (
+            "SummaryRatingsFinancialsTechnicals",
+            "MarketWatch",
+            "Privacy Policy",
+            "Terms of Use",
+            "Cookie",
+            "Subscribe",
+            "Sign in",
+            "Login",
+            "注册",
+            "登录",
+            "免责声明",
+        )
+        for token in noise_tokens:
+            cleaned = cleaned.replace(token, " ")
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        return cleaned
+
+    def _low_signal_text(self, text: str) -> bool:
+        if not text:
+            return True
+        stripped = text.strip()
+        if len(stripped) < 20:
+            return True
+        alpha_num = len(re.findall(r"[A-Za-z0-9\u4e00-\u9fff]", stripped))
+        if alpha_num < 15:
+            return True
+        if re.search(r"[A-Za-z]{25,}", stripped):
+            return True
+        return False
+
+    def _degraded_fact_from_doc(self, doc: Dict[str, Any]) -> str:
+        title = self._clean_degraded_text(str(doc.get("title") or "")).strip()
+        snippet = self._clean_degraded_text(str(doc.get("snippet") or doc.get("content") or "")).strip()
+        if not snippet:
+            snippet = self._clean_degraded_text(str(doc.get("content") or "")).strip()
+        if self._low_signal_text(snippet):
+            return ""
+
+        if len(snippet) > 140:
+            snippet = snippet[:140].rstrip(" ,.;，。；") + "…"
+
+        idx_ref = doc.get("_idx_ref")
+        ref = f"[{idx_ref}]" if idx_ref else ""
+        if title:
+            return f"- {title}：{snippet} {ref}".strip()
+        return f"- {snippet} {ref}".strip()
+
+    def _build_degraded_summary(self, docs: List[Dict[str, Any]]) -> str:
+        """Build a degraded summary from doc titles/snippets when LLM is unavailable."""
+        if not docs:
+            return "未找到深度研究数据源。"
+        lines: List[str] = ["## 核心发现"]
+
+        facts: List[str] = []
+        for idx, raw_doc in enumerate(docs[:8], 1):
+            doc = dict(raw_doc)
+            doc["_idx_ref"] = idx
+            fact = self._degraded_fact_from_doc(doc)
+            if fact:
+                facts.append(fact)
+            if len(facts) >= 4:
+                break
+
+        if not facts:
+            titles = [self._clean_degraded_text(str(doc.get("title") or "")) for doc in docs[:4]]
+            titles = [title for title in titles if title]
+            if titles:
+                facts = [f"- 来源覆盖：{'、'.join(titles[:3])}。"]
+            else:
+                facts = ["- 当前仅获得低质量检索片段，缺少可验证正文数据。"]
+
+        lines.extend(facts)
+
+        degraded_ratio = (
+            sum(1 for d in docs if d.get("degraded")) / max(1, len(docs))
+            if isinstance(docs, list) else 1.0
+        )
+
+        lines.append("")
+        lines.append("## 风险提示")
+        if degraded_ratio >= 0.8:
+            lines.append("- 证据以降级片段为主，结论可靠性偏低，建议优先补充可解析原文/PDF。")
+        else:
+            lines.append("- 存在部分降级来源，建议结合财报、公告或权威媒体原文复核关键结论。")
+
+        lines.append("")
+        lines.append("## 信息缺口")
+        lines.append("- 当前为降级摘要模式（LLM/正文抽取受限），缺少可核验的结构化财务明细与上下文。")
+        lines.append("- 建议补充：最新财报原文、业绩会纪要、估值模型假设与可追溯数据表。")
+        return "\n".join(lines)
+
     def _estimate_confidence(self, docs: Any) -> float:
         if not isinstance(docs, list) or not docs:
             return 0.2
-        base = 0.6
-        bonus = min(len(docs), 3) * 0.1
-        pdf_bonus = 0.1 if any(doc.get("is_pdf") for doc in docs) else 0.0
-        return min(0.95, base + bonus + pdf_bonus)
+        source_set = {
+            str(doc.get("source") or self._infer_source(str(doc.get("url") or "")) or "web").strip().lower()
+            for doc in docs if isinstance(doc, dict)
+        }
+        source_set.discard("")
+        source_diversity = len(source_set)
+
+        degraded_count = sum(1 for doc in docs if isinstance(doc, dict) and doc.get("degraded"))
+        degraded_ratio = degraded_count / max(1, len(docs))
+
+        base = 0.55
+        doc_bonus = min(len(docs), 4) * 0.07
+        diversity_bonus = min(0.18, source_diversity * 0.06)
+        score = base + doc_bonus + diversity_bonus
+        score -= min(0.45, degraded_ratio * 0.45)
+
+        if degraded_ratio >= 0.99:
+            score = min(score, 0.5)
+        elif degraded_ratio >= 0.8:
+            score = min(score, 0.58)
+
+        return round(max(0.2, min(0.95, score)), 4)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import traceback
+import time as _time
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, Awaitable, Callable, Optional
@@ -31,9 +33,11 @@ class ChatRouterDeps:
 
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
+    _logger = logging.getLogger("chat_router")
 
     @router.post("/chat/supervisor")
     async def chat_supervisor_endpoint(request: ChatRequest):
+        _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
             try:
@@ -65,7 +69,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 from backend.graph.report_builder import build_report_payload
 
                 report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-            except Exception:
+            except Exception as _report_exc:
+                _logger.warning("[chat/supervisor] report build failed: %s", _report_exc, exc_info=True)
                 report = None
 
             deps.schedule_report_index(session_id=thread_id, report=report, state=state)
@@ -77,6 +82,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 subject=state.get("subject"),
             )
 
+            _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
             return {
                 "success": True,
                 "schema_version": deps.chat_response_schema_version,
@@ -86,6 +92,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 "intent": "chat",
                 "classification": {"method": "langgraph", "confidence": 1.0},
                 "session_id": thread_id,
+                "response_time_ms": _elapsed_ms,
                 "graph": {
                     "subject": state.get("subject"),
                     "output_mode": state.get("output_mode"),
@@ -96,16 +103,14 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             raise
         except Exception as exc:
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     @router.post("/chat/supervisor/stream")
     async def chat_supervisor_stream_endpoint(request: ChatRequest):
-        import asyncio as _asyncio
         import json as _json
 
-        from backend.graph.event_bus import reset_event_emitter, set_event_emitter
+        from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
 
-        runner = await deps.get_graph_runner()
         try:
             thread_id = deps.resolve_thread_id(request.session_id)
         except ValueError as exc:
@@ -122,107 +127,27 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
         resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
-        queue: "_asyncio.Queue[object]" = _asyncio.Queue()
-        _END = object()
+        exec_deps = ExecutionDeps(
+            get_graph_runner=deps.get_graph_runner,
+            schedule_report_index=deps.schedule_report_index,
+            update_session_context=deps.update_session_context,
+            redact_sensitive_payload=deps.redact_sensitive_payload,
+            is_raw_trace_event=deps.is_raw_trace_event,
+            contract_info=deps.contract_info,
+            sse_event_schema_version=deps.sse_event_schema_version,
+        )
 
-        async def _emit(payload: dict) -> None:
-            if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
-                return
-
-            outgoing = deps.redact_sensitive_payload(dict(payload))
-            original_schema = outgoing.get("schema_version")
-            if (
-                isinstance(original_schema, str)
-                and original_schema
-                and original_schema != deps.sse_event_schema_version
-            ):
-                outgoing["trace_schema_version"] = original_schema
-            outgoing["schema_version"] = deps.sse_event_schema_version
-            await queue.put(outgoing)
-
-        async def _producer() -> None:
-            token = set_event_emitter(_emit)
-            try:
-                await queue.put(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "thinking",
-                        "stage": "langgraph_start",
-                        "message": "LangGraph",
-                        "timestamp": datetime.utcnow().isoformat(),
-                    }
-                )
-
-                state = await runner.ainvoke(
-                    thread_id=thread_id,
-                    query=resolved_query,
-                    ui_context=ui_context,
-                    output_mode=output_mode,
-                    strict_selection=strict_selection,
-                )
-                markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
-
-                report = None
-                try:
-                    from backend.graph.report_builder import build_report_payload
-
-                    report = build_report_payload(state=state, query=resolved_query, thread_id=thread_id)
-                except Exception:
-                    report = None
-
-                deps.schedule_report_index(session_id=thread_id, report=report, state=state)
-
-                deps.update_session_context(
-                    thread_id=thread_id,
-                    original_query=request.query,
-                    response_markdown=markdown,
-                    subject=state.get("subject"),
-                )
-
-                chunk_size = 60
-                for idx in range(0, len(markdown), chunk_size):
-                    chunk = markdown[idx : idx + chunk_size]
-                    if chunk:
-                        await queue.put(
-                            {
-                                "schema_version": deps.sse_event_schema_version,
-                                "type": "token",
-                                "content": chunk,
-                            }
-                        )
-                    await _asyncio.sleep(0)
-
-                await queue.put(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "done",
-                        "contracts": deps.contract_info(),
-                        "intent": "chat",
-                        "session_id": thread_id,
-                        "response": markdown,
-                        "report": report,
-                        "graph": {
-                            "subject": state.get("subject"),
-                            "output_mode": state.get("output_mode"),
-                            "trace": state.get("trace"),
-                        },
-                    }
-                )
-            except Exception as exc:
-                await queue.put(
-                    deps.redact_sensitive_payload(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "error",
-                            "message": str(exc),
-                        }
-                    )
-                )
-            finally:
-                reset_event_emitter(token)
-                await queue.put(_END)
-
-        producer_task = _asyncio.create_task(_producer())
+        pipeline = run_graph_pipeline(
+            deps=exec_deps,
+            query=resolved_query,
+            thread_id=thread_id,
+            ui_context=ui_context,
+            output_mode=output_mode,
+            strict_selection=strict_selection,
+            original_query=request.query,
+            source="chat",
+            trace_raw_enabled=trace_raw_enabled,
+        )
 
         def _serialize_sse_item(item: object) -> str:
             def _fallback(value: object):
@@ -233,24 +158,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             return _json.dumps(jsonable_encoder(item), ensure_ascii=False, default=_fallback)
 
         async def _stream():
-            try:
-                while True:
-                    try:
-                        item = await _asyncio.wait_for(queue.get(), timeout=5)
-                    except _asyncio.TimeoutError:
-                        yield ": keep-alive\n\n"
-                        continue
-
-                    if item is _END:
-                        break
-                    yield f"data: {_serialize_sse_item(item)}\n\n"
-            finally:
-                if not producer_task.done():
-                    producer_task.cancel()
-                    try:
-                        await producer_task
-                    except Exception:
-                        pass
+            async for event in pipeline:
+                if isinstance(event, dict) and event.get("type") == "keep-alive":
+                    yield ": keep-alive\n\n"
+                else:
+                    yield f"data: {_serialize_sse_item(event)}\n\n"
 
         return StreamingResponse(
             _stream(),

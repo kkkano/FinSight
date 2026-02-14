@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Bell, RefreshCw, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
+// 共享 UI 组件
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Badge } from './ui/Badge';
 
 interface SubscribeModalProps {
   isOpen: boolean;
@@ -172,20 +176,26 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            {/* 刷新按钮 — 使用共享 Button ghost 变体 */}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={loadSubscriptions}
               disabled={subsLoading}
-              className="p-1.5 hover:bg-fin-hover rounded-lg transition-colors text-fin-muted hover:text-fin-text"
+              className="p-1.5"
               title="刷新"
             >
               <RefreshCw size={16} className={subsLoading ? 'animate-spin' : ''} />
-            </button>
-            <button
+            </Button>
+            {/* 关闭按钮 — 使用共享 Button ghost 变体 */}
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onClose}
-              className="p-1.5 hover:bg-fin-hover rounded-lg transition-colors text-fin-muted hover:text-fin-text"
+              className="p-1.5"
             >
               <X size={18} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -193,14 +203,15 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
         <div className="p-6 space-y-5">
           {/* 订阅表单 */}
           <div className="grid md:grid-cols-2 gap-4 text-sm">
+            {/* 邮箱 — 使用共享 Input 组件 */}
             <div className="space-y-2">
-              <label className="text-xs text-fin-muted">邮箱</label>
-              <input
+              <Input
+                label="邮箱"
                 type="email"
                 value={subForm.email}
                 onChange={(e) => handleSubChange('email', e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2.5 text-fin-text text-sm focus:border-fin-primary focus:ring-2 focus:ring-fin-primary/20 outline-none transition-all"
+                className="py-2.5 rounded-lg"
               />
             </div>
             <div className="space-y-2">
@@ -213,9 +224,10 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                 className="w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2.5 text-fin-text text-sm uppercase resize-none focus:border-fin-primary focus:ring-2 focus:ring-fin-primary/20 outline-none transition-all"
               />
             </div>
+            {/* 触发阈值 — 使用共享 Input 组件 */}
             <div className="space-y-2">
-              <label className="text-xs text-fin-muted">触发阈值(涨跌幅%)</label>
-              <input
+              <Input
+                label="触发阈值(涨跌幅%)"
                 type="number"
                 min={0}
                 step={0.1}
@@ -224,7 +236,7 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                   const v = parseFloat(e.target.value);
                   handleSubChange('price_threshold', isNaN(v) ? null : v);
                 }}
-                className="w-full bg-fin-bg border border-fin-border rounded-lg px-3 py-2.5 text-fin-text text-sm focus:border-fin-primary focus:ring-2 focus:ring-fin-primary/20 outline-none transition-all"
+                className="py-2.5 rounded-lg"
               />
             </div>
             <div className="space-y-2">
@@ -255,13 +267,16 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
           {subsError && <p className="text-xs text-red-400">{subsError}</p>}
 
           <div className="flex justify-end">
-            <button
+            {/* 保存订阅按钮 — 使用共享 Button primary 变体 */}
+            <Button
+              variant="primary"
+              size="lg"
               onClick={handleSubscribe}
               disabled={subSubmitting}
-              className="px-5 py-2.5 rounded-lg bg-fin-primary text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-60 transition-colors"
+              className="font-medium"
             >
-              {subSubmitting ? '提交中…' : '保存订阅'}
-            </button>
+              {subSubmitting ? '提交中...' : '保存订阅'}
+            </Button>
           </div>
 
           {/* 已订阅列表 */}
@@ -290,16 +305,18 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                         <span className={`font-medium ${isDisabled ? 'text-fin-muted line-through' : 'text-fin-text'}`}>
                           {sub.ticker}
                         </span>
+                        {/* 已禁用标记 — 使用共享 Badge danger 变体 */}
                         {isDisabled && (
-                          <span className="px-1.5 py-0.5 rounded text-2xs bg-red-500/20 text-red-400 font-medium">
+                          <Badge variant="danger">
                             已禁用
-                          </span>
+                          </Badge>
                         )}
+                        {/* 失败次数标记 — 使用共享 Badge warning 变体 */}
                         {hasError && !isDisabled && (
-                          <span className="px-1.5 py-0.5 rounded text-2xs bg-amber-500/20 text-amber-400 font-medium flex items-center gap-1">
+                          <Badge variant="warning" className="flex items-center gap-1">
                             <AlertTriangle size={10} />
                             失败 {sub.alert_failures ?? 0} 次
-                          </span>
+                          </Badge>
                         )}
                       </div>
                       <div className="text-fin-muted truncate">{sub.email}</div>
@@ -324,10 +341,12 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                       )}
                     </div>
                     <div className="flex items-center gap-2 ml-3 shrink-0">
-                      {/* Toggle Switch */}
-                      <button
+                      {/* Toggle 开关 — 使用共享 Button ghost 变体 */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleToggle(sub.email, sub.ticker, isDisabled)}
-                        className={`p-1 rounded transition-colors ${
+                        className={`p-1 ${
                           isDisabled
                             ? 'text-fin-muted hover:text-fin-success'
                             : 'text-fin-success hover:text-fin-muted'
@@ -335,14 +354,16 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
                         title={isDisabled ? '点击启用' : '点击禁用'}
                       >
                         {isDisabled ? <ToggleLeft size={20} /> : <ToggleRight size={20} />}
-                      </button>
-                      {/* Unsubscribe */}
-                      <button
+                      </Button>
+                      {/* 取消订阅 — 使用共享 Button danger 变体 */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleUnsubscribe(sub.email, sub.ticker)}
                         className="text-red-400 hover:text-red-300 hover:underline"
                       >
                         取消
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );

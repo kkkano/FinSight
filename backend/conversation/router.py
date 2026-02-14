@@ -476,46 +476,50 @@ class ConversationRouter:
                 tickers_info += '\nCompany mentions: ' + ', '.join(metadata['company_mentions'])
         
         try:
-            prompt = f"""You are a professional financial dialogue system intent classifier. Analyze the user's query intent.
+            prompt = f"""<role>专业金融对话系统意图路由器</role>
 
-User Query: {query}
-Conversation Context: {context_info}
+<task>分析用户查询意图，从以下选项中选择唯一最匹配的类别。仅输出类别名称。</task>
+
+<input>
+用户查询: {query}
+对话上下文: {context_info}
 {tickers_info}
+</input>
 
-Analyze the user's intent and choose ONE from the following options:
+<intent_options>
+1. **CHAT** — 快速金融问答
+   价格查询、简单信息/对比、投资建议等，必须涉及金融话题或具体标的。
 
-1. **CHAT** - Quick Financial Q&A
-    - Price queries ("how much", "current price")
-    - Simple info/comparison ("what is", "introduction", "A vs B")
-    - Investment advice ("suggest", "recommend")
-    - MUST involve financial topics or specific tickers.
+2. **REPORT** — 深度分析报告
+   用户明确要求"分析"、"详细研究"、"值不值得投"、"未来走势"等。
 
-2. **REPORT** - Deep Analysis Report
-    - Explicit analysis requests ("analyze XXX", "detailed analysis")
-    - "worth investing", "should I buy", "future trend"
+3. **ALERT** — 监控与提醒
+   "提醒我"、"监控"、"盯住"、"跌破XX通知我"等。
 
-3. **ALERT** - Monitoring & Alerts
-    - "remind me", "monitor", "watch", "drops below XXX"
+4. **ECONOMIC_EVENTS** — 经济日历/宏观事件
+   "经济日历"、"CPI"、"FOMC"、"非农"等宏观数据查询。
 
-4. **ECONOMIC_EVENTS** - Economic calendar / macro events
-    - "economic calendar", "macro events", "CPI", "FOMC", "NFP"
+5. **NEWS_SENTIMENT** — 新闻舆情
+   "新闻情绪"、"舆情分析"、"媒体观点"等。
 
-5. **NEWS_SENTIMENT** - News sentiment / media sentiment
-    - "news sentiment", "headline sentiment", "舆情"
+6. **FOLLOWUP** — 追问
+   需要上下文的续问（"为什么"、"详细说说"、"风险呢"），且对话中已有标的。
 
-6. **FOLLOWUP** - Follow-up Questions
-    - Requires context ("why", "tell me more", "what about risks")
+7. **GREETING** — 寒暄
+   "你好"、"你是谁"等非业务对话。
 
-7. **GREETING** - Greeting / Small Talk
-    - "Hello", "Hi", "Who are you", "Introduce yourself"
-    - Non-financial general chat.
+8. **CLARIFY** — 需澄清
+   非金融话题、缺少关键信息（无标的无上下文）、意图不明。
+</intent_options>
 
-8. **CLARIFY** - Unclear / Irrelevant
-    - Queries unrelated to finance (e.g., "write a bubble sort", "weather today")
-    - Missing key info (no stock ticker or context)
-    - Unclear intent
+<disambiguation_rules>
+- 有上下文标的 + 简短问题（如"风险呢"） → FOLLOWUP（不是 CHAT）
+- "分析XX" → REPORT（不是 CHAT）
+- "XX多少钱" → CHAT（不是 REPORT）
+- 无标的 + 无上下文 + 模糊问题 → CLARIFY
+</disambiguation_rules>
 
-Respond with ONLY the intent name (CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIMENT/FOLLOWUP/GREETING/CLARIFY), nothing else."""
+仅输出意图名称（CHAT/REPORT/ALERT/ECONOMIC_EVENTS/NEWS_SENTIMENT/FOLLOWUP/GREETING/CLARIFY）："""
 
             response = self.llm.invoke([HumanMessage(content=prompt)])
             intent_str = response.content.strip().upper()

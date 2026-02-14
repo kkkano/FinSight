@@ -1,36 +1,88 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
+from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictClaim, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
 
 
 class FundamentalAgent(BaseFinancialAgent):
     AGENT_NAME = "fundamental"
     CACHE_TTL = 86400  # 24 hours
+    ERROR_CACHE_TTL = int(os.getenv("FUNDAMENTAL_ERROR_CACHE_TTL_SECONDS", "300"))
+    MAX_REFLECTIONS = 1  # Chain-of-Thought: one reflection to check for missed risk signals
 
     _METRIC_DEFINITIONS: List[Dict[str, Any]] = [
-        {"key": "revenue", "label": "Revenue", "table": "income", "candidates": ["total revenue", "revenue"]},
-        {"key": "net_income", "label": "Net Income", "table": "income", "candidates": ["net income"]},
-        {"key": "operating_income", "label": "Operating Income", "table": "income", "candidates": ["operating income", "ebit"]},
-        {"key": "operating_cash_flow", "label": "Operating Cash Flow", "table": "cashflow", "candidates": ["operating cash flow"]},
-        {"key": "total_assets", "label": "Total Assets", "table": "balance", "candidates": ["total assets"]},
-        {"key": "total_liabilities", "label": "Total Liabilities", "table": "balance", "candidates": ["total liabilities"]},
+        {"key": "revenue", "label": "营收", "table": "income", "candidates": ["total revenue", "revenue"]},
+        {"key": "net_income", "label": "净利润", "table": "income", "candidates": ["net income"]},
+        {"key": "operating_income", "label": "营业利润", "table": "income", "candidates": ["operating income", "ebit"]},
+        {"key": "operating_cash_flow", "label": "经营现金流", "table": "cashflow", "candidates": ["operating cash flow"]},
+        {"key": "total_assets", "label": "总资产", "table": "balance", "candidates": ["total assets"]},
+        {"key": "total_liabilities", "label": "总负债", "table": "balance", "candidates": ["total liabilities"]},
     ]
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
 
+    def _get_tool_registry(self) -> dict:
+        """FundamentalAgent tool registry: financial APIs + search for CoT reflection."""
+        registry = {}
+        tools = self.tools
+        if not tools:
+            return registry
+        search_fn = getattr(tools, "search", None)
+        if search_fn:
+            registry["search"] = {
+                "func": search_fn,
+                "description": "通用网络搜索，查询公司基本面、行业对比等",
+                "call_with": "query",
+            }
+        financials_fn = getattr(tools, "get_financial_statements", None)
+        if financials_fn:
+            registry["get_financial_statements"] = {
+                "func": financials_fn,
+                "description": "获取财务报表(ticker)，包含利润表、资产负债表、现金流量表",
+                "call_with": "ticker",
+            }
+        company_fn = getattr(tools, "get_company_info", None)
+        if company_fn:
+            registry["get_company_info"] = {
+                "func": company_fn,
+                "description": "获取公司概况(ticker)，包含行业、市值、主营业务",
+                "call_with": "ticker",
+            }
+        return registry
+
+    @staticmethod
+    def _has_financial_tables(financials: Any) -> bool:
+        if not isinstance(financials, dict):
+            return False
+        for key in ("financials", "balance_sheet", "cashflow"):
+            table = financials.get(key)
+            if isinstance(table, dict) and bool(table):
+                return True
+        return False
+
+    @classmethod
+    def _is_financials_error_payload(cls, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return True
+        if cls._has_financial_tables(payload):
+            return False
+        return bool(payload.get("error"))
+
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         cache_key = f"{ticker}:fundamental:financials"
         cached = self.cache.get(cache_key)
         if isinstance(cached, dict):
-            if "normalized_metrics" not in cached:
-                cached["normalized_metrics"] = self._build_normalized_metrics(cached.get("financials") or {})
-            return cached
+            cached_financials = cached.get("financials")
+            if not self._is_financials_error_payload(cached_financials):
+                if "normalized_metrics" not in cached:
+                    cached["normalized_metrics"] = self._build_normalized_metrics(cached_financials or {})
+                return cached
 
         financials_func = getattr(self.tools, "get_financial_statements", None)
         company_func = getattr(self.tools, "get_company_info", None)
@@ -45,16 +97,73 @@ class FundamentalAgent(BaseFinancialAgent):
             "company_info": company_info,
             "normalized_metrics": normalized_metrics,
         }
-        self.cache.set(cache_key, data, self.CACHE_TTL)
+        cache_ttl = self.CACHE_TTL
+        if self._is_financials_error_payload(financials):
+            cache_ttl = max(30, int(self.ERROR_CACHE_TTL))
+        self.cache.set(cache_key, data, cache_ttl)
         return data
 
     async def _first_summary(self, data: Any) -> str:
+        """True Chain-of-Thought: 2-step LLM analysis with chained dependency.
+
+        Step 1: Profitability quality + financial health analysis.
+        Step 2: Growth sustainability + risk signals (builds on Step 1 output).
+
+        If any step fails, gracefully degrades to the previous step or deterministic.
+        """
+        deterministic = self._deterministic_summary(data)
         if not isinstance(data, dict):
-            return "Unable to read fundamental data."
+            return deterministic
+
+        # Build rich context: deterministic metrics + raw financial hints
+        context_parts = [deterministic]
+        company_info = data.get("company_info", "")
+        if isinstance(company_info, str) and company_info.strip():
+            context_parts.append(f"\n公司概况: {company_info[:500]}")
+        base_context = "\n".join(context_parts)
+
+        # ── Step 1: Profitability & Financial Health ──
+        step1 = await self._llm_analyze(
+            base_context,
+            role="资深卖方基本面分析师（Chain-of-Thought 推理模式 — 第一步）",
+            focus=(
+                "按链式推理（CoT）进行第一阶段分析：\n"
+                "1. 盈利质量：营收与净利润的增长是否可持续？利润率趋势如何？\n"
+                "2. 财务健康：杠杆水平、现金流覆盖能力、偿债风险\n"
+                "3. 关键发现：最值得注意的 1-2 个财务信号\n"
+                "输出一段连贯的财务分析文本，为后续分析奠定基础。"
+            ),
+        )
+        if not step1:
+            return deterministic
+
+        # ── Step 2: Growth + Valuation + Risk (chains on Step 1) ──
+        step2_input = f"{base_context}\n\n--- 第一步分析结果 ---\n{step1}"
+        step2 = await self._llm_analyze(
+            step2_input,
+            role="资深卖方基本面分析师（Chain-of-Thought 推理模式 — 第二步）",
+            focus=(
+                "基于第一步的盈利质量和财务健康分析，继续推理：\n"
+                "1. 增长持续性：同比/环比趋势是加速还是减速？关键驱动因素是什么？\n"
+                "2. 估值含义：当前财务表现对估值倍数的支撑或压力\n"
+                "3. 风险信号：是否存在盈利粉饰、现金流与利润背离、异常一次性项目\n"
+                "4. 综合判断：整合第一步和第二步的分析，给出整体评价\n"
+                "输出一段连贯的分析文本，体现从第一步到第二步的推理链条。"
+            ),
+        )
+        if not step2:
+            return step1  # Degrade to step1 if step2 fails
+
+        return f"{step1}\n\n{step2}"
+
+    def _deterministic_summary(self, data: Any) -> str:
+        """Deterministic metrics-based summary (fallback)."""
+        if not isinstance(data, dict):
+            return "基本面数据读取失败。"
 
         financials = data.get("financials") or {}
-        if isinstance(financials, dict) and financials.get("error"):
-            return f"Unable to fetch financial statements: {financials.get('error')}"
+        if isinstance(financials, dict) and financials.get("error") and not self._has_financial_tables(financials):
+            return f"财务报表获取失败: {financials.get('error')}"
 
         normalized = data.get("normalized_metrics")
         if not isinstance(normalized, dict):
@@ -80,7 +189,7 @@ class FundamentalAgent(BaseFinancialAgent):
         latest_period = period_context.get("latest_period")
         period_type = period_context.get("period_type") or "unknown"
         if latest_period:
-            summary_parts.append(f"Latest period: {latest_period} ({period_type}).")
+            summary_parts.append(f"最新报告期: {latest_period}（{period_type}）。")
 
         metric_map = normalized.get("metrics") if isinstance(normalized.get("metrics"), dict) else {}
         revenue = metric_map.get("revenue") if isinstance(metric_map.get("revenue"), dict) else {}
@@ -90,20 +199,20 @@ class FundamentalAgent(BaseFinancialAgent):
         total_assets = metric_map.get("total_assets") if isinstance(metric_map.get("total_assets"), dict) else {}
         total_liabilities = metric_map.get("total_liabilities") if isinstance(metric_map.get("total_liabilities"), dict) else {}
 
-        summary_parts.append(self._format_metric_sentence("Revenue", revenue))
-        summary_parts.append(self._format_metric_sentence("Net income", net_income))
-        summary_parts.append(self._format_metric_sentence("Operating income", operating_income))
-        summary_parts.append(self._format_metric_sentence("Operating cash flow", operating_cash_flow))
+        summary_parts.append(self._format_metric_sentence("营收", revenue))
+        summary_parts.append(self._format_metric_sentence("净利润", net_income))
+        summary_parts.append(self._format_metric_sentence("营业利润", operating_income))
+        summary_parts.append(self._format_metric_sentence("经营现金流", operating_cash_flow))
 
         assets_value = self._safe_float(total_assets.get("latest"))
         liabilities_value = self._safe_float(total_liabilities.get("latest"))
         if assets_value is not None and liabilities_value is not None and assets_value != 0:
             debt_ratio = liabilities_value / assets_value
-            summary_parts.append(f"Liabilities / Assets {debt_ratio:.1%}.")
+            summary_parts.append(f"负债/资产 {debt_ratio:.1%}。")
 
         summary_parts = [item for item in summary_parts if item]
         if not summary_parts:
-            return "No usable fundamental metrics were found in the latest financials."
+            return "最新财报中未找到可用的基本面指标。"
         return " ".join(summary_parts)
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
@@ -117,7 +226,11 @@ class FundamentalAgent(BaseFinancialAgent):
             financials = raw_data.get("financials") or {}
             source = "yfinance"
             data_sources.append(source)
-            fallback_used = bool(isinstance(financials, dict) and financials.get("error"))
+            fallback_used = bool(
+                isinstance(financials, dict)
+                and financials.get("error")
+                and not self._has_financial_tables(financials)
+            )
 
             normalized = raw_data.get("normalized_metrics")
             if not isinstance(normalized, dict):
@@ -155,6 +268,49 @@ class FundamentalAgent(BaseFinancialAgent):
         confidence = max(0.2, min(0.92, confidence))
         risks = self._build_risks(raw_data, normalized)
 
+        # --- Conflict detection: revenue growth vs margin direction ---
+        conflict_flags: List[str] = []
+        conflicting_claims: List[ConflictClaim] = []
+        if isinstance(normalized, dict):
+            metric_map_for_conflict = normalized.get("metrics") if isinstance(normalized.get("metrics"), dict) else {}
+            revenue_m = metric_map_for_conflict.get("total_revenue", {})
+            margin_m = metric_map_for_conflict.get("gross_margin", {})
+            rev_yoy = self._safe_float(revenue_m.get("yoy")) if isinstance(revenue_m, dict) else None
+            margin_qoq = self._safe_float(margin_m.get("qoq")) if isinstance(margin_m, dict) else None
+            if rev_yoy is not None and margin_qoq is not None:
+                if rev_yoy > 10 and margin_qoq < -5:
+                    conflict_flags.append("营收高增长 vs 毛利率下滑")
+                    conflicting_claims.append(ConflictClaim(
+                        claim="盈利质量一致性",
+                        source_a="营收同比",
+                        value_a=f"+{rev_yoy:.1f}% (高增长)",
+                        source_b="毛利率环比",
+                        value_b=f"{margin_qoq:+.1f}% (下滑)",
+                        severity="medium",
+                    ))
+                elif rev_yoy < -5 and margin_qoq > 5:
+                    conflict_flags.append("营收下滑 vs 毛利率扩张")
+                    conflicting_claims.append(ConflictClaim(
+                        claim="盈利质量一致性",
+                        source_a="营收同比",
+                        value_a=f"{rev_yoy:+.1f}% (下滑)",
+                        source_b="毛利率环比",
+                        value_b=f"+{margin_qoq:.1f}% (扩张)",
+                        severity="low",
+                    ))
+
+        # Fallback observability
+        fallback_reason = None
+        if fallback_used:
+            if isinstance(raw_data, dict):
+                err_msg = raw_data.get("financials", {})
+                if isinstance(err_msg, dict):
+                    fallback_reason = str(err_msg.get("error") or "financial_data_incomplete")
+                else:
+                    fallback_reason = "financial_data_unavailable"
+            else:
+                fallback_reason = "no_structured_data"
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -165,6 +321,10 @@ class FundamentalAgent(BaseFinancialAgent):
             evidence_quality=evidence_quality,
             fallback_used=fallback_used,
             risks=risks,
+            conflict_flags=conflict_flags,
+            conflicting_claims=conflicting_claims,
+            fallback_reason=fallback_reason,
+            retryable=True,
         )
 
     def _build_normalized_metrics(self, financials: Dict[str, Any]) -> Dict[str, Any]:
@@ -328,9 +488,9 @@ class FundamentalAgent(BaseFinancialAgent):
         qoq = self._safe_float(metric.get("qoq"))
         yoy = self._safe_float(metric.get("yoy"))
         if qoq is not None:
-            growth_bits.append(f"QoQ {qoq:.1%}")
+            growth_bits.append(f"环比 {qoq:.1%}")
         if yoy is not None:
-            growth_bits.append(f"YoY {yoy:.1%}")
+            growth_bits.append(f"同比 {yoy:.1%}")
         if growth_bits:
             bits.append(f"({', '.join(growth_bits)})")
         return " ".join(bits) + "."
@@ -415,14 +575,14 @@ class FundamentalAgent(BaseFinancialAgent):
 
         risks: List[str] = []
         if net_income_value is not None and net_income_value < 0:
-            risks.append("Net income remains negative.")
+            risks.append("净利润为负，盈利能力存在风险。")
         if assets_value is not None and liabilities_value is not None and assets_value != 0:
             leverage = liabilities_value / assets_value
             if leverage > 0.6:
-                risks.append("Leverage ratio is elevated (liabilities/assets > 60%).")
+                risks.append(f"杠杆率偏高（负债/资产 = {leverage:.0%} > 60%），偿债压力较大。")
 
         financials = raw_data.get("financials") if isinstance(raw_data, dict) else {}
-        if isinstance(financials, dict) and financials.get("error"):
-            risks.append("Financial statement retrieval degraded; verify with primary filings.")
+        if isinstance(financials, dict) and financials.get("error") and not self._has_financial_tables(financials):
+            risks.append("财务数据获取异常，建议核实原始财报。")
 
-        return risks or ["Fundamental data shows no major red flags."]
+        return risks or ["基本面数据未见重大风险信号。"]

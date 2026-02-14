@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 import os
 import logging
 from datetime import datetime
+from urllib.parse import urlparse
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -10,6 +11,22 @@ logger = logging.getLogger(__name__)
 class NewsAgent(BaseFinancialAgent):
     AGENT_NAME = "NewsAgent"
     CACHE_TTL = 600  # 10 minutes
+    MAX_REFLECTIONS = 1  # ReAct: one Reason-Act cycle for deeper investigation
+    _AUTHORITATIVE_DOMAIN_HINTS = (
+        "sec.gov",
+        "reuters.com",
+        "bloomberg.com",
+        "wsj.com",
+        "ft.com",
+        "cnbc.com",
+        "marketwatch.com",
+        "finance.yahoo.com",
+        "nasdaq.com",
+        "fool.com",
+        "seekingalpha.com",
+        "investor.",
+        "apple.com",
+    )
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
         if circuit_breaker is None:
@@ -21,6 +38,79 @@ class NewsAgent(BaseFinancialAgent):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
         self._last_convergence = None
+
+    def _get_tool_registry(self) -> dict:
+        """NewsAgent tool registry: news APIs + search for ReAct reflection."""
+        registry = {}
+        tools = self.tools
+        if not tools:
+            return registry
+        search_fn = getattr(tools, "search", None)
+        if search_fn:
+            registry["search"] = {
+                "func": search_fn,
+                "description": "通用网络搜索，查询任意新闻/事件",
+                "call_with": "query",
+            }
+        news_fn = getattr(tools, "get_company_news", None)
+        if news_fn:
+            registry["get_company_news"] = {
+                "func": news_fn,
+                "description": "获取公司新闻列表(ticker)，返回结构化新闻数据",
+                "call_with": "ticker",
+            }
+        sentiment_fn = getattr(tools, "get_news_sentiment", None)
+        if sentiment_fn:
+            registry["get_news_sentiment"] = {
+                "func": sentiment_fn,
+                "description": "获取新闻情绪分析(ticker)，返回情绪评分和标签",
+                "call_with": "ticker",
+            }
+        return registry
+
+    def _is_finance_research_intent(self, query: str) -> bool:
+        text = str(query or "").lower()
+        signals = (
+            "10-k",
+            "10q",
+            "10-q",
+            "filing",
+            "earnings",
+            "transcript",
+            "investment report",
+            "deep report",
+            "longform",
+            "财报",
+            "业绩",
+            "研报",
+            "电话会",
+        )
+        return any(token in text for token in signals)
+
+    def _domain_from_url(self, url: str) -> str:
+        try:
+            host = urlparse(str(url or "").strip().lower()).netloc
+        except Exception:
+            host = ""
+        return host.lstrip("www.")
+
+    def _is_authoritative_domain(self, domain: str) -> bool:
+        host = str(domain or "").strip().lower()
+        if not host:
+            return False
+        return any(hint in host for hint in self._AUTHORITATIVE_DOMAIN_HINTS)
+
+    def _filter_authoritative_news(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        filtered: List[Dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            if self._is_authoritative_domain(self._domain_from_url(url)):
+                filtered.append(item)
+        return filtered
 
     async def _initial_search(self, query: str, ticker: str) -> List[Any]:
         cache_key = f"{ticker}:news:24h"
@@ -133,6 +223,17 @@ class NewsAgent(BaseFinancialAgent):
         except Exception:
             self._last_convergence = None
 
+        strict_sources = str(os.getenv("NEWS_STRICT_FINANCE_SOURCES", "true")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if strict_sources and self._is_finance_research_intent(query):
+            authoritative = self._filter_authoritative_news(unique_results)
+            if authoritative:
+                unique_results = authoritative
+
         if unique_results:
             self.cache.set(cache_key, unique_results, self.CACHE_TTL)
         return unique_results
@@ -214,16 +315,48 @@ class NewsAgent(BaseFinancialAgent):
         return results[:5]  # 限制数量
 
     async def _first_summary(self, data: List[Any]) -> str:
+        deterministic = self._deterministic_summary(data)
+        if not data:
+            return deterministic
+
+        # Build rich context for LLM ReAct-style analysis
+        news_context_parts = []
+        for item in data[:8]:
+            if not isinstance(item, dict):
+                continue
+            headline = item.get("headline", item.get("title", ""))
+            source = item.get("source", "")
+            date = item.get("datetime", item.get("published_at", ""))
+            url = item.get("url", "")
+            meta = f" ({source}" + (f", {date}" if date else "") + ")" if source else ""
+            news_context_parts.append(f"- {headline}{meta}")
+        news_context = "\n".join(news_context_parts)
+
+        analysis = await self._llm_analyze(
+            f"新闻列表：\n{news_context}",
+            role="资深金融新闻分析师（ReAct 推理模式）",
+            focus=(
+                "按 ReAct 模式分析：\n"
+                "1. Observe（观察）：从新闻标题中识别 2-4 个核心主题/事件\n"
+                "2. Reason（推理）：分析事件间的关联性、情绪倾向、对标的资产的影响路径\n"
+                "3. Assess（评估）：区分短期噪音 vs 中长期趋势信号\n"
+                "4. Risk（风险）：标注 1-2 个关键不确定性或信息缺口\n"
+                "输出一段连贯的分析文本，不要使用编号列表。"
+            ),
+        )
+        return analysis if analysis else deterministic
+
+    def _deterministic_summary(self, data: List[Any]) -> str:
+        """Simple headline concatenation (fallback)."""
         if not data:
             return "No recent news found."
-
-        # Simple concatenation for MVP, real impl would use LLM
         titles = [item.get("headline", item.get("title", "")) for item in data[:5]]
         return f"Recent news includes: {'; '.join(titles)}"
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence = []
         sources = set()
+        fallback_used = False
 
         # Handle None or non-list raw_data
         if raw_data and isinstance(raw_data, list):
@@ -238,6 +371,8 @@ class NewsAgent(BaseFinancialAgent):
                         timestamp=item.get("datetime", item.get("published_at")),
                         confidence=item.get("confidence", 0.7),
                     ))
+        else:
+            fallback_used = True
 
         trace = []
         if self._last_convergence:
@@ -251,6 +386,12 @@ class NewsAgent(BaseFinancialAgent):
             except Exception:
                 pass
 
+        # Fallback observability
+        fallback_reason = None
+        if not evidence:
+            fallback_used = True
+            fallback_reason = "no_news_data"
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -258,8 +399,10 @@ class NewsAgent(BaseFinancialAgent):
             confidence=0.8 if evidence else 0.1,
             data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
-            fallback_used=not bool(evidence),
+            fallback_used=fallback_used,
             trace=trace,
+            fallback_reason=fallback_reason,
+            retryable=True,
         )
 
     async def analyze_stream(self, query: str, ticker: str):
@@ -434,21 +577,65 @@ class NewsAgent(BaseFinancialAgent):
         if self.llm and hasattr(self.llm, 'astream'):
             try:
                 from langchain_core.messages import HumanMessage
-                prompt = f"""你是资深金融新闻分析师。请用中文输出**更完整**的新闻摘要（120-200字），要求：
-- 3-5条要点，覆盖事实+影响
-- 明确提到1-2个潜在风险或不确定性
-- 不要复述标题原文，尽量提炼
+                prompt = f"""<role>资深金融新闻分析师</role>
 
-新闻列表：
+<task>基于以下新闻列表，输出一份专业的中文新闻摘要分析（150-250字）。</task>
+
+<news>
 {chr(10).join(news_list)}
+</news>
 
-输出："""
+<requirements>
+- 提炼 3-5 条核心要点，每条包含：事实 + 市场影响判断
+- 识别新闻间的关联性（如多条新闻指向同一趋势）
+- 明确标注 1-2 个潜在风险或不确定性
+- 区分短期噪音和中长期趋势信号
+</requirements>
+
+<constraints>
+- 禁止复述新闻标题原文，必须提炼和解读
+- 禁止开场白，直接输出分析内容
+- 专业简洁，避免冗余表述
+</constraints>"""
                 async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
                     if hasattr(chunk, 'content') and chunk.content:
                         yield chunk.content
                 return
-            except Exception:
-                pass  # 回退到简单方法
+            except Exception as stream_exc:
+                logger.info(f"[NewsAgent] stream summary failed, fallback to retry invoke: {stream_exc}")
+                try:
+                    from backend.services.llm_retry import ainvoke_with_rate_limit_retry
+
+                    llm_factory = None
+                    try:
+                        from backend.llm_config import create_llm
+
+                        provider = os.getenv("LLM_PROVIDER", "openai_compatible")
+                        temperature = float(os.getenv("NEWS_LLM_TEMPERATURE", "0.3"))
+                        request_timeout = int(os.getenv("NEWS_LLM_REQUEST_TIMEOUT", "600"))
+                        llm_factory = lambda: create_llm(  # noqa: E731
+                            provider=provider,
+                            temperature=temperature,
+                            request_timeout=request_timeout,
+                        )
+                    except Exception:
+                        llm_factory = None
+
+                    max_attempts = max(1, int(os.getenv("NEWS_LLM_MAX_ATTEMPTS", "3")))
+                    resp = await ainvoke_with_rate_limit_retry(
+                        self.llm,
+                        [HumanMessage(content=prompt)],
+                        llm_factory=llm_factory,
+                        max_attempts=max_attempts,
+                        acquire_token=True,
+                    )
+                    text = resp.content if hasattr(resp, "content") else str(resp)
+                    text = str(text or "").strip()
+                    if text:
+                        yield text
+                        return
+                except Exception as invoke_exc:
+                    logger.info(f"[NewsAgent] invoke summary fallback failed: {invoke_exc}")
         
         # 简单方法：直接拼接标题
         yield f"近期新闻包括：{'; '.join([item.get('headline', item.get('title', '')) for item in data[:3]])}"

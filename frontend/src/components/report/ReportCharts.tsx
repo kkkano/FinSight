@@ -172,6 +172,96 @@ export interface SynthesisReportBlockProps {
   onCollapse: () => void;
 }
 
+/** Keywords that identify appendix/meta sections (collapsed by default).
+ *  Matches against heading text (case-insensitive).
+ *  Backend report_builder.py appends these as `##` headings. */
+const APPENDIX_HEADING_KEYWORDS = [
+  '引用来源', '引用链接', 'references', 'citations', 'citation',
+  '信息缺口', 'information gap',
+  '研究完整性', '完整性校验', 'integrity',
+  '数据冲突', '冲突披露', 'conflict',
+  '深度补充', '补充分析', '补充说明',
+];
+
+interface SynthesisSection {
+  heading: string;
+  /** Original heading level (2 for `##`, 3 for `###`). 0 = no heading (preamble). */
+  level: number;
+  content: string;
+  isAppendix: boolean;
+}
+
+/**
+ * Split a synthesis markdown string into sections by `##` or `###` headings.
+ * Backend report_builder appends appendix blocks with `##` headings while the
+ * narrative body typically uses `###`, so we must match both levels.
+ */
+const splitSynthesisSections = (markdown: string): SynthesisSection[] => {
+  if (!markdown) return [];
+  const sections: SynthesisSection[] = [];
+  const lines = markdown.split('\n');
+  let currentHeading = '';
+  let currentLevel = 0;
+  let currentLines: string[] = [];
+
+  const flush = () => {
+    const content = currentLines.join('\n').trim();
+    if (!content && !currentHeading) return;
+    const headingLower = currentHeading.toLowerCase();
+    const isAppendix = currentHeading !== '' && APPENDIX_HEADING_KEYWORDS.some(
+      (kw) => headingLower.includes(kw.toLowerCase()),
+    );
+    sections.push({ heading: currentHeading, level: currentLevel, content, isAppendix });
+  };
+
+  for (const line of lines) {
+    // Match ## or ### headings (but NOT # or ####+)
+    const match = line.match(/^(#{2,3})\s+(.+)/);
+    if (match) {
+      flush();
+      currentLevel = match[1].length; // 2 or 3
+      currentHeading = match[2].trim();
+      currentLines = [];
+    } else {
+      currentLines.push(line);
+    }
+  }
+  flush();
+  return sections;
+};
+
+/** Collapsible appendix section within the synthesis report. */
+const AppendixSection: React.FC<{ heading: string; content: string }> = ({ heading, content }) => {
+  const [open, setOpen] = React.useState(false);
+  if (!content) return null;
+
+  return (
+    <div className="rounded-lg border border-slate-200/70 dark:border-slate-700/50 overflow-hidden mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+      >
+        <ChevronDown
+          size={14}
+          className={`text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+        />
+        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{heading}</span>
+        {!open && (
+          <span className="ml-auto text-2xs text-slate-400 dark:text-slate-500">点击展开</span>
+        )}
+      </button>
+      {open && (
+        <div className="px-4 py-3 border-t border-slate-200/60 dark:border-slate-700/40 bg-white/60 dark:bg-slate-900/40">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed text-xs">
+            <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(content)}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
   synthesisReport,
   isExpanded,
@@ -180,6 +270,19 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
   onCollapse,
 }) => {
   if (!synthesisReport) return null;
+
+  const sections = React.useMemo(() => splitSynthesisSections(synthesisReport), [synthesisReport]);
+  const mainSections = sections.filter((s) => !s.isAppendix);
+  const appendixSections = sections.filter((s) => s.isAppendix);
+
+  /** Build markdown for main (non-appendix) sections, preserving original heading level. */
+  const mainMarkdown = mainSections
+    .map((s) => {
+      if (!s.heading) return s.content;
+      const prefix = '#'.repeat(s.level || 3);
+      return `${prefix} ${s.heading}\n\n${s.content}`;
+    })
+    .join('\n\n');
 
   return (
     <div className="rounded-xl border border-blue-200/80 dark:border-blue-700/60 bg-white/90 dark:bg-slate-900/70 overflow-hidden">
@@ -203,9 +306,22 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
         <div
           className={`p-5 transition-all duration-300 ease-in-out ${isExpanded ? '' : 'max-h-[300px] overflow-hidden'}`}
         >
+          {/* Main content — always rendered */}
           <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
-            <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(synthesisReport)}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(mainMarkdown)}</ReactMarkdown>
           </div>
+
+          {/* Appendix sections — each individually collapsible */}
+          {isExpanded && appendixSections.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-700/40">
+              <div className="text-2xs text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider font-medium">
+                附录 · {appendixSections.length} 项
+              </div>
+              {appendixSections.map((sec, idx) => (
+                <AppendixSection key={`${sec.heading}-${idx}`} heading={sec.heading} content={sec.content} />
+              ))}
+            </div>
+          )}
         </div>
 
         {!isExpanded && (

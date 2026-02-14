@@ -508,6 +508,14 @@ export const extractAgentDetailSections = (report: ReportIR): ReportSection[] =>
         {
           type: 'text' as const,
           content: item.summary || (item.error_message ? `\u26a0\ufe0f ${item.error_message}` : item.status === 'not_run' ? '\u672a\u8fd0\u884c\uff08\u672c\u8f6e\u672a\u89e6\u53d1\u6216\u65e0\u5339\u914d\u610f\u56fe\uff09' : '\u6682\u65e0\u8f93\u51fa'),
+          metadata: {
+            detail_payload: {
+              raw_output: item.raw_output ?? {},
+              evidence_full: Array.isArray(item.evidence_full) ? item.evidence_full : [],
+              trace_full: Array.isArray(item.trace_full) ? item.trace_full : [],
+              report_input: item.report_input ?? {},
+            },
+          },
         },
       ],
     }));

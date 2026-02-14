@@ -64,6 +64,10 @@ const mapStageToSource = (stage: string): AgentLogSource => {
   };
   if (stage.startsWith('langgraph_')) return 'supervisor';
   if (stage.startsWith('executor_step')) return 'supervisor';
+  if (stage.startsWith('llm_')) return 'supervisor';
+  if (stage.startsWith('cache_')) return 'system';
+  if (stage === 'api_call' || stage === 'data_source') return 'system';
+  if (stage === 'agent_step') return 'planner';
   // 未匹配时尝试根据 stage 名称匹配 agent
   if (stage.includes('news')) return 'news_agent';
   if (stage.includes('price')) return 'price_agent';
@@ -168,6 +172,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     // Raw SSE Events
     addRawEvent,
     traceRawEnabled,
+    setRequestMetrics,
   } = useStore();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -286,6 +291,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         },
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
           console.log('[ChatInput] onDone called, report:', report);
+
+          const metrics = meta?.metrics || {};
+          if (metrics && typeof metrics === 'object') {
+            setRequestMetrics({
+              llmTotalCalls: Number(metrics.llm_total_calls || 0),
+              toolTotalCalls: Number(metrics.tool_total_calls || 0),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+
           if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
             setSessionId(meta.session_id);
           }
@@ -549,36 +564,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('NVDA technical analysis')}
+            onClick={() => setInput('英伟达（NVDA）技术面分析：RSI、MACD、关键支撑阻力位')}
             disabled={isChatLoading}
           >
-            NVDA technical
+            NVDA 技术面
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('Compare AAPL vs MSFT')}
+            onClick={() => setInput('对比 AAPL 与 MSFT：营收增长、估值水平、技术面强弱')}
             disabled={isChatLoading}
           >
-            AAPL vs MSFT
+            AAPL 对比 MSFT
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('Latest Tesla key news')}
+            onClick={() => setInput('特斯拉最新关键新闻（24小时）及对股价影响解读')}
             disabled={isChatLoading}
           >
-            Tesla news
+            特斯拉新闻
           </button>
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
-            onClick={() => setInput('Detailed analysis for Apple with investment view')}
+            onClick={() => {
+              setOutputMode('investment_report');
+              setInput('请做 Apple 深度投资报告（deep report，filing document longform），重点引用 10-K/10-Q、业绩电话会与权威媒体来源，并给出明确结论与风险清单');
+            }}
             disabled={isChatLoading}
           >
-            Apple deep analysis
+            Apple 深度研报
           </button>
         </div>
       </div>
     </div>
   );
 };
-
-

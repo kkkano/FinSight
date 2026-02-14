@@ -175,6 +175,9 @@ def required_agents_for_request(state: dict[str, Any], candidates: Iterable[str]
         required = ["news_agent", "price_agent"]
     elif subject_type == "company":
         required = ["price_agent", "news_agent", "fundamental_agent"]
+        # Always include macro + technical for comprehensive investment reports
+        if output_mode == "investment_report":
+            required.extend(["macro_agent", "technical_agent"])
     else:
         required = ["price_agent", "news_agent"]
 

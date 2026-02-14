@@ -1,0 +1,1039 @@
+{
+  "report_id": "lg_d08426fd43",
+  "ticker": "AAPL",
+  "company_name": "AAPL",
+  "title": "AAPL 分析报告",
+  "summary": "- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。\n- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。",
+  "sentiment": "neutral",
+  "confidence_score": 0.55,
+  "sections": [
+    {
+      "title": "基本面分析",
+      "order": 1,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "fundamental_agent",
+      "data_sources": []
+    },
+    {
+      "title": "技术分析",
+      "order": 2,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "technical_agent",
+      "data_sources": []
+    },
+    {
+      "title": "深度搜索",
+      "order": 3,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "deep_search_agent",
+      "data_sources": []
+    },
+    {
+      "title": "宏观分析",
+      "order": 4,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "macro_agent",
+      "data_sources": []
+    },
+    {
+      "title": "价格分析",
+      "order": 5,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "price_agent",
+      "data_sources": []
+    },
+    {
+      "title": "新闻分析",
+      "order": 6,
+      "contents": [
+        {
+          "type": "text",
+          "content": "Not run (dry_run).",
+          "citation_refs": [],
+          "metadata": {}
+        }
+      ],
+      "subsections": [],
+      "is_collapsible": true,
+      "default_collapsed": false,
+      "confidence": 0.0,
+      "agent_name": "news_agent",
+      "data_sources": []
+    }
+  ],
+  "citations": [],
+  "risks": [
+    "证据覆盖率或引用数量不足，结论可信度下降，请谨慎参考。"
+  ],
+  "recommendation": "HOLD",
+  "generated_at": "2026-02-12T15:18:54.609764+00:00",
+  "meta": {
+    "source": "langgraph",
+    "thread_id": "query-matrix-report-1",
+    "subject_type": "company",
+    "agent_summaries": [
+      {
+        "title": "基本面分析",
+        "order": 1,
+        "agent_name": "fundamental_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      },
+      {
+        "title": "技术分析",
+        "order": 2,
+        "agent_name": "technical_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      },
+      {
+        "title": "深度搜索",
+        "order": 3,
+        "agent_name": "deep_search_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      },
+      {
+        "title": "宏观分析",
+        "order": 4,
+        "agent_name": "macro_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      },
+      {
+        "title": "价格分析",
+        "order": 5,
+        "agent_name": "price_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      },
+      {
+        "title": "新闻分析",
+        "order": 6,
+        "agent_name": "news_agent",
+        "status": "not_run",
+        "summary": "Not run (dry_run).",
+        "confidence": 0.0,
+        "data_sources": [],
+        "skipped_reason": "dry_run",
+        "escalation_not_needed": false
+      }
+    ],
+    "filing_section_citations": [],
+    "report_hints": {
+      "is_compare": false,
+      "has_conflict": false,
+      "compare_basis": [],
+      "conflict_agents": []
+    },
+    "graph_trace": {
+      "schema_version": "trace.v1",
+      "routing_chain": [
+        "langgraph"
+      ],
+      "spans": [
+        {
+          "schema_version": "trace.v1",
+          "node": "build_initial_state",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:53.376410+00:00"
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "normalize_ui_context",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:53.380667+00:00",
+          "data": {
+            "selections": {
+              "count": 0,
+              "types": []
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "decide_output_mode",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:53.381122+00:00",
+          "data": {
+            "output_mode": "investment_report"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "resolve_subject",
+          "duration_ms": 4,
+          "ts": "2026-02-12T15:18:53.390027+00:00",
+          "data": {
+            "subject_type": "company",
+            "tickers": [
+              "AAPL"
+            ],
+            "selection_types": []
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "clarify",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:53.390468+00:00",
+          "data": {
+            "needed": false,
+            "reason": "",
+            "question": ""
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "parse_operation",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:53.391861+00:00",
+          "data": {
+            "operation": "qa",
+            "confidence": 0.4,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "policy_gate",
+          "duration_ms": 1087,
+          "ts": "2026-02-12T15:18:54.479525+00:00",
+          "data": {
+            "decision_type": "policy_gate",
+            "summary": "selected=6 required=6 tools=7",
+            "fallback_reason": "none",
+            "budget": {
+              "max_rounds": 6,
+              "max_tools": 8
+            },
+            "allowed_tools": [
+              "get_stock_price",
+              "get_technical_snapshot",
+              "get_company_info",
+              "get_company_news",
+              "analyze_historical_drawdowns",
+              "get_current_datetime",
+              "search"
+            ],
+            "allowed_tools_count": 7,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers"
+            ],
+            "selection_summary": "selected=6 required=6 tools=7",
+            "agent_selection": {
+              "selected": [
+                "fundamental_agent",
+                "technical_agent",
+                "deep_search_agent",
+                "macro_agent",
+                "price_agent",
+                "news_agent"
+              ],
+              "required": [
+                "fundamental_agent",
+                "technical_agent",
+                "deep_search_agent",
+                "macro_agent",
+                "price_agent",
+                "news_agent"
+              ],
+              "scored": [
+                {
+                  "agent": "fundamental_agent",
+                  "score": 1.0,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.60",
+                    "output:investment_report=+0.35"
+                  ]
+                },
+                {
+                  "agent": "technical_agent",
+                  "score": 1.0,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.50",
+                    "output:investment_report=+0.20",
+                    "keyword:+0.25"
+                  ]
+                },
+                {
+                  "agent": "deep_search_agent",
+                  "score": 0.9,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.10",
+                    "operation:qa=+0.20",
+                    "output:investment_report=+0.10",
+                    "keyword:+0.45"
+                  ]
+                },
+                {
+                  "agent": "macro_agent",
+                  "score": 0.9,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.35",
+                    "output:investment_report=+0.25",
+                    "keyword:+0.25"
+                  ]
+                },
+                {
+                  "agent": "price_agent",
+                  "score": 0.9,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.55",
+                    "output:investment_report=+0.30"
+                  ]
+                },
+                {
+                  "agent": "news_agent",
+                  "score": 0.75,
+                  "reasons": [
+                    "base=0.05",
+                    "subject:company=+0.45",
+                    "output:investment_report=+0.25"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "planner",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:54.480318+00:00",
+          "data": {
+            "decision_type": "planner",
+            "summary": "plan=9 steps, first=get_company_info",
+            "fallback_reason": "none",
+            "planner_runtime": {
+              "mode": "stub",
+              "fallback": false,
+              "retry_attempts": 0,
+              "failure_strategy_version": "failure.v1",
+              "variant": "A"
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "kind": "tool",
+                "name": "get_company_info",
+                "why": "补齐公司基础信息，便于解释新闻/财务信息的语境",
+                "parallel_group": null
+              },
+              {
+                "id": "s2",
+                "kind": "tool",
+                "name": "get_stock_price",
+                "why": "研报模式补充当前价格与估值/风险叙述的锚点",
+                "parallel_group": null
+              },
+              {
+                "id": "s3",
+                "kind": "tool",
+                "name": "analyze_historical_drawdowns",
+                "why": "研报模式补充历史回撤信息用于风险章节",
+                "parallel_group": null
+              },
+              {
+                "id": "s4",
+                "kind": "agent",
+                "name": "fundamental_agent",
+                "why": "研报模式：运行 fundamental_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s5",
+                "kind": "agent",
+                "name": "technical_agent",
+                "why": "研报模式：运行 technical_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s6",
+                "kind": "agent",
+                "name": "deep_search_agent",
+                "why": "研报模式：运行 deep_search_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s7",
+                "kind": "agent",
+                "name": "macro_agent",
+                "why": "研报模式：运行 macro_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s8",
+                "kind": "agent",
+                "name": "price_agent",
+                "why": "研报模式：运行 price_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              },
+              {
+                "id": "s9",
+                "kind": "agent",
+                "name": "news_agent",
+                "why": "研报模式：运行 news_agent 产出结构化摘要+证据（用于卡片展示）",
+                "parallel_group": "report_agents"
+              }
+            ],
+            "step_count": 9,
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ],
+            "decision_summary": "plan=9 steps, first=get_company_info"
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "execute_plan",
+          "duration_ms": 124,
+          "ts": "2026-02-12T15:18:54.605046+00:00",
+          "data": {
+            "decision_type": "execute_plan",
+            "summary": "steps=9 done=0 skipped=9",
+            "fallback_reason": "none",
+            "executor": {
+              "type": "dry_run",
+              "ran_steps": 9,
+              "error_count": 0,
+              "failure_strategy_version": "failure.v1",
+              "events": [
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s1",
+                  "kind": "tool",
+                  "name": "get_company_info"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s1",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s2",
+                  "kind": "tool",
+                  "name": "get_stock_price"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s2",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s3",
+                  "kind": "tool",
+                  "name": "analyze_historical_drawdowns"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s3",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s4",
+                  "kind": "agent",
+                  "name": "fundamental_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s4",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s5",
+                  "kind": "agent",
+                  "name": "technical_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s5",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s6",
+                  "kind": "agent",
+                  "name": "deep_search_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s6",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s7",
+                  "kind": "agent",
+                  "name": "macro_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s7",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s8",
+                  "kind": "agent",
+                  "name": "price_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s8",
+                  "cached": false,
+                  "duration_ms": 0
+                },
+                {
+                  "event": "executor.step_started",
+                  "step_id": "s9",
+                  "kind": "agent",
+                  "name": "news_agent"
+                },
+                {
+                  "event": "executor.step_finished",
+                  "step_id": "s9",
+                  "cached": false,
+                  "duration_ms": 0
+                }
+              ]
+            },
+            "steps": [
+              {
+                "id": "s1",
+                "name": "get_company_info",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s2",
+                "name": "get_stock_price",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s3",
+                "name": "analyze_historical_drawdowns",
+                "kind": "tool",
+                "parallel_group": null,
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s4",
+                "name": "fundamental_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s5",
+                "name": "technical_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s6",
+                "name": "deep_search_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s7",
+                "name": "macro_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s8",
+                "name": "price_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              },
+              {
+                "id": "s9",
+                "name": "news_agent",
+                "kind": "agent",
+                "parallel_group": "report_agents",
+                "cached": false,
+                "skipped": true,
+                "status_reason": "dry_run",
+                "duration_ms": 0,
+                "output_preview": null
+              }
+            ],
+            "input_state": "explicit",
+            "input_sources": [
+              "state.query",
+              "state.ui_context.active_symbol",
+              "state.subject.tickers",
+              "state.policy.allowed_tools",
+              "state.policy.allowed_agents"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "synthesize",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:54.605629+00:00",
+          "data": {
+            "decision_type": "synthesize",
+            "summary": "render_vars=17",
+            "fallback_reason": "none",
+            "synthesize_runtime": {
+              "mode": "stub",
+              "fallback": false,
+              "retry_attempts": 0,
+              "failure_strategy_version": "failure.v1",
+              "keys": [
+                "analysis",
+                "catalysts",
+                "company_overview",
+                "comparison_conclusion",
+                "comparison_metrics",
+                "conclusion",
+                "highlights",
+                "impact_analysis",
+                "investment_summary",
+                "investment_thesis",
+                "news_summary",
+                "next_watch",
+                "price_snapshot",
+                "risks",
+                "summary",
+                "technical_snapshot",
+                "valuation"
+              ]
+            },
+            "render_vars_keys": [
+              "analysis",
+              "catalysts",
+              "company_overview",
+              "comparison_conclusion",
+              "comparison_metrics",
+              "conclusion",
+              "highlights",
+              "impact_analysis",
+              "investment_summary",
+              "investment_thesis",
+              "news_summary",
+              "next_watch",
+              "price_snapshot",
+              "risks",
+              "summary",
+              "technical_snapshot"
+            ]
+          }
+        },
+        {
+          "schema_version": "trace.v1",
+          "node": "render",
+          "duration_ms": 0,
+          "ts": "2026-02-12T15:18:54.606419+00:00",
+          "data": {
+            "draft_markdown_len": 524,
+            "draft_markdown_preview": "## 投资研报：AAPL\n\n**问题**：Deep analysis report on AAPL with macro and technical\n\n## 综合投资观点\n\n**AAPL 综合研判：中性（Neutral）**\n\n多空信号交织，建议观望或分批操作。以下为多维度交叉验…"
+          }
+        }
+      ],
+      "clarify": {
+        "needed": false,
+        "subject_type": "company"
+      },
+      "policy": {
+        "output_mode": "investment_report",
+        "subject_type": "company",
+        "budget": {
+          "max_rounds": 6,
+          "max_tools": 8
+        },
+        "allowed_tools": [
+          "get_stock_price",
+          "get_technical_snapshot",
+          "get_company_info",
+          "get_company_news",
+          "analyze_historical_drawdowns",
+          "get_current_datetime",
+          "search"
+        ],
+        "allowed_agents": [
+          "fundamental_agent",
+          "technical_agent",
+          "deep_search_agent",
+          "macro_agent",
+          "price_agent",
+          "news_agent"
+        ],
+        "agent_selection": {
+          "required": [
+            "fundamental_agent",
+            "technical_agent",
+            "deep_search_agent",
+            "macro_agent",
+            "price_agent",
+            "news_agent"
+          ],
+          "max_agents": 6,
+          "min_agents": 2
+        }
+      },
+      "planner_runtime": {
+        "mode": "stub",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "variant": "A"
+      },
+      "planner": {
+        "type": "stub",
+        "validated": true,
+        "steps": 9,
+        "operation": "qa"
+      },
+      "executor": {
+        "type": "dry_run",
+        "ran_steps": 9,
+        "error_count": 0,
+        "failure_strategy_version": "failure.v1",
+        "events": [
+          {
+            "event": "executor.step_started",
+            "step_id": "s1",
+            "kind": "tool",
+            "name": "get_company_info"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s1",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s2",
+            "kind": "tool",
+            "name": "get_stock_price"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s2",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s3",
+            "kind": "tool",
+            "name": "analyze_historical_drawdowns"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s3",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s4",
+            "kind": "agent",
+            "name": "fundamental_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s4",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s5",
+            "kind": "agent",
+            "name": "technical_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s5",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s6",
+            "kind": "agent",
+            "name": "deep_search_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s6",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s7",
+            "kind": "agent",
+            "name": "macro_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s7",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s8",
+            "kind": "agent",
+            "name": "price_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s8",
+            "cached": false,
+            "duration_ms": 0
+          },
+          {
+            "event": "executor.step_started",
+            "step_id": "s9",
+            "kind": "agent",
+            "name": "news_agent"
+          },
+          {
+            "event": "executor.step_finished",
+            "step_id": "s9",
+            "cached": false,
+            "duration_ms": 0
+          }
+        ]
+      },
+      "rag": {
+        "enabled": false,
+        "reason": "empty_evidence_pool"
+      },
+      "synthesize_runtime": {
+        "mode": "stub",
+        "fallback": false,
+        "retry_attempts": 0,
+        "failure_strategy_version": "failure.v1",
+        "keys": [
+          "analysis",
+          "catalysts",
+          "company_overview",
+          "comparison_conclusion",
+          "comparison_metrics",
+          "conclusion",
+          "highlights",
+          "impact_analysis",
+          "investment_summary",
+          "investment_thesis",
+          "news_summary",
+          "next_watch",
+          "price_snapshot",
+          "risks",
+          "summary",
+          "technical_snapshot",
+          "valuation"
+        ]
+      }
+    },
+    "evidence_policy": {
+      "status": "warning",
+      "coverage": 0.0,
+      "covered_blocks": 0,
+      "total_blocks": 6,
+      "unique_sources": 0,
+      "min_coverage": 0.8,
+      "min_sources": 2,
+      "min_key_section_sources": 2,
+      "invalid_refs": [],
+      "key_section_issues": [],
+      "meets_coverage": false,
+      "meets_min_sources": false
+    }
+  },
+  "synthesis_report": "## AAPL 综合研究报告\n\n## 投资研报：AAPL\n\n**问题**：Deep analysis report on AAPL with macro and technical\n\n## 综合投资观点\n\n**AAPL 综合研判：中性（Neutral）**\n\n多空信号交织，建议观望或分批操作。以下为多维度交叉验证结论：\n\n\n## 公司与业务\n\n- 公司概况：暂无数据。\n\n## 价格快照\n\n- （暂无价格数据；如需可启用 live tools）\n\n## 技术面\n\n- （暂无技术指标；如需可启用 live tools）\n\n## 关键催化剂（含新闻/事件）\n\n- 可能催化：财报、产品发布、政策变化、行业景气度变化。\n- 将基于新闻/财报证据进一步细化。\n\n## 财务与估值\n\n- 估值与财务：暂无数据。\n- 常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。\n\n## 风险\n\n- 注：以上仅供参考，不构成投资建议。\n\n## 结论与展望\n\n\n**后续关注：**\n- 关注下一财报季的营收指引和利润率变化\n- 跟踪行业政策和竞争格局变化\n\n---\n\n*免责声明：以上内容基于公开数据自动生成，仅供研究参考，不构成任何投资建议。投资决策请结合个人风险偏好及专业顾问意见。*\n\n---\n*注：以下模块本轮未触发或执行失败，如需更全面分析可尝试启用 live tools 或调整查询关键词：*\n*基本面分析, 技术分析, 深度搜索, 宏观分析, 价格分析, 新闻分析*\n\n## 决策框架（扩展版）\n- 研究标的：AAPL。本节用于补齐可执行决策框架，强调“判断-证据-触发条件-证伪条件”闭环，避免只给方向不给路径。\n- 核心摘要重述：- 研报为结构化交付物：会更长、更全面，但不等于“必须跑全家桶”。\n- 如果缺少关键证据（财报/新闻/数据），会明确标注缺口。\n- 投资主线重述：**AAPL 综合研判：中性（Neutral）**\n\n多空信号交织，建议观望或分批操作。以下为多维度交叉验证结论：\n- 公司与业务定位：- 公司概况：暂无数据。\n- 方向性结论：**后续关注：**\n- 关注下一财报季的营收指引和利润率变化\n- 跟踪行业政策和竞争格局变化\n- 证伪条件建议：若核心假设连续两个观察窗口未被验证（例如增长动能、利润率、现金流改善未兑现），应将结论下修一个等级，并重新评估仓位与风险预算。\n\n## 多维证据交叉验证\n- 当前可用多 Agent 证据较少，建议至少补齐价格、技术、基本面、新闻、宏观与深度研究六个维度后再形成最终结论。\n\n## 催化剂拆解与观察频率\n- 催化剂1：可能催化：财报、产品发布、政策变化、行业景气度变化。；建议跟踪频率：周度复盘 + 事件前后48小时专项评估。\n- 催化剂2：将基于新闻/财报证据进一步细化。；建议跟踪频率：周度复盘 + 事件前后48小时专项评估。\n\n## 估值与定价锚（扩展）\n- 估值要点1：估值与财务：暂无数据。；建议结合历史分位、同行对比与市场风险偏好变化做三维校正。\n- 估值要点2：常见框架：增长 vs 估值倍数、盈利质量、现金流与风险溢价。；建议结合历史分位、同行对比与市场风险偏好变化做三维校正。\n\n## 三情景推演（执行版）\n- 基准情景：关键经营指标延续当前节奏，估值中枢维持区间震荡；执行上以“分批、纪律、验证”为主。\n- 乐观情景：盈利与现金流同步改善且外部流动性支持风险资产估值扩张；可提高进攻仓位，但需保留止盈纪律。\n- 保守情景：增长放缓或宏观扰动导致估值压缩；优先保护本金，减小仓位波动暴露，并提高对冲与现金比例。\n\n## 风险管理与触发阈值\n- 风险1：注：以上仅供参考，不构成投资建议。\n- 统一风险控制建议：设置“基本面失效阈值 + 技术面趋势破坏阈值 + 事件冲击阈值”三重触发，任一触发即执行减仓或暂停加仓。\n\n## 执行清单（可直接落地）\n- 明确本次交易/配置的时间框架（短线/波段/中线）并与信号频率匹配。\n- 将结论拆成可监控指标：价格、成交量、盈利预期、现金流、宏观变量。\n- 为每个指标设定阈值与动作（加仓/减仓/观望），避免主观临盘决策。\n- 在重大事件窗口前，先更新假设再做仓位动作，禁止在信息不完整时重仓。\n- 固定复盘节奏：日度看风险、周度看趋势、月度看假设是否仍成立。\n- 当外部环境显著变化时，优先复核风险预算，而不是只看收益目标。\n\n## 深度附录（补充1）\n- 本附录用于补齐研究可执行性：围绕 AAPL 的判断，建议将“结论”拆成可量化监控项，并与仓位动作一一绑定，确保策略在不同市场状态下可复现。\n- 若后续新增财报、指引、政策或行业竞争格局变化，应在24小时内完成假设更新，并把变更记录写入研究日志，避免新旧逻辑混用。\n- 对于分歧较大的证据，统一采用“来源可信度 + 时效性 + 可验证性”三维评分后再纳入主结论。\n\n## 深度附录（补充2）\n- 本附录用于补齐研究可执行性：围绕 AAPL 的判断，建议将“结论”拆成可量化监控项，并与仓位动作一一绑定，确保策略在不同市场状态下可复现。\n- 若后续新增财报、指引、政策或行业竞争格局变化，应在24小时内完成假设更新，并把变更记录写入研究日志，避免新旧逻辑混用。\n- 对于分歧较大的证据，统一采用“来源可信度 + 时效性 + 可验证性”三维评分后再纳入主结论。\n\n## 深度附录（补充3）\n- 本附录用于补齐研究可执行性：围绕 AAPL 的判断，建议将“结论”拆成可量化监控项，并与仓位动作一一绑定，确保策略在不同市场状态下可复现。\n- 若后续新增财报、指引、政策或行业竞争格局变化，应在24小时内完成假设更新，并把变更记录写入研究日志，避免新旧逻辑混用。\n- 对于分歧较大的证据，统一采用“来源可信度 + 时效性 + 可验证性”三维评分后再纳入主结论。\n",
+  "agent_status": {
+    "fundamental_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    },
+    "technical_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    },
+    "deep_search_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    },
+    "macro_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    },
+    "price_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    },
+    "news_agent": {
+      "status": "not_run",
+      "confidence": 0.0,
+      "skipped_reason": "dry_run",
+      "escalation_not_needed": false
+    }
+  },
+  "report_hints": {
+    "is_compare": false,
+    "has_conflict": false,
+    "compare_basis": [],
+    "conflict_agents": []
+  }
+}

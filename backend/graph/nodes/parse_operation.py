@@ -20,7 +20,15 @@ def parse_operation(state: GraphState) -> dict:
     lowered = query.lower()
 
     def _match_any(tokens: tuple[str, ...]) -> bool:
-        return any(t in lowered for t in tokens)
+        for t in tokens:
+            # Short ASCII tokens (<=3 chars) need word-boundary match to avoid
+            # substring false-positives like "ma" inside "macro"/"market".
+            if len(t) <= 3 and t.isascii():
+                if re.search(r"\b" + re.escape(t) + r"\b", lowered):
+                    return True
+            elif t in lowered:
+                return True
+        return False
 
     op = "qa"
     confidence = 0.4
@@ -32,7 +40,7 @@ def parse_operation(state: GraphState) -> dict:
         # Impact analysis has priority over raw price/technical keywords (e.g. "影响股价").
         op = "analyze_impact"
         confidence = 0.75
-    elif _match_any(("技术面", "技術面", "技术分析", "技術分析", "technical analysis", "macd", "rsi", "kdj", "均线", "ma", "k线", "k 線", "支撑", "阻力")):
+    elif _match_any(("技术面", "技術面", "技术分析", "技術分析", "technical analysis", "macd", "rsi", "kdj", "均线", "ma", "k线", "k線", "支撑", "阻力")):
         # Technical asks should not be treated as generic "fetch latest news".
         op = "technical"
         confidence = 0.85

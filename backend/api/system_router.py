@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict
+import os
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -18,7 +19,6 @@ class SystemRouterDeps:
     get_planner_ab_metrics: Callable[[], Dict[str, Any]]
     memory_service: Any
     logger: Any
-    legacy_agent: Any
 
 
 def create_system_router(deps: SystemRouterDeps) -> APIRouter:
@@ -56,10 +56,9 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             components["tools_module"] = {"status": "unavailable"}
 
         components["memory"] = {"status": "ok" if deps.memory_service else "unavailable"}
-        components["legacy_agent"] = {
-            "status": "deprecated",
-            "available": bool(deps.legacy_agent),
-        }
+
+        live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
+        components["live_tools"] = {"status": "active" if live_tools else "dry_run"}
 
         return {
             "status": status,

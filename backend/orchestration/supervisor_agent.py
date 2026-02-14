@@ -1502,11 +1502,8 @@ class SupervisorAgent:
             if search_func:
                 content = search_func(url)
                 if content and len(content) > 100:
-                    # 使用 LLM 生成摘要
-                    from langchain_core.messages import HumanMessage
-                    prompt = f"请用2-3句话总结以下内容的要点：\n\n{content[:2000]}"
-                    response = self.llm.invoke([HumanMessage(content=prompt)])
-                    return response.content[:300] if hasattr(response, 'content') else str(response)[:300]
+                    cleaned = " ".join(str(content).split())
+                    return cleaned[:300]
 
             # 如果没有专门的 fetch 函数，尝试用搜索
             search = getattr(self.tools_module, 'search', None)

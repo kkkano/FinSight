@@ -92,3 +92,38 @@ async def test_news_agent_deduplication(mock_llm, mock_cache, mock_tools, circui
     # Should only have 1 evidence due to deduplication on URL
     assert len(result.evidence) == 1
     assert result.evidence[0].url == "http://same.com"
+
+
+@pytest.mark.asyncio
+async def test_news_agent_finance_query_prefers_authoritative_domains(
+    mock_llm,
+    mock_cache,
+    mock_tools,
+    circuit_breaker,
+    monkeypatch,
+):
+    monkeypatch.setenv("NEWS_STRICT_FINANCE_SOURCES", "true")
+    mock_tools._fetch_with_finnhub_news.return_value = [
+        {
+            "headline": "Apple revenue beat estimates",
+            "url": "https://www.reuters.com/technology/apple-reports-quarterly-results-2026-02-13/",
+            "source": "Reuters",
+            "datetime": "2026-02-13",
+        },
+        {
+            "headline": "Random finance blog post",
+            "url": "https://random-finance.cc/apple-aapl-hot-take",
+            "source": "Blog",
+            "datetime": "2026-02-13",
+        },
+    ]
+
+    agent = NewsAgent(mock_llm, mock_cache, mock_tools, circuit_breaker)
+    result = await agent.research(
+        "请做 Apple 深度投资报告（deep report，重点引用 10-K 与业绩电话会）",
+        "AAPL",
+    )
+
+    urls = [item.url or "" for item in result.evidence]
+    assert any("reuters.com" in url for url in urls)
+    assert all("random-finance.cc" not in url for url in urls)

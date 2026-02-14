@@ -40,6 +40,9 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
             is_favorite INTEGER NOT NULL DEFAULT 0,
             trace_digest_json TEXT,
             report_json TEXT NOT NULL,
+            source_type TEXT NOT NULL DEFAULT 'ai_generated',
+            filing_type TEXT,
+            publisher TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -58,6 +61,9 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
         "is_favorite": "INTEGER NOT NULL DEFAULT 0",
         "trace_digest_json": "TEXT",
         "report_json": "TEXT NOT NULL",
+        "source_type": "TEXT NOT NULL DEFAULT 'ai_generated'",
+        "filing_type": "TEXT",
+        "publisher": "TEXT",
         "created_at": "TEXT NOT NULL",
         "updated_at": "TEXT NOT NULL",
     }
@@ -73,6 +79,7 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type)")
 
     return {"table": "report_index", "added_columns": added}
 

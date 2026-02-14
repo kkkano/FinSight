@@ -8,6 +8,8 @@ import { SubscribeModal } from '../SubscribeModal';
 import { useStore } from '../../store/useStore';
 import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
+import { useToast } from '../ui/Toast';
+import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import Workbench from '../../pages/Workbench';
@@ -19,6 +21,7 @@ export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
 type WorkspaceShellProps = {
   view: WorkspaceView;
   dashboardSymbol: string | null;
+  initialReportId?: string | null;
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
   navigateToWorkbench: () => void;
@@ -34,6 +37,7 @@ const clampPanelWidth = (value: number) => Math.max(MIN_PANEL_WIDTH, Math.min(MA
 export function WorkspaceShell({
   view,
   dashboardSymbol,
+  initialReportId,
   navigateToChat,
   navigateToDashboard,
   navigateToWorkbench,
@@ -45,8 +49,30 @@ export function WorkspaceShell({
   const workbenchSymbol = (workbenchParams.get('symbol') || '').trim() || null;
 
   const isMobile = useIsMobileLayout();
-  const { theme, setTheme } = useStore();
+  const { theme, setTheme, showRightPanel, setShowRightPanel } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
+  const { toast } = useToast();
+
+  // 启动时检查 dry_run 状态并提示用户
+  useEffect(() => {
+    const checkDryRun = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/health`);
+        const data = await res.json();
+        if (data?.components?.live_tools?.status === 'dry_run') {
+          toast({
+            type: 'warning',
+            title: 'Dry-run 模式',
+            message: '当前为模拟模式，不执行实际工具调用。设置 LANGGRAPH_EXECUTE_LIVE_TOOLS=true 启用。',
+            duration: 8000,
+          });
+        }
+      } catch {
+        // 健康检查失败时静默忽略
+      }
+    };
+    checkDryRun();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const { dashboardData } = useDashboardStore();
   const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || 'AAPL';
   useDashboardData(view === 'workbench' ? preferredSymbol : null);
@@ -54,7 +80,6 @@ export function WorkspaceShell({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isContextPanelExpanded, setIsContextPanelExpanded] = useState(true);
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const saved = localStorage.getItem(PANEL_WIDTH_STORAGE_KEY);
@@ -114,9 +139,9 @@ export function WorkspaceShell({
 
   const contextPanelProps = {
     panelWidth,
-    isExpanded: isContextPanelExpanded,
-    onExpand: () => setIsContextPanelExpanded(true),
-    onCollapse: () => setIsContextPanelExpanded(false),
+    isExpanded: showRightPanel,
+    onExpand: () => setShowRightPanel(true),
+    onCollapse: () => setShowRightPanel(false),
     onResizeStart: handleResizeStart,
     onSubscribeClick: () => setIsSubscribeOpen(true),
   };
@@ -188,6 +213,7 @@ export function WorkspaceShell({
           onDashboardRequest={openDashboard}
           contextPanel={contextPanelProps}
           marketQuotes={marketQuotes}
+          initialReportId={initialReportId}
         />
       )}
 

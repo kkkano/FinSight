@@ -64,6 +64,9 @@ prometheus-client==0.21.0
 # LangSmith 可观测性（可选）
 langsmith>=0.1.0
 
+# LangFuse 链路追踪（可选）
+langfuse>=2.0.0,<4.0.0
+
 # FastAPI & Web Server
 fastapi==0.122.0
 uvicorn[standard]==0.38.0
@@ -75,6 +78,10 @@ APScheduler==3.10.4
 # PDF Export
 reportlab==4.2.5
 pypdf==4.2.0
+
+# Testing (CI needs these)
+pytest>=7.0
+pytest-asyncio>=0.21.0
 
 # RAG - Vector Store & Embeddings
 chromadb>=0.4.0

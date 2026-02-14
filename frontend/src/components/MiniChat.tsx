@@ -26,6 +26,7 @@ export const MiniChat: React.FC = () => {
     setSessionId,
     addRawEvent,
     traceRawEnabled,
+    setRequestMetrics,
   } = useStore();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
@@ -133,6 +134,15 @@ export const MiniChat: React.FC = () => {
         undefined, // onToolEnd
         (report, thinking, meta) => {
           // onDone
+          const metrics = meta?.metrics || {};
+          if (metrics && typeof metrics === 'object') {
+            setRequestMetrics({
+              llmTotalCalls: Number(metrics.llm_total_calls || 0),
+              toolTotalCalls: Number(metrics.tool_total_calls || 0),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+
           if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
             setSessionId(meta.session_id);
           }
@@ -344,6 +354,5 @@ export const MiniChat: React.FC = () => {
     </div>
   );
 };
-
 
 

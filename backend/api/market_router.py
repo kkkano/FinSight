@@ -17,11 +17,73 @@ class MarketRouterDeps:
     get_financial_statements: Callable[[str], Any]
     get_financial_statements_summary: Callable[[str], Any]
     get_stock_historical_data: Callable[..., Any]
+    detect_chart_type: Callable[[str, str | None], dict[str, Any]] | None
     logger: Any
 
 
 def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Market"])
+
+    @router.post("/api/chart/detect")
+    def detect_chart(payload: dict[str, Any]):
+        query = str(payload.get("query") or "").strip()
+        ticker = payload.get("ticker")
+        ticker_value = str(ticker).strip() if ticker is not None else None
+
+        if not query:
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": "empty_query",
+            }
+
+        if deps.detect_chart_type is None:
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": "chart_detector_unavailable",
+            }
+
+        try:
+            detected = deps.detect_chart_type(query, ticker_value or None)
+            chart_type = detected.get("chart_type") if isinstance(detected, dict) else None
+            data_dimension = detected.get("data_dimension") if isinstance(detected, dict) else None
+            confidence_raw = detected.get("confidence") if isinstance(detected, dict) else 0.0
+            try:
+                confidence = float(confidence_raw)
+            except Exception:
+                confidence = 0.0
+            confidence = max(0.0, min(1.0, confidence))
+            reason = (
+                str(detected.get("reason") or "")
+                if isinstance(detected, dict)
+                else "invalid_detector_response"
+            )
+            should_generate = bool(chart_type) and confidence >= 0.35
+            return {
+                "success": True,
+                "should_generate": should_generate,
+                "chart_type": chart_type,
+                "data_dimension": data_dimension,
+                "confidence": confidence,
+                "reason": reason,
+            }
+        except Exception as exc:
+            deps.logger.warning("[ChartDetect] failed: %s", exc)
+            return {
+                "success": False,
+                "should_generate": False,
+                "chart_type": None,
+                "data_dimension": None,
+                "confidence": 0.0,
+                "reason": str(exc),
+            }
 
     @router.get("/api/stock/price/{ticker}")
     def get_price(ticker: str):
@@ -39,7 +101,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
             return {"ticker": ticker, "data": price_info}
         except Exception as exc:
-            return {"error": str(exc)}
+            deps.logger.warning("[API] get_price failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 价格数据") from exc
 
     @router.get("/api/stock/news/{ticker}")
     def get_news(ticker: str):
@@ -47,7 +110,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             news = deps.get_company_news(ticker)
             return {"ticker": ticker, "data": news}
         except Exception as exc:
-            return {"error": str(exc)}
+            deps.logger.warning("[API] get_news failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 新闻数据") from exc
 
     @router.get("/api/financials/{ticker}")
     def get_financials(ticker: str):
@@ -55,7 +119,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             financials_data = deps.get_financial_statements(ticker)
             return financials_data
         except Exception as exc:
-            return {"ticker": ticker, "error": str(exc)}
+            deps.logger.warning("[API] get_financials failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 财务数据") from exc
 
     @router.get("/api/financials/{ticker}/summary")
     def get_financials_summary(ticker: str):
@@ -63,7 +128,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             summary = deps.get_financial_statements_summary(ticker)
             return {"ticker": ticker, "summary": summary}
         except Exception as exc:
-            return {"ticker": ticker, "error": str(exc)}
+            deps.logger.warning("[API] get_financials_summary failed for %s: %s", ticker, exc)
+            raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 财务摘要") from exc
 
     @router.get("/api/stock/kline/{ticker}", response_model=KlineResponse)
     def get_kline_data(ticker: str, period: str = "1y", interval: str = "1d"):
@@ -129,4 +195,3 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return router
-

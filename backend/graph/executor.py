@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import time
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
+
+logger = logging.getLogger(__name__)
 
 
 AsyncInvoker = Callable[[dict[str, Any]], Awaitable[Any]]
@@ -186,10 +189,12 @@ async def execute_plan(
         exec_events.append({"event": "executor.step_started", "step_id": step_id, "kind": kind, "name": name})
         await emit_event(
             {
-                "type": "thinking",
-                "stage": "executor_step_start",
-                "message": f"{step_id} {kind}:{name}",
-                "result": {"inputs": inputs},
+                "type": "step_start",
+                "step_id": step_id,
+                "kind": kind,
+                "name": name,
+                "inputs_keys": list(inputs.keys()) if isinstance(inputs, dict) else [],
+                "parallel_group": parallel_group,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
         )
@@ -209,10 +214,13 @@ async def execute_plan(
             )
             await emit_event(
                 {
-                    "type": "thinking",
-                    "stage": "executor_step_done",
-                    "message": f"{step_id} cached",
-                    "result": {"cached": True, "duration_ms": duration_ms},
+                    "type": "step_done",
+                    "step_id": step_id,
+                    "kind": kind,
+                    "name": name,
+                    "cached": True,
+                    "duration_ms": duration_ms,
+                    "parallel_group": parallel_group,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
@@ -253,15 +261,15 @@ async def execute_plan(
                 )
                 await emit_event(
                     {
-                        "type": "thinking",
-                        "stage": "executor_step_done",
-                        "message": f"{step_id} skipped escalation",
-                        "result": {
-                            "cached": False,
-                            "skipped": True,
-                            "reason": "escalation_not_needed",
-                            "duration_ms": duration_ms,
-                        },
+                        "type": "step_done",
+                        "step_id": step_id,
+                        "kind": kind,
+                        "name": name,
+                        "cached": False,
+                        "skipped": True,
+                        "reason": "escalation_not_needed",
+                        "duration_ms": duration_ms,
+                        "parallel_group": parallel_group,
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     }
                 )
@@ -326,15 +334,15 @@ async def execute_plan(
             )
             await emit_event(
                 {
-                    "type": "thinking",
-                    "stage": "executor_step_done",
-                    "message": f"{step_id} done",
-                    "result": {
-                        "cached": False,
-                        "skipped": isinstance(output, dict) and output.get("skipped") is True,
-                        "duration_ms": duration_ms,
-                        "status_reason": status_reason,
-                    },
+                    "type": "step_done",
+                    "step_id": step_id,
+                    "kind": kind,
+                    "name": name,
+                    "cached": False,
+                    "skipped": isinstance(output, dict) and output.get("skipped") is True,
+                    "duration_ms": duration_ms,
+                    "status_reason": status_reason,
+                    "parallel_group": parallel_group,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
@@ -351,15 +359,26 @@ async def execute_plan(
                 "retry_attempts": 0,
             }
             artifacts["errors"].append(err)
+            logger.warning(
+                "[Executor] step %s (%s:%s) FAILED%s: %s",
+                step_id, kind, name,
+                " (optional, continuing)" if optional else " (REQUIRED, aborting)",
+                exc,
+            )
             exec_events.append(
                 {"event": "executor.step_failed", "step_id": step_id, "duration_ms": int((time.perf_counter() - start) * 1000), "error": str(exc), "optional": optional}
             )
             await emit_event(
                 {
-                    "type": "thinking",
-                    "stage": "executor_step_error",
-                    "message": f"{step_id} failed: {exc}",
-                    "result": {"optional": optional},
+                    "type": "step_error",
+                    "step_id": step_id,
+                    "kind": kind,
+                    "name": name,
+                    "error": str(exc)[:300],
+                    "error_type": exc.__class__.__name__,
+                    "optional": optional,
+                    "parallel_group": parallel_group,
+                    "duration_ms": int((time.perf_counter() - start) * 1000),
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )

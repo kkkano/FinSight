@@ -97,6 +97,17 @@ export interface Citation {
   freshness_hours?: number;   // 新鲜度（小时）
 }
 
+export interface CoreViewpoint {
+  agent_name: string;
+  title: string;
+  headline: string;
+  detail: string;
+  confidence: number;
+  data_sources: string[];
+  evidence_count: number;
+  status: string;
+}
+
 export interface ReportIR {
   report_id: string;
   ticker: string;
@@ -108,6 +119,8 @@ export interface ReportIR {
   generated_at: string;
   // Forum 整合的完整报告文本（≥2000字）
   synthesis_report?: string;
+  // Per-agent structured viewpoints (deterministic, zero-LLM)
+  core_viewpoints?: CoreViewpoint[];
   sections: ReportSection[];
   citations: Citation[];
   risks?: string[];
@@ -219,6 +232,13 @@ export type RawEventType =
   | 'agent_done'
   | 'agent_step'
   | 'agent_error'
+  // Executor completion stage
+  | 'step_done'
+  // Executor step lifecycle (agent/tool dispatch)
+  | 'step_start'
+  | 'step_error'
+  // Planner output
+  | 'plan_ready'
   // Supervisor 执行
   | 'supervisor_start'
   | 'supervisor_done'
@@ -251,6 +271,5 @@ export interface ConsoleFilterOptions {
   autoScroll: boolean;           // 自动滚动
   maxEvents: number;             // 最大事件数
 }
-
 
 

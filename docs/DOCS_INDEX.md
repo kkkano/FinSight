@@ -4,15 +4,22 @@
 
 ## 1. 当前有效（生产与开发以这些为准）
 
-- `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`：LangGraph 重构 SSOT（唯一开发标准）
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：**LangGraph 设计 SSOT（唯一开发标准）**
+- `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 变更日志（配合 06a 使用）
+- `docs/AGENTIC_SPRINT_TODOLIST.md`：Agentic Sprint 全量 TODO（原 06c 职能，现为主 TODO）
 - `docs/11_PRODUCTION_RUNBOOK.md`：生产部署/回滚/排障 Runbook
 - `docs/TEAM_EXECUTION_MEMORY.md`：会话丢失后的执行恢复锚点（流程/证据/devlog 约束）
 - `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
 - `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
-- `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档（含 Mermaid 图）
+- `docs/LANGGRAPH_FLOW.md`：LangGraph 11 节点完整数据流文档l（含 Mermaid 图）
+- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 全流程深度拆解（12 张 Mermaid 图 + 详细表格 + 端到端数据流）
 - `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
 - `docs/WORKBENCH_ROADMAP.md`：工作台开发路线图（Sprint 1-4）
 - `docs/ISSUE_TRACKER.md`：全量问题追踪清单（P0/P1/P2 checkbox）
+- `docs/V1_RELEASE_SUMMARY.md`：v1.0.0 发布总结
+- `docs/SPRINT2_DEVLOG.md`：Sprint 2 开发日志（v1.1.0 任务清单 + 变更记录）
+- `docs/feature_logs/2026-02-10_sprint2_bugfix_batch.md`：Sprint 2 批量修复日志（13 项 bug 修复详情）
+- `docs/PROMPT_OPTIMIZATION_CHANGELOG.md`：全项目 18 个 LLM 提示词优化前后对比报告
 - `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
 - `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
 - `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策
@@ -21,6 +28,7 @@
 
 ## 2. 历史阶段文档（仅参考，不作为实现依据）
 
+- `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（**DEPRECATED** — 已由 06a + 06b 取代，仅保留历史参考）
 - `docs/02_PHASE0_COMPLETION.md`
 - `docs/03_PHASE1_IMPLEMENTATION.md`
 - `docs/04_PHASE2_DEEP_RESEARCH.md`
@@ -55,6 +63,8 @@
 
 ## 5. 文档治理规则
 
-- 新增核心设计/规则，先写入 `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`。
-- 与代码冲突时，以代码与 06 为准，并同步更新 01/README。
+- 新增核心设计/规则，先写入 `docs/06a_LANGGRAPH_DESIGN_SPEC.md`（SSOT）。
+- TODO/路线图统一登记到 `docs/AGENTIC_SPRINT_TODOLIST.md`。
+- 与代码冲突时，以代码与 06a 为准，并同步更新 01/README。
 - 历史文档允许保留，但必须在首屏标注 `Archived` 或 `Superseded`。
+- `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` 已废弃，不再作为开发依据。

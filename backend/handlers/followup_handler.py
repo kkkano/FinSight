@@ -489,11 +489,11 @@ class FollowupHandler:
             from langchain_core.messages import HumanMessage
 
             action_prompts = {
-                'translate_en': f"将以下内容翻译成英文，保持专业金融术语：\n\n{text[:2000]}",
-                'translate_zh': f"将以下内容翻译成中文，保持专业金融术语：\n\n{text[:2000]}",
-                'summary': f"用3-5个要点总结以下内容，简洁专业：\n\n{text[:2000]}",
-                'conclusion': f"提取以下内容的核心结论和投资建议：\n\n{text[:2000]}",
-                'risk': f"提取以下内容中的风险因素，用要点列出：\n\n{text[:2000]}",
+                'translate_en': f"<task>将以下金融分析内容翻译成英文。</task>\n<rules>保持专业金融术语准确，保留数据格式和结构。</rules>\n\n{text[:2000]}",
+                'translate_zh': f"<task>将以下金融分析内容翻译成简体中文。</task>\n<rules>保持专业金融术语准确，保留数据格式和结构。</rules>\n\n{text[:2000]}",
+                'summary': f"<task>用 3-5 个要点总结以下内容的核心信息。</task>\n<rules>每个要点包含关键数据，简洁专业，禁止开场白。</rules>\n\n{text[:2000]}",
+                'conclusion': f"<task>提取以下内容的核心投资结论和可操作建议。</task>\n<rules>明确方向（多/空/中性）、关键依据、建议操作，禁止开场白。</rules>\n\n{text[:2000]}",
+                'risk': f"<task>从以下内容中提取所有风险因素。</task>\n<rules>按风险等级排序（高→低），每条风险附概率/影响评估，禁止开场白。</rules>\n\n{text[:2000]}",
             }
 
             prompt = action_prompts.get(action, action_prompts['summary'])

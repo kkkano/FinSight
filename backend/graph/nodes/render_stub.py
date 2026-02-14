@@ -13,7 +13,21 @@ def render_stub(state: GraphState) -> dict:
     """
     Phase 4 template renderer.
     Render markdown by subject_type + output_mode.
+
+    IMPORTANT: If the upstream *synthesize* node already produced a substantial
+    ``draft_markdown`` (e.g. via narrative / llm mode), we preserve it as-is
+    and skip template rendering.  Template rendering is only a **fallback**
+    for stub / empty drafts.
     """
+    # ── Early-return: honour existing narrative draft ──────────────
+    _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
+    artifacts = state.get("artifacts") or {}
+    existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
+    if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
+        # synthesize already wrote a rich draft — pass through unchanged.
+        return {"artifacts": artifacts}
+
+    # ── Regular template rendering (stub / thin-draft fallback) ───
     subject = state.get("subject") or {}
     subject_type = subject.get("subject_type", "unknown")
     output_mode = state.get("output_mode", "brief")
