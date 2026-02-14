@@ -18,7 +18,9 @@ const STREAM_EVENT_TYPES = new Set<RawEventType>([
   'llm_start',
   'llm_end',
   'llm_call',
+  'step_start',
   'step_done',
+  'step_error',
 ]);
 
 const AGENT_LABELS: Record<string, string> = {
@@ -62,6 +64,7 @@ const getEventAgent = (event: RawSSEEvent): string => {
   const inferred =
     canonicalAgentName(data.agent) ||
     canonicalAgentName(data.agent_name) ||
+    canonicalAgentName(data.name) ||
     canonicalAgentName(data.source) ||
     canonicalAgentName(data.stage);
   if (inferred) return inferred;
@@ -119,6 +122,8 @@ export const AgentLogPanel: React.FC = () => {
   const [pausedEvents, setPausedEvents] = useState<RawSSEEvent[]>([]);
   const [consoleLens, setConsoleLens] = useState<ConsoleLens>('event_stream');
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  // Track whether user explicitly deselected all agents (vs initial empty state)
+  const hasExplicitDeselect = useRef(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -140,6 +145,8 @@ export const AgentLogPanel: React.FC = () => {
   useEffect(() => {
     setSelectedAgents((prev) => {
       if (availableAgents.length === 0) return new Set();
+      // User explicitly deselected all → keep empty
+      if (hasExplicitDeselect.current) return new Set();
       if (prev.size === 0) return new Set(availableAgents);
       const next = new Set(Array.from(prev).filter((agent) => availableAgents.includes(agent)));
       return next.size > 0 ? next : new Set(availableAgents);
@@ -155,8 +162,12 @@ export const AgentLogPanel: React.FC = () => {
     }
 
     if (consoleLens === 'agent_pipeline') {
-      const currentAgents = selectedAgents.size > 0 ? selectedAgents : new Set(availableAgents);
-      events = events.filter((e) => currentAgents.has(getEventAgent(e)));
+      // Empty selectedAgents = show nothing (user explicitly deselected all)
+      if (selectedAgents.size === 0) {
+        events = [];
+      } else {
+        events = events.filter((e) => selectedAgents.has(getEventAgent(e)));
+      }
     }
 
     if (typeFilter.size > 0) {
@@ -230,19 +241,31 @@ export const AgentLogPanel: React.FC = () => {
 
   const toggleAgentFilter = useCallback((agent: string) => {
     setSelectedAgents((prev) => {
-      const baseline = prev.size > 0 ? new Set(prev) : new Set(availableAgents);
-      if (baseline.has(agent)) {
-        baseline.delete(agent);
+      const next = new Set(prev);
+      if (next.has(agent)) {
+        next.delete(agent);
       } else {
-        baseline.add(agent);
+        next.add(agent);
+        // User actively selected an agent → clear explicit deselect
+        hasExplicitDeselect.current = false;
       }
-      return baseline;
+      // If all deselected via individual toggles, mark as explicit
+      if (next.size === 0) {
+        hasExplicitDeselect.current = true;
+      }
+      return next;
     });
-  }, [availableAgents]);
+  }, []);
 
   const selectAllAgents = useCallback(() => {
+    hasExplicitDeselect.current = false;
     setSelectedAgents(new Set(availableAgents));
   }, [availableAgents]);
+
+  const deselectAllAgents = useCallback(() => {
+    hasExplicitDeselect.current = true;
+    setSelectedAgents(new Set());
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -362,8 +385,15 @@ export const AgentLogPanel: React.FC = () => {
           >
             全选
           </button>
+          <button
+            type="button"
+            onClick={deselectAllAgents}
+            className="px-1.5 py-[1px] rounded text-[9px] border border-fin-border text-fin-muted hover:text-fin-text whitespace-nowrap"
+          >
+            全取消
+          </button>
           {availableAgents.map((agent, idx) => {
-            const active = selectedAgents.size === 0 || selectedAgents.has(agent);
+            const active = selectedAgents.has(agent);
             return (
               <button
                 key={agent}

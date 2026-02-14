@@ -16,6 +16,10 @@ export const EVENT_TYPE_CONFIG: Record<string, { color: string; bg: string; labe
   data_source:      { color: 'text-sky-400',    bg: 'bg-sky-500/10',    label: 'DATA',  icon: '\ud83d\udcca' },
   api_call:         { color: 'text-pink-400',   bg: 'bg-pink-500/10',   label: 'API',   icon: '\ud83c\udf10' },
   agent_step:       { color: 'text-teal-400',   bg: 'bg-teal-500/10',   label: 'STEP',  icon: '\u25c8' },
+  step_done:        { color: 'text-green-300',  bg: 'bg-green-500/10',  label: 'STEP\u2713', icon: '\u2713' },
+  step_start:       { color: 'text-teal-400',   bg: 'bg-teal-500/10',   label: 'STEP\u25b6', icon: '\u25b6' },
+  step_error:       { color: 'text-red-400',    bg: 'bg-red-500/10',    label: 'STEP\u2717', icon: '\u2717' },
+  plan_ready:       { color: 'text-violet-400',  bg: 'bg-violet-500/10', label: 'PLAN',  icon: '\ud83d\udccb' },
   system:           { color: 'text-slate-400',  bg: 'bg-slate-500/10',  label: 'SYS',   icon: '\u2699' },
   done:             { color: 'text-green-400',  bg: 'bg-green-500/10',  label: 'DONE',  icon: '\u2705' },
   error:            { color: 'text-red-400',    bg: 'bg-red-500/10',    label: 'ERR',   icon: '\u2717' },
@@ -202,6 +206,14 @@ export const getEventSummary = (event: RawSSEEvent): string => {
       return 'Forum synthesis started';
     case 'forum_done':
       return 'Forum synthesis completed';
+    case 'step_start':
+      return `${data.kind || 'step'}:${data.name || '?'} started (${data.step_id || '?'})`;
+    case 'step_error':
+      return `${data.kind || 'step'}:${data.name || '?'} error: ${data.error || data.message || '?'}`;
+    case 'plan_ready':
+      return `Plan ready: ${data.step_count || '?'} steps, agents=[${(data.agents || []).join(', ')}]`;
+    case 'step_done':
+      return `${data.kind || 'step'}:${data.name || '?'} done (${data.step_id || '?'})`;
     default:
       if (data.message) return data.message.slice(0, 120);
       return JSON.stringify(data).slice(0, 100);
