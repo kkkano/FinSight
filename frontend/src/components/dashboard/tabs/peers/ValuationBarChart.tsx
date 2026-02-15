@@ -23,7 +23,7 @@ export function ValuationBarChart({ peers, subjectSymbol }: ValuationBarChartPro
       }))
       .sort((a, b) => b.value - a.value);
 
-    const maxVal = chartData.length > 0 ? Math.max(...withPE.map((d) => d.value)) : 1;
+    const maxVal = withPE.length > 0 ? Math.max(...withPE.map((d) => d.value)) : 1;
     return withPE.map((d) => ({
       ...d,
       pct: maxVal > 0 ? (d.value / maxVal) * 100 : 0,

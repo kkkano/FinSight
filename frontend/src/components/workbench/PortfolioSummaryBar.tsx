@@ -8,6 +8,11 @@ import { TrendingUp, TrendingDown, Briefcase, BarChart3 } from 'lucide-react';
 
 import { useStore } from '../../store/useStore';
 
+interface PositionEntry {
+  symbol: string;
+  shares: number;
+}
+
 interface SummaryMetric {
   label: string;
   value: string;
@@ -16,7 +21,13 @@ interface SummaryMetric {
 }
 
 export function PortfolioSummaryBar() {
-  const positions = useStore((s) => s.portfolioPositions) ?? [];
+  const rawPositions = useStore((s) => s.portfolioPositions) ?? {};
+
+  // Convert Record<string, number> → PositionEntry[]
+  const positions: PositionEntry[] = useMemo(
+    () => Object.entries(rawPositions).map(([symbol, shares]) => ({ symbol, shares })),
+    [rawPositions],
+  );
 
   const metrics = useMemo((): SummaryMetric[] => {
     if (positions.length === 0) {
@@ -28,24 +39,16 @@ export function PortfolioSummaryBar() {
       ];
     }
 
-    const totalValue = positions.reduce((sum, p) => {
-      const val = (p.shares ?? 0) * (p.avgCost ?? 0);
-      return sum + val;
-    }, 0);
-
     const largest = positions.reduce(
-      (max, p) => {
-        const val = (p.shares ?? 0) * (p.avgCost ?? 0);
-        return val > max.value ? { symbol: p.symbol, value: val } : max;
-      },
-      { symbol: '--', value: 0 },
+      (max, p) => (p.shares > max.shares ? p : max),
+      positions[0],
     );
 
     return [
       { label: '持仓数', value: String(positions.length), icon: <Briefcase size={14} /> },
       {
         label: '总市值',
-        value: totalValue > 0 ? `$${(totalValue / 1000).toFixed(1)}K` : '--',
+        value: '--',
         icon: <BarChart3 size={14} />,
       },
       {
