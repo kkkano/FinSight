@@ -2,10 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
+import { useDashboardStore } from '../store/dashboardStore';
 
-interface WatchlistItem {
-  symbol: string;
-  name: string;
+interface QuoteInfo {
   price?: string;
   change?: string;
   isUp?: boolean;
@@ -46,11 +45,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
   const [userName, setUserName] = useState('用户');
   const [riskPreference, setRiskPreference] = useState('balanced');
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [quotes, setQuotes] = useState<Record<string, QuoteInfo>>({});
   const [alertCount, setAlertCount] = useState(0);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newTicker, setNewTicker] = useState('');
   const { subscriptionEmail, portfolioPositions, currentTicker } = useStore();
+
+  // Unified watchlist from dashboardStore (API-first)
+  const { watchlist, initWatchlist, addWatchItemApi, removeWatchItemApi } = useDashboardStore();
 
   useEffect(() => {
     if (currentView === 'dashboard') {
@@ -66,71 +68,73 @@ const Sidebar: React.FC<SidebarProps> = ({
     const ticker = newTicker.trim().toUpperCase();
     if (!ticker) return;
     try {
-      await apiClient.addWatchlist({ user_id: DEFAULT_USER_ID, ticker });
+      await addWatchItemApi(ticker);
       setNewTicker('');
       setShowAddInput(false);
-      await loadUserProfile();
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to add ticker:', error);
     }
   };
 
   const handleRemoveTicker = async (ticker: string) => {
     try {
-      await apiClient.removeWatchlist({ user_id: DEFAULT_USER_ID, ticker });
-      setWatchlist((prev) => prev.filter((item) => item.symbol !== ticker));
+      await removeWatchItemApi(ticker);
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to remove ticker:', error);
     }
   };
 
-  const loadUserProfile = useCallback(async () => {
+  // Load user profile info only (name, risk preference) — watchlist handled by store
+  const loadUserProfileInfo = useCallback(async () => {
     try {
       const response = await apiClient.getUserProfile(DEFAULT_USER_ID);
       const profile = response?.profile;
       if (!profile) return;
-
       setUserName(profile.name || '用户');
       setRiskPreference(profile.risk_preference || 'balanced');
+    } catch {
+      // Profile load failed — keep defaults
+    }
+  }, []);
 
-      const list = Array.isArray(profile.watchlist) ? profile.watchlist : [];
-      if (!list.length) {
-        setWatchlist([]);
-        return;
-      }
+  // Fetch price quotes for watchlist symbols
+  const loadWatchlistQuotes = useCallback(async () => {
+    if (watchlist.length === 0) {
+      setQuotes({});
+      return;
+    }
 
-      const results = await Promise.all(
-        list.slice(0, 6).map(async (ticker: string) => {
-          try {
-            const priceRes = await apiClient.fetchStockPrice(ticker);
-            const payload = priceRes?.data ?? priceRes;
-            const data = payload?.data ?? payload;
+    const results: Record<string, QuoteInfo> = {};
+    await Promise.all(
+      watchlist.slice(0, 6).map(async (item) => {
+        try {
+          const priceRes = await apiClient.fetchStockPrice(item.symbol);
+          const payload = priceRes?.data ?? priceRes;
+          const data = payload?.data ?? payload;
 
-            let price: string | undefined;
+          if (typeof data === 'object' && data.price) {
+            const price = `$${Number(data.price).toFixed(2)}`;
             let change: string | undefined;
             let isUp = true;
 
-            if (typeof data === 'object' && data.price) {
-              price = `$${Number(data.price).toFixed(2)}`;
-              if (data.change_percent !== undefined) {
-                const pct = Number(data.change_percent);
-                isUp = pct >= 0;
-                change = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
-              }
+            if (data.change_percent !== undefined) {
+              const pct = Number(data.change_percent);
+              isUp = pct >= 0;
+              change = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
             }
 
-            return { symbol: ticker, name: ticker, price, change, isUp } as WatchlistItem;
-          } catch {
-            return { symbol: ticker, name: ticker } as WatchlistItem;
+            results[item.symbol] = { price, change, isUp };
           }
-        }),
-      );
+        } catch {
+          // Price fetch failed — leave empty
+        }
+      }),
+    );
 
-      setWatchlist(results);
-    } catch (error) {
-      console.error('Failed to load user profile:', error);
-    }
-  }, []);
+    setQuotes(results);
+  }, [watchlist]);
 
   const loadAlertCount = useCallback(async () => {
     if (!subscriptionEmail) {
@@ -146,15 +150,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [subscriptionEmail]);
 
+  // Initialize watchlist + profile on mount
   useEffect(() => {
-    loadUserProfile();
+    initWatchlist();
+    loadUserProfileInfo();
     loadAlertCount();
-    const timer = setInterval(() => {
-      loadUserProfile();
-      loadAlertCount();
-    }, 60_000);
+  }, [initWatchlist, loadUserProfileInfo, loadAlertCount]);
+
+  // Refresh quotes when watchlist changes and every 60s
+  useEffect(() => {
+    loadWatchlistQuotes();
+    const timer = setInterval(loadWatchlistQuotes, 60_000);
     return () => clearInterval(timer);
-  }, [loadAlertCount, loadUserProfile]);
+  }, [loadWatchlistQuotes]);
 
   return (
     <>
@@ -263,90 +271,95 @@ const Sidebar: React.FC<SidebarProps> = ({
         />
       </nav>
 
-      <div className="mt-auto border-t border-fin-border pt-5">
-        <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
-          <span>我的关注 ({watchlist.length})</span>
-          <button
-            type="button"
-            aria-label="添加关注股票"
-            onClick={() => setShowAddInput((prev) => !prev)}
-            className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-
-        {showAddInput && (
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              value={newTicker}
-              onChange={(event) => setNewTicker(event.target.value)}
-              onKeyDown={(event) => event.key === 'Enter' && handleAddTicker()}
-              placeholder="输入股票代码"
-              className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
-              autoFocus
-            />
+      {/* Dashboard 页面有独立的 Watchlist 组件，此处隐藏避免重复 */}
+      {currentView !== 'dashboard' && (
+        <div className="mt-auto border-t border-fin-border pt-5">
+          <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
+            <span>我的关注 ({watchlist.length})</span>
             <button
               type="button"
-              onClick={handleAddTicker}
-              className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
+              aria-label="添加关注股票"
+              onClick={() => setShowAddInput((prev) => !prev)}
+              className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
             >
-              添加
+              <Plus size={16} />
             </button>
           </div>
-        )}
 
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {watchlist.length > 0 ? (
-            watchlist.map((item) => {
-              const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
-              return (
-                <div
-                  key={item.symbol}
-                  className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
-                  onClick={() => onDashboardClick?.(item.symbol)}
-                >
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
-                    <span className="text-2xs text-fin-muted truncate">{item.name}</span>
-                    {shares > 0 && (
-                      <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
-                        持仓 {shares}
-                      </span>
-                    )}
-                  </div>
+          {showAddInput && (
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newTicker}
+                onChange={(event) => setNewTicker(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && handleAddTicker()}
+                placeholder="输入股票代码"
+                className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleAddTicker}
+                className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
+              >
+                添加
+              </button>
+            </div>
+          )}
 
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <div className={`font-medium text-sm ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                        {item.price || '--'}
-                      </div>
-                      <div className={`text-2xs ${item.isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                        {item.change || '--'}
-                      </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {watchlist.length > 0 ? (
+              watchlist.map((item) => {
+                const quote = quotes[item.symbol];
+                const isUp = quote?.isUp !== false;
+                const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
+                return (
+                  <div
+                    key={item.symbol}
+                    className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
+                    onClick={() => onDashboardClick?.(item.symbol)}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
+                      <span className="text-2xs text-fin-muted truncate">{item.name}</span>
+                      {shares > 0 && (
+                        <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
+                          持仓 {shares}
+                        </span>
+                      )}
                     </div>
 
-                    <button
-                      type="button"
-                      aria-label={`移除 ${item.symbol}`}
-                      className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRemoveTicker(item.symbol);
-                      }}
-                    >
-                      <X size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <div className={`font-medium text-sm ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                          {quote?.price || '--'}
+                        </div>
+                        <div className={`text-2xs ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                          {quote?.change || '--'}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        aria-label={`移除 ${item.symbol}`}
+                        className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRemoveTicker(item.symbol);
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
-          )}
+                );
+              })
+            ) : (
+              <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </aside>
     </>
   );

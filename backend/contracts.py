@@ -8,6 +8,7 @@ CHAT_RESPONSE_SCHEMA_VERSION = "chat.response.v1"
 GRAPH_STATE_SCHEMA_VERSION = "graph.state.v1"
 SSE_EVENT_SCHEMA_VERSION = "chat.sse.v1"
 TRACE_SCHEMA_VERSION = "trace.v1"
+DASHBOARD_DATA_SCHEMA_VERSION = "dashboard.data.v2"
 
 
 def contract_manifest() -> dict[str, str]:
@@ -17,6 +18,7 @@ def contract_manifest() -> dict[str, str]:
         "graph_state": GRAPH_STATE_SCHEMA_VERSION,
         "sse_event": SSE_EVENT_SCHEMA_VERSION,
         "trace": TRACE_SCHEMA_VERSION,
+        "dashboard_data": DASHBOARD_DATA_SCHEMA_VERSION,
     }
 
 
@@ -26,6 +28,7 @@ __all__ = [
     "GRAPH_STATE_SCHEMA_VERSION",
     "SSE_EVENT_SCHEMA_VERSION",
     "TRACE_SCHEMA_VERSION",
+    "DASHBOARD_DATA_SCHEMA_VERSION",
     "contract_manifest",
 ]
 

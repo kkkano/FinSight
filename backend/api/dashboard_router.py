@@ -7,7 +7,9 @@ v2.0 重构：使用多源数据服务层（data_service.py），支持 10+ 数�
 """
 import asyncio
 import logging
+import os
 from functools import partial
+from typing import Optional
 from fastapi import APIRouter, Query
 from backend.dashboard.schemas import (
     DashboardState,
@@ -17,6 +19,10 @@ from backend.dashboard.schemas import (
     WatchItem,
     LayoutPrefs,
     NewsModeConfig,
+    ValuationData,
+    FinancialStatement,
+    TechnicalData,
+    PeerComparisonData,
 )
 from backend.dashboard.asset_resolver import resolve_asset, is_valid_symbol
 from backend.dashboard.widget_selector import select_capabilities
@@ -33,13 +39,20 @@ from backend.dashboard.data_service import (
     fetch_sector_weights,
     fetch_top_constituents,
     fetch_holdings,
+    fetch_valuation,
+    fetch_financial_statements,
+    fetch_technical_indicators,
 )
+from backend.dashboard.peer_service import fetch_peer_comparison
 
 logger = logging.getLogger(__name__)
 
 dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 _DASHBOARD_FETCH_TIMEOUT_SECONDS = 15.0
+_DASHBOARD_NEWS_FETCH_TIMEOUT_SECONDS = float(
+    os.getenv("FINSIGHT_DASHBOARD_NEWS_TIMEOUT", "45")
+)
 
 
 async def _run_blocking(name: str, fn, *args, timeout: float = _DASHBOARD_FETCH_TIMEOUT_SECONDS, **kwargs):
@@ -203,10 +216,62 @@ async def get_dashboard(
     else:
         state.debug["cache"]["charts"] = True
 
+    # 4.2b v2 data (equity only): valuation, financials, technicals, peers
+    v2_valuation = None
+    v2_financials = None
+    v2_technicals = None
+    v2_peers = None
+    v2_valuation_fallback: Optional[str] = None
+    v2_financials_fallback: Optional[str] = None
+    v2_technicals_fallback: Optional[str] = None
+    v2_peers_fallback: Optional[str] = None
+
+    if asset_type == "equity":
+        v2_tasks = {
+            "valuation": _run_blocking("fetch_valuation", fetch_valuation, sym, timeout=5.0),
+            "financials": _run_blocking("fetch_financials", fetch_financial_statements, sym, timeout=8.0),
+            "technicals": _run_blocking("fetch_technicals", fetch_technical_indicators, sym, timeout=5.0),
+            "peers": _run_blocking("fetch_peers", fetch_peer_comparison, sym, timeout=10.0),
+        }
+        v2_results = await asyncio.gather(*v2_tasks.values(), return_exceptions=True)
+        v2_map = dict(zip(v2_tasks.keys(), v2_results))
+
+        for key, result in v2_map.items():
+            if isinstance(result, BaseException):
+                reason = f"{key}_error: {result}"
+                fallback_reasons.append(reason)
+                if key == "valuation":
+                    v2_valuation_fallback = reason
+                elif key == "financials":
+                    v2_financials_fallback = reason
+                elif key == "technicals":
+                    v2_technicals_fallback = reason
+                elif key == "peers":
+                    v2_peers_fallback = reason
+            elif result is None:
+                fallback_reasons.append(f"{key}_unavailable")
+                if key == "valuation":
+                    v2_valuation_fallback = f"{key}_unavailable"
+                elif key == "financials":
+                    v2_financials_fallback = f"{key}_unavailable"
+                elif key == "technicals":
+                    v2_technicals_fallback = f"{key}_unavailable"
+                elif key == "peers":
+                    v2_peers_fallback = f"{key}_unavailable"
+            else:
+                if key == "valuation":
+                    v2_valuation = result
+                elif key == "financials":
+                    v2_financials = result
+                elif key == "technicals":
+                    v2_technicals = result
+                elif key == "peers":
+                    v2_peers = result
+
     # 4.3 新闻数据 - 使用多源回退（yfinance → Finnhub → Alpha Vantage → 搜索）
     news = dashboard_cache.get(symbol, "news")
     if news is None:
-        fetched_news = await _run_blocking("fetch_news", fetch_news, sym, limit=20)
+        fetched_news = await _run_blocking("fetch_news", fetch_news, sym, limit=20, timeout=_DASHBOARD_NEWS_FETCH_TIMEOUT_SECONDS)
         if fetched_news is None:
             fetched_news = {"market": [], "impact": []}
             fallback_reasons.append("news_unavailable")
@@ -230,11 +295,28 @@ async def get_dashboard(
     if fallback_reasons:
         state.debug["fallback_reasons"] = fallback_reasons
 
-    data = DashboardData(
-        snapshot=raw_data.get("snapshot", {}),
-        charts=filtered_charts,
-        news=raw_data.get("news", {}),
-    )
+    try:
+        data = DashboardData(
+            snapshot=raw_data.get("snapshot", {}),
+            charts=filtered_charts,
+            news=raw_data.get("news", {}),
+            valuation=ValuationData(**v2_valuation) if v2_valuation else None,
+            valuation_fallback_reason=v2_valuation_fallback,
+            financials=FinancialStatement(**v2_financials) if v2_financials else None,
+            financials_fallback_reason=v2_financials_fallback,
+            technicals=TechnicalData(**v2_technicals) if v2_technicals else None,
+            technicals_fallback_reason=v2_technicals_fallback,
+            peers=PeerComparisonData(**v2_peers) if v2_peers else None,
+            peers_fallback_reason=v2_peers_fallback,
+        )
+    except Exception as exc:
+        logger.warning("[Dashboard] DashboardData construction failed: %s", exc)
+        data = DashboardData(
+            snapshot=raw_data.get("snapshot", {}),
+            charts=filtered_charts,
+            news={"market": [], "impact": []},
+        )
+        state.debug["data_construction_error"] = str(exc)
 
     return DashboardResponse(success=True, state=state, data=data)
 

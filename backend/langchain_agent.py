@@ -308,9 +308,9 @@ class LangChainFinancialAgent:
             from backend.llm_config import get_llm_config  # type: ignore
 
             cfg = get_llm_config(provider=self.provider)
-            return cfg.get("model", "gemini-2.5-flash")
+            return cfg.get("model", "")
         except Exception:
-            return "gemini-2.5-flash"
+            return ""
 
     def _create_llm(self) -> ChatOpenAI:
         # 使用统一的 LLM 工厂函数（历史遗留代码已提取到 llm_config.py）

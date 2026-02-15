@@ -9,6 +9,7 @@ from typing import Any, Callable
 from backend.contracts import TRACE_SCHEMA_VERSION
 from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
+from backend.services.langfuse_tracer import langfuse_span
 
 
 def _utc_now_iso() -> str:
@@ -300,7 +301,7 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
         base_trace = state.get("trace") or {}
         spans = list(base_trace.get("spans") or [])
 
-        # Real-time stream: node start (stream endpoint sets event emitter).
+        # ========== SSE 实时推送：节点启动 ==========
         await emit_event(
             {
                 "schema_version": TRACE_SCHEMA_VERSION,
@@ -312,11 +313,30 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
         )
 
         start = time.perf_counter()
-        maybe_updates = fn(state)
-        updates = await maybe_updates if asyncio.iscoroutine(maybe_updates) else (maybe_updates or {})
-        duration_ms = int((time.perf_counter() - start) * 1000)
 
-        data = _span_data(node_name, state, updates) or {}
+        # ========== Langfuse 桥接：节点级 Span ==========
+        # langfuse_span 内部处理 Langfuse 未启用 / 异常场景，保证不影响主流程
+        async with langfuse_span(node_name) as lf_span:
+            maybe_updates = fn(state)
+            updates = (
+                await maybe_updates
+                if asyncio.iscoroutine(maybe_updates)
+                else (maybe_updates or {})
+            )
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            data = _span_data(node_name, state, updates) or {}
+
+            # 将节点产出同步写入 Langfuse Span
+            if lf_span is not None:
+                try:
+                    lf_span.update(
+                        output=data,
+                        metadata={"duration_ms": duration_ms},
+                    )
+                except Exception:
+                    pass
+
+        # ========== 内部 Trace 收集（SSE 推送用） ==========
         span: dict[str, Any] = {
             "schema_version": TRACE_SCHEMA_VERSION,
             "node": node_name,
@@ -327,7 +347,7 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
             span["data"] = data
         spans.append(span)
 
-        # Real-time stream: node done with compact summary.
+        # SSE 实时推送：节点完成
         await emit_event(
             {
                 "schema_version": TRACE_SCHEMA_VERSION,

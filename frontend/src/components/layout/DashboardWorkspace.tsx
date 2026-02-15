@@ -16,6 +16,7 @@ type DashboardWorkspaceProps = {
     onCollapse: () => void;
     onResizeStart: (event: MouseEvent) => void;
     onSubscribeClick: () => void;
+    onNavigateToChat?: () => void;
   };
 };
 
@@ -28,8 +29,8 @@ export function DashboardWorkspace({
   contextPanel,
 }: DashboardWorkspaceProps) {
   return (
-    <div className="flex-1 min-w-0 flex min-h-0 overflow-hidden relative max-lg:flex-col">
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full flex-1 min-w-0 flex min-h-0 overflow-hidden relative max-lg:flex-col">
+      <div className="h-full flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
         <Dashboard
           initialSymbol={symbol ?? undefined}
           onBackToChat={onBackToChat}
@@ -49,6 +50,7 @@ export function DashboardWorkspace({
         onCollapse={contextPanel.onCollapse}
         onResizeStart={contextPanel.onResizeStart}
         onSubscribeClick={contextPanel.onSubscribeClick}
+        onNavigateToChat={contextPanel.onNavigateToChat}
         showMiniChat
       />
     </div>

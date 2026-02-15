@@ -46,6 +46,61 @@ export interface AgentStatusGridProps {
   report: ReportIR;
 }
 
+/** Derive visual state from agent status fields. */
+const deriveAgentVisual = (status: Record<string, any>) => {
+  const isSuccess = status.status === 'success';
+  const isSkipped = status.status === 'not_run';
+  const hasFallback = !!status.fallback_reason;
+  const isRetryable = !!status.retryable;
+
+  if (isSuccess) {
+    return {
+      dotColor: 'bg-emerald-500',
+      bgColor: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300',
+      label: `${Math.round((typeof status.confidence === 'number' ? status.confidence : 0) * 100)}%`,
+    };
+  }
+  if (isSkipped) {
+    return {
+      dotColor: 'bg-blue-500',
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300',
+      label: 'Skipped',
+    };
+  }
+  if (hasFallback && isRetryable) {
+    return {
+      dotColor: 'bg-yellow-500',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300',
+      label: '限流降级(可重试)',
+    };
+  }
+  if (hasFallback) {
+    return {
+      dotColor: 'bg-red-500',
+      bgColor: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300',
+      label: '执行失败',
+    };
+  }
+  // Generic non-success fallback
+  return {
+    dotColor: 'bg-amber-500',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300',
+    label: 'Failed',
+  };
+};
+
+/** Format error_stage for tooltip display. */
+const formatErrorStage = (stage: string | undefined): string | null => {
+  if (!stage || stage === 'unknown') return null;
+  const stageMap: Record<string, string> = {
+    token_acquire: '令牌获取',
+    llm_invoke: 'LLM 调用',
+    parse: '结果解析',
+    tool: '工具调用',
+  };
+  return stageMap[stage] || stage;
+};
+
 export const AgentStatusGrid: React.FC<AgentStatusGridProps> = ({ report }) => {
   const agentStatus = (report as any).agent_status;
   if (!agentStatus) return null;
@@ -53,9 +108,7 @@ export const AgentStatusGrid: React.FC<AgentStatusGridProps> = ({ report }) => {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
       {Object.entries(agentStatus).map(([key, status]: [string, any]) => {
-        const isSuccess = status.status === 'success';
-        const isSkipped = status.status === 'not_run';
-        const confidence = typeof status.confidence === 'number' ? status.confidence : 0;
+        const visual = deriveAgentVisual(status);
         const qualityScore = typeof status?.evidence_quality?.overall_score === 'number'
           ? status.evidence_quality.overall_score
           : null;
@@ -70,22 +123,43 @@ export const AgentStatusGrid: React.FC<AgentStatusGridProps> = ({ report }) => {
         const skipLabel = status.escalation_not_needed
           ? 'Escalation skipped'
           : (status.skipped_reason ? `Skip: ${status.skipped_reason}` : null);
+        const fallbackReason = status.fallback_reason || null;
+        const errorStageLabel = formatErrorStage(status.error_stage);
+        const durationMs = typeof status.duration_ms === 'number' ? status.duration_ms : null;
+
+        // Build tooltip text for hover
+        const tooltipParts: string[] = [];
+        if (fallbackReason) tooltipParts.push(`降级原因: ${fallbackReason}`);
+        if (errorStageLabel) tooltipParts.push(`失败阶段: ${errorStageLabel}`);
+        if (durationMs !== null) tooltipParts.push(`耗时: ${durationMs}ms`);
+        const tooltipText = tooltipParts.length > 0 ? tooltipParts.join(' | ') : undefined;
 
         return (
           <div
             key={key}
-            className={`px-2 py-1.5 rounded-lg text-2xs ${isSuccess ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : isSkipped ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}
+            className={`px-2 py-1.5 rounded-lg text-2xs ${visual.bgColor}`}
+            title={tooltipText}
           >
             <div className="font-medium capitalize">{key}</div>
             <div className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${isSuccess ? 'bg-emerald-500' : isSkipped ? 'bg-blue-500' : 'bg-amber-500'}`}></span>
-              {isSuccess ? `${Math.round(confidence * 100)}%` : isSkipped ? 'Skipped' : 'Failed'}
+              <span className={`w-1.5 h-1.5 rounded-full ${visual.dotColor}`}></span>
+              {visual.label}
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
               <span className={`px-1.5 py-0.5 rounded ${qualityTone}`}>{qualityLabel}</span>
               {skipLabel && (
                 <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
                   {skipLabel}
+                </span>
+              )}
+              {fallbackReason && (
+                <span className={`px-1.5 py-0.5 rounded ${status.retryable ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200'}`}>
+                  {status.retryable ? '⚠ 可重试' : '✗ 不可恢复'}
+                </span>
+              )}
+              {durationMs !== null && (
+                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300">
+                  {durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`}
                 </span>
               )}
             </div>

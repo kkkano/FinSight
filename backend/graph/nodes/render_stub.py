@@ -6,7 +6,46 @@ import re
 from pathlib import Path
 from string import Template
 
+from langchain_core.messages import AIMessage
+
 from backend.graph.state import GraphState
+
+
+def _build_ai_reply_message(artifacts: dict) -> AIMessage:
+    """
+    Extract a concise summary from artifacts to persist as AIMessage
+    in the checkpointer's message history.
+
+    This enables multi-turn conversation context without storing
+    the full draft_markdown (which can be 4000-6000 chars) in messages.
+    """
+    _MAX_SUMMARY_CHARS = 500
+
+    draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
+    if isinstance(draft, str) and draft.strip():
+        text = draft.strip()
+        # Strip leading markdown headers for cleaner summary
+        lines = text.splitlines()
+        content_lines = [
+            ln for ln in lines
+            if not ln.strip().startswith("#") and ln.strip()
+        ]
+        summary = "\n".join(content_lines).strip()
+        if not summary:
+            summary = text
+        if len(summary) > _MAX_SUMMARY_CHARS:
+            summary = summary[:_MAX_SUMMARY_CHARS] + "..."
+        return AIMessage(content=summary)
+
+    # Fallback: chat response or generic marker
+    response = artifacts.get("response") if isinstance(artifacts, dict) else None
+    if isinstance(response, str) and response.strip():
+        text = response.strip()
+        if len(text) > _MAX_SUMMARY_CHARS:
+            text = text[:_MAX_SUMMARY_CHARS] + "..."
+        return AIMessage(content=text)
+
+    return AIMessage(content="(analysis completed)")
 
 
 def render_stub(state: GraphState) -> dict:
@@ -25,7 +64,7 @@ def render_stub(state: GraphState) -> dict:
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
         # synthesize already wrote a rich draft — pass through unchanged.
-        return {"artifacts": artifacts}
+        return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
 
     # ── Regular template rendering (stub / thin-draft fallback) ───
     subject = state.get("subject") or {}
@@ -37,7 +76,8 @@ def render_stub(state: GraphState) -> dict:
     if subject_type == "unknown":
         # Guardrail: clarification prompts must be emitted only from the Clarify node.
         markdown = "> (internal) unexpected state: `unknown` subject reached Render.\n"
-        return {"artifacts": {**(state.get("artifacts") or {}), "draft_markdown": markdown}}
+        result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
+        return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     ticker = (tickers or [None])[0] if isinstance(tickers, list) else None
@@ -267,4 +307,5 @@ def render_stub(state: GraphState) -> dict:
                 values[key] = value
 
     markdown = note_prefix + tpl.safe_substitute(values)
-    return {"artifacts": {**(state.get("artifacts") or {}), "draft_markdown": markdown}}
+    result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
+    return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}

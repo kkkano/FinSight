@@ -55,7 +55,9 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
             resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
-            state = await runner.ainvoke(
+            from backend.graph.runner import run_graph_traced
+            state = await run_graph_traced(
+                runner,
                 thread_id=thread_id,
                 query=resolved_query,
                 ui_context=ui_context,

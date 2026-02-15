@@ -1,8 +1,68 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from langchain_core.messages import AIMessage, HumanMessage
+
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
+
+# Maximum number of recent messages to include in planner context.
+# Each turn = 1 Human + 1 AI, so 12 messages ≈ 6 rounds.
+_MAX_HISTORY_MESSAGES = 12
+
+
+def _format_conversation_history(state: GraphState) -> str:
+    """
+    Extract recent conversation history from state messages for planner context.
+
+    Returns an XML block if history exists, empty string otherwise.
+    Only includes messages BEFORE the current query (i.e., history, not the
+    current turn's HumanMessage which is already in inputs.query).
+    """
+    messages = state.get("messages") or []
+    if not messages:
+        return ""
+
+    current_query = (state.get("query") or "").strip()
+
+    # Filter to Human/AI messages, skip current query's message
+    history_msgs = []
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            content = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
+            # Skip the current query (it's the last HumanMessage matching query text)
+            if content == current_query and not any(
+                isinstance(m, HumanMessage) and
+                (m.content.strip() if isinstance(m.content, str) else str(m.content).strip()) == current_query
+                for m in messages[messages.index(msg) + 1:]
+                if isinstance(m, HumanMessage)
+            ):
+                continue
+            history_msgs.append(("user", content))
+        elif isinstance(msg, AIMessage):
+            content = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
+            if content:
+                # Truncate long AI responses for context
+                if len(content) > 300:
+                    content = content[:300] + "..."
+                history_msgs.append(("assistant", content))
+
+    if not history_msgs:
+        return ""
+
+    # Take last N messages
+    recent = history_msgs[-_MAX_HISTORY_MESSAGES:]
+
+    lines = []
+    for role, content in recent:
+        lines.append(f"[{role}]: {content}")
+
+    return (
+        "<conversation_history>\n"
+        "以下是用户与助手之前的对话记录，用于理解指代和上下文：\n"
+        + "\n".join(lines)
+        + "\n</conversation_history>\n"
+    )
 
 
 def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
@@ -62,7 +122,7 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
 
 <planner_variant>{planner_variant}</planner_variant>
 
-<inputs>
+{_format_conversation_history(state)}<inputs>
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
@@ -93,6 +153,7 @@ kind 类型说明：
 4) 计划应最小化：不要默认运行所有工具/Agent，仅包含回答用户问题所必需的步骤。
 5) 可并行的步骤应设置相同的 parallel_group 值（如 "p1"）以提升执行效率。
 6) 每个步骤的 "why" 字段必须说明该步骤对回答用户问题的必要性。
+7) 若存在 conversation_history，利用对话上下文理解代词指代和隐含意图（如"它的PE"→"之前讨论的标的的PE"）。
 </constraints>
 
 <operation_guidelines>

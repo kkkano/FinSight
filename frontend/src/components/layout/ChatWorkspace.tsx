@@ -21,6 +21,7 @@ type ChatWorkspaceProps = {
     onCollapse: () => void;
     onResizeStart: (event: MouseEvent) => void;
     onSubscribeClick: () => void;
+    onNavigateToChat?: () => void;
   };
   marketQuotes: MarketQuote[];
   initialReportId?: string | null;
@@ -132,6 +133,7 @@ export function ChatWorkspace({
           onCollapse={contextPanel.onCollapse}
           onResizeStart={contextPanel.onResizeStart}
           onSubscribeClick={contextPanel.onSubscribeClick}
+          onNavigateToChat={contextPanel.onNavigateToChat}
           showMiniChat={false}
         />
       </div>

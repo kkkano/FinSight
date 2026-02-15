@@ -10,7 +10,7 @@ def test_langgraph_runner_import_and_invoke():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    result = _run(runner.ainvoke(thread_id="t-basic", query="hello", ui_context={"active_symbol": "AAPL"}))
+    result = _run(runner.ainvoke(thread_id="t-basic", query="分析 AAPL", ui_context={"active_symbol": "AAPL"}))
 
     assert isinstance(result, dict)
     assert "artifacts" in result
@@ -21,13 +21,17 @@ def test_langgraph_runner_import_and_invoke():
     spans = trace.get("spans") or []
     assert [s.get("node") for s in spans] == [
         "build_initial_state",
+        "trim_history",
+        "summarize_history",
         "normalize_ui_context",
         "decide_output_mode",
+        "chat_respond",
         "resolve_subject",
         "clarify",
         "parse_operation",
         "policy_gate",
         "planner",
+        "confirmation_gate",
         "execute_plan",
         "synthesize",
         "render",

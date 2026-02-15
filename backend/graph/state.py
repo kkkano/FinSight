@@ -6,7 +6,7 @@ docs/06_LANGGRAPH_REFACTOR_GUIDE.md
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, NotRequired, TypedDict
+from typing import Annotated, Any, Literal, NotRequired, TypedDict
 
 from langgraph.graph import MessagesState
 from langgraph.graph.message import add_messages
@@ -32,6 +32,7 @@ class Subject(TypedDict):
     selection_ids: list[str]
     selection_types: list[str]
     selection_payload: list[dict]
+    binding_tier: str
 
 
 class Operation(TypedDict):
@@ -125,11 +126,17 @@ class GraphState(MessagesState):
     output_mode: NotRequired[OutputMode]
     strict_selection: NotRequired[bool]
     clarify: NotRequired[Clarify]
+    chat_responded: NotRequired[bool]
 
     policy: NotRequired[Policy]
     plan_ir: NotRequired[PlanIR]
     artifacts: NotRequired[Artifacts]
     trace: NotRequired[Trace]
+
+    # --- Gate-1: human-in-the-loop confirmation ---
+    require_confirmation: NotRequired[bool]
+    confirmation_options: NotRequired[list[str]]
+    user_confirmation: NotRequired[Any]
 
 
 __all__ = [

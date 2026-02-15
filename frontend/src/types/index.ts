@@ -143,6 +143,10 @@ export interface ReportIR {
     confidence?: number;
     error?: string;
     skipped_reason?: string;
+    fallback_reason?: string;
+    retryable?: boolean;
+    error_stage?: string;
+    duration_ms?: number;
     escalation_not_needed?: boolean;
     evidence_quality?: {
       overall_score?: number;

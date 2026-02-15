@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> Complete data flow documentation for the 11-node StateGraph pipeline.
+> Complete data flow documentation for the 13-node StateGraph pipeline.
 
 ---
 
@@ -9,7 +9,9 @@
 ```mermaid
 graph TD
     START([START]) --> build_initial_state
-    build_initial_state --> normalize_ui_context
+    build_initial_state --> trim_history
+    trim_history --> summarize_history
+    summarize_history --> normalize_ui_context
     normalize_ui_context --> decide_output_mode
     decide_output_mode --> resolve_subject
     resolve_subject --> clarify
@@ -25,6 +27,8 @@ graph TD
     render --> END_DONE([END: 返回最终响应])
 
     style START fill:#10b981,color:#fff
+    style trim_history fill:#f59e0b,color:#fff
+    style summarize_history fill:#f59e0b,color:#fff
     style END_CLARIFY fill:#ef4444,color:#fff
     style END_DONE fill:#3b82f6,color:#fff
 ```
@@ -48,7 +52,56 @@ graph TD
 
 ---
 
-### 2. normalize_ui_context
+### 2. trim_history (Memory Safety)
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `messages` | Read | Checkpointer 累积的完整对话历史 |
+| `messages` | Write | `RemoveMessage` 列表 (删除超出 token 预算的旧消息) |
+
+**Token 预算兜底**: 使用 `langchain_core.messages.trim_messages` + `tiktoken` (cl100k_base) 计算 token 数。当总 token 超过预算时，从最早的消息开始删除，保留最近的消息。
+
+- 删除方式: 返回 `RemoveMessage(id=...)` 列表，由 `add_messages` reducer 原生处理
+- 如果消息数为空或在预算内: 返回空 dict `{}`，不做任何修改
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `LANGGRAPH_MAX_HISTORY_TOKENS` | `8000` | 对话历史最大 token 数 |
+
+**Source**: `backend/graph/nodes/trim_conversation_history.py`
+
+---
+
+### 3. summarize_history (Conditional Compression)
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `messages` | Read | 当前对话消息列表 |
+| `messages` | Write | `RemoveMessage` 列表 + `SystemMessage` 摘要 |
+
+**条件压缩**: 当对话消息数超过阈值时，将旧消息压缩为一条 `SystemMessage` 摘要，保留最近 N 条消息。
+
+**处理流程**:
+1. 统计 `HumanMessage` + `AIMessage` 数量
+2. 若 ≤ 阈值 → 返回空 dict，不做任何处理
+3. 若 > 阈值 → 提取旧消息内容为摘要文本 (`[对话摘要]` 前缀)
+4. 返回: `RemoveMessage` (删除旧消息) + `SystemMessage` (摘要)
+
+**摘要提取** (确定性，零 LLM):
+- `HumanMessage` → 保留完整 content
+- `AIMessage` → 截断到 100 字符 + "..."
+- 格式: `[用户]: xxx` / `[助手]: xxx`
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `LANGGRAPH_SUMMARIZE_THRESHOLD` | `12` | 触发摘要的消息数阈值 |
+| `LANGGRAPH_SUMMARIZE_KEEP_RECENT` | `6` | 保留最近 N 条消息 |
+
+**Source**: `backend/graph/nodes/summarize_history.py`
+
+---
+
+### 4. normalize_ui_context
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -58,7 +111,7 @@ graph TD
 
 ---
 
-### 3. decide_output_mode
+### 5. decide_output_mode
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -73,7 +126,7 @@ graph TD
 
 ---
 
-### 4. resolve_subject
+### 6. resolve_subject
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -87,7 +140,7 @@ graph TD
 
 ---
 
-### 5. clarify (条件分支)
+### 7. clarify (条件分支)
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -101,7 +154,7 @@ graph TD
 
 ---
 
-### 6. parse_operation
+### 8. parse_operation
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -113,7 +166,7 @@ graph TD
 
 ---
 
-### 7. policy_gate
+### 9. policy_gate
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -128,7 +181,7 @@ graph TD
 
 ---
 
-### 8. planner ★
+### 10. planner ★
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -170,7 +223,7 @@ graph TD
 
 ---
 
-### 9. execute_plan ★
+### 11. execute_plan ★
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -194,7 +247,7 @@ graph TD
 
 ---
 
-### 10. synthesize ★
+### 12. synthesize ★
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -217,7 +270,7 @@ graph TD
 
 ---
 
-### 11. render
+### 13. render
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -238,6 +291,9 @@ graph TD
 
 | Variable | Default | Effect |
 |----------|---------|--------|
+| `LANGGRAPH_MAX_HISTORY_TOKENS` | `8000` | 对话历史最大 token 数 (trim_history) |
+| `LANGGRAPH_SUMMARIZE_THRESHOLD` | `12` | 触发摘要压缩的消息数阈值 |
+| `LANGGRAPH_SUMMARIZE_KEEP_RECENT` | `6` | 摘要时保留最近 N 条消息 |
 | `LANGGRAPH_PLANNER_MODE` | `stub` | planner 模式: stub \| llm |
 | `LANGGRAPH_SYNTHESIZE_MODE` | `stub` | synthesize 模式: stub \| llm |
 | `LANGGRAPH_EXECUTE_LIVE_TOOLS` | `false` | executor 是否实际调用 tools |

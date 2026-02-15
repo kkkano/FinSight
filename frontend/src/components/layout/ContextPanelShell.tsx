@@ -11,6 +11,8 @@ export type ContextPanelShellProps = {
   onResizeStart: (event: MouseEvent) => void;
   onSubscribeClick: () => void;
   showMiniChat: boolean;
+  /** Callback to navigate to chat view (for execution bridge "继续追问"). */
+  onNavigateToChat?: () => void;
 };
 
 export function ContextPanelShell({
@@ -22,6 +24,7 @@ export function ContextPanelShell({
   onResizeStart,
   onSubscribeClick,
   showMiniChat,
+  onNavigateToChat,
 }: ContextPanelShellProps) {
   if (!isExpanded) {
     return (
@@ -61,6 +64,7 @@ export function ContextPanelShell({
         <RightPanel
           onCollapse={onCollapse}
           onSubscribeClick={onSubscribeClick}
+          onNavigateToChat={onNavigateToChat}
           showMiniChat={showMiniChat}
           className="h-full"
         />

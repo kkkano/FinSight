@@ -15,6 +15,7 @@ import type {
   SelectionItem,
 } from '../types/dashboard';
 import { STORAGE_KEYS } from '../types/dashboard';
+import { apiClient } from '../api/client';
 
 // === Store 接口 ===
 interface DashboardStore {
@@ -47,6 +48,13 @@ interface DashboardStore {
   toggleSelection: (selection: SelectionItem) => void;
   setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
+
+  // Watchlist API methods (API-first, replace localStorage persistence)
+  initWatchlist: () => Promise<void>;
+  addWatchItemApi: (ticker: string) => Promise<void>;
+  removeWatchItemApi: (ticker: string) => Promise<void>;
+  /** @internal in-flight guard */ _isWatchlistLoading: boolean;
+  /** @internal loaded flag */ _isWatchlistLoaded: boolean;
 }
 
 // === 持久化辅助函数 ===
@@ -75,19 +83,40 @@ const DEFAULT_LAYOUT_PREFS: LayoutPrefs = {
   order: [],
 };
 
+const normalizeLayoutPrefs = (value: unknown): LayoutPrefs => {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_LAYOUT_PREFS;
+  }
+
+  const raw = value as Partial<LayoutPrefs>;
+  const hiddenWidgets = Array.isArray(raw.hidden_widgets)
+    ? raw.hidden_widgets.filter((item): item is string => typeof item === 'string')
+    : [];
+  const order = Array.isArray(raw.order)
+    ? raw.order.filter((item): item is string => typeof item === 'string')
+    : [];
+
+  return {
+    hidden_widgets: hiddenWidgets,
+    order,
+  };
+};
+
 // === Store 实例 ===
-export const useDashboardStore = create<DashboardStore>((set) => ({
-  // 初始状态（从 localStorage 恢复）
+export const useDashboardStore = create<DashboardStore>((set, get) => ({
+  // 初始状态（从 localStorage 恢复, watchlist 改为 API 加载）
   activeAsset: loadFromStorage(STORAGE_KEYS.ACTIVE_ASSET, null),
   capabilities: null,
-  watchlist: loadFromStorage(STORAGE_KEYS.WATCHLIST, []),
-  layoutPrefs: loadFromStorage(STORAGE_KEYS.LAYOUT, DEFAULT_LAYOUT_PREFS),
+  watchlist: [],
+  layoutPrefs: normalizeLayoutPrefs(loadFromStorage(STORAGE_KEYS.LAYOUT, DEFAULT_LAYOUT_PREFS)),
   newsMode: loadFromStorage<NewsModeType>(STORAGE_KEYS.NEWS_MODE, 'market'),
   dashboardData: null,
   isLoading: false,
   error: null,
   activeSelection: null,  // 当前选中的新闻/报告
   activeSelections: [],
+  _isWatchlistLoading: false,
+  _isWatchlistLoaded: false,
 
   // 设置当前资产（同时清除 selection，因为切换股票后之前的引用不再有效）
   setActiveAsset: (asset) => {
@@ -98,9 +127,8 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
   // 设置能力集
   setCapabilities: (caps) => set({ capabilities: caps }),
 
-  // 设置完整自选列表
+  // 设置完整自选列表（本地状态，不持久化到 localStorage）
   setWatchlist: (list) => {
-    saveToStorage(STORAGE_KEYS.WATCHLIST, list);
     set({ watchlist: list });
   },
 
@@ -112,7 +140,6 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
       );
       if (exists) return {};
       const next = [...state.watchlist, item];
-      saveToStorage(STORAGE_KEYS.WATCHLIST, next);
       return { watchlist: next };
     }),
 
@@ -122,14 +149,14 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
       const next = state.watchlist.filter(
         (w) => w.symbol.toUpperCase() !== symbol.toUpperCase()
       );
-      saveToStorage(STORAGE_KEYS.WATCHLIST, next);
       return { watchlist: next };
     }),
 
   // 设置布局偏好
   setLayoutPrefs: (prefs) => {
-    saveToStorage(STORAGE_KEYS.LAYOUT, prefs);
-    set({ layoutPrefs: prefs });
+    const normalized = normalizeLayoutPrefs(prefs);
+    saveToStorage(STORAGE_KEYS.LAYOUT, normalized);
+    set({ layoutPrefs: normalized });
   },
 
   // 切换组件可见性
@@ -204,4 +231,49 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
 
   // 清除当前选择
   clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
+
+  // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
+
+  initWatchlist: async () => {
+    const { _isWatchlistLoaded, _isWatchlistLoading } = get();
+    if (_isWatchlistLoaded || _isWatchlistLoading) return;
+
+    set({ _isWatchlistLoading: true });
+
+    try {
+      const response = await apiClient.getUserProfile('default_user');
+      const profile = response?.profile;
+      const list: string[] = Array.isArray(profile?.watchlist)
+        ? profile.watchlist
+        : [];
+
+      const watchItems: WatchItem[] = list.map((ticker: string) => ({
+        symbol: ticker.toUpperCase(),
+        type: 'equity',
+        name: ticker.toUpperCase(),
+      }));
+
+      set({
+        watchlist: watchItems,
+        _isWatchlistLoaded: true,
+        _isWatchlistLoading: false,
+      });
+    } catch {
+      set({ _isWatchlistLoading: false });
+    }
+  },
+
+  addWatchItemApi: async (ticker: string) => {
+    await apiClient.addWatchlist({ user_id: 'default_user', ticker });
+    get().addWatchItem({
+      symbol: ticker.toUpperCase(),
+      type: 'equity',
+      name: ticker.toUpperCase(),
+    });
+  },
+
+  removeWatchItemApi: async (ticker: string) => {
+    await apiClient.removeWatchlist({ user_id: 'default_user', ticker });
+    get().removeWatchItem(ticker);
+  },
 }));

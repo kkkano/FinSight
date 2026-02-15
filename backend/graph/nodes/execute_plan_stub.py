@@ -335,6 +335,33 @@ async def execute_plan_stub(state: GraphState) -> dict:
         deduped.append(e)
     artifacts["evidence_pool"] = deduped
 
+    # Phase P0-3c: collect per-agent fallback diagnostics into artifacts
+    # so synthesize/render can surface degradation info to the user.
+    agent_diagnostics: dict[str, dict[str, Any]] = {}
+    if isinstance(step_results, dict):
+        for step_id, item in step_results.items():
+            if not isinstance(item, dict):
+                continue
+            step = step_index.get(step_id) or {}
+            if step.get("kind") != "agent":
+                continue
+            agent_name = step.get("name") or step_id
+            output = item.get("output")
+            if not isinstance(output, dict):
+                continue
+            diag: dict[str, Any] = {
+                "status": output.get("status", "unknown"),
+                "duration_ms": output.get("duration_ms"),
+            }
+            fallback_reason = output.get("fallback_reason")
+            if fallback_reason:
+                diag["fallback_reason"] = fallback_reason
+                diag["retryable"] = output.get("retryable", False)
+                diag["error_stage"] = output.get("error_stage", "unknown")
+            agent_diagnostics[str(agent_name)] = diag
+    if agent_diagnostics:
+        artifacts["agent_diagnostics"] = agent_diagnostics
+
     # Phase 11.11.2: RAG v2 minimal loop
     rag_trace: dict[str, Any] = {"enabled": False}
     try:

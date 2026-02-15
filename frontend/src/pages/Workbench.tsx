@@ -4,30 +4,22 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient, type ReportIndexItem } from '../api/client';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
-import type { NewsItem } from '../types/dashboard';
 import { Card } from '../components/ui/Card';
-import { NewsSection } from '../components/workbench/NewsSection';
+import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
+import { RebalanceEntryCard } from '../components/workbench/RebalanceEntryCard';
 import { ReportSection } from '../components/workbench/ReportSection';
 import { TaskSection } from '../components/workbench/TaskSection';
 
 type WorkbenchProps = {
   symbol: string;
-  newsItems: NewsItem[];
-  rawNewsItems?: NewsItem[];
-  rankingMeta?: {
-    version?: string;
-    formula?: string;
-    notes?: string[];
-  };
   fromDashboard?: boolean;
+  onNavigateToChat?: () => void;
 };
 
 export function Workbench({
   symbol,
-  newsItems,
-  rawNewsItems = [],
-  rankingMeta,
   fromDashboard = false,
+  onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
   const { watchlist } = useDashboardStore();
@@ -89,28 +81,29 @@ export function Workbench({
         </div>
       </Card>
 
-      {/* Main content grid: reports (1 col) + news (2 cols) */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <ReportSection
-          symbol={symbol}
-          reports={latestReports}
-          loading={loadingReports}
-        />
-        <NewsSection
-          symbol={symbol}
-          newsItems={newsItems}
-          rawNewsItems={rawNewsItems}
-          rankingMeta={rankingMeta}
-          watchlist={watchlist}
-        />
-      </div>
+      {/* Portfolio Summary Bar */}
+      <PortfolioSummaryBar />
 
-      {/* Dynamic tasks */}
-      <TaskSection
-        symbol={symbol}
-        latestReports={latestReports}
-        newsItems={newsItems}
-      />
+      {/* Main content: two-column layout */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Left: Tasks + Rebalance (main, emphasized) */}
+        <div className="lg:col-span-2 space-y-4">
+          <TaskSection
+            symbol={symbol}
+            onNavigateToChat={onNavigateToChat}
+          />
+          <RebalanceEntryCard onNavigateToChat={onNavigateToChat} />
+        </div>
+
+        {/* Right: Reports (sidebar) */}
+        <div className="space-y-4">
+          <ReportSection
+            symbol={symbol}
+            reports={latestReports}
+            loading={loadingReports}
+          />
+        </div>
+      </div>
     </div>
   );
 }

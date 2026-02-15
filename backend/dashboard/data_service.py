@@ -542,27 +542,34 @@ def _parse_news_text(text: str) -> list[dict[str, Any]]:
 
 def fetch_news(symbol: str, limit: int = 20) -> dict[str, Any]:
     try:
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
         from backend.tools.news import get_company_news, get_market_news_headlines
 
         impact_items: list[Any] = []
-        try:
-            raw_impact = get_company_news(symbol, limit=limit)
-            if isinstance(raw_impact, list):
-                impact_items = raw_impact
-            elif isinstance(raw_impact, str):
-                impact_items = _parse_news_text(raw_impact)
-        except Exception as exc:
-            logger.info("[DataService] get_company_news failed for %s: %s", symbol, exc)
-
         market_items: list[Any] = []
-        try:
-            raw_market = get_market_news_headlines(limit=limit)
-            if isinstance(raw_market, list):
-                market_items = raw_market
-            elif isinstance(raw_market, str):
-                market_items = _parse_news_text(raw_market)
-        except Exception as exc:
-            logger.info("[DataService] get_market_news_headlines failed: %s", exc)
+
+        # Parallel fetch: company news + market headlines
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_impact = pool.submit(get_company_news, symbol, limit)
+            f_market = pool.submit(get_market_news_headlines, limit)
+
+            try:
+                raw_impact = f_impact.result(timeout=30)
+                if isinstance(raw_impact, list):
+                    impact_items = raw_impact
+                elif isinstance(raw_impact, str):
+                    impact_items = _parse_news_text(raw_impact)
+            except (FuturesTimeout, Exception) as exc:
+                logger.info("[DataService] get_company_news failed for %s: %s", symbol, exc)
+
+            try:
+                raw_market = f_market.result(timeout=30)
+                if isinstance(raw_market, list):
+                    market_items = raw_market
+                elif isinstance(raw_market, str):
+                    market_items = _parse_news_text(raw_market)
+            except (FuturesTimeout, Exception) as exc:
+                logger.info("[DataService] get_market_news_headlines failed: %s", exc)
 
         market_raw = [_to_news_item(item) for item in market_items[:limit]]
         impact_raw = [_to_news_item(item) for item in impact_items[:limit]]
@@ -665,6 +672,146 @@ def fetch_holdings(symbol: str, asset_type: str, limit: int = 50) -> list[dict[s
         return []
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# v2 data fetch functions (equity only)
+# ══════════════════════════════════════════════════════════════════════════════
+# Performance budget (Gate-4):
+# ┌──────────────┬─────────┬───────────┬──────────┬───────────────────┐
+# │ Source       │ Timeout │ Cache TTL │ Max Par  │ fallback          │
+# ├──────────────┼─────────┼───────────┼──────────┼───────────────────┤
+# │ valuation    │ 5s      │ 300s(5m)  │ 1        │ return None       │
+# │ financials   │ 8s      │ 3600s(1h) │ 1        │ return None       │
+# │ technicals   │ 5s      │ 60s       │ 1        │ return None       │
+# │ peers        │ 10s     │ 3600s(1h) │ 3(batch) │ return None       │
+# └──────────────┴─────────┴───────────┴──────────┴───────────────────┘
+
+
+def fetch_valuation(symbol: str) -> dict[str, Any] | None:
+    """Fetch valuation metrics from yfinance Ticker.info.
+
+    Returns a dict matching the ValuationData schema fields, or None on
+    failure.
+    """
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(symbol).info or {}
+        result = {
+            "market_cap": _safe_float(info.get("marketCap")),
+            "trailing_pe": _safe_float(info.get("trailingPE")),
+            "forward_pe": _safe_float(info.get("forwardPE")),
+            "price_to_book": _safe_float(info.get("priceToBook")),
+            "price_to_sales": _safe_float(info.get("priceToSalesTrailing12Months")),
+            "ev_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
+            "dividend_yield": _safe_float(info.get("dividendYield")),
+            "beta": _safe_float(info.get("beta")),
+            "week52_high": _safe_float(info.get("fiftyTwoWeekHigh")),
+            "week52_low": _safe_float(info.get("fiftyTwoWeekLow")),
+        }
+        # Return None if every field is empty
+        if all(v is None for v in result.values()):
+            return None
+        return result
+    except Exception as exc:
+        logger.info("[DataService] fetch_valuation failed for %s: %s", symbol, exc)
+        return None
+
+
+def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] | None:
+    """Fetch quarterly financial statements from yfinance.
+
+    Returns a dict matching the FinancialStatement schema, or None on
+    failure.
+    """
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+
+        # Helper: extract a row by candidate names from a DataFrame
+        def _extract_row(frame: Optional[pd.DataFrame], candidates: list[str]) -> list[Optional[float]]:
+            if frame is None or (hasattr(frame, "empty") and frame.empty):
+                return []
+            for name in candidates:
+                if name in frame.index:
+                    row = frame.loc[name]
+                    return [_safe_float(row[col]) for col in frame.columns]
+            return []
+
+        # Helper: format period label from column Timestamp
+        def _period_label(col: Any) -> str:
+            if isinstance(col, pd.Timestamp):
+                return f"{col.year}Q{(col.month - 1) // 3 + 1}"
+            return str(col)[:10]
+
+        # Fetch quarterly statements
+        income = getattr(ticker, "quarterly_income_stmt", None)
+        balance = getattr(ticker, "quarterly_balance_sheet", None)
+        cashflow = getattr(ticker, "quarterly_cashflow", None)
+
+        # Determine period columns from whichever statement is available
+        ref_frame = None
+        for frame in (income, balance, cashflow):
+            if frame is not None and not frame.empty:
+                ref_frame = frame
+                break
+        if ref_frame is None:
+            return None
+
+        # Limit to requested number of periods
+        cols = list(ref_frame.columns[:periods])
+        period_labels = [_period_label(c) for c in cols]
+
+        # Trim all frames to the same columns
+        def _trim(frame: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+            if frame is None or frame.empty:
+                return None
+            common = [c for c in cols if c in frame.columns]
+            return frame[common] if common else None
+
+        income = _trim(income)
+        balance = _trim(balance)
+        cashflow = _trim(cashflow)
+
+        result: dict[str, Any] = {
+            "periods": period_labels,
+            "revenue": _extract_row(income, ["Total Revenue", "Revenue", "Net Sales", "Operating Revenue"]),
+            "gross_profit": _extract_row(income, ["Gross Profit"]),
+            "operating_income": _extract_row(income, ["Operating Income", "Operating Revenue"]),
+            "net_income": _extract_row(income, ["Net Income", "Net Income Common Stockholders"]),
+            "eps": _extract_row(income, ["Basic EPS", "Diluted EPS"]),
+            "total_assets": _extract_row(balance, ["Total Assets"]),
+            "total_liabilities": _extract_row(balance, ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
+            "operating_cash_flow": _extract_row(cashflow, ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities"]),
+            "free_cash_flow": _extract_row(cashflow, ["Free Cash Flow"]),
+        }
+        return result
+    except Exception as exc:
+        logger.info("[DataService] fetch_financial_statements failed for %s: %s", symbol, exc)
+        return None
+
+
+def fetch_technical_indicators(symbol: str) -> dict[str, Any] | None:
+    """Compute technical indicators for *symbol*.
+
+    Fetches 1-year daily OHLCV via yfinance and delegates to
+    :func:`backend.tools.technical.compute_technical_indicators`.
+    """
+    try:
+        import yfinance as yf
+        from backend.tools.technical import compute_technical_indicators
+
+        hist = yf.Ticker(symbol).history(period="1y", interval="1d")
+        if hist is None or hist.empty:
+            return None
+
+        result = compute_technical_indicators(hist)
+        return result if result else None
+    except Exception as exc:
+        logger.info("[DataService] fetch_technical_indicators failed for %s: %s", symbol, exc)
+        return None
+
+
 class DashboardDataService:
     """Lightweight wrapper with cache-aware helper methods."""
 
@@ -742,6 +889,38 @@ class DashboardDataService:
                 return cached
         data = fetch_holdings(symbol, asset_type, limit)
         self.cache.set(symbol, "holdings", data, ttl=self.cache.TTL_HOLDINGS)
+        return data
+
+    # ── v2 data methods ────────────────────────────────────────
+
+    def get_valuation(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "valuation")
+            if cached is not None:
+                return cached
+        data = fetch_valuation(symbol)
+        if data is not None:
+            self.cache.set(symbol, "valuation", data, ttl=self.cache.TTL_VALUATION)
+        return data
+
+    def get_financial_statements(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "financials")
+            if cached is not None:
+                return cached
+        data = fetch_financial_statements(symbol)
+        if data is not None:
+            self.cache.set(symbol, "financials", data, ttl=self.cache.TTL_FINANCIALS)
+        return data
+
+    def get_technical_indicators(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "technicals")
+            if cached is not None:
+                return cached
+        data = fetch_technical_indicators(symbol)
+        if data is not None:
+            self.cache.set(symbol, "technicals", data, ttl=self.cache.TTL_TECHNICALS)
         return data
 
 

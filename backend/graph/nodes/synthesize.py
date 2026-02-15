@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
 from backend.graph.executor import summarize_selection
@@ -18,6 +18,51 @@ from backend.graph.state import GraphState
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
 
 logger = logging.getLogger(__name__)
+
+# Maximum messages to include in synthesize prompt context
+_MAX_SYNTH_HISTORY_MESSAGES = 8
+
+
+def _format_conversation_history_for_synth(state: GraphState) -> str:
+    """
+    Extract recent conversation history from state messages for synthesize context.
+    Shorter than planner's version — only includes enough for pronoun resolution.
+    """
+    messages = state.get("messages") or []
+    if not messages:
+        return ""
+
+    current_query = (state.get("query") or "").strip()
+    history_msgs = []
+
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            content = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
+            # Skip the current query
+            if content == current_query and not any(
+                isinstance(m, HumanMessage) and
+                (m.content.strip() if isinstance(m.content, str) else str(m.content).strip()) == current_query
+                for m in messages[messages.index(msg) + 1:]
+                if isinstance(m, HumanMessage)
+            ):
+                continue
+            history_msgs.append(f"[user]: {content}")
+        elif isinstance(msg, AIMessage):
+            content = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
+            if content and len(content) > 200:
+                content = content[:200] + "..."
+            if content:
+                history_msgs.append(f"[assistant]: {content}")
+
+    if not history_msgs:
+        return ""
+
+    recent = history_msgs[-_MAX_SYNTH_HISTORY_MESSAGES:]
+    return (
+        "<conversation_history>\n"
+        + "\n".join(recent)
+        + "\n</conversation_history>\n"
+    )
 
 
 def _env_str(key: str, default: str) -> str:
@@ -1355,6 +1400,8 @@ async def _generate_narrative_draft(
         if ev_lines:
             evidence_text = "\n".join(ev_lines)
 
+    conversation_history = _format_conversation_history_for_synth(state)
+
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
 
 <task>
@@ -1363,7 +1410,7 @@ async def _generate_narrative_draft(
 标的: {ticker_label}
 </task>
 
-<agent_outputs>
+{conversation_history}<agent_outputs>
 {chr(10).join(agent_sections) if agent_sections else "(无智能体输出)"}
 </agent_outputs>
 
@@ -1575,6 +1622,8 @@ async def synthesize(state: GraphState) -> dict:
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
 
+    synth_conversation_history = _format_conversation_history_for_synth(state)
+
     prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
 
 <task>
@@ -1582,7 +1631,7 @@ async def synthesize(state: GraphState) -> dict:
 所有文本值必须为简体中文。
 </task>
 
-<inputs>
+{synth_conversation_history}<inputs>
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
