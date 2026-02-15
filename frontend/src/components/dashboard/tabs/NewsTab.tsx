@@ -64,10 +64,15 @@ export function NewsTab() {
   const ticker = activeAsset?.symbol ?? null;
   const { data: reportData, loading: reportLoading } = useLatestReport(ticker);
 
+  // Extract news sub-properties so useMemo deps align with React Compiler inference
+  const newsMarket = dashboardData?.news?.market;
+  const newsImpact = dashboardData?.news?.impact;
+
   // Combine market + impact news
   const allNews = useMemo<NewsItem[]>(() => {
-    const market = dashboardData?.news?.market ?? [];
-    const impact = dashboardData?.news?.impact ?? [];
+    if (!newsMarket && !newsImpact) return [];
+    const market = newsMarket ?? [];
+    const impact = newsImpact ?? [];
     // Deduplicate by title
     const seen = new Set<string>();
     const combined: NewsItem[] = [];
@@ -78,7 +83,7 @@ export function NewsTab() {
       }
     }
     return combined;
-  }, [dashboardData?.news?.market, dashboardData?.news?.impact]);
+  }, [newsMarket, newsImpact]);
 
   // Apply filter
   const filteredNews = useMemo(() => {

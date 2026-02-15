@@ -19,9 +19,3 @@ export const BREAKPOINTS = {
 } as const;
 
 export type BreakpointKey = keyof typeof BREAKPOINTS;
-
-/** 判断当前视口是否 < 某断点 */
-export function isBelowBreakpoint(key: BreakpointKey): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.innerWidth < BREAKPOINTS[key];
-}

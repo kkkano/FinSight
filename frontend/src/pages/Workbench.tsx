@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { apiClient, type ReportIndexItem } from '../api/client';
-import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
@@ -22,7 +21,6 @@ export function Workbench({
   onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
-  const { watchlist } = useDashboardStore();
   const { sessionId } = useStore();
 
   const [latestReports, setLatestReports] = useState<ReportIndexItem[]>([]);

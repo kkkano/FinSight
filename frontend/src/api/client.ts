@@ -99,10 +99,6 @@ api.interceptors.response.use(
   }
 );
 
-export const createCancelToken = () => {
-  return axios.CancelToken.source();
-};
-
 // ---------------------------------------------------------------------------
 // Shared SSE parser — used by sendMessageStream() and executeAgent()
 // ---------------------------------------------------------------------------

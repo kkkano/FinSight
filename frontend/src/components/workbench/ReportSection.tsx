@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, ChevronRight, GitCompareArrows,
-  Inbox, Library, Loader2, Search,
+  Inbox, Library, Search,
 } from 'lucide-react';
 
 import type { ReportIndexItem } from '../../api/client';
@@ -243,7 +243,7 @@ function TimelineGroup({
 /*  ReportSection (main)                                               */
 /* ------------------------------------------------------------------ */
 
-function ReportSection({ symbol, reports, loading }: ReportSectionProps) {
+function ReportSection({ reports, loading }: ReportSectionProps) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('date');

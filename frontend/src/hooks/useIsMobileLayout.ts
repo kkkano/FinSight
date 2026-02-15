@@ -19,6 +19,3 @@ export function useIsMobileLayout(key: BreakpointKey = 'lg') {
 
   return isMobile;
 }
-
-// 保留旧导出以保持向后兼容
-export const MOBILE_LAYOUT_BREAKPOINT = BREAKPOINTS.lg;

@@ -67,7 +67,8 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
 /*  TaskSection                                                        */
 /* ------------------------------------------------------------------ */
 
-function TaskSection({ symbol, onNavigateToChat }: TaskSectionProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function TaskSection(_props: TaskSectionProps) {
   const navigate = useNavigate();
   const sessionId = useStore((s) => s.sessionId);
 

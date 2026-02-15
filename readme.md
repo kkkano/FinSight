@@ -127,9 +127,9 @@ cd frontend && pnpm build && pnpm tsc --noEmit
 ```mermaid
 graph TB
     subgraph Frontend["前端 (React + TypeScript)"]
-        DASH[仪表盘<br/>6-Tab 金融终端]
-        WB[工作台<br/>AI 任务 + 调仓]
-        CHAT[对话<br/>AI 助手]
+        DASH["仪表盘<br/>6-Tab 金融终端"]
+        WB["工作台<br/>AI 任务 + 调仓"]
+        CHAT["对话<br/>AI 助手"]
     end
 
     subgraph API["FastAPI 后端"]
@@ -145,8 +145,8 @@ graph TB
 
     subgraph Core["LangGraph 核心"]
         RUNNER[GraphRunner]
-        GRAPH[StateGraph<br/>15 个节点]
-        CP[Checkpointer<br/>SQLite / Postgres]
+        GRAPH["StateGraph<br/>15 个节点"]
+        CP["Checkpointer<br/>SQLite / Postgres"]
     end
 
     subgraph Agents["专业 Agent"]
@@ -159,11 +159,11 @@ graph TB
     end
 
     subgraph Services["服务层"]
-        MEM[记忆管理<br/>Trim + Summarize]
-        TASK_GEN[任务生成器<br/>规则 + LLM]
+        MEM["记忆管理<br/>Trim + Summarize"]
+        TASK_GEN["任务生成器<br/>规则 + LLM"]
         REB_ENG[调仓引擎]
         RPT_IDX[报告索引]
-        RAG[RAG v2<br/>混合检索]
+        RAG["RAG v2<br/>混合检索"]
         LF[LangFuse 追踪]
     end
 
@@ -190,26 +190,26 @@ graph TB
 
 ```mermaid
 flowchart TD
-    START((START)) --> BIS[build_initial_state<br/>初始化状态]
-    BIS --> TH[trim_history<br/>修剪对话历史]
-    TH --> SH[summarize_history<br/>摘要长历史]
-    SH --> NUI[normalize_ui_context<br/>标准化前端上下文]
-    NUI --> DOM[decide_output_mode<br/>决定输出模式]
-    DOM --> CR{chat_respond<br/>闲聊检测}
+    START((START)) --> BIS["build_initial_state<br/>初始化状态"]
+    BIS --> TH["trim_history<br/>修剪对话历史"]
+    TH --> SH["summarize_history<br/>摘要长历史"]
+    SH --> NUI["normalize_ui_context<br/>标准化前端上下文"]
+    NUI --> DOM["decide_output_mode<br/>决定输出模式"]
+    DOM --> CR{"chat_respond<br/>闲聊检测"}
 
     CR -->|闲聊/问候| END1((END))
-    CR -->|需要分析| RS[resolve_subject<br/>解析分析主体]
+    CR -->|需要分析| RS["resolve_subject<br/>解析分析主体"]
 
-    RS --> CL{clarify<br/>是否需要澄清?}
-    CL -->|需要澄清| END2((END<br/>返回追问))
-    CL -->|无需澄清| PO[parse_operation<br/>解析操作类型]
+    RS --> CL{"clarify<br/>是否需要澄清?"}
+    CL -->|需要澄清| END2(("END<br/>返回追问"))
+    CL -->|无需澄清| PO["parse_operation<br/>解析操作类型"]
 
-    PO --> PG[policy_gate<br/>策略门控<br/>预算/工具/Agent]
-    PG --> PL[planner<br/>LLM 规划<br/>生成 PlanIR]
-    PL --> CG[confirmation_gate<br/>人工确认中断<br/>interrupt()]
-    CG --> EP[execute_plan<br/>执行计划<br/>Agent 并行调度]
-    EP --> SYN[synthesize<br/>LLM 合成<br/>生成报告]
-    SYN --> REN[render<br/>渲染 Markdown]
+    PO --> PG["policy_gate<br/>策略门控<br/>预算/工具/Agent"]
+    PG --> PL["planner<br/>LLM 规划<br/>生成 PlanIR"]
+    PL --> CG["confirmation_gate<br/>人工确认中断<br/>interrupt()"]
+    CG --> EP["execute_plan<br/>执行计划<br/>Agent 并行调度"]
+    EP --> SYN["synthesize<br/>LLM 合成<br/>生成报告"]
+    SYN --> REN["render<br/>渲染 Markdown"]
     REN --> END3((END))
 
     style BIS fill:#1e293b,stroke:#fa8019,color:#e8eaed
@@ -244,47 +244,47 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    PLAN[PlanIR<br/>执行计划] --> SCHED[Step Scheduler<br/>并行分组]
+    PLAN["PlanIR<br/>执行计划"] --> SCHED["Step Scheduler<br/>并行分组"]
 
-    SCHED --> G1[并行组 1]
-    SCHED --> G2[并行组 2]
-    SCHED --> G3[并行组 3]
+    SCHED --> G1["并行组 1"]
+    SCHED --> G2["并行组 2"]
+    SCHED --> G3["并行组 3"]
 
-    G1 --> PA[price_agent<br/>实时行情]
-    G1 --> NA[news_agent<br/>新闻检索 + LLM 情绪分析]
+    G1 --> PA["price_agent<br/>实时行情"]
+    G1 --> NA["news_agent<br/>新闻检索 + LLM 情绪分析"]
 
-    G2 --> FA[fundamental_agent<br/>基本面 + 财报]
-    G2 --> TA[technical_agent<br/>技术指标计算]
+    G2 --> FA["fundamental_agent<br/>基本面 + 财报"]
+    G2 --> TA["technical_agent<br/>技术指标计算"]
 
-    G3 --> MA[macro_agent<br/>宏观经济]
-    G3 --> DA[deep_search_agent<br/>深度搜索<br/>Tavily + Exa]
+    G3 --> MA["macro_agent<br/>宏观经济"]
+    G3 --> DA["deep_search_agent<br/>深度搜索<br/>Tavily + Exa"]
 
-    PA --> POOL[Evidence Pool<br/>证据池合并]
+    PA --> POOL["Evidence Pool<br/>证据池合并"]
     NA --> POOL
     FA --> POOL
     TA --> POOL
     MA --> POOL
     DA --> POOL
 
-    POOL --> RAG[RAG v2<br/>混合索引<br/>Dense + Sparse]
-    RAG --> RRF[RRF 融合]
-    RRF --> SYN[Synthesize<br/>LLM 合成报告]
+    POOL --> RAG["RAG v2<br/>混合索引<br/>Dense + Sparse"]
+    RAG --> RRF["RRF 融合"]
+    RRF --> SYN["Synthesize<br/>LLM 合成报告"]
 ```
 
 ### 记忆管理流程
 
 ```mermaid
 flowchart LR
-    MSG[对话消息] --> TRIM{消息数 > 阈值?}
-    TRIM -->|是| CUT[trim_history<br/>保留最近 N 条]
-    TRIM -->|否| PASS[直接通过]
+    MSG["对话消息"] --> TRIM{"消息数 > 阈值?"}
+    TRIM -->|是| CUT["trim_history<br/>保留最近 N 条"]
+    TRIM -->|否| PASS["直接通过"]
 
-    CUT --> SUM{Token 仍然过多?}
-    SUM -->|是| SUMM[summarize_history<br/>LLM 摘要旧消息]
-    SUM -->|否| PASS2[继续]
+    CUT --> SUM{"Token 仍然过多?"}
+    SUM -->|是| SUMM["summarize_history<br/>LLM 摘要旧消息"]
+    SUM -->|否| PASS2["继续"]
 
     SUMM --> PASS2
-    PASS --> NUI[normalize_ui_context]
+    PASS --> NUI["normalize_ui_context"]
     PASS2 --> NUI
 ```
 

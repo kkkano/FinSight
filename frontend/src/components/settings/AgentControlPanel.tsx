@@ -68,6 +68,7 @@ function savePreferences(prefs: AgentPreferences): void {
 }
 
 /** Read current preferences (for use outside React components). */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getAgentPreferences(): AgentPreferences {
   return loadPreferences();
 }

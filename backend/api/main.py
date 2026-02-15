@@ -1,19 +1,16 @@
 ﻿import logging
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import re
 import sys
-import traceback
 import time
 from collections import deque
-from datetime import date, datetime, time as dt_time, timezone
 from threading import Lock
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
-from fastapi.responses import StreamingResponse, JSONResponse, Response
-from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from backend.api.schemas import (
@@ -35,7 +32,6 @@ from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VER
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
 from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
-from backend.llm_config import create_llm  # Legacy test compatibility hook.
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse

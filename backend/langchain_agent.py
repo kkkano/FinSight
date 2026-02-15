@@ -25,7 +25,7 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -36,7 +36,7 @@ from langchain_core.runnables import RunnableLambda
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode
 
 from backend.langchain_tools import FINANCIAL_TOOLS, get_tools_description
 
@@ -515,9 +515,6 @@ class LangChainFinancialAgent:
 
     async def analyze_stream(self, query: str, thread_id: Optional[str] = None):
         """Stream LLM output token by token."""
-        from uuid import uuid4
-        import json
-
         # 重置工具调用追踪器
         if hasattr(self, '_reset_tracker'):
             self._reset_tracker()

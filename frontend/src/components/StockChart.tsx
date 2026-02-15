@@ -56,8 +56,6 @@ export const StockChart: React.FC = () => {
 
         // apiClient.fetchKline 返回的是 response.data，即后端返回的完整数据
         // 后端返回格式: {ticker: string, data: {kline_data: [...] 或 error: "..."}, cached: boolean}
-        console.log('[StockChart] 收到数据:', res);
-
         // 检查响应结构
         if (res && res.data) {
           const responseData = res.data;
@@ -71,7 +69,6 @@ export const StockChart: React.FC = () => {
           }
           // 检查是否有 kline_data
           else if (responseData.kline_data && Array.isArray(responseData.kline_data) && responseData.kline_data.length > 0) {
-            console.log(`[StockChart] ✅ 成功获取 ${responseData.kline_data.length} 条真实数据 (来源: ${responseData.source || 'any'})`);
             const isIntraday = responseData.kline_data.some((item: KlineData) => (item.time || '').includes(':'));
             let processedData = responseData.kline_data;
 

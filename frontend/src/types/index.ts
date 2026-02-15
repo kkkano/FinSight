@@ -267,13 +267,4 @@ export interface RawSSEEvent {
   sessionId?: string;            // 会话 ID
 }
 
-// Console Filter Options
-export interface ConsoleFilterOptions {
-  eventTypes: RawEventType[];    // 要显示的事件类型
-  searchText: string;            // 搜索文本
-  showRawJson: boolean;          // 是否显示原始 JSON
-  autoScroll: boolean;           // 自动滚动
-  maxEvents: number;             // 最大事件数
-}
-
 

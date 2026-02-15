@@ -343,9 +343,13 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
   onExpand,
   onCollapse,
 }) => {
+  const sections = React.useMemo(
+    () => (synthesisReport ? splitSynthesisSections(synthesisReport) : []),
+    [synthesisReport],
+  );
+
   if (!synthesisReport) return null;
 
-  const sections = React.useMemo(() => splitSynthesisSections(synthesisReport), [synthesisReport]);
   const mainSections = sections.filter((s) => !s.isAppendix);
   const appendixSections = sections.filter((s) => s.isAppendix);
 

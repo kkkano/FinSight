@@ -290,8 +290,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           });
         },
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
-          console.log('[ChatInput] onDone called, report:', report);
-
           const metrics = meta?.metrics || {};
           if (metrics && typeof metrics === 'object') {
             setRequestMetrics({

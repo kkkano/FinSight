@@ -375,7 +375,6 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
   const sendChartDataToBackend = async (ticker: string, summary: string) => {
     try {
       await apiClient.addChartData(ticker, summary);
-      console.log(`[ChartData] ${ticker} summary injected into context`);
     } catch (err) {
       console.error('Chart data upload failed:', err);
     }
