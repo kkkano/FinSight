@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from backend.graph.checkpointer import aget_graph_checkpointer, get_graph_checkpointer_info
 from backend.graph.nodes import (
     build_initial_state,
+    chat_respond,
     decide_output_mode,
     clarify,
     execute_plan_stub,
@@ -44,6 +45,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
     graph.add_node("decide_output_mode", with_node_trace("decide_output_mode", decide_output_mode))
+    graph.add_node("chat_respond", with_node_trace("chat_respond", chat_respond))
     graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
     graph.add_node("clarify", with_node_trace("clarify", clarify))
     graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
@@ -58,7 +60,19 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_edge("trim_history", "summarize_history")
     graph.add_edge("summarize_history", "normalize_ui_context")
     graph.add_edge("normalize_ui_context", "decide_output_mode")
-    graph.add_edge("decide_output_mode", "resolve_subject")
+    graph.add_edge("decide_output_mode", "chat_respond")
+
+    def _route_after_chat_respond(state: GraphState) -> str:
+        if state.get("chat_responded") is True:
+            return END
+        return "resolve_subject"
+
+    graph.add_conditional_edges(
+        "chat_respond",
+        _route_after_chat_respond,
+        {"resolve_subject": "resolve_subject", END: END},
+    )
+
     graph.add_edge("resolve_subject", "clarify")
 
     def _route_after_clarify(state: GraphState) -> str:

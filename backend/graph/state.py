@@ -32,6 +32,7 @@ class Subject(TypedDict):
     selection_ids: list[str]
     selection_types: list[str]
     selection_payload: list[dict]
+    binding_tier: str
 
 
 class Operation(TypedDict):
@@ -125,6 +126,7 @@ class GraphState(MessagesState):
     output_mode: NotRequired[OutputMode]
     strict_selection: NotRequired[bool]
     clarify: NotRequired[Clarify]
+    chat_responded: NotRequired[bool]
 
     policy: NotRequired[Policy]
     plan_ir: NotRequired[PlanIR]

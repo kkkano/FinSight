@@ -50,6 +50,20 @@ export interface ExecuteRequest {
 }
 
 /**
+ * Daily task item — GET /api/tasks/daily
+ */
+export interface DailyTask {
+  id: string;
+  title: string;
+  category: string;
+  priority: number;
+  action_url: string;
+  icon: string;
+  /** 可执行任务的参数 — 直接传给 executeAgent()。导航型任务为 null。 */
+  execution_params: ExecuteRequest | null;
+}
+
+/**
  * SSE event callbacks shared between sendMessageStream & executeAgent.
  */
 export interface SSECallbacks {
@@ -477,5 +491,39 @@ export const apiClient = {
     }
 
     await parseSSEStream(response, callbacks, opts);
+  },
+
+  /**
+   * Fetch personalized daily tasks from ``GET /api/tasks/daily``.
+   *
+   * Tasks with ``execution_params`` can be directly passed to
+   * ``executeAgent()`` for in-place execution.
+   */
+  async getDailyTasks(params: {
+    session_id: string;
+    news_count?: number;
+    risk_preference?: string;
+    watchlist?: string[];
+  }): Promise<{
+    success: boolean;
+    session_id: string;
+    risk_preference: string;
+    watchlist: string[];
+    tasks: DailyTask[];
+    count: number;
+  }> {
+    const searchParams = new URLSearchParams();
+    searchParams.set('session_id', params.session_id);
+    if (params.news_count !== undefined) {
+      searchParams.set('news_count', String(params.news_count));
+    }
+    if (params.risk_preference) {
+      searchParams.set('risk_preference', params.risk_preference);
+    }
+    if (params.watchlist && params.watchlist.length > 0) {
+      searchParams.set('watchlist', params.watchlist.join(','));
+    }
+    const { data } = await api.get(`/api/tasks/daily?${searchParams.toString()}`);
+    return data;
   },
 };

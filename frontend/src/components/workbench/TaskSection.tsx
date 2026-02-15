@@ -1,143 +1,291 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, FileSearch, ListTodo, Newspaper, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle, BarChart2, CheckCircle2, FileSearch,
+  ListTodo, Loader2, Newspaper, Shield, Sparkles, TrendingUp, XCircle,
+} from 'lucide-react';
 
-import type { ReportIndexItem } from '../../api/client';
+import { apiClient } from '../../api/client';
+import type { DailyTask, ExecuteRequest } from '../../api/client';
 import type { NewsItem } from '../../types/dashboard';
+import { useStore } from '../../store/useStore';
 import { Card } from '../ui/Card';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
 interface TaskSectionProps {
   symbol: string;
-  latestReports: ReportIndexItem[];
   newsItems: NewsItem[];
 }
 
-interface TaskItem {
-  id: string;
-  icon: 'report' | 'news' | 'stale' | 'generate';
-  text: string;
-  action: () => void;
+type TaskRunStatus = 'idle' | 'running' | 'done' | 'error';
+
+interface TaskRunState {
+  status: TaskRunStatus;
+  step: string | null;
+  progress: number;
+  reportId: string | null;
+  error: string | null;
 }
 
-const MAX_TASKS = 5;
+const INITIAL_RUN_STATE: TaskRunState = {
+  status: 'idle',
+  step: null,
+  progress: 0,
+  reportId: null,
+  error: null,
+};
 
-const ICON_MAP = {
-  report: FileSearch,
-  news: Newspaper,
-  stale: AlertTriangle,
-  generate: Sparkles,
-} as const;
+/* ------------------------------------------------------------------ */
+/*  Icon registry — maps backend icon names to Lucide components       */
+/* ------------------------------------------------------------------ */
 
-function daysBetween(dateStr: string): number {
-  const then = Date.parse(dateStr);
-  if (Number.isNaN(then)) return 0;
-  const now = Date.now();
-  return Math.floor((now - then) / (1000 * 60 * 60 * 24));
-}
+const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> = {
+  AlertTriangle,
+  FileSearch,
+  Newspaper,
+  Sparkles,
+  Shield,
+  TrendingUp,
+  BarChart2,
+};
 
-function formatRelativeTime(dateStr: string): string {
-  const days = daysBetween(dateStr);
-  if (days < 1) return '今天';
-  if (days === 1) return '1 天前';
-  return `${String(days)} 天前`;
-}
+/* ------------------------------------------------------------------ */
+/*  TaskSection                                                        */
+/* ------------------------------------------------------------------ */
 
-function TaskSection({ symbol, latestReports, newsItems }: TaskSectionProps) {
+function TaskSection({ symbol, newsItems }: TaskSectionProps) {
   const navigate = useNavigate();
+  const sessionId = useStore((s) => s.sessionId);
 
-  const tasks = useMemo(() => {
-    const result: TaskItem[] = [];
+  // Tasks from API
+  const [tasks, setTasks] = useState<DailyTask[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-    // ── 1. 最新研报（最多 2 条，避免挤占其他类别） ──
-    const MAX_REPORT_TASKS = 2;
-    const recentReports = latestReports.slice(0, MAX_REPORT_TASKS);
-    for (const report of recentReports) {
-      const ticker = report.ticker || symbol;
-      const time = report.generated_at
-        ? formatRelativeTime(report.generated_at)
-        : 'unknown';
-      result.push({
-        id: `review-${report.report_id}`,
-        icon: 'report',
-        text: `查看 ${ticker} 最新研报（生成于 ${time}）`,
-        action: () =>
-          navigate(
-            `/chat?report_id=${encodeURIComponent(report.report_id)}`,
-          ),
+  // Per-task execution state (keyed by task.id)
+  const [runStates, setRunStates] = useState<Record<string, TaskRunState>>({});
+  const abortRef = useRef<Record<string, AbortController>>({});
+
+  /* ---- Fetch tasks from API ---- */
+  useEffect(() => {
+    if (!sessionId) return;
+
+    let cancelled = false;
+    setIsLoading(true);
+    setFetchError(null);
+
+    apiClient
+      .getDailyTasks({
+        session_id: sessionId,
+        news_count: newsItems.length,
+      })
+      .then((res) => {
+        if (!cancelled) {
+          setTasks(res.tasks);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Failed to load tasks';
+          setFetchError(message);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
-    }
 
-    // ── 2. 未读快讯 ──
-    if (newsItems.length > 0) {
-      result.push({
-        id: 'unread-news',
-        icon: 'news',
-        text: `${String(newsItems.length)} 条未读快讯（${symbol}）`,
-        action: () =>
-          navigate(`/dashboard/${encodeURIComponent(symbol)}`),
-      });
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, newsItems.length]);
 
-    // ── 3. 过期研报提醒（最多 1 条） ──
-    const staleReport = latestReports.find((r) => {
-      const dateStr = r.generated_at || r.created_at || '';
-      return daysBetween(dateStr) >= 3;
-    });
-    if (staleReport && result.length < MAX_TASKS) {
-      const ticker = staleReport.ticker || symbol;
-      const days = daysBetween(
-        staleReport.generated_at || staleReport.created_at || '',
-      );
-      result.push({
-        id: `stale-${staleReport.report_id}`,
-        icon: 'stale',
-        text: `${ticker} 研报已 ${String(days)} 天未更新 -- 建议刷新`,
-        action: () => {
-          navigate('/chat');
-        },
-      });
-    }
+  /* ---- Update run state immutably ---- */
+  const updateRun = useCallback(
+    (taskId: string, patch: Partial<TaskRunState>) => {
+      setRunStates((prev) => ({
+        ...prev,
+        [taskId]: { ...(prev[taskId] || INITIAL_RUN_STATE), ...patch },
+      }));
+    },
+    [],
+  );
 
-    // ── 4. 生成新分析（常驻） ──
-    if (result.length < MAX_TASKS) {
-      result.push({
-        id: 'generate-new',
-        icon: 'generate',
-        text: `为 ${symbol} 生成新的深度分析`,
-        action: () => {
-          navigate('/chat');
-        },
-      });
-    }
+  /* ---- Execute a task in-place via SSE ---- */
+  const executeTask = useCallback(
+    (task: DailyTask) => {
+      if (!task.execution_params) return;
 
-    return result.slice(0, MAX_TASKS);
-  }, [latestReports, newsItems, symbol, navigate]);
+      const controller = new AbortController();
+      abortRef.current[task.id] = controller;
 
+      const request: ExecuteRequest = {
+        ...task.execution_params,
+        session_id: sessionId,
+        source: 'workbench_task',
+      };
+
+      updateRun(task.id, { status: 'running', step: '准备中...', progress: 5, error: null, reportId: null });
+
+      apiClient
+        .executeAgent(request, {
+          onThinking: (step: any) => {
+            const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
+            updateRun(task.id, { step: message, progress: Math.min(90, (runStates[task.id]?.progress || 10) + 10) });
+          },
+          onToken: () => {
+            updateRun(task.id, { step: '生成报告...', progress: 85 });
+          },
+          onDone: (report?: any) => {
+            const reportId = report?.report_id || null;
+            updateRun(task.id, { status: 'done', step: null, progress: 100, reportId });
+          },
+          onError: (error: string) => {
+            updateRun(task.id, { status: 'error', step: null, error });
+          },
+        }, { signal: controller.signal })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          const message = err instanceof Error ? err.message : 'Execution failed';
+          updateRun(task.id, { status: 'error', step: null, error: message });
+        });
+    },
+    [sessionId, updateRun, runStates],
+  );
+
+  /* ---- Handle task click ---- */
+  const handleClick = useCallback(
+    (task: DailyTask) => {
+      const run = runStates[task.id];
+
+      // If done → navigate to report
+      if (run?.status === 'done' && run.reportId) {
+        navigate(`/chat?report_id=${encodeURIComponent(run.reportId)}`);
+        return;
+      }
+
+      // If already running → ignore
+      if (run?.status === 'running') return;
+
+      // If has execution_params → execute in-place
+      if (task.execution_params) {
+        executeTask(task);
+        return;
+      }
+
+      // Otherwise → navigate
+      navigate(task.action_url);
+    },
+    [runStates, navigate, executeTask],
+  );
+
+  /* ---- Cleanup abort controllers on unmount ---- */
+  useEffect(() => {
+    const refs = abortRef.current;
+    return () => {
+      Object.values(refs).forEach((c) => c.abort());
+    };
+  }, []);
+
+  /* ---- Render ---- */
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-3 text-fin-text font-semibold text-sm">
         <ListTodo size={16} className="text-fin-primary" />
         今日任务
       </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-xs text-fin-muted py-2">
+          <Loader2 size={12} className="animate-spin" />
+          加载中...
+        </div>
+      )}
+
+      {fetchError && !isLoading && (
+        <div className="text-xs text-red-500 py-2">加载失败: {fetchError}</div>
+      )}
+
       <div className="space-y-1.5">
-        {tasks.length === 0 ? (
+        {!isLoading && tasks.length === 0 && !fetchError && (
           <div className="text-xs text-fin-muted py-2">暂无建议任务</div>
-        ) : null}
+        )}
+
         {tasks.map((task) => {
-          const IconComponent = ICON_MAP[task.icon];
+          const IconComponent = ICON_MAP[task.icon] || ListTodo;
+          const run = runStates[task.id] || INITIAL_RUN_STATE;
+          const isRunning = run.status === 'running';
+          const isDone = run.status === 'done';
+          const isError = run.status === 'error';
+          const isExecutable = !!task.execution_params;
+
           return (
-            <button
-              key={task.id}
-              type="button"
-              onClick={task.action}
-              className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text transition-colors group"
-            >
-              <IconComponent
-                size={14}
-                className="text-fin-muted group-hover:text-fin-primary shrink-0 transition-colors"
-              />
-              <span className="truncate">{task.text}</span>
-            </button>
+            <div key={task.id} className="space-y-0.5">
+              <button
+                type="button"
+                onClick={() => handleClick(task)}
+                disabled={isRunning}
+                className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors group ${
+                  isRunning
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 cursor-wait'
+                    : isDone
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                      : isError
+                        ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30'
+                        : 'text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text'
+                }`}
+              >
+                {/* Icon — swap based on state */}
+                {isRunning ? (
+                  <Loader2 size={14} className="animate-spin shrink-0 text-blue-500" />
+                ) : isDone ? (
+                  <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
+                ) : isError ? (
+                  <XCircle size={14} className="shrink-0 text-red-500" />
+                ) : (
+                  <IconComponent
+                    size={14}
+                    className="text-fin-muted group-hover:text-fin-primary shrink-0 transition-colors"
+                  />
+                )}
+
+                <span className="truncate flex-1">
+                  {isDone && run.reportId ? '查看报告' : task.title}
+                </span>
+
+                {/* Executable badge */}
+                {isExecutable && run.status === 'idle' && (
+                  <span className="ml-auto px-1.5 py-0.5 rounded text-2xs bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
+                    执行
+                  </span>
+                )}
+              </button>
+
+              {/* Progress bar for running tasks */}
+              {isRunning && (
+                <div className="px-2">
+                  <div className="flex items-center gap-2 text-2xs text-blue-500 dark:text-blue-300 mb-0.5">
+                    <span className="truncate">{run.step || '处理中...'}</span>
+                    <span className="shrink-0">{run.progress}%</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-blue-100 dark:bg-blue-900/30 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${run.progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Error message */}
+              {isError && run.error && (
+                <div className="px-2 text-2xs text-red-400 truncate" title={run.error}>
+                  {run.error}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

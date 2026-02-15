@@ -8,6 +8,9 @@ from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
 
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import yfinance as yf
 
 from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
@@ -16,6 +19,38 @@ from .search import search
 from .utils import _normalize_published_date
 
 logger = logging.getLogger(__name__)
+
+# ── RSS-dedicated lightweight session ────────────────────────────
+_RSS_SESSION: Optional[requests.Session] = None
+_RSS_TIMEOUT = int(os.getenv("FINSIGHT_RSS_TIMEOUT", "4"))
+_RSS_MAX_RETRIES = int(os.getenv("FINSIGHT_RSS_MAX_RETRIES", "1"))
+_MAX_RSS_FEEDS = int(os.getenv("FINSIGHT_MAX_RSS_FEEDS", "6"))
+
+
+def _get_rss_session() -> requests.Session:
+    """Lightweight session: 1 retry, short timeout, no aggressive backoff."""
+    global _RSS_SESSION
+    if _RSS_SESSION is not None:
+        return _RSS_SESSION
+    retry = Retry(
+        total=_RSS_MAX_RETRIES,
+        backoff_factor=0.1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=6, pool_maxsize=6)
+    session = requests.Session()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update({"User-Agent": "FinSight/1.0 NewsBot"})
+    _RSS_SESSION = session
+    return session
+
+
+def _rss_get(url: str, timeout: int = _RSS_TIMEOUT) -> requests.Response:
+    """HTTP GET using the lightweight RSS session."""
+    return _get_rss_session().get(url, timeout=timeout)
 
 NEWS_TAG_RULES = [
     ("科技", ["tech", "technology", "software", "hardware", "cloud", "cyber", "科技", "软件", "硬件", "云", "数据中心", "互联网"]),
@@ -513,9 +548,10 @@ def _fetch_rss_headlines(
     max_age_days: int = 2,
 ) -> tuple[list[str], bool]:
     all_lines: List[str] = []
-    for url in feed_urls:
+    feeds_to_try = feed_urls[:_MAX_RSS_FEEDS]
+    for url in feeds_to_try:
         try:
-            resp = _http_get(url, timeout=8)
+            resp = _rss_get(url, timeout=_RSS_TIMEOUT)
             if resp.status_code != 200:
                 continue
             lines, ok = _parse_rss_items(resp.text, limit=limit, max_age_days=max_age_days)
@@ -956,12 +992,6 @@ def get_market_news_headlines(limit: int = 5) -> str:
     使用搜索聚合并提取编号行作为标题，否则返回简短提示。
     """
     # 0) 官方 RSS（Reuters/Bloomberg），优先 48h 内
-    reuters_feeds = [
-        "https://feeds.reuters.com/reuters/businessNews",
-        "https://feeds.reuters.com/reuters/topNews",
-        "https://feeds.reuters.com/reuters/worldNews",
-        "https://feeds.reuters.com/reuters/technologyNews",
-    ]
     bloomberg_default_feeds = [
         "https://feeds.bloomberg.com/markets/news.rss",
         "https://feeds.bloomberg.com/technology/news.rss",
@@ -971,6 +1001,15 @@ def get_market_news_headlines(limit: int = 5) -> str:
         "https://feeds.bloomberg.com/businessweek/news.rss",
         "https://feeds.bloomberg.com/industries/news.rss",
     ]
+    market_default_feeds = [
+        "https://feeds.marketwatch.com/marketwatch/topstories/",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+        "https://seekingalpha.com/feed.xml",
+    ]
+
+    reuters_env = os.getenv("REUTERS_RSS_URLS", "").strip()
+    reuters_feeds = [u.strip() for u in reuters_env.split(",") if u.strip()]
+
     bloomberg_env = os.getenv("BLOOMBERG_RSS_URLS", "").strip()
     bloomberg_env_feeds = [u.strip() for u in bloomberg_env.split(",") if u.strip()]
     if bloomberg_env_feeds:
@@ -980,7 +1019,22 @@ def get_market_news_headlines(limit: int = 5) -> str:
     else:
         bloomberg_feeds = bloomberg_default_feeds
 
-    rss_feeds = reuters_feeds + bloomberg_feeds
+    market_env = os.getenv("MARKET_NEWS_RSS_URLS", "").strip()
+    market_env_feeds = [u.strip() for u in market_env.split(",") if u.strip()]
+    if market_env_feeds:
+        market_feeds = market_default_feeds + [
+            u for u in market_env_feeds if u not in market_default_feeds
+        ]
+    else:
+        market_feeds = market_default_feeds
+
+    rss_feeds: List[str] = []
+    seen_urls = set()
+    for url in (bloomberg_feeds + market_feeds + reuters_feeds):
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            rss_feeds.append(url)
+
     rss_lines, rss_ok = _fetch_rss_headlines(rss_feeds, limit=limit * 2, max_age_days=2)
     if rss_ok:
         return "最近48小时市场要闻(RSS):\n" + "\n".join(rss_lines[:limit])

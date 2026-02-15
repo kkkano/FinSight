@@ -542,27 +542,34 @@ def _parse_news_text(text: str) -> list[dict[str, Any]]:
 
 def fetch_news(symbol: str, limit: int = 20) -> dict[str, Any]:
     try:
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
         from backend.tools.news import get_company_news, get_market_news_headlines
 
         impact_items: list[Any] = []
-        try:
-            raw_impact = get_company_news(symbol, limit=limit)
-            if isinstance(raw_impact, list):
-                impact_items = raw_impact
-            elif isinstance(raw_impact, str):
-                impact_items = _parse_news_text(raw_impact)
-        except Exception as exc:
-            logger.info("[DataService] get_company_news failed for %s: %s", symbol, exc)
-
         market_items: list[Any] = []
-        try:
-            raw_market = get_market_news_headlines(limit=limit)
-            if isinstance(raw_market, list):
-                market_items = raw_market
-            elif isinstance(raw_market, str):
-                market_items = _parse_news_text(raw_market)
-        except Exception as exc:
-            logger.info("[DataService] get_market_news_headlines failed: %s", exc)
+
+        # Parallel fetch: company news + market headlines
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_impact = pool.submit(get_company_news, symbol, limit)
+            f_market = pool.submit(get_market_news_headlines, limit)
+
+            try:
+                raw_impact = f_impact.result(timeout=30)
+                if isinstance(raw_impact, list):
+                    impact_items = raw_impact
+                elif isinstance(raw_impact, str):
+                    impact_items = _parse_news_text(raw_impact)
+            except (FuturesTimeout, Exception) as exc:
+                logger.info("[DataService] get_company_news failed for %s: %s", symbol, exc)
+
+            try:
+                raw_market = f_market.result(timeout=30)
+                if isinstance(raw_market, list):
+                    market_items = raw_market
+                elif isinstance(raw_market, str):
+                    market_items = _parse_news_text(raw_market)
+            except (FuturesTimeout, Exception) as exc:
+                logger.info("[DataService] get_market_news_headlines failed: %s", exc)
 
         market_raw = [_to_news_item(item) for item in market_items[:limit]]
         impact_raw = [_to_news_item(item) for item in impact_items[:limit]]

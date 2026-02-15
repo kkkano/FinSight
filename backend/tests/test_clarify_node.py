@@ -22,6 +22,7 @@ def test_clarify_node_interrupts_when_subject_unknown():
         "summarize_history",
         "normalize_ui_context",
         "decide_output_mode",
+        "chat_respond",
         "resolve_subject",
         "clarify",
     ]
@@ -35,7 +36,9 @@ def test_clarify_node_allows_continue_when_subject_known():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    result = _run(runner.ainvoke(thread_id="t-clarify-company", query="分析影响", ui_context={"active_symbol": "AAPL"}))
+    # "股价分析" contains unambiguous Tier-2 keyword "股价",
+    # so active_symbol binding is safe and subject resolves to company.
+    result = _run(runner.ainvoke(thread_id="t-clarify-company", query="股价分析", ui_context={"active_symbol": "AAPL"}))
 
     assert (result.get("clarify") or {}).get("needed") is False
 

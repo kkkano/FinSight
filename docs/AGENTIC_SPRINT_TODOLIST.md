@@ -59,13 +59,13 @@
   - asyncio.TimeoutError → `fallback_reason="rate_limit_timeout", retryable=True, error_stage="token_acquire"`
   - RateLimitError 类 → `fallback_reason="rate_limit_timeout", retryable=True, error_stage="llm_invoke"`
   - 其他 Exception → `fallback_reason="execution_error", retryable=False, error_stage="unknown"`
-- [ ] **P0-3c** 修改 `backend/graph/nodes/execute_plan_stub.py` — 将 fallback_reason 写入 evidence_pool/artifacts
+- [x] **P0-3c** 修改 `backend/graph/nodes/execute_plan_stub.py` — 将 fallback_reason 写入 evidence_pool/artifacts
   - synthesize 节点可读取，render 模板可展示
 - [x] **P0-3d** 修改 `backend/graph/report_builder.py` — report payload 增加 `agent_diagnostics` 字段
   - 每个 agent 的: status, fallback_reason, retryable, error_stage, duration_ms
-- [ ] **P0-3e** 前端 ReportView 组件展示降级原因
+- [x] **P0-3e** 前端 ReportView 组件展示降级原因
   - AgentStatusGrid 中: 🟢正常 / 🟡限流降级(可重试) / 🔴执行失败
-  - Tooltip 显示 error_stage
+  - Tooltip 显示 error_stage + duration_ms
 
 ### P0-4: 限流策略统一 — 全局桶 + 每 agent 保底配额
 
@@ -93,18 +93,18 @@
 
 > **为什么在限流之后**: TaskSection 触发执行需要限流稳定。
 
-- [ ] **P0-5a** 修改 `frontend/src/components/workbench/TaskSection.tsx`
+- [x] **P0-5a** 修改 `frontend/src/components/workbench/TaskSection.tsx`
   - 删除 `useMemo` 硬编码任务生成逻辑 (line 48-113)
   - 新增 `useEffect` 调用 `GET /api/tasks/daily?session_id=...&news_count=N`
   - 从 dashboardStore 获取 newsItems.length 作为 news_count
-- [ ] **P0-5b** 修改 `backend/services/daily_tasks.py` — 增强任务生成
+- [x] **P0-5b** 修改 `backend/services/daily_tasks.py` — 增强任务生成
   - 每个任务增加 `execution_params` 字段: `{ query, tickers, output_mode, agents }`
   - 任务 ID 使用稳定的 hash (ticker + category + date) 而非递增数字
   - 增加 "重新分析" 类型任务 (针对 stale 报告)
-- [ ] **P0-5c** 修改 `backend/api/task_router.py` — 响应格式增加 execution_params
-- [ ] **P0-5d** 前端 TaskSection 任务点击 → 调用 `executeAgent(task.execution_params)` → 就地显示进度
+- [x] **P0-5c** 修改 `backend/api/task_router.py` — 响应格式增加 execution_params
+- [x] **P0-5d** 前端 TaskSection 任务点击 → 调用 `executeAgent(task.execution_params)` → 就地显示进度
   - 不再 `navigate('/chat')`
-  - 使用 executionStore 跟踪状态
+  - 使用 per-task runStates 跟踪状态
   - 完成后显示"查看报告"按钮 (跳转 `/chat?report_id=xxx`)
 
 ---
@@ -261,33 +261,57 @@
 
 ---
 
-## Phase 3: 工作台升级 — Mission Control
+## Phase 3: 工作台升级 — AI 任务执行中心
 
-### P3-1: Workbench 布局重构
+> **设计转型 (2026-02-15)**:
+> 工作台从「被动信息展示面板」转型为「AI 驱动的任务执行中心」。
+> - 砍掉 NewsSection（与 Dashboard 完全重复）
+> - 砍掉 ReportSection 当前形式（降级为折叠式 Timeline）
+> - 核心: AI 基于持仓生成任务 → 一键执行 → LangGraph interrupt 追问 → 结果展示
+> - 详细设计见: `docs/WORKBENCH_ROADMAP.md`
 
-- [ ] **P3-1a** 修改 WorkspaceShell — Workbench 视图增加右侧面板 (ContextPanelShell)
-  - 包含: StreamingResultPanel + AgentLogPanel
-  - 执行任务时右侧实时展示结果
-- [ ] **P3-1b** Workbench 主区域改为上下两栏
-  - 上: TaskSection (任务队列) + 执行状态
-  - 下: ReportSection (历史报告时间线) + NewsSection
+### P3-1: 清理 + 布局重构
 
-### P3-2: 任务执行状态机
+- [ ] **P3-1a** 删除 `NewsSection` 组件及 Workbench 中的引用（与 Dashboard 完全重复）
+- [ ] **P3-1b** 删除 `WorkspaceShell` 中 `useDashboardData(view==='workbench')` 逻辑
+- [ ] **P3-1c** Workbench 增加右侧面板 (ContextPanelShell)
+  - Tab 1: 执行过程 (StreamingResultPanel + InterruptCard)
+  - Tab 2: 执行历史
+- [ ] **P3-1d** 主区域布局: TaskSection (核心) + Report Timeline (折叠)
+- [ ] **P3-1e** 新增持仓概览条组件 (PortfolioSummaryBar)
 
-- [ ] **P3-2a** TaskSection 任务卡片增加状态指示
-  - pending (默认) → running (点击执行) → done (完成) → expired (过期)
-  - running 状态: 显示 agent 管道进度
-  - done 状态: 显示"查看报告"/"重新执行"按钮
-- [ ] **P3-2b** 任务执行历史 — 最近 10 次执行记录，含 duration、agent 状态、结论快照
+### P3-2: LangGraph Interrupt 机制（核心改造）
 
-### P3-3: Report Timeline
+- [ ] **P3-2a** 修改 `runner.py` — `graph.compile()` 添加 `interrupt_before=["execute_plan"]`
+- [ ] **P3-2b** 切换 Checkpointer 默认值: memory → sqlite（interrupt 必须持久化）
+- [ ] **P3-2c** 新增 `POST /api/execute/resume` API — 接受 `thread_id + resume_value`
+  - 使用 LangGraph `Command(resume=...)` 恢复图执行
+- [ ] **P3-2d** 前端新增 `InterruptCard.tsx` — 就地追问 UI（选项/自由文本）
+- [ ] **P3-2e** 修改 `TaskSection.tsx` 状态机 — 增加 `interrupted` 状态 + SSE interrupt 事件
+- [ ] **P3-2f** 编写 interrupt/resume 端到端测试
 
-- [ ] **P3-3a** ReportSection 升级为时间线视图
-  - 按日期分组，每个节点: ticker + 标题 + 评分 + 置信度
-  - 点击 → 回放 (调用 getReportReplay → ReportView)
-  - 支持: 对比模式 (选两份报告 diff)
-- [ ] **P3-3b** 后端新增 `GET /api/reports/compare?id1=X&id2=Y`
+### P3-3: AI 任务生成（替换硬编码规则）
+
+- [ ] **P3-3a** 新建 `backend/services/task_generator.py` — 双层架构
+  - 规则层: 价格异动、财报日历、研报时效、持仓集中度
+  - LLM 层: 市场新闻 × 持仓的交叉分析，个性化补充
+- [ ] **P3-3b** 新建 `AITask` Pydantic schema — category/priority/reason/execution_params
+- [ ] **P3-3c** 修改 `GET /api/tasks/daily` — 调用 task_generator，返回 5-8 条个性化任务
+- [ ] **P3-3d** 前端 TaskSection 适配新任务格式（分类图标 + 理由 + 优先级）
+- [ ] **P3-3e** 编写测试（规则层覆盖 + LLM mock）
+
+### P3-4: Report Timeline
+
+- [ ] **P3-4a** ReportSection 改为可折叠时间线视图（按日期分组，默认折叠）
+- [ ] **P3-4b** 后端新增 `GET /api/reports/compare?id1=X&id2=Y`
   - 返回两份报告的结构化差异 (评分变化、新增/删除风险、价格变动)
+- [ ] **P3-4c** 支持对比模式: 选两份报告 → diff 展示
+
+### P3-5: 持仓数据接入
+
+- [ ] **P3-5a** 新建 `GET /api/portfolio/summary` — 总市值、今日盈亏、持仓分布
+- [ ] **P3-5b** 前端新增 `usePortfolioData` hook
+- [ ] **P3-5c** PortfolioSummaryBar 接入真实数据
 
 ---
 
@@ -352,8 +376,8 @@ Phase 1 (前端状态 + 体验) ← 依赖 Phase 0
 Phase 2 (TradingKey 改造) ← 依赖 P1-3
   P2-1 → P2-2 → P2-3 → P2-4 → P2-5 → P2-6 → P2-7 → P2-8
 
-Phase 3 (工作台 Mission Control) ← 依赖 P0-5 + P1-1
-  P3-1 → P3-2 → P3-3
+Phase 3 (工作台 AI 任务执行中心) ← 依赖 P0-5 + P1-1
+  P3-1 (清理+布局) → P3-2 (LangGraph interrupt) → P3-3 (AI 任务生成) → P3-4 (Timeline) → P3-5 (持仓)
 
 Phase 4 (产品打磨) ← 可并行
   P4-1 → P4-2 → P4-3 → P4-4 → P4-5
@@ -535,9 +559,9 @@ Phase 4 (产品打磨) ← 可并行
 ## 执行顺序总览（含记忆模块 + 死代码清理）
 
 ```
-Phase 0 剩余 (基础设施) ← P0-3c/3e + P0-5
-  P0-3c → P0-3e (fallback 展示)
-  P0-5a → P0-5b → P0-5c → P0-5d (TaskSection 接后端)
+Phase 0 剩余 (基础设施) ← ✅ 全部完成
+  P0-3c → P0-3e (fallback 展示) ✅
+  P0-5a → P0-5b → P0-5c → P0-5d (TaskSection 接后端) ✅
 
 Phase M0 (LangGraph 原生记忆) ← 与 Phase 0/1 并行，投入产出比最高
   PM0-1a (验证 checkpointer) ✅
@@ -561,8 +585,8 @@ Phase M1 (LangGraph Store + 长期记忆) ← 依赖 PM0 + langgraph 升级
   → PM1-4 (持久化确认)
   → PM1-5 (删除旧 MemoryService)
 
-Phase 3 (工作台 Mission Control) ← 依赖 P0-5 + P1-1
-  P3-1 → P3-2 → P3-3
+Phase 3 (工作台 AI 任务执行中心) ← 依赖 P0-5 + P1-1
+  P3-1 (清理+布局) → P3-2 (LangGraph interrupt) → P3-3 (AI 任务生成) → P3-4 (Timeline) → P3-5 (持仓)
 
 Phase 4 (产品打磨) ← 可并行
   P4-1 → P4-2 → P4-3 → P4-4 → P4-5

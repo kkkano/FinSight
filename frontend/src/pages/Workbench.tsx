@@ -108,7 +108,6 @@ export function Workbench({
       {/* Dynamic tasks */}
       <TaskSection
         symbol={symbol}
-        latestReports={latestReports}
         newsItems={newsItems}
       />
     </div>

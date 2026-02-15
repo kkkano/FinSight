@@ -43,6 +43,7 @@ class PlanSubject(BaseModel):
     selection_ids: list[str] = Field(default_factory=list)
     selection_types: list[str] = Field(default_factory=list)
     selection_payload: list[dict] = Field(default_factory=list)
+    binding_tier: str = Field(default="none")
 
     model_config = {"extra": "forbid"}
 

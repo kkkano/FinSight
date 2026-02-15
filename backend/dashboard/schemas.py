@@ -116,10 +116,12 @@ class DashboardData(BaseModel):
     Dashboard 聚合数据
 
     包含所有展示数据：KPI 快照、图表数据、新闻列表。
+    news 内部包含 ranked list (market/impact) 和 ranking_meta dict，
+    因此类型为 Dict[str, Any] 而非严格的 Dict[str, List[...]]。
     """
     snapshot: Dict[str, Any] = Field(default_factory=dict)
     charts: Dict[str, Any] = Field(default_factory=dict)
-    news: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+    news: Dict[str, Any] = Field(default_factory=dict)
 
 
 class DashboardResponse(BaseModel):
