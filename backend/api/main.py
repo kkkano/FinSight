@@ -24,6 +24,8 @@ from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.dashboard_router import dashboard_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.api.market_router import MarketRouterDeps, create_market_router
+from backend.api.portfolio_router import portfolio_router
+from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
@@ -644,6 +646,17 @@ execution_router = create_execution_router(
     )
 )
 
+# --- Phase 3: Portfolio & Rebalance routers ---
+from backend.services.rebalance_engine import RebalanceEngine as _RebalanceEngine
+
+_rebalance_engine = _RebalanceEngine()
+
+rebalance_router = create_rebalance_router(
+    RebalanceRouterDeps(
+        rebalance_engine=_rebalance_engine,
+    )
+)
+
 app.include_router(system_router)
 app.include_router(user_router)
 app.include_router(chat_router)
@@ -654,6 +667,8 @@ app.include_router(report_router)
 app.include_router(task_router)
 app.include_router(execution_router)
 app.include_router(dashboard_router)
+app.include_router(portfolio_router)
+app.include_router(rebalance_router)
 # 鍚姩鍏ュ彛
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)

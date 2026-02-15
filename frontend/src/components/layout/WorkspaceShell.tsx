@@ -13,7 +13,6 @@ import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import Workbench from '../../pages/Workbench';
-import { useDashboardData } from '../../hooks/useDashboardData';
 import { useDashboardStore } from '../../store/dashboardStore';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 
@@ -76,7 +75,6 @@ export function WorkspaceShell({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const { dashboardData } = useDashboardStore();
   const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || 'AAPL';
-  useDashboardData(view === 'workbench' ? preferredSymbol : null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
@@ -196,19 +194,7 @@ export function WorkspaceShell({
               <Workbench
                 symbol={preferredSymbol}
                 fromDashboard={fromDashboard}
-                newsItems={dashboardData?.news?.impact || []}
-                rawNewsItems={dashboardData?.news?.impact_raw || []}
-                rankingMeta={
-                  typeof dashboardData?.news?.ranking_meta === 'object'
-                    ? {
-                        version: (dashboardData.news.ranking_meta as { version?: string }).version,
-                        formula: (dashboardData.news.ranking_meta as { formula?: string }).formula,
-                        notes: Array.isArray((dashboardData.news.ranking_meta as { notes?: unknown[] }).notes)
-                          ? ((dashboardData.news.ranking_meta as { notes?: string[] }).notes || [])
-                          : [],
-                      }
-                    : undefined
-                }
+                onNavigateToChat={navigateToChat}
               />
             </div>
           ) : (

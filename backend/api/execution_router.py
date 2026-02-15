@@ -19,7 +19,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
+from backend.services.execution_service import ExecutionDeps, run_graph_pipeline, resume_graph_pipeline
 
 logger = logging.getLogger("execution_router")
 
@@ -54,6 +54,16 @@ class ExecuteRequest(BaseModel):
         None,
         description="Per-agent depth + budget preferences from frontend UI",
     )
+
+
+class ResumeRequest(BaseModel):
+    """Body for ``POST /api/execute/resume``."""
+
+    thread_id: str = Field(..., min_length=1, description="Thread / session ID to resume")
+    resume_value: Any = Field(..., description="User response to the interrupt prompt")
+    session_id: str | None = Field(None, description="Session ID")
+    source: str | None = Field(None, description="Trigger origin")
+    trace_raw: bool | None = Field(None)
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +139,63 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
                     return value.isoformat()
                 return str(value)
 
+            return _json.dumps(
+                jsonable_encoder(item), ensure_ascii=False, default=_fallback,
+            )
+
+        async def _stream():
+            async for event in pipeline:
+                if isinstance(event, dict) and event.get("type") == "keep-alive":
+                    yield ": keep-alive\n\n"
+                else:
+                    yield f"data: {_serialize(event)}\n\n"
+
+        return StreamingResponse(
+            _stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # POST /api/execute/resume — resume an interrupted graph run
+    # ------------------------------------------------------------------
+
+    @router.post("/api/execute/resume")
+    async def resume_endpoint(request: ResumeRequest):
+        thread_id = request.thread_id
+        if request.session_id:
+            try:
+                thread_id = deps.resolve_thread_id(request.session_id)
+            except ValueError:
+                pass
+
+        exec_deps = ExecutionDeps(
+            get_graph_runner=deps.get_graph_runner,
+            schedule_report_index=deps.schedule_report_index,
+            update_session_context=deps.update_session_context,
+            redact_sensitive_payload=deps.redact_sensitive_payload,
+            is_raw_trace_event=deps.is_raw_trace_event,
+            contract_info=deps.contract_info,
+            sse_event_schema_version=deps.sse_event_schema_version,
+        )
+
+        pipeline = resume_graph_pipeline(
+            deps=exec_deps,
+            thread_id=thread_id,
+            resume_value=request.resume_value,
+            source=request.source or "resume",
+            trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
+        )
+
+        def _serialize(item: object) -> str:
+            def _fallback(value: object):
+                if isinstance(value, (datetime, date, dt_time)):
+                    return value.isoformat()
+                return str(value)
             return _json.dumps(
                 jsonable_encoder(item), ensure_ascii=False, default=_fallback,
             )

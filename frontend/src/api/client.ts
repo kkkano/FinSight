@@ -79,6 +79,7 @@ export interface SSECallbacks {
   onError?: (error: string) => void;
   onThinking?: (step: any) => void;
   onRawEvent?: (event: RawSSEEvent) => void;
+  onInterrupt?: (data: { thread_id: string; prompt?: string; options?: string[]; plan_summary?: string; required_agents?: string[] }) => void;
 }
 
 const api = axios.create({
@@ -119,7 +120,7 @@ export async function parseSSEStream(
   callbacks: SSECallbacks,
   opts: { traceRawEnabled?: boolean; signal?: AbortSignal } = {},
 ): Promise<void> {
-  const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent } = callbacks;
+  const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent, onInterrupt } = callbacks;
   const traceRawEnabled = opts.traceRawEnabled ?? true;
 
   const normalizeEventType = (payload: any): RawEventType => {
@@ -208,6 +209,14 @@ export async function parseSSEStream(
             onDone?.(data.report, data.thinking, data);
           } else if (data.type === 'error') {
             onError?.(data.message);
+          } else if (data.type === 'interrupt') {
+            onInterrupt?.({
+              thread_id: data.thread_id || data.data?.thread_id || '',
+              prompt: data.data?.prompt || data.prompt,
+              options: data.data?.options || data.options,
+              plan_summary: data.data?.plan_summary || data.plan_summary,
+              required_agents: data.data?.required_agents || data.required_agents,
+            });
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)
           ) {
@@ -360,6 +369,27 @@ export const apiClient = {
     const response = await api.post(`/api/reports/${encodeURIComponent(params.reportId)}/favorite`, {
       session_id: params.sessionId,
       is_favorite: params.isFavorite,
+    });
+    return response.data;
+  },
+
+  /** Compare two reports — GET /api/reports/compare */
+  async compareReports(params: {
+    sessionId: string;
+    reportId1: string;
+    reportId2: string;
+  }): Promise<{
+    confidence_score: { a: number | null; b: number | null; delta: number | null };
+    sentiment: { a: string | null; b: string | null; changed: boolean };
+    risks: { added: string[]; removed: string[]; unchanged_count: number };
+    summary: { a: string | null; b: string | null };
+  }> {
+    const response = await api.get('/api/reports/compare', {
+      params: {
+        session_id: params.sessionId,
+        id1: params.reportId1,
+        id2: params.reportId2,
+      },
     });
     return response.data;
   },
@@ -530,5 +560,53 @@ export const apiClient = {
     }
     const { data } = await api.get(`/api/tasks/daily?${searchParams.toString()}`);
     return data;
+  },
+
+  // --- Rebalance ---
+  async generateRebalanceSuggestion(params: Record<string, unknown>): Promise<unknown> {
+    const response = await api.post('/api/rebalance/suggestions/generate', params);
+    return response.data;
+  },
+
+  async listRebalanceSuggestions(sessionId: string, limit = 10): Promise<unknown> {
+    const response = await api.get('/api/rebalance/suggestions', { params: { session_id: sessionId, limit } });
+    return response.data;
+  },
+
+  async patchRebalanceSuggestion(suggestionId: string, body: { status: string }): Promise<unknown> {
+    const response = await api.patch(`/api/rebalance/suggestions/${encodeURIComponent(suggestionId)}`, body);
+    return response.data;
+  },
+
+  // --- Resume execution ---
+  async resumeExecution(
+    params: { thread_id: string; resume_value: unknown; session_id?: string; source?: string },
+    callbacks?: SSECallbacks,
+    opts?: { traceRawEnabled?: boolean; signal?: AbortSignal },
+  ): Promise<Response> {
+    const url = buildApiUrl('/api/execute/resume');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: opts?.signal,
+    });
+
+    if (callbacks && response.ok) {
+      await parseSSEStream(response.clone(), callbacks, opts);
+    }
+
+    return response;
+  },
+
+  // --- Portfolio ---
+  async getPortfolioSummary(sessionId: string): Promise<unknown> {
+    const response = await api.get('/api/portfolio/summary', { params: { session_id: sessionId } });
+    return response.data;
+  },
+
+  async syncPortfolioPositions(sessionId: string, positions: unknown[]): Promise<unknown> {
+    const response = await api.post('/api/portfolio/positions', { session_id: sessionId, positions });
+    return response.data;
   },
 };

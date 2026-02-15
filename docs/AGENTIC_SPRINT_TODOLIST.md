@@ -271,134 +271,287 @@ idle → running → done | error | cancelled (终态，不可回退)
 
 ---
 
-## Phase 2: 仪表盘 TradingKey 风格改造
+## 开工前 Gate (P2+P3 阻塞项, 必须先完成)
 
-> 依赖: P1-3 (卡片可操作化) 完成后再改造 UI，否则改了还要改。
+> **更新 (2026-02-15)**: 以下 6 项必须在 Phase 2/3 开工前解决，否则后续开发反复返工。
 
-### P2-1: 设计 Token 与主题系统
-
-- [ ] **P2-1a** 新建 `frontend/src/styles/tradingkey-theme.ts` — TradingKey 暗色主题变量
-  - 色板: #181a1f, #1e2025, #24282f, #2b3139, #363d47
-  - 强调色: #fa8019 (橙), #0cad92 (绿), #f74f5c (红)
-  - 圆角: 10px, 阴影: 0 4px 20px 2px rgba(0,0,0,.4)
-  - 字体: -apple-system, "PingFang SC", "Microsoft YaHei"
-- [ ] **P2-1b** 迁移现有 CSS 变量 / Tailwind config 到 TradingKey token
-
-### P2-2: Dashboard 布局重构 (6-Tab)
-
-- [ ] **P2-2a** 新建 `frontend/src/components/dashboard/DashboardTabs.tsx`
-  - 6 个 Tab: 综合分析 / 财务报表 / 技术面 / 新闻动态 / 深度研究 / 同行对比
-  - TradingKey 风格 Tab 栏 (橙色下划线)
-  - 路由: `/dashboard/:symbol?tab=overview|financial|technical|news|research|peers`
-- [ ] **P2-2b** Stock Header 组件 — 股票信息头部
-  - Logo + 名称 + 交易所 + 实时价格 + 涨跌 + 盘后数据
-  - 关注按钮 + 快速分析按钮 (触发 Agent)
-- [ ] **P2-2c** Metrics Bar — 7 列关键指标条
-  - 市值 / PE / PB / EPS / 股息率 / 52周区间 / Beta
-  - 数据源: /api/dashboard 的 snapshot
-
-### P2-3: Tab 1 — 综合分析
-
-- [ ] **P2-3a** 综合评分环 (Score Ring) — SVG 环形图 + 评分 + 星级
-- [ ] **P2-3b** 分析师评级卡 — 共识评级 + 堆叠评级条 + 上涨空间
-- [ ] **P2-3c** 目标价格卡 — 最低/平均/最高 + 渐变范围条 + 当前价标记
-- [ ] **P2-3d** 公司亮点与风险卡 — 绿点利好 + 红点利空列表
-- [ ] **P2-3e** 维度评分雷达图 — SVG 五边形 (基本面/技术面/新闻/深度/宏观)
-- [ ] **P2-3f** 关键洞察卡 — AI 生成摘要 (来自 synthesize 的 investment_summary)
-- [ ] **P2-3g** 风险指标卡 — Beta/波动率/夏普/最大回撤 + 4 条风险告警
-
-### P2-4: Tab 2 — 财务报表
-
-- [ ] **P2-4a** 利润表组件 — 5 年年度数据表 (FundamentalAgent 数据)
-- [ ] **P2-4b** 盈利能力趋势图 — 毛利率/净利率柱状图
-- [ ] **P2-4c** 关键估值指标 — PE/PEG/EV-EBITDA/FCF Yield 四宫格
-- [ ] **P2-4d** 资产负债表摘要 — 核心行项目 + 同比变化
-
-### P2-5: Tab 3 — 技术面
-
-- [ ] **P2-5a** K 线图占位 → 后续接入 TechnicalAgent 实时数据
-- [ ] **P2-5b** 技术面综合评估 — 评分 + 均线信号 + 震荡信号
-- [ ] **P2-5c** 均线指标表 — MA5/10/20/50/100/200/EMA12/EMA26
-- [ ] **P2-5d** 震荡指标表 — RSI/Stoch/MACD/ADX/CCI/Williams
-- [ ] **P2-5e** 支撑与阻力可视化 — R3-R1 / 当前 / S1-S3
-- [ ] **P2-5f** 布林带 & 成交量 — 上中下轨 + 日均/今日成交量
-
-### P2-6: Tab 4 — 新闻动态
-
-- [ ] **P2-6a** 情绪统计三卡 — 正面/中性/负面百分比 + 进度条
-- [ ] **P2-6b** 筛选器 Pills — 全部/利好/中性/利空/财报/产品/监管
-- [ ] **P2-6c** 新闻列表 — 情绪标签 + 标题摘要 + 来源时间
-- [ ] **P2-6d** AI 新闻摘要卡 — NewsAgent 综合分析
-
-### P2-7: Tab 5 — 深度研究
-
-- [ ] **P2-7a** 研究元数据 — 信心度/引用数/证据质量/冲突数
-- [ ] **P2-7b** 执行摘要 — DeepSearchAgent synthesis
-- [ ] **P2-7c** 核心发现 — 分节 + 引文证据块 (引用来源 + 引述)
-- [ ] **P2-7d** 观点冲突 — 乐观 vs 悲观对照面板
-- [ ] **P2-7e** 参考文献列表
-
-### P2-8: Tab 6 — 同行对比
-
-- [ ] **P2-8a** 评分对比 — 6 公司圆形评分卡 (当前股票高亮)
-- [ ] **P2-8b** 详细指标对比表 — 12+ 列 (PE/PEG/PB/EV-EBITDA/净利率/ROE/营收增速/股息率/评分)
-- [ ] **P2-8c** 估值水平横向条形图
-- [ ] **P2-8d** 营收增速横向条形图
-- [ ] **P2-8e** AI 同行分析摘要
+- [x] **Gate-1** LangGraph Interrupt 实现 — 使用官方 `interrupt()` + `Command(resume=...)` + `astream_events`
+  - 文件: `backend/graph/runner.py` 新增 `confirmation_gate` 节点
+  - 条件触发: 仅 `state.require_confirmation=True` 时中断 (report 模式), brief 模式直接执行
+  - 禁止: `raise GraphInterrupt` 或捕获 `GraphInterrupt` 异常
+- [x] **Gate-2** GraphRunner 新增 `resume()` 方法
+  - 文件: `backend/graph/runner.py` (~30行)
+  - 返回 `AsyncIterator[StreamEvent]` (流语义, 使用 `astream_events`, 非 `ainvoke`)
+  - `resume_graph_pipeline()` 必须通过 `runner.resume()` 调用, 不可绕过封装
+- [x] **Gate-3** 冻结 DashboardData v2 契约
+  - 新建: `backend/dashboard/contracts.py` (~40行)
+  - 定义: valuation / financials / technicals / peers 字段结构
+  - 前端先用 mock 数据开发, API 响应头携带 `X-Dashboard-Version: v2`
+- [x] **Gate-4** P2-B 性能预算表
+  - 文件: `backend/dashboard/data_service.py`
+  - 每路请求定义: 超时 / 缓存 TTL / 并行上限 / fallback 策略
+  - snapshot 5s/30s | valuation 5s/300s | financials 8s/3600s | technicals 5s/60s | peers 10s/3600s
+  - 实现: `asyncio.wait_for()` + `asyncio.gather(return_exceptions=True)`
+- [x] **Gate-5** 独立持仓存储
+  - 新建: `backend/services/portfolio_store.py` (~80行)
+  - 独立 SQLite: `data/portfolio.db` (不与 checkpointer 的 `data/checkpoints.db` 共库)
+  - 表: `portfolio_positions` (session_id, ticker, shares, avg_cost) + `rebalance_suggestions`
+- [x] **Gate-6** Rebalance 证据快照
+  - 新增 `EvidenceSnapshot` schema: evidence_id / source / quote / report_id / captured_at
+  - 生成建议时将证据深拷贝到 `RebalanceAction.evidence_snapshots`
+  - 前端优先读快照, 仅 fallback 反查 report
 
 ---
 
-## Phase 3: 工作台升级 — AI 任务执行中心
+## 硬约束 (全局生效, 贯穿 P2+P3)
 
-> **设计转型 (2026-02-15)**:
+> 以下 2 条约束在整个 Phase 2 + Phase 3 开发中始终有效。
+
+**HC-1: Dashboard v2 可空子模块必须附 `fallback_reason`**
+
+每个 v2 新增的可空字段返回 None 时, 必须附带 `xxx_fallback_reason` 字符串。
+前端对 None 字段统一显示 `<DataFallback reason={fallbackReason} />`。
+
+**HC-2: Rebalance 服务端强制 `suggestion_only` + `executable=false`**
+
+无论客户端传入什么值, 服务端在返回前强制覆盖:
+- `suggestion.mode = "suggestion_only"`
+- `suggestion.executable = False`
+- `suggestion.disclaimer = "本建议仅供参考，不构成投资建议。"`
+
+Pydantic schema 用 `Literal[False]` 编译时约束 + router 运行时覆盖。
+
+---
+
+## Phase 2: 仪表盘 TradingKey 风格改造 (v2)
+
+> **更新 (2026-02-15)**: 从简单卡片滚动 → TradingKey 风格 6-Tab 专业金融终端。
+> **设计原则**: Tab1 "无报告也能用" — 基于实时数据自动生成基线评分; report 只是增强。
+> **详细设计**: 见 `plans/snuggly-sleeping-mango.md` Phase 2 部分。
+> **批次纪律**: 每批次完成后: `pnpm tsc --noEmit` + `pnpm build` + `pytest` + 单独 git commit。
+
+### 批次 2-A: 前端基础层
+
+#### P2-1: 主题 Token + ECharts 暗色适配
+
+- [x] **P2-1a** 修改 `frontend/src/index.css` — `:root.dark` 更新 TradingKey 暗色变量
+  - 背景层次: --fin-bg #12141a / --fin-card #1e2028 / --fin-panel #252830
+  - 强调色: --fin-primary #fa8019(橙) / --fin-success #0cad92(绿) / --fin-danger #f74f5c(红)
+- [x] **P2-1b** 新建 `frontend/src/styles/echarts-theme.ts` (~80行)
+  - ECharts 暗色主题注册 + `getChartColors(isDark)` 工具函数
+  - 修改 MarketChartCard / RevenueTrendCard 等使用 `getChartColors()`
+- [x] **P2-1c** 修改 `frontend/tailwind.config.js` — 字体添加 PingFang SC / Microsoft YaHei
+
+#### P2-2: Dashboard 布局重构
+
+- [x] **P2-2a** 新建 `frontend/src/components/dashboard/StockHeader.tsx` (~150行)
+  - 股票代码 + 中文名 + 实时价格 + 涨跌幅 + "加自选"/"快速分析"/"生成报告" 按钮
+- [x] **P2-2b** 新建 `frontend/src/components/dashboard/MetricsBar.tsx` (~120行)
+  - 7 列指标横条: market_cap / PE / PB / EPS / dividend_yield / 52week_range / beta
+  - 数据源: `dashboardData.valuation` (P2-B1)
+- [x] **P2-2c** 新建 `frontend/src/components/dashboard/DashboardTabs.tsx` (~100行)
+  - 6 Tab: 综合分析 / 财务报表 / 技术面 / 新闻动态 / 深度研究 / 同行对比
+  - URL 同步: `?tab=overview|financial|technical|news|research|peers`
+- [x] **P2-2d** 修改 `frontend/src/pages/Dashboard.tsx` (~60行改动)
+  - 新结构: Watchlist aside | StockHeader + MetricsBar + DashboardTabs
+  - 移除 DashboardWidgets 直接引用
+
+### 批次 2-B: 后端数据扩展 (与 2-A 可并行)
+
+#### P2-B1: 估值指标 + 财务报表
+
+- [x] **P2-B1a** 修改 `backend/dashboard/schemas.py` — 新增 `ValuationData` + `FinancialStatement` schema
+- [x] **P2-B1b** 修改 `backend/dashboard/data_service.py` — 新增 `fetch_valuation()` + `fetch_financial_statements()`
+  - 数据源: `yfinance.Ticker.info` + `quarterly_income_stmt / balance_sheet / cashflow`
+  - 遵循 Gate-4 性能预算 (5s/8s 超时 + 300s/3600s 缓存)
+- [x] **P2-B1c** 修改 `backend/api/dashboard_router.py` — 并行获取 valuation + financials
+  - 返回 `data.valuation` + `data.financials` (含 fallback_reason, HC-1)
+- [x] **P2-B1d** 修改 `frontend/src/types/dashboard.ts` — 新增 TypeScript 类型
+
+#### P2-B2: 技术指标独立端点
+
+- [x] **P2-B2a** 新建 `backend/tools/technical.py` (~100行)
+  - 从 `technical_agent.py::_compute_indicators()` 提取公共计算逻辑
+  - 新增: Stochastic / ADX / CCI / Williams %R / Bollinger Bands / S-R levels
+- [x] **P2-B2b** 修改 `backend/dashboard/data_service.py` — 新增 `fetch_technical_indicators()`
+- [x] **P2-B2c** 修改 `backend/dashboard/schemas.py` — 新增 `TechnicalData` schema
+- [x] **P2-B2d** 修改 `backend/api/dashboard_router.py` — 并行获取 technicals
+
+#### P2-B3: 同行对比数据
+
+- [x] **P2-B3a** 新建 `backend/dashboard/peer_service.py` (~120行)
+  - `resolve_peers(symbol, limit=6)` + `fetch_peer_comparison(symbol, peers)`
+  - 缓存 1h TTL
+- [x] **P2-B3b** 修改 `backend/dashboard/schemas.py` — 新增 `PeerData` schema
+- [x] **P2-B3c** 修改 `backend/api/dashboard_router.py` — 并行获取 peers
+
+### 批次 2-C: Tab 实现 (依赖 2-A + 部分依赖 2-B)
+
+#### P2-3: Tab1 综合分析 ("无报告也能用")
+
+- [x] **P2-3a** 新建 `frontend/src/hooks/useLatestReport.ts` (~40行)
+  - 从 `apiClient.listReportIndex()` 获取最新报告, 缓存在 ref
+- [x] **P2-3b** 新建 `OverviewTab.tsx` + `overview/ScoreRing.tsx` (~120行)
+  - 基线评分: 基于 valuation + technicals 自动计算 (PE/RSI/Beta/趋势/新闻情绪)
+  - 增强评分: 有 report 时使用 confidence_score 覆盖
+- [x] **P2-3c** 新建 `overview/AnalystRatingCard.tsx` (~80行)
+  - 无 report: 技术信号共识 (偏多/偏空/中性); 有 report: 完整评级
+- [x] **P2-3d** 新建 `overview/DimensionRadar.tsx` (~90行)
+  - ECharts 5维雷达: 基本面/技术面/新闻/深度研究/宏观
+  - 无 report: 3 维有值, 2 维显示 "待分析"
+- [x] **P2-3e** 新建 `overview/KeyInsightsCard.tsx` (~70行)
+  - 无 report: 自动生成 3 条实时洞察 (PE对比/MA信号/新闻倾向)
+- [x] **P2-3f** 新建 `overview/RiskMetricsCard.tsx` (~70行)
+- [x] **P2-3g** 新建 `overview/HighlightsCard.tsx` (~60行)
+
+#### P2-4: Tab2 财务报表 (依赖 P2-B1)
+
+- [x] **P2-4a** 新建 `FinancialTab.tsx` + `financial/IncomeTable.tsx` (~120行)
+- [x] **P2-4b** 新建 `financial/ProfitabilityChart.tsx` (~80行)
+- [x] **P2-4c** 新建 `financial/ValuationGrid.tsx` (~70行)
+- [x] **P2-4d** 新建 `financial/BalanceSheetSummary.tsx` (~80行)
+
+#### P2-5: Tab3 技术面 (依赖 P2-B2)
+
+- [x] **P2-5a** 新建 `TechnicalTab.tsx` + `technical/TechnicalSummaryCard.tsx` (~80行)
+- [x] **P2-5b** 新建 `technical/MovingAverageTable.tsx` (~90行)
+- [x] **P2-5c** 新建 `technical/OscillatorTable.tsx` (~90行)
+- [x] **P2-5d** 新建 `technical/SupportResistanceChart.tsx` (~100行)
+- [x] **P2-5e** 新建 `technical/BollingerVolumeCard.tsx` (~80行)
+
+#### P2-6: Tab4 新闻动态 (无新后端依赖)
+
+- [x] **P2-6a** 新建 `NewsTab.tsx` + `news/SentimentStatsBar.tsx` (~60行)
+- [x] **P2-6b** 新建 `news/NewsFilterPills.tsx` (~40行)
+- [x] **P2-6c** 改造 `NewsFeed.tsx` — 抽取 `NewsListView`, 接收筛选条件 prop
+- [x] **P2-6d** 新建 `news/AiNewsSummaryCard.tsx` (~60行)
+
+#### P2-7: Tab5 深度研究 (无新后端依赖)
+
+- [x] **P2-7a** 新建 `ResearchTab.tsx` + `research/ResearchMetadata.tsx` (~60行)
+- [x] **P2-7b** 新建 `research/ExecutiveSummary.tsx` (~50行)
+- [x] **P2-7c** 新建 `research/CoreFindings.tsx` (~80行)
+- [x] **P2-7d** 新建 `research/ConflictPanel.tsx` (~70行)
+- [x] **P2-7e** 新建 `research/ReferenceList.tsx` (~50行)
+
+#### P2-8: Tab6 同行对比 (依赖 P2-B3)
+
+- [x] **P2-8a** 新建 `PeersTab.tsx` + `peers/PeerScoreGrid.tsx` (~80行)
+- [x] **P2-8b** 新建 `peers/PeerComparisonTable.tsx` (~100行)
+- [x] **P2-8c** 新建 `peers/ValuationBarChart.tsx` (~70行)
+- [x] **P2-8d** 新建 `peers/RevenueGrowthChart.tsx` (~70行)
+- [x] **P2-8e** 新建 `peers/AiPeerSummary.tsx` (~50行)
+
+### 批次 2-D: 清理 + 整合
+
+- [x] **P2-9** 旧 DashboardWidgets 垂直滚动代码清理
+- [x] **P2-10** 响应式 + 移动端适配 (移动端 Tab 横向滚动 Pills / 平板 2 列 / 桌面 3 列)
+
+---
+
+## Phase 3: 工作台升级 — AI 任务执行中心 + 调仓建议
+
+> **更新 (2026-02-15)**:
 > 工作台从「被动信息展示面板」转型为「AI 驱动的任务执行中心」。
 > - 砍掉 NewsSection（与 Dashboard 完全重复）
-> - 砍掉 ReportSection 当前形式（降级为折叠式 Timeline）
-> - 核心: AI 基于持仓生成任务 → 一键执行 → LangGraph interrupt 追问 → 结果展示
-> - 详细设计见: `docs/WORKBENCH_ROADMAP.md`
+> - ReportSection 降级为折叠式 Timeline
+> - 核心: AI 任务生成 → 一键执行 → LangGraph interrupt 追问 → 结果展示
+> - **新增**: 调仓建议 RebalanceSuggestion (suggestion_only, 不执行交易)
+> **详细设计**: 见 `plans/snuggly-sleeping-mango.md` Phase 3 部分。
 
-### P3-1: 清理 + 布局重构
+### 批次 3-A: 清理 + 布局 (无外部依赖)
 
-- [ ] **P3-1a** 删除 `NewsSection` 组件及 Workbench 中的引用（与 Dashboard 完全重复）
-- [ ] **P3-1b** 删除 `WorkspaceShell` 中 `useDashboardData(view==='workbench')` 逻辑
-- [ ] **P3-1c** Workbench 增加右侧面板 (ContextPanelShell)
-  - Tab 1: 执行过程 (StreamingResultPanel + InterruptCard)
-  - Tab 2: 执行历史
-- [ ] **P3-1d** 主区域布局: TaskSection (核心) + Report Timeline (折叠)
-- [ ] **P3-1e** 新增持仓概览条组件 (PortfolioSummaryBar)
+#### P3-1: 清理 + 布局重构
 
-### P3-2: LangGraph Interrupt 机制（核心改造）
+- [x] **P3-1a** 删除 `frontend/src/components/workbench/NewsSection.tsx` (292行)
+  - 同步修改 index.ts / Workbench.tsx 移除引用
+- [x] **P3-1b** 修改 `WorkspaceShell.tsx` — 移除 `useDashboardData(view==='workbench')` 和 newsItems props
+- [x] **P3-1c** Workbench 布局重构: 主区域 (TaskSection + ReportTimeline) + 右侧面板 (ContextPanelShell)
+- [x] **P3-1d** 新建 `frontend/src/components/workbench/PortfolioSummaryBar.tsx` (~80行)
+  - 横条: 总市值 | 今日盈亏 | 持仓数 | 最大持仓
+  - 先用 localStorage 数据, P3-5 后接入后端 API
 
-- [ ] **P3-2a** 修改 `runner.py` — `graph.compile()` 添加 `interrupt_before=["execute_plan"]`
-- [ ] **P3-2b** 切换 Checkpointer 默认值: memory → sqlite（interrupt 必须持久化）
-- [ ] **P3-2c** 新增 `POST /api/execute/resume` API — 接受 `thread_id + resume_value`
-  - 使用 LangGraph `Command(resume=...)` 恢复图执行
-- [ ] **P3-2d** 前端新增 `InterruptCard.tsx` — 就地追问 UI（选项/自由文本）
-- [ ] **P3-2e** 修改 `TaskSection.tsx` 状态机 — 增加 `interrupted` 状态 + SSE interrupt 事件
-- [ ] **P3-2f** 编写 interrupt/resume 端到端测试
+### 批次 3-B: LangGraph Interrupt (核心全栈)
 
-### P3-3: AI 任务生成（替换硬编码规则）
+#### P3-2: LangGraph Interrupt 机制
 
-- [ ] **P3-3a** 新建 `backend/services/task_generator.py` — 双层架构
-  - 规则层: 价格异动、财报日历、研报时效、持仓集中度
-  - LLM 层: 市场新闻 × 持仓的交叉分析，个性化补充
-- [ ] **P3-3b** 新建 `AITask` Pydantic schema — category/priority/reason/execution_params
-- [ ] **P3-3c** 修改 `GET /api/tasks/daily` — 调用 task_generator，返回 5-8 条个性化任务
-- [ ] **P3-3d** 前端 TaskSection 适配新任务格式（分类图标 + 理由 + 优先级）
-- [ ] **P3-3e** 编写测试（规则层覆盖 + LLM mock）
+> **实现方式**: 使用官方 `interrupt()` 函数 + `Command(resume=...)` + `astream_events` 事件流。
+> 参见 Gate-1 / Gate-2。
 
-### P3-4: Report Timeline
+- [x] **P3-2a** 修改 `backend/graph/runner.py` — 添加 `confirmation_gate` 条件节点
+  - 触发条件: `state.require_confirmation=True` (仅 report 模式)
+  - brief/快速分析 → 不中断, 直接执行
+  - 修改 `backend/graph/state.py` 新增字段
+- [x] **P3-2b** 验证 Checkpointer 为 sqlite 持久化
+- [x] **P3-2c** 新增 `POST /api/execute/resume` — 接受 `thread_id + resume_value`
+  - `execution_service.resume_graph_pipeline()` 调用 `runner.resume()` (astream_events 流语义)
+- [x] **P3-2d** 新建 `frontend/src/components/execution/InterruptCard.tsx` (~120行)
+- [x] **P3-2e** 修改 `TaskSection.tsx` 状态机: `idle → running → done|error|interrupted`
+- [x] **P3-2f** SSE 事件扩展: 后端检测 `on_interrupt` 事件 + 前端 `onInterrupt` 回调
 
-- [ ] **P3-4a** ReportSection 改为可折叠时间线视图（按日期分组，默认折叠）
-- [ ] **P3-4b** 后端新增 `GET /api/reports/compare?id1=X&id2=Y`
-  - 返回两份报告的结构化差异 (评分变化、新增/删除风险、价格变动)
-- [ ] **P3-4c** 支持对比模式: 选两份报告 → diff 展示
+### 批次 3-C: AI 任务生成 (依赖 3-B)
 
-### P3-5: 持仓数据接入
+#### P3-3: AI 任务生成 (双层: 规则+LLM)
 
-- [ ] **P3-5a** 新建 `GET /api/portfolio/summary` — 总市值、今日盈亏、持仓分布
-- [ ] **P3-5b** 前端新增 `usePortfolioData` hook
-- [ ] **P3-5c** PortfolioSummaryBar 接入真实数据
+- [x] **P3-3a** 新建 `backend/services/task_generator.py` (~200行)
+  - 规则层 (确定性): 价格异动 / 财报日历 / 研报时效 / 持仓集中度
+  - LLM 层 (可选, `use_llm_enhancement`): 持仓×新闻交叉分析, 1h 缓存
+- [x] **P3-3b** 新建 `backend/api/task_schemas.py` (~30行) — `AITask` schema
+- [x] **P3-3c** 修改 `backend/api/task_router.py` — 调用 TaskGenerator, 新增 portfolio 参数
+- [x] **P3-3d** 前端 TaskSection 适配: 分类图标 + reason + priority
+- [x] **P3-3e** 测试 (规则层覆盖 + LLM mock)
+
+### 批次 3-D: Report Timeline + 持仓
+
+#### P3-4: Report Timeline
+
+- [x] **P3-4a** 修改 `ReportSection.tsx` → 时间线视图 (按日期分组, 默认折叠)
+- [x] **P3-4b** 新增 `GET /api/reports/compare?id1=X&id2=Y`
+- [x] **P3-4c** 对比模式 UI: 双栏对比 + 差异高亮
+
+#### P3-5: 持仓数据接入
+
+- [x] **P3-5a** 新建 `backend/api/portfolio_router.py` (~120行)
+  - `GET /api/portfolio/summary` + `POST/PUT/DELETE /api/portfolio/positions`
+  - 存储: 独立 `data/portfolio.db` (Gate-5)
+- [x] **P3-5b** 新建 `frontend/src/hooks/usePortfolioData.ts` (~50行)
+- [x] **P3-5c** PortfolioSummaryBar 接入 usePortfolioData
+
+### 批次 3-E: 调仓建议 RebalanceSuggestion (依赖 3-D)
+
+> **定位**: suggestion_only — 只生成建议, 不执行交易。强制 `executable: false` (HC-2)。
+
+#### P3-6: 调仓建议
+
+**后端**:
+
+- [x] **P3-6a** 新建 `backend/api/rebalance_schemas.py` (~80行)
+  - `RebalanceAction` / `RebalanceSuggestion` (mode=Literal["suggestion_only"], executable=Literal[False])
+  - `GenerateRebalanceRequest` / `PatchSuggestionRequest`
+- [x] **P3-6b** 新建 `backend/services/rebalance_engine.py` (~300行) — 四步流水线
+  - Step 1: 持仓诊断 | Step 2: 候选操作 (规则+可选LLM) | Step 3: 约束求解 | Step 4: 解释生成
+  - 证据绑定: evidence_snapshots 深拷贝 (Gate-6)
+- [x] **P3-6c** 新建 `backend/api/rebalance_router.py` (~120行) — factory+DI
+  - `POST generate` / `GET list` / `PATCH status` (HC-2 强制覆盖)
+- [x] **P3-6d** 注册 `backend/api/main.py` — portfolio_router + rebalance_router
+
+**前端**:
+
+- [x] **P3-6e** 新建 `frontend/src/hooks/useRebalanceSuggestion.ts` (~80行)
+- [x] **P3-6f** 修改 `frontend/src/api/client.ts` — 新增 rebalance API 方法
+- [x] **P3-6g** 修改 `frontend/src/types/dashboard.ts` — 新增 Rebalance 类型
+- [x] **P3-6h** 新建 `RebalanceEntryCard.tsx` (~100行) — 入口卡片
+- [x] **P3-6i** 新建 `rebalance/RebalanceParamPanel.tsx` (~90行) — 参数面板
+- [x] **P3-6j** 新建 `rebalance/RebalanceResultView.tsx` (~50行) — 结果容器
+- [x] **P3-6k** 新建 `rebalance/SuggestionSummaryCard.tsx` (~60行)
+- [x] **P3-6l** 新建 `rebalance/ActionList.tsx` (~120行)
+- [x] **P3-6m** 新建 `rebalance/EvidenceLinks.tsx` (~50行) — 快照优先
+- [x] **P3-6n** 新建 `rebalance/DisclaimerBanner.tsx` (~30行)
+- [x] **P3-6o** 新建 `rebalance/ActionButtons.tsx` (~50行) — 发送到对话/忽略/重新生成
+
+**测试**:
+
+- [x] **P3-6p** 新建 `backend/tests/test_rebalance_engine.py` (~150行)
 
 ---
 
@@ -643,37 +796,38 @@ Phase 4 (产品打磨) ← 可并行
 
 ---
 
-## 执行顺序总览（含记忆模块 + 死代码清理）
+## 执行顺序总览（含 Gate + 记忆模块 + 调仓建议）
 
 ```
-Phase 0 剩余 (基础设施) ← ✅ 全部完成
-  P0-3c → P0-3e (fallback 展示) ✅
-  P0-5a → P0-5b → P0-5c → P0-5d (TaskSection 接后端) ✅
+Phase 0 (基础设施) ← ✅ 全部完成
+  P0-1 ~ P0-5 ✅
 
-Phase M0 (LangGraph 原生记忆) ← 与 Phase 0/1 并行，投入产出比最高
-  PM0-1a (验证 checkpointer) ✅
-  → PM0-1b (AI 回复写回 messages) ✅
-  → PM0-1c/1d (planner+synthesize 读历史) [可并行] ✅
-  → PM0-2a (trim_messages 兜底) ✅
-  → PM0-2b (summarize_history 条件节点) ✅
-  → PM0-3 (清理硬编码模型名) ✅
+Phase M0 (LangGraph 原生记忆) ← ✅ 全部完成
+  PM0-1a → PM0-1b → PM0-1c/1d → PM0-2a → PM0-2b → PM0-3 ✅
 
 Phase 1 (前端状态 + 体验) ← 依赖 Phase 0
   P1-1 ~ P1-6
 
-Phase 2 (TradingKey 改造) ← 依赖 P1-3
-  P2-1 → P2-2 → P2-3 → P2-4 → P2-5 → P2-6 → P2-7 → P2-8
+═══ Gate (P2/P3 开工前阻塞项) ═══
+  Gate-1 (LangGraph interrupt) → Gate-2 (resume 方法)
+  Gate-3 (v2 契约) → Gate-4 (性能预算)
+  Gate-5 (持仓存储) → Gate-6 (证据快照)
 
-Phase M1 (LangGraph Store + 长期记忆) ← 依赖 PM0 + langgraph 升级
-  PM1-0 (升级 langgraph)
-  → PM1-1a/1b (配置 Store + 迁移 MemoryService + 持仓)
-  → PM1-2a/2b (用户画像+持仓注入 pipeline)
-  → PM1-3a/3b (对话摘要 + 焦点加载)
-  → PM1-4 (持久化确认)
-  → PM1-5 (删除旧 MemoryService)
+Phase 2 (TradingKey 改造) ← 依赖 P1-3 + Gate-3/4
+  批次 2-A (前端): P2-1 → P2-2      ┐
+  批次 2-B (后端): P2-B1/B2/B3       ├ 可并行
+  批次 2-C (Tab): P2-3~P2-8 (依赖 2-A + 2-B)
+  批次 2-D (清理): P2-9 → P2-10
 
-Phase 3 (工作台 AI 任务执行中心) ← 依赖 P0-5 + P1-1
-  P3-1 (清理+布局) → P3-2 (LangGraph interrupt) → P3-3 (AI 任务生成) → P3-4 (Timeline) → P3-5 (持仓)
+Phase M1 (LangGraph Store + 长期记忆) ← 依赖 PM0
+  PM1-0 → PM1-1a/1b → PM1-2a/2b → PM1-3a/3b → PM1-4 → PM1-5
+
+Phase 3 (工作台 + 调仓建议) ← 依赖 P0-5 + P1-1 + Gate-1/2/5/6
+  批次 3-A (清理+布局): P3-1
+  批次 3-B (Interrupt): P3-2
+  批次 3-C (AI 任务): P3-3
+  批次 3-D (Report+持仓): P3-4 + P3-5
+  批次 3-E (调仓建议): P3-6
 
 Phase 4 (产品打磨) ← 可并行
   P4-1 → P4-2 → P4-3 → P4-4 → P4-5
@@ -720,3 +874,31 @@ Phase M2 (智能记忆) ← 依赖 PM1 + Phase 2
 - **决策**: 将 MemoryService (用户画像 JSON 文件) 迁移到 LangGraph Store
 - **原因**: Store 与 graph pipeline 天然集成，节点可直接 store.search/put；消除孤立系统
 - **前提**: langgraph 升级完成，Store API 可用
+
+### ADR-009: LangGraph Interrupt 使用官方 interrupt() 函数
+- **决策**: 使用 `interrupt()` + `Command(resume=...)` + `astream_events`, 不用 `raise GraphInterrupt`
+- **原因**: 官方 API 更稳定; 异常捕获方式在 astream_events 中行为不确定; resume 需要 Command 语义
+
+### ADR-010: 条件性 confirmation_gate 替代全局 interrupt_before
+- **决策**: 新增 `confirmation_gate` 条件节点, 非全局 `interrupt_before=["execute_plan"]`
+- **原因**: 全局 interrupt 会阻塞所有执行 (包括快速分析 brief 模式), 条件节点可按 output_mode 决定
+
+### ADR-011: 持仓存储独立于 Checkpointer
+- **决策**: 使用独立 SQLite `data/portfolio.db`, 不与 checkpointer 共库
+- **原因**: 避免锁冲突和迁移耦合; 持仓数据生命周期与 graph checkpoint 不同
+
+### ADR-012: Rebalance 证据快照优先
+- **决策**: 生成建议时深拷贝 evidence 到 `evidence_snapshots`, 前端读快照优先
+- **原因**: 报告可能被删除/更新, 反查不稳定; 快照解耦保证证据可追溯
+
+### ADR-013: Rebalance 强制 suggestion_only
+- **决策**: 服务端双重保护 — Pydantic `Literal[False]` + router 运行时覆盖 `executable=False`
+- **原因**: 法律合规要求, 不执行任何实际交易; 客户端不可绕过
+
+### ADR-014: Dashboard v2 可空字段附带 fallback_reason
+- **决策**: 每个 v2 新增可空字段返回 None 时必须附带 fallback_reason
+- **原因**: 前端需要区分 "数据未加载" vs "获取失败(超时/错误)" 以提供精确降级提示
+
+### ADR-015: LLM 调用可选化 (use_llm_enhancement)
+- **决策**: 调仓引擎和任务生成器的 LLM 层默认关闭, 用户可选开启
+- **原因**: 避免工作台加载时 3+ LLM 调用导致高成本和高延迟; 模板层可覆盖 80% 场景

@@ -31,6 +31,7 @@ def test_langgraph_runner_import_and_invoke():
         "parse_operation",
         "policy_gate",
         "planner",
+        "confirmation_gate",
         "execute_plan",
         "synthesize",
         "render",

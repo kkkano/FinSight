@@ -1,9 +1,19 @@
-﻿import { useEffect, useState } from 'react';
+/**
+ * Dashboard v2 - TradingKey-style financial terminal layout.
+ *
+ * Structure:
+ *   Watchlist (aside) | StockHeader
+ *                      | MetricsBar
+ *                      | DashboardTabs -> [Tab panels]
+ */
+import { useEffect, useState } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
-import { DashboardWidgets } from '../components/dashboard/DashboardWidgets';
+import { StockHeader } from '../components/dashboard/StockHeader';
+import { MetricsBar } from '../components/dashboard/MetricsBar';
+import { DashboardTabs } from '../components/dashboard/DashboardTabs';
 import { useStore } from '../store/useStore';
 
 interface DashboardProps {
@@ -14,7 +24,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
-  const { activeAsset, isLoading, error, setActiveAsset } = useDashboardStore();
+  const { activeAsset, dashboardData, isLoading, error, setActiveAsset } = useDashboardStore();
   const { theme, setTheme } = useStore();
 
   const [currentSymbol, setCurrentSymbol] = useState<string>(
@@ -46,6 +56,11 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
     refetch(currentSymbol);
   };
 
+  // Derived data for sub-components
+  const snapshot = dashboardData?.snapshot ?? {};
+  const charts = dashboardData?.charts ?? {};
+  const valuation = dashboardData?.valuation ?? null;
+
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
       <aside className="w-[220px] shrink-0 border-r border-fin-border bg-fin-card flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b">
@@ -53,6 +68,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
       </aside>
 
       <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-fin-bg">
+        {/* Navigation header bar */}
         <header className="h-[52px] bg-fin-card border-b border-fin-border flex items-center justify-between px-5 shrink-0 max-lg:px-3">
           <div className="flex items-center gap-3 min-w-0">
             {onBackToChat && (
@@ -75,15 +91,6 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
                     去工作台
                   </button>
                 )}
-              </div>
-            )}
-
-            {activeAsset && (
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-lg font-bold text-fin-text truncate">{activeAsset.display_name}</span>
-                <span className="text-2xs text-fin-muted bg-fin-bg-secondary px-2 py-0.5 rounded shrink-0">
-                  {activeAsset.type.toUpperCase()}
-                </span>
               </div>
             )}
 
@@ -112,9 +119,10 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
           </div>
         </header>
 
+        {/* Error banner */}
         {error && (
           <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2 shrink-0 max-lg:mx-3">
-            <span className="font-medium">加载失败：</span>
+            <span className="font-medium">加载失败:</span>
             <span className="truncate flex-1">{error}</span>
             <button
               type="button"
@@ -126,11 +134,26 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="p-5 max-lg:p-3">
-            <DashboardWidgets />
-          </div>
-        </div>
+        {/* StockHeader: symbol info + price + action buttons */}
+        <StockHeader
+          ticker={activeAsset?.symbol || currentSymbol}
+          displayName={activeAsset?.display_name || currentSymbol}
+          assetType={activeAsset?.type || 'equity'}
+          snapshot={snapshot}
+          charts={charts}
+          valuation={valuation}
+          loading={isLoading && !dashboardData}
+        />
+
+        {/* MetricsBar: key valuation indicators */}
+        <MetricsBar
+          valuation={valuation}
+          snapshot={snapshot}
+          loading={isLoading && !dashboardData}
+        />
+
+        {/* Tabs + Tab panels */}
+        <DashboardTabs />
       </main>
     </div>
   );

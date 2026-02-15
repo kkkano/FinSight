@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 
 from backend.graph.checkpointer import aget_graph_checkpointer, get_graph_checkpointer_info
 from backend.graph.nodes import (
     build_initial_state,
     chat_respond,
+    confirmation_gate,
     decide_output_mode,
     clarify,
     execute_plan_stub,
@@ -51,6 +54,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
     graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
     graph.add_node("planner", with_node_trace("planner", planner))
+    graph.add_node("confirmation_gate", with_node_trace("confirmation_gate", confirmation_gate))
     graph.add_node("execute_plan", with_node_trace("execute_plan", execute_plan_stub))
     graph.add_node("synthesize", with_node_trace("synthesize", synthesize))
     graph.add_node("render", with_node_trace("render", render_stub))
@@ -88,7 +92,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
     )
 
     graph.add_edge("policy_gate", "planner")
-    graph.add_edge("planner", "execute_plan")
+    graph.add_edge("planner", "confirmation_gate")
+    graph.add_edge("confirmation_gate", "execute_plan")
     graph.add_edge("execute_plan", "synthesize")
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)
@@ -132,6 +137,29 @@ class GraphRunner:
 
         config = {"configurable": {"thread_id": thread_id}}
         return await self._graph.ainvoke(state, config=config)
+
+    async def resume(
+        self,
+        *,
+        thread_id: str,
+        resume_value: Any,
+        config: dict[str, Any] | None = None,
+    ) -> AsyncIterator[dict]:
+        """Resume an interrupted graph via ``Command(resume=...)``.
+
+        Returns an async iterator of stream events (``astream_events v2``),
+        consistent with the SSE pipeline used by ``run_graph_pipeline``.
+        """
+        merged_config: dict[str, Any] = {
+            "configurable": {"thread_id": thread_id},
+            **(config or {}),
+        }
+        async for event in self._graph.astream_events(
+            Command(resume=resume_value),
+            config=merged_config,
+            version="v2",
+        ):
+            yield event
 
     @staticmethod
     def checkpointer_info() -> dict[str, Any]:

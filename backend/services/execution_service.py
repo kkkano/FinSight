@@ -289,3 +289,180 @@ async def run_graph_pipeline(
                 await producer_task
             except Exception:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# Resume pipeline (for human-in-the-loop interrupt/resume flow)
+# ---------------------------------------------------------------------------
+
+async def resume_graph_pipeline(
+    *,
+    deps: ExecutionDeps,
+    thread_id: str,
+    resume_value: Any,
+    source: str | None = None,
+    trace_raw_enabled: bool = False,
+    markdown_chunk_size: int = 60,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """Resume an interrupted graph run and yield SSE-compatible events.
+
+    Mirrors the structure of :func:`run_graph_pipeline` but instead of
+    starting a new run it sends ``Command(resume=resume_value)`` to the
+    checkpointed graph via ``runner.resume()``.
+    """
+    from backend.graph.event_bus import reset_event_emitter, set_event_emitter
+    from backend.orchestration.trace_emitter import TraceEvent, get_trace_emitter
+
+    queue: asyncio.Queue[object] = asyncio.Queue()
+    _END = object()
+    request_started_at = datetime.utcnow().isoformat()
+
+    # -- internal emitter ---------------------------------------------------
+
+    async def _emit(payload: dict) -> None:
+        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
+            return
+        outgoing = deps.redact_sensitive_payload(dict(payload))
+        outgoing["schema_version"] = deps.sse_event_schema_version
+        await queue.put(outgoing)
+
+    def _enqueue_trace_event(event: TraceEvent) -> None:
+        if event is None:
+            return
+        try:
+            payload = event.to_sse_dict()
+        except Exception:
+            return
+        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
+            return
+        outgoing = deps.redact_sensitive_payload(dict(payload))
+        outgoing["schema_version"] = deps.sse_event_schema_version
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(queue.put_nowait, outgoing)
+        except Exception:
+            pass
+
+    # -- producer coroutine ------------------------------------------------
+
+    async def _producer() -> None:
+        token = set_event_emitter(_emit)
+        trace_emitter = get_trace_emitter()
+        trace_emitter.add_listener(_enqueue_trace_event)
+        try:
+            await queue.put(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "thinking",
+                    "stage": "resume_start",
+                    "message": "Resuming execution",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
+
+            runner = await deps.get_graph_runner()
+
+            # Collect final state from the stream events
+            final_state: dict[str, Any] = {}
+            async for event in runner.resume(
+                thread_id=thread_id,
+                resume_value=resume_value,
+            ):
+                event_name = event.get("event", "")
+                # Forward interrupt events to the client
+                if "interrupt" in event_name:
+                    await queue.put(
+                        {
+                            "schema_version": deps.sse_event_schema_version,
+                            "type": "interrupt",
+                            "thread_id": thread_id,
+                            "data": event.get("data", {}),
+                        }
+                    )
+                # Capture final state from on_chain_end
+                if event_name == "on_chain_end" and event.get("data", {}).get("output"):
+                    final_state = event["data"]["output"]
+
+            # Build report from final state
+            markdown = ((final_state.get("artifacts") or {}).get("draft_markdown")) or ""
+            report: dict[str, Any] | None = None
+            try:
+                from backend.graph.report_builder import build_report_payload
+                report = build_report_payload(
+                    state=final_state, query=final_state.get("query", ""), thread_id=thread_id,
+                )
+            except Exception as exc:
+                logger.warning("[resume_pipeline] report build failed: %s", exc)
+
+            # Persist report index
+            deps.schedule_report_index(
+                session_id=thread_id, report=report, state=final_state,
+            )
+
+            # Stream markdown
+            for idx in range(0, len(markdown), markdown_chunk_size):
+                chunk = markdown[idx: idx + markdown_chunk_size]
+                if chunk:
+                    await queue.put(
+                        {
+                            "schema_version": deps.sse_event_schema_version,
+                            "type": "token",
+                            "content": chunk,
+                        }
+                    )
+                await asyncio.sleep(0)
+
+            # Done
+            await queue.put(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "done",
+                    "contracts": deps.contract_info(),
+                    "intent": "resume",
+                    "session_id": thread_id,
+                    "source": source,
+                    "response": markdown,
+                    "report": report,
+                    "metrics": {
+                        "request_started_at": request_started_at,
+                        "request_finished_at": datetime.utcnow().isoformat(),
+                    },
+                }
+            )
+        except Exception as exc:
+            logger.error("[resume_pipeline] unhandled: %s", exc, exc_info=True)
+            await queue.put(
+                deps.redact_sensitive_payload(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "error",
+                        "message": "Resume execution failed",
+                    }
+                )
+            )
+        finally:
+            trace_emitter.remove_listener(_enqueue_trace_event)
+            reset_event_emitter(token)
+            await queue.put(_END)
+
+    # -- launch & yield ----------------------------------------------------
+
+    producer_task = asyncio.create_task(_producer())
+    try:
+        while True:
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=5)
+            except asyncio.TimeoutError:
+                yield {"type": "keep-alive"}
+                continue
+            if item is _END:
+                break
+            if isinstance(item, dict):
+                yield item
+    finally:
+        if not producer_task.done():
+            producer_task.cancel()
+            try:
+                await producer_task
+            except Exception:
+                pass

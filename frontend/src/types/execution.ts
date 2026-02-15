@@ -22,7 +22,7 @@ export interface AgentRunInfo {
 
 // --- Execution run status ---
 
-export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled';
+export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted';
 
 export interface ExecutionRun {
   runId: string;
@@ -46,6 +46,14 @@ export interface ExecutionRun {
   abortController: AbortController | null;
   /** Set of runIds that have been bridged to chat (prevent duplicate). */
   bridgedToChat?: boolean;
+  /** Interrupt data when status is 'interrupted' (human-in-the-loop). */
+  interruptData?: {
+    thread_id: string;
+    prompt?: string;
+    options?: string[];
+    plan_summary?: string;
+    required_agents?: string[];
+  } | null;
 }
 
 // --- Start execution parameters (camelCase) ---

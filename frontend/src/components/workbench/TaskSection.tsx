@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart2, CheckCircle2, FileSearch,
-  ListTodo, Loader2, Newspaper, Shield, Sparkles, TrendingUp, XCircle,
+  ListTodo, Loader2, Newspaper, PauseCircle, Shield,
+  Sparkles, TrendingUp, XCircle,
 } from 'lucide-react';
 
 import { apiClient } from '../../api/client';
 import type { DailyTask, ExecuteRequest } from '../../api/client';
-import type { NewsItem } from '../../types/dashboard';
 import { useStore } from '../../store/useStore';
 import { Card } from '../ui/Card';
+import { InterruptCard } from '../execution/InterruptCard';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -17,10 +18,18 @@ import { Card } from '../ui/Card';
 
 interface TaskSectionProps {
   symbol: string;
-  newsItems: NewsItem[];
+  onNavigateToChat?: () => void;
 }
 
-type TaskRunStatus = 'idle' | 'running' | 'done' | 'error';
+type TaskRunStatus = 'idle' | 'running' | 'done' | 'error' | 'interrupted';
+
+interface InterruptInfo {
+  thread_id: string;
+  prompt?: string;
+  options?: string[];
+  plan_summary?: string;
+  required_agents?: string[];
+}
 
 interface TaskRunState {
   status: TaskRunStatus;
@@ -28,6 +37,7 @@ interface TaskRunState {
   progress: number;
   reportId: string | null;
   error: string | null;
+  interruptData: InterruptInfo | null;
 }
 
 const INITIAL_RUN_STATE: TaskRunState = {
@@ -36,6 +46,7 @@ const INITIAL_RUN_STATE: TaskRunState = {
   progress: 0,
   reportId: null,
   error: null,
+  interruptData: null,
 };
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +67,7 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
 /*  TaskSection                                                        */
 /* ------------------------------------------------------------------ */
 
-function TaskSection({ symbol, newsItems }: TaskSectionProps) {
+function TaskSection({ symbol, onNavigateToChat }: TaskSectionProps) {
   const navigate = useNavigate();
   const sessionId = useStore((s) => s.sessionId);
 
@@ -80,7 +91,6 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
     apiClient
       .getDailyTasks({
         session_id: sessionId,
-        news_count: newsItems.length,
       })
       .then((res) => {
         if (!cancelled) {
@@ -100,7 +110,7 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, newsItems.length]);
+  }, [sessionId]);
 
   /* ---- Update run state immutably ---- */
   const updateRun = useCallback(
@@ -127,7 +137,14 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
         source: 'workbench_task',
       };
 
-      updateRun(task.id, { status: 'running', step: '准备中...', progress: 5, error: null, reportId: null });
+      updateRun(task.id, {
+        status: 'running',
+        step: '准备中...',
+        progress: 5,
+        error: null,
+        reportId: null,
+        interruptData: null,
+      });
 
       apiClient
         .executeAgent(request, {
@@ -145,6 +162,13 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
           onError: (error: string) => {
             updateRun(task.id, { status: 'error', step: null, error });
           },
+          onInterrupt: (data) => {
+            updateRun(task.id, {
+              status: 'interrupted',
+              step: data.prompt ?? '等待确认...',
+              interruptData: data,
+            });
+          },
         }, { signal: controller.signal })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
@@ -153,6 +177,50 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
         });
     },
     [sessionId, updateRun, runStates],
+  );
+
+  /* ---- Resume an interrupted task ---- */
+  const handleResume = useCallback(
+    (taskId: string, threadId: string, resumeValue: string) => {
+      updateRun(taskId, { status: 'running', step: '恢复执行...', interruptData: null });
+
+      apiClient
+        .resumeExecution(
+          { thread_id: threadId, resume_value: resumeValue, session_id: sessionId, source: 'workbench_resume' },
+          {
+            onThinking: (step: any) => {
+              const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
+              updateRun(taskId, { step: message });
+            },
+            onToken: () => {
+              updateRun(taskId, { step: '生成报告...', progress: 85 });
+            },
+            onDone: (report?: any) => {
+              const reportId = report?.report_id || null;
+              updateRun(taskId, { status: 'done', step: null, progress: 100, reportId });
+            },
+            onError: (error: string) => {
+              updateRun(taskId, { status: 'error', step: null, error });
+            },
+            onInterrupt: (data) => {
+              updateRun(taskId, { status: 'interrupted', step: data.prompt ?? '等待确认...', interruptData: data });
+            },
+          },
+        )
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Resume failed';
+          updateRun(taskId, { status: 'error', step: null, error: message });
+        });
+    },
+    [sessionId, updateRun],
+  );
+
+  /* ---- Cancel an interrupted task ---- */
+  const handleCancelInterrupt = useCallback(
+    (taskId: string) => {
+      updateRun(taskId, { status: 'idle', step: null, interruptData: null });
+    },
+    [updateRun],
   );
 
   /* ---- Handle task click ---- */
@@ -166,8 +234,8 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
         return;
       }
 
-      // If already running → ignore
-      if (run?.status === 'running') return;
+      // If already running or interrupted → ignore
+      if (run?.status === 'running' || run?.status === 'interrupted') return;
 
       // If has execution_params → execute in-place
       if (task.execution_params) {
@@ -219,6 +287,7 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
           const isRunning = run.status === 'running';
           const isDone = run.status === 'done';
           const isError = run.status === 'error';
+          const isInterrupted = run.status === 'interrupted';
           const isExecutable = !!task.execution_params;
 
           return (
@@ -226,7 +295,7 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
               <button
                 type="button"
                 onClick={() => handleClick(task)}
-                disabled={isRunning}
+                disabled={isRunning || isInterrupted}
                 className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors group ${
                   isRunning
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 cursor-wait'
@@ -234,7 +303,9 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
                       ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
                       : isError
                         ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30'
-                        : 'text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text'
+                        : isInterrupted
+                          ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300 cursor-default'
+                          : 'text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text'
                 }`}
               >
                 {/* Icon — swap based on state */}
@@ -244,6 +315,8 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
                   <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
                 ) : isError ? (
                   <XCircle size={14} className="shrink-0 text-red-500" />
+                ) : isInterrupted ? (
+                  <PauseCircle size={14} className="shrink-0 text-amber-500" />
                 ) : (
                   <IconComponent
                     size={14}
@@ -252,7 +325,7 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
                 )}
 
                 <span className="truncate flex-1">
-                  {isDone && run.reportId ? '查看报告' : task.title}
+                  {isDone && run.reportId ? '查看报告' : isInterrupted ? '等待确认' : task.title}
                 </span>
 
                 {/* Executable badge */}
@@ -276,6 +349,17 @@ function TaskSection({ symbol, newsItems }: TaskSectionProps) {
                       style={{ width: `${run.progress}%` }}
                     />
                   </div>
+                </div>
+              )}
+
+              {/* InterruptCard for interrupted tasks */}
+              {isInterrupted && run.interruptData && (
+                <div className="mt-2">
+                  <InterruptCard
+                    data={run.interruptData}
+                    onResume={(threadId, resumeValue) => handleResume(task.id, threadId, resumeValue)}
+                    onCancel={() => handleCancelInterrupt(task.id)}
+                  />
                 </div>
               )}
 

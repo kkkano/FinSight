@@ -33,6 +33,7 @@ export default {
         }
       },
       fontFamily: {
+        sans: ['-apple-system', '"PingFang SC"', '"Microsoft YaHei"', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       animation: {

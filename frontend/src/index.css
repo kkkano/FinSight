@@ -25,22 +25,22 @@
 }
 
 :root.dark {
-  /* Dark Mode Overrides */
-  --fin-bg: #0f172a;
-  --fin-bg-secondary: #1e293b;
-  --fin-card: #1e293b;
-  --fin-panel: #1e293b;
-  --fin-border: #334155;
-  --fin-hover: #283548;
-  
+  /* Dark Mode Overrides - TradingKey dark theme */
+  --fin-bg: #12141a;
+  --fin-bg-secondary: #181a22;
+  --fin-card: #1e2028;
+  --fin-panel: #252830;
+  --fin-border: #2a2d38;
+  --fin-hover: #2e3140;
+
   --fin-text: #f8fafc;
   --fin-text-secondary: #cbd5e1;
   --fin-muted: #64748b;
-  
+
   --fin-primary: 59 130 246;
-  --fin-success: #10b981;
-  --fin-danger: #ef4444;
-  --fin-warning: #f59e0b;
+  --fin-success: #0cad92;
+  --fin-danger: #f74f5c;
+  --fin-warning: #f5a623;
   --fin-predict: #a78bfa;
 
   color-scheme: dark;

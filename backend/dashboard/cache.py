@@ -35,6 +35,10 @@ class DashboardCache:
     TTL_SECTOR_WEIGHTS = 3600  # 板块权重
     TTL_CONSTITUENTS = 3600    # 成分股
     TTL_HOLDINGS = 3600        # 持仓数据
+    TTL_VALUATION = 300        # Valuation metrics (5 min)
+    TTL_FINANCIALS = 3600      # Financial statements (1 hour)
+    TTL_TECHNICALS = 60        # Technical indicators (1 min)
+    TTL_PEERS = 3600           # Peer comparison (1 hour)
 
     def __init__(self) -> None:
         """初始化缓存存储"""
@@ -107,6 +111,10 @@ class DashboardCache:
                 "sector_weights": self.TTL_SECTOR_WEIGHTS,
                 "top_constituents": self.TTL_CONSTITUENTS,
                 "holdings": self.TTL_HOLDINGS,
+                "valuation": self.TTL_VALUATION,
+                "financials": self.TTL_FINANCIALS,
+                "technicals": self.TTL_TECHNICALS,
+                "peers": self.TTL_PEERS,
             }
             ttl = ttl_map.get(data_type, self.TTL_CHARTS)
 

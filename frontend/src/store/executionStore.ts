@@ -83,6 +83,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       completedAt: null,
       abortController,
       bridgedToChat: false,
+      interruptData: null,
     };
 
     set((state) => ({
@@ -269,6 +270,14 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           status: 'error',
           error: error ?? 'Unknown error',
           currentStep: null,
+        });
+      },
+
+      onInterrupt: (data) => {
+        updateRun({
+          status: 'interrupted',
+          currentStep: data.prompt ?? '等待确认...',
+          interruptData: data,
         });
       },
     };
