@@ -25,6 +25,7 @@ def policy_gate(state: GraphState) -> dict:
     Responsibilities:
     - Provide a per-request "allowed tools/agents" whitelist
     - Provide a per-request budget (max rounds/tools)
+    - Apply user agent_preferences (depth filtering, budget override)
 
     Later phases will make this stricter (tool schemas, per-subject budgets, safety gates).
     """
@@ -35,6 +36,13 @@ def policy_gate(state: GraphState) -> dict:
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
 
+    # --- Read user preferences from ui_context ---
+    ui_context = state.get("ui_context") or {}
+    agents_override = ui_context.get("agents_override")
+    budget_override = ui_context.get("budget_override")
+    raw_prefs = ui_context.get("agent_preferences") or {}
+    agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
+
     # Budget baseline
     if output_mode == "investment_report":
         budget = {"max_rounds": 6, "max_tools": 8}
@@ -42,6 +50,11 @@ def policy_gate(state: GraphState) -> dict:
         budget = {"max_rounds": 4, "max_tools": 4}
     else:
         budget = {"max_rounds": 3, "max_tools": 4}
+
+    # Apply budget_override from ui_context (validated: 1-10)
+    if isinstance(budget_override, (int, float)):
+        clamped = max(1, min(10, int(budget_override)))
+        budget["max_rounds"] = clamped
 
     # Tool whitelist (minimal, can expand later)
     if subject_type in ("news_item", "news_set"):
@@ -68,11 +81,20 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = ["search", "get_current_datetime"]
 
     # Agent whitelist:
-    # - Default (brief/chat): keep empty to avoid non-deterministic/heavy sub-agent execution.
-    # - investment_report: allow sub-agents (executor supports kind=agent when enabled).
+    # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
     allowed_agents: list[str] = []
     agent_selection: dict[str, object] = {}
-    if output_mode == "investment_report":
+
+    # --- agents_override: highest priority (validated against whitelist) ---
+    if agents_override and isinstance(agents_override, list):
+        validated = [
+            a for a in agents_override
+            if isinstance(a, str) and a in REPORT_AGENT_CANDIDATES
+        ]
+        if validated:
+            allowed_agents = validated
+            agent_selection = {"selected": validated, "override": True}
+    elif output_mode == "investment_report":
         max_agents = _env_int("LANGGRAPH_REPORT_MAX_AGENTS", 4, min_value=1, max_value=len(REPORT_AGENT_CANDIDATES))
         min_agents = _env_int("LANGGRAPH_REPORT_MIN_AGENTS", 2, min_value=1, max_value=max_agents)
         selection = select_agents_for_request(
@@ -94,6 +116,26 @@ def policy_gate(state: GraphState) -> dict:
             "scores": selected_scores,
             "reasons": selected_reasons,
         }
+
+        # --- Apply agent_preferences depth filtering (whitelist validated) ---
+        _VALID_DEPTHS = {"standard", "deep", "off"}
+        pref_agents = agent_preferences.get("agents")
+        if isinstance(pref_agents, dict):
+            removed_by_prefs: list[str] = []
+            for name, depth in pref_agents.items():
+                if not isinstance(name, str) or name not in REPORT_AGENT_CANDIDATES:
+                    continue  # Ignore unknown agent names
+                depth_str = str(depth) if depth else "standard"
+                if depth_str not in _VALID_DEPTHS:
+                    depth_str = "standard"
+                if depth_str == "off" and name in allowed_agents:
+                    allowed_agents.remove(name)
+                    removed_by_prefs.append(name)
+                elif depth_str == "deep":
+                    # Boost budget for deep analysis
+                    budget["max_rounds"] = min(budget["max_rounds"] + 1, 10)
+            if removed_by_prefs:
+                agent_selection["removed_by_prefs"] = removed_by_prefs
 
     # Tool schemas (Pydantic JSON schema) for planner constraints.
     tool_schemas: dict[str, dict] = {}

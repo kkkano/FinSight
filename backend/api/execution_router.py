@@ -50,6 +50,10 @@ class ExecuteRequest(BaseModel):
         None,
         description="Whether to include full raw trace events in SSE stream",
     )
+    agent_preferences: dict | None = Field(
+        None,
+        description="Per-agent depth + budget preferences from frontend UI",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +98,8 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             ui_context["budget_override"] = request.budget
         if request.source:
             ui_context["source"] = request.source
+        if request.agent_preferences:
+            ui_context["agent_preferences"] = request.agent_preferences
 
         exec_deps = ExecutionDeps(
             get_graph_runner=deps.get_graph_runner,

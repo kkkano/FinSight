@@ -15,6 +15,7 @@ import { DashboardWorkspace } from './DashboardWorkspace';
 import Workbench from '../../pages/Workbench';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { useDashboardStore } from '../../store/dashboardStore';
+import { ExecutionBanner } from '../execution/ExecutionBanner';
 
 export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
 
@@ -144,6 +145,7 @@ export function WorkspaceShell({
     onCollapse: () => setShowRightPanel(false),
     onResizeStart: handleResizeStart,
     onSubscribeClick: () => setIsSubscribeOpen(true),
+    onNavigateToChat: navigateToChat,
   };
 
   return (
@@ -169,53 +171,59 @@ export function WorkspaceShell({
         onMobileClose={() => setIsSidebarOpen(false)}
       />
 
-      {view === 'dashboard' ? (
-        <DashboardWorkspace
-          isMobile={isMobile}
-          symbol={dashboardSymbol}
-          onBackToChat={navigateToChat}
-          onSymbolChange={openDashboard}
-          onGoWorkbench={(symbol) => {
-            const normalized = symbol.trim();
-            if (!normalized) {
-              navigate('/workbench?from=dashboard');
-              return;
-            }
-            navigate(`/workbench?from=dashboard&symbol=${encodeURIComponent(normalized)}`);
-          }}
-          contextPanel={contextPanelProps}
-        />
-      ) : view === 'workbench' ? (
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-5 max-lg:p-3">
-          <Workbench
-            symbol={preferredSymbol}
-            fromDashboard={fromDashboard}
-            newsItems={dashboardData?.news?.impact || []}
-            rawNewsItems={dashboardData?.news?.impact_raw || []}
-            rankingMeta={
-              typeof dashboardData?.news?.ranking_meta === 'object'
-                ? {
-                    version: (dashboardData.news.ranking_meta as { version?: string }).version,
-                    formula: (dashboardData.news.ranking_meta as { formula?: string }).formula,
-                    notes: Array.isArray((dashboardData.news.ranking_meta as { notes?: unknown[] }).notes)
-                      ? ((dashboardData.news.ranking_meta as { notes?: string[] }).notes || [])
-                      : [],
-                  }
-                : undefined
-            }
-          />
+      <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+        <ExecutionBanner />
+
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          {view === 'dashboard' ? (
+            <DashboardWorkspace
+              isMobile={isMobile}
+              symbol={dashboardSymbol}
+              onBackToChat={navigateToChat}
+              onSymbolChange={openDashboard}
+              onGoWorkbench={(symbol) => {
+                const normalized = symbol.trim();
+                if (!normalized) {
+                  navigate('/workbench?from=dashboard');
+                  return;
+                }
+                navigate(`/workbench?from=dashboard&symbol=${encodeURIComponent(normalized)}`);
+              }}
+              contextPanel={contextPanelProps}
+            />
+          ) : view === 'workbench' ? (
+            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-5 max-lg:p-3">
+              <Workbench
+                symbol={preferredSymbol}
+                fromDashboard={fromDashboard}
+                newsItems={dashboardData?.news?.impact || []}
+                rawNewsItems={dashboardData?.news?.impact_raw || []}
+                rankingMeta={
+                  typeof dashboardData?.news?.ranking_meta === 'object'
+                    ? {
+                        version: (dashboardData.news.ranking_meta as { version?: string }).version,
+                        formula: (dashboardData.news.ranking_meta as { formula?: string }).formula,
+                        notes: Array.isArray((dashboardData.news.ranking_meta as { notes?: unknown[] }).notes)
+                          ? ((dashboardData.news.ranking_meta as { notes?: string[] }).notes || [])
+                          : [],
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ) : (
+            <ChatWorkspace
+              isMobile={isMobile}
+              theme={theme}
+              onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onDashboardRequest={openDashboard}
+              contextPanel={contextPanelProps}
+              marketQuotes={marketQuotes}
+              initialReportId={initialReportId}
+            />
+          )}
         </div>
-      ) : (
-        <ChatWorkspace
-          isMobile={isMobile}
-          theme={theme}
-          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          onDashboardRequest={openDashboard}
-          contextPanel={contextPanelProps}
-          marketQuotes={marketQuotes}
-          initialReportId={initialReportId}
-        />
-      )}
+      </div>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <SubscribeModal isOpen={isSubscribeOpen} onClose={() => setIsSubscribeOpen(false)} />

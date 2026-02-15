@@ -18,12 +18,15 @@ import { MacroCard } from '../cards/MacroCard';
 import { NewsFeed } from './NewsFeed';
 
 export function DashboardWidgets() {
-  const { capabilities, layoutPrefs, dashboardData, isLoading } =
+  const { activeAsset, capabilities, layoutPrefs, dashboardData, isLoading, resetLayoutPrefs } =
     useDashboardStore();
 
+  const hiddenWidgets = Array.isArray(layoutPrefs?.hidden_widgets)
+    ? layoutPrefs.hidden_widgets
+    : [];
+
   // 检查 widget 是否隐藏
-  const isHidden = (widgetId: string) =>
-    layoutPrefs.hidden_widgets.includes(widgetId);
+  const isHidden = (widgetId: string) => hiddenWidgets.includes(widgetId);
 
   // 无数据时显示占位
   if (!dashboardData && !isLoading) {
@@ -52,15 +55,50 @@ export function DashboardWidgets() {
   const charts = dashboardData?.charts ?? {};
   const news = dashboardData?.news ?? { market: [], impact: [] };
 
+  const showSnapshot = !isHidden(WIDGET_IDS.SNAPSHOT);
+  const showMarketChart = capabilities?.market_chart !== false && !isHidden(WIDGET_IDS.MARKET_CHART);
+  const showNewsFeed = !isHidden(WIDGET_IDS.NEWS_FEED);
+  const showRevenueTrend = Boolean(capabilities?.revenue_trend) && !isHidden(WIDGET_IDS.REVENUE_TREND);
+  const showSegmentMix = Boolean(capabilities?.segment_mix) && !isHidden(WIDGET_IDS.SEGMENT_MIX);
+  const showSectorWeights = Boolean(capabilities?.sector_weights) && !isHidden(WIDGET_IDS.SECTOR_WEIGHTS);
+  const showTopConstituents = Boolean(capabilities?.top_constituents) && !isHidden(WIDGET_IDS.TOP_CONSTITUENTS);
+  const showHoldings = Boolean(capabilities?.holdings) && !isHidden(WIDGET_IDS.HOLDINGS);
+  const showMacro = !isHidden(WIDGET_IDS.MACRO);
+  const hasVisibleWidget =
+    showSnapshot ||
+    showMarketChart ||
+    showNewsFeed ||
+    showRevenueTrend ||
+    showSegmentMix ||
+    showSectorWeights ||
+    showTopConstituents ||
+    showHoldings ||
+    showMacro;
+
+  if (!hasVisibleWidget && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-fin-muted text-sm gap-3">
+        <span>当前布局中所有卡片都被隐藏了</span>
+        <button
+          type="button"
+          onClick={resetLayoutPrefs}
+          className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-card hover:bg-fin-hover transition-colors text-fin-text text-xs"
+        >
+          重置仪表盘布局
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* 1. 核心 KPI 卡片 */}
-      {!isHidden(WIDGET_IDS.SNAPSHOT) && (
-        <SnapshotCard data={snapshot} loading={isLoading} />
+      {showSnapshot && (
+        <SnapshotCard data={snapshot} loading={isLoading} ticker={activeAsset?.symbol} />
       )}
 
       {/* 2. 价格走势图（支持图表类型和时间范围切换） */}
-      {capabilities?.market_chart !== false && !isHidden(WIDGET_IDS.MARKET_CHART) && (
+      {showMarketChart && (
         <MarketChartCard
           data={charts?.market_chart || []}
           loading={isLoading}
@@ -68,7 +106,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 3. 新闻动态 */}
-      {!isHidden(WIDGET_IDS.NEWS_FEED) && (
+      {showNewsFeed && (
         <NewsFeed
           marketNews={news?.market || []}
           impactNews={news?.impact || []}
@@ -86,7 +124,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 4. 营收趋势（股票） */}
-      {capabilities?.revenue_trend && !isHidden(WIDGET_IDS.REVENUE_TREND) && (
+      {showRevenueTrend && (
         <RevenueTrendCard
           data={charts?.revenue_trend || []}
           loading={isLoading}
@@ -94,7 +132,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 5. 分部收入（股票） */}
-      {capabilities?.segment_mix && !isHidden(WIDGET_IDS.SEGMENT_MIX) && (
+      {showSegmentMix && (
         <SegmentMixCard
           data={charts?.segment_mix || []}
           loading={isLoading}
@@ -102,7 +140,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 6. 行业权重（ETF/Index） */}
-      {capabilities?.sector_weights && !isHidden(WIDGET_IDS.SECTOR_WEIGHTS) && (
+      {showSectorWeights && (
         <SectorWeightsCard
           data={charts?.sector_weights || []}
           loading={isLoading}
@@ -110,7 +148,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 7. 成分股 (ETF/Index) */}
-      {capabilities?.top_constituents && !isHidden(WIDGET_IDS.TOP_CONSTITUENTS) && (
+      {showTopConstituents && (
         <TopConstituentsCard
           data={charts?.top_constituents || []}
           loading={isLoading}
@@ -118,7 +156,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 8. 持仓 (Portfolio) */}
-      {capabilities?.holdings && !isHidden(WIDGET_IDS.HOLDINGS) && (
+      {showHoldings && (
         <HoldingsCard
           data={charts?.holdings || []}
           loading={isLoading}
@@ -126,7 +164,7 @@ export function DashboardWidgets() {
       )}
 
       {/* 9. 宏观指标 */}
-      {!isHidden(WIDGET_IDS.MACRO) && <MacroCard loading={isLoading} />}
+      {showMacro && <MacroCard loading={isLoading} />}
     </div>
   );
 }

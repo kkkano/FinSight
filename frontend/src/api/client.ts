@@ -47,6 +47,11 @@ export interface ExecuteRequest {
   budget?: number;
   source?: string;
   session_id?: string;
+  agent_preferences?: {
+    agents?: Record<string, string>;
+    maxRounds?: number;
+    concurrentMode?: boolean;
+  };
 }
 
 /**

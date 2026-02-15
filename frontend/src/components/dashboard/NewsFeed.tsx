@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ExternalLink, MessageCircleQuestion, Newspaper, TrendingUp } from 'lucide-react';
+import { ExternalLink, Loader2, MessageCircleQuestion, Newspaper, Sparkles, TrendingUp } from 'lucide-react';
 
 import { useDashboardStore } from '../../store/dashboardStore';
+import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import type { NewsItem, NewsModeType, SelectionItem } from '../../types/dashboard';
 import { generateNewsId } from '../../utils/hash';
 
@@ -29,6 +30,7 @@ export function NewsFeed({
   const { activeAsset, newsMode, setNewsMode } = useDashboardStore();
   const [localMode, setLocalMode] = useState<NewsModeType>(newsMode);
   const [displayMode, setDisplayMode] = useState<'ranked' | 'raw'>('ranked');
+  const { execute: executeAnalysis, isRunning: isAnalyzing } = useExecuteAgent();
 
   const handleModeChange = (mode: NewsModeType) => {
     setLocalMode(mode);
@@ -155,6 +157,16 @@ export function NewsFeed({
               news={news}
               formatTime={formatTime}
               showRanking={displayMode === 'ranked'}
+              onAnalyze={(title) => {
+                if (isAnalyzing) return;
+                executeAnalysis({
+                  query: `分析这条新闻的市场影响: ${title}`,
+                  tickers: activeAsset ? [activeAsset.symbol] : [],
+                  agents: ['news_agent'],
+                  source: 'dashboard_news',
+                });
+              }}
+              isAnalyzing={isAnalyzing}
             />
           ))}
         </div>
@@ -167,9 +179,11 @@ interface NewsItemCardProps {
   news: NewsItem;
   formatTime: (ts: string) => string;
   showRanking?: boolean;
+  onAnalyze?: (title: string) => void;
+  isAnalyzing?: boolean;
 }
 
-function NewsItemCard({ news, formatTime, showRanking = false }: NewsItemCardProps) {
+function NewsItemCard({ news, formatTime, showRanking = false, onAnalyze, isAnalyzing = false }: NewsItemCardProps) {
   const { activeSelections, setActiveSelection, toggleSelection } = useDashboardStore();
 
   const newsId = generateNewsId(news.title, news.source, news.ts);
@@ -261,6 +275,22 @@ function NewsItemCard({ news, formatTime, showRanking = false }: NewsItemCardPro
         </div>
 
         <div className="flex items-center gap-1 shrink-0 mt-1">
+          {onAnalyze && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAnalyze(news.title); }}
+              disabled={isAnalyzing}
+              title="分析影响"
+              aria-label={`分析 ${news.title} 的市场影响`}
+              className={`p-1.5 rounded-lg transition-all ${
+                isAnalyzing
+                  ? 'text-fin-muted opacity-50 cursor-not-allowed'
+                  : 'text-fin-muted opacity-0 group-hover:opacity-100 hover:bg-amber-500/10 hover:text-amber-400'
+              }`}
+            >
+              {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleAskAbout}

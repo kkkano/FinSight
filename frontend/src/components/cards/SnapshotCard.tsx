@@ -3,12 +3,18 @@
  *
  * 显示 4 个关键指标：Revenue, EPS, Gross Margin, FCF
  * 或对于 Index/ETF/Crypto：Index Level, NAV 等
+ *
+ * 支持一键触发深入分析或生成投资报告。
  */
+import { FileText, Loader2, Zap } from 'lucide-react';
+
+import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import type { SnapshotData } from '../../types/dashboard';
 
 interface SnapshotCardProps {
   data: SnapshotData;
   loading?: boolean;
+  ticker?: string;
 }
 
 // 格式化数字
@@ -94,8 +100,32 @@ const getMetrics = (data: SnapshotData) => {
   return metrics;
 };
 
-export function SnapshotCard({ data, loading }: SnapshotCardProps) {
+export function SnapshotCard({ data, loading, ticker }: SnapshotCardProps) {
   const metrics = getMetrics(data);
+
+  const { execute, isRunning, runId } = useExecuteAgent();
+
+  const handleAnalyze = () => {
+    if (!ticker || isRunning) return;
+    // 快速模板：outputMode='brief' + 低预算，agent 选择交给 policy_gate + 用户偏好
+    execute({
+      query: `快速分析 ${ticker}`,
+      tickers: [ticker],
+      outputMode: 'brief',
+      budget: 3,
+      source: 'dashboard_snapshot',
+    });
+  };
+
+  const handleReport = () => {
+    if (!ticker || isRunning) return;
+    execute({
+      query: `生成 ${ticker} 投资报告`,
+      tickers: [ticker],
+      outputMode: 'investment_report',
+      source: 'dashboard_snapshot',
+    });
+  };
 
   if (loading) {
     return (
@@ -135,6 +165,40 @@ export function SnapshotCard({ data, loading }: SnapshotCardProps) {
           </div>
         ))}
       </div>
+
+      {/* Action buttons */}
+      {ticker && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-fin-border/50">
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning && runId ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Zap size={12} />
+            )}
+            快速分析
+            <span className="text-2xs opacity-60">~30s</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleReport}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning && runId ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <FileText size={12} />
+            )}
+            生成报告
+            <span className="text-2xs opacity-60">~2min</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

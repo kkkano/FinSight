@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
+import { AgentControlPanel } from './settings/AgentControlPanel';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -610,6 +611,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               保存时会写入 `llm_endpoints[]`。主用 endpoint（优先启用中的第一个）会同步回填到 legacy 字段以保持兼容。
             </p>
           </Card>
+
+          {/* Agent 控制面板 */}
+          <AgentControlPanel />
 
           {/* 界面布局 — 使用共享 Card 组件 */}
           <Card className="p-4 bg-fin-bg/40">

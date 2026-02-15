@@ -1,7 +1,7 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-02-06
+> **更新日期**：2026-02-15
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
 
@@ -258,6 +258,22 @@ class GraphState(TypedDict):
 - selection 必须以结构化字段进入 state，不允许拼接 query 来识别。
 - `output_mode` 必须 UI 显式传入，来源优先级最高。
 - `strict_selection` 默认 false（宽松），但输入必须保留此位以备未来进行活动。
+
+### 4.4 数据分层约束（Memory / Portfolio / RAG / Live）
+
+> 本节用于约束“字段归属”，避免把用户状态、持仓真相源、文档证据和实时快照混在同一层。
+
+| 层 | 职责 | 典型字段 | 禁止事项 |
+|---|---|---|---|
+| Memory | 用户偏好与会话记忆 | `risk_profile, locale, session_summary` | 不保存持仓真相数据 |
+| Portfolio | 持仓/交易/自选主数据 | `ticker, quantity, avg_cost, watchlist` | 不作为语义检索语料 |
+| RAG | 文档证据检索与引用 | `doc/chunk/embedding/citation` | 不长期存 LLM 研报正文 |
+| Live | 实时行情与新闻快照 | `price/news snapshot` | 不替代长期证据库 |
+
+路由原则（必须遵守）：
+- `latest/news-now`：Live first，必要时补充 RAG 历史背景。
+- `history/filing/details`：RAG first，必要时补充实时数据校验。
+- Portfolio 相关问题先读 Portfolio，再决定是否拼接 RAG 证据。
 
 ---
 

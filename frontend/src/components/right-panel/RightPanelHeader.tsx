@@ -1,4 +1,4 @@
-import { Activity, Bell, RefreshCw, TrendingUp, X } from 'lucide-react';
+import { Activity, Bell, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
 import type { RightPanelTab } from './types';
 
@@ -31,6 +31,7 @@ const TabButton: FC<{
 type RightPanelHeaderProps = {
   activeTab: RightPanelTab;
   alertsCount: number;
+  executionCount: number;
   loading: boolean;
   onTabChange: (tab: RightPanelTab) => void;
   onRefresh: () => void;
@@ -40,6 +41,7 @@ type RightPanelHeaderProps = {
 export function RightPanelHeader({
   activeTab,
   alertsCount,
+  executionCount,
   loading,
   onTabChange,
   onRefresh,
@@ -69,6 +71,14 @@ export function RightPanelHeader({
           title="市场图表"
           icon={<TrendingUp size={14} />}
           testId="context-tab-chart"
+        />
+        <TabButton
+          active={activeTab === 'execution'}
+          onClick={() => onTabChange('execution')}
+          title="执行状态"
+          icon={<Sparkles size={14} />}
+          badge={executionCount}
+          testId="context-tab-execution"
         />
       </div>
       <div className="flex items-center gap-1">

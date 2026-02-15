@@ -111,76 +111,163 @@
 
 ## Phase 1: 前端状态管理 + 体验升级
 
+> 前置: Phase 0 全部完成
+> 目标: 全局执行状态管理、Dashboard 可操作化、watchlist 统一
+> 文件数: 6 新建 + 14 修改
+
+### 核心契约（实现前必须遵守）
+
+**1. runId 生命周期**
+- 创建: `startExecution()` 生成 `crypto.randomUUID()` → 插入 `activeRuns[]`
+- 存活: `activeRuns[]` 持有引用，页面切换不影响 run 存活
+- 结束: `_completeRun / _failRun / cancelExecution` → 从 `activeRuns[]` 移除 → 插入 `recentRuns[]` (FIFO max 20)
+- GC: `recentRuns` 超 20 条自动淘汰最旧
+
+**2. 执行状态机**
+```
+idle → running → done | error | cancelled (终态，不可回退)
+```
+
+**3. 进度映射（纯事件驱动，禁止预测 agent 数量）**
+- `supervisor_start` → 5%, 从 `event.agents[]` 初始化已知 agents
+- `agent_start/done/error` → `10 + (已完成agent数/已知agent总数) * 70`
+- 若运行中出现未列出的 `agent_start` → 动态追加
+- 首个 `token` → `max(当前, 85)`
+- `done` → 100
+- **progress 只升不降（取 max）**
+
+**4. 取消语义**
+- ExecutionBanner [×] / StreamingResultPanel [取消] / `useExecuteAgent.cancel()` → `cancelExecution(runId)`
+- **`useExecuteAgent` 组件卸载默认不取消** (`cancelOnUnmount` 默认 `false`)
+- cancel 动作: `abort()` → status='cancelled' → 移入 recentRuns
+
+**5. 批次验证检查点**
+
+| 批次 | 验证 |
+|------|------|
+| 1 | `pnpm tsc --noEmit` 通过；executionStore 单测通过；dashboardStore watchlist 不影响 Dashboard |
+| 2 | `pnpm tsc --noEmit` 通过；useExecuteAgent hook 单测通过 |
+| 3 | `pnpm build` 通过；三个 view 正常渲染；卡片按钮不破坏布局 |
+| 4 | `pytest backend/tests/ -x -q` 通过；policy_gate 测试覆盖 preferences 过滤 |
+| 5 | Sidebar 和 Dashboard watchlist 同步；最终 `pnpm build` 通过 |
+
+### 执行顺序
+
+```
+批次1: P1-1a (ExecutionStore + types) + P1-6b (dashboardStore watchlist 改造)
+批次2: P1-1b (useExecuteAgent) + P1-4a (StreamingResultPanel) + P1-5a (AgentControlPanel)
+批次3: P1-2 (ExecutionBanner) + P1-3 (卡片可操作化) + P1-4b (execution tab)
+批次4: P1-5b (policy_gate) + P1-5c (前端附带 prefs)
+批次5: P1-6c (Sidebar 统一)
+```
+
 ### P1-1: ExecutionStore (全局执行状态)
 
-- [ ] **P1-1a** 新建 `frontend/src/store/executionStore.ts`
-  - `ExecutionRun`: runId, query, tickers, source, status, agentStatuses, progress, report, fallbackReasons
-  - `activeRuns[]`, `recentRuns[]` (最多 20 条)
-  - `startExecution()` → 调用 `apiClient.executeAgent()` → 解析 SSE → 更新 run
-  - `getActiveRunForTicker(ticker)` → 查找当前 ticker 是否有正在执行的任务
+- [ ] **P1-1a** 新建 `frontend/src/types/execution.ts` + `frontend/src/store/executionStore.ts`
+  - 类型: `AgentRunInfo` (name, status, error, fallbackReason), `ExecutionRun` (runId, query, tickers, source, status, agentStatuses, progress, streamedContent, report, error, abortController), `StartExecutionParams` (query, tickers?, outputMode?, agents?, source, budget?)
+  - **前端统一 camelCase**: `outputMode` (构造 `ExecuteRequest` 时映射为 `output_mode`)
+  - 独立 Zustand store (不扩展 useStore)
+  - `startExecution(params)` → 生成 runId → AbortController → `apiClient.executeAgent()` → SSE 回调按事件驱动契约更新
+  - `cancelExecution(runId)` → abort + status='cancelled' + 移入 recentRuns
+  - `getActiveRunForTicker(ticker)` → 查找 activeRuns
 - [ ] **P1-1b** 新建 `frontend/src/hooks/useExecuteAgent.ts`
-  - 封装 executionStore.startExecution()
-  - 返回 `{ execute, isRunning, progress, result, error }`
-  - 支持 AbortController 取消
+  - 封装 `executionStore.startExecution()`
+  - 返回 `{ execute, isRunning, progress, currentStep, result, error, cancel, runId }`
+  - **`cancelOnUnmount` 默认 `false`** — 切页面不杀任务
+  - 支持 `onComplete` / `onError` 回调
 
 ### P1-2: 全局执行进度条 (ExecutionBanner)
 
 - [ ] **P1-2a** 新建 `frontend/src/components/execution/ExecutionBanner.tsx`
-  - 订阅 executionStore.activeRuns
-  - 无活跃任务时不渲染
-  - 展示: ticker + agent 进度管道图 (price ✓ → news ⟳ → fundamental ○)
-  - 支持点击展开详情 / 取消执行
+  - 订阅 `executionStore.activeRuns` **和** `recentRuns`
+  - 活跃 run → 显示 ticker + agent 管道图 (○ pending / ⟳ running / ✓ done / ✗ error) + 进度
+  - 完成 run → **基于 `recentRuns` 的 `completedAt` 保留 3 秒**后隐藏（不依赖 activeRuns）
+  - 展开详情 + [取消] 按钮
 - [ ] **P1-2b** 修改 `frontend/src/components/layout/WorkspaceShell.tsx`
-  - 在 topbar 下方、内容区上方插入 ExecutionBanner
+  - 在 Sidebar 之后、view 内容之前插入 ExecutionBanner（包裹 flex-col 容器）
   - 所有 view (chat / dashboard / workbench) 都可见
 
 ### P1-3: Dashboard 卡片可操作化
 
 - [ ] **P1-3a** 修改 Dashboard SnapshotCard — 增加 action 按钮
-  - "🔍 深入分析" → `useExecuteAgent({ agents: ['price_agent', 'news_agent'] })`
-  - "📊 生成报告" → `useExecuteAgent({ output_mode: 'investment_report' })`
-  - 按钮在执行中显示 spinner，完成后变为"查看结果"
-- [ ] **P1-3b** 修改 Dashboard NewsFeed — 新闻条目增加分析按钮
-  - 每条新闻右侧: "🤖 分析影响" → 触发带新闻上下文的 agent 执行
-  - 结果注入 MiniChat 作为新消息
-- [ ] **P1-3c** 修改 Dashboard MacroCard — 增加宏观深度分析按钮
-  - "📈 宏观详解" → `useExecuteAgent({ agents: ['macro_agent'] })`
+  - 新增 props: `ticker?: string`
+  - "深入分析" → `execute({ query, tickers, agents: ['price_agent','news_agent'], source: 'dashboard_snapshot' })`
+  - "生成报告" → `execute({ query, tickers, outputMode: 'investment_report', source: 'dashboard_snapshot' })`
+  - 执行中 spinner，完成变"查看结果"
+- [ ] **P1-3b** 修改 Dashboard NewsFeed — 每条新闻增加"分析影响"按钮
+  - 使用 `useExecuteAgent({ onComplete: (report) => useStore.getState().addMessage({...}) })`
+  - 结果注入 MiniChat (via: 'mini')
+- [ ] **P1-3c** 修改 Dashboard MacroCard — 占位区改为"宏观详解"按钮
+- [ ] 同步修改 `DashboardWidgets.tsx` 传入 `ticker` prop
 
 ### P1-4: 流式结果展示面板 (StreamingResultPanel)
 
 - [ ] **P1-4a** 新建 `frontend/src/components/execution/StreamingResultPanel.tsx`
-  - 可嵌入: Dashboard 右侧面板 / Workbench 任务旁 / 弹出模态框
-  - 订阅 executionStore 特定 runId
-  - 实时渲染: markdown 流式输出 + agent 状态 + 降级标记
-  - 完成后: 展示完整 ReportView
-- [ ] **P1-4b** 修改 `frontend/src/components/layout/ContextPanelShell.tsx`
-  - 新增 "执行结果" tab (与 MiniChat 并列)
-  - 有活跃执行时自动切换到此 tab
+  - Props: `runId: string | null`, `compact?: boolean`
+  - running → Agent 状态条 + markdown 实时流 (react-markdown) + 进度条 + 取消
+  - done → 有 report 渲染 `<ReportView>`，否则渲染最终 markdown
+  - error → 错误信息 + 可重试按钮
+- [ ] **P1-4b** 修改 RightPanel 系列组件
+  - `right-panel/types.ts`: 扩展 `RightPanelTab` 增加 `'execution'`
+  - `RightPanelHeader.tsx`: 新增 execution tab 按钮 (Sparkles + badge)
+  - `RightPanel.tsx`: 新增 execution tab → `<StreamingResultPanel compact />`
+  - **自动切换仅在新 run 启动时 (0→N) 触发**，用 `useRef` 防频繁抢焦点
 
 ### P1-5: Agent 控制面板
 
 - [ ] **P1-5a** 新建 `frontend/src/components/settings/AgentControlPanel.tsx`
-  - 6 个 Agent 开关 + 深度选择 (标准/深度/关闭)
-  - 预算上限滑块 (max_rounds: 1-10)
-  - 并发模式开关
-  - 当前 Agent 健康状态 (从 /health 获取)
-  - 存储到 useStore 或 localStorage
+  - 类型: `AgentDepth = 'standard' | 'deep' | 'off'`, `AgentPreferences = { agents: Record<string, AgentDepth>, maxRounds: number, concurrentMode: boolean }`
+  - 6 个 Agent 行: 名称 + 深度下拉 + 健康指示灯 (从 /health)
+  - 预算滑块 (1-10) + 并发开关
+  - localStorage 持久化 (`finsight-agent-preferences`)，**仅作输入，后端做最终校验**
+  - 嵌入 `SettingsModal.tsx`
 - [ ] **P1-5b** 修改 `backend/graph/nodes/policy_gate.py`
-  - 读取 `ui_context.agent_preferences`
-  - 覆盖 capability_registry 的 agent 选择
-  - 映射深度到 budget.max_rounds
-- [ ] **P1-5c** 前端执行时自动附带 agent_preferences 到 ui_context
+  - 读取 `ui_context.agent_preferences` / `agents_override` / `budget_override`
+  - **后端白名单强校验**: agent 名 ∈ `REPORT_AGENT_CANDIDATES`、depth ∈ `{standard, deep, off}`、budget ∈ `[1, 10]`，不合法值回退默认
+  - `agents_override` 优先级最高 → `depth='off'` 移除候选 → `depth='deep'` 增加 max_rounds → `budget_override` 覆盖
+- [ ] **P1-5c** 前端执行时自动附带 agent_preferences
+  - `api/client.ts`: `ExecuteRequest` 新增 `agent_preferences?` 字段
+  - `backend/api/execution_router.py`: 写入 `ui_context["agent_preferences"]`
+  - `executionStore.startExecution()`: 从 localStorage 读取 → 编码到 request
 
 ### P1-6: Watchlist 统一
 
-- [ ] **P1-6a** 确定单一数据源: 以后端 `/api/user/profile` + `/api/user/watchlist/*` 为准
-  - dashboardStore.watchlist 改为从 API 加载，不再用 localStorage
-  - Sidebar 和 Dashboard 共享同一份数据
 - [ ] **P1-6b** 修改 `frontend/src/store/dashboardStore.ts`
-  - `watchlist` 初始化从 `apiClient.getUserProfile()` 获取
-  - `addWatchlist` / `removeWatchlist` 先调 API 再更新本地状态
-  - 移除 localStorage 持久化 (由 API 持久化)
-- [ ] **P1-6c** 修改 Sidebar watchlist 组件 — 改为从 dashboardStore 读取 (而非独立 fetch)
+  - watchlist 初始化为空数组 (移除 localStorage 加载)
+  - 新增 `initWatchlist()`: 调 API 加载 watchlist
+    - **in-flight 防重入**: `_isWatchlistLoading` 标记，React StrictMode 双 mount 不重复请求
+  - 新增 `addWatchItemApi(ticker)` / `removeWatchItemApi(ticker)`: 先调 API → 再更新本地
+  - 移除 watchlist localStorage 持久化
+- [ ] **P1-6c** 修改 `frontend/src/components/Sidebar.tsx`
+  - 删除本地 watchlist 状态，改从 `useDashboardStore` 读取
+  - 保留本地 `quotes` state 获取价格 (每 60s 刷新)
+  - `handleAddTicker` / `handleRemoveTicker` → 调用 dashboardStore API actions
+  - `useEffect` 调 `initWatchlist()` 初始化
+
+### 文件变更清单
+
+| 文件 | 操作 | 批次 |
+|------|------|------|
+| `frontend/src/types/execution.ts` | 新建 | 1 |
+| `frontend/src/store/executionStore.ts` | 新建 | 1 |
+| `frontend/src/store/dashboardStore.ts` | 改 | 1 |
+| `frontend/src/hooks/useExecuteAgent.ts` | 新建 | 2 |
+| `frontend/src/components/execution/StreamingResultPanel.tsx` | 新建 | 2 |
+| `frontend/src/components/settings/AgentControlPanel.tsx` | 新建 | 2 |
+| `frontend/src/components/execution/ExecutionBanner.tsx` | 新建 | 3 |
+| `frontend/src/components/layout/WorkspaceShell.tsx` | 改 | 3 |
+| `frontend/src/components/cards/SnapshotCard.tsx` | 改 | 3 |
+| `frontend/src/components/dashboard/NewsFeed.tsx` | 改 | 3 |
+| `frontend/src/components/cards/MacroCard.tsx` | 改 | 3 |
+| `frontend/src/components/dashboard/DashboardWidgets.tsx` | 改 | 3 |
+| `frontend/src/components/RightPanel.tsx` | 改 | 3 |
+| `frontend/src/components/right-panel/RightPanelHeader.tsx` | 改 | 3 |
+| `frontend/src/components/right-panel/types.ts` | 改 | 3 |
+| `frontend/src/components/SettingsModal.tsx` | 改 | 3 |
+| `backend/graph/nodes/policy_gate.py` | 改 | 4 |
+| `backend/api/execution_router.py` | 改 | 4 |
+| `frontend/src/api/client.ts` | 改 | 4 |
+| `frontend/src/components/Sidebar.tsx` | 改 | 5 |
 
 ---
 

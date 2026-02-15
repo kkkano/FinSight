@@ -36,6 +36,7 @@ export const MiniChat: React.FC = () => {
   // 用户是否关闭了 context pill
   const [contextEnabled, setContextEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // 流式内容累积 ref（避免闭包问题）
   const accumulatedContentRef = useRef<string>('');
@@ -50,7 +51,12 @@ export const MiniChat: React.FC = () => {
 
   // 自动滚动到底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'auto',
+    });
   }, [messages]);
 
   // 当 symbol 变化时自动重新启用 context
@@ -203,7 +209,7 @@ export const MiniChat: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto space-y-3 p-2">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto space-y-3 p-2">
         {recentMessages.length <= 1 ? (
           <div className="text-center text-fin-muted text-xs py-8">
             <p>👋 Hi! 有什么可以帮你的？</p>
@@ -354,5 +360,4 @@ export const MiniChat: React.FC = () => {
     </div>
   );
 };
-
 

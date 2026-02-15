@@ -1,4 +1,4 @@
-export type RightPanelTab = 'alerts' | 'portfolio' | 'chart';
+export type RightPanelTab = 'alerts' | 'portfolio' | 'chart' | 'execution';
 
 export type WatchlistItem = {
   ticker: string;

@@ -9,6 +9,7 @@
 
 | 日期 | 类型 | 内容 | 影响范围 |
 |---|---|---|---|
+| 2026-02-15 | 文档同步 | 在 `05_RAG_ARCHITECTURE.md` 新增「4.3 数据分层与字段归属（Memory/Portfolio/RAG/Live）」；补充字段级归属、生命周期与三条硬规则；在 `06a_LANGGRAPH_DESIGN_SPEC.md` 新增 `4.4 数据分层约束` 与路由原则，统一开发语义边界。 | Docs（RAG 架构 + LangGraph 设计规范） |
 | 2026-02-02 | 研报入口 | 使用 **按钮触发专用**，区分发送按钮和 | FE/BE 接口增加 `options.output_mode` |
 | 2026-02-02 | selection 宽松 | `strict_selection=false` 默认宽松，让 Planner 可以适度获取 selection | Planner/PolicyGate |
 | 2026-02-02 | 排布决策 | 采用 **Planner-Executor**（LLM 做结构化计划 PlanIR | BE LangGraph |
