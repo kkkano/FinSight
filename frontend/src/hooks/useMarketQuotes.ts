@@ -16,6 +16,7 @@ export type MarketQuote = {
 };
 
 export const MARKET_INDICES: MarketQuoteSeed[] = [
+  { label: 'NASDAQ', ticker: '^IXIC', flag: '🇺🇸' },
   { label: 'S&P 500', ticker: '^GSPC', flag: '🇺🇸' },
   { label: '沪深300', ticker: '000300.SS', flag: '🇨🇳' },
   { label: '黄金', ticker: 'GC=F', flag: '🌕' },
@@ -62,4 +63,3 @@ export function useMarketQuotes(seeds: MarketQuoteSeed[] = MARKET_INDICES) {
 
   return { quotes, refresh };
 }
-

@@ -172,6 +172,31 @@ async def run_graph_pipeline(
                 output_mode=output_mode,
                 strict_selection=strict_selection,
             )
+
+            # 2b. Check if the graph was interrupted (human-in-the-loop)
+            # LangGraph stores pending interrupts in __interrupt__ state key
+            pending_interrupts = state.get("__interrupt__")
+            if pending_interrupts:
+                # Extract interrupt info and forward to client
+                interrupt_data: dict[str, Any] = {
+                    "thread_id": thread_id,
+                }
+                if isinstance(pending_interrupts, (list, tuple)) and len(pending_interrupts) > 0:
+                    first = pending_interrupts[0]
+                    if hasattr(first, "value"):
+                        interrupt_data["data"] = first.value
+                    elif isinstance(first, dict):
+                        interrupt_data["data"] = first
+                await queue.put(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "interrupt",
+                        **interrupt_data,
+                    }
+                )
+                await queue.put(_END)
+                return
+
             markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
 
             # 3. Build report payload

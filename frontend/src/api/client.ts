@@ -391,7 +391,9 @@ export const apiClient = {
         id2: params.reportId2,
       },
     });
-    return response.data;
+    // Backend wraps diff data in { success, report_a, report_b, diff: {...} }
+    const raw = response.data;
+    return raw.diff ?? raw;
   },
 
   // User profile / watchlist

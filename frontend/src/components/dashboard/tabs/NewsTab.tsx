@@ -66,9 +66,8 @@ export function NewsTab() {
 
   // Combine market + impact news
   const allNews = useMemo<NewsItem[]>(() => {
-    if (!dashboardData?.news) return [];
-    const market = dashboardData.news.market ?? [];
-    const impact = dashboardData.news.impact ?? [];
+    const market = dashboardData?.news?.market ?? [];
+    const impact = dashboardData?.news?.impact ?? [];
     // Deduplicate by title
     const seen = new Set<string>();
     const combined: NewsItem[] = [];
@@ -79,7 +78,7 @@ export function NewsTab() {
       }
     }
     return combined;
-  }, [dashboardData?.news]);
+  }, [dashboardData?.news?.market, dashboardData?.news?.impact]);
 
   // Apply filter
   const filteredNews = useMemo(() => {

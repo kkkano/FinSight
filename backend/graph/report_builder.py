@@ -870,7 +870,7 @@ def _agent_summaries_from_steps(
                 "summary": summary or "（无输出）",
                 "confidence": max(0.0, min(1.0, confidence_value)),
                 "data_sources": [str(x) for x in data_sources if str(x).strip()][:8],
-                "evidence_quality": output.get("evidence_quality") if isinstance(output.get("evidence_quality"), dict) else {},
+                "evidence_quality": (output.get("evidence_quality") if isinstance(output, dict) and isinstance(output.get("evidence_quality"), dict) else {}),
                 "raw_output": raw_output,
                 "evidence_full": evidence_full if isinstance(evidence_full, list) else [],
                 "trace_full": trace_full if isinstance(trace_full, list) else [],

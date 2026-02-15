@@ -13,7 +13,6 @@ import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import Workbench from '../../pages/Workbench';
-import { useDashboardStore } from '../../store/dashboardStore';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 
 export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
@@ -73,7 +72,6 @@ export function WorkspaceShell({
     };
     checkDryRun();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const { dashboardData } = useDashboardStore();
   const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || 'AAPL';
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -216,5 +214,4 @@ export function WorkspaceShell({
     </div>
   );
 }
-
 

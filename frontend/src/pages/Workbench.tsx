@@ -6,6 +6,7 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
+import { RebalanceEntryCard } from '../components/workbench/RebalanceEntryCard';
 import { ReportSection } from '../components/workbench/ReportSection';
 import { TaskSection } from '../components/workbench/TaskSection';
 
@@ -85,12 +86,13 @@ export function Workbench({
 
       {/* Main content: two-column layout */}
       <div className="grid lg:grid-cols-3 gap-4">
-        {/* Left: Tasks (main, emphasized) */}
+        {/* Left: Tasks + Rebalance (main, emphasized) */}
         <div className="lg:col-span-2 space-y-4">
           <TaskSection
             symbol={symbol}
             onNavigateToChat={onNavigateToChat}
           />
+          <RebalanceEntryCard onNavigateToChat={onNavigateToChat} />
         </div>
 
         {/* Right: Reports (sidebar) */}
