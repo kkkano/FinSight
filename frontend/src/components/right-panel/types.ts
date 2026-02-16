@@ -22,3 +22,14 @@ export type PortfolioSummary = {
   avgChange: number;
 };
 
+export type AlertSubscription = {
+  id: string;
+  ticker: string;
+  alertTypes: string[];
+  disabled: boolean;
+  priceThreshold?: number | null;
+  riskThreshold?: string | null;
+  lastAlertAt?: string | null;
+  updatedAt?: string | null;
+  source: 'polling';
+};

@@ -28,6 +28,8 @@ export const RightPanel: FC<RightPanelProps> = ({
   const [activeTab, setActiveTab] = useState<RightPanelTab>('alerts');
   const {
     alerts,
+    alertsLoading,
+    alertsError,
     loading,
     lastUpdated,
     refreshAll,
@@ -77,7 +79,15 @@ export const RightPanel: FC<RightPanelProps> = ({
       />
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === 'alerts' && <RightPanelAlertsTab alerts={alerts} onSubscribeClick={onSubscribeClick} />}
+        {activeTab === 'alerts' && (
+          <RightPanelAlertsTab
+            alerts={alerts}
+            loading={alertsLoading}
+            error={alertsError}
+            onRetry={refreshAll}
+            onSubscribeClick={onSubscribeClick}
+          />
+        )}
         {activeTab === 'portfolio' && (
           <RightPanelPortfolioTab
             positionRows={positionRows}

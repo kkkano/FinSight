@@ -2,14 +2,35 @@
 import { apiClient } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
-import type { PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
+import type { AlertSubscription, PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
 import { parsePricePayload } from './utils';
 
 const DEFAULT_USER_ID = 'default_user';
 
+const normalizeAlert = (raw: any): AlertSubscription => {
+  const ticker = String(raw?.ticker || '--').toUpperCase();
+  const email = String(raw?.email || 'anonymous');
+  const alertTypes = Array.isArray(raw?.alert_types)
+    ? raw.alert_types.filter((value: unknown) => typeof value === 'string')
+    : [];
+  return {
+    id: `${email}:${ticker}:${alertTypes.join('|')}`,
+    ticker,
+    alertTypes,
+    disabled: raw?.disabled === true,
+    priceThreshold: typeof raw?.price_threshold === 'number' ? raw.price_threshold : null,
+    riskThreshold: typeof raw?.risk_threshold === 'string' ? raw.risk_threshold : null,
+    lastAlertAt: typeof raw?.last_alert_at === 'string' ? raw.last_alert_at : null,
+    updatedAt: typeof raw?.updated_at === 'string' ? raw.updated_at : null,
+    source: 'polling',
+  };
+};
+
 export function useRightPanelData() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<AlertSubscription[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isPortfolioEditing, setIsPortfolioEditing] = useState(false);
@@ -49,15 +70,22 @@ export function useRightPanelData() {
   }, [dashboardWatchlist]);
 
   const loadAlerts = useCallback(async () => {
+    setAlertsLoading(true);
+    setAlertsError(null);
     if (!subscriptionEmail) {
       setAlerts([]);
+      setAlertsLoading(false);
       return;
     }
     try {
       const response = await apiClient.listSubscriptions(subscriptionEmail);
-      setAlerts(Array.isArray(response?.subscriptions) ? response.subscriptions : []);
+      const items = Array.isArray(response?.subscriptions) ? response.subscriptions.map(normalizeAlert) : [];
+      setAlerts(items);
     } catch {
       setAlerts([]);
+      setAlertsError('订阅加载失败');
+    } finally {
+      setAlertsLoading(false);
     }
   }, [subscriptionEmail]);
 
@@ -134,6 +162,8 @@ export function useRightPanelData() {
   return {
     watchlist,
     alerts,
+    alertsLoading,
+    alertsError,
     loading,
     lastUpdated,
     refreshAll,
@@ -147,5 +177,3 @@ export function useRightPanelData() {
     savePortfolioEdit,
   };
 }
-
-
