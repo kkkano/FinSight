@@ -1,9 +1,5 @@
-/**
- * Revenue Trend Card - 营收趋势柱状图
- *
- * 使用 ECharts 展示季度营收趋势
- */
 import ReactECharts from 'echarts-for-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import type { ChartPoint } from '../../types/dashboard';
 
 interface RevenueTrendCardProps {
@@ -12,11 +8,9 @@ interface RevenueTrendCardProps {
   title?: string;
 }
 
-export function RevenueTrendCard({
-  data,
-  loading,
-  title = '营收趋势',
-}: RevenueTrendCardProps) {
+export function RevenueTrendCard({ data, loading, title = '营收趋势' }: RevenueTrendCardProps) {
+  const chartTheme = useChartTheme();
+
   if (loading) {
     return (
       <div className="bg-fin-card border border-fin-border rounded-xl p-4 h-64">
@@ -34,7 +28,6 @@ export function RevenueTrendCard({
     );
   }
 
-  // 格式化数值
   const formatValue = (value: number) => {
     if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
     if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
@@ -44,6 +37,9 @@ export function RevenueTrendCard({
   const option = {
     tooltip: {
       trigger: 'axis',
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
       formatter: (params: { name: string; value: number }[]) => {
         const item = params[0];
         return `${item.name}<br/>营收: $${formatValue(item.value)}`;
@@ -61,18 +57,18 @@ export function RevenueTrendCard({
       data: data.map((d) => d.period || d.name || ''),
       axisLabel: {
         fontSize: 10,
-        color: '#888',
+        color: chartTheme.textSecondary,
       },
-      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisLine: { lineStyle: { color: chartTheme.border } },
     },
     yAxis: {
       type: 'value',
       axisLabel: {
         fontSize: 10,
-        color: '#888',
+        color: chartTheme.textSecondary,
         formatter: (value: number) => `$${formatValue(value)}`,
       },
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      splitLine: { lineStyle: { color: chartTheme.grid } },
     },
     series: [
       {
@@ -86,8 +82,8 @@ export function RevenueTrendCard({
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: '#3b82f6' },
-              { offset: 1, color: '#60a5fa' },
+              { offset: 0, color: chartTheme.primary },
+              { offset: 1, color: chartTheme.primarySoft },
             ],
           },
           borderRadius: [4, 4, 0, 0],

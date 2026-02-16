@@ -15,6 +15,7 @@ import { useState, useMemo, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { EChartsOption } from 'echarts';
 import { BarChart3, LineChart, TrendingUp, Activity } from 'lucide-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import type { ChartPoint } from '../../types/dashboard';
 
 // 图表类型定义
@@ -70,6 +71,7 @@ export function MarketChartCard({
   loading,
   title = '价格走势',
 }: MarketChartCardProps) {
+  const chartTheme = useChartTheme();
   const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
 
@@ -141,10 +143,10 @@ export function MarketChartCard({
 
     // 计算涨跌颜色
     const isUp = closeData.length >= 2 ? closeData[closeData.length - 1] >= closeData[0] : true;
-    const mainColor = isUp ? '#10b981' : '#ef4444';
+    const mainColor = isUp ? chartTheme.success : chartTheme.danger;
     const areaGradient = isUp
-      ? ['rgba(16, 185, 129, 0.4)', 'rgba(16, 185, 129, 0.05)']
-      : ['rgba(239, 68, 68, 0.4)', 'rgba(239, 68, 68, 0.05)'];
+      ? [chartTheme.success, chartTheme.success]
+      : [chartTheme.danger, chartTheme.danger];
 
     // 计算 MA
     const ma5 = calculateMA(closeData, 5);
@@ -152,10 +154,10 @@ export function MarketChartCard({
 
     // 成交量颜色（跟随 K 线涨跌）
     const volumeColors = filteredData.map((d, i) => {
-      if (i === 0) return '#10b981';
+      if (i === 0) return chartTheme.success;
       const prevClose = filteredData[i - 1].close || 0;
       const currClose = d.close || 0;
-      return currClose >= prevClose ? '#10b981' : '#ef4444';
+      return currClose >= prevClose ? chartTheme.success : chartTheme.danger;
     });
 
     // 基础配置
@@ -165,16 +167,16 @@ export function MarketChartCard({
         trigger: 'axis',
         axisPointer: {
           type: 'cross',
-          crossStyle: { color: '#999' },
+          crossStyle: { color: chartTheme.muted },
         },
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderColor: '#e5e7eb',
-        textStyle: { color: '#374151', fontSize: 12 },
+        backgroundColor: chartTheme.tooltipBackground,
+        borderColor: chartTheme.tooltipBorder,
+        textStyle: { color: chartTheme.tooltipText, fontSize: 12 },
         confine: true,
       },
       axisPointer: {
         link: [{ xAxisIndex: 'all' }],
-        label: { backgroundColor: '#777' },
+        label: { backgroundColor: chartTheme.textSecondary },
       },
       toolbox: {
         feature: {
@@ -197,11 +199,11 @@ export function MarketChartCard({
           },
         },
         iconStyle: {
-          borderColor: '#6b7280',
+          borderColor: chartTheme.muted,
         },
         emphasis: {
           iconStyle: {
-            borderColor: '#3b82f6',
+            borderColor: chartTheme.primary,
           },
         },
         right: 10,
@@ -213,8 +215,8 @@ export function MarketChartCard({
         outOfBrush: { colorAlpha: 0.1 },
         brushStyle: {
           borderWidth: 1,
-          color: 'rgba(59, 130, 246, 0.2)',
-          borderColor: 'rgba(59, 130, 246, 0.8)',
+          color: chartTheme.primarySoft,
+          borderColor: chartTheme.primary,
         },
       },
       visualMap: {
@@ -222,8 +224,8 @@ export function MarketChartCard({
         seriesIndex: hasVolume ? 4 : undefined, // volume series index
         dimension: 2,
         pieces: [
-          { value: 1, color: '#10b981' },
-          { value: -1, color: '#ef4444' },
+          { value: 1, color: chartTheme.success },
+          { value: -1, color: chartTheme.danger },
         ],
       },
       grid: hasVolume
@@ -238,8 +240,8 @@ export function MarketChartCard({
               type: 'category',
               data: xData,
               boundaryGap: true,
-              axisLine: { lineStyle: { color: '#e5e7eb' } },
-              axisLabel: { fontSize: 10, color: '#9ca3af' },
+              axisLine: { lineStyle: { color: chartTheme.border } },
+              axisLabel: { fontSize: 10, color: chartTheme.muted },
               axisTick: { show: false },
               splitLine: { show: false },
               min: 'dataMin',
@@ -251,7 +253,7 @@ export function MarketChartCard({
               gridIndex: 1,
               data: xData,
               boundaryGap: true,
-              axisLine: { lineStyle: { color: '#e5e7eb' } },
+              axisLine: { lineStyle: { color: chartTheme.border } },
               axisTick: { show: false },
               splitLine: { show: false },
               axisLabel: { show: false },
@@ -264,8 +266,8 @@ export function MarketChartCard({
               type: 'category',
               data: xData,
               boundaryGap: true,
-              axisLine: { lineStyle: { color: '#e5e7eb' } },
-              axisLabel: { fontSize: 10, color: '#9ca3af' },
+              axisLine: { lineStyle: { color: chartTheme.border } },
+              axisLabel: { fontSize: 10, color: chartTheme.muted },
               axisTick: { show: false },
               splitLine: { show: false },
             },
@@ -274,9 +276,9 @@ export function MarketChartCard({
         ? [
             {
               scale: true,
-              splitArea: { show: true, areaStyle: { color: ['rgba(250,250,250,0.3)', 'rgba(240,240,240,0.3)'] } },
-              axisLabel: { fontSize: 10, color: '#9ca3af' },
-              splitLine: { lineStyle: { color: '#f3f4f6' } },
+              splitArea: { show: true, areaStyle: { color: [chartTheme.splitAreaA, chartTheme.splitAreaB] } },
+              axisLabel: { fontSize: 10, color: chartTheme.muted },
+              splitLine: { lineStyle: { color: chartTheme.grid } },
               axisLine: { show: false },
             },
             {
@@ -293,8 +295,8 @@ export function MarketChartCard({
             {
               type: 'value',
               scale: true,
-              axisLabel: { fontSize: 10, color: '#9ca3af' },
-              splitLine: { lineStyle: { color: '#f3f4f6' } },
+              axisLabel: { fontSize: 10, color: chartTheme.muted },
+              splitLine: { lineStyle: { color: chartTheme.grid } },
               axisLine: { show: false },
             },
           ],
@@ -314,10 +316,10 @@ export function MarketChartCard({
           height: 20,
           start: 0,
           end: 100,
-          borderColor: '#e5e7eb',
-          fillerColor: 'rgba(59, 130, 246, 0.1)',
-          handleStyle: { color: '#3b82f6' },
-          textStyle: { fontSize: 10, color: '#9ca3af' },
+          borderColor: chartTheme.border,
+          fillerColor: chartTheme.sliderFiller,
+          handleStyle: { color: chartTheme.primary },
+          textStyle: { fontSize: 10, color: chartTheme.muted },
         },
       ],
       series: [],
@@ -335,10 +337,10 @@ export function MarketChartCard({
             type: 'candlestick',
             data: filteredData.map((d) => [d.open, d.close, d.low, d.high]),
             itemStyle: {
-              color: '#10b981',
-              color0: '#ef4444',
-              borderColor: '#10b981',
-              borderColor0: '#ef4444',
+              color: chartTheme.success,
+              color0: chartTheme.danger,
+              borderColor: chartTheme.success,
+              borderColor0: chartTheme.danger,
             },
           });
           // MA5
@@ -348,7 +350,7 @@ export function MarketChartCard({
             data: ma5,
             smooth: true,
             symbol: 'none',
-            lineStyle: { width: 1, color: '#f59e0b', opacity: 0.8 },
+            lineStyle: { width: 1, color: chartTheme.warning, opacity: 0.8 },
           });
           // MA10
           series.push({
@@ -357,7 +359,7 @@ export function MarketChartCard({
             data: ma10,
             smooth: true,
             symbol: 'none',
-            lineStyle: { width: 1, color: '#3b82f6', opacity: 0.8 },
+            lineStyle: { width: 1, color: chartTheme.primary, opacity: 0.8 },
           });
         } else {
           // 无 OHLC 数据时退化为折线
@@ -450,7 +452,7 @@ export function MarketChartCard({
       ...baseOption,
       series,
     };
-  }, [filteredData, chartType, hasOHLC, hasVolume, formatTime]);
+  }, [filteredData, chartType, hasOHLC, hasVolume, formatTime, chartTheme]);
 
   if (loading) {
     return (

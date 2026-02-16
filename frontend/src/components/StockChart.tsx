@@ -2,6 +2,7 @@
 import ReactECharts from 'echarts-for-react';
 import { useStore } from '../store/useStore';
 import { apiClient } from '../api/client';
+import { useChartTheme } from '../hooks/useChartTheme';
 import type { KlineData } from '../types/index';
 import { Loader2, BarChart3, TrendingUp, Activity } from 'lucide-react';
 
@@ -22,6 +23,7 @@ type ChartType = 'candlestick' | 'line';
 
 export const StockChart: React.FC = () => {
   const { currentTicker } = useStore();
+  const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,19 +166,19 @@ export const StockChart: React.FC = () => {
     title: {
       text: `${currentTicker} ${PERIOD_OPTIONS.find(opt => opt.value === period)?.label || period}`,
       left: 'center',
-      textStyle: { color: '#e4e4e7', fontSize: 14 }
+      textStyle: { color: chartTheme.text, fontSize: 14 }
     },
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'cross',
-        lineStyle: { color: '#3b82f6', width: 1, type: 'dashed' },
-        crossStyle: { color: '#3b82f6', width: 1, type: 'dashed' }
+        lineStyle: { color: chartTheme.crosshair, width: 1, type: 'dashed' },
+        crossStyle: { color: chartTheme.crosshair, width: 1, type: 'dashed' }
       },
-      backgroundColor: 'rgba(24, 24, 27, 0.95)',
-      borderColor: '#3b82f6',
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
       borderWidth: 1,
-      textStyle: { color: '#e4e4e7', fontSize: 12 },
+      textStyle: { color: chartTheme.tooltipText, fontSize: 12 },
       padding: [10, 12],
       formatter: (params: any) => {
         const data = params[0];
@@ -186,7 +188,7 @@ export const StockChart: React.FC = () => {
         const low = parseFloat(data.data[4]).toFixed(2);
         const change = parseFloat(close) - parseFloat(open);
         const changePercent = ((change / parseFloat(open)) * 100).toFixed(2);
-        const changeColor = change >= 0 ? '#22c55e' : '#ef4444';
+        const changeColor = change >= 0 ? chartTheme.success : chartTheme.danger;
 
         // 格式化时间显示（24小时视图）
         let timeDisplay = data.axisValue;
@@ -204,24 +206,24 @@ export const StockChart: React.FC = () => {
 
         return `
           <div style="padding: 4px;">
-            <div style="font-weight: 600; margin-bottom: 6px; color: #f4f4f5;">${timeDisplay}</div>
+            <div style="font-weight: 600; margin-bottom: 6px; color: ${chartTheme.tooltipText};">${timeDisplay}</div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #a1a1aa;">开盘:</span>
-              <span style="color: #e4e4e7; font-weight: 500;">$${open}</span>
+              <span style="color: ${chartTheme.tooltipMuted};">开盘:</span>
+              <span style="color: ${chartTheme.tooltipText}; font-weight: 500;">$${open}</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #a1a1aa;">收盘:</span>
+              <span style="color: ${chartTheme.tooltipMuted};">收盘:</span>
               <span style="color: ${changeColor}; font-weight: 600;">$${close}</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #a1a1aa;">最高:</span>
-              <span style="color: #e4e4e7; font-weight: 500;">$${high}</span>
+              <span style="color: ${chartTheme.tooltipMuted};">最高:</span>
+              <span style="color: ${chartTheme.tooltipText}; font-weight: 500;">$${high}</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span style="color: #a1a1aa;">最低:</span>
-              <span style="color: #e4e4e7; font-weight: 500;">$${low}</span>
+              <span style="color: ${chartTheme.tooltipMuted};">最低:</span>
+              <span style="color: ${chartTheme.tooltipText}; font-weight: 500;">$${low}</span>
             </div>
-            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #27272a;">
+            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid ${chartTheme.border};">
               <span style="color: ${changeColor}; font-weight: 600;">
                 ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent}%)
               </span>
@@ -246,9 +248,9 @@ export const StockChart: React.FC = () => {
         }
         return item.time;
       }),
-      axisLine: { lineStyle: { color: '#27272a' } },
+      axisLine: { lineStyle: { color: chartTheme.border } },
       axisLabel: {
-        color: '#a1a1aa',
+        color: chartTheme.textSecondary,
         fontSize: 9,
         rotate: 0,
         interval: 'auto',
@@ -268,8 +270,8 @@ export const StockChart: React.FC = () => {
     yAxis: {
       scale: true,
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { color: '#a1a1aa', formatter: '${value}' }
+      splitLine: { lineStyle: { color: chartTheme.grid } },
+      axisLabel: { color: chartTheme.textSecondary, formatter: '${value}' }
     },
     dataZoom: [
       { type: 'inside', start: 50, end: 100 },
@@ -281,10 +283,10 @@ export const StockChart: React.FC = () => {
         name: 'K线',
         data: data.map(item => [item.open, item.close, item.low, item.high]),
         itemStyle: {
-          color: '#22c55e',        // 涨 (绿)
-          color0: '#ef4444',       // 跌 (红)
-          borderColor: '#22c55e',
-          borderColor0: '#ef4444'
+          color: chartTheme.success,        // 涨 (绿)
+          color0: chartTheme.danger,       // 跌 (红)
+          borderColor: chartTheme.success,
+          borderColor0: chartTheme.danger
         }
       }
     ]
@@ -296,21 +298,21 @@ export const StockChart: React.FC = () => {
     title: {
       text: `${currentTicker} 涨跌趋势 (相对起始点)`,
       left: 'center',
-      textStyle: { color: '#e4e4e7', fontSize: 14 }
+      textStyle: { color: chartTheme.text, fontSize: 14 }
     },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
-      backgroundColor: 'rgba(24, 24, 27, 0.9)',
-      borderColor: '#27272a',
-      textStyle: { color: '#e4e4e7' },
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
       formatter: (params: any) => {
         const data = params[0];
         const sign = data.value >= 0 ? '+' : '';
         return `
           <div style="padding: 8px;">
             <div><strong>${data.axisValue}</strong></div>
-            <div>涨跌: <span style="color: ${data.value >= 0 ? '#22c55e' : '#ef4444'}">${sign}${data.value.toFixed(2)}%</span></div>
+            <div>涨跌: <span style="color: ${data.value >= 0 ? chartTheme.success : chartTheme.danger}">${sign}${data.value.toFixed(2)}%</span></div>
           </div>
         `;
       }
@@ -331,9 +333,9 @@ export const StockChart: React.FC = () => {
         }
         return item.time;
       }),
-      axisLine: { lineStyle: { color: '#27272a' } },
+      axisLine: { lineStyle: { color: chartTheme.border } },
       axisLabel: {
-        color: '#a1a1aa',
+        color: chartTheme.textSecondary,
         fontSize: 9,
         rotate: 0,
         interval: 'auto',
@@ -352,9 +354,9 @@ export const StockChart: React.FC = () => {
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#27272a' } },
+      splitLine: { lineStyle: { color: chartTheme.grid } },
       axisLabel: {
-        color: '#a1a1aa',
+        color: chartTheme.textSecondary,
         formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
       }
     },
@@ -369,7 +371,7 @@ export const StockChart: React.FC = () => {
         data: returnsData.map(item => item.value),
         smooth: true,
         lineStyle: {
-          color: '#3b82f6',
+          color: chartTheme.primary,
           width: 2
         },
         areaStyle: {
@@ -380,13 +382,13 @@ export const StockChart: React.FC = () => {
             x2: 0,
             y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-              { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+              { offset: 0, color: chartTheme.primarySoft },
+              { offset: 1, color: chartTheme.primaryFaint }
             ]
           }
         },
         itemStyle: {
-          color: '#3b82f6'
+          color: chartTheme.primary
         }
       }
     ]
@@ -502,5 +504,3 @@ const generateMockData = (_ticker: string, period: string = '1y'): KlineData[] =
 
   return data;
 };
-
-

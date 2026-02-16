@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react';
 import { Loader2 } from 'lucide-react';
 
 import { apiClient } from '../api/client';
+import { useChartTheme } from '../hooks/useChartTheme';
 import type { ChartType, KlineData } from '../types';
 
 interface InlineChartProps {
@@ -23,7 +24,7 @@ const chartLabels: Partial<Record<ChartType, string>> = {
   tree: 'Hierarchy',
 };
 
-const buildLineOption = (data: KlineData[], fillArea = false) => {
+const buildLineOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>, fillArea = false) => {
   const returns = data.map((item, idx) => {
     const firstClose = data[0].close;
     const value = ((item.close - firstClose) / firstClose) * 100;
@@ -35,22 +36,22 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
-      backgroundColor: 'rgba(24, 24, 27, 0.9)',
-      borderColor: '#27272a',
-      textStyle: { color: '#e4e4e7' },
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
       formatter: (params: any) => {
         const point = params[0];
         const sign = point.value >= 0 ? '+' : '';
-        return `${point.axisValue}<br/>Return: <span style="color: ${point.value >= 0 ? '#22c55e' : '#ef4444'}">${sign}${point.value.toFixed(2)}%</span>`;
+        return `${point.axisValue}<br/>Return: <span style="color: ${point.value >= 0 ? chartTheme.success : chartTheme.danger}">${sign}${point.value.toFixed(2)}%</span>`;
       },
     },
     grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
     xAxis: {
       type: 'category',
       data: returns.map((item) => item.time),
-      axisLine: { lineStyle: { color: '#27272a' } },
+      axisLine: { lineStyle: { color: chartTheme.border } },
       axisLabel: {
-        color: '#94a3b8',
+        color: chartTheme.muted,
         fontSize: 10,
         rotate: 0,
         hideOverlap: true,
@@ -73,9 +74,9 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#27272a' } },
+      splitLine: { lineStyle: { color: chartTheme.grid } },
       axisLabel: {
-        color: '#a1a1aa',
+        color: chartTheme.textSecondary,
         fontSize: 10,
         formatter: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
       },
@@ -85,7 +86,7 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
         type: 'line',
         data: returns.map((item) => item.value),
         smooth: true,
-        lineStyle: { color: '#3b82f6', width: 2 },
+        lineStyle: { color: chartTheme.primary, width: 2 },
         areaStyle: fillArea
           ? {
             color: {
@@ -95,49 +96,49 @@ const buildLineOption = (data: KlineData[], fillArea = false) => {
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' },
+                { offset: 0, color: chartTheme.primarySoft },
+                { offset: 1, color: chartTheme.primaryFaint },
               ],
             },
           }
           : undefined,
-        itemStyle: { color: '#3b82f6' },
+        itemStyle: { color: chartTheme.primary },
       },
     ],
   };
 };
 
-const buildCandleOption = (data: KlineData[]) => ({
+const buildCandleOption = (data: KlineData[], chartTheme: ReturnType<typeof useChartTheme>) => ({
   backgroundColor: 'transparent',
   tooltip: {
     trigger: 'axis',
     axisPointer: { type: 'cross' },
-    backgroundColor: 'rgba(24, 24, 27, 0.9)',
-    borderColor: '#27272a',
-    textStyle: { color: '#e4e4e7' },
+    backgroundColor: chartTheme.tooltipBackground,
+    borderColor: chartTheme.tooltipBorder,
+    textStyle: { color: chartTheme.tooltipText },
   },
   grid: { left: '10%', right: '10%', bottom: '15%', top: '10%' },
   xAxis: {
     type: 'category',
     data: data.map((item) => item.time),
-    axisLine: { lineStyle: { color: '#27272a' } },
-    axisLabel: { color: '#a1a1aa', fontSize: 10, rotate: 45 },
+    axisLine: { lineStyle: { color: chartTheme.border } },
+    axisLabel: { color: chartTheme.textSecondary, fontSize: 10, rotate: 45 },
   },
   yAxis: {
     scale: true,
     axisLine: { show: false },
-    splitLine: { lineStyle: { color: '#27272a' } },
-    axisLabel: { color: '#a1a1aa', fontSize: 10 },
+    splitLine: { lineStyle: { color: chartTheme.grid } },
+    axisLabel: { color: chartTheme.textSecondary, fontSize: 10 },
   },
   series: [
     {
       type: 'candlestick',
       data: data.map((item) => [item.open, item.close, item.low, item.high]),
       itemStyle: {
-        color: '#22c55e',
-        color0: '#ef4444',
-        borderColor: '#22c55e',
-        borderColor0: '#ef4444',
+        color: chartTheme.success,
+        color0: chartTheme.danger,
+        borderColor: chartTheme.success,
+        borderColor0: chartTheme.danger,
       },
     },
   ],
@@ -172,6 +173,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   chartType = 'line',
   onDataReady,
 }) => {
+  const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
   const [loading, setLoading] = useState(true);
   const onDataReadyRef = useRef(onDataReady);
@@ -229,8 +231,8 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   }
 
   const option = chartType === 'candlestick'
-    ? buildCandleOption(data)
-    : buildLineOption(data, chartType === 'area');
+    ? buildCandleOption(data, chartTheme)
+    : buildLineOption(data, chartTheme, chartType === 'area');
 
   return (
     <div className="my-4 p-4 bg-fin-panel rounded-lg border border-fin-border">
@@ -241,5 +243,4 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     </div>
   );
 };
-
 
