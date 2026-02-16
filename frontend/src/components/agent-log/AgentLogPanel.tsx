@@ -339,7 +339,7 @@ export const AgentLogPanel: React.FC = () => {
       />
 
       {/* Lens controls (A/B) */}
-      <div className="flex items-center gap-2 px-2 py-1 bg-fin-bg border-b border-fin-border/50 overflow-x-auto scrollbar-none">
+      <div className="flex items-center gap-2 px-2 py-1 bg-fin-bg border-b border-fin-border/50 overflow-x-auto scrollbar-hide">
         <button
           type="button"
           onClick={() => setConsoleLens('event_stream')}
@@ -377,7 +377,7 @@ export const AgentLogPanel: React.FC = () => {
 
       {/* B mode agent selector */}
       {consoleLens === 'agent_pipeline' && (
-        <div className="flex items-center gap-1 px-2 py-1 bg-fin-panel border-b border-fin-border/50 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1 px-2 py-1 bg-fin-panel border-b border-fin-border/50 overflow-x-auto scrollbar-hide">
           <button
             type="button"
             onClick={selectAllAgents}

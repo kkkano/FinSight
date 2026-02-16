@@ -21,6 +21,7 @@ REPORT_AGENT_CANDIDATES: tuple[str, ...] = (
     "fundamental_agent",
     "technical_agent",
     "macro_agent",
+    "risk_agent",
     "deep_search_agent",
 )
 
@@ -60,6 +61,14 @@ AGENT_CAPABILITIES: dict[str, AgentCapability] = {
         operation_weights={"generate_report": 0.35, "analyze_impact": 0.35, "compare": 0.2},
         output_mode_weights={"investment_report": 0.25, "brief": 0.05},
         keyword_hints=("\u5b8f\u89c2", "macro", "cpi", "ppi", "fed", "fomc", "\u5229\u7387", "\u901a\u80c0", "\u5c31\u4e1a"),
+    ),
+    "risk_agent": AgentCapability(
+        name="risk_agent",
+        subject_weights={"company": 0.2, "portfolio": 0.55, "news_set": 0.2},
+        operation_weights={"generate_report": 0.15, "analyze_impact": 0.3, "compare": 0.1},
+        output_mode_weights={"investment_report": 0.15, "brief": 0.08},
+        keyword_hints=("\u98ce\u9669", "risk", "\u98ce\u63a7", "\u6ce2\u52a8", "volatility", "drawdown", "var"),
+        keyword_boost=0.35,
     ),
     "deep_search_agent": AgentCapability(
         name="deep_search_agent",

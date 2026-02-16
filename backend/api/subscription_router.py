@@ -30,6 +30,7 @@ def create_subscription_router() -> APIRouter:
                 ticker=request.ticker,
                 alert_types=request.alert_types,
                 price_threshold=request.price_threshold,
+                risk_threshold=request.risk_threshold,
             )
 
             if success:
@@ -117,4 +118,3 @@ def create_subscription_router() -> APIRouter:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return router
-

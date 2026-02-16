@@ -186,12 +186,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="bg-fin-bg-secondary p-4 rounded-xl mb-5">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-slate-300 rounded-full flex items-center justify-center overflow-hidden">
-            <User size={24} className="text-slate-500" />
+          <div className="w-10 h-10 bg-fin-bg-secondary rounded-full flex items-center justify-center overflow-hidden">
+            <User size={24} className="text-fin-muted" />
           </div>
           <div>
             <div className="font-semibold text-fin-text text-sm">{userName}</div>
-            <span className="text-2xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+            <span className="text-2xs bg-fin-primary/15 text-fin-primary px-2 py-0.5 rounded-full font-bold">
               {RISK_LABELS[riskPreference] || '稳健型'}
             </span>
           </div>

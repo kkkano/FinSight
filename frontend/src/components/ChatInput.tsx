@@ -8,6 +8,7 @@ import { apiClient } from '../api/client';
 import type { ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
+import { useToast } from './ui';
 
 const extractTickers = (text: string): string[] => {
   const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
@@ -174,8 +175,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     traceRawEnabled,
     setRequestMetrics,
   } = useStore();
+  const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const shouldGenerateChart = async (
     query: string,
@@ -213,6 +215,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
     setInput('');
     setDraft('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.overflowY = 'hidden';
+    }
 
     // Build history before appending new messages.
     const currentMessages = useStore.getState().messages;
@@ -359,6 +365,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         (error) => {
           updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
           setStatus('Error occurred');
+          toast({
+            type: 'error',
+            title: '网络请求失败',
+            message: '请确认后端服务已启动',
+          });
           const current = useStore.getState().executionProgress ?? 0;
           setExecutionState('Execution failed', current);
           addAgentLog({
@@ -442,6 +453,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         isLoading: false,
       });
       setStatus('Request failed');
+      toast({
+        type: 'error',
+        title: '网络请求失败',
+        message: '请确认后端服务已启动',
+      });
       const current = useStore.getState().executionProgress ?? 0;
       setExecutionState('Request failed', current);
     } finally {
@@ -459,7 +475,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
   }, [draft]);
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -528,18 +544,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           深度
         </button>
       </div>
-      <div className="relative flex items-center max-w-5xl mx-auto">
-        <input
+      <div className="relative flex items-end max-w-5xl mx-auto">
+        <textarea
           ref={inputRef}
           id="chat-input"
-          type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            const el = e.target;
+            el.style.height = 'auto';
+            el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+            el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Ask anything about a ticker... (e.g., AAPL price trend)"
           disabled={isChatLoading}
           aria-label="输入聊天消息"
-          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted"
+          rows={1}
+          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted resize-none overflow-y-hidden max-h-[160px]"
         />
 
         <div className="absolute right-2 flex items-center gap-2">

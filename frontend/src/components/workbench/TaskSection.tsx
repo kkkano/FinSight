@@ -11,6 +11,7 @@ import type { DailyTask, ExecuteRequest } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
 import { Card } from '../ui/Card';
+import { useToast } from '../ui';
 import { InterruptCard } from '../execution/InterruptCard';
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +72,7 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TaskSection(_props: TaskSectionProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const sessionId = useStore((s) => s.sessionId);
   const watchlist = useDashboardStore((s) => s.watchlist ?? []);
   const watchlistSymbols = useMemo(
@@ -87,6 +89,7 @@ function TaskSection(_props: TaskSectionProps) {
   // Per-task execution state (keyed by task.id)
   const [runStates, setRunStates] = useState<Record<string, TaskRunState>>({});
   const abortRef = useRef<Record<string, AbortController>>({});
+  const lastErrorRef = useRef<string | null>(null);
 
   /* ---- Fetch tasks from API ---- */
   useEffect(() => {
@@ -120,6 +123,22 @@ function TaskSection(_props: TaskSectionProps) {
       cancelled = true;
     };
   }, [sessionId, watchlistKey]);
+
+  useEffect(() => {
+    if (!fetchError) {
+      lastErrorRef.current = null;
+      return;
+    }
+    if (lastErrorRef.current === fetchError) {
+      return;
+    }
+    lastErrorRef.current = fetchError;
+    toast({
+      type: 'error',
+      title: '任务加载失败',
+      message: fetchError,
+    });
+  }, [fetchError, toast]);
 
   /* ---- Update run state immutably ---- */
   const updateRun = useCallback(
@@ -282,7 +301,7 @@ function TaskSection(_props: TaskSectionProps) {
       )}
 
       {fetchError && !isLoading && (
-        <div className="text-xs text-red-500 py-2">加载失败: {fetchError}</div>
+        <div className="text-xs text-fin-danger py-2">加载失败: {fetchError}</div>
       )}
 
       <div className="space-y-1.5">

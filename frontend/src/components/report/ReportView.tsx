@@ -22,6 +22,7 @@ import {
   RiskCatalystMetrics,
   SynthesisReportBlock,
 } from './ReportCharts';
+import { useToast } from '../ui';
 
 const DEFAULT_USER_ID = 'default_user';
 
@@ -31,13 +32,14 @@ export interface ReportViewProps {
 
 export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const { subscriptionEmail } = useStore();
+  const { toast } = useToast();
 
   /* ---------------------------------------------------------------- */
   /*  State                                                            */
   /* ---------------------------------------------------------------- */
 
   const [expandedSections, setExpandedSections] = useState<Record<string | number, boolean>>({
-    ...report.sections.reduce((acc, sec) => ({ ...acc, [sec.order]: true }), {}),
+    ...(report.sections ?? []).reduce((acc, sec) => ({ ...acc, [sec.order]: true }), {}),
     synthesis: true,
   });
   const [activeSection, setActiveSection] = useState<number | null>(null);
@@ -45,7 +47,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const [watchlisted, setWatchlisted] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [actionState, setActionState] = useState({ exporting: false, watchlist: false, subscribe: false });
-  const [actionMessage, setActionMessage] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   /* ---------------------------------------------------------------- */
@@ -58,8 +59,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     return Number.isNaN(date.getTime()) ? report.generated_at : date.toLocaleDateString();
   }, [report.generated_at]);
 
-  const catalystItems = useMemo(() => extractCatalystItems(report.sections), [report.sections]);
-  const metricItems = useMemo(() => extractMetrics(report.sections), [report.sections]);
+  const sections = report.sections ?? [];
+  const catalystItems = useMemo(() => extractCatalystItems(sections), [sections]);
+  const metricItems = useMemo(() => extractMetrics(sections), [sections]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
   const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
   const reportHints = useMemo(() => extractReportHints(report), [report]);
@@ -190,11 +192,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   /*  Handlers                                                         */
   /* ---------------------------------------------------------------- */
 
-  const pushStatus = (tone: 'success' | 'error' | 'info', text: string) => {
-    setActionMessage({ tone, text });
-    setTimeout(() => setActionMessage(null), 2500);
-  };
-
   const handleJumpToSection = (order: number) => {
     setActiveSection(order);
     setExpandedSections((prev) => ({ ...prev, [order]: true }));
@@ -224,9 +221,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       a.download = `report_${report.ticker}_${formattedDate}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
-      pushStatus('success', 'PDF exported');
+      toast({ type: 'success', title: 'PDF 已导出' });
     } catch {
-      pushStatus('error', 'PDF export failed');
+      toast({ type: 'error', title: 'PDF 导出失败' });
     } finally {
       setActionState((prev) => ({ ...prev, exporting: false }));
     }
@@ -240,14 +237,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       if (watchlisted) {
         await apiClient.removeWatchlist(payload);
         setWatchlisted(false);
-        pushStatus('info', 'Removed from watchlist');
+        toast({ type: 'info', title: '已移除自选' });
       } else {
         await apiClient.addWatchlist(payload);
         setWatchlisted(true);
-        pushStatus('success', 'Saved to watchlist');
+        toast({ type: 'success', title: '已加入自选' });
       }
     } catch {
-      pushStatus('error', 'Watchlist update failed');
+      toast({ type: 'error', title: '自选更新失败' });
     } finally {
       setActionState((prev) => ({ ...prev, watchlist: false }));
     }
@@ -257,11 +254,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     if (actionState.subscribe) return;
     const email = subscriptionEmail.trim();
     if (!email) {
-      pushStatus('info', '\u8bf7\u5728\u8bbe\u7f6e\u4e2d\u586b\u5199\u8ba2\u9605\u90ae\u7bb1');
+      toast({ type: 'info', title: '请先在设置中填写订阅邮箱' });
       return;
     }
     if (subscribed) {
-      pushStatus('info', 'Already subscribed');
+      toast({ type: 'info', title: '已订阅提醒' });
       return;
     }
     setActionState((prev) => ({ ...prev, subscribe: true }));
@@ -272,9 +269,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
         alert_types: ['price_change', 'news'],
       });
       setSubscribed(true);
-      pushStatus('success', 'Alerts subscribed');
+      toast({ type: 'success', title: '提醒订阅成功' });
     } catch {
-      pushStatus('error', 'Subscription failed');
+      toast({ type: 'error', title: '订阅失败' });
     } finally {
       setActionState((prev) => ({ ...prev, subscribe: false }));
     }
@@ -296,12 +293,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const collapseSynthesis = () => {
     setExpandedSections((prev) => ({ ...prev, synthesis: false }));
   };
-
-  const messageToneClass = actionMessage?.tone === 'success'
-    ? 'text-emerald-600 dark:text-emerald-300'
-    : actionMessage?.tone === 'error'
-      ? 'text-rose-600 dark:text-rose-300'
-      : 'text-slate-500 dark:text-slate-300';
 
   /* ---------------------------------------------------------------- */
   /*  Fullscreen mode render                                           */
@@ -407,9 +398,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
         />
 
         {/* Mobile section nav */}
-        {report.sections.length > 0 && (
+        {sections.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2 lg:hidden">
-            {report.sections.map((section) => (
+            {sections.map((section) => (
               <button
                 key={section.order}
                 type="button"
@@ -425,9 +416,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           </div>
         )}
 
-        {actionMessage && (
-          <div className={`mt-3 text-[11px] ${messageToneClass}`}>{actionMessage.text}</div>
-        )}
       </div>
 
       {/* Body: sidebar + content */}
@@ -440,7 +428,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 章节目录
               </div>
               <div className="space-y-2">
-                {report.sections.map((section) => {
+                {sections.map((section) => {
                   const agentName = (section as any).agent_name;
                   const hasError = (section as any).error;
                   return (

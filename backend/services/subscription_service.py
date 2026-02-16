@@ -22,6 +22,7 @@ import re
 SUBSCRIPTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "subscriptions.json"
 ALERT_FAILURE_LIMIT = int(os.getenv("ALERT_FAILURE_LIMIT", "3"))
 EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+RISK_THRESHOLD_ALLOWED = {"low", "medium", "high", "critical"}
 
 
 class SubscriptionService:
@@ -43,6 +44,38 @@ class SubscriptionService:
                 self.subscriptions = {}
         else:
             self.subscriptions = {}
+        self._backfill_subscription_defaults()
+
+    def _normalize_risk_threshold(self, value: Optional[str]) -> str:
+        if value is None:
+            return "high"
+        normalized = str(value).strip().lower()
+        if normalized not in RISK_THRESHOLD_ALLOWED:
+            return "high"
+        return normalized
+
+    def _backfill_subscription_defaults(self) -> None:
+        changed = False
+        if not isinstance(self.subscriptions, dict):
+            self.subscriptions = {}
+            return
+
+        for _, subs in self.subscriptions.items():
+            if not isinstance(subs, list):
+                continue
+            for sub in subs:
+                if not isinstance(sub, dict):
+                    continue
+                normalized_threshold = self._normalize_risk_threshold(sub.get("risk_threshold"))
+                if sub.get("risk_threshold") != normalized_threshold:
+                    sub["risk_threshold"] = normalized_threshold
+                    changed = True
+                if "last_risk_at" not in sub:
+                    sub["last_risk_at"] = None
+                    changed = True
+
+        if changed:
+            self._save_subscriptions()
     
     def _save_subscriptions(self):
         """保存订阅数据"""
@@ -57,7 +90,8 @@ class SubscriptionService:
         email: str,
         ticker: str,
         alert_types: List[str] = None,
-        price_threshold: Optional[float] = None
+        price_threshold: Optional[float] = None,
+        risk_threshold: Optional[str] = "high",
     ) -> bool:
         """
         订阅股票提醒
@@ -73,6 +107,7 @@ class SubscriptionService:
         """
         if alert_types is None:
             alert_types = ["price_change", "news"]
+        normalized_risk_threshold = self._normalize_risk_threshold(risk_threshold)
 
         if not self.is_valid_email(email):
             logger.info(f"❌ Invalid email address: {email}")
@@ -87,6 +122,7 @@ class SubscriptionService:
                 # 更新现有订阅
                 sub['alert_types'] = alert_types
                 sub['price_threshold'] = price_threshold
+                sub['risk_threshold'] = normalized_risk_threshold
                 sub['updated_at'] = datetime.now().isoformat()
                 # 重新启用并清理失败状态
                 sub['disabled'] = False
@@ -102,10 +138,12 @@ class SubscriptionService:
             "ticker": ticker,
             "alert_types": alert_types,
             "price_threshold": price_threshold,
+            "risk_threshold": normalized_risk_threshold,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
             "last_alert_at": None,
             "last_news_at": None,
+            "last_risk_at": None,
             "last_alert_attempt_at": None,
             "last_alert_error": None,
             "last_alert_error_at": None,
@@ -236,6 +274,15 @@ class SubscriptionService:
             for sub in self.subscriptions[email]:
                 if sub['ticker'] == ticker:
                     sub['last_news_at'] = datetime.now().isoformat()
+                    self._save_subscriptions()
+                    break
+
+    def update_last_risk(self, email: str, ticker: str):
+        """Update last risk alert timestamp."""
+        if email in self.subscriptions:
+            for sub in self.subscriptions[email]:
+                if sub['ticker'] == ticker:
+                    sub['last_risk_at'] = datetime.now().isoformat()
                     self._save_subscriptions()
                     break
 

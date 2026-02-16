@@ -6,7 +6,7 @@
  *                      | MetricsBar
  *                      | DashboardTabs -> [Tab panels]
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -15,6 +15,7 @@ import { StockHeader } from '../components/dashboard/StockHeader';
 import { MetricsBar } from '../components/dashboard/MetricsBar';
 import { DashboardTabs } from '../components/dashboard/DashboardTabs';
 import { useStore } from '../store/useStore';
+import { useToast } from '../components/ui';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -26,6 +27,8 @@ interface DashboardProps {
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset } = useDashboardStore();
   const { theme, setTheme } = useStore();
+  const { toast } = useToast();
+  const lastErrorRef = useRef<string | null>(null);
 
   const [currentSymbol, setCurrentSymbol] = useState<string>(
     () => initialSymbol || activeAsset?.symbol || 'AAPL',
@@ -41,6 +44,22 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   }, [activeAsset, currentSymbol, initialSymbol, setActiveAsset]);
 
   const { refetch } = useDashboardData(currentSymbol);
+
+  useEffect(() => {
+    if (!error) {
+      lastErrorRef.current = null;
+      return;
+    }
+    if (lastErrorRef.current === error) {
+      return;
+    }
+    lastErrorRef.current = error;
+    toast({
+      type: 'error',
+      title: '加载失败',
+      message: error,
+    });
+  }, [error, toast]);
 
   const handleSymbolChange = (symbol: string) => {
     setCurrentSymbol(symbol);
@@ -121,13 +140,13 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
 
         {/* Error banner */}
         {error && (
-          <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2 shrink-0 max-lg:mx-3">
+          <div className="mx-5 mt-4 p-2 bg-fin-danger/10 border border-fin-danger/30 rounded-lg text-fin-danger text-sm flex items-center gap-2 shrink-0 max-lg:mx-3">
             <span className="font-medium">加载失败:</span>
             <span className="truncate flex-1">{error}</span>
             <button
               type="button"
               onClick={handleRefresh}
-              className="text-red-700 underline hover:no-underline whitespace-nowrap"
+              className="text-fin-danger font-medium underline hover:no-underline whitespace-nowrap"
             >
               重试
             </button>

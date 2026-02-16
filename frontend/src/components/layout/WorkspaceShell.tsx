@@ -167,7 +167,7 @@ export function WorkspaceShell({
         onMobileClose={() => setIsSidebarOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+      <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         <ExecutionBanner />
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -214,5 +214,4 @@ export function WorkspaceShell({
     </div>
   );
 }
-
 

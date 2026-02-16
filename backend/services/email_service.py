@@ -4,20 +4,19 @@
 用于发送股票提醒邮件
 """
 
+from __future__ import annotations
+
 import logging
-
-logger = logging.getLogger(__name__)
-
-# -*- coding: utf-8 -*-
-
-
 import os
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from typing import List, Dict, Optional
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
+
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -31,80 +30,65 @@ EMAIL_FROM = os.getenv("EMAIL_FROM", SMTP_USER)
 
 class EmailService:
     """邮件服务类"""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.smtp_server = SMTP_SERVER
         self.smtp_port = SMTP_PORT
         self.smtp_user = SMTP_USER
         self.smtp_password = SMTP_PASSWORD
         self.email_from = EMAIL_FROM
-        
+
     def send_email(
         self,
         to_email: str,
         subject: str,
         html_content: str,
-        text_content: Optional[str] = None
+        text_content: Optional[str] = None,
     ) -> tuple[bool, str, Optional[str]]:
         """
         发送邮件
-        
-        Args:
-            to_email: 收件人邮箱
-            subject: 邮件主题
-            html_content: HTML 内容
-            text_content: 纯文本内容（可选）
-            
+
         Returns:
             (success, error_type, error_message)
-            error_type: 'none', 'transient', 'permanent'
+            error_type: 'none' | 'transient' | 'permanent'
         """
         if not self.smtp_user or not self.smtp_password:
-            logger.warning("⚠️  邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
-            return False, 'permanent', "SMTP credentials missing"
-        
+            logger.warning("⚠️ 邮件服务未配置：请设置 SMTP_USER 和 SMTP_PASSWORD 环境变量")
+            return False, "permanent", "SMTP credentials missing"
+
         try:
-            # 创建邮件
-            msg = MIMEMultipart('alternative')
-            msg['From'] = self.email_from
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            
-            # 添加文本和HTML内容
+            msg = MIMEMultipart("alternative")
+            msg["From"] = self.email_from
+            msg["To"] = to_email
+            msg["Subject"] = subject
+
             if text_content:
-                part1 = MIMEText(text_content, 'plain', 'utf-8')
-                msg.attach(part1)
-            
-            part2 = MIMEText(html_content, 'html', 'utf-8')
-            msg.attach(part2)
-            
-            # 发送邮件
-            # 使用 shorter timeout防止长时间阻塞
+                msg.attach(MIMEText(text_content, "plain", "utf-8"))
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
             with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
                 server.starttls()
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
-            
-            # 使用纯 ASCII 日志，避免控制台编码问题
-            logger.info(f"[EmailService] Sent email to {to_email}")
-            return True, 'none', None
-            
-        except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, 
-                TimeoutError, ConnectionError) as e:
-            logger.error(f"[EmailService] Transient network error for {to_email}: {e}")
-            return False, 'transient', str(e)
-            
-        except (smtplib.SMTPAuthenticationError, smtplib.SMTPRecipientsRefused,
-                smtplib.SMTPSenderRefused, smtplib.SMTPDataError) as e:
-            logger.error(f"[EmailService] Permanent SMTP error for {to_email}: {e}")
-            return False, 'permanent', str(e)
-            
-        except Exception as e:
-            logger.error(f"[EmailService] Unexpected error for {to_email}: {e}")
-            # Treat unknown exceptions as transient to be safe, or permanent? 
-            # Usually unknown could be anything. Let's assume transient for safety unless obvious.
-            return False, 'transient', str(e)
-    
+
+            logger.info("[EmailService] Sent email to %s", to_email)
+            return True, "none", None
+
+        except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, TimeoutError, ConnectionError) as exc:
+            logger.error("[EmailService] Transient network error for %s: %s", to_email, exc)
+            return False, "transient", str(exc)
+        except (
+            smtplib.SMTPAuthenticationError,
+            smtplib.SMTPRecipientsRefused,
+            smtplib.SMTPSenderRefused,
+            smtplib.SMTPDataError,
+        ) as exc:
+            logger.error("[EmailService] Permanent SMTP error for %s: %s", to_email, exc)
+            return False, "permanent", str(exc)
+        except Exception as exc:  # noqa: BLE001 - 保持外部接口兼容
+            logger.error("[EmailService] Unexpected error for %s: %s", to_email, exc)
+            return False, "transient", str(exc)
+
     def send_stock_alert(
         self,
         to_email: str,
@@ -112,33 +96,30 @@ class EmailService:
         alert_type: str,
         message: str,
         current_price: Optional[float] = None,
-        change_percent: Optional[float] = None
-    ) -> bool:
+        change_percent: Optional[float] = None,
+    ) -> tuple[bool, str, Optional[str]]:
         """
         发送股票提醒邮件
-        
-        Args:
-            to_email: 收件人邮箱
-            ticker: 股票代码
-            alert_type: 提醒类型（price_change, news, report）
-            message: 提醒消息
-            current_price: 当前价格
-            change_percent: 涨跌幅
-            
-        Returns:
-            (success, error_type, error_message)
         """
-        # 根据提醒类型生成主题
         if alert_type == "price_change":
             subject = f"📊 {ticker} 价格变动提醒"
         elif alert_type == "news":
             subject = f"📰 {ticker} 重要新闻提醒"
         elif alert_type == "report":
             subject = f"📈 {ticker} 分析报告提醒"
+        elif alert_type == "risk":
+            subject = f"⚠️ {ticker} 风险等级变动提醒"
         else:
             subject = f"🔔 {ticker} 提醒"
-        
-        # 生成HTML内容
+
+        change_class = "positive" if change_percent is not None and change_percent >= 0 else "negative"
+        price_html = f'<div class="price">当前价格: ${current_price:.2f}</div>' if current_price is not None else ""
+        change_html = (
+            f'<div class="change {change_class}">涨跌幅: {change_percent:+.2f}%</div>'
+            if change_percent is not None
+            else ""
+        )
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -165,41 +146,42 @@ class EmailService:
                 </div>
                 <div class="content">
                     <div class="ticker">{ticker}</div>
-                    {f'<div class="price">当前价格: ${current_price:.2f}</div>' if current_price else ''}
-                    {f'<div class="change {"positive" if change_percent and change_percent >= 0 else "negative"}">涨跌幅: {change_percent:+.2f}%</div>' if change_percent is not None else ''}
+                    {price_html}
+                    {change_html}
                     <div class="message">
                         <p>{message}</p>
                     </div>
                     <div class="footer">
                         <p>此邮件由 FinSight AI 自动发送</p>
-                        <p>发送时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                        <p>发送时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
                     </div>
                 </div>
             </div>
         </body>
         </html>
         """
-        
-        # 生成纯文本内容
+
+        price_text = f"当前价格: ${current_price:.2f}" if current_price is not None else ""
+        change_text = f"涨跌幅: {change_percent:+.2f}%" if change_percent is not None else ""
         text_content = f"""
 FinSight 股票提醒
 
 股票代码: {ticker}
-{f'当前价格: ${current_price:.2f}' if current_price else ''}
-{f'涨跌幅: {change_percent:+.2f}%' if change_percent is not None else ''}
+{price_text}
+{change_text}
 
 {message}
 
 ---
 此邮件由 FinSight AI 自动发送
-发送时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+发送时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         """
-        
+
         return self.send_email(to_email, subject, html_content, text_content)
 
 
-# 全局实例
-_email_service = None
+_email_service: Optional[EmailService] = None
+
 
 def get_email_service() -> EmailService:
     """获取邮件服务实例（单例模式）"""
@@ -207,3 +189,4 @@ def get_email_service() -> EmailService:
     if _email_service is None:
         _email_service = EmailService()
     return _email_service
+

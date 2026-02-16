@@ -14,6 +14,7 @@ import { apiClient, type ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { ReportView } from './report';
+import { useToast } from './ui';
 
 export const MiniChat: React.FC = () => {
   // 共享主 Chat 的 messages（统一上下文）
@@ -28,6 +29,7 @@ export const MiniChat: React.FC = () => {
     traceRawEnabled,
     setRequestMetrics,
   } = useStore();
+  const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
@@ -37,6 +39,7 @@ export const MiniChat: React.FC = () => {
   const [contextEnabled, setContextEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // 流式内容累积 ref（避免闭包问题）
   const accumulatedContentRef = useRef<string>('');
@@ -97,6 +100,10 @@ export const MiniChat: React.FC = () => {
     });
 
     setInput('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.overflowY = 'hidden';
+    }
     setIsLoading(true);
 
     // 重置累积 ref
@@ -163,6 +170,7 @@ export const MiniChat: React.FC = () => {
             content: `Error: ${error}`,
             isLoading: false,
           });
+          toast({ type: 'error', title: '请求失败', message: error || '网络错误' });
         },
         (step) => {
           // onThinking
@@ -190,6 +198,11 @@ export const MiniChat: React.FC = () => {
       updateMessage(aiMsgId, {
         content: `发送失败: ${error}`,
         isLoading: false,
+      });
+      toast({
+        type: 'error',
+        title: '发送失败',
+        message: String(error),
       });
     } finally {
       setIsLoading(false);
@@ -331,16 +344,23 @@ export const MiniChat: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
             data-testid="mini-chat-input"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const el = e.target;
+              el.style.height = 'auto';
+              el.style.height = `${Math.min(el.scrollHeight, 80)}px`;
+              el.style.overflowY = el.scrollHeight > 80 ? 'auto' : 'hidden';
+            }}
             onKeyDown={handleKeyDown}
             placeholder={currentSymbol ? `问关于 ${currentSymbol} 的问题...` : '输入问题...'}
             disabled={isLoading}
-            className="flex-1 px-3 py-2 text-xs bg-fin-bg border border-fin-border rounded-lg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary disabled:opacity-50"
+            rows={1}
+            className="flex-1 px-3 py-2 text-xs bg-fin-bg border border-fin-border rounded-lg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary disabled:opacity-50 resize-none overflow-y-hidden max-h-[80px]"
           />
           <button
             data-testid="mini-chat-send-btn"
@@ -360,4 +380,3 @@ export const MiniChat: React.FC = () => {
     </div>
   );
 };
-

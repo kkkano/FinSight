@@ -68,11 +68,13 @@ export function RebalanceParamPanel({ loading, onGenerate, sessionId, portfolio 
       {/* Risk tier radio group */}
       <div className="space-y-2">
         <span className="text-xs text-fin-muted font-medium">风险偏好</span>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="风险偏好">
           {RISK_TIERS.map((tier) => (
             <button
               key={tier.value}
               type="button"
+              role="radio"
+              aria-checked={riskTier === tier.value}
               onClick={() => setRiskTier(tier.value)}
               className={`
                 text-left px-3 py-2 rounded-lg border text-xs transition-colors

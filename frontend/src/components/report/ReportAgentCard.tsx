@@ -49,23 +49,23 @@ const JsonViewer: React.FC<{ label: string; value: any }> = ({ label, value }) =
   }, [value]);
 
   return (
-    <div className="rounded-lg border border-slate-200/70 dark:border-slate-700/60 overflow-hidden">
-      <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/70 flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{label}</span>
+    <div className="rounded-lg border border-fin-border overflow-hidden">
+      <div className="px-3 py-2 bg-fin-bg-secondary flex items-center justify-between">
+        <span className="text-xs font-medium text-fin-text">{label}</span>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-2xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          className="inline-flex items-center gap-1 text-2xs text-fin-text-secondary hover:text-fin-text"
           onClick={async () => {
             await navigator.clipboard.writeText(content);
             setCopied(true);
             setTimeout(() => setCopied(false), 1200);
           }}
         >
-          {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+          {copied ? <Check size={12} className="text-fin-success" /> : <Copy size={12} />}
           {copied ? '已复制' : '复制'}
         </button>
       </div>
-      <pre className="p-3 text-[11px] leading-relaxed overflow-auto max-h-[320px] bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-all">
+      <pre className="p-3 text-[11px] leading-relaxed overflow-auto max-h-[320px] bg-fin-card text-fin-text whitespace-pre-wrap break-all">
         {content}
       </pre>
     </div>
@@ -75,7 +75,7 @@ const JsonViewer: React.FC<{ label: string; value: any }> = ({ label, value }) =
 const EvidenceExcerptList: React.FC<{ evidence: any[] }> = ({ evidence }) => {
   if (!Array.isArray(evidence) || evidence.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200/70 dark:border-slate-700/60 p-3 text-xs text-slate-500 dark:text-slate-400">
+      <div className="rounded-lg border border-fin-border p-3 text-xs text-fin-text-secondary">
         暂无证据摘录
       </div>
     );
@@ -83,15 +83,15 @@ const EvidenceExcerptList: React.FC<{ evidence: any[] }> = ({ evidence }) => {
 
   const rows = evidence.slice(0, 8);
   return (
-    <div className="rounded-lg border border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40 p-3 space-y-3">
+    <div className="rounded-lg border border-fin-border bg-fin-bg-secondary p-3 space-y-3">
       {rows.map((item, index) => {
         const sourceId = String(item?.source_id || item?.id || index + 1);
         const title = String(item?.title || item?.source || item?.url || `证据 ${index + 1}`);
         const snippet = String(item?.snippet || item?.summary || item?.content || '').trim();
         const url = String(item?.url || '').trim();
         return (
-          <div key={`${sourceId}-${index}`} className="text-xs text-slate-700 dark:text-slate-200">
-            <div className="font-semibold text-slate-800 dark:text-slate-100">
+          <div key={`${sourceId}-${index}`} className="text-xs text-fin-text">
+            <div className="font-semibold text-fin-text">
               [{sourceId}] {title}
             </div>
             {snippet && <div className="mt-1 leading-relaxed">{snippet.slice(0, 320)}</div>}
@@ -100,7 +100,7 @@ const EvidenceExcerptList: React.FC<{ evidence: any[] }> = ({ evidence }) => {
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-block text-blue-600 dark:text-blue-300 hover:underline break-all"
+                className="mt-1 inline-block text-fin-primary hover:underline break-all"
               >
                 {url}
               </a>
@@ -132,11 +132,11 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
 
   if (agentDetailSections.length > 0) {
     return (
-      <details className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
-        <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
-          <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Agent 分析详情</span>
-          <span className="text-2xs text-slate-400 ml-auto">{agentDetailSections.length} 个数据源</span>
+      <details className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden">
+        <summary className="px-5 py-3 cursor-pointer hover:bg-fin-hover transition-colors flex items-center gap-2">
+          <ChevronDown size={16} className="text-fin-muted group-open:rotate-180 transition-transform" />
+          <span className="text-sm font-semibold text-fin-text">Agent 分析详情</span>
+          <span className="text-2xs text-fin-muted ml-auto">{agentDetailSections.length} 个数据源</span>
         </summary>
 
         <div className="p-4 pt-0 space-y-3">
@@ -151,35 +151,35 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
             return (
               <div
                 key={`${section.order}-${section.title}`}
-                className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm"
+                className="border border-fin-border rounded-xl overflow-hidden bg-fin-card shadow-sm"
               >
                 <button
                   type="button"
                   onClick={() => onToggleSection(section.order)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-fin-bg-secondary hover:bg-fin-hover transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex items-center justify-center text-xs font-bold">
+                    <span className="h-6 w-6 rounded-full bg-fin-primary/15 text-fin-primary flex items-center justify-center text-xs font-bold">
                       {section.order}
                     </span>
                     <div className="text-left">
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white">{section.title}</div>
-                      <div className="text-2xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      <div className="text-sm font-semibold text-fin-text">{section.title}</div>
+                      <div className="text-2xs text-fin-text-secondary mt-0.5">
                         {section.agent_name || 'agent'} · confidence {Math.round((section.confidence || 0) * 100)}%
                       </div>
                     </div>
                   </div>
                   <ChevronDown
                     size={16}
-                    className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    className={`text-fin-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
                   />
                 </button>
 
                 {isOpen && (
                   <div className="p-4 space-y-3">
-                    <div className="rounded-lg border border-slate-200/70 dark:border-slate-700/60 p-3 bg-slate-50/60 dark:bg-slate-800/40">
-                      <div className="text-2xs text-slate-500 dark:text-slate-400 mb-1">Summary</div>
-                      <div className="text-xs leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                    <div className="rounded-lg border border-fin-border p-3 bg-fin-bg-secondary">
+                      <div className="text-2xs text-fin-text-secondary mb-1">Summary</div>
+                      <div className="text-xs leading-relaxed text-fin-text whitespace-pre-wrap">
                         {summary}
                       </div>
                     </div>
@@ -191,8 +191,8 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
                         disabled={evidenceCount === 0}
                         className={`underline-offset-2 hover:underline ${
                           evidenceCount === 0
-                            ? 'text-slate-400 cursor-not-allowed'
-                            : 'text-slate-600 dark:text-slate-300'
+                            ? 'text-fin-muted cursor-not-allowed'
+                            : 'text-fin-text-secondary'
                         }`}
                       >
                         {isEvidenceOpen ? '收起依据' : `查看依据 (${evidenceCount})`}
@@ -202,7 +202,7 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
                         <button
                           type="button"
                           onClick={() => toggleDebug(section.order)}
-                          className="text-indigo-600 dark:text-indigo-300 underline-offset-2 hover:underline"
+                          className="text-fin-primary underline-offset-2 hover:underline"
                         >
                           {isDebugOpen ? '收起 Debug（仅开发者）' : 'Debug（仅开发者）'}
                         </button>
@@ -214,11 +214,11 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
                     {isDeveloper && isDebugOpen && (
                       <div className="space-y-3">
                         <JsonViewer label="整合输入（给研报生成器）" value={payload.report_input} />
-                        <details className="rounded-lg border border-slate-200/70 dark:border-slate-700/60 overflow-hidden">
-                          <summary className="px-3 py-2 cursor-pointer bg-slate-50 dark:bg-slate-800/70 text-xs font-medium text-slate-700 dark:text-slate-200">
+                        <details className="rounded-lg border border-fin-border overflow-hidden">
+                          <summary className="px-3 py-2 cursor-pointer bg-fin-bg-secondary text-xs font-medium text-fin-text">
                             原始输出（采集/trace）
                           </summary>
-                          <div className="p-3 space-y-3 bg-white dark:bg-slate-900 border-t border-slate-200/70 dark:border-slate-700/60">
+                          <div className="p-3 space-y-3 bg-fin-card border-t border-fin-border">
                             <JsonViewer label="Raw Output" value={payload.raw_output} />
                             <JsonViewer label="Trace Full" value={payload.trace_full} />
                           </div>
@@ -236,11 +236,11 @@ export const ReportAgentCard: React.FC<ReportAgentCardProps> = ({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden">
-      <div className="px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 border-b border-slate-200/70 dark:border-slate-700/60">
+    <div className="rounded-xl border border-fin-border bg-fin-card overflow-hidden">
+      <div className="px-5 py-3 text-sm font-semibold text-fin-text border-b border-fin-border">
         Agent 分析详情
       </div>
-      <div className="px-5 py-4 text-xs text-slate-400">暂无 agent 分析</div>
+      <div className="px-5 py-4 text-xs text-fin-muted">暂无 agent 分析</div>
     </div>
   );
 };
@@ -270,13 +270,13 @@ export const ReportEvidencePoolSection: React.FC<ReportEvidencePoolProps> = ({
 
   return (
     <details
-      className="group rounded-xl border border-slate-200/80 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/50 overflow-hidden"
+      className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden"
       open
     >
-      <summary className="px-5 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center gap-2">
-        <ChevronDown size={16} className="text-slate-400 group-open:rotate-180 transition-transform" />
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">证据池</span>
-        <span className="text-2xs text-slate-400 ml-auto">{citations.length} 条来源</span>
+      <summary className="px-5 py-3 cursor-pointer hover:bg-fin-hover transition-colors flex items-center gap-2">
+        <ChevronDown size={16} className="text-fin-muted group-open:rotate-180 transition-transform" />
+        <span className="text-sm font-semibold text-fin-text">证据池</span>
+        <span className="text-2xs text-fin-muted ml-auto">{citations.length} 条来源</span>
       </summary>
       <div className="p-4 pt-0">
         <EvidencePool
@@ -292,4 +292,3 @@ export const ReportEvidencePoolSection: React.FC<ReportEvidencePoolProps> = ({
     </details>
   );
 };
-

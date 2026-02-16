@@ -102,6 +102,8 @@ class SubscriptionRequest(BaseModel):
     alert_types: Optional[list[str]] = Field(None, description="提醒类型")
     price_threshold: Optional[float] = Field(None, description="价格阈值(%)")
 
+    risk_threshold: Optional[str] = Field("high", description="Risk alert threshold: low/medium/high/critical")
+
     @field_validator("alert_types", mode="before")
     @classmethod
     def default_alert_types(cls, v):
@@ -110,7 +112,7 @@ class SubscriptionRequest(BaseModel):
     @field_validator("alert_types")
     @classmethod
     def validate_alert_types(cls, v):
-        allowed = {"price_change", "news", "report"}
+        allowed = {"price_change", "news", "report", "risk"}
         invalid = [x for x in v if x not in allowed]
         if invalid:
             raise ValueError(f"unsupported alert_types: {invalid}")
@@ -122,6 +124,17 @@ class SubscriptionRequest(BaseModel):
         if v is not None and v <= 0:
             raise ValueError("price_threshold must be positive")
         return v
+
+    @field_validator("risk_threshold")
+    @classmethod
+    def validate_risk_threshold(cls, v):
+        if v is None:
+            return "high"
+        normalized = str(v).strip().lower()
+        allowed = {"low", "medium", "high", "critical"}
+        if normalized not in allowed:
+            raise ValueError(f"unsupported risk_threshold: {v}")
+        return normalized
 
 
 class UnsubscribeRequest(BaseModel):

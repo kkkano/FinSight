@@ -21,6 +21,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from backend.agents.risk_agent import RiskAgent, RiskLevel
 from backend.services.subscription_service import SubscriptionService
 from backend.services.email_service import EmailService
 
@@ -254,6 +255,148 @@ class NewsAlertScheduler:
             checked,
             len(sent),
         )
+        return sent
+
+
+class RiskAlertScheduler:
+    """Execute risk alerts once with dependency injection."""
+
+    _RISK_LEVEL_ORDER: dict[RiskLevel, int] = {
+        RiskLevel.LOW: 1,
+        RiskLevel.MEDIUM: 2,
+        RiskLevel.HIGH: 3,
+        RiskLevel.CRITICAL: 4,
+    }
+
+    def __init__(
+        self,
+        subscription_service: SubscriptionService,
+        email_service: EmailService,
+        price_fetcher: Callable[[str], Optional[PriceSnapshot]],
+    ) -> None:
+        self.subscription_service = subscription_service
+        self.email_service = email_service
+        self.price_fetcher = price_fetcher
+
+    @staticmethod
+    def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    @classmethod
+    def _normalize_threshold(cls, value: Optional[str]) -> RiskLevel:
+        raw = str(value or "high").strip().lower()
+        try:
+            return RiskLevel(raw)
+        except Exception:
+            return RiskLevel.HIGH
+
+    @classmethod
+    def _meets_threshold(cls, actual: RiskLevel, threshold: RiskLevel) -> bool:
+        return cls._RISK_LEVEL_ORDER[actual] >= cls._RISK_LEVEL_ORDER[threshold]
+
+    def _is_cooling_down(self, sub: dict) -> bool:
+        cooldown_minutes = max(1, int(os.getenv("RISK_ALERT_COOLDOWN_MINUTES", "180")))
+        last_risk_at = self._parse_dt(sub.get("last_risk_at"))
+        if last_risk_at is None:
+            return False
+        return (datetime.now(last_risk_at.tzinfo) - last_risk_at) < timedelta(minutes=cooldown_minutes)
+
+    def run_once(self) -> List[Dict]:
+        sent: List[Dict] = []
+        subscriptions = self.subscription_service.get_subscriptions()
+        checked = 0
+
+        for sub in subscriptions:
+            if sub.get("disabled"):
+                continue
+
+            alert_types = sub.get("alert_types") or []
+            if "risk" not in alert_types:
+                continue
+            checked += 1
+
+            if self._is_cooling_down(sub):
+                continue
+
+            snapshot = self.price_fetcher(sub["ticker"])
+            if snapshot is None:
+                continue
+
+            assessment = RiskAgent.evaluate_ticker_risk_lightweight(
+                str(sub["ticker"]).strip().upper(),
+                snapshot,
+            )
+            threshold = self._normalize_threshold(sub.get("risk_threshold"))
+
+            if not self._meets_threshold(assessment.risk_level, threshold):
+                continue
+
+            message = (
+                f"{assessment.ticker} 风险评分 {assessment.risk_score:.1f}/100，"
+                f"等级 {assessment.risk_level.value}。{assessment.summary}"
+            )
+
+            if not self.subscription_service.is_valid_email(sub.get("email", "")):
+                self.subscription_service.record_alert_attempt(
+                    sub["email"],
+                    sub["ticker"],
+                    success=False,
+                    error="invalid_email",
+                    disable=True,
+                )
+                continue
+
+            result = self.email_service.send_stock_alert(
+                to_email=sub["email"],
+                ticker=sub["ticker"],
+                alert_type="risk",
+                message=message,
+                current_price=snapshot.price,
+                change_percent=snapshot.change_percent,
+            )
+
+            if isinstance(result, tuple):
+                success, error_type, error_msg = result
+            else:
+                success, error_type, error_msg = result, "unknown", None
+
+            if not success:
+                logger.warning(
+                    "Risk email send failed for %s -> %s: %s (%s)",
+                    sub["ticker"],
+                    sub["email"],
+                    error_msg,
+                    error_type,
+                )
+                self.subscription_service.record_alert_attempt(
+                    sub["email"],
+                    sub["ticker"],
+                    success=False,
+                    error=error_msg or "send_failed",
+                    is_transient_error=(error_type == "transient"),
+                )
+                continue
+
+            self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
+            self.subscription_service.update_last_risk(sub["email"], sub["ticker"])
+
+            sent.append(
+                {
+                    "email": sub["email"],
+                    "ticker": sub["ticker"],
+                    "risk_score": assessment.risk_score,
+                    "risk_level": assessment.risk_level.value,
+                    "risk_threshold": threshold.value,
+                    "message": message,
+                }
+            )
+
+        logger.info("risk run completed: checked=%s, sent=%s", checked, len(sent))
         return sent
 
 
@@ -540,6 +683,22 @@ def run_news_alert_cycle() -> List[Dict]:
     )
     res = scheduler.run_once()
     return res
+
+
+def run_risk_alert_cycle() -> List[Dict]:
+    """One-shot risk sweep using default services and price fetcher."""
+    from backend.services.subscription_service import get_subscription_service
+    from backend.services.email_service import get_email_service
+
+    scheduler = RiskAlertScheduler(
+        subscription_service=get_subscription_service(),
+        email_service=get_email_service(),
+        price_fetcher=fetch_price_snapshot,
+    )
+    res = scheduler.run_once()
+    return res
+
+
 LOG_DIR = Path(os.getenv("ALERT_LOG_DIR", Path(__file__).resolve().parent.parent.parent / "logs"))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -201,7 +201,7 @@ export const AgentLogToolbar: React.FC<AgentLogToolbarProps> = ({
       </div>
 
       {/* Type filter row */}
-      <div className="flex items-center gap-1 px-2 py-1 bg-fin-panel border-b border-fin-border/50 overflow-x-auto scrollbar-none">
+      <div className="flex items-center gap-1 px-2 py-1 bg-fin-panel border-b border-fin-border/50 overflow-x-auto scrollbar-hide">
         <span className="text-[9px] text-fin-muted shrink-0">TYPE:</span>
         {Object.entries(EVENT_TYPE_CONFIG)
           .filter(([key]) => key !== 'any')

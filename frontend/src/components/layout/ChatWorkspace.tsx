@@ -78,7 +78,7 @@ export function ChatWorkspace({
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
       <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:px-3">
-        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-none">
+        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-hide">
           {marketQuotes.map((quote) => (
             <span key={quote.label} className="flex items-center gap-1 whitespace-nowrap">
               {quote.flag} {quote.label}:{' '}

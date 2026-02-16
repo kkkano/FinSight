@@ -3,6 +3,7 @@ import { BarChart3, Briefcase, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { useStore } from '../../store/useStore';
 import { usePortfolioSummary } from '../../hooks/usePortfolioSummary';
+import { Skeleton } from '../ui';
 
 interface SummaryMetric {
   label: string;
@@ -22,7 +23,7 @@ const formatCurrency = (value: number | null | undefined): string => {
 
 export function PortfolioSummaryBar() {
   const sessionId = useStore((s) => s.sessionId);
-  const { data } = usePortfolioSummary(sessionId);
+  const { data, loading } = usePortfolioSummary(sessionId);
 
   const metrics = useMemo((): SummaryMetric[] => {
     const positions = data?.positions ?? [];
@@ -48,12 +49,16 @@ export function PortfolioSummaryBar() {
   }, [data]);
 
   return (
-    <div className="flex items-center gap-6 px-4 py-2.5 bg-fin-card border border-fin-border rounded-xl overflow-x-auto scrollbar-none">
+    <div className="flex items-center gap-6 px-4 py-2.5 bg-fin-card border border-fin-border rounded-xl overflow-x-auto scrollbar-hide">
       {metrics.map((metric) => (
         <div key={metric.label} className="flex items-center gap-2 whitespace-nowrap">
           <span className="text-fin-text-secondary">{metric.icon}</span>
           <span className="text-xs text-fin-muted">{metric.label}</span>
-          <span className={`text-xs font-semibold ${metric.color ?? 'text-fin-text'}`}>{metric.value}</span>
+          {loading ? (
+            <Skeleton variant="rectangular" className="w-20 h-3" />
+          ) : (
+            <span className={`text-xs font-semibold ${metric.color ?? 'text-fin-text'}`}>{metric.value}</span>
+          )}
         </div>
       ))}
     </div>

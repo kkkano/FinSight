@@ -245,6 +245,7 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         from backend.agents.macro_agent import MacroAgent
         from backend.agents.news_agent import NewsAgent
         from backend.agents.price_agent import PriceAgent
+        from backend.agents.risk_agent import RiskAgent
         from backend.agents.technical_agent import TechnicalAgent
     except Exception:
         logger.exception("agent adapter failed to import legacy agents")
@@ -265,6 +266,7 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         "fundamental_agent": FundamentalAgent,
         "technical_agent": TechnicalAgent,
         "macro_agent": MacroAgent,
+        "risk_agent": RiskAgent,
         "deep_search_agent": DeepSearchAgent,
     }
 

@@ -113,7 +113,16 @@ function ActionRow({ action, style, isExpanded, onToggle }: ActionRowProps) {
     <>
       <tr
         className="border-b border-fin-border/50 hover:bg-fin-hover/50 cursor-pointer transition-colors"
+        tabIndex={0}
+        role="button"
+        aria-expanded={isExpanded}
         onClick={() => onToggle(action.ticker)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle(action.ticker);
+          }
+        }}
       >
         <td className="py-2 px-2">
           {isExpanded
