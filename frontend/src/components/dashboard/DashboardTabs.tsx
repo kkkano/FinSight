@@ -84,6 +84,7 @@ export function DashboardTabs() {
               key={tab.key}
               type="button"
               onClick={() => handleTabChange(tab.key)}
+              data-testid={`dashboard-tab-${tab.key}`}
               className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                 isActive
                   ? 'text-fin-primary'

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 
 /* ------------------------------------------------------------------ */
 /*  共享 Mock 工具                                                      */
@@ -22,6 +22,39 @@ const fulfillSSE = async (route: any) => {
     contentType: 'text/event-stream',
     body,
   });
+};
+
+const getTranslateX = (transform: string): number | null => {
+  if (!transform || transform === 'none') return null;
+
+  const matrix3dMatch = transform.match(/^matrix3d\((.+)\)$/);
+  if (matrix3dMatch) {
+    const values = matrix3dMatch[1].split(',').map((value) => Number(value.trim()));
+    return Number.isFinite(values[12]) ? values[12] : null;
+  }
+
+  const matrixMatch = transform.match(/^matrix\((.+)\)$/);
+  if (matrixMatch) {
+    const values = matrixMatch[1].split(',').map((value) => Number(value.trim()));
+    return Number.isFinite(values[4]) ? values[4] : null;
+  }
+
+  const translateMatch = transform.match(/translateX\((-?\d+(?:\.\d+)?)px\)/);
+  if (translateMatch) {
+    return Number(translateMatch[1]);
+  }
+
+  return null;
+};
+
+const expectSidebarHidden = async (sidebar: Locator) => {
+  await expect
+    .poll(async () => {
+      const transform = await sidebar.evaluate((node) => getComputedStyle(node).transform);
+      const translateX = getTranslateX(transform);
+      return translateX !== null ? translateX < 0 : false;
+    })
+    .toBe(true);
 };
 
 const buildDashboardPayload = (symbol = 'AAPL') => ({
@@ -188,7 +221,7 @@ test.describe('Mobile sidebar drawer', () => {
 
     // 侧边栏初始状态应为隐藏
     const sidebar = page.getByTestId('sidebar');
-    await expect(sidebar).toHaveCSS('transform', /translateX\(-/);
+    await expectSidebarHidden(sidebar);
 
     // 点击移动端菜单按钮
     const menuBtn = page.locator('button[aria-label="打开导航菜单"]');
@@ -218,7 +251,7 @@ test.describe('Mobile sidebar drawer', () => {
 
       // 验证侧边栏收起
       const sidebar = page.getByTestId('sidebar');
-      await expect(sidebar).toHaveCSS('transform', /translateX\(-/);
+      await expectSidebarHidden(sidebar);
     }
   });
 
@@ -237,7 +270,7 @@ test.describe('Mobile sidebar drawer', () => {
     // 导航后 drawer 应关闭
     await page.waitForTimeout(350);
     const sidebar = page.getByTestId('sidebar');
-    await expect(sidebar).toHaveCSS('transform', /translateX\(-/);
+    await expectSidebarHidden(sidebar);
   });
 });
 

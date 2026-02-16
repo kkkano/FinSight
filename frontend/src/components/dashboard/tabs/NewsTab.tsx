@@ -9,7 +9,8 @@ import { ExternalLink } from 'lucide-react';
 
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
-import type { NewsItem } from '../../../types/dashboard.ts';
+import type { NewsItem, SelectionItem } from '../../../types/dashboard.ts';
+import { generateNewsId } from '../../../utils/hash.ts';
 import { SentimentStatsBar } from './news/SentimentStatsBar.tsx';
 import { NewsFilterPills } from './news/NewsFilterPills.tsx';
 import type { NewsFilterType } from './news/NewsFilterPills.tsx';
@@ -59,6 +60,8 @@ function formatNewsTime(ts: string): string {
 export function NewsTab() {
   const activeAsset = useDashboardStore((s) => s.activeAsset);
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const activeSelections = useDashboardStore((s) => s.activeSelections);
+  const toggleSelection = useDashboardStore((s) => s.toggleSelection);
   const [activeFilter, setActiveFilter] = useState<NewsFilterType>('all');
 
   const ticker = activeAsset?.symbol ?? null;
@@ -125,43 +128,80 @@ export function NewsTab() {
         </div>
       ) : (
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {filteredNews.map((news, idx) => (
-            <a
-              key={`${news.title}-${idx}`}
-              href={news.url && news.url !== '#' ? news.url : undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block p-3 rounded-lg border border-transparent hover:border-fin-border hover:bg-fin-hover/40 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">
-                    {news.title}
-                  </h4>
-                  {news.summary ? (
-                    <p className="text-xs text-fin-muted mt-1 line-clamp-2">{news.summary}</p>
-                  ) : null}
-                  <div className="flex items-center gap-2 mt-1.5 text-2xs text-fin-muted">
-                    {news.source ? <span>{news.source}</span> : null}
-                    {news.source ? <span>·</span> : null}
-                    <span>{formatNewsTime(news.ts)}</span>
-                    {typeof news.ranking_score === 'number' ? (
-                      <>
-                        <span>·</span>
-                        <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
-                      </>
+          {filteredNews.map((news, idx) => {
+            const newsId = generateNewsId(news.title, news.source, news.ts);
+            const isSelected = activeSelections.some((s) => s.id === newsId);
+            const selection: SelectionItem = {
+              type: 'news',
+              id: newsId,
+              title: news.title,
+              url: news.url,
+              source: news.source,
+              ts: news.ts,
+              snippet: (news.summary || news.title || '').slice(0, 100),
+            };
+
+            return (
+              <a
+                key={`${news.title}-${idx}`}
+                href={news.url && news.url !== '#' ? news.url : undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`group block p-3 rounded-lg border transition-colors ${
+                  isSelected
+                    ? 'border-fin-primary bg-fin-primary/5'
+                    : 'border-transparent hover:border-fin-border hover:bg-fin-hover/40'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    data-testid={`news-select-${newsId}`}
+                    title={isSelected ? '取消选择' : '选择'}
+                    aria-label={isSelected ? `取消选择 ${news.title}` : `选择 ${news.title}`}
+                    aria-pressed={isSelected}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      toggleSelection(selection);
+                    }}
+                    className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected
+                        ? 'bg-fin-primary border-fin-primary'
+                        : 'border-fin-border bg-transparent hover:border-fin-primary'
+                    }`}
+                  >
+                    {isSelected ? <span className="text-white text-2xs leading-none">✓</span> : null}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">
+                      {news.title}
+                    </h4>
+                    {news.summary ? (
+                      <p className="text-xs text-fin-muted mt-1 line-clamp-2">{news.summary}</p>
                     ) : null}
+                    <div className="flex items-center gap-2 mt-1.5 text-2xs text-fin-muted">
+                      {news.source ? <span>{news.source}</span> : null}
+                      {news.source ? <span>·</span> : null}
+                      <span>{formatNewsTime(news.ts)}</span>
+                      {typeof news.ranking_score === 'number' ? (
+                        <>
+                          <span>·</span>
+                          <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
+                  {news.url && news.url !== '#' ? (
+                    <ExternalLink
+                      size={14}
+                      className="text-fin-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1"
+                    />
+                  ) : null}
                 </div>
-                {news.url && news.url !== '#' ? (
-                  <ExternalLink
-                    size={14}
-                    className="text-fin-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1"
-                  />
-                ) : null}
-              </div>
-            </a>
-          ))}
+              </a>
+            );
+          })}
         </div>
       )}
     </div>

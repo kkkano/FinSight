@@ -267,10 +267,10 @@ test('Selection reference: ask-from-news keeps selection context in request', as
   });
 
   await page.goto('/dashboard/AAPL');
-
-  await page.getByText('新闻动态').scrollIntoViewIfNeeded();
-  await expect(page.getByTitle('选择').first()).toBeVisible();
-  await page.getByTitle('选择').first().click();
+  await page.getByTestId('dashboard-tab-news').click();
+  const selectButton = page.locator('[data-testid^="news-select-"]').first();
+  await expect(selectButton).toBeVisible();
+  await selectButton.click();
 
   await page.getByTestId('mini-chat-input').fill('基于这条新闻给个判断');
   await page.getByTestId('mini-chat-send-btn').click();
