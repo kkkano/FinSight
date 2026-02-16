@@ -1,18 +1,7 @@
-/**
- * DimensionRadar - 5-dimension analysis coverage display.
- *
- * Dimensions: Fundamentals / Technicals / News Sentiment / Deep Research / Macro
- * Without report: Fundamentals + Technicals + News have values, others show 0.
- * With report: all 5 filled from agent status.
- *
- * Uses a table-based bar chart representation (no ECharts dependency).
- */
 import { useMemo } from 'react';
 
-import type { ValuationData, TechnicalData, NewsItem } from '../../../../types/dashboard';
+import type { NewsItem, TechnicalData, ValuationData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
-
-// --- Props ---
 
 interface DimensionRadarProps {
   valuation?: ValuationData | null;
@@ -21,14 +10,34 @@ interface DimensionRadarProps {
   reportData?: LatestReportData | null;
 }
 
-// --- Types ---
-
 interface Dimension {
   name: string;
-  value: number; // 0-100
+  value: number;
 }
 
-// --- Helpers ---
+const clampPercent = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
+
+const readAgentConfidence = (
+  reportData: LatestReportData | null | undefined,
+  candidates: string[],
+): number | null => {
+  const report = reportData?.report as Record<string, unknown> | undefined;
+  const agentStatus = report?.agent_status as Record<string, any> | undefined;
+  if (!agentStatus || typeof agentStatus !== 'object') return null;
+
+  for (const key of candidates) {
+    const node = agentStatus[key];
+    if (!node || typeof node !== 'object') continue;
+    const confidenceRaw = node.confidence ?? node.score;
+    const confidence = Number(confidenceRaw);
+    if (!Number.isFinite(confidence)) continue;
+
+    if (confidence <= 1) return clampPercent(confidence * 100);
+    return clampPercent(confidence);
+  }
+
+  return null;
+};
 
 function computeDimensions(
   valuation: ValuationData | null | undefined,
@@ -36,54 +45,58 @@ function computeDimensions(
   news: NewsItem[] | undefined,
   reportData: LatestReportData | null | undefined,
 ): Dimension[] {
-  const hasReport = !!reportData?.report;
-
-  // Fundamentals: based on valuation data completeness
   let fundamentals = 0;
   if (valuation) {
     const fields = [
-      valuation.trailing_pe, valuation.forward_pe, valuation.price_to_book,
-      valuation.ev_to_ebitda, valuation.dividend_yield, valuation.market_cap,
+      valuation.trailing_pe,
+      valuation.forward_pe,
+      valuation.price_to_book,
+      valuation.ev_to_ebitda,
+      valuation.dividend_yield,
+      valuation.market_cap,
     ];
-    const filled = fields.filter((f) => f != null).length;
-    fundamentals = Math.round((filled / fields.length) * 100);
+    const filled = fields.filter((field) => field != null).length;
+    fundamentals = clampPercent((filled / fields.length) * 100);
   }
 
-  // Technicals: based on data completeness
-  let techScore = 0;
+  let technical = 0;
   if (technicals) {
     const fields = [
-      technicals.rsi, technicals.macd, technicals.ma50, technicals.ma200,
-      technicals.ema12, technicals.adx, technicals.cci,
+      technicals.rsi,
+      technicals.macd,
+      technicals.ma50,
+      technicals.ma200,
+      technicals.ema12,
+      technicals.adx,
+      technicals.cci,
     ];
-    const filled = fields.filter((f) => f != null).length;
-    techScore = Math.round((filled / fields.length) * 100);
+    const filled = fields.filter((field) => field != null).length;
+    technical = clampPercent((filled / fields.length) * 100);
   }
 
-  // News sentiment: based on news count
-  const newsCount = news?.length ?? 0;
-  const newsScore = newsCount > 0 ? Math.min(100, newsCount * 10) : 0;
+  const newsList = news ?? [];
+  const newsCountScore = Math.min(100, newsList.length * 10);
+  const relevanceList = newsList
+    .map((item) => item.asset_relevance)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const relevanceAvg = relevanceList.length
+    ? relevanceList.reduce((sum, value) => sum + value, 0) / relevanceList.length
+    : null;
+  const newsSentiment = relevanceAvg == null
+    ? newsCountScore
+    : clampPercent(newsCountScore * (0.6 + 0.4 * relevanceAvg));
 
-  // Deep research: only from report
-  let researchScore = 0;
-  if (hasReport) {
-    const report = reportData!.report as Record<string, unknown>;
-    researchScore = report.core_viewpoints ? 85 : 60;
-  }
-
-  // Macro: only from report
-  const macroScore = hasReport ? 70 : 0;
+  const deepResearch = readAgentConfidence(reportData, ['deep_search_agent', 'deep_research_agent']) ?? 0;
+  const macro = readAgentConfidence(reportData, ['macro_agent']) ?? 0;
 
   return [
     { name: '基本面', value: fundamentals },
-    { name: '技术面', value: techScore },
-    { name: '新闻舆情', value: newsScore },
-    { name: '深度研究', value: researchScore },
-    { name: '宏观环境', value: macroScore },
+    { name: '技术面', value: technical },
+    { name: '新闻情绪', value: newsSentiment },
+    { name: '深度研究', value: deepResearch },
+    { name: '宏观环境', value: macro },
   ];
 }
-
-// --- Component ---
 
 export function DimensionRadar({ valuation, technicals, news, reportData }: DimensionRadarProps) {
   const dimensions = useMemo(
@@ -93,33 +106,27 @@ export function DimensionRadar({ valuation, technicals, news, reportData }: Dime
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">
-        分析维度覆盖
-      </div>
+      <div className="text-xs font-medium text-fin-muted mb-3">分析维度覆盖</div>
 
       <div className="space-y-2.5">
-        {dimensions.map((d) => (
-          <div key={d.name} className="flex items-center gap-2">
-            <span className="text-2xs text-fin-muted w-16 shrink-0 text-right">
-              {d.name}
-            </span>
+        {dimensions.map((item) => (
+          <div key={item.name} className="flex items-center gap-2">
+            <span className="text-2xs text-fin-muted w-16 shrink-0 text-right">{item.name}</span>
             <div className="flex-1 h-2 bg-fin-border rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  d.value >= 70
+                  item.value >= 70
                     ? 'bg-fin-success'
-                    : d.value >= 40
+                    : item.value >= 40
                       ? 'bg-fin-warning'
-                      : d.value > 0
+                      : item.value > 0
                         ? 'bg-fin-danger'
                         : 'bg-fin-border'
                 }`}
-                style={{ width: `${d.value}%` }}
+                style={{ width: `${item.value}%` }}
               />
             </div>
-            <span className="text-2xs text-fin-text-secondary tabular-nums w-8">
-              {d.value}%
-            </span>
+            <span className="text-2xs text-fin-text-secondary tabular-nums w-8">{item.value}%</span>
           </div>
         ))}
       </div>

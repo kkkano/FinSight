@@ -36,6 +36,33 @@ export interface ReportIndexItem {
   updated_at?: string;
 }
 
+export interface PortfolioSummaryPosition {
+  ticker: string;
+  shares: number;
+  avg_cost?: number | null;
+  updated_at?: string;
+  live_price?: number | null;
+  live_change?: number | null;
+  live_change_percent?: number | null;
+  price_source?: string;
+  market_value: number;
+  cost_basis: number;
+  unrealized_pnl?: number | null;
+  day_change?: number | null;
+}
+
+export interface PortfolioSummaryResponse {
+  success: boolean;
+  session_id: string;
+  positions: PortfolioSummaryPosition[];
+  count: number;
+  priced_count?: number;
+  total_value: number;
+  total_cost: number;
+  total_pnl: number;
+  total_day_change?: number;
+}
+
 /**
  * Execute request — POST /api/execute
  */
@@ -598,12 +625,15 @@ export const apiClient = {
   },
 
   // --- Portfolio ---
-  async getPortfolioSummary(sessionId: string): Promise<unknown> {
-    const response = await api.get('/api/portfolio/summary', { params: { session_id: sessionId } });
+  async getPortfolioSummary(sessionId: string): Promise<PortfolioSummaryResponse> {
+    const response = await api.get<PortfolioSummaryResponse>('/api/portfolio/summary', { params: { session_id: sessionId } });
     return response.data;
   },
 
-  async syncPortfolioPositions(sessionId: string, positions: unknown[]): Promise<unknown> {
+  async syncPortfolioPositions(
+    sessionId: string,
+    positions: Array<{ ticker: string; shares: number; avg_cost?: number | null }>,
+  ): Promise<{ success: boolean; session_id: string; synced_count: number }> {
     const response = await api.post('/api/portfolio/positions', { session_id: sessionId, positions });
     return response.data;
   },

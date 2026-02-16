@@ -7,9 +7,10 @@ valuation metrics for a target symbol and its peers.
 from __future__ import annotations
 
 import logging
-import math
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from typing import Any, Optional
+
+from backend.utils.quote import safe_float
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +28,6 @@ _SECTOR_PEER_MAP: dict[str, list[str]] = {
     "Consumer Cyclical": ["AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TGT"],
     "Communication Services": ["GOOGL", "META", "DIS", "NFLX", "CMCSA", "T", "VZ"],
 }
-
-
-def _safe_float(value: Any) -> Optional[float]:
-    """Convert to float, return None for NaN/Inf/missing."""
-    if value is None:
-        return None
-    try:
-        out = float(value)
-        if math.isnan(out) or math.isinf(out):
-            return None
-        return out
-    except (TypeError, ValueError):
-        return None
-
 
 def resolve_peers(symbol: str, limit: int = 6) -> list[str]:
     """Find peer symbols based on industry/sector from yfinance.
@@ -119,15 +106,15 @@ def _fetch_single_peer_metrics(sym: str) -> dict[str, Any]:
         return {
             "symbol": sym,
             "name": info.get("shortName") or info.get("longName") or sym,
-            "trailing_pe": _safe_float(info.get("trailingPE")),
-            "forward_pe": _safe_float(info.get("forwardPE")),
-            "price_to_book": _safe_float(info.get("priceToBook")),
-            "ev_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
-            "net_margin": _safe_float(info.get("profitMargins")),
-            "roe": _safe_float(info.get("returnOnEquity")),
-            "revenue_growth": _safe_float(info.get("revenueGrowth")),
-            "dividend_yield": _safe_float(info.get("dividendYield")),
-            "market_cap": _safe_float(info.get("marketCap")),
+            "trailing_pe": safe_float(info.get("trailingPE")),
+            "forward_pe": safe_float(info.get("forwardPE")),
+            "price_to_book": safe_float(info.get("priceToBook")),
+            "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
+            "net_margin": safe_float(info.get("profitMargins")),
+            "roe": safe_float(info.get("returnOnEquity")),
+            "revenue_growth": safe_float(info.get("revenueGrowth")),
+            "dividend_yield": safe_float(info.get("dividendYield")),
+            "market_cap": safe_float(info.get("marketCap")),
         }
     except Exception as exc:
         logger.info("[PeerService] metrics fetch failed for %s: %s", sym, exc)

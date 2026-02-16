@@ -21,7 +21,7 @@ export function Workbench({
   onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
-  const { sessionId } = useStore();
+  const { sessionId, portfolioPositions } = useStore();
 
   const [latestReports, setLatestReports] = useState<ReportIndexItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -55,6 +55,17 @@ export function Workbench({
       cancelled = true;
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    const positions = Object.entries(portfolioPositions ?? {}).map(([ticker, shares]) => ({
+      ticker: ticker.trim().toUpperCase(),
+      shares: Number(shares) || 0,
+    })).filter((item) => item.ticker && item.shares > 0);
+
+    void apiClient.syncPortfolioPositions(sessionId, positions).catch(() => {
+      // keep UI responsive even when sync fails
+    });
+  }, [sessionId, portfolioPositions]);
 
   return (
     <div className="space-y-4">

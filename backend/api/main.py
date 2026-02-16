@@ -35,6 +35,7 @@ from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
+from backend.services.portfolio_store import get_positions as get_portfolio_positions
 from backend.services.report_index import get_report_index_store
 
 logger = logging.getLogger(__name__)
@@ -626,6 +627,8 @@ task_router = create_task_router(
     TaskRouterDeps(
         resolve_thread_id=_resolve_thread_id,
         get_report_index_store=lambda: get_report_index_store(),
+        get_portfolio_positions=get_portfolio_positions,
+        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
     )
 )
 

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Portfolio position management router.
 
-CRUD operations for portfolio positions stored in the independent
-portfolio.db (Gate-5). Supports sync (bulk replace), upsert, and delete.
+CRUD operations for positions stored in independent ``portfolio.db``.
 """
+
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -18,13 +19,12 @@ from backend.services.portfolio_store import (
     sync_positions,
     update_position,
 )
+from backend.tools import get_stock_price
+from backend.utils.quote import resolve_live_quote, safe_float
 
 logger = logging.getLogger(__name__)
 
 portfolio_router = APIRouter(tags=["Portfolio"])
-
-
-# ── Request schemas ─────────────────────────────────────────
 
 
 class SyncPositionsRequest(BaseModel):
@@ -41,54 +41,82 @@ class UpdatePositionRequest(BaseModel):
     avg_cost: float | None = None
 
 
-# ── Endpoints ───────────────────────────────────────────────
-
-
 @portfolio_router.get("/api/portfolio/summary")
 async def get_portfolio_summary(session_id: str):
-    """Return all positions with calculated market values.
-
-    Uses stored positions from portfolio_store. Live price
-    enrichment is optional (falls back to avg_cost if unavailable).
-    """
+    """Return all positions with calculated market values."""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
 
     positions = get_positions(session_id)
 
-    # Compute summary metrics
     total_value = 0.0
     total_cost = 0.0
+    total_day_change = 0.0
+    priced_positions = 0
     enriched: list[dict[str, Any]] = []
 
-    for pos in positions:
+    quote_tasks = [
+        asyncio.to_thread(
+            resolve_live_quote,
+            str(pos.get("ticker", "")).strip().upper(),
+            get_stock_price,
+        )
+        for pos in positions
+    ]
+    live_quotes = await asyncio.gather(*quote_tasks) if quote_tasks else []
+
+    for pos, quote_result in zip(positions, live_quotes):
+        quote = quote_result[0] if isinstance(quote_result, tuple) else None
         shares = float(pos.get("shares", 0))
-        avg_cost = pos.get("avg_cost")
+        avg_cost = safe_float(pos.get("avg_cost"))
+        live_price = safe_float((quote or {}).get("price")) if quote else None
+        live_change = safe_float((quote or {}).get("change")) if quote else None
+        live_change_pct = safe_float((quote or {}).get("change_percent")) if quote else None
 
-        # Use avg_cost as fallback price when live prices are unavailable
-        estimated_price = float(avg_cost) if avg_cost else 0.0
-        market_value = shares * estimated_price
-        cost_basis = shares * (float(avg_cost) if avg_cost else 0.0)
-        pnl = market_value - cost_basis
+        if live_price is not None:
+            used_price = live_price
+            price_source = str((quote or {}).get("source") or "live")
+            priced_positions += 1
+        elif avg_cost is not None:
+            used_price = avg_cost
+            price_source = "avg_cost_fallback"
+        else:
+            used_price = 0.0
+            price_source = "unavailable"
 
-        enriched.append({
-            **pos,
-            "market_value": round(market_value, 2),
-            "cost_basis": round(cost_basis, 2),
-            "unrealized_pnl": round(pnl, 2),
-        })
+        market_value = shares * used_price
+        cost_basis = shares * (avg_cost or 0.0)
+        unrealized_pnl = (market_value - cost_basis) if avg_cost is not None else None
+        day_change = (shares * live_change) if live_change is not None else None
+
+        enriched.append(
+            {
+                **pos,
+                "live_price": round(live_price, 6) if live_price is not None else None,
+                "live_change": round(live_change, 6) if live_change is not None else None,
+                "live_change_percent": round(live_change_pct, 6) if live_change_pct is not None else None,
+                "price_source": price_source,
+                "market_value": round(market_value, 2),
+                "cost_basis": round(cost_basis, 2),
+                "unrealized_pnl": round(unrealized_pnl, 2) if unrealized_pnl is not None else None,
+                "day_change": round(day_change, 2) if day_change is not None else None,
+            }
+        )
 
         total_value += market_value
         total_cost += cost_basis
+        total_day_change += day_change or 0.0
 
     return {
         "success": True,
         "session_id": session_id,
         "positions": enriched,
         "count": len(enriched),
+        "priced_count": priced_positions,
         "total_value": round(total_value, 2),
         "total_cost": round(total_cost, 2),
         "total_pnl": round(total_value - total_cost, 2),
+        "total_day_change": round(total_day_change, 2),
     }
 
 
@@ -154,3 +182,4 @@ async def remove_position_endpoint(ticker: str, session_id: str):
 
 
 __all__ = ["portfolio_router"]
+

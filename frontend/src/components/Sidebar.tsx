@@ -3,6 +3,7 @@ import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
+import { parseQuotePayload } from '../utils/quote';
 
 interface QuoteInfo {
   price?: string;
@@ -108,25 +109,18 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const results: Record<string, QuoteInfo> = {};
     await Promise.all(
-      watchlist.slice(0, 6).map(async (item) => {
+      watchlist.map(async (item) => {
         try {
           const priceRes = await apiClient.fetchStockPrice(item.symbol);
-          const payload = priceRes?.data ?? priceRes;
-          const data = payload?.data ?? payload;
+          const quote = parseQuotePayload(priceRes?.data ?? priceRes);
+          if (quote.price === undefined) return;
 
-          if (typeof data === 'object' && data.price) {
-            const price = `$${Number(data.price).toFixed(2)}`;
-            let change: string | undefined;
-            let isUp = true;
+          const price = `$${quote.price.toFixed(2)}`;
+          const pct = quote.changePct;
+          const isUp = pct === undefined ? true : pct >= 0;
+          const change = pct === undefined ? undefined : `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
 
-            if (data.change_percent !== undefined) {
-              const pct = Number(data.change_percent);
-              isUp = pct >= 0;
-              change = `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
-            }
-
-            results[item.symbol] = { price, change, isUp };
-          }
+          results[item.symbol] = { price, change, isUp };
         } catch {
           // Price fetch failed — leave empty
         }

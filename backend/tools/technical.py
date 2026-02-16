@@ -6,43 +6,29 @@ pandas DataFrame.
 """
 
 import logging
-import math
 from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+from backend.utils.quote import safe_float
 
 logger = logging.getLogger(__name__)
 
 # Minimum data points required for meaningful indicator computation
 _MIN_POINTS = 30
 
-
-def _safe_float(value: Any) -> Optional[float]:
-    """Convert value to float, returning None for NaN/Inf."""
-    if value is None:
-        return None
-    try:
-        out = float(value)
-        if math.isnan(out) or math.isinf(out):
-            return None
-        return out
-    except (TypeError, ValueError):
-        return None
-
-
 def _calc_ma(series: pd.Series, window: int) -> Optional[float]:
     """Simple moving average of the last value."""
     if len(series) < window:
         return None
-    return _safe_float(series.rolling(window=window).mean().iloc[-1])
+    return safe_float(series.rolling(window=window).mean().iloc[-1])
 
 
 def _calc_ema(series: pd.Series, span: int) -> Optional[float]:
     """Exponential moving average of the last value."""
     if len(series) < span:
         return None
-    return _safe_float(series.ewm(span=span, adjust=False).mean().iloc[-1])
+    return safe_float(series.ewm(span=span, adjust=False).mean().iloc[-1])
 
 
 def _calc_rsi(series: pd.Series, window: int = 14) -> Optional[float]:
@@ -75,8 +61,8 @@ def _calc_macd(
     ema_slow = series.ewm(span=slow, adjust=False).mean()
     macd_line = ema_fast - ema_slow
     signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
-    macd_val = _safe_float(macd_line.iloc[-1])
-    signal_val = _safe_float(signal_line.iloc[-1])
+    macd_val = safe_float(macd_line.iloc[-1])
+    signal_val = safe_float(signal_line.iloc[-1])
     hist_val = (macd_val - signal_val) if macd_val is not None and signal_val is not None else None
     return macd_val, signal_val, hist_val
 
@@ -98,7 +84,7 @@ def _calc_stochastic(
     denom = denom.replace(0, np.nan)
     k_series = ((close - lowest_low) / denom) * 100
     d_series = k_series.rolling(window=d_period).mean()
-    return _safe_float(k_series.iloc[-1]), _safe_float(d_series.iloc[-1])
+    return safe_float(k_series.iloc[-1]), safe_float(d_series.iloc[-1])
 
 
 def _calc_adx(
@@ -126,7 +112,7 @@ def _calc_adx(
     dx_denom = (plus_di + minus_di).replace(0, np.nan)
     dx = ((plus_di - minus_di).abs() / dx_denom) * 100
     adx = dx.ewm(span=period, adjust=False).mean()
-    return _safe_float(adx.iloc[-1])
+    return safe_float(adx.iloc[-1])
 
 
 def _calc_cci(
@@ -143,7 +129,7 @@ def _calc_cci(
     mad = tp.rolling(window=period).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
     mad = mad.replace(0, np.nan)
     cci = (tp - sma_tp) / (0.015 * mad)
-    return _safe_float(cci.iloc[-1])
+    return safe_float(cci.iloc[-1])
 
 
 def _calc_williams_r(
@@ -160,7 +146,7 @@ def _calc_williams_r(
     denom = highest_high - lowest_low
     denom = denom.replace(0, np.nan)
     wr = ((highest_high - close) / denom) * -100
-    return _safe_float(wr.iloc[-1])
+    return safe_float(wr.iloc[-1])
 
 
 def _calc_bollinger_bands(
@@ -176,9 +162,9 @@ def _calc_bollinger_bands(
     upper = middle + num_std * std
     lower = middle - num_std * std
     return (
-        _safe_float(upper.iloc[-1]),
-        _safe_float(middle.iloc[-1]),
-        _safe_float(lower.iloc[-1]),
+        safe_float(upper.iloc[-1]),
+        safe_float(middle.iloc[-1]),
+        safe_float(lower.iloc[-1]),
     )
 
 
@@ -188,9 +174,9 @@ def _calc_pivot_points(
     close: pd.Series,
 ) -> tuple[list[float], list[float]]:
     """Classic pivot-point support/resistance levels from the last bar."""
-    h = _safe_float(high.iloc[-1])
-    l_val = _safe_float(low.iloc[-1])
-    c = _safe_float(close.iloc[-1])
+    h = safe_float(high.iloc[-1])
+    l_val = safe_float(low.iloc[-1])
+    c = safe_float(close.iloc[-1])
     if h is None or l_val is None or c is None:
         return [], []
     pivot = (h + l_val + c) / 3
@@ -230,7 +216,7 @@ def compute_technical_indicators(df: pd.DataFrame) -> dict[str, Any]:
     low = df["Low"].astype(float)
     volume = df["Volume"].astype(float) if "Volume" in df.columns else pd.Series(dtype=float)
 
-    last_close = _safe_float(close.iloc[-1])
+    last_close = safe_float(close.iloc[-1])
     if last_close is None:
         return {}
 
@@ -277,7 +263,7 @@ def compute_technical_indicators(df: pd.DataFrame) -> dict[str, Any]:
     # Average volume (20-day)
     avg_volume: Optional[float] = None
     if len(volume) >= 20:
-        avg_volume = _safe_float(volume.tail(20).mean())
+        avg_volume = safe_float(volume.tail(20).mean())
 
     # Trend determination
     trend = "neutral"

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart2, CheckCircle2, FileSearch,
@@ -9,6 +9,7 @@ import {
 import { apiClient } from '../../api/client';
 import type { DailyTask, ExecuteRequest } from '../../api/client';
 import { useStore } from '../../store/useStore';
+import { useDashboardStore } from '../../store/dashboardStore';
 import { Card } from '../ui/Card';
 import { InterruptCard } from '../execution/InterruptCard';
 
@@ -71,6 +72,12 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
 function TaskSection(_props: TaskSectionProps) {
   const navigate = useNavigate();
   const sessionId = useStore((s) => s.sessionId);
+  const watchlist = useDashboardStore((s) => s.watchlist ?? []);
+  const watchlistSymbols = useMemo(
+    () => watchlist.map((item) => item.symbol).filter(Boolean),
+    [watchlist],
+  );
+  const watchlistKey = useMemo(() => watchlistSymbols.join(','), [watchlistSymbols]);
 
   // Tasks from API
   const [tasks, setTasks] = useState<DailyTask[]>([]);
@@ -92,6 +99,7 @@ function TaskSection(_props: TaskSectionProps) {
     apiClient
       .getDailyTasks({
         session_id: sessionId,
+        watchlist: watchlistSymbols,
       })
       .then((res) => {
         if (!cancelled) {
@@ -111,7 +119,7 @@ function TaskSection(_props: TaskSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, watchlistKey]);
 
   /* ---- Update run state immutably ---- */
   const updateRun = useCallback(

@@ -137,7 +137,9 @@ class TaskGenerator:
     def _check_price_anomaly(
         self, tasks: list[AITask], ticker: str, snap: dict
     ) -> None:
-        change_pct = snap.get("change_pct")
+        change_pct = snap.get("change_percent")
+        if change_pct is None:
+            change_pct = snap.get("change_pct")
         if change_pct is not None and change_pct < _PRICE_DROP_THRESHOLD:
             tasks.append(
                 AITask(

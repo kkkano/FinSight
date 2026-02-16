@@ -37,6 +37,20 @@ interface BalanceItem {
   subtext?: string;
 }
 
+const pickLatestAvailable = (
+  periods: string[] | undefined,
+  series: Array<number | null> | undefined,
+): { value: number | null; period?: string } => {
+  if (!Array.isArray(series) || series.length === 0) return { value: null };
+  for (let idx = 0; idx < series.length; idx += 1) {
+    const value = series[idx];
+    if (value != null) {
+      return { value, period: periods?.[idx] };
+    }
+  }
+  return { value: null };
+};
+
 function buildItems(financials: FinancialStatement | null | undefined): BalanceItem[] {
   if (!financials) {
     return [
@@ -47,10 +61,11 @@ function buildItems(financials: FinancialStatement | null | undefined): BalanceI
     ];
   }
 
-  // Use the latest period
-  const lastIdx = (financials.periods?.length ?? 1) - 1;
-  const totalAssets = financials.total_assets?.[lastIdx] ?? null;
-  const totalLiabilities = financials.total_liabilities?.[lastIdx] ?? null;
+  const latestAssets = pickLatestAvailable(financials.periods, financials.total_assets);
+  const latestLiabilities = pickLatestAvailable(financials.periods, financials.total_liabilities);
+  const totalAssets = latestAssets.value;
+  const totalLiabilities = latestLiabilities.value;
+  const period = latestAssets.period ?? latestLiabilities.period ?? '';
 
   // Compute equity = assets - liabilities
   let equity: number | null = null;
@@ -63,8 +78,6 @@ function buildItems(financials: FinancialStatement | null | undefined): BalanceI
   if (totalLiabilities != null && equity != null && equity !== 0) {
     deRatio = totalLiabilities / equity;
   }
-
-  const period = financials.periods?.[lastIdx] ?? '';
 
   return [
     { label: '总资产', value: fmtNum(totalAssets), subtext: period },

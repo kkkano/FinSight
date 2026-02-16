@@ -84,6 +84,9 @@ scripts/test_*_report.json
 
 # --- Runtime Data ---
 data/langgraph/
+data/*.db
+data/*.db-shm
+data/*.db-wal
 backend/data/*.sqlite
 backend/data/*.db
 backend/data/*.bak

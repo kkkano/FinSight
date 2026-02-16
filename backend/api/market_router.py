@@ -7,6 +7,7 @@ from typing import Any, Callable
 from fastapi import APIRouter, HTTPException
 
 from backend.api.schemas import KlineResponse
+from backend.utils.quote import parse_quote_payload, resolve_live_quote
 
 
 @dataclass(frozen=True)
@@ -19,7 +20,6 @@ class MarketRouterDeps:
     get_stock_historical_data: Callable[..., Any]
     detect_chart_type: Callable[[str, str | None], dict[str, Any]] | None
     logger: Any
-
 
 def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Market"])
@@ -94,12 +94,18 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 cached_data = orchestrator.cache.get(cache_key)
                 if cached_data is not None:
                     deps.logger.info("[API] price cache hit %s", ticker)
-                    return {"ticker": ticker, "data": cached_data, "cached": True}
+                    normalized = parse_quote_payload(cached_data)
+                    return {"ticker": ticker, "data": normalized or cached_data, "cached": True}
 
-            price_info = deps.get_stock_price(ticker)
-            if orchestrator and price_info:
-                orchestrator.cache.set(f"price:{ticker}", price_info, ttl=60)
-            return {"ticker": ticker, "data": price_info}
+            quote, raw_payload = resolve_live_quote(ticker, deps.get_stock_price)
+            if quote is not None:
+                if orchestrator:
+                    orchestrator.cache.set(f"price:{ticker}", quote, ttl=60)
+                return {"ticker": ticker, "data": quote}
+
+            if orchestrator and raw_payload:
+                orchestrator.cache.set(f"price:{ticker}", raw_payload, ttl=60)
+            return {"ticker": ticker, "data": raw_payload or {"error": "price unavailable"}}
         except Exception as exc:
             deps.logger.warning("[API] get_price failed for %s: %s", ticker, exc)
             raise HTTPException(status_code=502, detail=f"无法获取 {ticker} 价格数据") from exc

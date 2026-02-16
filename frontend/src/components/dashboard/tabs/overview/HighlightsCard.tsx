@@ -1,15 +1,7 @@
-/**
- * HighlightsCard - Two-column bullish/bearish highlights.
- *
- * Without report: auto-generates from technicals/valuation data.
- * With report: extracts from core_viewpoints bullish/bearish categories.
- */
 import { useMemo } from 'react';
 
-import type { ValuationData, TechnicalData } from '../../../../types/dashboard';
+import type { TechnicalData, ValuationData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
-
-// --- Props ---
 
 interface HighlightsCardProps {
   valuation?: ValuationData | null;
@@ -17,14 +9,10 @@ interface HighlightsCardProps {
   reportData?: LatestReportData | null;
 }
 
-// --- Types ---
-
 interface HighlightPair {
   bullish: string[];
   bearish: string[];
 }
-
-// --- Helpers ---
 
 function generateAutoHighlights(
   valuation: ValuationData | null | undefined,
@@ -37,46 +25,43 @@ function generateAutoHighlights(
   const ma200 = technicals?.ma200;
   const ma50 = technicals?.ma50;
 
-  // Price vs MA200
   if (close != null && ma200 != null) {
     if (close > ma200) bullish.push('股价高于 MA200');
     else bearish.push('股价低于 MA200');
   }
 
-  // Price vs MA50
   if (close != null && ma50 != null) {
     if (close > ma50) bullish.push('股价高于 MA50');
     else bearish.push('股价低于 MA50');
   }
 
-  // RSI
   const rsi = technicals?.rsi;
   if (rsi != null) {
-    if (rsi < 70) bullish.push('RSI 未进入超买');
-    if (rsi > 30) { /* Not oversold - neutral */ }
-    else bearish.push('RSI 进入超卖');
-    if (rsi > 70) bearish.push('RSI 进入超买');
+    if (rsi >= 70) {
+      bearish.push('RSI 进入超买');
+    } else if (rsi <= 30) {
+      bullish.push('RSI 进入超卖区，存在反弹窗口');
+    } else {
+      bullish.push('RSI 处于中性区间');
+    }
   }
 
-  // MACD
   const macdHist = technicals?.macd_hist;
   if (macdHist != null) {
     if (macdHist > 0) bullish.push('MACD 金叉');
     else bearish.push('MACD 死叉');
   }
 
-  // PE
   const pe = valuation?.trailing_pe;
   if (pe != null) {
-    if (pe < 20) bullish.push('市盈率偏低');
-    else if (pe > 35) bearish.push('市盈率偏高');
+    if (pe < 20) bullish.push('估值处于相对低位');
+    else if (pe > 35) bearish.push('估值偏高');
   }
 
-  // Beta
   const beta = valuation?.beta;
   if (beta != null) {
-    if (beta < 1.0) bullish.push('低 Beta 防御性强');
-    else if (beta > 1.5) bearish.push('高 Beta 波动风险');
+    if (beta < 1.0) bullish.push('Beta 偏低，波动较可控');
+    else if (beta > 1.5) bearish.push('Beta 偏高，波动风险较大');
   }
 
   return {
@@ -94,25 +79,28 @@ function extractReportHighlights(reportData: LatestReportData | null | undefined
   const bullish: string[] = [];
   const bearish: string[] = [];
 
-  for (const vp of viewpoints) {
-    if (typeof vp !== 'object' || vp === null) continue;
-    const obj = vp as Record<string, unknown>;
-    const cat = String(obj.category ?? obj.sentiment ?? '').toLowerCase();
-    const text = String(obj.title ?? obj.content ?? obj.text ?? '');
+  for (const item of viewpoints) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const category = String(row.category ?? row.sentiment ?? '').toLowerCase();
+    const text = String(row.title ?? row.content ?? row.text ?? '');
     if (!text) continue;
 
-    if (cat.includes('bull') || cat.includes('positive') || cat.includes('strength')) {
+    if (category.includes('bull') || category.includes('positive') || category.includes('strength')) {
       bullish.push(text);
-    } else if (cat.includes('bear') || cat.includes('negative') || cat.includes('risk') || cat.includes('weakness')) {
+    } else if (
+      category.includes('bear') ||
+      category.includes('negative') ||
+      category.includes('risk') ||
+      category.includes('weakness')
+    ) {
       bearish.push(text);
     }
   }
 
-  if (bullish.length === 0 && bearish.length === 0) return null;
+  if (!bullish.length && !bearish.length) return null;
   return { bullish: bullish.slice(0, 4), bearish: bearish.slice(0, 4) };
 }
-
-// --- Component ---
 
 export function HighlightsCard({ valuation, technicals, reportData }: HighlightsCardProps) {
   const highlights = useMemo(() => {
@@ -123,12 +111,9 @@ export function HighlightsCard({ valuation, technicals, reportData }: Highlights
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">
-        多空亮点
-      </div>
+      <div className="text-xs font-medium text-fin-muted mb-3">多空亮点</div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Bullish column */}
         <div>
           <div className="text-2xs font-semibold text-fin-success mb-2">看多因素</div>
           {highlights.bullish.length === 0 ? (
@@ -145,7 +130,6 @@ export function HighlightsCard({ valuation, technicals, reportData }: Highlights
           )}
         </div>
 
-        {/* Bearish column */}
         <div>
           <div className="text-2xs font-semibold text-fin-danger mb-2">看空因素</div>
           {highlights.bearish.length === 0 ? (

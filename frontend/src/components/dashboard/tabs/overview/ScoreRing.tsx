@@ -48,7 +48,10 @@ function extractReportScore(reportData: LatestReportData | null | undefined): nu
   if (!reportData?.report) return null;
   const report = reportData.report as Record<string, unknown>;
   const confidence = report.confidence_score ?? report.score ?? report.overall_score;
-  if (typeof confidence === 'number') {
+  if (typeof confidence === 'number' && Number.isFinite(confidence)) {
+    if (confidence <= 1) {
+      return Math.max(1, Math.min(10, Math.round(confidence * 10)));
+    }
     return Math.max(1, Math.min(10, Math.round(confidence)));
   }
   return null;

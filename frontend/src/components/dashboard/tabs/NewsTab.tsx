@@ -1,22 +1,14 @@
-/**
- * NewsTab - Container component for the News tab panel.
- *
- * Combines SentimentStatsBar, NewsFilterPills, AiNewsSummaryCard,
- * and a filtered news list using data from dashboardStore and useLatestReport.
- */
 import { useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 
-import { useDashboardStore } from '../../../store/dashboardStore.ts';
-import { useLatestReport } from '../../../hooks/useLatestReport.ts';
-import type { NewsItem, SelectionItem } from '../../../types/dashboard.ts';
-import { generateNewsId } from '../../../utils/hash.ts';
-import { SentimentStatsBar } from './news/SentimentStatsBar.tsx';
-import { NewsFilterPills } from './news/NewsFilterPills.tsx';
-import type { NewsFilterType } from './news/NewsFilterPills.tsx';
-import { AiNewsSummaryCard } from './news/AiNewsSummaryCard.tsx';
-
-// --- Keyword sets matching the sentiment classification in SentimentStatsBar ---
+import { useDashboardStore } from '../../../store/dashboardStore';
+import { useLatestReport } from '../../../hooks/useLatestReport';
+import type { NewsItem, SelectionItem } from '../../../types/dashboard';
+import { generateNewsId } from '../../../utils/hash';
+import { SentimentStatsBar } from './news/SentimentStatsBar';
+import { NewsFilterPills } from './news/NewsFilterPills';
+import type { NewsFilterType } from './news/NewsFilterPills';
+import { AiNewsSummaryCard } from './news/AiNewsSummaryCard';
 
 const POSITIVE_KEYWORDS = [
   'surge', 'jump', 'rise', 'gain', 'bull', 'rally', 'upgrade', 'beat',
@@ -32,10 +24,11 @@ const NEGATIVE_KEYWORDS = [
 
 function classifySentiment(item: NewsItem): 'bullish' | 'bearish' | 'neutral' {
   const text = `${item.title ?? ''} ${item.summary ?? ''}`.toLowerCase();
-  const posHits = POSITIVE_KEYWORDS.filter((kw) => text.includes(kw)).length;
-  const negHits = NEGATIVE_KEYWORDS.filter((kw) => text.includes(kw)).length;
-  if (posHits > negHits) return 'bullish';
-  if (negHits > posHits) return 'bearish';
+  const positiveHits = POSITIVE_KEYWORDS.filter((keyword) => text.includes(keyword)).length;
+  const negativeHits = NEGATIVE_KEYWORDS.filter((keyword) => text.includes(keyword)).length;
+
+  if (positiveHits > negativeHits) return 'bullish';
+  if (negativeHits > positiveHits) return 'bearish';
   return 'neutral';
 }
 
@@ -44,8 +37,8 @@ function formatNewsTime(ts: string): string {
   try {
     const date = new Date(ts);
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const diffMs = now.getTime() - date.getTime();
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
 
     if (hours < 1) return '刚刚';
@@ -62,33 +55,33 @@ export function NewsTab() {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
   const activeSelections = useDashboardStore((s) => s.activeSelections);
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
+
   const [activeFilter, setActiveFilter] = useState<NewsFilterType>('all');
 
   const ticker = activeAsset?.symbol ?? null;
   const { data: reportData, loading: reportLoading } = useLatestReport(ticker);
 
-  // Extract news sub-properties so useMemo deps align with React Compiler inference
   const newsMarket = dashboardData?.news?.market;
   const newsImpact = dashboardData?.news?.impact;
 
-  // Combine market + impact news
   const allNews = useMemo<NewsItem[]>(() => {
     if (!newsMarket && !newsImpact) return [];
     const market = newsMarket ?? [];
     const impact = newsImpact ?? [];
-    // Deduplicate by title
+
     const seen = new Set<string>();
-    const combined: NewsItem[] = [];
+    const merged: NewsItem[] = [];
+
     for (const item of [...market, ...impact]) {
-      if (!seen.has(item.title)) {
-        seen.add(item.title);
-        combined.push(item);
-      }
+      const dedupeKey = `${item.title || ''}::${item.source || ''}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      merged.push(item);
     }
-    return combined;
+
+    return merged;
   }, [newsMarket, newsImpact]);
 
-  // Apply filter
   const filteredNews = useMemo(() => {
     if (activeFilter === 'all') return allNews;
     return allNews.filter((item) => classifySentiment(item) === activeFilter);
@@ -104,24 +97,17 @@ export function NewsTab() {
 
   return (
     <div className="space-y-4">
-      {/* AI Summary */}
       <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
-
-      {/* Sentiment statistics */}
       <SentimentStatsBar news={allNews} />
 
-      {/* Filter pills */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-fin-text">
           新闻列表
-          <span className="ml-2 text-xs text-fin-muted font-normal">
-            ({filteredNews.length})
-          </span>
+          <span className="ml-2 text-xs text-fin-muted font-normal">({filteredNews.length})</span>
         </h3>
         <NewsFilterPills activeFilter={activeFilter} onFilterChange={setActiveFilter} />
       </div>
 
-      {/* News list */}
       {filteredNews.length === 0 ? (
         <div className="flex items-center justify-center h-32 text-fin-muted text-sm">
           暂无匹配的新闻
@@ -130,7 +116,7 @@ export function NewsTab() {
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
           {filteredNews.map((news, idx) => {
             const newsId = generateNewsId(news.title, news.source, news.ts);
-            const isSelected = activeSelections.some((s) => s.id === newsId);
+            const isSelected = activeSelections.some((item) => item.id === newsId);
             const selection: SelectionItem = {
               type: 'news',
               id: newsId,
@@ -173,13 +159,16 @@ export function NewsTab() {
                   >
                     {isSelected ? <span className="text-white text-2xs leading-none">✓</span> : null}
                   </button>
+
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">
                       {news.title}
                     </h4>
+
                     {news.summary ? (
                       <p className="text-xs text-fin-muted mt-1 line-clamp-2">{news.summary}</p>
                     ) : null}
+
                     <div className="flex items-center gap-2 mt-1.5 text-2xs text-fin-muted">
                       {news.source ? <span>{news.source}</span> : null}
                       {news.source ? <span>·</span> : null}
@@ -190,8 +179,17 @@ export function NewsTab() {
                           <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
                         </>
                       ) : null}
+                      {typeof news.asset_relevance === 'number' ? (
+                        <>
+                          <span>·</span>
+                          <span className="text-fin-warning">
+                            relevance {(news.asset_relevance * 100).toFixed(0)}%
+                          </span>
+                        </>
+                      ) : null}
                     </div>
                   </div>
+
                   {news.url && news.url !== '#' ? (
                     <ExternalLink
                       size={14}

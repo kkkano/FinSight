@@ -14,6 +14,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from backend.dashboard.cache import dashboard_cache
+from backend.utils.quote import safe_float
 
 logger = logging.getLogger(__name__)
 
@@ -98,19 +99,6 @@ _NEWS_RANKING_HALF_LIFE_HOURS = {
     "impact": 36.0,
 }
 
-
-def _safe_float(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    try:
-        output = float(value)
-        if math.isnan(output) or math.isinf(output):
-            return None
-        return output
-    except (TypeError, ValueError):
-        return None
-
-
 def _ts_seconds(ts: Any) -> Optional[int]:
     if ts is None:
         return None
@@ -163,11 +151,11 @@ def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") ->
             output.append(
                 {
                     "time": ts,
-                    "open": _safe_float(row.get("open")),
-                    "high": _safe_float(row.get("high")),
-                    "low": _safe_float(row.get("low")),
-                    "close": _safe_float(row.get("close")),
-                    "volume": _safe_float(row.get("volume")) or 0,
+                    "open": safe_float(row.get("open")),
+                    "high": safe_float(row.get("high")),
+                    "low": safe_float(row.get("low")),
+                    "close": safe_float(row.get("close")),
+                    "volume": safe_float(row.get("volume")) or 0,
                 }
             )
         return output
@@ -191,7 +179,7 @@ def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any]:
         try:
             hist = ticker.history(period="5d", interval="1d")
             if hist is not None and not hist.empty:
-                last_close = _safe_float(hist["Close"].iloc[-1])
+                last_close = safe_float(hist["Close"].iloc[-1])
         except Exception:
             last_close = None
 
@@ -199,17 +187,17 @@ def fetch_snapshot(symbol: str, asset_type: str) -> dict[str, Any]:
         if asset_type == "equity":
             output.update(
                 {
-                    "revenue": _safe_float(info.get("totalRevenue")),
-                    "eps": _safe_float(info.get("trailingEps") or info.get("forwardEps")),
-                    "gross_margin": _safe_float(info.get("grossMargins")),
-                    "fcf": _safe_float(info.get("freeCashflow")),
+                    "revenue": safe_float(info.get("totalRevenue")),
+                    "eps": safe_float(info.get("trailingEps") or info.get("forwardEps")),
+                    "gross_margin": safe_float(info.get("grossMargins")),
+                    "fcf": safe_float(info.get("freeCashflow")),
                 }
             )
         elif asset_type in {"index", "crypto"}:
             if last_close is not None:
                 output["index_level"] = last_close
         elif asset_type == "etf":
-            nav = _safe_float(info.get("navPrice"))
+            nav = safe_float(info.get("navPrice"))
             output["nav"] = nav if nav is not None else last_close
 
         return output
@@ -239,7 +227,7 @@ def fetch_revenue_trend(symbol: str) -> list[dict[str, Any]]:
 
         output: list[dict[str, Any]] = []
         for col in revenue_row.index:
-            value = _safe_float(revenue_row[col])
+            value = safe_float(revenue_row[col])
             if value is None:
                 continue
             if isinstance(col, pd.Timestamp):
@@ -697,16 +685,16 @@ def fetch_valuation(symbol: str) -> dict[str, Any] | None:
 
         info = yf.Ticker(symbol).info or {}
         result = {
-            "market_cap": _safe_float(info.get("marketCap")),
-            "trailing_pe": _safe_float(info.get("trailingPE")),
-            "forward_pe": _safe_float(info.get("forwardPE")),
-            "price_to_book": _safe_float(info.get("priceToBook")),
-            "price_to_sales": _safe_float(info.get("priceToSalesTrailing12Months")),
-            "ev_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
-            "dividend_yield": _safe_float(info.get("dividendYield")),
-            "beta": _safe_float(info.get("beta")),
-            "week52_high": _safe_float(info.get("fiftyTwoWeekHigh")),
-            "week52_low": _safe_float(info.get("fiftyTwoWeekLow")),
+            "market_cap": safe_float(info.get("marketCap")),
+            "trailing_pe": safe_float(info.get("trailingPE")),
+            "forward_pe": safe_float(info.get("forwardPE")),
+            "price_to_book": safe_float(info.get("priceToBook")),
+            "price_to_sales": safe_float(info.get("priceToSalesTrailing12Months")),
+            "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
+            "dividend_yield": safe_float(info.get("dividendYield")),
+            "beta": safe_float(info.get("beta")),
+            "week52_high": safe_float(info.get("fiftyTwoWeekHigh")),
+            "week52_low": safe_float(info.get("fiftyTwoWeekLow")),
         }
         # Return None if every field is empty
         if all(v is None for v in result.values()):
@@ -728,62 +716,89 @@ def fetch_financial_statements(symbol: str, periods: int = 8) -> dict[str, Any] 
 
         ticker = yf.Ticker(symbol)
 
-        # Helper: extract a row by candidate names from a DataFrame
-        def _extract_row(frame: Optional[pd.DataFrame], candidates: list[str]) -> list[Optional[float]]:
-            if frame is None or (hasattr(frame, "empty") and frame.empty):
-                return []
-            for name in candidates:
-                if name in frame.index:
-                    row = frame.loc[name]
-                    return [_safe_float(row[col]) for col in frame.columns]
-            return []
-
-        # Helper: format period label from column Timestamp
         def _period_label(col: Any) -> str:
             if isinstance(col, pd.Timestamp):
                 return f"{col.year}Q{(col.month - 1) // 3 + 1}"
-            return str(col)[:10]
+            text = str(col).strip()
+            if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+                try:
+                    dt = pd.to_datetime(text)
+                    return f"{dt.year}Q{(dt.month - 1) // 3 + 1}"
+                except Exception:
+                    return text[:10]
+            return text[:10]
 
-        # Fetch quarterly statements
+        def _valid_frame(frame: Optional[pd.DataFrame]) -> bool:
+            return frame is not None and hasattr(frame, "empty") and not frame.empty
+
+        def _build_label_map(frame: Optional[pd.DataFrame]) -> dict[str, Any]:
+            if not _valid_frame(frame):
+                return {}
+            mapping: dict[str, Any] = {}
+            for col in frame.columns:
+                label = _period_label(col)
+                if label and label not in mapping:
+                    mapping[label] = col
+            return mapping
+
+        def _locate_row(frame: Optional[pd.DataFrame], candidates: list[str]) -> Optional[pd.Series]:
+            if not _valid_frame(frame):
+                return None
+            index_lookup = {str(idx).strip().lower(): idx for idx in frame.index}
+            for candidate in candidates:
+                key = candidate.strip().lower()
+                if key in index_lookup:
+                    return frame.loc[index_lookup[key]]
+            return None
+
+        def _extract_series(frame: Optional[pd.DataFrame], candidates: list[str], labels: list[str]) -> list[Optional[float]]:
+            if not labels:
+                return []
+            row = _locate_row(frame, candidates)
+            if row is None:
+                return [None for _ in labels]
+            label_map = _build_label_map(frame)
+            output: list[Optional[float]] = []
+            for label in labels:
+                col = label_map.get(label)
+                output.append(safe_float(row.get(col)) if col is not None else None)
+            return output
+
         income = getattr(ticker, "quarterly_income_stmt", None)
+        if income is None or (hasattr(income, "empty") and income.empty):
+            income = getattr(ticker, "quarterly_financials", None)
         balance = getattr(ticker, "quarterly_balance_sheet", None)
         cashflow = getattr(ticker, "quarterly_cashflow", None)
 
-        # Determine period columns from whichever statement is available
-        ref_frame = None
+        label_candidates: list[str] = []
         for frame in (income, balance, cashflow):
-            if frame is not None and not frame.empty:
-                ref_frame = frame
-                break
-        if ref_frame is None:
+            for label in _build_label_map(frame).keys():
+                if label not in label_candidates:
+                    label_candidates.append(label)
+
+        period_labels = label_candidates[:periods]
+        if not period_labels:
             return None
-
-        # Limit to requested number of periods
-        cols = list(ref_frame.columns[:periods])
-        period_labels = [_period_label(c) for c in cols]
-
-        # Trim all frames to the same columns
-        def _trim(frame: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
-            if frame is None or frame.empty:
-                return None
-            common = [c for c in cols if c in frame.columns]
-            return frame[common] if common else None
-
-        income = _trim(income)
-        balance = _trim(balance)
-        cashflow = _trim(cashflow)
 
         result: dict[str, Any] = {
             "periods": period_labels,
-            "revenue": _extract_row(income, ["Total Revenue", "Revenue", "Net Sales", "Operating Revenue"]),
-            "gross_profit": _extract_row(income, ["Gross Profit"]),
-            "operating_income": _extract_row(income, ["Operating Income", "Operating Revenue"]),
-            "net_income": _extract_row(income, ["Net Income", "Net Income Common Stockholders"]),
-            "eps": _extract_row(income, ["Basic EPS", "Diluted EPS"]),
-            "total_assets": _extract_row(balance, ["Total Assets"]),
-            "total_liabilities": _extract_row(balance, ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
-            "operating_cash_flow": _extract_row(cashflow, ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities"]),
-            "free_cash_flow": _extract_row(cashflow, ["Free Cash Flow"]),
+            "revenue": _extract_series(income, ["Total Revenue", "Revenue", "Net Sales", "Operating Revenue"], period_labels),
+            "gross_profit": _extract_series(income, ["Gross Profit"], period_labels),
+            "operating_income": _extract_series(income, ["Operating Income", "Operating Income Loss"], period_labels),
+            "net_income": _extract_series(income, ["Net Income", "Net Income Common Stockholders"], period_labels),
+            "eps": _extract_series(income, ["Basic EPS", "Diluted EPS"], period_labels),
+            "total_assets": _extract_series(balance, ["Total Assets", "Total Asset"], period_labels),
+            "total_liabilities": _extract_series(
+                balance,
+                ["Total Liabilities Net Minority Interest", "Total Liabilities", "Total Liab", "Liabilities"],
+                period_labels,
+            ),
+            "operating_cash_flow": _extract_series(
+                cashflow,
+                ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities", "Operating Cash Flow"],
+                period_labels,
+            ),
+            "free_cash_flow": _extract_series(cashflow, ["Free Cash Flow"], period_labels),
         }
         return result
     except Exception as exc:

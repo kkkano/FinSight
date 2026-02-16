@@ -531,12 +531,9 @@ class FundamentalAgent(BaseFinancialAgent):
         }
 
     def _safe_float(self, value: Any) -> Optional[float]:
-        if value is None:
-            return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+        from backend.utils.quote import safe_float
+
+        return safe_float(value)
 
     def _format_value(self, value: float) -> str:
         if abs(value) >= 1e12:

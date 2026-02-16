@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { useStore } from '../../store/useStore';
+import { useDashboardStore } from '../../store/dashboardStore';
 import type { PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
 import { parsePricePayload } from './utils';
 
@@ -13,13 +14,17 @@ export function useRightPanelData() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isPortfolioEditing, setIsPortfolioEditing] = useState(false);
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
+  const dashboardWatchlist = useDashboardStore((s) => s.watchlist ?? []);
 
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition } = useStore();
 
   const loadWatchlist = useCallback(async () => {
     try {
       const profile = await apiClient.getUserProfile(DEFAULT_USER_ID);
-      const list = Array.isArray(profile?.profile?.watchlist) ? profile.profile.watchlist : [];
+      const listFromProfile = Array.isArray(profile?.profile?.watchlist) ? profile.profile.watchlist : [];
+      const list = listFromProfile.length
+        ? listFromProfile
+        : dashboardWatchlist.map((item) => item.symbol).filter(Boolean);
       if (!list.length) {
         setWatchlist([]);
         return;
@@ -41,7 +46,7 @@ export function useRightPanelData() {
     } catch {
       setWatchlist([]);
     }
-  }, []);
+  }, [dashboardWatchlist]);
 
   const loadAlerts = useCallback(async () => {
     if (!subscriptionEmail) {
@@ -142,6 +147,5 @@ export function useRightPanelData() {
     savePortfolioEdit,
   };
 }
-
 
 
