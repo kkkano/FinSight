@@ -28,7 +28,9 @@ def test_phase3_investment_report_mode_can_expand_with_why():
     result = _run(
         runner.ainvoke(
             thread_id="t-r1",
-            query="生成投资报告",
+            # Use a query with unambiguous financial intent ("股价") so that
+            # Tier 2 keyword detection binds active_symbol without needing LLM.
+            query="分析AAPL股价，生成投资报告",
             ui_context={"active_symbol": "AAPL"},
         )
     )
