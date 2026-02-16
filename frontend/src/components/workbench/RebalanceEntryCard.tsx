@@ -114,9 +114,9 @@ export function RebalanceEntryCard() {
         </p>
 
         <div className="flex items-center gap-2 text-2xs text-fin-muted">
-          <span>{suggestion.actions.length} 项操作建议</span>
+          <span>{suggestion.actions?.length ?? 0} 项操作建议</span>
           <span className="text-fin-border">|</span>
-          <span>换手率 {suggestion.expected_impact.estimated_turnover_pct.toFixed(1)}%</span>
+          <span>换手率 {(suggestion.expected_impact?.estimated_turnover_pct ?? 0).toFixed(1)}%</span>
         </div>
 
         <div className="flex items-center gap-2 pt-1">

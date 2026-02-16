@@ -179,7 +179,7 @@ export const ChatList: React.FC = () => {
       });
 
       const elapsedSeconds =
-        (response.thinking_elapsed_seconds ?? response.response_time_ms / 1000).toFixed(1);
+        (response.thinking_elapsed_seconds ?? (response.response_time_ms != null ? response.response_time_ms / 1000 : 0)).toFixed(1);
       setStatus(`Completed in ${elapsedSeconds}s`);
 
       if (response.current_focus || tickerToChart) {
