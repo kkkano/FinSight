@@ -152,7 +152,7 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
 
     const ticker = run.tickers[0] || '';
     const reportTitle = run.report?.title || `${ticker} 投资报告`;
-    const reportSummary = run.report?.executive_summary || run.streamedContent?.slice(0, 500) || '';
+    const reportSummary = run.report?.summary || run.streamedContent?.slice(0, 500) || '';
 
     addMessage({
       id: `bridge-${run.runId}`,

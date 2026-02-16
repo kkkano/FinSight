@@ -90,7 +90,7 @@ export function Workbench({
             symbol={symbol}
             onNavigateToChat={onNavigateToChat}
           />
-          <RebalanceEntryCard onNavigateToChat={onNavigateToChat} />
+          <RebalanceEntryCard />
         </div>
 
         {/* Right: Reports (sidebar) */}
