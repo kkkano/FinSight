@@ -1612,15 +1612,35 @@ async def synthesize(state: GraphState) -> dict:
     rag_context = artifacts.get("rag_context") if isinstance(artifacts, dict) else None
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
 
+    # Build separated evidence sections for structured prompt
+    evidence_pool_list = evidence_pool if isinstance(evidence_pool, list) else []
+    rag_context_list = rag_context if isinstance(rag_context, list) else []
+
     inputs = {
         "query": state.get("query") or "",
         "subject": subject,
         "operation": operation,
         "output_mode": output_mode,
-        "evidence_pool": evidence_pool if isinstance(evidence_pool, list) else [],
-        "rag_context": rag_context if isinstance(rag_context, list) else [],
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
+
+    # Format evidence sections with XML tags
+    realtime_section = ""
+    if evidence_pool_list:
+        realtime_section = "<realtime_evidence>\n" + json_dumps_safe(evidence_pool_list[:20], ensure_ascii=False, indent=2) + "\n</realtime_evidence>\n"
+
+    historical_section = ""
+    if rag_context_list:
+        historical_section = "<historical_knowledge>\n" + json_dumps_safe(rag_context_list[:20], ensure_ascii=False, indent=2) + "\n</historical_knowledge>\n"
+
+    evidence_rules = ""
+    if realtime_section or historical_section:
+        evidence_rules = """<evidence_priority_rules>
+1. 实时数据与历史数据冲突时，以实时数据为准
+2. 引用历史数据时必须标注数据时间（如"根据 2025 Q3 财报..."）
+3. 无法确认时效性的数据需注明"截至某日期"
+</evidence_priority_rules>
+"""
 
     synth_conversation_history = _format_conversation_history_for_synth(state)
 
@@ -1635,7 +1655,7 @@ async def synthesize(state: GraphState) -> dict:
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
-<output_format>
+{realtime_section}{historical_section}{evidence_rules}<output_format>
 返回 JSON 对象，键为以下模板变量的子集：
 news_summary, impact_analysis, next_watch, risks,
 conclusion, investment_summary, company_overview, catalysts, valuation,
@@ -1657,7 +1677,7 @@ summary, highlights, analysis.
 </field_quality_guidelines>
 
 <constraints>
-1) 优先使用 evidence_pool/rag_context/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
+1) 优先使用 realtime_evidence/historical_knowledge/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
 2) 禁止输出原始工具数据、搜索日志、trace 信息。
 3) 免责声明最多在 risks 字段末尾出现 1 次，其他字段禁止重复。
 4) 每个字段控制在 6 条要点以内，追求信息密度而非长度。

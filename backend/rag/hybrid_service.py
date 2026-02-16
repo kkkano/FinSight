@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
-import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from math import sqrt
 from typing import Any, Iterable, Optional
 
 from sqlalchemy import create_engine, text
 
-logger = logging.getLogger(__name__)
+from backend.rag.embedder import (
+    EmbeddingService,
+    SparseVector,
+    get_embedding_service,
+)
 
-_TOKEN_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]+")
+logger = logging.getLogger(__name__)
 
 
 def _utc_now() -> datetime:
@@ -30,24 +31,13 @@ def _env_bool(name: str, default: bool) -> bool:
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _tokenize(text_value: str) -> list[str]:
-    if not text_value:
-        return []
-    return [t.lower() for t in _TOKEN_RE.findall(text_value)]
+# ---------------------------------------------------------------------------
+# Embedding helpers (delegate to EmbeddingService)
+# ---------------------------------------------------------------------------
 
-
-def _hash_embedding(text_value: str, dim: int) -> list[float]:
-    vec = [0.0] * dim
-    tokens = _tokenize(text_value)
-    if not tokens:
-        return vec
-    for token in tokens:
-        digest = hashlib.sha1(token.encode("utf-8")).digest()
-        idx = int.from_bytes(digest[:4], "big") % dim
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vec[idx] += sign
-    norm = sqrt(sum(v * v for v in vec)) or 1.0
-    return [v / norm for v in vec]
+def _embed_text(text_value: str, embedder: EmbeddingService) -> tuple[list[float], SparseVector]:
+    """Encode a single text into (dense_vector, sparse_vector)."""
+    return embedder.encode_single(text_value)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -56,15 +46,19 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
-def _sparse_overlap_score(query_tokens: list[str], doc_tokens: list[str]) -> float:
-    if not query_tokens or not doc_tokens:
+def _sparse_score(query_sparse: SparseVector, doc_sparse: SparseVector) -> float:
+    """Weighted sparse matching using lexical weights."""
+    if not query_sparse.weights or not doc_sparse.weights:
         return 0.0
-    q = set(query_tokens)
-    d = set(doc_tokens)
-    overlap = len(q & d)
-    if overlap == 0:
-        return 0.0
-    return overlap / max(1, len(q))
+    score = 0.0
+    for token, q_weight in query_sparse.weights.items():
+        if token in doc_sparse.weights:
+            score += q_weight * doc_sparse.weights[token]
+    # Normalise by query magnitude
+    q_norm = sum(w * w for w in query_sparse.weights.values()) ** 0.5
+    if q_norm > 0:
+        score /= q_norm
+    return score
 
 
 def _vector_literal(vec: list[float]) -> str:
@@ -92,44 +86,55 @@ class RAGDocument:
 
 
 class _InMemoryHybridStore:
-    def __init__(self, *, vector_dim: int, rrf_k: int) -> None:
+    def __init__(self, *, vector_dim: int, rrf_k: int, embedder: EmbeddingService | None = None) -> None:
         self._vector_dim = vector_dim
         self._rrf_k = rrf_k
+        self._embedder = embedder or get_embedding_service()
         self._lock = threading.Lock()
         self._docs: dict[tuple[str, str], dict[str, Any]] = {}
 
     def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
         indexed = 0
         skipped = 0
-        with self._lock:
-            for doc in docs:
-                if not isinstance(doc, RAGDocument):
-                    skipped += 1
-                    continue
-                collection = (doc.collection or "").strip()
-                source_id = (doc.source_id or "").strip()
-                content = (doc.content or "").strip()
-                if not collection or not source_id or not content:
-                    skipped += 1
-                    continue
+        # Collect valid docs for batch embedding
+        pending: list[tuple[tuple[str, str], dict[str, Any], str]] = []
+        for doc in docs:
+            if not isinstance(doc, RAGDocument):
+                skipped += 1
+                continue
+            collection = (doc.collection or "").strip()
+            source_id = (doc.source_id or "").strip()
+            content = (doc.content or "").strip()
+            if not collection or not source_id or not content:
+                skipped += 1
+                continue
 
-                key = (collection, source_id)
-                payload = {
-                    "collection": collection,
-                    "scope": (doc.scope or "ephemeral").strip() or "ephemeral",
-                    "source_id": source_id,
-                    "content": content,
-                    "title": (doc.title or "").strip() or None,
-                    "url": (doc.url or "").strip() or None,
-                    "source": (doc.source or "unknown").strip() or "unknown",
-                    "metadata": _safe_metadata(doc.metadata),
-                    "expires_at": doc.expires_at,
-                    "created_at": doc.created_at,
-                    "embedding": _hash_embedding(content, self._vector_dim),
-                    "tokens": _tokenize(content),
-                }
-                self._docs[key] = payload
-                indexed += 1
+            key = (collection, source_id)
+            payload = {
+                "collection": collection,
+                "scope": (doc.scope or "ephemeral").strip() or "ephemeral",
+                "source_id": source_id,
+                "content": content,
+                "title": (doc.title or "").strip() or None,
+                "url": (doc.url or "").strip() or None,
+                "source": (doc.source or "unknown").strip() or "unknown",
+                "metadata": _safe_metadata(doc.metadata),
+                "expires_at": doc.expires_at,
+                "created_at": doc.created_at,
+            }
+            pending.append((key, payload, content))
+
+        if pending:
+            # Batch encode all contents
+            contents = [p[2] for p in pending]
+            embed_result = self._embedder.encode(contents)
+
+            with self._lock:
+                for i, (key, payload, _content) in enumerate(pending):
+                    payload["embedding"] = embed_result.dense[i]
+                    payload["sparse"] = embed_result.sparse[i]
+                    self._docs[key] = payload
+                    indexed += 1
 
         return {"indexed": indexed, "skipped": skipped}
 
@@ -154,8 +159,7 @@ class _InMemoryHybridStore:
         if not docs:
             return []
 
-        q_emb = _hash_embedding(query_text, self._vector_dim)
-        q_tokens = _tokenize(query_text)
+        q_dense, q_sparse = _embed_text(query_text, self._embedder)
 
         dense_scored: list[tuple[str, float]] = []
         sparse_scored: list[tuple[str, float]] = []
@@ -163,8 +167,9 @@ class _InMemoryHybridStore:
         for d in docs:
             source_id = d["source_id"]
             by_source[source_id] = d
-            dense_scored.append((source_id, _cosine(q_emb, d["embedding"])))
-            sparse_scored.append((source_id, _sparse_overlap_score(q_tokens, d["tokens"])))
+            dense_scored.append((source_id, _cosine(q_dense, d["embedding"])))
+            doc_sparse = d.get("sparse", SparseVector())
+            sparse_scored.append((source_id, _sparse_score(q_sparse, doc_sparse)))
 
         dense_sorted = sorted(dense_scored, key=lambda x: x[1], reverse=True)
         sparse_sorted = sorted(sparse_scored, key=lambda x: x[1], reverse=True)
@@ -173,6 +178,13 @@ class _InMemoryHybridStore:
         sparse_rank = {sid: rank + 1 for rank, (sid, _) in enumerate(sparse_sorted) if _ > 0}
         dense_score_map = dict(dense_scored)
         sparse_score_map = dict(sparse_scored)
+
+        # RRF fusion with scope boost (E5)
+        _SCOPE_BOOST: dict[str, float] = {
+            "persistent": 0.15,
+            "medium_ttl": 0.05,
+            "ephemeral": 0.0,
+        }
 
         fused: list[dict[str, Any]] = []
         for sid, payload in by_source.items():
@@ -183,11 +195,15 @@ class _InMemoryHybridStore:
                 rrf += 1.0 / (self._rrf_k + d_rank)
             if s_rank is not None:
                 rrf += 1.0 / (self._rrf_k + s_rank)
+            # Apply scope boost
+            scope = payload.get("scope", "ephemeral")
+            rrf += _SCOPE_BOOST.get(scope, 0.0)
+
             fused.append(
                 {
                     "source_id": sid,
                     "collection": payload["collection"],
-                    "scope": payload["scope"],
+                    "scope": scope,
                     "title": payload.get("title"),
                     "url": payload.get("url"),
                     "source": payload.get("source"),
@@ -228,10 +244,11 @@ class _InMemoryHybridStore:
 
 
 class _PostgresHybridStore:
-    def __init__(self, *, dsn: str, vector_dim: int, rrf_k: int) -> None:
+    def __init__(self, *, dsn: str, vector_dim: int, rrf_k: int, embedder: EmbeddingService | None = None) -> None:
         self._dsn = dsn
         self._vector_dim = vector_dim
         self._rrf_k = rrf_k
+        self._embedder = embedder or get_embedding_service()
         self._engine = create_engine(dsn, future=True, pool_pre_ping=True)
         self._schema_ready = False
         self._schema_lock = threading.Lock()
@@ -244,6 +261,17 @@ class _PostgresHybridStore:
                 return
             with self._engine.begin() as conn:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
+                # E6: Check existing table dimension and migrate if needed
+                existing_dim = self._check_vector_dimension(conn)
+                if existing_dim is not None and existing_dim != self._vector_dim:
+                    logger.warning(
+                        "RAG v2 vector dimension mismatch: table has %d, need %d. "
+                        "Dropping and recreating table (all embeddings will be re-generated).",
+                        existing_dim, self._vector_dim,
+                    )
+                    conn.execute(text("DROP TABLE IF EXISTS rag_documents_v2 CASCADE"))
+
                 conn.execute(
                     text(
                         f"""
@@ -267,6 +295,7 @@ class _PostgresHybridStore:
                     )
                 )
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_collection ON rag_documents_v2(collection)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_scope ON rag_documents_v2(scope)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_expires_at ON rag_documents_v2(expires_at)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rag_v2_search_vector ON rag_documents_v2 USING GIN(search_vector)"))
                 # Optional ANN index. If not supported by current pgvector settings, keep running.
@@ -280,6 +309,26 @@ class _PostgresHybridStore:
                 except Exception as exc:  # pragma: no cover - depends on pgvector runtime config
                     logger.warning("RAG v2 ivfflat index skipped: %s", exc)
             self._schema_ready = True
+
+    @staticmethod
+    def _check_vector_dimension(conn: Any) -> int | None:
+        """Query existing embedding column dimension, return None if table doesn't exist."""
+        try:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT atttypmod
+                    FROM pg_attribute
+                    WHERE attrelid = 'rag_documents_v2'::regclass
+                      AND attname = 'embedding'
+                    """
+                )
+            ).fetchone()
+            if row and row[0]:
+                return int(row[0])
+        except Exception:
+            pass
+        return None
 
     def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:
         self._ensure_schema()
@@ -308,35 +357,43 @@ class _PostgresHybridStore:
                 expires_at = EXCLUDED.expires_at
             """
         )
-        with self._engine.begin() as conn:
-            for doc in docs:
-                if not isinstance(doc, RAGDocument):
-                    skipped += 1
-                    continue
-                collection = (doc.collection or "").strip()
-                source_id = (doc.source_id or "").strip()
-                content = (doc.content or "").strip()
-                if not collection or not source_id or not content:
-                    skipped += 1
-                    continue
-                embedding = _hash_embedding(content, self._vector_dim)
-                conn.execute(
-                    sql,
-                    {
-                        "collection": collection,
-                        "scope": (doc.scope or "ephemeral").strip() or "ephemeral",
-                        "source_id": source_id,
-                        "content": content,
-                        "title": (doc.title or "").strip() or None,
-                        "url": (doc.url or "").strip() or None,
-                        "source": (doc.source or "unknown").strip() or "unknown",
-                        "metadata": json.dumps(_safe_metadata(doc.metadata), ensure_ascii=False),
-                        "embedding": _vector_literal(embedding),
-                        "created_at": doc.created_at,
-                        "expires_at": doc.expires_at,
-                    },
-                )
-                indexed += 1
+        # Collect valid docs for batch embedding
+        pending: list[tuple[RAGDocument, str]] = []
+        for doc in docs:
+            if not isinstance(doc, RAGDocument):
+                skipped += 1
+                continue
+            content = (doc.content or "").strip()
+            collection = (doc.collection or "").strip()
+            source_id = (doc.source_id or "").strip()
+            if not collection or not source_id or not content:
+                skipped += 1
+                continue
+            pending.append((doc, content))
+
+        if pending:
+            contents = [p[1] for p in pending]
+            embed_result = self._embedder.encode(contents)
+            with self._engine.begin() as conn:
+                for i, (doc, content) in enumerate(pending):
+                    embedding = embed_result.dense[i]
+                    conn.execute(
+                        sql,
+                        {
+                            "collection": (doc.collection or "").strip(),
+                            "scope": (doc.scope or "ephemeral").strip() or "ephemeral",
+                            "source_id": (doc.source_id or "").strip(),
+                            "content": content,
+                            "title": (doc.title or "").strip() or None,
+                            "url": (doc.url or "").strip() or None,
+                            "source": (doc.source or "unknown").strip() or "unknown",
+                            "metadata": json.dumps(_safe_metadata(doc.metadata), ensure_ascii=False),
+                            "embedding": _vector_literal(embedding),
+                            "created_at": doc.created_at,
+                            "expires_at": doc.expires_at,
+                        },
+                    )
+                    indexed += 1
         return {"indexed": indexed, "skipped": skipped}
 
     def hybrid_search(self, query: str, *, collection: str, top_k: int) -> list[dict[str, Any]]:
@@ -344,8 +401,12 @@ class _PostgresHybridStore:
         query_text = (query or "").strip()
         if not query_text:
             return []
-        q_emb = _vector_literal(_hash_embedding(query_text, self._vector_dim))
+        q_dense, _q_sparse = _embed_text(query_text, self._embedder)
+        q_emb = _vector_literal(q_dense)
         candidate_k = max(12, int(top_k) * 4)
+        # Scope boost constants for RRF
+        scope_boost_persistent = 0.15
+        scope_boost_medium = 0.05
         sql = text(
             """
             WITH live_docs AS (
@@ -396,7 +457,12 @@ class _PostgresHybridStore:
                 sparse.sparse_rank,
                 sparse.sparse_score,
                 COALESCE(1.0 / (:rrf_k + dense.dense_rank), 0)
-                + COALESCE(1.0 / (:rrf_k + sparse.sparse_rank), 0) AS rrf_score
+                + COALESCE(1.0 / (:rrf_k + sparse.sparse_rank), 0)
+                + CASE
+                    WHEN d.scope = 'persistent' THEN :scope_boost_persistent
+                    WHEN d.scope = 'medium_ttl' THEN :scope_boost_medium
+                    ELSE 0
+                  END AS rrf_score
             FROM ids
             JOIN live_docs d USING (source_id)
             LEFT JOIN dense USING (source_id)
@@ -415,6 +481,8 @@ class _PostgresHybridStore:
                     "candidate_k": candidate_k,
                     "top_k": max(1, int(top_k)),
                     "rrf_k": self._rrf_k,
+                    "scope_boost_persistent": scope_boost_persistent,
+                    "scope_boost_medium": scope_boost_medium,
                 },
             ).mappings()
 
@@ -466,15 +534,20 @@ class HybridRAGService:
         rrf_k: int,
         postgres_dsn: Optional[str] = None,
         allow_memory_fallback: bool = True,
+        embedder: EmbeddingService | None = None,
     ) -> None:
-        self.vector_dim = max(16, int(vector_dim))
+        self._embedder = embedder or get_embedding_service()
+        # Use embedder's native dim when available; env override still honoured
+        effective_dim = self._embedder.dim if vector_dim <= 0 else max(16, int(vector_dim))
+        self.vector_dim = effective_dim
         self.rrf_k = max(1, int(rrf_k))
         self.backend_name = "memory"
+        self.embedding_model = self._embedder.model_name
         self.fallback_reason: Optional[str] = None
         backend_norm = (backend or "auto").strip().lower()
 
         if backend_norm == "memory":
-            self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k)
+            self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
             self.backend_name = "memory"
             return
 
@@ -482,7 +555,7 @@ class HybridRAGService:
         wants_postgres = backend_norm == "postgres" or (backend_norm == "auto" and bool(dsn))
         if wants_postgres and dsn:
             try:
-                self._store = _PostgresHybridStore(dsn=dsn, vector_dim=self.vector_dim, rrf_k=self.rrf_k)
+                self._store = _PostgresHybridStore(dsn=dsn, vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
                 self.backend_name = "postgres"
                 return
             except Exception as exc:
@@ -491,13 +564,15 @@ class HybridRAGService:
                 self.fallback_reason = str(exc)
                 logger.warning("RAG v2 fallback to memory backend: %s", exc)
 
-        self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k)
+        self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
         self.backend_name = "memory"
 
     @classmethod
     def from_env(cls) -> "HybridRAGService":
         backend = os.getenv("RAG_V2_BACKEND", "auto")
-        vector_dim = int((os.getenv("RAG_V2_VECTOR_DIM") or "96").strip())
+        # Default to 0 = "auto-detect from embedder"
+        raw_dim = os.getenv("RAG_V2_VECTOR_DIM", "").strip()
+        vector_dim = int(raw_dim) if raw_dim else 0
         rrf_k = int((os.getenv("RAG_V2_RRF_K") or "60").strip())
         postgres_dsn = (os.getenv("RAG_V2_POSTGRES_DSN") or os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
         allow_fallback = _env_bool("RAG_V2_ALLOW_MEMORY_FALLBACK", True)
@@ -511,12 +586,15 @@ class HybridRAGService:
 
     @classmethod
     def for_testing(cls, *, backend: str = "memory") -> "HybridRAGService":
+        # Force hash backend for fast, deterministic tests
+        embedder = EmbeddingService(force_backend="hash")
         return cls(
             backend=backend,
-            vector_dim=64,
+            vector_dim=0,  # auto from embedder
             rrf_k=40,
             postgres_dsn=None,
             allow_memory_fallback=True,
+            embedder=embedder,
         )
 
     def ingest_documents(self, docs: Iterable[RAGDocument]) -> dict[str, Any]:

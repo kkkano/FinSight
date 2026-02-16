@@ -38,15 +38,21 @@ def _env_int(name: str, default: int, *, min_value: int = 0, max_value: int = 10
     return max(min_value, min(max_value, parsed))
 
 
-def _ttl_hours_for_evidence(*, subject_type: str, evidence_type: str, source: str) -> int:
+def _ttl_hours_for_evidence(*, subject_type: str, evidence_type: str, source: str, confidence: float = 0.0, source_reliability: float = 0.0) -> int:
     """
-    RAG v2 TTL policy (minimal closed-loop):
+    RAG v2 TTL policy:
     - filing/research_doc: persistent (no TTL)
+    - DeepSearch high-quality (confidence >= 0.7 AND source_reliability >= 0.75): persistent
     - news/selection/search-derived: short-term TTL
     - others: session-ephemeral TTL
     """
     if subject_type in ("filing", "research_doc"):
         return 0
+
+    # E4: DeepSearch high-quality results → persistent
+    if confidence >= 0.7 and source_reliability >= 0.75:
+        return 0
+
     news_ttl = _env_int("RAG_V2_NEWS_TTL_HOURS", 24 * 7, min_value=1, max_value=24 * 180)
     ephemeral_ttl = _env_int("RAG_V2_EPHEMERAL_TTL_HOURS", 12, min_value=1, max_value=24 * 30)
 
@@ -57,6 +63,32 @@ def _ttl_hours_for_evidence(*, subject_type: str, evidence_type: str, source: st
     if source_norm in ("news", "selection", "search", "tavily", "exa", "google_news"):
         return news_ttl
     return ephemeral_ttl
+
+
+# E4: High-reliability source domains (strict whitelist from deep_search_agent)
+_HIGH_RELIABILITY_SOURCE_HINTS = frozenset({
+    "sec.gov", "reuters.com", "bloomberg.com", "wsj.com", "ft.com",
+})
+
+
+def _estimate_source_reliability(url: str) -> float:
+    """Estimate source reliability from URL domain (0.0 - 1.0)."""
+    if not url:
+        return 0.5
+    url_lower = url.lower()
+    # Check high-reliability domains
+    for domain in _HIGH_RELIABILITY_SOURCE_HINTS:
+        if domain in url_lower:
+            return 0.9
+    # Investor relations pages
+    if "investor" in url_lower:
+        return 0.85
+    # Known finance sources
+    finance_hints = ("yahoo.com/finance", "cnbc.com", "marketwatch.com", "seekingalpha.com")
+    for hint in finance_hints:
+        if hint in url_lower:
+            return 0.75
+    return 0.6
 
 
 def _build_rag_doc_id(*, thread_id: str, evidence: dict[str, Any], index: int) -> str:
@@ -362,14 +394,28 @@ async def execute_plan_stub(state: GraphState) -> dict:
     if agent_diagnostics:
         artifacts["agent_diagnostics"] = agent_diagnostics
 
-    # Phase 11.11.2: RAG v2 minimal loop
+    # Phase 11.11.2: RAG v2 pipeline with routing
     rag_trace: dict[str, Any] = {"enabled": False}
     try:
         from backend.rag.hybrid_service import RAGDocument, get_rag_service
+        from backend.rag.rag_router import RAGPriority, decide_rag_priority
 
         query_text = str(state.get("query") or "").strip()
         thread_id = str(state.get("thread_id") or "").strip() or "unknown"
-        if query_text and deduped:
+        output_mode = str(state.get("output_mode") or "").strip()
+        operation_name = str((state.get("operation") or {}).get("name", "")).strip() if isinstance(state.get("operation"), dict) else ""
+
+        # E5: Query routing — decide RAG priority
+        rag_priority = decide_rag_priority(
+            query=query_text,
+            output_mode=output_mode,
+            operation=operation_name,
+            subject_type=str((subject or {}).get("subject_type") or ""),
+        )
+
+        if rag_priority == RAGPriority.SKIP:
+            rag_trace = {"enabled": False, "reason": "router_skip", "router_decision": rag_priority.value}
+        elif query_text and deduped:
             rag = get_rag_service()
             subject_type = str((subject or {}).get("subject_type") or "unknown")
             collection = _collection_from_thread_id(thread_id)
@@ -383,20 +429,26 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     continue
                 evidence_type = str(evidence.get("type") or "selection").strip()
                 source = str(evidence.get("source") or "selection").strip() or "selection"
+                evidence_url = str(evidence.get("url") or "").strip()
+                evidence_confidence = float(evidence.get("confidence") or 0.0)
+                evidence_reliability = _estimate_source_reliability(evidence_url)
                 ttl_hours = _ttl_hours_for_evidence(
                     subject_type=subject_type,
                     evidence_type=evidence_type,
                     source=source,
+                    confidence=evidence_confidence,
+                    source_reliability=evidence_reliability,
                 )
                 expires_at = None if ttl_hours <= 0 else now + timedelta(hours=ttl_hours)
+                scope = "persistent" if ttl_hours <= 0 else "ephemeral"
                 rag_docs.append(
                     RAGDocument(
                         collection=collection,
-                        scope="persistent" if ttl_hours <= 0 else "ephemeral",
+                        scope=scope,
                         source_id=_build_rag_doc_id(thread_id=thread_id, evidence=evidence, index=idx),
                         content=content[:4000],
                         title=title or None,
-                        url=str(evidence.get("url") or "").strip() or None,
+                        url=evidence_url or None,
                         source=source,
                         metadata={
                             "published_date": evidence.get("published_date"),
@@ -409,30 +461,58 @@ async def execute_plan_stub(state: GraphState) -> dict:
 
             if rag_docs:
                 ingest_stats = await asyncio.to_thread(rag.ingest_documents, rag_docs)
-                top_k = _env_int("RAG_V2_TOP_K", 6, min_value=1, max_value=20)
+                # Retrieve candidates (fetch more for reranking)
+                rerank_top_n = _env_int("RAG_V2_RERANK_TOP_N", 8, min_value=1, max_value=20)
+                retrieval_k = _env_int("RAG_V2_TOP_K", max(rerank_top_n * 3, 18), min_value=1, max_value=60)
                 rag_hits = await asyncio.to_thread(
                     rag.hybrid_search,
                     query_text,
                     collection=collection,
-                    top_k=top_k,
+                    top_k=retrieval_k,
                 )
+                # Cross-Encoder reranking
+                reranker_used = False
+                try:
+                    from backend.rag.reranker import get_reranker_service
+                    reranker = get_reranker_service()
+                    if reranker.is_enabled and rag_hits:
+                        rag_hits = await asyncio.to_thread(
+                            reranker.rerank,
+                            query_text,
+                            rag_hits,
+                            top_n=rerank_top_n,
+                        )
+                        reranker_used = True
+                except Exception as rerank_exc:
+                    logger.debug("Reranker unavailable, using RRF order: %s", rerank_exc)
+                    rag_hits = rag_hits[:rerank_top_n]
+
                 cleaned = await asyncio.to_thread(rag.cleanup_expired)
                 artifacts["rag_context"] = rag_hits
                 artifacts["rag_stats"] = {
                     "backend": rag.backend_name,
+                    "embedding_model": getattr(rag, "embedding_model", "unknown"),
+                    "reranker_used": reranker_used,
+                    "router_decision": rag_priority.value,
                     "collection": collection,
                     "indexed": int(ingest_stats.get("indexed", 0)),
                     "skipped": int(ingest_stats.get("skipped", 0)),
                     "hits": len(rag_hits),
+                    "retrieval_k": retrieval_k,
+                    "rerank_top_n": rerank_top_n,
                     "expired_cleaned": int(cleaned),
                 }
                 rag_trace = {
                     "enabled": True,
                     "backend": rag.backend_name,
+                    "embedding_model": getattr(rag, "embedding_model", "unknown"),
+                    "reranker_used": reranker_used,
+                    "router_decision": rag_priority.value,
                     "collection": collection,
                     "indexed": int(ingest_stats.get("indexed", 0)),
                     "hits": len(rag_hits),
-                    "top_k": top_k,
+                    "retrieval_k": retrieval_k,
+                    "rerank_top_n": rerank_top_n,
                 }
             else:
                 rag_trace = {"enabled": False, "reason": "no_rag_documents"}
