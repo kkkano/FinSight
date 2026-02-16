@@ -1,18 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Maximize2, TrendingUp, X } from 'lucide-react';
 import { StockChart } from '../StockChart';
+import { Dialog } from '../ui/Dialog';
 
 export function RightPanelChartTab() {
   const [chartHeight, setChartHeight] = useState(250);
   const [isChartMaximized, setIsChartMaximized] = useState(false);
-
-  useEffect(() => {
-    const onEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsChartMaximized(false);
-    };
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
-  }, []);
 
   return (
     <>
@@ -54,29 +47,33 @@ export function RightPanelChartTab() {
         </div>
       </div>
 
-      {isChartMaximized && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-fin-panel border border-fin-border rounded-xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-fin-border/50">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="text-fin-primary" size={20} />
-                <span className="font-bold text-lg text-fin-text">Market Chart (Full View)</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsChartMaximized(false)}
-                className="p-2 hover:bg-fin-hover rounded-full text-fin-muted hover:text-fin-text transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex-1 p-4 overflow-hidden bg-fin-bg-secondary/30">
-              <StockChart />
-            </div>
+      <Dialog
+        open={isChartMaximized}
+        onClose={() => setIsChartMaximized(false)}
+        labelledBy="right-panel-chart-title"
+        overlayClassName="p-6"
+        panelClassName="bg-fin-panel border border-fin-border rounded-xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-fin-border/50">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="text-fin-primary" size={20} />
+            <h2 id="right-panel-chart-title" className="font-bold text-lg text-fin-text">
+              Market Chart (Full View)
+            </h2>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsChartMaximized(false)}
+            className="p-2 hover:bg-fin-hover rounded-full text-fin-muted hover:text-fin-text transition-colors"
+            aria-label="Close full chart"
+          >
+            <X size={20} />
+          </button>
         </div>
-      )}
+        <div className="flex-1 p-4 overflow-hidden bg-fin-bg-secondary/30">
+          <StockChart />
+        </div>
+      </Dialog>
     </>
   );
 }
-

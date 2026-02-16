@@ -5,9 +5,70 @@ import { normalizeMarkdown } from '../../utils/markdown';
 import type { ReportSection as ReportSectionType, ReportContent, Citation } from '../../types/index';
 import { ChevronDown, ChevronUp, BarChart2 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import type { ChartTheme } from '../../hooks/useChartTheme';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import { buildChartOption } from './ReportUtils';
 
 const markdownPlugins = [remarkGfm];
+
+const patchAxisTheme = (axis: any, chartTheme: ChartTheme): any => {
+  if (!axis) return axis;
+  if (Array.isArray(axis)) {
+    return axis.map((item) => patchAxisTheme(item, chartTheme));
+  }
+  return {
+    ...axis,
+    axisLine: {
+      ...(axis.axisLine || {}),
+      lineStyle: {
+        ...((axis.axisLine || {}).lineStyle || {}),
+        color: (((axis.axisLine || {}).lineStyle || {}).color) || chartTheme.border,
+      },
+    },
+    splitLine: {
+      ...(axis.splitLine || {}),
+      lineStyle: {
+        ...((axis.splitLine || {}).lineStyle || {}),
+        color: (((axis.splitLine || {}).lineStyle || {}).color) || chartTheme.grid,
+      },
+    },
+    axisLabel: {
+      ...(axis.axisLabel || {}),
+      color: (axis.axisLabel || {}).color || chartTheme.textSecondary,
+    },
+  };
+};
+
+const applyChartTheme = (option: any, chartTheme: ChartTheme): any => {
+  if (!option) return option;
+  return {
+    ...option,
+    textStyle: {
+      ...(option.textStyle || {}),
+      color: (option.textStyle || {}).color || chartTheme.text,
+    },
+    tooltip: {
+      ...(option.tooltip || {}),
+      backgroundColor: (option.tooltip || {}).backgroundColor || chartTheme.tooltipBackground,
+      borderColor: (option.tooltip || {}).borderColor || chartTheme.tooltipBorder,
+      textStyle: {
+        ...((option.tooltip || {}).textStyle || {}),
+        color: (((option.tooltip || {}).textStyle || {}).color) || chartTheme.tooltipText,
+      },
+    },
+    legend: option.legend
+      ? {
+          ...option.legend,
+          textStyle: {
+            ...((option.legend || {}).textStyle || {}),
+            color: (((option.legend || {}).textStyle || {}).color) || chartTheme.textSecondary,
+          },
+        }
+      : option.legend,
+    xAxis: patchAxisTheme(option.xAxis, chartTheme),
+    yAxis: patchAxisTheme(option.yAxis, chartTheme),
+  };
+};
 
 /* ------------------------------------------------------------------ */
 /*  SectionRenderer                                                    */
@@ -32,6 +93,7 @@ export const ReportSection: React.FC<ReportSectionProps> = ({
   citationMap,
   onCitationJump,
 }) => {
+  const chartTheme = useChartTheme();
   const sectionId = `${anchorPrefix}-section-${section.order}`;
   const agentName = (section as any).agent_name;
   const confidence = (section as any).confidence;
@@ -93,6 +155,7 @@ export const ReportSection: React.FC<ReportSectionProps> = ({
               const imageUrl = typeof content.content === 'string' ? content.content : content.content?.url;
               const imageAlt = content.metadata?.title || content.content?.alt || 'Report visual';
               const chartOption = content.type === 'chart' ? buildChartOption(content) : null;
+              const themedChartOption = chartOption ? applyChartTheme(chartOption, chartTheme) : null;
               const citations = content.citation_refs || [];
 
               return (
@@ -105,9 +168,9 @@ export const ReportSection: React.FC<ReportSectionProps> = ({
 
                   {content.type === 'chart' && (
                     <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                      {chartOption ? (
+                      {themedChartOption ? (
                         <ReactECharts
-                          option={chartOption}
+                          option={themedChartOption}
                           style={{ height: 260, width: '100%' }}
                           notMerge
                           lazyUpdate

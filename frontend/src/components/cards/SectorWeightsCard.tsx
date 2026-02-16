@@ -1,9 +1,5 @@
-/**
- * Sector Weights Card - 行业权重饼图
- *
- * 用于展示指数/ETF 的行业分布
- */
 import ReactECharts from 'echarts-for-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import type { ChartPoint } from '../../types/dashboard';
 
 interface SectorWeightsCardProps {
@@ -12,11 +8,23 @@ interface SectorWeightsCardProps {
   title?: string;
 }
 
-export function SectorWeightsCard({
-  data,
-  loading,
-  title = '行业权重',
-}: SectorWeightsCardProps) {
+const buildSectorColors = (primary: string, success: string, warning: string, danger: string): Record<string, string> => ({
+  IT: primary,
+  'Health Care': success,
+  Financials: warning,
+  'Consumer Disc.': danger,
+  Communication: '#8b5cf6',
+  Industrials: '#06b6d4',
+  Energy: '#f97316',
+  Materials: '#84cc16',
+  Utilities: '#ec4899',
+  'Real Estate': '#14b8a6',
+  Other: '#6b7280',
+});
+
+export function SectorWeightsCard({ data, loading, title = '行业权重' }: SectorWeightsCardProps) {
+  const chartTheme = useChartTheme();
+
   if (loading) {
     return (
       <div className="bg-fin-card border border-fin-border rounded-xl p-4 h-64">
@@ -34,25 +42,15 @@ export function SectorWeightsCard({
     );
   }
 
-  // 行业颜色映射
-  const sectorColors: Record<string, string> = {
-    IT: '#3b82f6',
-    'Health Care': '#10b981',
-    Financials: '#f59e0b',
-    'Consumer Disc.': '#ef4444',
-    Communication: '#8b5cf6',
-    Industrials: '#06b6d4',
-    Energy: '#f97316',
-    Materials: '#84cc16',
-    Utilities: '#ec4899',
-    'Real Estate': '#14b8a6',
-    Other: '#6b7280',
-  };
+  const sectorColors = buildSectorColors(chartTheme.primary, chartTheme.success, chartTheme.warning, chartTheme.danger);
 
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: (params: { name: string; value: number; percent: number }) =>
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
+      formatter: (params: { name: string; value: number }) =>
         `${params.name}: ${(params.value * 100).toFixed(1)}%`,
     },
     legend: {
@@ -61,10 +59,10 @@ export function SectorWeightsCard({
       top: 'center',
       textStyle: {
         fontSize: 10,
-        color: '#666',
+        color: chartTheme.textSecondary,
       },
       formatter: (name: string) => {
-        const item = data.find((d) => d.name === name);
+        const item = data.find((row) => row.name === name);
         const pct = item?.value ? (item.value * 100).toFixed(1) : '0';
         return `${name} ${pct}%`;
       },
@@ -77,7 +75,7 @@ export function SectorWeightsCard({
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 4,
-          borderColor: '#fff',
+          borderColor: chartTheme.isDark ? chartTheme.border : '#ffffff',
           borderWidth: 2,
         },
         label: {
@@ -88,16 +86,17 @@ export function SectorWeightsCard({
             show: true,
             fontSize: 11,
             fontWeight: 'bold',
+            color: chartTheme.text,
           },
         },
         labelLine: {
           show: false,
         },
-        data: data.map((d) => ({
-          name: d.name || 'Unknown',
-          value: d.value || 0,
+        data: data.map((row) => ({
+          name: row.name || 'Unknown',
+          value: row.value || 0,
           itemStyle: {
-            color: sectorColors[d.name || ''] || '#6b7280',
+            color: sectorColors[row.name || ''] || sectorColors.Other,
           },
         })),
       },

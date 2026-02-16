@@ -1,9 +1,5 @@
-/**
- * Segment Mix Card - 分部收入饼图
- *
- * 使用 ECharts 展示收入来源分布
- */
 import ReactECharts from 'echarts-for-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import type { ChartPoint } from '../../types/dashboard';
 
 interface SegmentMixCardProps {
@@ -12,11 +8,19 @@ interface SegmentMixCardProps {
   title?: string;
 }
 
-export function SegmentMixCard({
-  data,
-  loading,
-  title = '收入结构',
-}: SegmentMixCardProps) {
+const buildColors = (primary: string, success: string, warning: string, danger: string) => [
+  primary,
+  success,
+  warning,
+  danger,
+  '#8b5cf6',
+  '#06b6d4',
+  '#ec4899',
+];
+
+export function SegmentMixCard({ data, loading, title = '收入结构' }: SegmentMixCardProps) {
+  const chartTheme = useChartTheme();
+
   if (loading) {
     return (
       <div className="bg-fin-card border border-fin-border rounded-xl p-4 h-64">
@@ -34,20 +38,14 @@ export function SegmentMixCard({
     );
   }
 
-  // 颜色序列
-  const colors = [
-    '#3b82f6', // blue
-    '#10b981', // green
-    '#f59e0b', // amber
-    '#ef4444', // red
-    '#8b5cf6', // purple
-    '#06b6d4', // cyan
-    '#ec4899', // pink
-  ];
+  const colors = buildColors(chartTheme.primary, chartTheme.success, chartTheme.warning, chartTheme.danger);
 
   const option = {
     tooltip: {
       trigger: 'item',
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
       formatter: '{b}: {c} ({d}%)',
     },
     legend: {
@@ -56,7 +54,7 @@ export function SegmentMixCard({
       top: 'center',
       textStyle: {
         fontSize: 10,
-        color: '#666',
+        color: chartTheme.textSecondary,
       },
     },
     series: [
@@ -67,7 +65,7 @@ export function SegmentMixCard({
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 6,
-          borderColor: '#fff',
+          borderColor: chartTheme.isDark ? chartTheme.border : '#ffffff',
           borderWidth: 2,
         },
         label: {
@@ -78,15 +76,16 @@ export function SegmentMixCard({
             show: true,
             fontSize: 12,
             fontWeight: 'bold',
+            color: chartTheme.text,
           },
         },
         labelLine: {
           show: false,
         },
-        data: data.map((d, i) => ({
-          name: d.name || `Segment ${i + 1}`,
-          value: d.value || 0,
-          itemStyle: { color: colors[i % colors.length] },
+        data: data.map((item, idx) => ({
+          name: item.name || `Segment ${idx + 1}`,
+          value: item.value || 0,
+          itemStyle: { color: colors[idx % colors.length] },
         })),
       },
     ],

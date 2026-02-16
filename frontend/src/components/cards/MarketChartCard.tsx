@@ -144,9 +144,21 @@ export function MarketChartCard({
     // 计算涨跌颜色
     const isUp = closeData.length >= 2 ? closeData[closeData.length - 1] >= closeData[0] : true;
     const mainColor = isUp ? chartTheme.success : chartTheme.danger;
+    const toAlpha = (color: string, alpha: number) => {
+      if (color.startsWith('#') && color.length === 7) {
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+      if (color.startsWith('rgb(')) {
+        return color.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
+      }
+      return color;
+    };
     const areaGradient = isUp
-      ? [chartTheme.success, chartTheme.success]
-      : [chartTheme.danger, chartTheme.danger];
+      ? [toAlpha(chartTheme.success, 0.4), toAlpha(chartTheme.success, 0.05)]
+      : [toAlpha(chartTheme.danger, 0.4), toAlpha(chartTheme.danger, 0.05)];
 
     // 计算 MA
     const ma5 = calculateMA(closeData, 5);

@@ -2,6 +2,7 @@
 import { apiClient } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
+import { createPollingAlertFeedSource, reduceAlertFeedEvent } from './alertFeed';
 import type { AlertSubscription, PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
 import { parsePricePayload } from './utils';
 
@@ -69,38 +70,54 @@ export function useRightPanelData() {
     }
   }, [dashboardWatchlist]);
 
-  const loadAlerts = useCallback(async () => {
-    setAlertsLoading(true);
-    setAlertsError(null);
-    if (!subscriptionEmail) {
-      setAlerts([]);
-      setAlertsLoading(false);
-      return;
-    }
-    try {
-      const response = await apiClient.listSubscriptions(subscriptionEmail);
-      const items = Array.isArray(response?.subscriptions) ? response.subscriptions.map(normalizeAlert) : [];
-      setAlerts(items);
-    } catch {
-      setAlerts([]);
-      setAlertsError('订阅加载失败');
-    } finally {
-      setAlertsLoading(false);
-    }
+  const fetchAlertSnapshot = useCallback(async (): Promise<AlertSubscription[]> => {
+    if (!subscriptionEmail) return [];
+    const response = await apiClient.listSubscriptions(subscriptionEmail);
+    return Array.isArray(response?.subscriptions) ? response.subscriptions.map(normalizeAlert) : [];
   }, [subscriptionEmail]);
+
+  const alertFeedSource = useMemo(
+    () => createPollingAlertFeedSource({ fetchAlerts: fetchAlertSnapshot }),
+    [fetchAlertSnapshot],
+  );
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadWatchlist(), loadAlerts()]);
+    setAlertsLoading(true);
+    setAlertsError(null);
+    await Promise.all([loadWatchlist(), alertFeedSource.pull()]);
     setLastUpdated(new Date());
     setLoading(false);
-  }, [loadWatchlist, loadAlerts]);
+    setAlertsLoading(false);
+  }, [loadWatchlist, alertFeedSource]);
 
   useEffect(() => {
-    refreshAll();
-    const timer = setInterval(refreshAll, 60_000);
+    setLoading(true);
+    void loadWatchlist().finally(() => setLoading(false));
+    const timer = setInterval(() => {
+      void loadWatchlist();
+      setLastUpdated(new Date());
+    }, 60_000);
     return () => clearInterval(timer);
-  }, [refreshAll]);
+  }, [loadWatchlist]);
+
+  useEffect(() => {
+    setAlertsLoading(true);
+    setAlertsError(null);
+    const unsubscribe = alertFeedSource.connect((event) => {
+      if (event.type === 'error') {
+        setAlertsError(event.message);
+        setAlertsLoading(false);
+        setLastUpdated(new Date());
+        return;
+      }
+      setAlerts((current) => reduceAlertFeedEvent(current, event));
+      setAlertsError(null);
+      setAlertsLoading(false);
+      setLastUpdated(new Date());
+    });
+    return unsubscribe;
+  }, [alertFeedSource]);
 
   const positionRows = useMemo<PortfolioRow[]>(() => {
     return watchlist.map((item) => {

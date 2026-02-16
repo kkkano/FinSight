@@ -1,9 +1,5 @@
-/**
- * Holdings Card - ETF 持仓饼图
- *
- * 用于展示 ETF/Portfolio 的持仓分布
- */
 import ReactECharts from 'echarts-for-react';
+import { useChartTheme } from '../../hooks/useChartTheme';
 import type { ChartPoint } from '../../types/dashboard';
 
 interface HoldingsCardProps {
@@ -12,11 +8,22 @@ interface HoldingsCardProps {
   title?: string;
 }
 
-export function HoldingsCard({
-  data,
-  loading,
-  title = '持仓明细',
-}: HoldingsCardProps) {
+const buildPalette = (primary: string, success: string, warning: string, danger: string) => [
+  primary,
+  success,
+  warning,
+  danger,
+  '#8b5cf6',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+  '#f97316',
+  '#14b8a6',
+];
+
+export function HoldingsCard({ data, loading, title = '持仓明细' }: HoldingsCardProps) {
+  const chartTheme = useChartTheme();
+
   if (loading) {
     return (
       <div className="bg-fin-card border border-fin-border rounded-xl p-4 h-64">
@@ -34,21 +41,8 @@ export function HoldingsCard({
     );
   }
 
-  // 颜色序列
-  const colors = [
-    '#3b82f6',
-    '#10b981',
-    '#f59e0b',
-    '#ef4444',
-    '#8b5cf6',
-    '#06b6d4',
-    '#ec4899',
-    '#84cc16',
-    '#f97316',
-    '#14b8a6',
-  ];
+  const colors = buildPalette(chartTheme.primary, chartTheme.success, chartTheme.warning, chartTheme.danger);
 
-  // 排序取前 10
   const sortedData = [...data]
     .sort((a, b) => (b.weight || 0) - (a.weight || 0))
     .slice(0, 10);
@@ -56,6 +50,9 @@ export function HoldingsCard({
   const option = {
     tooltip: {
       trigger: 'item',
+      backgroundColor: chartTheme.tooltipBackground,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
       formatter: (params: { name: string; value: number }) =>
         `${params.name}: ${(params.value * 100).toFixed(2)}%`,
     },
@@ -65,10 +62,10 @@ export function HoldingsCard({
       top: 'center',
       textStyle: {
         fontSize: 10,
-        color: '#666',
+        color: chartTheme.textSecondary,
       },
       formatter: (name: string) => {
-        const item = sortedData.find((d) => d.symbol === name);
+        const item = sortedData.find((row) => row.symbol === name);
         const pct = item?.weight ? (item.weight * 100).toFixed(1) : '0';
         return `${name} ${pct}%`;
       },
@@ -81,7 +78,7 @@ export function HoldingsCard({
         roseType: 'radius',
         itemStyle: {
           borderRadius: 4,
-          borderColor: '#fff',
+          borderColor: chartTheme.isDark ? chartTheme.border : '#ffffff',
           borderWidth: 2,
         },
         label: {
@@ -92,12 +89,13 @@ export function HoldingsCard({
             show: true,
             fontSize: 11,
             fontWeight: 'bold',
+            color: chartTheme.text,
           },
         },
-        data: sortedData.map((d, i) => ({
-          name: d.symbol || `#${i + 1}`,
-          value: d.weight || 0,
-          itemStyle: { color: colors[i % colors.length] },
+        data: sortedData.map((row, idx) => ({
+          name: row.symbol || `#${idx + 1}`,
+          value: row.weight || 0,
+          itemStyle: { color: colors[idx % colors.length] },
         })),
       },
     ],
