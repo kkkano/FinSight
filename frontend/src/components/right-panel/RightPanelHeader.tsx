@@ -1,6 +1,7 @@
 import { Activity, Bell, RefreshCw, Sparkles, TrendingUp, X } from 'lucide-react';
 import type { FC, ReactNode } from 'react';
 import type { RightPanelTab } from './types';
+import { Tooltip } from '../ui/Tooltip';
 
 const TabButton: FC<{
   active: boolean;
@@ -10,22 +11,24 @@ const TabButton: FC<{
   badge?: number;
   testId?: string;
 }> = ({ active, onClick, title, icon, badge, testId }) => (
-  <button
-    type="button"
-    title={title}
-    onClick={onClick}
-    data-testid={testId}
-    className={`relative p-2 rounded-lg transition-colors ${
-      active ? 'bg-fin-primary/10 text-fin-primary' : 'text-fin-muted hover:text-fin-text hover:bg-fin-hover'
-    }`}
-  >
-    {icon}
-    {badge !== undefined && badge > 0 && (
-      <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-fin-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-        {badge > 9 ? '9+' : badge}
-      </span>
-    )}
-  </button>
+  <Tooltip content={title}>
+    <button
+      type="button"
+      aria-label={title}
+      onClick={onClick}
+      data-testid={testId}
+      className={`relative p-2 rounded-lg transition-colors ${
+        active ? 'bg-fin-primary/10 text-fin-primary' : 'text-fin-muted hover:text-fin-text hover:bg-fin-hover'
+      }`}
+    >
+      {icon}
+      {badge !== undefined && badge > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-fin-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
+  </Tooltip>
 );
 
 type RightPanelHeaderProps = {
@@ -82,22 +85,26 @@ export function RightPanelHeader({
         />
       </div>
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
-          title="Refresh"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-        </button>
-        <button
-          type="button"
-          onClick={onCollapse}
-          className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
-          title="Collapse"
-        >
-          <X size={12} />
-        </button>
+        <Tooltip content="Refresh">
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </Tooltip>
+        <Tooltip content="Collapse">
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="p-1.5 hover:bg-fin-hover rounded text-fin-muted hover:text-fin-text transition-colors"
+            aria-label="Collapse"
+          >
+            <X size={12} />
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

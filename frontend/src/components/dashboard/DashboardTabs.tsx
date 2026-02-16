@@ -9,6 +9,7 @@
  */
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Tabs } from '../ui/Tabs';
 
 import { OverviewTab } from './tabs/OverviewTab.tsx';
 import { FinancialTab } from './tabs/FinancialTab.tsx';
@@ -76,30 +77,19 @@ export function DashboardTabs() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Tab bar */}
-      <div className="flex items-end gap-0 border-b border-fin-border bg-fin-card px-5 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-3">
-        {TABS.map((tab) => {
-          const isActive = tab.key === activeTab;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => handleTabChange(tab.key)}
-              data-testid={`dashboard-tab-${tab.key}`}
-              className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
-                isActive
-                  ? 'text-fin-primary'
-                  : 'text-fin-muted hover:text-fin-text'
-              }`}
-            >
-              {tab.label}
-              {/* Active underline */}
-              {isActive && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-fin-primary rounded-full" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        items={TABS.map((tab) => ({
+          value: tab.key,
+          label: tab.label,
+          testId: `dashboard-tab-${tab.key}`,
+        }))}
+        value={activeTab}
+        onChange={handleTabChange}
+        listClassName="flex items-end gap-0 border-b border-fin-border bg-fin-card px-5 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-3"
+        buttonClassName="px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
+        activeClassName="text-fin-primary border-fin-primary"
+        inactiveClassName="text-fin-muted hover:text-fin-text"
+      />
 
       {/* Tab panel */}
       <div className="flex-1 min-h-0 overflow-y-auto">

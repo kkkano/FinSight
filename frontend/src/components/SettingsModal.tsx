@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
+import { Dialog } from './ui/Dialog';
 import { AgentControlPanel } from './settings/AgentControlPanel';
 
 interface SettingsModalProps {
@@ -358,11 +359,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
-      <div className="bg-fin-panel border border-fin-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      labelledBy="settings-modal-title"
+      panelClassName="bg-fin-panel border border-fin-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+    >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-fin-border sticky top-0 bg-fin-panel z-10">
           <div className="flex items-center gap-2">
@@ -835,7 +838,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             {saved ? '✓ 已保存' : loading ? '保存中...' : '保存'}
           </Button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 };

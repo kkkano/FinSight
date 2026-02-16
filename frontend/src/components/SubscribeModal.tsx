@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
+import { Dialog } from './ui/Dialog';
 
 interface SubscribeModalProps {
   isOpen: boolean;
@@ -159,11 +160,12 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-fin-panel border border-fin-border rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl">
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      panelClassName="bg-fin-panel border border-fin-border rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl"
+    >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-fin-border sticky top-0 bg-fin-panel z-10 rounded-t-2xl">
           <div className="flex items-center gap-2">
@@ -374,7 +376,6 @@ export const SubscribeModal: React.FC<SubscribeModalProps> = ({ isOpen, onClose 
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 };

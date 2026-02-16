@@ -13,6 +13,11 @@ export type { InputProps } from './Input';
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 
+export { Dialog } from './Dialog';
+export { Tabs } from './Tabs';
+export type { TabItem } from './Tabs';
+export { Tooltip } from './Tooltip';
+
 export { ToastProvider, ToastContainer, useToast } from './Toast';
 export type { ToastType, ToastOptions, ToastItem, UseToastReturn } from './Toast';
 
