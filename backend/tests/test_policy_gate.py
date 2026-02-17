@@ -69,6 +69,7 @@ def test_policy_gate_company_technical_allowlist_is_tight_and_includes_technical
     tools = policy.get("allowed_tools") or []
     assert "get_stock_price" in tools
     assert "get_technical_snapshot" in tools
+    assert "get_option_chain_metrics" in tools
     assert "get_company_news" not in tools, "technical mode should not default to news tools"
 
 
@@ -90,6 +91,71 @@ def test_policy_gate_company_compare_allowlist_includes_performance_comparison()
     tools = policy.get("allowed_tools") or []
     assert "get_performance_comparison" in tools
     assert "get_stock_price" not in tools, "compare mode should not default to single-stock price tool"
+
+
+def test_policy_gate_company_price_allowlist_includes_option_metrics():
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "price", "confidence": 0.9, "params": {}},
+            "output_mode": "brief",
+        }
+    )
+    tools = ((result.get("policy") or {}).get("allowed_tools") or [])
+    assert "get_stock_price" in tools
+    assert "get_option_chain_metrics" in tools
+
+
+def test_policy_gate_company_default_allowlist_includes_new_agent_tools():
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "qa", "confidence": 0.6, "params": {}},
+            "output_mode": "brief",
+        }
+    )
+    tools = set(((result.get("policy") or {}).get("allowed_tools") or []))
+    expected = {
+        "get_earnings_estimates",
+        "get_eps_revisions",
+        "get_option_chain_metrics",
+        "get_factor_exposure",
+        "run_portfolio_stress_test",
+        "get_event_calendar",
+        "score_news_source_reliability",
+    }
+    assert expected.issubset(tools)
+
+
+def test_policy_gate_news_subject_allowlist_includes_calendar_and_reliability_tools():
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "news_item",
+                "tickers": ["AAPL"],
+                "selection_ids": ["n1"],
+                "selection_types": ["news"],
+                "selection_payload": [{"type": "news", "id": "n1"}],
+            },
+            "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+            "output_mode": "brief",
+        }
+    )
+    tools = set(((result.get("policy") or {}).get("allowed_tools") or []))
+    assert "get_event_calendar" in tools
+    assert "score_news_source_reliability" in tools
 
 
 def test_policy_gate_company_compare_brief_disables_agents_by_default():

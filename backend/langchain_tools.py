@@ -42,6 +42,36 @@ except ImportError:  # pragma: no cover - backwards compatibility
         search as _search,
     )
 
+try:  # pragma: no cover - optional tools
+    from backend.tools import (  # type: ignore
+        get_earnings_estimates as _get_earnings_estimates,
+        get_eps_revisions as _get_eps_revisions,
+        get_event_calendar as _get_event_calendar,
+        get_factor_exposure as _get_factor_exposure,
+        get_option_chain_metrics as _get_option_chain_metrics,
+        run_portfolio_stress_test as _run_portfolio_stress_test,
+        score_news_source_reliability as _score_news_source_reliability,
+    )
+except Exception:  # pragma: no cover - optional tools fallback
+    try:
+        from tools import (  # type: ignore
+            get_earnings_estimates as _get_earnings_estimates,
+            get_eps_revisions as _get_eps_revisions,
+            get_event_calendar as _get_event_calendar,
+            get_factor_exposure as _get_factor_exposure,
+            get_option_chain_metrics as _get_option_chain_metrics,
+            run_portfolio_stress_test as _run_portfolio_stress_test,
+            score_news_source_reliability as _score_news_source_reliability,
+        )
+    except Exception:  # pragma: no cover - compatibility mode
+        _get_earnings_estimates = None
+        _get_eps_revisions = None
+        _get_option_chain_metrics = None
+        _get_factor_exposure = None
+        _run_portfolio_stress_test = None
+        _get_event_calendar = None
+        _score_news_source_reliability = None
+
 
 # ============================================
 # Pydantic input models (LangChain-friendly)
@@ -67,6 +97,52 @@ class TickerComparisonInput(BaseModel):
     tickers: Dict[str, str] = Field(
         description="Mapping of label to ticker, e.g. {'Apple': 'AAPL', 'NVIDIA': 'NVDA'}"
     )
+
+
+class OptionChainInput(BaseModel):
+    """Option-chain derived metric inputs."""
+
+    ticker: str = Field(description="Ticker symbol, e.g. 'AAPL'")
+    expiry: Optional[str] = Field(
+        default=None,
+        description="Optional expiry date in YYYY-MM-DD format",
+    )
+
+
+class EventCalendarInput(BaseModel):
+    """Event calendar inputs."""
+
+    ticker: str = Field(description="Ticker symbol, e.g. 'AAPL'")
+    days_ahead: int = Field(default=30, ge=1, le=120, description="Forward window in days")
+
+
+class SourceReliabilityInput(BaseModel):
+    """News source reliability inputs."""
+
+    source: str = Field(default="", description="Source name, e.g. Reuters")
+    url: str = Field(default="", description="Optional article URL")
+
+
+class FactorExposureInput(BaseModel):
+    """Portfolio factor exposure inputs."""
+
+    positions: list[dict[str, Any]] = Field(
+        description="Portfolio positions, e.g. [{'ticker':'AAPL','weight':0.6}]"
+    )
+    lookback_days: int = Field(default=252, ge=30, le=1260, description="Historical lookback window")
+
+
+class StressTestInput(BaseModel):
+    """Portfolio stress-test inputs."""
+
+    positions: list[dict[str, Any]] = Field(
+        description="Portfolio positions, e.g. [{'ticker':'AAPL','weight':0.6}]"
+    )
+    scenarios: Optional[dict[str, dict[str, float]]] = Field(
+        default=None,
+        description="Optional scenario map, e.g. {'equity_selloff': {'market': -0.1}}",
+    )
+    lookback_days: int = Field(default=252, ge=30, le=1260, description="Historical lookback window")
 
 
 class EmptyInput(BaseModel):
@@ -291,6 +367,101 @@ def get_current_datetime() -> str:
         return f"get_current_datetime failed: {exc}"
 
 
+@tool("get_earnings_estimates", args_schema=StockTickerInput, return_direct=False)
+def get_earnings_estimates(ticker: str) -> str:
+    """Get forward earnings estimates and revision signal."""
+
+    if not callable(_get_earnings_estimates):
+        return "get_earnings_estimates unavailable: backend.tools function not found"
+    try:
+        payload = _get_earnings_estimates(ticker)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_earnings_estimates failed: {exc}"
+
+
+@tool("get_eps_revisions", args_schema=StockTickerInput, return_direct=False)
+def get_eps_revisions(ticker: str) -> str:
+    """Get EPS revision table and trend signal."""
+
+    if not callable(_get_eps_revisions):
+        return "get_eps_revisions unavailable: backend.tools function not found"
+    try:
+        payload = _get_eps_revisions(ticker)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_eps_revisions failed: {exc}"
+
+
+@tool("get_option_chain_metrics", args_schema=OptionChainInput, return_direct=False)
+def get_option_chain_metrics(ticker: str, expiry: Optional[str] = None) -> str:
+    """Get option-derived metrics such as IV, put/call ratio and skew."""
+
+    if not callable(_get_option_chain_metrics):
+        return "get_option_chain_metrics unavailable: backend.tools function not found"
+    try:
+        payload = _get_option_chain_metrics(ticker, expiry=expiry)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_option_chain_metrics failed: {exc}"
+
+
+@tool("get_factor_exposure", args_schema=FactorExposureInput, return_direct=False)
+def get_factor_exposure(positions: list[dict[str, Any]], lookback_days: int = 252) -> str:
+    """Estimate portfolio factor exposures from free market data."""
+
+    if not callable(_get_factor_exposure):
+        return "get_factor_exposure unavailable: backend.tools function not found"
+    try:
+        payload = _get_factor_exposure(positions, lookback_days=lookback_days)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_factor_exposure failed: {exc}"
+
+
+@tool("run_portfolio_stress_test", args_schema=StressTestInput, return_direct=False)
+def run_portfolio_stress_test(
+    positions: list[dict[str, Any]],
+    scenarios: Optional[dict[str, dict[str, float]]] = None,
+    lookback_days: int = 252,
+) -> str:
+    """Run factor-based portfolio stress tests under predefined or custom scenarios."""
+
+    if not callable(_run_portfolio_stress_test):
+        return "run_portfolio_stress_test unavailable: backend.tools function not found"
+    try:
+        payload = _run_portfolio_stress_test(positions, scenarios=scenarios, lookback_days=lookback_days)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"run_portfolio_stress_test failed: {exc}"
+
+
+@tool("get_event_calendar", args_schema=EventCalendarInput, return_direct=False)
+def get_event_calendar(ticker: str, days_ahead: int = 30) -> str:
+    """Get upcoming earnings/dividend/macro events for a ticker."""
+
+    if not callable(_get_event_calendar):
+        return "get_event_calendar unavailable: backend.tools function not found"
+    try:
+        payload = _get_event_calendar(ticker, days_ahead=days_ahead)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_event_calendar failed: {exc}"
+
+
+@tool("score_news_source_reliability", args_schema=SourceReliabilityInput, return_direct=False)
+def score_news_source_reliability(source: str = "", url: str = "") -> str:
+    """Score source reliability with rule-based heuristics."""
+
+    if not callable(_score_news_source_reliability):
+        return "score_news_source_reliability unavailable: backend.tools function not found"
+    try:
+        payload = _score_news_source_reliability(source=source, url=url)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"score_news_source_reliability failed: {exc}"
+
+
 # ============================================
 # Registry helpers
 # ============================================
@@ -299,13 +470,20 @@ FINANCIAL_TOOLS = [
     get_current_datetime,
     get_stock_price,
     get_technical_snapshot,
+    get_option_chain_metrics,
     get_company_info,
     get_company_news,
+    get_event_calendar,
+    score_news_source_reliability,
     search,
     get_market_sentiment,
     get_economic_events,
+    get_earnings_estimates,
+    get_eps_revisions,
     get_performance_comparison,
     analyze_historical_drawdowns,
+    get_factor_exposure,
+    run_portfolio_stress_test,
 ]
 
 
@@ -340,12 +518,19 @@ __all__ = [
     "get_tool_by_name",
     "get_stock_price",
     "get_technical_snapshot",
+    "get_option_chain_metrics",
     "get_company_news",
+    "get_event_calendar",
+    "score_news_source_reliability",
     "get_company_info",
     "search",
     "get_market_sentiment",
     "get_economic_events",
+    "get_earnings_estimates",
+    "get_eps_revisions",
     "get_performance_comparison",
     "analyze_historical_drawdowns",
+    "get_factor_exposure",
+    "run_portfolio_stress_test",
     "get_current_datetime",
 ]

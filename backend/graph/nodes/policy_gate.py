@@ -58,22 +58,46 @@ def policy_gate(state: GraphState) -> dict:
 
     # Tool whitelist (minimal, can expand later)
     if subject_type in ("news_item", "news_set"):
-        allowed_tools = ["get_company_news", "search", "get_current_datetime"]
+        allowed_tools = [
+            "get_company_news",
+            "get_event_calendar",
+            "score_news_source_reliability",
+            "search",
+            "get_current_datetime",
+        ]
     elif subject_type == "company":
         # Keep allowlist tight for better planner accuracy (avoid "grab everything").
         if op_name == "price":
-            allowed_tools = ["get_stock_price", "get_current_datetime", "search"]
+            allowed_tools = [
+                "get_stock_price",
+                "get_option_chain_metrics",
+                "get_current_datetime",
+                "search",
+            ]
         elif op_name == "technical":
-            allowed_tools = ["get_stock_price", "get_technical_snapshot", "get_current_datetime", "search"]
+            allowed_tools = [
+                "get_stock_price",
+                "get_technical_snapshot",
+                "get_option_chain_metrics",
+                "get_current_datetime",
+                "search",
+            ]
         elif op_name == "compare":
             allowed_tools = ["get_performance_comparison", "get_current_datetime", "search"]
         else:
             allowed_tools = [
                 "get_stock_price",
                 "get_technical_snapshot",
+                "get_option_chain_metrics",
                 "get_company_info",
                 "get_company_news",
+                "get_event_calendar",
+                "score_news_source_reliability",
+                "get_earnings_estimates",
+                "get_eps_revisions",
                 "analyze_historical_drawdowns",
+                "get_factor_exposure",
+                "run_portfolio_stress_test",
                 "get_current_datetime",
                 "search",
             ]
