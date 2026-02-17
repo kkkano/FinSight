@@ -113,6 +113,18 @@ export interface NewsRankingMeta {
   notes?: string[];
 }
 
+export interface DataSourceMeta {
+  provider: string;
+  source_type: string;
+  as_of: string;
+  latency_ms: number;
+  fallback_used: boolean;
+  confidence: number;
+  currency?: string;
+  calc_window?: string;
+  fallback_reason?: string | null;
+}
+
 // === 选中对象（用于 MiniChat 上下文引用） ===
 export interface SelectionItem {
   type: 'news' | 'filing' | 'doc';
@@ -136,6 +148,7 @@ export interface DashboardData {
     ranking_meta?: NewsRankingMeta;
     [key: string]: NewsItem[] | NewsRankingMeta | undefined;
   };
+  meta?: Record<string, DataSourceMeta>;
   // v2 fields
   valuation?: ValuationData | null;
   valuation_fallback_reason?: string | null;
@@ -343,6 +356,8 @@ export interface RebalanceSuggestion {
   disclaimer: string;
   status: SuggestionStatus;
   created_at: string;
+  degraded_mode?: boolean;
+  fallback_reason?: string | null;
 }
 
 export interface GenerateRebalanceParams {
@@ -351,6 +366,30 @@ export interface GenerateRebalanceParams {
   risk_tier?: RiskTier;
   constraints?: Partial<RebalanceConstraints>;
   use_llm_enhancement?: boolean;
+}
+
+// === AI Insights (Phase F) ===
+export interface InsightCard {
+  agent_name: string;
+  tab: string;
+  score: number;             // 0-10
+  score_label: string;       // 弱势 | 偏空 | 中性 | 偏多 | 强势
+  summary: string;
+  key_points: string[];
+  risks: string[];
+  sub_scores?: Record<string, number>;
+  confidence: number;
+  as_of: string;
+  model_generated: boolean;
+}
+
+export interface DashboardInsightsResponse {
+  success: boolean;
+  symbol: string;
+  insights: Record<string, InsightCard>;
+  generated_at: string;
+  cached: boolean;
+  cache_age_seconds: number;
 }
 
 // === localStorage 键 ===

@@ -1,20 +1,21 @@
 /**
  * AgentControlPanel — user preferences for agent depth, budget, and concurrency.
  *
- * Persisted to localStorage (`finsight-agent-preferences`).
- * Backend performs whitelist validation — frontend values are only input.
+ * Persisted to localStorage (`finsight-agent-preferences`) and synced to backend.
+ * Backend performs whitelist validation; frontend values are only input.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { apiClient } from '../../api/client';
+import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import { Card } from '../ui/Card';
-
-// --- Constants ---
 
 const AGENT_NAMES = [
   { key: 'price_agent', label: '价格分析' },
   { key: 'news_agent', label: '新闻分析' },
   { key: 'fundamental_agent', label: '基本面' },
   { key: 'technical_agent', label: '技术面' },
+  { key: 'risk_agent', label: '风险分析' },
   { key: 'macro_agent', label: '宏观分析' },
   { key: 'deep_search_agent', label: '深度搜索' },
 ] as const;
@@ -37,43 +38,61 @@ const DEFAULT_PREFS: AgentPreferences = {
   concurrentMode: true,
 };
 
-// --- Persistence helpers ---
+const normalizePreferences = (raw: unknown): AgentPreferences => {
+  const parsed = typeof raw === 'object' && raw !== null ? (raw as Partial<AgentPreferences>) : {};
+  const inputAgents =
+    typeof parsed.agents === 'object' && parsed.agents !== null
+      ? (parsed.agents as Record<string, unknown>)
+      : {};
+
+  const agents: Record<string, AgentDepth> = Object.fromEntries(
+    AGENT_NAMES.map(({ key }) => {
+      const depthRaw = String(inputAgents[key] ?? 'standard').toLowerCase();
+      const depth = depthRaw === 'deep' || depthRaw === 'off' ? depthRaw : 'standard';
+      return [key, depth as AgentDepth];
+    }),
+  );
+
+  const roundsRaw = Number(parsed.maxRounds);
+  const maxRounds = Number.isFinite(roundsRaw)
+    ? Math.max(1, Math.min(10, Math.trunc(roundsRaw)))
+    : DEFAULT_PREFS.maxRounds;
+
+  const concurrentMode =
+    typeof parsed.concurrentMode === 'boolean'
+      ? parsed.concurrentMode
+      : DEFAULT_PREFS.concurrentMode;
+
+  return { agents, maxRounds, concurrentMode };
+};
 
 function loadPreferences(): AgentPreferences {
   if (typeof window === 'undefined') return DEFAULT_PREFS;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
-    const parsed = JSON.parse(raw);
-    return {
-      agents: { ...DEFAULT_PREFS.agents, ...(parsed.agents ?? {}) },
-      maxRounds: Math.max(
-        1,
-        Math.min(10, Number(parsed.maxRounds) || DEFAULT_PREFS.maxRounds),
-      ),
-      concurrentMode: parsed.concurrentMode !== false,
-    };
+    return normalizePreferences(JSON.parse(raw));
   } catch {
     return DEFAULT_PREFS;
   }
 }
 
+let preferenceCache: AgentPreferences = loadPreferences();
+
 function savePreferences(prefs: AgentPreferences): void {
+  preferenceCache = prefs;
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch {
-    // localStorage quota or unavailable — ignore
+    // ignore localStorage failures
   }
 }
 
-/** Read current preferences (for use outside React components). */
 // eslint-disable-next-line react-refresh/only-export-components
 export function getAgentPreferences(): AgentPreferences {
-  return loadPreferences();
+  return preferenceCache;
 }
-
-// --- Depth option config ---
 
 const DEPTH_OPTIONS: { value: AgentDepth; label: string }[] = [
   { value: 'standard', label: '标准' },
@@ -81,10 +100,7 @@ const DEPTH_OPTIONS: { value: AgentDepth; label: string }[] = [
   { value: 'off', label: '关闭' },
 ];
 
-function depthButtonClass(
-  depth: AgentDepth,
-  isActive: boolean,
-): string {
+function depthButtonClass(depth: AgentDepth, isActive: boolean): string {
   if (!isActive) {
     return 'bg-fin-bg border border-fin-border text-fin-muted hover:text-fin-text';
   }
@@ -97,42 +113,75 @@ function depthButtonClass(
   return 'bg-fin-primary/10 text-fin-primary border border-fin-primary/30';
 }
 
-// --- Component ---
-
 export const AgentControlPanel: React.FC = () => {
-  const [prefs, setPrefs] = useState<AgentPreferences>(DEFAULT_PREFS);
+  const sessionId = useStore((state) => state.sessionId);
+  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
+  const [prefs, setPrefs] = useState<AgentPreferences>(() => preferenceCache);
 
   useEffect(() => {
-    setPrefs(loadPreferences());
+    const localPrefs = loadPreferences();
+    preferenceCache = localPrefs;
+    setPrefs(localPrefs);
   }, []);
 
-  const persist = useCallback((next: AgentPreferences) => {
-    setPrefs(next);
-    savePreferences(next);
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const syncFromApi = async () => {
+      try {
+        const response = await apiClient.getAgentPreferences(userId);
+        if (!response?.success || !response.preferences || cancelled) return;
+        const normalized = normalizePreferences(response.preferences);
+        savePreferences(normalized);
+        setPrefs(normalized);
+      } catch {
+        // keep local preferences when API unavailable
+      }
+    };
+    void syncFromApi();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const persist = useCallback(
+    (updater: (previous: AgentPreferences) => AgentPreferences) => {
+      setPrefs((previous) => {
+        const next = normalizePreferences(updater(previous));
+        savePreferences(next);
+        void apiClient
+          .updateAgentPreferences({ user_id: userId, preferences: next })
+          .catch(() => undefined);
+        return next;
+      });
+    },
+    [userId],
+  );
 
   const setAgentDepth = useCallback(
     (agentKey: string, depth: AgentDepth) => {
-      persist({
-        ...prefs,
-        agents: { ...prefs.agents, [agentKey]: depth },
-      });
+      persist((previous) => ({
+        ...previous,
+        agents: { ...previous.agents, [agentKey]: depth },
+      }));
     },
-    [prefs, persist],
+    [persist],
   );
 
   const setMaxRounds = useCallback(
     (value: number) => {
-      persist({ ...prefs, maxRounds: Math.max(1, Math.min(10, value)) });
+      persist((previous) => ({
+        ...previous,
+        maxRounds: Math.max(1, Math.min(10, value)),
+      }));
     },
-    [prefs, persist],
+    [persist],
   );
 
   const setConcurrentMode = useCallback(
     (enabled: boolean) => {
-      persist({ ...prefs, concurrentMode: enabled });
+      persist((previous) => ({ ...previous, concurrentMode: enabled }));
     },
-    [prefs, persist],
+    [persist],
   );
 
   return (
@@ -141,7 +190,6 @@ export const AgentControlPanel: React.FC = () => {
         Agent 控制面板
       </h3>
 
-      {/* Agent depth grid */}
       <div className="space-y-2 mb-4">
         {AGENT_NAMES.map(({ key, label }) => (
           <div key={key} className="flex items-center justify-between gap-3">
@@ -165,7 +213,6 @@ export const AgentControlPanel: React.FC = () => {
         ))}
       </div>
 
-      {/* Budget slider */}
       <div className="mb-4">
         <div className="flex items-center justify-between text-xs mb-1">
           <span className="text-fin-muted">预算上限（轮次）</span>
@@ -186,7 +233,6 @@ export const AgentControlPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Concurrent mode */}
       <label className="inline-flex items-center gap-2 text-xs text-fin-muted cursor-pointer">
         <input
           type="checkbox"

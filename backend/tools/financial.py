@@ -249,6 +249,163 @@ def get_company_info(ticker: str) -> str:
     logger.info(f"Falling back to web search for '{ticker}' company info")
     return search(f"{ticker} company profile stock information")
 
+
+def _serialize_table_records(table: Any, *, max_rows: int = 8) -> List[Dict[str, Any]]:
+    if table is None:
+        return []
+    try:
+        if getattr(table, "empty", True):
+            return []
+        frame = table.reset_index()
+    except Exception:
+        return []
+
+    if frame is None or frame.empty:
+        return []
+
+    first_col = frame.columns[0]
+    frame = frame.rename(columns={first_col: "period"})
+
+    records: List[Dict[str, Any]] = []
+    for _, row in frame.head(max_rows).iterrows():
+        item: Dict[str, Any] = {}
+        for column in frame.columns:
+            value = row[column]
+            if hasattr(value, "isoformat"):
+                try:
+                    item[str(column)] = value.isoformat()
+                    continue
+                except Exception:
+                    pass
+            if value is None:
+                item[str(column)] = None
+                continue
+            try:
+                if isinstance(value, (int, float)):
+                    item[str(column)] = float(value)
+                else:
+                    item[str(column)] = str(value)
+            except Exception:
+                item[str(column)] = str(value)
+        records.append(item)
+    return records
+
+
+def _serialize_calendar_payload(calendar_payload: Any) -> Dict[str, Any]:
+    if not isinstance(calendar_payload, dict):
+        return {}
+
+    result: Dict[str, Any] = {}
+    for key, value in calendar_payload.items():
+        key_text = str(key)
+        if isinstance(value, list):
+            serialized_list: List[Any] = []
+            for item in value:
+                if hasattr(item, "isoformat"):
+                    try:
+                        serialized_list.append(item.isoformat())
+                        continue
+                    except Exception:
+                        pass
+                serialized_list.append(str(item))
+            result[key_text] = serialized_list
+            continue
+
+        if hasattr(value, "isoformat"):
+            try:
+                result[key_text] = value.isoformat()
+                continue
+            except Exception:
+                pass
+
+        if isinstance(value, (int, float)):
+            result[key_text] = float(value)
+        elif value is None:
+            result[key_text] = None
+        else:
+            result[key_text] = str(value)
+    return result
+
+
+def _infer_revision_signal(eps_revisions: List[Dict[str, Any]]) -> str:
+    if not eps_revisions:
+        return "unknown"
+
+    score = 0.0
+    for row in eps_revisions:
+        if not isinstance(row, dict):
+            continue
+        up_7 = float(row.get("upLast7days") or 0.0)
+        up_30 = float(row.get("upLast30days") or 0.0)
+        down_7 = float(row.get("downLast7Days") or 0.0)
+        down_30 = float(row.get("downLast30days") or 0.0)
+        score += up_7 + up_30 - down_7 - down_30
+
+    if score >= 6:
+        return "positive"
+    if score <= -6:
+        return "negative"
+    return "neutral"
+
+
+def get_earnings_estimates(ticker: str) -> Dict[str, Any]:
+    """
+    Get forward earnings estimates and EPS revision trends from free yfinance.
+    """
+    result: Dict[str, Any] = {
+        "ticker": str(ticker or "").upper(),
+        "source": "yfinance",
+        "as_of": datetime.now().isoformat(),
+        "earnings_estimate": [],
+        "eps_trend": [],
+        "eps_revisions": [],
+        "calendar": {},
+        "revision_signal": "unknown",
+        "error": None,
+    }
+
+    if not ticker:
+        result["error"] = "ticker_required"
+        return result
+
+    try:
+        stock = yf.Ticker(ticker)
+
+        result["earnings_estimate"] = _serialize_table_records(getattr(stock, "earnings_estimate", None), max_rows=8)
+        result["eps_trend"] = _serialize_table_records(getattr(stock, "eps_trend", None), max_rows=8)
+        result["eps_revisions"] = _serialize_table_records(getattr(stock, "eps_revisions", None), max_rows=8)
+        result["calendar"] = _serialize_calendar_payload(getattr(stock, "calendar", None))
+        result["revision_signal"] = _infer_revision_signal(result["eps_revisions"])
+
+        if (
+            not result["earnings_estimate"]
+            and not result["eps_trend"]
+            and not result["eps_revisions"]
+            and not result["calendar"]
+        ):
+            result["error"] = "no_earnings_estimate_data"
+        return result
+    except Exception as e:
+        logger.info(f"[EarningsEstimates] fetch failed for {ticker}: {e}")
+        result["error"] = f"fetch_failed: {e.__class__.__name__}"
+        return result
+
+
+def get_eps_revisions(ticker: str) -> Dict[str, Any]:
+    """
+    Lightweight wrapper focused on EPS revision data.
+    """
+    payload = get_earnings_estimates(ticker)
+    return {
+        "ticker": payload.get("ticker"),
+        "source": payload.get("source"),
+        "as_of": payload.get("as_of"),
+        "eps_revisions": payload.get("eps_revisions") if isinstance(payload.get("eps_revisions"), list) else [],
+        "eps_trend": payload.get("eps_trend") if isinstance(payload.get("eps_trend"), list) else [],
+        "revision_signal": payload.get("revision_signal", "unknown"),
+        "error": payload.get("error"),
+    }
+
 # ============================================
 # 新闻获取
 # ============================================

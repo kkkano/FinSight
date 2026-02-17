@@ -13,7 +13,6 @@ export function useDashboardData(symbol: string | null) {
   const {
     setActiveAsset,
     setCapabilities,
-    setWatchlist,
     setDashboardData,
     setLoading,
     setError,
@@ -53,7 +52,6 @@ export function useDashboardData(symbol: string | null) {
         if (!controller.signal.aborted) {
           setActiveAsset(json.state.active_asset);
           setCapabilities(json.state.capabilities);
-          setWatchlist(json.state.watchlist);
           setDashboardData(json.data);
         }
       } catch (err: unknown) {
@@ -69,7 +67,6 @@ export function useDashboardData(symbol: string | null) {
     [
       setActiveAsset,
       setCapabilities,
-      setWatchlist,
       setDashboardData,
       setLoading,
       setError,

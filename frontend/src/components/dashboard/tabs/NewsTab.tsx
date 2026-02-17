@@ -9,6 +9,7 @@ import { SentimentStatsBar } from './news/SentimentStatsBar';
 import { NewsFilterPills } from './news/NewsFilterPills';
 import type { NewsFilterType } from './news/NewsFilterPills';
 import { AiNewsSummaryCard } from './news/AiNewsSummaryCard';
+import { AiInsightCard } from './shared/AiInsightCard';
 
 const POSITIVE_KEYWORDS = [
   'surge', 'jump', 'rise', 'gain', 'bull', 'rally', 'upgrade', 'beat',
@@ -55,14 +56,22 @@ export function NewsTab() {
   const dashboardData = useDashboardStore((s) => s.dashboardData);
   const activeSelections = useDashboardStore((s) => s.activeSelections);
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
+  const insightsData = useDashboardStore((s) => s.insightsData);
+  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
+  const insightsError = useDashboardStore((s) => s.insightsError);
+  const insightsStale = useDashboardStore((s) => s.insightsStale);
 
   const [activeFilter, setActiveFilter] = useState<NewsFilterType>('all');
 
   const ticker = activeAsset?.symbol ?? null;
-  const { data: reportData, loading: reportLoading } = useLatestReport(ticker);
+  const { data: reportData, loading: reportLoading } = useLatestReport(ticker, {
+    sourceType: 'dashboard',
+    fallbackToAnySource: false,
+  });
 
   const newsMarket = dashboardData?.news?.market;
   const newsImpact = dashboardData?.news?.impact;
+  const newsInsight = insightsData?.news ?? null;
 
   const allNews = useMemo<NewsItem[]>(() => {
     if (!newsMarket && !newsImpact) return [];
@@ -97,7 +106,18 @@ export function NewsTab() {
 
   return (
     <div className="space-y-4">
-      <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
+      {/* AI News Insight Card — replaces AiNewsSummaryCard when insights available */}
+      <AiInsightCard
+        tab="news"
+        insight={newsInsight}
+        loading={insightsLoading}
+        error={insightsError}
+        stale={insightsStale}
+      />
+      {/* Fallback: report-based news summary (hidden when insight is present) */}
+      {!newsInsight && !insightsLoading && (
+        <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
+      )}
       <SentimentStatsBar news={allNews} />
 
       <div className="flex items-center justify-between">

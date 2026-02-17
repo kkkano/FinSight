@@ -148,9 +148,11 @@ def _build_service(backend: str, postgres_dsn: str | None = None) -> HybridRAGSe
         dsn = (postgres_dsn or os.getenv("RAG_V2_POSTGRES_DSN") or os.getenv("LANGGRAPH_CHECKPOINT_POSTGRES_DSN") or "").strip()
         if not dsn:
             raise ValueError("postgres backend requested but no DSN provided")
+        raw_dim = (os.getenv("RAG_V2_VECTOR_DIM") or "").strip()
+        vector_dim = int(raw_dim) if raw_dim else 0
         return HybridRAGService(
             backend="postgres",
-            vector_dim=96,
+            vector_dim=vector_dim,
             rrf_k=60,
             postgres_dsn=dsn,
             allow_memory_fallback=False,
@@ -503,6 +505,9 @@ def run_eval(
         "baseline_path": str(baseline_path),
         "backend": service.backend_name,
         "backend_requested": backend,
+        "embedding_model": getattr(service, "embedding_model", "unknown"),
+        "vector_dim": int(getattr(service, "vector_dim", 0) or 0),
+        "fallback_reason": getattr(service, "fallback_reason", None),
         "top_k": effective_top_k,
         "citation_top_k": effective_citation_top_k,
         "case_count": len(case_results),
@@ -579,6 +584,9 @@ def write_gate_summary(
         "generated_at": payload.get("generated_at"),
         "backend": payload.get("backend"),
         "backend_requested": payload.get("backend_requested"),
+        "embedding_model": payload.get("embedding_model"),
+        "vector_dim": payload.get("vector_dim"),
+        "fallback_reason": payload.get("fallback_reason"),
         "case_count": payload.get("case_count"),
         "overall_metrics": payload.get("overall_metrics"),
         "gate": {
@@ -667,6 +675,9 @@ def main() -> int:
     print("=" * 72)
     print(f"Run ID: {payload['run_id']}")
     print(f"Backend: {payload['backend']} (requested={payload['backend_requested']})")
+    print(f"Embedding: {payload.get('embedding_model')} (dim={payload.get('vector_dim')})")
+    if payload.get("fallback_reason"):
+        print(f"Backend fallback reason: {payload['fallback_reason']}")
     print(f"Cases: {payload['case_count']}")
     print(f"Recall@K: {payload['overall_metrics']['recall_at_k']:.4f}")
     print(f"nDCG@K: {payload['overall_metrics']['ndcg_at_k']:.4f}")

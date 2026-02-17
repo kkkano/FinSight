@@ -378,6 +378,71 @@ class RiskAgent(BaseFinancialAgent):
             assessed_at=assessed_at,
         )
 
+    def _build_portfolio_signals(
+        self,
+        ticker: str,
+        factor_payload: Any,
+        stress_payload: Any,
+    ) -> list[RiskSignal]:
+        signals: list[RiskSignal] = []
+
+        if isinstance(factor_payload, dict) and not factor_payload.get("error"):
+            factor_beta = factor_payload.get("factor_beta")
+            if isinstance(factor_beta, dict):
+                market_beta = safe_float(factor_beta.get("market"))
+                growth_beta = safe_float(factor_beta.get("growth"))
+                if market_beta is not None and market_beta >= 1.25:
+                    signals.append(
+                        RiskSignal(
+                            source_agent=self.AGENT_NAME,
+                            category="macro",
+                            description=f"{ticker} portfolio market beta={market_beta:.2f}, downside sensitivity elevated.",
+                            severity=0.65,
+                        )
+                    )
+                if growth_beta is not None and growth_beta >= 1.35:
+                    signals.append(
+                        RiskSignal(
+                            source_agent=self.AGENT_NAME,
+                            category="technical",
+                            description=f"{ticker} portfolio growth-factor tilt is high (beta={growth_beta:.2f}).",
+                            severity=0.55,
+                        )
+                    )
+
+            ann_vol = safe_float(factor_payload.get("annualized_volatility"))
+            if ann_vol is not None and ann_vol >= 0.35:
+                signals.append(
+                    RiskSignal(
+                        source_agent=self.AGENT_NAME,
+                        category="technical",
+                        description=f"{ticker} estimated annualized volatility {ann_vol:.1%} is elevated.",
+                        severity=0.6,
+                    )
+                )
+
+        if isinstance(stress_payload, dict) and not stress_payload.get("error"):
+            worst_case = safe_float(stress_payload.get("worst_case_return"))
+            if worst_case is not None and worst_case <= -0.12:
+                signals.append(
+                    RiskSignal(
+                        source_agent=self.AGENT_NAME,
+                        category="fundamental",
+                        description=f"{ticker} stress test worst-case return {worst_case:.1%} indicates fragile downside profile.",
+                        severity=0.75,
+                    )
+                )
+            elif worst_case is not None and worst_case <= -0.08:
+                signals.append(
+                    RiskSignal(
+                        source_agent=self.AGENT_NAME,
+                        category="fundamental",
+                        description=f"{ticker} stress test worst-case return {worst_case:.1%}; monitor drawdown risk.",
+                        severity=0.55,
+                    )
+                )
+        return signals
+
     async def research(
         self,
         query: str,
@@ -392,6 +457,39 @@ class RiskAgent(BaseFinancialAgent):
         get_stock_price = getattr(self.tools, "get_stock_price", None)
         quote, raw_payload = resolve_live_quote(clean_ticker, get_stock_price)
         assessment = self.evaluate_ticker_risk_lightweight(clean_ticker, quote or {})
+
+        positions = [{"ticker": clean_ticker, "weight": 1.0}]
+        get_factor_exposure = getattr(self.tools, "get_factor_exposure", None)
+        run_stress_test = getattr(self.tools, "run_portfolio_stress_test", None)
+        factor_payload = get_factor_exposure(positions, lookback_days=252) if get_factor_exposure else {}
+        stress_payload = run_stress_test(positions, lookback_days=252) if run_stress_test else {}
+        if not isinstance(factor_payload, dict):
+            factor_payload = {"error": "invalid_factor_payload"}
+        if not isinstance(stress_payload, dict):
+            stress_payload = {"error": "invalid_stress_payload"}
+
+        extra_signals = self._build_portfolio_signals(
+            ticker=clean_ticker,
+            factor_payload=factor_payload,
+            stress_payload=stress_payload,
+        )
+        if extra_signals:
+            merged_signals = list(assessment.signals) + extra_signals
+            merged_score = self._score_signals(merged_signals)
+            merged_level = self._level_from_score(merged_score)
+            assessment = RiskAssessment(
+                ticker=assessment.ticker,
+                risk_score=merged_score,
+                risk_level=merged_level,
+                signals=merged_signals,
+                summary=self._build_summary(
+                    ticker=assessment.ticker,
+                    score=merged_score,
+                    level=merged_level,
+                    signals=merged_signals,
+                ),
+                assessed_at=assessment.assessed_at,
+            )
 
         source = str((quote or {}).get("source") or "risk_rule_engine")
         fallback_used = source == "yfinance_fallback" or quote is None
@@ -408,13 +506,49 @@ class RiskAgent(BaseFinancialAgent):
                 },
             )
         ]
+        data_sources = [source]
+
+        if (
+            isinstance(factor_payload, dict)
+            and not factor_payload.get("error")
+            and isinstance(factor_payload.get("factor_beta"), dict)
+        ):
+            evidence.append(
+                EvidenceItem(
+                    text="Portfolio factor exposure snapshot.",
+                    source=str(factor_payload.get("source") or "factor_model"),
+                    timestamp=assessment.assessed_at,
+                    meta=factor_payload,
+                )
+            )
+            data_sources.append(str(factor_payload.get("source") or "factor_model"))
+
+        if (
+            isinstance(stress_payload, dict)
+            and not stress_payload.get("error")
+            and isinstance(stress_payload.get("scenarios"), list)
+        ):
+            evidence.append(
+                EvidenceItem(
+                    text="Portfolio stress-test snapshot.",
+                    source=str(stress_payload.get("source") or "stress_model"),
+                    timestamp=assessment.assessed_at,
+                    meta=stress_payload,
+                )
+            )
+            data_sources.append(str(stress_payload.get("source") or "stress_model"))
+
+        if not isinstance(factor_payload, dict) or factor_payload.get("error"):
+            fallback_used = True
+        if not isinstance(stress_payload, dict) or stress_payload.get("error"):
+            fallback_used = True
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=assessment.summary,
             evidence=evidence,
             confidence=0.75 if quote is not None else 0.45,
-            data_sources=[source],
+            data_sources=list(dict.fromkeys(data_sources)),
             as_of=assessment.assessed_at,
             fallback_used=fallback_used,
             risks=[signal.description for signal in assessment.signals],

@@ -57,6 +57,20 @@ jobs:
     name: Stage 4 - Retrieval Gate
     runs-on: ubuntu-latest
     needs: [stage3-retrieval-unit]
+    services:
+      pgvector:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,10 +80,56 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run retrieval quality gate
-        run: python tests/retrieval_eval/run_retrieval_eval.py --gate --report-prefix ci
-      - name: Verify retrieval gate summary
-        run: test -f tests/retrieval_eval/reports/gate_summary.json
+      - name: Verify retrieval dependency versions
+        run: |
+          python - <<'PY'
+          import importlib.metadata as md
+          import transformers
+
+          flag_ver = md.version("FlagEmbedding")
+          st_ver = md.version("sentence-transformers")
+          tf_ver = transformers.__version__
+          print(f"FlagEmbedding={flag_ver}")
+          print(f"sentence-transformers={st_ver}")
+          print(f"transformers={tf_ver}")
+
+          major = int(tf_ver.split(".")[0])
+          if major >= 5:
+              raise SystemExit("transformers major version must be <5 for FlagEmbedding compatibility")
+          PY
+      - name: Check embedding backend visibility
+        run: |
+          python - <<'PY'
+          from backend.rag.embedder import EmbeddingService
+          svc = EmbeddingService()
+          model = svc.model_name
+          print(f"Embedding backend: {model}")
+          if model == "hash":
+              print("::warning::RAG embedding backend is hash fallback (degraded mode).")
+          PY
+      - name: Run retrieval quality gate (memory)
+        run: |
+          python tests/retrieval_eval/run_retrieval_eval.py \
+            --backend memory \
+            --gate \
+            --report-prefix ci_memory \
+            --output-dir tests/retrieval_eval/reports/memory
+      - name: Run retrieval quality gate (postgres)
+        env:
+          RAG_EMBEDDING: bge-m3
+          RAG_V2_VECTOR_DIM: "1024"
+          RAG_V2_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          python tests/retrieval_eval/run_retrieval_eval.py \
+            --backend postgres \
+            --postgres-dsn "$RAG_V2_POSTGRES_DSN" \
+            --gate \
+            --report-prefix ci_postgres \
+            --output-dir tests/retrieval_eval/reports/postgres
+      - name: Verify retrieval gate summaries
+        run: |
+          test -f tests/retrieval_eval/reports/memory/gate_summary.json
+          test -f tests/retrieval_eval/reports/postgres/gate_summary.json
       - name: Upload retrieval reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,7 +137,6 @@ jobs:
           name: retrieval-reports
           path: |
             tests/retrieval_eval/reports/
-            tests/retrieval_eval/reports/gate_summary.json
 
   stage5-frontend-build:
     name: Stage 5 - Frontend Build

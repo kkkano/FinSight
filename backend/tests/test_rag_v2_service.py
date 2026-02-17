@@ -113,3 +113,71 @@ def test_hybrid_rag_memory_upsert_by_collection_and_source_id():
     hits = service.hybrid_search("stronger relevance", collection="session:t3", top_k=2)
     assert hits
     assert hits[0]["content"].startswith("updated content")
+
+
+def test_hybrid_rag_count_documents_excludes_expired():
+    service = HybridRAGService.for_testing(backend="memory")
+    base = _now()
+
+    service.ingest_documents(
+        [
+            RAGDocument(
+                collection="session:t4",
+                scope="ephemeral",
+                source_id="alive_doc",
+                content="active content",
+                source="selection",
+                expires_at=base + timedelta(hours=2),
+            ),
+            RAGDocument(
+                collection="session:t4",
+                scope="ephemeral",
+                source_id="expired_doc",
+                content="expired content",
+                source="selection",
+                expires_at=base - timedelta(minutes=1),
+            ),
+        ]
+    )
+
+    assert service.count_documents() >= 1
+    service.cleanup_expired()
+    assert service.count_documents() == 1
+
+
+def test_cleanup_stale_filings_removes_old_filing_docs():
+    service = HybridRAGService.for_testing(backend="memory")
+    old_created_at = _now() - timedelta(days=730)
+
+    service.ingest_documents(
+        [
+            RAGDocument(
+                collection="session:t5",
+                scope="persistent",
+                source_id="old_filing",
+                content="old filing content",
+                source="filing",
+                metadata={"type": "filing"},
+                created_at=old_created_at,
+                expires_at=None,
+            ),
+            RAGDocument(
+                collection="session:t5",
+                scope="persistent",
+                source_id="fresh_filing",
+                content="fresh filing content",
+                source="filing",
+                metadata={"type": "filing"},
+                created_at=_now(),
+                expires_at=None,
+            ),
+        ]
+    )
+
+    deleted = service.cleanup_stale_filings(older_than_days=365)
+    assert deleted >= 1
+
+    hits = service.hybrid_search("filing content", collection="session:t5", top_k=5)
+    ids = [hit["source_id"] for hit in hits]
+    assert "old_filing" not in ids
+    assert "fresh_filing" in ids

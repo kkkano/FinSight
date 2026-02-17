@@ -60,6 +60,25 @@ async def test_price_agent_fallback(mock_llm, mock_cache, mock_tools, circuit_br
     mock_tools._fetch_with_yfinance.assert_called_once()
     mock_tools._fetch_with_finnhub.assert_called_once()
 
+
+@pytest.mark.asyncio
+async def test_price_agent_enriches_option_metrics(mock_llm, mock_cache, mock_tools, circuit_breaker):
+    mock_tools.get_option_chain_metrics = MagicMock(return_value={
+        "ticker": "AAPL",
+        "source": "yfinance_options",
+        "as_of": "2026-02-18T00:00:00",
+        "iv_atm": 0.28,
+        "put_call_ratio_oi": 0.92,
+        "iv_skew_25d": 0.03,
+        "error": None,
+    })
+
+    agent = PriceAgent(mock_llm, mock_cache, mock_tools, circuit_breaker)
+    result = await agent.research("Get AAPL price", "AAPL")
+
+    assert any(item.source == "yfinance_options" for item in result.evidence)
+    assert "yfinance_options" in result.data_sources
+
 @pytest.mark.asyncio
 async def test_news_agent_success(mock_llm, mock_cache, mock_tools, circuit_breaker):
     agent = NewsAgent(mock_llm, mock_cache, mock_tools, circuit_breaker)
@@ -70,6 +89,27 @@ async def test_news_agent_success(mock_llm, mock_cache, mock_tools, circuit_brea
     assert "Apple releases new iPhone" in result.summary
     assert len(result.evidence) >= 1
     assert result.evidence[0].source == "finnhub"
+
+
+@pytest.mark.asyncio
+async def test_news_agent_adds_event_calendar_evidence(mock_llm, mock_cache, mock_tools, circuit_breaker):
+    mock_tools.get_event_calendar = MagicMock(return_value={
+        "ticker": "AAPL",
+        "as_of": "2026-02-18T00:00:00",
+        "earnings_events": [{"date": "2026-03-01", "title": "Earnings Date"}],
+        "dividend_events": [],
+        "macro_events": [{"date": None, "title": "Monitor CPI release window"}],
+    })
+    mock_tools.score_news_source_reliability = MagicMock(return_value={
+        "reliability_score": 0.9,
+        "reliability_tier": "high",
+        "reason": "domain:reuters.com",
+    })
+
+    agent = NewsAgent(mock_llm, mock_cache, mock_tools, circuit_breaker)
+    result = await agent.research("News for AAPL", "AAPL")
+
+    assert any(item.source == "event_calendar" for item in result.evidence)
 
 @pytest.mark.asyncio
 async def test_news_agent_deduplication(mock_llm, mock_cache, mock_tools, circuit_breaker):

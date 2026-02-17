@@ -19,38 +19,60 @@ interface UseLatestReportReturn {
   data: LatestReportData | null;
   loading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<LatestReportData | null>;
 }
 
-export function useLatestReport(ticker: string | null | undefined): UseLatestReportReturn {
+interface UseLatestReportOptions {
+  sourceType?: string;
+  fallbackToAnySource?: boolean;
+}
+
+export function useLatestReport(
+  ticker: string | null | undefined,
+  options: UseLatestReportOptions = {},
+): UseLatestReportReturn {
   const [data, setData] = useState<LatestReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastTickerRef = useRef<string | null>(null);
 
   const sessionId = useStore((s) => s.sessionId);
+  const sourceType = options.sourceType?.trim() || undefined;
+  const fallbackToAnySource = options.fallbackToAnySource ?? true;
 
-  const fetchReport = useCallback(async () => {
+  const fetchReport = useCallback(async (): Promise<LatestReportData | null> => {
     if (!ticker || !sessionId) {
       setData(null);
-      return;
+      return null;
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const indexResult = await apiClient.listReportIndex({
+      let indexResult = await apiClient.listReportIndex({
         sessionId,
         ticker,
         limit: 1,
+        sourceType,
       });
+
+      if (
+        sourceType
+        && fallbackToAnySource
+        && (!Array.isArray(indexResult?.items) || indexResult.items.length === 0)
+      ) {
+        indexResult = await apiClient.listReportIndex({
+          sessionId,
+          ticker,
+          limit: 1,
+        });
+      }
 
       const items = indexResult?.items ?? [];
       if (items.length === 0) {
         setData(null);
-        setLoading(false);
-        return;
+        return null;
       }
 
       const reportId = items[0].report_id;
@@ -60,21 +82,25 @@ export function useLatestReport(ticker: string | null | undefined): UseLatestRep
       });
 
       if (replay?.success && replay.report) {
-        setData({
+        const latest: LatestReportData = {
           reportId,
           report: replay.report,
           citations: replay.citations ?? [],
-        });
+        };
+        setData(latest);
+        return latest;
       } else {
         setData(null);
+        return null;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
       setData(null);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [ticker, sessionId]);
+  }, [ticker, sessionId, sourceType, fallbackToAnySource]);
 
   useEffect(() => {
     if (ticker !== lastTickerRef.current) {

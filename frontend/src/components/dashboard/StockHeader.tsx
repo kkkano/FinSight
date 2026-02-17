@@ -10,6 +10,7 @@ import { FileText, Loader2, Star, Zap } from 'lucide-react';
 import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
+import { useToast } from '../ui';
 
 // --- Props ---
 
@@ -64,6 +65,7 @@ export function StockHeader({
 }: StockHeaderProps) {
   const { watchlist, addWatchItemApi, removeWatchItemApi } = useDashboardStore();
   const { execute, isRunning, runId } = useExecuteAgent();
+  const { toast } = useToast();
 
   // Watchlist toggle state
   const isInWatchlist = watchlist.some(
@@ -77,8 +79,13 @@ export function StockHeader({
       } else {
         await addWatchItemApi(ticker);
       }
-    } catch {
-      // Silently handle watchlist API errors
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '操作失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '自选操作失败',
+        message,
+      });
     }
   };
 

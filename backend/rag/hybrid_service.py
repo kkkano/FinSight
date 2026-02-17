@@ -6,7 +6,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
 
 from sqlalchemy import create_engine, text
@@ -29,6 +29,29 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _is_production_env() -> bool:
+    values = [
+        os.getenv("APP_ENV", ""),
+        os.getenv("ENV", ""),
+        os.getenv("NODE_ENV", ""),
+        os.getenv("FASTAPI_ENV", ""),
+    ]
+    return any(str(v).strip().lower() in {"prod", "production"} for v in values)
+
+
+def _log_backend_fallback(*, reason: str, detail: str | None = None, backend_requested: str | None = None) -> None:
+    payload: dict[str, Any] = {
+        "event": "rag_backend_fallback",
+        "backend": "memory",
+        "reason": reason,
+        "backend_requested": backend_requested or os.getenv("RAG_V2_BACKEND", "auto"),
+    }
+    if detail:
+        payload["detail"] = detail
+    log_fn = logger.warning if _is_production_env() else logger.info
+    log_fn("rag_backend_fallback %s", payload)
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +260,29 @@ class _InMemoryHybridStore:
             for key, payload in self._docs.items():
                 expires_at = payload.get("expires_at")
                 if isinstance(expires_at, datetime) and expires_at <= now:
+                    to_delete.append(key)
+            for key in to_delete:
+                self._docs.pop(key, None)
+        return len(to_delete)
+
+    def count_documents(self) -> int:
+        now = _utc_now()
+        with self._lock:
+            return sum(
+                1
+                for payload in self._docs.values()
+                if not (isinstance(payload.get("expires_at"), datetime) and payload.get("expires_at") <= now)
+            )
+
+    def cleanup_stale_filings(self, *, older_than_days: int = 365) -> int:
+        threshold = _utc_now() - timedelta(days=max(1, int(older_than_days)))
+        to_delete: list[tuple[str, str]] = []
+        with self._lock:
+            for key, payload in self._docs.items():
+                metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+                doc_type = str(metadata.get("type") or "").strip().lower()
+                created_at = payload.get("created_at")
+                if doc_type in {"filing", "research_doc"} and isinstance(created_at, datetime) and created_at <= threshold:
                     to_delete.append(key)
             for key in to_delete:
                 self._docs.pop(key, None)
@@ -524,6 +570,32 @@ class _PostgresHybridStore:
             result = conn.execute(sql)
         return int(result.rowcount or 0)
 
+    def count_documents(self) -> int:
+        self._ensure_schema()
+        sql = text(
+            """
+            SELECT COUNT(1)
+            FROM rag_documents_v2
+            WHERE expires_at IS NULL OR expires_at > now()
+            """
+        )
+        with self._engine.connect() as conn:
+            value = conn.execute(sql).scalar() or 0
+        return int(value)
+
+    def cleanup_stale_filings(self, *, older_than_days: int = 365) -> int:
+        self._ensure_schema()
+        sql = text(
+            """
+            DELETE FROM rag_documents_v2
+            WHERE created_at <= (now() - make_interval(days => :older_than_days))
+              AND lower(COALESCE(metadata->>'type', '')) IN ('filing', 'research_doc')
+            """
+        )
+        with self._engine.begin() as conn:
+            result = conn.execute(sql, {"older_than_days": max(1, int(older_than_days))})
+        return int(result.rowcount or 0)
+
 
 class HybridRAGService:
     def __init__(
@@ -552,6 +624,20 @@ class HybridRAGService:
             return
 
         dsn = (postgres_dsn or "").strip()
+        if backend_norm == "postgres" and not dsn:
+            message = "postgres backend requested but no DSN configured"
+            if not allow_memory_fallback:
+                raise ValueError(message)
+            self.fallback_reason = message
+            _log_backend_fallback(
+                reason="postgres_dsn_missing",
+                detail=message,
+                backend_requested=backend_norm,
+            )
+            self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
+            self.backend_name = "memory"
+            return
+
         wants_postgres = backend_norm == "postgres" or (backend_norm == "auto" and bool(dsn))
         if wants_postgres and dsn:
             try:
@@ -562,10 +648,19 @@ class HybridRAGService:
                 if not allow_memory_fallback:
                     raise
                 self.fallback_reason = str(exc)
-                logger.warning("RAG v2 fallback to memory backend: %s", exc)
+                _log_backend_fallback(
+                    reason="postgres_init_failed",
+                    detail=str(exc),
+                    backend_requested=backend_norm,
+                )
 
         self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
         self.backend_name = "memory"
+        if wants_postgres and self.fallback_reason is None:
+            _log_backend_fallback(
+                reason="postgres_unavailable_use_memory",
+                backend_requested=backend_norm,
+            )
 
     @classmethod
     def from_env(cls) -> "HybridRAGService":
@@ -605,6 +700,18 @@ class HybridRAGService:
 
     def cleanup_expired(self) -> int:
         return self._store.cleanup_expired()
+
+    def count_documents(self) -> int:
+        count_fn = getattr(self._store, "count_documents", None)
+        if callable(count_fn):
+            return int(count_fn())
+        return 0
+
+    def cleanup_stale_filings(self, *, older_than_days: int = 365) -> int:
+        cleanup_fn = getattr(self._store, "cleanup_stale_filings", None)
+        if callable(cleanup_fn):
+            return int(cleanup_fn(older_than_days=older_than_days))
+        return 0
 
 
 _service_singleton: Optional[HybridRAGService] = None

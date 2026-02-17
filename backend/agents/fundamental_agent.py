@@ -54,6 +54,20 @@ class FundamentalAgent(BaseFinancialAgent):
                 "description": "获取公司概况(ticker)，包含行业、市值、主营业务",
                 "call_with": "ticker",
             }
+        earnings_fn = getattr(tools, "get_earnings_estimates", None)
+        if earnings_fn:
+            registry["get_earnings_estimates"] = {
+                "func": earnings_fn,
+                "description": "Get earnings estimates and EPS revision trend",
+                "call_with": "ticker",
+            }
+        eps_revision_fn = getattr(tools, "get_eps_revisions", None)
+        if eps_revision_fn:
+            registry["get_eps_revisions"] = {
+                "func": eps_revision_fn,
+                "description": "Get EPS revisions summary signal",
+                "call_with": "ticker",
+            }
         return registry
 
     @staticmethod
@@ -86,15 +100,33 @@ class FundamentalAgent(BaseFinancialAgent):
 
         financials_func = getattr(self.tools, "get_financial_statements", None)
         company_func = getattr(self.tools, "get_company_info", None)
+        earnings_func = getattr(self.tools, "get_earnings_estimates", None)
+        eps_revision_func = getattr(self.tools, "get_eps_revisions", None)
 
         financials = financials_func(ticker) if financials_func else {"error": "missing_financials_tool"}
         company_info = company_func(ticker) if company_func else ""
+        earnings_estimates = earnings_func(ticker) if earnings_func else {"error": "missing_earnings_estimates_tool"}
+        eps_revisions = eps_revision_func(ticker) if eps_revision_func else {"error": "missing_eps_revisions_tool"}
+
+        if not isinstance(earnings_estimates, dict):
+            earnings_estimates = {"error": "invalid_earnings_estimates_payload"}
+        if not isinstance(eps_revisions, dict):
+            eps_revisions = {"error": "invalid_eps_revisions_payload"}
+
+        if isinstance(earnings_estimates, dict) and not earnings_estimates.get("eps_revisions"):
+            if isinstance(eps_revisions.get("eps_revisions"), list):
+                earnings_estimates["eps_revisions"] = eps_revisions.get("eps_revisions")
+            if eps_revisions.get("revision_signal"):
+                earnings_estimates["revision_signal"] = eps_revisions.get("revision_signal")
+
         normalized_metrics = self._build_normalized_metrics(financials if isinstance(financials, dict) else {})
 
         data = {
             "ticker": ticker,
             "financials": financials,
             "company_info": company_info,
+            "earnings_estimates": earnings_estimates,
+            "eps_revisions": eps_revisions,
             "normalized_metrics": normalized_metrics,
         }
         cache_ttl = self.CACHE_TTL
@@ -210,6 +242,34 @@ class FundamentalAgent(BaseFinancialAgent):
             debt_ratio = liabilities_value / assets_value
             summary_parts.append(f"负债/资产 {debt_ratio:.1%}。")
 
+        earnings_payload = data.get("earnings_estimates") if isinstance(data.get("earnings_estimates"), dict) else {}
+        eps_revisions_payload = data.get("eps_revisions") if isinstance(data.get("eps_revisions"), dict) else {}
+        revision_signal = str(
+            earnings_payload.get("revision_signal")
+            or eps_revisions_payload.get("revision_signal")
+            or "unknown"
+        ).lower()
+        signal_text_map = {
+            "positive": "EPS棰勬湡淇鍋忔闈?positive)",
+            "neutral": "EPS棰勬湡淇涓€?neutral)",
+            "negative": "EPS棰勬湡淇鍋忚礋闈?negative)",
+        }
+        signal_text_map = {
+            "positive": "EPS revisions trend is positive.",
+            "neutral": "EPS revisions trend is neutral.",
+            "negative": "EPS revisions trend is negative.",
+        }
+        if revision_signal in signal_text_map:
+            summary_parts.append(signal_text_map[revision_signal])
+
+        calendar_payload = earnings_payload.get("calendar") if isinstance(earnings_payload, dict) else {}
+        if isinstance(calendar_payload, dict):
+            for key in ("Earnings Date", "earningsDate", "EarningsDate"):
+                value = calendar_payload.get(key)
+                if value:
+                    summary_parts.append(f"Upcoming earnings window: {value}")
+                    break
+
         summary_parts = [item for item in summary_parts if item]
         if not summary_parts:
             return "最新财报中未找到可用的基本面指标。"
@@ -260,6 +320,32 @@ class FundamentalAgent(BaseFinancialAgent):
                         },
                     )
                 )
+
+            earnings_payload = raw_data.get("earnings_estimates") if isinstance(raw_data.get("earnings_estimates"), dict) else {}
+            eps_revisions_payload = raw_data.get("eps_revisions") if isinstance(raw_data.get("eps_revisions"), dict) else {}
+            revision_signal = str(
+                earnings_payload.get("revision_signal")
+                or eps_revisions_payload.get("revision_signal")
+                or "unknown"
+            ).lower()
+            if revision_signal in {"positive", "neutral", "negative"}:
+                evidence.append(
+                    EvidenceItem(
+                        text=f"EPS revision signal: {revision_signal}",
+                        source="yfinance_earnings",
+                        timestamp=str(earnings_payload.get("as_of") or eps_revisions_payload.get("as_of") or ""),
+                        meta={
+                            "metric_key": "eps_revision_signal",
+                            "revision_signal": revision_signal,
+                            "eps_revisions_count": len(
+                                earnings_payload.get("eps_revisions")
+                                if isinstance(earnings_payload.get("eps_revisions"), list)
+                                else (eps_revisions_payload.get("eps_revisions") or [])
+                            ),
+                        },
+                    )
+                )
+                data_sources.append("yfinance_earnings")
 
             evidence_quality = self._compute_evidence_quality(normalized)
 
@@ -579,6 +665,15 @@ class FundamentalAgent(BaseFinancialAgent):
                 risks.append(f"杠杆率偏高（负债/资产 = {leverage:.0%} > 60%），偿债压力较大。")
 
         financials = raw_data.get("financials") if isinstance(raw_data, dict) else {}
+        earnings_payload = raw_data.get("earnings_estimates") if isinstance(raw_data, dict) and isinstance(raw_data.get("earnings_estimates"), dict) else {}
+        eps_revisions_payload = raw_data.get("eps_revisions") if isinstance(raw_data, dict) and isinstance(raw_data.get("eps_revisions"), dict) else {}
+        revision_signal = str(
+            earnings_payload.get("revision_signal")
+            or eps_revisions_payload.get("revision_signal")
+            or "unknown"
+        ).lower()
+        if revision_signal == "negative":
+            risks.append("EPS revisions trend is negative; forward earnings expectations may be under pressure.")
         if isinstance(financials, dict) and financials.get("error") and not self._has_financial_tables(financials):
             risks.append("财务数据获取异常，建议核实原始财报。")
 

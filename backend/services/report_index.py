@@ -141,6 +141,10 @@ class ReportIndexStore:
         report_json = json.dumps(report, ensure_ascii=False)
         trace_digest_json = json.dumps(trace_digest or {}, ensure_ascii=False)
         generated_at = str(report.get("generated_at") or "").strip() or _now_iso()
+        meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
+        source_type = str(report.get("source_type") or meta.get("source_type") or "ai_generated").strip() or "ai_generated"
+        filing_type = str(report.get("filing_type") or "").strip() or None
+        publisher = str(report.get("publisher") or "").strip() or None
         now = _now_iso()
 
         with self._lock:
@@ -150,8 +154,9 @@ class ReportIndexStore:
                     INSERT INTO report_index(
                         report_id, session_id, ticker, title, summary, tags_json,
                         generated_at, confidence_score, trace_digest_json, report_json,
+                        source_type, filing_type, publisher,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(report_id) DO UPDATE SET
                         session_id=excluded.session_id,
                         ticker=excluded.ticker,
@@ -162,6 +167,9 @@ class ReportIndexStore:
                         confidence_score=excluded.confidence_score,
                         trace_digest_json=excluded.trace_digest_json,
                         report_json=excluded.report_json,
+                        source_type=excluded.source_type,
+                        filing_type=excluded.filing_type,
+                        publisher=excluded.publisher,
                         updated_at=excluded.updated_at
                     """,
                     (
@@ -175,6 +183,9 @@ class ReportIndexStore:
                         confidence_value,
                         trace_digest_json,
                         report_json,
+                        source_type,
+                        filing_type,
+                        publisher,
                         now,
                         now,
                     ),

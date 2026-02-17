@@ -59,3 +59,11 @@ def test_preferences(memory_service):
 
     profile = memory_service.get_user_profile(user_id)
     assert profile.preferences.get("theme") == "dark"
+
+
+def test_reject_path_traversal_user_id(memory_service):
+    with pytest.raises(ValueError):
+        memory_service.get_user_profile("../../etc/passwd")
+
+    with pytest.raises(ValueError):
+        memory_service.set_preference("../evil", "theme", "dark")

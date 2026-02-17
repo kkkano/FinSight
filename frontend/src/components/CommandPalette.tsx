@@ -1,7 +1,17 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { FC, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquarePlus, LayoutDashboard, Gauge, Moon, Sun, Search } from 'lucide-react';
+import {
+  Bot,
+  Gauge,
+  GitCompare,
+  LayoutDashboard,
+  MessageSquarePlus,
+  Moon,
+  Search,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Dialog } from './ui/Dialog';
 
@@ -10,6 +20,7 @@ interface CommandAction {
   label: string;
   icon: FC<{ size?: number; className?: string }>;
   shortcut?: string;
+  keywords?: string[];
   execute: () => void;
 }
 
@@ -20,7 +31,7 @@ interface CommandPaletteProps {
 
 export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { theme, setTheme } = useStore();
+  const { theme, setTheme, setDraft, currentTicker } = useStore();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -33,6 +44,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         id: 'new-chat',
         label: '新建对话',
         icon: MessageSquarePlus,
+        keywords: ['chat', 'new'],
         execute: () => {
           navigate('/chat');
           onClose();
@@ -42,6 +54,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         id: 'open-workbench',
         label: '打开工作台',
         icon: LayoutDashboard,
+        keywords: ['workbench'],
         execute: () => {
           navigate('/workbench');
           onClose();
@@ -51,8 +64,43 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         id: 'open-dashboard',
         label: '打开仪表盘',
         icon: Gauge,
+        keywords: ['dashboard'],
         execute: () => {
           navigate('/dashboard');
+          onClose();
+        },
+      },
+      {
+        id: 'cmd-analyze',
+        label: '/analyze 快速分析',
+        icon: Sparkles,
+        keywords: ['analyze', 'analysis', '分析'],
+        execute: () => {
+          const seed = currentTicker?.trim().toUpperCase();
+          setDraft(seed ? `/analyze ${seed}` : '/analyze ');
+          navigate('/chat');
+          onClose();
+        },
+      },
+      {
+        id: 'cmd-compare',
+        label: '/compare 标的对比',
+        icon: GitCompare,
+        keywords: ['compare', '对比'],
+        execute: () => {
+          const seed = currentTicker?.trim().toUpperCase();
+          setDraft(seed ? `/compare ${seed} vs SPY` : '/compare AAPL vs MSFT');
+          navigate('/chat');
+          onClose();
+        },
+      },
+      {
+        id: 'cmd-agents',
+        label: '/agents Agent 设置',
+        icon: Bot,
+        keywords: ['agents', 'settings', '偏好'],
+        execute: () => {
+          window.dispatchEvent(new CustomEvent('finsight:open-settings'));
           onClose();
         },
       },
@@ -60,19 +108,26 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
         id: 'toggle-dark-mode',
         label: '切换明暗主题',
         icon: theme === 'dark' ? Sun : Moon,
+        keywords: ['theme', 'dark', 'light'],
         execute: () => {
           setTheme(theme === 'dark' ? 'light' : 'dark');
           onClose();
         },
       },
     ],
-    [navigate, onClose, theme, setTheme],
+    [navigate, onClose, theme, setTheme, setDraft, currentTicker],
   );
 
   const filteredActions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return actions;
-    return actions.filter((action) => action.label.toLowerCase().includes(normalized));
+    return actions.filter((action) => {
+      const inLabel = action.label.toLowerCase().includes(normalized);
+      const inKeywords = action.keywords?.some((keyword) =>
+        keyword.toLowerCase().includes(normalized),
+      );
+      return inLabel || Boolean(inKeywords);
+    });
   }, [actions, query]);
 
   useEffect(() => {

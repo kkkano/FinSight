@@ -39,12 +39,19 @@ def test_health_endpoint():
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert data.get("status") == "healthy"
+    assert data.get("status") in ("healthy", "degraded")
     components = data.get("components") or {}
     checkpointer = components.get("checkpointer") or {}
     assert checkpointer.get("status") == "ok"
     assert checkpointer.get("schema_version") == "checkpointer.v1"
     assert checkpointer.get("backend") in ("sqlite", "postgres", "memory")
+    rag = components.get("rag") or {}
+    if rag:
+        assert rag.get("status") in ("ok", "degraded", "error")
+        assert "backend" in rag or rag.get("status") == "error"
+        assert "embedding_model" in rag or rag.get("status") == "error"
+        assert "vector_dim" in rag or rag.get("status") == "error"
+        assert "doc_count" in rag or rag.get("status") == "error"
     assert "timestamp" in data
 
 

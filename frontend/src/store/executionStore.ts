@@ -239,8 +239,27 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           });
         } else {
           // Generic thinking step — update currentStep only
+          const latestRun = getRun() ?? run;
+          const patch: Partial<ExecutionRun> = {};
           if (message) {
-            updateRun({ currentStep: message });
+            patch.currentStep = message;
+          }
+          const normalizedStage = String(stage || '').toLowerCase();
+          if (normalizedStage.includes('synth')) {
+            patch.progress = Math.max(latestRun.progress, 88);
+          } else if (normalizedStage.includes('render')) {
+            patch.progress = Math.max(latestRun.progress, 95);
+          } else if (normalizedStage.startsWith('llm_') && latestRun.progress >= 80) {
+            if (normalizedStage === 'llm_end') {
+              patch.progress = Math.max(latestRun.progress, 96);
+            } else if (normalizedStage === 'llm_start') {
+              patch.progress = Math.max(latestRun.progress, 88);
+            } else {
+              patch.progress = Math.max(latestRun.progress, 92);
+            }
+          }
+          if (Object.keys(patch).length > 0) {
+            updateRun(patch);
           }
         }
       },
@@ -251,7 +270,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
         updateRun({
           streamedContent: run.streamedContent + token,
-          progress: Math.max(run.progress, 85),
+          progress: Math.max(run.progress, 92),
           currentStep: '生成报告...',
         });
       },
@@ -283,13 +302,28 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     };
 
     // Fire-and-forget — errors handled via onError callback
-    apiClient
-      .executeAgent(request, callbacks, { signal: abortController.signal })
-      .catch((err: unknown) => {
+    callbacks.onRawEvent = (event) => {
+      useStore.getState().addRawEvent(event);
+    };
+
+    const traceRawEnabled = useStore.getState().traceRawEnabled;
+    void (async () => {
+      try {
+        await apiClient.executeAgent(request, callbacks, {
+          signal: abortController.signal,
+          traceRawEnabled,
+        });
+
+        const run = getRun();
+        if (run && run.status === 'running') {
+          callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
+        }
+      } catch (err: unknown) {
         if (abortController.signal.aborted) return;
         const msg = err instanceof Error ? err.message : 'Execution failed';
         callbacks.onError?.(msg);
-      });
+      }
+    })();
 
     return runId;
   },

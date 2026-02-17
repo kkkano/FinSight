@@ -16,6 +16,8 @@ interface KeyInsightsCardProps {
   technicals?: TechnicalData | null;
   news?: NewsItem[];
   reportData?: LatestReportData | null;
+  /** AI insight key points from DigestAgent — highest priority when available */
+  insightPoints?: string[];
 }
 
 // --- Helpers ---
@@ -96,12 +98,14 @@ function extractReportInsights(reportData: LatestReportData | null | undefined):
 
 // --- Component ---
 
-export function KeyInsightsCard({ valuation, technicals, news, reportData }: KeyInsightsCardProps) {
+export function KeyInsightsCard({ valuation, technicals, news, reportData, insightPoints }: KeyInsightsCardProps) {
   const insights = useMemo(() => {
+    // Priority: AI insight > report > auto-generated
+    if (insightPoints && insightPoints.length > 0) return insightPoints.slice(0, 5);
     const reportInsights = extractReportInsights(reportData);
     if (reportInsights && reportInsights.length > 0) return reportInsights;
     return generateAutoInsights(valuation, technicals, news);
-  }, [valuation, technicals, news, reportData]);
+  }, [valuation, technicals, news, reportData, insightPoints]);
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">

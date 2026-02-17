@@ -12,7 +12,7 @@ import { useToast } from '../ui/Toast';
 import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
-import Workbench from '../../pages/Workbench';
+import { WorkbenchWorkspace } from './WorkbenchWorkspace';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 
 export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
@@ -31,7 +31,20 @@ const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 600;
 const PANEL_WIDTH_STORAGE_KEY = 'finsight_right_panel_width';
 
-const clampPanelWidth = (value: number) => Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, value));
+const getDynamicPanelMaxWidth = () => {
+  if (typeof window === 'undefined') return MAX_PANEL_WIDTH;
+  const viewport = window.innerWidth || 0;
+  if (!viewport) return MAX_PANEL_WIDTH;
+
+  // 预留左侧导航与主内容空间，避免右侧面板把中间布局“挤飞”。
+  const ratioBound = Math.floor(viewport * 0.38);
+  const reserveBound = viewport - 760;
+  const dynamicMax = Math.min(MAX_PANEL_WIDTH, ratioBound, reserveBound);
+  return Math.max(MIN_PANEL_WIDTH, dynamicMax);
+};
+
+const clampPanelWidth = (value: number, maxWidth = getDynamicPanelMaxWidth()) =>
+  Math.max(MIN_PANEL_WIDTH, Math.min(maxWidth, value));
 
 export function WorkspaceShell({
   view,
@@ -83,7 +96,7 @@ export function WorkspaceShell({
       if (saved) {
         const parsed = Number(saved);
         if (!Number.isNaN(parsed)) {
-          return clampPanelWidth(parsed);
+          return clampPanelWidth(parsed, getDynamicPanelMaxWidth());
         }
       }
     } catch {
@@ -102,6 +115,14 @@ export function WorkspaceShell({
     }
   }, [panelWidth]);
 
+  useEffect(() => {
+    const handleOpenSettings = () => setIsSettingsOpen(true);
+    window.addEventListener('finsight:open-settings', handleOpenSettings as EventListener);
+    return () => {
+      window.removeEventListener('finsight:open-settings', handleOpenSettings as EventListener);
+    };
+  }, []);
+
   const handleResizeStart = useCallback(
     (event: MouseEvent) => {
       if (isMobile) return;
@@ -111,7 +132,7 @@ export function WorkspaceShell({
 
       const onMouseMove = (moveEvent: globalThis.MouseEvent) => {
         const diff = startX - moveEvent.clientX;
-        setPanelWidth(clampPanelWidth(startWidth + diff));
+        setPanelWidth(clampPanelWidth(startWidth + diff, getDynamicPanelMaxWidth()));
       };
       const onMouseUp = () => {
         document.removeEventListener('mousemove', onMouseMove);
@@ -128,6 +149,17 @@ export function WorkspaceShell({
     [isMobile],
   );
 
+  useEffect(() => {
+    if (isMobile) return;
+    const onResize = () => {
+      setPanelWidth((prev) => clampPanelWidth(prev, getDynamicPanelMaxWidth()));
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+    };
+  }, [isMobile]);
+
   const openDashboard = (symbol: string) => {
     const normalized = symbol.trim();
     if (!normalized) return;
@@ -141,6 +173,7 @@ export function WorkspaceShell({
     onCollapse: () => setShowRightPanel(false),
     onResizeStart: handleResizeStart,
     onSubscribeClick: () => setIsSubscribeOpen(true),
+    autoSwitchExecution: view !== 'dashboard',
     onNavigateToChat: navigateToChat,
   };
 
@@ -188,13 +221,13 @@ export function WorkspaceShell({
               contextPanel={contextPanelProps}
             />
           ) : view === 'workbench' ? (
-            <div className="flex-1 min-w-0 min-h-0 overflow-y-auto p-5 max-lg:p-3">
-              <Workbench
-                symbol={preferredSymbol}
-                fromDashboard={fromDashboard}
-                onNavigateToChat={navigateToChat}
-              />
-            </div>
+            <WorkbenchWorkspace
+              isMobile={isMobile}
+              symbol={preferredSymbol}
+              fromDashboard={fromDashboard}
+              onNavigateToChat={navigateToChat}
+              contextPanel={contextPanelProps}
+            />
           ) : (
             <ChatWorkspace
               isMobile={isMobile}
@@ -214,4 +247,3 @@ export function WorkspaceShell({
     </div>
   );
 }
-

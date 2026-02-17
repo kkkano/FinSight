@@ -15,8 +15,7 @@ import { useStore } from '../../store/useStore';
 import { apiClient } from '../../api/client';
 import type { WatchItem, ActiveAsset } from '../../types/dashboard';
 // 共享 UI 组件
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import { Button, Input, useToast } from '../ui';
 
 // 价格数据类型
 type QuoteData = {
@@ -63,10 +62,11 @@ interface WatchlistProps {
 }
 
 export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
-  const { watchlist, addWatchItem, removeWatchItem, setActiveAsset } =
+  const { watchlist, addWatchItemApi, removeWatchItemApi, setActiveAsset } =
     useDashboardStore();
   const { portfolioPositions, setPortfolioPosition, removePortfolioPosition } =
     useStore();
+  const { toast } = useToast();
 
   // 添加模式状态
   const [isAdding, setIsAdding] = useState(false);
@@ -165,13 +165,23 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
   };
 
   // 处理删除
-  const handleDelete = (symbol: string) => {
-    removeWatchItem(symbol);
-    setContextMenu(null);
+  const handleDelete = async (symbol: string) => {
+    try {
+      await removeWatchItemApi(symbol);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '移除失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '移除自选失败',
+        message,
+      });
+    } finally {
+      setContextMenu(null);
+    }
   };
 
   // 处理添加
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const symbol = newSymbol.trim().toUpperCase();
     if (!symbol) return;
 
@@ -184,21 +194,25 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
       return;
     }
 
-    addWatchItem({
-      symbol,
-      type: 'equity',
-      name: symbol,
-    });
-
-    setNewSymbol('');
-    setIsAdding(false);
-    onSymbolSelect?.(symbol);
+    try {
+      await addWatchItemApi(symbol);
+      setNewSymbol('');
+      setIsAdding(false);
+      onSymbolSelect?.(symbol);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '添加失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '添加自选失败',
+        message,
+      });
+    }
   };
 
   // 处理键盘事件（添加 ticker）
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleAdd();
+      void handleAdd();
     } else if (e.key === 'Escape') {
       setIsAdding(false);
       setNewSymbol('');
@@ -293,7 +307,9 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
             <Button
               variant="primary"
               size="sm"
-              onClick={handleAdd}
+              onClick={() => {
+                void handleAdd();
+              }}
               aria-label="确认添加"
             >
               添加
@@ -405,7 +421,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(item.symbol);
+                          void handleDelete(item.symbol);
                         }}
                         aria-label={`从自选列表中删除 ${item.symbol}`}
                         className="p-1 rounded hover:bg-fin-bg-secondary text-fin-muted hover:text-fin-danger"
@@ -509,7 +525,9 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleDelete(contextMenu.symbol)}
+            onClick={() => {
+              void handleDelete(contextMenu.symbol);
+            }}
             className="w-full px-3 py-1.5 text-left text-xs text-fin-danger justify-start"
           >
             <X size={12} />

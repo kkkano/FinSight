@@ -10,8 +10,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import os
+import re
 
 logger = logging.getLogger(__name__)
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 @dataclass
@@ -56,8 +58,15 @@ class MemoryService:
         if not os.path.exists(storage_path):
             os.makedirs(storage_path)
 
+    def _normalize_user_id(self, user_id: str) -> str:
+        normalized = str(user_id or "").strip()
+        if not _USER_ID_PATTERN.fullmatch(normalized):
+            raise ValueError("invalid user_id: only [A-Za-z0-9._-], length 1-64")
+        return normalized
+
     def _get_file_path(self, user_id: str) -> str:
-        return os.path.join(self.storage_path, f"{user_id}.json")
+        normalized_user_id = self._normalize_user_id(user_id)
+        return os.path.join(self.storage_path, f"{normalized_user_id}.json")
 
     def get_user_profile(self, user_id: str) -> UserProfile:
         """获取用户画像，不存在则创建默认"""

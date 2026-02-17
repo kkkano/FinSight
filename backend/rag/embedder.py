@@ -2,7 +2,7 @@
 """Embedding service: bge-m3 with hash-based fallback.
 
 Provides dense (1024-dim) + sparse (lexical weights) embeddings via
-``BAAI/bge-m3`` when *FlagEmbedding* is installed.  Falls back to the
+``BAAI/bge-m3`` when *FlagEmbedding* is installed. Falls back to the
 legacy SHA-1 hash embedding for CI / lightweight dev environments.
 
 Environment variables
@@ -12,7 +12,7 @@ RAG_EMBEDDING
 BGE_M3_DEVICE
     ``cpu`` (default), ``cuda``, ``mps``, etc.
 BGE_M3_MAX_LENGTH
-    Maximum token length for bge-m3 encoding.  Default ``512``.
+    Maximum token length for bge-m3 encoding. Default ``512``.
 """
 from __future__ import annotations
 
@@ -37,11 +37,34 @@ _BGE_M3_DIM = 1024
 _HASH_DIM_DEFAULT = 96
 
 
+def _is_production_env() -> bool:
+    values = [
+        os.getenv("APP_ENV", ""),
+        os.getenv("ENV", ""),
+        os.getenv("NODE_ENV", ""),
+        os.getenv("FASTAPI_ENV", ""),
+    ]
+    return any(str(v).strip().lower() in {"prod", "production"} for v in values)
+
+
+def _log_hash_fallback(*, reason: str, detail: str | None = None, requested_backend: str | None = None) -> None:
+    payload: dict[str, Any] = {
+        "event": "rag_embedding_fallback",
+        "backend": "hash",
+        "reason": reason,
+        "requested_backend": requested_backend or os.getenv("RAG_EMBEDDING", "bge-m3"),
+    }
+    if detail:
+        payload["detail"] = detail
+    log_fn = logger.warning if _is_production_env() else logger.info
+    log_fn("rag_embedding_fallback %s", payload)
+
+
 def _tokenize(text: str) -> list[str]:
     """Simple regex tokeniser shared by hash-embedding and sparse helpers."""
     if not text:
         return []
-    return [t.lower() for t in _TOKEN_RE.findall(text)]
+    return [token.lower() for token in _TOKEN_RE.findall(text)]
 
 
 # ---------------------------------------------------------------------------
@@ -51,14 +74,16 @@ def _tokenize(text: str) -> list[str]:
 @dataclass(frozen=True)
 class SparseVector:
     """Sparse representation: ``{token_id_or_string: weight}``."""
+
     weights: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class EmbeddingResult:
     """Result of encoding a batch of texts."""
-    dense: list[list[float]]          # (N, dim)
-    sparse: list[SparseVector]        # N sparse vectors
+
+    dense: list[list[float]]  # (N, dim)
+    sparse: list[SparseVector]  # N sparse vectors
     model_name: str = "hash"
     dim: int = _HASH_DIM_DEFAULT
 
@@ -88,16 +113,15 @@ def _hash_sparse(text: str) -> SparseVector:
     if not tokens:
         return SparseVector()
     freq: dict[str, float] = {}
-    for t in tokens:
-        freq[t] = freq.get(t, 0.0) + 1.0
-    # normalise by max freq
-    max_f = max(freq.values()) if freq else 1.0
-    return SparseVector(weights={k: v / max_f for k, v in freq.items()})
+    for token in tokens:
+        freq[token] = freq.get(token, 0.0) + 1.0
+    max_freq = max(freq.values()) if freq else 1.0
+    return SparseVector(weights={key: value / max_freq for key, value in freq.items()})
 
 
 def _hash_encode_batch(texts: list[str], dim: int) -> EmbeddingResult:
-    dense = [_hash_embedding(t, dim) for t in texts]
-    sparse = [_hash_sparse(t) for t in texts]
+    dense = [_hash_embedding(text, dim) for text in texts]
+    sparse = [_hash_sparse(text) for text in texts]
     return EmbeddingResult(dense=dense, sparse=sparse, model_name="hash", dim=dim)
 
 
@@ -121,10 +145,13 @@ class _BGEM3Wrapper:
             if self._model is not None:
                 return self._model
             from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-untyped]
+
             use_fp16 = self._device != "cpu"
             logger.info(
                 "Loading bge-m3 (device=%s, fp16=%s, max_length=%d) ...",
-                self._device, use_fp16, self._max_length,
+                self._device,
+                use_fp16,
+                self._max_length,
             )
             self._model = BGEM3FlagModel(
                 "BAAI/bge-m3",
@@ -143,24 +170,22 @@ class _BGEM3Wrapper:
             return_sparse=True,
             return_colbert_vecs=False,
         )
+
         dense_vecs: list[list[float]] = []
         sparse_vecs: list[SparseVector] = []
 
         raw_dense = output.get("dense_vecs") if isinstance(output, dict) else getattr(output, "dense_vecs", None)
         raw_sparse = output.get("lexical_weights") if isinstance(output, dict) else getattr(output, "lexical_weights", None)
 
-        for i, text in enumerate(texts):
-            # Dense
+        for idx, text in enumerate(texts):
             if raw_dense is not None:
-                row = raw_dense[i]
-                dense_vecs.append([float(v) for v in row])
+                dense_vecs.append([float(value) for value in raw_dense[idx]])
             else:
                 dense_vecs.append(_hash_embedding(text, _BGE_M3_DIM))
 
-            # Sparse (lexical weights: {token_id: weight})
             if raw_sparse is not None:
-                raw_w = raw_sparse[i]
-                weights = {str(k): float(v) for k, v in raw_w.items()} if isinstance(raw_w, dict) else {}
+                row = raw_sparse[idx]
+                weights = {str(key): float(value) for key, value in row.items()} if isinstance(row, dict) else {}
                 sparse_vecs.append(SparseVector(weights=weights))
             else:
                 sparse_vecs.append(_hash_sparse(text))
@@ -173,7 +198,6 @@ class _BGEM3Wrapper:
         )
 
 
-# Module-level lazy singleton
 _bge_m3: _BGEM3Wrapper | None = None
 _bge_m3_lock = threading.Lock()
 
@@ -193,21 +217,16 @@ def _get_bge_m3() -> _BGEM3Wrapper:
 # ---------------------------------------------------------------------------
 
 class EmbeddingService:
-    """Unified embedding interface with automatic fallback.
-
-    Usage::
-
-        svc = EmbeddingService()
-        result = svc.encode(["Hello world", "Another text"])
-        # result.dense  -> list of 1024-dim vectors
-        # result.sparse -> list of SparseVector
-    """
+    """Unified embedding interface with automatic fallback."""
 
     def __init__(self, *, force_backend: str | None = None) -> None:
         backend = (force_backend or os.getenv("RAG_EMBEDDING", "bge-m3")).strip().lower()
+        self._requested_backend = backend
         self._use_bge = backend != "hash"
-        self._bge_available: bool | None = None  # lazy check
+        self._bge_available: bool | None = None
         self._hash_dim = int(os.getenv("RAG_HASH_DIM", str(_HASH_DIM_DEFAULT)))
+        if not self._use_bge:
+            _log_hash_fallback(reason="configured_hash_backend", requested_backend=backend)
 
     @property
     def model_name(self) -> str:
@@ -227,11 +246,13 @@ class EmbeddingService:
             return self._bge_available
         try:
             import FlagEmbedding  # noqa: F401
+
             self._bge_available = True
-        except ImportError:
-            logger.warning(
-                "FlagEmbedding not installed — falling back to hash embedding. "
-                "Install with: pip install FlagEmbedding"
+        except ImportError as exc:
+            _log_hash_fallback(
+                reason="flagembedding_unavailable",
+                detail=str(exc),
+                requested_backend=self._requested_backend,
             )
             self._bge_available = False
         return self._bge_available
@@ -246,7 +267,11 @@ class EmbeddingService:
             try:
                 return _get_bge_m3().encode(text_list)
             except Exception as exc:
-                logger.error("bge-m3 encode failed, falling back to hash: %s", exc)
+                _log_hash_fallback(
+                    reason="bge_encode_error",
+                    detail=str(exc),
+                    requested_backend=self._requested_backend,
+                )
 
         return _hash_encode_batch(text_list, self._hash_dim)
 
@@ -255,10 +280,6 @@ class EmbeddingService:
         result = self.encode([text])
         return result.dense[0], result.sparse[0]
 
-
-# ---------------------------------------------------------------------------
-# Module singleton
-# ---------------------------------------------------------------------------
 
 _embedding_service: EmbeddingService | None = None
 _embedding_lock = threading.Lock()

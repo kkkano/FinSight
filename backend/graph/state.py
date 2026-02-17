@@ -127,6 +127,7 @@ class GraphState(MessagesState):
     strict_selection: NotRequired[bool]
     clarify: NotRequired[Clarify]
     chat_responded: NotRequired[bool]
+    memory_context: NotRequired[dict[str, Any]]
 
     policy: NotRequired[Policy]
     plan_ir: NotRequired[PlanIR]

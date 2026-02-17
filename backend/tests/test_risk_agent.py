@@ -135,3 +135,39 @@ async def test_risk_agent_research_returns_agent_output():
     assert output.summary
     assert isinstance(output.risks, list)
     assert output.data_sources
+
+
+@pytest.mark.asyncio
+async def test_risk_agent_includes_factor_and_stress_signals():
+    class _Tools:
+        @staticmethod
+        def get_stock_price(_ticker: str):
+            return {"price": 100.0, "change_percent": -2.0, "source": "mock_quote"}
+
+        @staticmethod
+        def get_factor_exposure(_positions, lookback_days: int = 252):
+            return {
+                "source": "yfinance_factor_model",
+                "lookback_days": lookback_days,
+                "factor_beta": {"market": 1.35, "growth": 1.45},
+                "annualized_volatility": 0.42,
+                "max_drawdown": -0.18,
+                "error": None,
+            }
+
+        @staticmethod
+        def run_portfolio_stress_test(_positions, lookback_days: int = 252):
+            return {
+                "source": "factor_stress_model",
+                "lookback_days": lookback_days,
+                "scenarios": [{"name": "equity_selloff", "projected_return": -0.16}],
+                "worst_case_return": -0.16,
+                "error": None,
+            }
+
+    agent = RiskAgent(llm=None, cache=None, tools_module=_Tools())
+    output = await agent.research(query="analyze risk", ticker="AAPL")
+
+    assert any(item.source == "yfinance_factor_model" for item in output.evidence)
+    assert any(item.source == "factor_stress_model" for item in output.evidence)
+    assert any("beta" in risk.lower() or "stress" in risk.lower() for risk in output.risks)

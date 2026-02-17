@@ -469,22 +469,33 @@ def _extend_synthesis_report_if_short(
         a for a in agent_summaries if isinstance(a, dict) and a.get("status") == "success"
     ]
     supplement: list[str] = []
+    existing_keys: set[str] = set()
+    for line in text.splitlines():
+        key = _normalize_line_for_dedupe(line)
+        if key:
+            existing_keys.add(key)
+
     for item in success_agents:
         name = _safe_str(item.get("agent_name") or "").strip()
         summary = _safe_str(item.get("summary") or "").strip()
         if not name or not summary:
             continue
-        # Skip if this agent's content is already present in the draft
-        if name in text:
-            continue
         if name == "deep_search_agent":
             summary = _sanitize_deep_search_summary(summary, name)
-        # Append as plain paragraphs — no separate heading
-        supplement.append(summary[:3000])
-        supplement.append("")
+        # Use concise headline instead of appending full summary block
+        headline = _extract_headline(summary)
+        if not headline or headline == "（无摘要）":
+            continue
+        agent_title = _AGENT_TITLE_MAP.get(name, name)
+        line = f"- {agent_title}：{headline}"
+        key = _normalize_line_for_dedupe(line)
+        if not key or key in existing_keys:
+            continue
+        supplement.append(line)
+        existing_keys.add(key)
 
     if supplement:
-        text = (text + "\n\n" + "\n".join(supplement)).strip()
+        text = (text + "\n\n## 关键执行观点\n" + "\n".join(supplement)).strip()
 
     # --- Append citation list only if no source section exists ---
     if citations and not has_source_section:

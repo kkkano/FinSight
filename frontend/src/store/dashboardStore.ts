@@ -13,9 +13,11 @@ import type {
   NewsModeType,
   DashboardData,
   SelectionItem,
+  InsightCard,
 } from '../types/dashboard';
 import { STORAGE_KEYS } from '../types/dashboard';
 import { apiClient } from '../api/client';
+import { deriveUserIdFromSessionId, useStore } from './useStore';
 
 // === Store 接口 ===
 interface DashboardStore {
@@ -30,6 +32,13 @@ interface DashboardStore {
   error: string | null;
   activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
   activeSelections: SelectionItem[];      // 多选：用于 Dashboard 新闻多选引用
+
+  // AI Insights 状态 (Phase F)
+  insightsData: Record<string, InsightCard> | null;
+  insightsLoading: boolean;
+  insightsError: string | null;
+  insightsStale: boolean;
+  insightsCachedAt: string | null;
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -49,12 +58,20 @@ interface DashboardStore {
   setSelections: (selections: SelectionItem[]) => void;
   clearSelection: () => void;
 
+  // AI Insights actions (Phase F)
+  setInsightsData: (data: Record<string, InsightCard>) => void;
+  setInsightsLoading: (loading: boolean) => void;
+  setInsightsError: (error: string | null) => void;
+  setInsightsStale: (stale: boolean) => void;
+  clearInsights: () => void;
+
   // Watchlist API methods (API-first, replace localStorage persistence)
   initWatchlist: () => Promise<void>;
   addWatchItemApi: (ticker: string) => Promise<void>;
   removeWatchItemApi: (ticker: string) => Promise<void>;
   /** @internal in-flight guard */ _isWatchlistLoading: boolean;
   /** @internal loaded flag */ _isWatchlistLoaded: boolean;
+  /** @internal owner id for loaded watchlist */ _watchlistOwnerId: string | null;
 }
 
 // === 持久化辅助函数 ===
@@ -102,6 +119,8 @@ const normalizeLayoutPrefs = (value: unknown): LayoutPrefs => {
   };
 };
 
+const resolveCurrentUserId = (): string => deriveUserIdFromSessionId(useStore.getState().sessionId);
+
 // === Store 实例 ===
 export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 初始状态（从 localStorage 恢复, watchlist 改为 API 加载）
@@ -117,11 +136,28 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   activeSelections: [],
   _isWatchlistLoading: false,
   _isWatchlistLoaded: false,
+  _watchlistOwnerId: null,
 
-  // 设置当前资产（同时清除 selection，因为切换股票后之前的引用不再有效）
+  // AI Insights 初始状态
+  insightsData: null,
+  insightsLoading: false,
+  insightsError: null,
+  insightsStale: false,
+  insightsCachedAt: null,
+
+  // 设置当前资产（同时清除 selection 和 insights，因为切换股票后之前的数据不再有效）
   setActiveAsset: (asset) => {
     saveToStorage(STORAGE_KEYS.ACTIVE_ASSET, asset);
-    set({ activeAsset: asset, error: null, activeSelection: null, activeSelections: [] });
+    set({
+      activeAsset: asset,
+      error: null,
+      activeSelection: null,
+      activeSelections: [],
+      insightsData: null,
+      insightsError: null,
+      insightsStale: false,
+      insightsCachedAt: null,
+    });
   },
 
   // 设置能力集
@@ -232,16 +268,34 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   // 清除当前选择
   clearSelection: () => set({ activeSelection: null, activeSelections: [] }),
 
+  // --- AI Insights actions (Phase F) ---
+  setInsightsData: (data) => set({ insightsData: data, insightsError: null }),
+  setInsightsLoading: (loading) => set({ insightsLoading: loading }),
+  setInsightsError: (error) => set({ insightsError: error }),
+  setInsightsStale: (stale) => set({ insightsStale: stale }),
+  clearInsights: () => set({
+    insightsData: null,
+    insightsLoading: false,
+    insightsError: null,
+    insightsStale: false,
+    insightsCachedAt: null,
+  }),
+
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 
   initWatchlist: async () => {
-    const { _isWatchlistLoaded, _isWatchlistLoading } = get();
-    if (_isWatchlistLoaded || _isWatchlistLoading) return;
+    const userId = resolveCurrentUserId();
+    const { _isWatchlistLoaded, _isWatchlistLoading, _watchlistOwnerId } = get();
+    if (_isWatchlistLoading) return;
+    if (_isWatchlistLoaded && _watchlistOwnerId === userId) return;
 
     set({ _isWatchlistLoading: true });
 
     try {
-      const response = await apiClient.getUserProfile('default_user');
+      const response = await apiClient.getUserProfile(userId);
+      if (!response?.success) {
+        throw new Error(response?.error || '加载自选列表失败');
+      }
       const profile = response?.profile;
       const list: string[] = Array.isArray(profile?.watchlist)
         ? profile.watchlist
@@ -257,6 +311,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         watchlist: watchItems,
         _isWatchlistLoaded: true,
         _isWatchlistLoading: false,
+        _watchlistOwnerId: userId,
       });
     } catch {
       set({ _isWatchlistLoading: false });
@@ -264,7 +319,11 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   addWatchItemApi: async (ticker: string) => {
-    await apiClient.addWatchlist({ user_id: 'default_user', ticker });
+    const userId = resolveCurrentUserId();
+    const response = await apiClient.addWatchlist({ user_id: userId, ticker });
+    if (!response?.success) {
+      throw new Error(response?.error || '添加自选失败');
+    }
     get().addWatchItem({
       symbol: ticker.toUpperCase(),
       type: 'equity',
@@ -273,7 +332,11 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   },
 
   removeWatchItemApi: async (ticker: string) => {
-    await apiClient.removeWatchlist({ user_id: 'default_user', ticker });
+    const userId = resolveCurrentUserId();
+    const response = await apiClient.removeWatchlist({ user_id: userId, ticker });
+    if (!response?.success) {
+      throw new Error(response?.error || '移除自选失败');
+    }
     get().removeWatchItem(ticker);
   },
 }));

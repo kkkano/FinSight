@@ -15,6 +15,8 @@ interface ScoreRingProps {
   valuation?: ValuationData | null;
   technicals?: TechnicalData | null;
   reportData?: LatestReportData | null;
+  /** AI insight score from DigestAgent — highest priority when available */
+  insightScore?: number | null;
 }
 
 // --- Helpers ---
@@ -65,14 +67,18 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 // --- Component ---
 
-export function ScoreRing({ valuation, technicals, reportData }: ScoreRingProps) {
-  const { score, fromReport } = useMemo(() => {
+export function ScoreRing({ valuation, technicals, reportData, insightScore }: ScoreRingProps) {
+  const { score, source } = useMemo<{ score: number; source: 'insight' | 'report' | 'baseline' }>(() => {
+    // Priority: AI insight > report > baseline
+    if (insightScore != null && Number.isFinite(insightScore)) {
+      return { score: Math.max(1, Math.min(10, Math.round(insightScore))), source: 'insight' };
+    }
     const reportScore = extractReportScore(reportData);
     if (reportScore !== null) {
-      return { score: reportScore, fromReport: true };
+      return { score: reportScore, source: 'report' };
     }
-    return { score: computeBaselineScore(valuation, technicals), fromReport: false };
-  }, [valuation, technicals, reportData]);
+    return { score: computeBaselineScore(valuation, technicals), source: 'baseline' };
+  }, [valuation, technicals, reportData, insightScore]);
 
   const progress = score / 10;
   const strokeDashoffset = RING_CIRCUMFERENCE * (1 - progress);
@@ -112,8 +118,8 @@ export function ScoreRing({ valuation, technicals, reportData }: ScoreRingProps)
           <span className="text-2xs text-fin-muted">/10</span>
         </div>
       </div>
-      <div className="text-2xs text-fin-muted mt-2" title={fromReport ? '' : '基于实时市场数据自动计算'}>
-        {fromReport ? '基于研报评分' : '基于实时数据'}
+      <div className="text-2xs text-fin-muted mt-2" title={source === 'baseline' ? '基于实时市场数据自动计算' : ''}>
+        {source === 'insight' ? '基于 AI 分析' : source === 'report' ? '基于研报评分' : '基于实时数据'}
       </div>
     </div>
   );

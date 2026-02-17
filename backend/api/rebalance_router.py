@@ -6,7 +6,9 @@ HC-2: all suggestions are non-executable (suggestion_only mode).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +26,7 @@ from backend.services.portfolio_store import (
     save_suggestion,
 )
 from backend.services.rebalance_engine import RebalanceContext, RebalanceEngine
+from backend.utils.quote import parse_quote_payload, safe_float
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,24 @@ class RebalanceRouterDeps:
     """Injected from main.py."""
 
     rebalance_engine: Any  # RebalanceEngine instance
+    get_stock_price: Any | None = None
+    get_company_info: Any | None = None
+
+
+def _extract_sector(raw: Any) -> str | None:
+    if isinstance(raw, dict):
+        for key in ("sector", "finnhubIndustry", "industry"):
+            value = str(raw.get(key) or "").strip()
+            if value:
+                return value
+        return None
+    text = str(raw or "")
+    if not text:
+        return None
+    match = re.search(r"(?im)^\s*-\s*Sector\s*:\s*(.+?)\s*$", text)
+    if match:
+        return match.group(1).strip()
+    return None
 
 
 # ── Router factory ──────────────────────────────────────────
@@ -68,11 +89,77 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
                 detail="No portfolio positions found. Add positions first.",
             )
 
+        tickers = sorted(
+            {
+                str(item.get("ticker", "")).strip().upper()
+                for item in portfolio
+                if str(item.get("ticker", "")).strip()
+            }
+        )
+
+        async def _fetch_live_price(ticker: str) -> tuple[str, float | None]:
+            if deps.get_stock_price is None:
+                return ticker, None
+            try:
+                raw_payload = await asyncio.to_thread(deps.get_stock_price, ticker)
+                parsed = parse_quote_payload(raw_payload) or {}
+                price = safe_float(parsed.get("price"))
+                if price is None or price <= 0:
+                    return ticker, None
+                return ticker, price
+            except Exception as exc:
+                logger.warning("[rebalance] failed to load live price for %s: %s", ticker, exc)
+                return ticker, None
+
+        price_pairs = await asyncio.gather(*[_fetch_live_price(ticker) for ticker in tickers])
+        live_prices = {ticker: price for ticker, price in price_pairs if price is not None}
+
+        sector_map: dict[str, str] = {}
+        for item in portfolio:
+            ticker = str(item.get("ticker", "")).strip().upper()
+            if not ticker:
+                continue
+            direct_sector = str(item.get("sector", "")).strip()
+            if direct_sector:
+                sector_map[ticker] = direct_sector
+
+        missing_sector_tickers = [ticker for ticker in tickers if ticker not in sector_map]
+
+        async def _fetch_sector(ticker: str) -> tuple[str, str | None]:
+            if deps.get_company_info is None:
+                return ticker, None
+            try:
+                info = await asyncio.to_thread(deps.get_company_info, ticker)
+                return ticker, _extract_sector(info)
+            except Exception as exc:
+                logger.warning("[rebalance] failed to load sector for %s: %s", ticker, exc)
+                return ticker, None
+
+        if missing_sector_tickers:
+            sector_pairs = await asyncio.gather(*[_fetch_sector(ticker) for ticker in missing_sector_tickers])
+            for ticker, sector in sector_pairs:
+                if sector:
+                    sector_map[ticker] = sector
+
+        missing_price_tickers = [ticker for ticker in tickers if ticker not in live_prices]
+        missing_sector_tickers = [ticker for ticker in tickers if ticker not in sector_map]
+        fallback_reasons: list[str] = []
+        if missing_price_tickers:
+            fallback_reasons.append(f"missing_live_prices:{','.join(missing_price_tickers)}")
+        if missing_sector_tickers:
+            fallback_reasons.append(f"missing_sector_map:{','.join(missing_sector_tickers)}")
+        diagnostics_only = len(fallback_reasons) > 0
+
         ctx = RebalanceContext(
             session_id=request.session_id,
             portfolio=portfolio,
             risk_tier=request.risk_tier,
             constraints=request.constraints,
+            live_prices=live_prices,
+            sector_map=sector_map,
+            diagnostics_only=diagnostics_only,
+            fallback_reasons=fallback_reasons,
+            use_llm_enhancement=bool(request.use_llm_enhancement),
         )
 
         try:

@@ -38,6 +38,8 @@ class NewsAgent(BaseFinancialAgent):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
         self._last_convergence = None
+        self._last_event_calendar: Dict[str, Any] = {}
+        self._last_reliability_summary: Dict[str, Any] = {}
 
     def _get_tool_registry(self) -> dict:
         """NewsAgent tool registry: news APIs + search for ReAct reflection."""
@@ -65,6 +67,20 @@ class NewsAgent(BaseFinancialAgent):
                 "func": sentiment_fn,
                 "description": "获取新闻情绪分析(ticker)，返回情绪评分和标签",
                 "call_with": "ticker",
+            }
+        event_fn = getattr(tools, "get_event_calendar", None)
+        if event_fn:
+            registry["get_event_calendar"] = {
+                "func": event_fn,
+                "description": "获取财报/分红/宏观事件日历",
+                "call_with": "ticker",
+            }
+        reliability_fn = getattr(tools, "score_news_source_reliability", None)
+        if reliability_fn:
+            registry["score_news_source_reliability"] = {
+                "func": reliability_fn,
+                "description": "评估新闻来源可靠度",
+                "call_with": "none",
             }
         return registry
 
@@ -112,11 +128,83 @@ class NewsAgent(BaseFinancialAgent):
                 filtered.append(item)
         return filtered
 
+    def _score_reliability_for_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        scorer = getattr(self.tools, "score_news_source_reliability", None)
+        if not scorer:
+            return {"reliability_score": 0.55, "reliability_tier": "medium", "reason": "default"}
+        try:
+            payload = scorer(source=item.get("source", ""), url=item.get("url", ""))
+            if isinstance(payload, dict):
+                score = payload.get("reliability_score")
+                if isinstance(score, (int, float)):
+                    return payload
+        except Exception:
+            pass
+        return {"reliability_score": 0.55, "reliability_tier": "medium", "reason": "default"}
+
+    def _annotate_reliability(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        annotated: List[Dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            rel = self._score_reliability_for_item(item)
+            cloned = dict(item)
+            cloned["source_reliability"] = rel
+            score = rel.get("reliability_score")
+            if isinstance(score, (int, float)) and "confidence" not in cloned:
+                cloned["confidence"] = max(0.1, min(0.95, float(score)))
+            annotated.append(cloned)
+        return annotated
+
+    def _summarize_reliability(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        scores: List[float] = []
+        high_count = 0
+        low_count = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            rel = item.get("source_reliability")
+            if not isinstance(rel, dict):
+                continue
+            score = rel.get("reliability_score")
+            if not isinstance(score, (int, float)):
+                continue
+            s = float(score)
+            scores.append(s)
+            if s >= 0.85:
+                high_count += 1
+            if s < 0.65:
+                low_count += 1
+        avg = sum(scores) / len(scores) if scores else None
+        return {
+            "count": len(scores),
+            "avg_reliability": round(avg, 4) if avg is not None else None,
+            "high_reliability_count": high_count,
+            "low_reliability_count": low_count,
+        }
+
+    def _load_event_calendar(self, ticker: str) -> Dict[str, Any]:
+        event_fn = getattr(self.tools, "get_event_calendar", None)
+        if not event_fn:
+            return {}
+        try:
+            payload = event_fn(ticker=ticker, days_ahead=30)
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            return {}
+        return {}
+
     async def _initial_search(self, query: str, ticker: str) -> List[Any]:
         cache_key = f"{ticker}:news:24h"
+        self._last_event_calendar = {}
+        self._last_reliability_summary = {}
         cached = self.cache.get(cache_key)
-        if cached:
-            return cached
+        if isinstance(cached, list):
+            annotated_cached = self._annotate_reliability(cached)
+            self._last_reliability_summary = self._summarize_reliability(annotated_cached)
+            self._last_event_calendar = self._load_event_calendar(ticker)
+            return annotated_cached
 
         results = []
 
@@ -233,6 +321,10 @@ class NewsAgent(BaseFinancialAgent):
             authoritative = self._filter_authoritative_news(unique_results)
             if authoritative:
                 unique_results = authoritative
+
+        unique_results = self._annotate_reliability(unique_results)
+        self._last_reliability_summary = self._summarize_reliability(unique_results)
+        self._last_event_calendar = self._load_event_calendar(ticker)
 
         if unique_results:
             self.cache.set(cache_key, unique_results, self.CACHE_TTL)
@@ -351,7 +443,17 @@ class NewsAgent(BaseFinancialAgent):
         if not data:
             return "No recent news found."
         titles = [item.get("headline", item.get("title", "")) for item in data[:5]]
-        return f"Recent news includes: {'; '.join(titles)}"
+        summary = f"Recent news includes: {'; '.join(titles)}"
+        calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
+        earnings_count = len(calendar.get("earnings_events") or []) if isinstance(calendar.get("earnings_events"), list) else 0
+        dividend_count = len(calendar.get("dividend_events") or []) if isinstance(calendar.get("dividend_events"), list) else 0
+        macro_count = len(calendar.get("macro_events") or []) if isinstance(calendar.get("macro_events"), list) else 0
+        if earnings_count or dividend_count or macro_count:
+            summary += (
+                f" | Event calendar: earnings={earnings_count},"
+                f" dividends={dividend_count}, macro={macro_count}"
+            )
+        return summary
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence = []
@@ -364,12 +466,18 @@ class NewsAgent(BaseFinancialAgent):
                 if isinstance(item, dict):
                     source = item.get("source", "unknown")
                     sources.add(source)
+                    source_reliability = item.get("source_reliability") if isinstance(item.get("source_reliability"), dict) else {}
+                    rel_score = source_reliability.get("reliability_score")
+                    confidence = item.get("confidence", 0.7)
+                    if isinstance(rel_score, (int, float)):
+                        confidence = max(0.1, min(0.95, float(rel_score)))
                     evidence.append(EvidenceItem(
                         text=item.get("headline", item.get("title", "")),
                         source=source,
                         url=item.get("url"),
                         timestamp=item.get("datetime", item.get("published_at")),
-                        confidence=item.get("confidence", 0.7),
+                        confidence=confidence,
+                        meta={"source_reliability": source_reliability} if source_reliability else {},
                     ))
         else:
             fallback_used = True
@@ -392,15 +500,48 @@ class NewsAgent(BaseFinancialAgent):
             fallback_used = True
             fallback_reason = "no_news_data"
 
+        risks: List[str] = []
+        reliability_summary = self._last_reliability_summary if isinstance(self._last_reliability_summary, dict) else {}
+        avg_reliability = reliability_summary.get("avg_reliability")
+        low_count = reliability_summary.get("low_reliability_count")
+        if isinstance(avg_reliability, (int, float)) and float(avg_reliability) < 0.65:
+            risks.append("News source reliability is low; validate key claims with primary disclosures.")
+        if isinstance(low_count, int) and low_count >= 2:
+            risks.append("Multiple low-reliability sources detected in this batch.")
+
+        event_calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
+        if event_calendar:
+            earnings_count = len(event_calendar.get("earnings_events") or []) if isinstance(event_calendar.get("earnings_events"), list) else 0
+            dividend_count = len(event_calendar.get("dividend_events") or []) if isinstance(event_calendar.get("dividend_events"), list) else 0
+            macro_count = len(event_calendar.get("macro_events") or []) if isinstance(event_calendar.get("macro_events"), list) else 0
+            if earnings_count or dividend_count or macro_count:
+                evidence.append(
+                    EvidenceItem(
+                        text=(
+                            f"Event calendar snapshot: earnings={earnings_count}, "
+                            f"dividends={dividend_count}, macro={macro_count}"
+                        ),
+                        source="event_calendar",
+                        timestamp=str(event_calendar.get("as_of") or datetime.now().isoformat()),
+                        meta=event_calendar,
+                    )
+                )
+                sources.add("event_calendar")
+
+        output_confidence = 0.8 if evidence else 0.1
+        if isinstance(avg_reliability, (int, float)):
+            output_confidence = max(0.1, min(0.9, float(avg_reliability)))
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
             evidence=evidence,
-            confidence=0.8 if evidence else 0.1,
+            confidence=output_confidence,
             data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
             fallback_used=fallback_used,
             trace=trace,
+            risks=risks,
             fallback_reason=fallback_reason,
             retryable=True,
         )

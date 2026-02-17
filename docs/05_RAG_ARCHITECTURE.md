@@ -258,3 +258,87 @@ RAG v2 不单独暴露为入口服务，而是嵌入主编排：
 | 2026-02-07 | 从旧 Chroma 规划文档重写为 RAG v2 当前实现与生产导向策略 |
 | 2026-02-07 | 新增"研报库边界"与"推荐入库来源"，明确生成研报不作为主检索语料 |
 | 2026-02-17 | Phase E RAG 引擎升级：bge-m3 替换 SHA1 伪 embedding、chunker/reranker/router 新建、SCOPE_BOOST、DeepSearch 持久化双重门槛、synthesize XML 标签分离 |
+---
+
+## 10. 本地 Postgres 联调（一键）
+
+> 目标：在本地模拟 Stage4 `postgres` gate，与 CI 门禁保持一致。
+
+### 10.1 一键执行
+
+```powershell
+scripts\run_stage4_postgres_gate.cmd -DriftGate
+```
+
+默认行为：
+1. 拉起 `pgvector/pgvector:pg16`
+2. 等待容器健康
+3. 执行 `tests/retrieval_eval/run_retrieval_eval.py --backend postgres --gate --drift-gate`
+4. 输出 `tests/retrieval_eval/reports/local-postgres/gate_summary.json`
+5. 结束后自动清理容器（可用 `-KeepDb` 保留）
+
+### 10.2 复用已有 Postgres（不自动起库）
+
+```powershell
+scripts\run_stage4_postgres_gate.cmd -NoDockerStart -PgHost 127.0.0.1 -PgPort 5432 -PostgresUser postgres -PostgresPassword postgres -PostgresDb postgres
+```
+
+### 10.3 关键环境对齐（与 CI 一致）
+
+- `RAG_EMBEDDING=bge-m3`
+- `RAG_V2_VECTOR_DIM=1024`
+- `RAG_V2_POSTGRES_DSN=postgresql+psycopg://...`
+
+---
+
+## 11. 常见故障排查
+
+1. **`Required command not found: docker`**
+   - 原因：本机未安装/未启动 Docker Desktop。
+   - 处理：安装并启动 Docker；或改用 `-NoDockerStart` + 外部 Postgres。
+
+2. **`No module named psycopg2`**
+   - 原因：DSN 使用了 `postgresql+psycopg2://`，但环境仅安装 `psycopg`。
+   - 处理：统一改用 `postgresql+psycopg://`（本仓库 CI 与脚本已统一）。
+
+3. **`vector extension not available` / `CREATE EXTENSION vector` 失败**
+   - 原因：数据库镜像不是 pgvector，或无扩展权限。
+   - 处理：使用 `pgvector/pgvector:pg16`，并确认数据库用户具备创建扩展权限。
+
+4. **本地通过、CI 失败（依赖漂移）**
+   - 原因：`FlagEmbedding / sentence-transformers / transformers` 版本未锁定。
+   - 处理：使用仓库 `requirements.txt` 的固定版本，并在干净环境执行：
+
+```bash
+pip install -r requirements.txt
+python -m pip check
+```
+
+---
+
+## 12. 2026-02-17 联调执行记录（PR-6）
+
+### 12.1 已执行命令
+
+```powershell
+python tests/retrieval_eval/run_retrieval_eval.py --backend memory --gate --report-prefix local_memory --output-dir tests/retrieval_eval/reports/local-memory
+scripts\run_stage4_postgres_gate.cmd -DriftGate
+```
+
+### 12.2 执行结果
+
+1. memory gate：通过  
+   - `tests/retrieval_eval/reports/local-memory/gate_summary.json`
+2. postgres gate：阻塞  
+   - 错误：`Required command not found: docker`
+   - 说明：当前机器未安装/未启动 Docker，未能拉起 pgvector 容器
+
+### 12.3 恢复步骤
+
+```powershell
+# 方案 A：安装 Docker 后重跑
+scripts\run_stage4_postgres_gate.cmd -DriftGate
+
+# 方案 B：使用外部 Postgres
+scripts\run_stage4_postgres_gate.cmd -NoDockerStart -PgHost 127.0.0.1 -PgPort 5432 -PostgresUser postgres -PostgresPassword postgres -PostgresDb postgres -DriftGate
+```

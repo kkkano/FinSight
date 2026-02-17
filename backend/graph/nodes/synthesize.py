@@ -65,6 +65,28 @@ def _format_conversation_history_for_synth(state: GraphState) -> str:
     )
 
 
+def _format_memory_context_for_synth(state: GraphState) -> str:
+    memory_context = state.get("memory_context")
+    if not isinstance(memory_context, dict) or not memory_context:
+        return ""
+
+    payload: dict[str, Any] = {}
+    for key in ("user_id", "risk_tolerance", "investment_style", "watchlist", "last_focus", "recent_focuses"):
+        value = memory_context.get(key)
+        if value is None:
+            continue
+        payload[key] = value
+
+    if not payload:
+        return ""
+
+    return (
+        "<memory_context>\n"
+        + json_dumps_safe(payload, ensure_ascii=False, indent=2)
+        + "\n</memory_context>\n"
+    )
+
+
 def _env_str(key: str, default: str) -> str:
     raw = os.getenv(key)
     return raw.strip() if isinstance(raw, str) and raw.strip() else default
@@ -1401,6 +1423,7 @@ async def _generate_narrative_draft(
             evidence_text = "\n".join(ev_lines)
 
     conversation_history = _format_conversation_history_for_synth(state)
+    memory_context_block = _format_memory_context_for_synth(state)
 
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
 
@@ -1410,7 +1433,7 @@ async def _generate_narrative_draft(
 标的: {ticker_label}
 </task>
 
-{conversation_history}<agent_outputs>
+{conversation_history}{memory_context_block}<agent_outputs>
 {chr(10).join(agent_sections) if agent_sections else "(无智能体输出)"}
 </agent_outputs>
 
@@ -1643,6 +1666,7 @@ async def synthesize(state: GraphState) -> dict:
 """
 
     synth_conversation_history = _format_conversation_history_for_synth(state)
+    synth_memory_context = _format_memory_context_for_synth(state)
 
     prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
 
@@ -1651,7 +1675,7 @@ async def synthesize(state: GraphState) -> dict:
 所有文本值必须为简体中文。
 </task>
 
-{synth_conversation_history}<inputs>
+{synth_conversation_history}{synth_memory_context}<inputs>
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 

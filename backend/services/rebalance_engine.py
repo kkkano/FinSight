@@ -12,14 +12,17 @@ HC-2: ``executable`` is always ``False``, ``mode`` is always ``suggestion_only``
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+import inspect
 
 from pydantic import BaseModel, Field
 
 from backend.api.rebalance_schemas import (
     ActionType,
+    EvidenceSnapshot,
     ExpectedImpact,
     RebalanceAction,
     RebalanceConstraints,
@@ -44,6 +47,11 @@ class RebalanceContext(BaseModel):
     live_prices: dict[str, float] = Field(default_factory=dict)
     # ticker -> sector string (optional)
     sector_map: dict[str, str] = Field(default_factory=dict)
+    # when key inputs are missing, switch to diagnosis-only mode
+    diagnostics_only: bool = False
+    fallback_reasons: list[str] = Field(default_factory=list)
+    # optional enhancement switch (fallback to deterministic when unavailable)
+    use_llm_enhancement: bool = False
 
 
 # ── Diagnosis result ────────────────────────────────────────
@@ -78,11 +86,13 @@ _DEFAULT_MOCK_PRICE = 100.0
 
 
 def _get_price(ticker: str, live_prices: dict[str, float]) -> float:
-    """Return live price if available, else mock price, else default."""
+    """Return live price if available, else optional mock price."""
     price = live_prices.get(ticker)
     if price is not None and price > 0:
         return price
-    return _MOCK_PRICES.get(ticker, _DEFAULT_MOCK_PRICE)
+    if os.getenv("REBALANCE_USE_MOCK_PRICES", "false").lower() in {"1", "true", "yes", "on"}:
+        return _MOCK_PRICES.get(ticker, _DEFAULT_MOCK_PRICE)
+    return 0.0
 
 
 # ── Engine ──────────────────────────────────────────────────
@@ -94,15 +104,26 @@ class RebalanceEngine:
     All suggestions are non-executable (HC-2).
     """
 
+    def __init__(self, llm_enhancer: Any | None = None):
+        self._llm_enhancer = llm_enhancer
+
     async def generate(self, ctx: RebalanceContext) -> RebalanceSuggestion:
         """Run the full pipeline and return a RebalanceSuggestion."""
         diagnosis = self._diagnose_portfolio(ctx)
-        candidates = self._generate_candidates(diagnosis, ctx)
-        solved = self._solve_constraints(candidates, ctx.constraints)
-        explanation = self._generate_explanation(solved, diagnosis, ctx)
         warnings = self._collect_warnings(diagnosis, ctx)
 
-        turnover = self._estimate_turnover(solved)
+        if ctx.diagnostics_only:
+            solved: list[RebalanceAction] = []
+            explanation = self._generate_diagnostics_summary(diagnosis, ctx)
+            turnover = 0.0
+        else:
+            candidates = self._generate_candidates(diagnosis, ctx)
+            candidates = await self._maybe_enhance_candidates(candidates, diagnosis, ctx)
+            solved = self._solve_constraints(candidates, ctx.constraints)
+            explanation = self._generate_explanation(solved, diagnosis, ctx)
+            turnover = self._estimate_turnover(solved)
+
+        fallback_reason = "; ".join(ctx.fallback_reasons) if ctx.fallback_reasons else None
 
         return RebalanceSuggestion(
             suggestion_id=uuid.uuid4().hex[:16],
@@ -120,6 +141,8 @@ class RebalanceEngine:
             warnings=warnings,
             status="draft",
             created_at=datetime.now(timezone.utc).isoformat(),
+            degraded_mode=ctx.diagnostics_only,
+            fallback_reason=fallback_reason,
         )
 
     # ── Step 1: Diagnose ────────────────────────────────────
@@ -133,7 +156,11 @@ class RebalanceEngine:
             if not ticker:
                 continue
             shares = float(pos.get("shares", 0))
+            if shares <= 0:
+                continue
             price = _get_price(ticker, ctx.live_prices)
+            if price <= 0:
+                continue
             position_values[ticker] = shares * price
 
         total_value = sum(position_values.values())
@@ -172,6 +199,8 @@ class RebalanceEngine:
 
         if len(position_values) == 1:
             risk_flags.append("\u4ec5\u6301\u6709\u5355\u4e00\u6807\u7684\uff0c\u5206\u6563\u5316\u4e0d\u8db3")
+        if not position_values:
+            risk_flags.append("缺少有效价格输入，暂无法计算持仓权重。")
 
         return _PortfolioDiagnosis(
             total_value=round(total_value, 2),
@@ -180,6 +209,19 @@ class RebalanceEngine:
             risk_flags=risk_flags,
             position_values=position_values,
         )
+
+    def _generate_diagnostics_summary(
+        self,
+        diag: _PortfolioDiagnosis,
+        ctx: RebalanceContext,
+    ) -> str:
+        reasons = "；".join(ctx.fallback_reasons) if ctx.fallback_reasons else "关键输入不足"
+        if diag.risk_flags:
+            return (
+                f"当前进入仅诊断模式（{reasons}），暂不输出目标仓位。"
+                f"已识别风险：{'；'.join(diag.risk_flags)}。"
+            )
+        return f"当前进入仅诊断模式（{reasons}），暂不输出目标仓位。"
 
     # ── Step 2: Generate candidates ─────────────────────────
 
@@ -199,6 +241,16 @@ class RebalanceEngine:
             if current_weight > ctx.constraints.max_single_position_pct:
                 target = min(equal_weight, ctx.constraints.max_single_position_pct)
                 delta = round(target - current_weight, 2)
+                evidence = self._build_action_evidence(
+                    ticker=ticker,
+                    current_weight=current_weight,
+                    target_weight=target,
+                    trigger=(
+                        f"single_position_limit={ctx.constraints.max_single_position_pct:.1f}% "
+                        f"breached by current_weight={current_weight:.1f}%"
+                    ),
+                    ctx=ctx,
+                )
                 candidates.append(
                     RebalanceAction(
                         ticker=ticker,
@@ -212,6 +264,8 @@ class RebalanceEngine:
                             f"\u5efa\u8bae\u51cf\u4ed3\u81f3 {target:.1f}%"
                         ),
                         priority=1,
+                        evidence_ids=[item.evidence_id for item in evidence],
+                        evidence_snapshots=evidence,
                     )
                 )
                 continue
@@ -220,6 +274,16 @@ class RebalanceEngine:
             if current_weight < equal_weight * 0.5 and num_positions >= 3:
                 target = equal_weight
                 delta = round(target - current_weight, 2)
+                evidence = self._build_action_evidence(
+                    ticker=ticker,
+                    current_weight=current_weight,
+                    target_weight=target,
+                    trigger=(
+                        f"under_weight_detected: current_weight={current_weight:.1f}% "
+                        f"vs equal_weight={equal_weight:.1f}%"
+                    ),
+                    ctx=ctx,
+                )
                 candidates.append(
                     RebalanceAction(
                         ticker=ticker,
@@ -232,6 +296,8 @@ class RebalanceEngine:
                             f"\u663e\u8457\u4f4e\u4e8e\u5747\u8861\u6bd4\u4f8b {equal_weight:.1f}%"
                         ),
                         priority=3,
+                        evidence_ids=[item.evidence_id for item in evidence],
+                        evidence_snapshots=evidence,
                     )
                 )
                 continue
@@ -239,6 +305,16 @@ class RebalanceEngine:
             # Rule: Within tolerance -> HOLD
             delta_from_equal = abs(current_weight - equal_weight)
             if delta_from_equal <= ctx.constraints.min_action_delta_pct:
+                evidence = self._build_action_evidence(
+                    ticker=ticker,
+                    current_weight=current_weight,
+                    target_weight=current_weight,
+                    trigger=(
+                        f"within_tolerance: delta={delta_from_equal:.2f}% "
+                        f"<= min_action_delta={ctx.constraints.min_action_delta_pct:.2f}%"
+                    ),
+                    ctx=ctx,
+                )
                 candidates.append(
                     RebalanceAction(
                         ticker=ticker,
@@ -248,6 +324,8 @@ class RebalanceEngine:
                         delta_weight=0.0,
                         reason=f"{ticker} \u6743\u91cd\u63a5\u8fd1\u5747\u8861\uff0c\u7ef4\u6301\u4e0d\u53d8",
                         priority=5,
+                        evidence_ids=[item.evidence_id for item in evidence],
+                        evidence_snapshots=evidence,
                     )
                 )
 
@@ -388,7 +466,76 @@ class RebalanceEngine:
         for flag in diag.risk_flags:
             warnings.append(flag)
 
+        for reason in ctx.fallback_reasons:
+            warnings.append(f"降级原因：{reason}")
+
         return warnings
+
+    async def _maybe_enhance_candidates(
+        self,
+        candidates: list[RebalanceAction],
+        diag: _PortfolioDiagnosis,
+        ctx: RebalanceContext,
+    ) -> list[RebalanceAction]:
+        if not ctx.use_llm_enhancement:
+            return candidates
+        if self._llm_enhancer is None:
+            logger.warning(
+                "[rebalance] use_llm_enhancement=true but no enhancer configured, fallback to deterministic"
+            )
+            return candidates
+
+        try:
+            result = self._llm_enhancer(candidates, diag, ctx)
+            if inspect.isawaitable(result):
+                result = await result
+            if isinstance(result, list) and all(isinstance(item, RebalanceAction) for item in result):
+                return result
+            logger.warning("[rebalance] enhancer returned invalid payload, fallback to deterministic")
+            return candidates
+        except Exception as exc:
+            logger.warning("[rebalance] enhancer failed, fallback to deterministic: %s", exc)
+            return candidates
+
+    @staticmethod
+    def _build_action_evidence(
+        *,
+        ticker: str,
+        current_weight: float,
+        target_weight: float,
+        trigger: str,
+        ctx: RebalanceContext,
+    ) -> list[EvidenceSnapshot]:
+        captured_at = datetime.now(timezone.utc).isoformat()
+        live_price = ctx.live_prices.get(ticker)
+        sector = ctx.sector_map.get(ticker, "Unknown")
+        snapshots = [
+            EvidenceSnapshot(
+                evidence_id=f"rebalance:{ticker}:price",
+                source="live_price",
+                quote=f"{ticker} live_price={live_price if live_price is not None else 'N/A'}",
+                report_id="",
+                captured_at=captured_at,
+            ),
+            EvidenceSnapshot(
+                evidence_id=f"rebalance:{ticker}:weights",
+                source="portfolio_diagnosis",
+                quote=(
+                    f"{ticker} current_weight={current_weight:.2f}% "
+                    f"target_weight={target_weight:.2f}% sector={sector}"
+                ),
+                report_id="",
+                captured_at=captured_at,
+            ),
+            EvidenceSnapshot(
+                evidence_id=f"rebalance:{ticker}:constraint",
+                source="constraint_rule",
+                quote=trigger,
+                report_id="",
+                captured_at=captured_at,
+            ),
+        ]
+        return snapshots
 
     @staticmethod
     def _estimate_turnover(actions: list[RebalanceAction]) -> float:

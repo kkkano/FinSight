@@ -222,6 +222,7 @@ class DashboardData(BaseModel):
     snapshot: Dict[str, Any] = Field(default_factory=dict)
     charts: Dict[str, Any] = Field(default_factory=dict)
     news: Dict[str, Any] = Field(default_factory=dict)
+    meta: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     # v2 新增 (HC-1: 可空 + fallback_reason)
     valuation: Optional[ValuationData] = None
@@ -243,6 +244,44 @@ class DashboardResponse(BaseModel):
     success: bool = True
     state: DashboardState
     data: DashboardData
+
+
+# ---------------------------------------------------------------------------
+# Insights (Phase F)
+# ---------------------------------------------------------------------------
+
+class InsightCard(BaseModel):
+    """
+    单个维度的 AI 洞察卡片
+
+    由 DigestAgent 生成，包含评分、摘要、要点和风险。
+    当 LLM 不可用时，由确定性评分逻辑生成（model_generated=False）。
+    """
+    agent_name: str = Field(..., description="生成该卡片的 digest agent 名称")
+    tab: str = Field(..., description="对应的 Dashboard Tab 名称")
+    score: float = Field(..., ge=0, le=10, description="综合评分 (0-10)")
+    score_label: str = Field(..., description="评分标签 (弱势/偏空/中性/偏多/强势)")
+    summary: str = Field("", description="200-400 字中文分析摘要")
+    key_points: List[str] = Field(default_factory=list, description="3-5 条要点")
+    risks: List[str] = Field(default_factory=list, description="1-3 条风险")
+    sub_scores: Optional[Dict[str, float]] = Field(None, description="子维度评分 (仅 overview)")
+    confidence: float = Field(0.5, ge=0, le=1, description="置信度")
+    as_of: str = Field("", description="数据时间 ISO 格式")
+    model_generated: bool = Field(True, description="True=LLM 生成, False=规则 fallback")
+
+
+class DashboardInsightsResponse(BaseModel):
+    """
+    Dashboard Insights API 响应
+
+    包含各 Tab 的 AI 洞察卡片。
+    """
+    success: bool = True
+    symbol: str = Field(..., description="资产代码")
+    insights: Dict[str, InsightCard] = Field(default_factory=dict, description="tab_name → InsightCard")
+    generated_at: str = Field("", description="生成时间 ISO 格式")
+    cached: bool = Field(False, description="是否来自缓存")
+    cache_age_seconds: float = Field(0, description="缓存年龄（秒）")
 
 
 class DashboardErrorDetail(BaseModel):
