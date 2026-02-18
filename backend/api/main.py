@@ -26,6 +26,7 @@ from backend.api.portfolio_router import portfolio_router
 from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
+from backend.api.alerts_router import create_alerts_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.user_router import UserRouterDeps, create_user_router
@@ -644,6 +645,7 @@ market_router = create_market_router(
 )
 
 subscription_router = create_subscription_router()
+alerts_router = create_alerts_router()
 
 config_router = create_config_router(
     ConfigRouterDeps(
@@ -700,6 +702,7 @@ app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(market_router)
 app.include_router(subscription_router)
+app.include_router(alerts_router)
 app.include_router(config_router)
 app.include_router(report_router)
 app.include_router(task_router)

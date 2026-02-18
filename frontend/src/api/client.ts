@@ -76,6 +76,7 @@ export interface ExecuteRequest {
   budget?: number;
   source?: string;
   session_id?: string;
+  run_id?: string;
   agent_preferences?: AgentPreferencesPayload;
 }
 
@@ -83,6 +84,18 @@ export interface AgentPreferencesPayload {
   agents?: Record<string, string>;
   maxRounds?: number;
   concurrentMode?: boolean;
+}
+
+export interface AlertFeedEvent {
+  id: string;
+  email: string;
+  ticker: string;
+  event_type: string;
+  severity: string;
+  title: string;
+  message: string;
+  triggered_at: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -200,6 +213,7 @@ export async function parseSSEStream(
               parsedData: data,
               size: new Blob([rawJson]).size,
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
             });
           }
 
@@ -207,21 +221,47 @@ export async function parseSSEStream(
             onToken?.(data.content);
           } else if (data.type === 'tool_start') {
             onToolStart?.(data.name);
+            onThinking?.({
+              stage: 'tool_start',
+              message: data.message || `${data.name || 'tool'} start`,
+              result: data,
+              timestamp: data.timestamp || new Date().toISOString(),
+              eventType: data.type,
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
+            });
           } else if (data.type === 'tool_end') {
             onToolEnd?.();
+            onThinking?.({
+              stage: 'tool_end',
+              message: data.message || `${data.name || data.tool || 'tool'} end`,
+              result: data,
+              timestamp: data.timestamp || new Date().toISOString(),
+              eventType: data.type,
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
+            });
           } else if (data.type === 'thinking') {
             onThinking?.({
               stage: data.stage || 'any',
               message: data.message,
               result: data.result,
               timestamp: data.timestamp || new Date().toISOString(),
+              eventType: 'thinking',
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (
-            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'system'].includes(data.type)
+            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'system'].includes(data.type)
           ) {
             const stage = data.stage || data.type;
             const message =
               data.message ||
+              (data.type === 'step_start' ? `${data.kind || 'step'} ${data.name || data.step_id || ''} started`.trim() : '') ||
+              (data.type === 'step_done' ? `${data.kind || 'step'} ${data.name || data.step_id || ''} done`.trim() : '') ||
+              (data.type === 'step_error' ? `${data.kind || 'step'} ${data.name || data.step_id || ''} error`.trim() : '') ||
+              (data.type === 'tool_start' ? `${data.name || data.tool || 'tool'} start` : '') ||
+              (data.type === 'tool_end' ? `${data.name || data.tool || 'tool'} end` : '') ||
               (data.type === 'cache_hit' ? `cache hit: ${data.key || ''}` : '') ||
               (data.type === 'cache_miss' ? `cache miss: ${data.key || ''}` : '') ||
               (data.type === 'cache_set' ? `cache set: ${data.key || ''}` : '') ||
@@ -235,6 +275,9 @@ export async function parseSSEStream(
               message,
               result: data,
               timestamp: data.timestamp || new Date().toISOString(),
+              eventType: data.type,
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (data.type === 'done') {
             onDone?.(data.report, data.thinking, data);
@@ -264,7 +307,10 @@ export async function parseSSEStream(
                 error: data.error,
                 agents: data.agents,
               },
-              timestamp: new Date().toISOString(),
+              timestamp: data.timestamp || new Date().toISOString(),
+              eventType: data.type,
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           }
         } catch (e) {
@@ -278,6 +324,7 @@ export async function parseSSEStream(
               parsedData: { parseError: true, raw: rawJson, error: String(e) },
               size: new Blob([rawJson]).size,
               sessionId: undefined,
+              runId: undefined,
             });
           }
         }
@@ -495,6 +542,26 @@ export const apiClient = {
     return response.data;
   },
 
+  async listAlertFeed(params: {
+    email: string;
+    limit?: number;
+    since?: string;
+  }): Promise<{
+    success: boolean;
+    email: string;
+    events: AlertFeedEvent[];
+    count: number;
+  }> {
+    const response = await api.get('/api/alerts/feed', {
+      params: {
+        email: params.email,
+        limit: params.limit,
+        since: params.since,
+      },
+    });
+    return response.data;
+  },
+
   async toggleSubscription(payload: { email: string; ticker: string; enabled: boolean }): Promise<any> {
     const response = await api.post('/api/subscription/toggle', payload);
     return response.data;
@@ -640,7 +707,7 @@ export const apiClient = {
 
   // --- Resume execution ---
   async resumeExecution(
-    params: { thread_id: string; resume_value: unknown; session_id?: string; source?: string },
+    params: { thread_id: string; resume_value: unknown; session_id?: string; source?: string; run_id?: string },
     callbacks?: SSECallbacks,
     opts?: { traceRawEnabled?: boolean; signal?: AbortSignal },
   ): Promise<Response> {

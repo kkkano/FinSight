@@ -12,8 +12,14 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
+from uuid import uuid4
 
 logger = logging.getLogger("execution_service")
+
+
+def _normalize_run_id(run_id: str | None) -> str:
+    value = str(run_id or "").strip()
+    return value or str(uuid4())
 
 
 def _normalize_report_source_type(source: str | None) -> str:
@@ -115,6 +121,7 @@ async def run_graph_pipeline(
     deps: ExecutionDeps,
     query: str,
     thread_id: str,
+    run_id: str | None = None,
     ui_context: dict[str, Any] | None = None,
     output_mode: str | None = None,
     strict_selection: str | None = None,
@@ -161,6 +168,7 @@ async def run_graph_pipeline(
 
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
+    run_id_value = _normalize_run_id(run_id)
     request_started_at = datetime.utcnow().isoformat()
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
@@ -178,11 +186,7 @@ async def run_graph_pipeline(
         if event_type in stream_metrics:
             stream_metrics[event_type] += 1
 
-    # -- internal emitter (graph nodes call emit_event → _emit) ------------
-
-    async def _emit(payload: dict) -> None:
-        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
-            return
+    def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
         outgoing = deps.redact_sensitive_payload(dict(payload))
         original_schema = outgoing.get("schema_version")
         if (
@@ -192,8 +196,22 @@ async def run_graph_pipeline(
         ):
             outgoing["trace_schema_version"] = original_schema
         outgoing["schema_version"] = deps.sse_event_schema_version
-        _record_stream_metric(outgoing)
+        outgoing.setdefault("session_id", thread_id)
+        outgoing.setdefault("run_id", run_id_value)
+        return outgoing
+
+    async def _queue_event(payload: dict[str, Any], *, record_metric: bool = True) -> None:
+        outgoing = _stamp_ids(payload)
+        if record_metric:
+            _record_stream_metric(outgoing)
         await queue.put(outgoing)
+
+    # -- internal emitter (graph nodes call emit_event → _emit) ------------
+
+    async def _emit(payload: dict) -> None:
+        if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
+            return
+        await _queue_event(payload)
 
     def _enqueue_trace_event(event: TraceEvent) -> None:
         if event is None:
@@ -206,8 +224,7 @@ async def run_graph_pipeline(
         if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
             return
 
-        outgoing = deps.redact_sensitive_payload(dict(payload))
-        outgoing["schema_version"] = deps.sse_event_schema_version
+        outgoing = _stamp_ids(payload)
         _record_stream_metric(outgoing)
 
         try:
@@ -224,7 +241,7 @@ async def run_graph_pipeline(
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
             # 1. langgraph_start
-            await queue.put(
+            await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
                     "type": "thinking",
@@ -258,7 +275,7 @@ async def run_graph_pipeline(
                     timeout_seconds,
                     (query or "")[:120],
                 )
-                await queue.put(
+                await _queue_event(
                     {
                         "schema_version": deps.sse_event_schema_version,
                         "type": "error",
@@ -281,7 +298,7 @@ async def run_graph_pipeline(
                         interrupt_data["data"] = first.value
                     elif isinstance(first, dict):
                         interrupt_data["data"] = first
-                await queue.put(
+                await _queue_event(
                     {
                         "schema_version": deps.sse_event_schema_version,
                         "type": "interrupt",
@@ -342,7 +359,7 @@ async def run_graph_pipeline(
             for idx in range(0, len(markdown), markdown_chunk_size):
                 chunk = markdown[idx: idx + markdown_chunk_size]
                 if chunk:
-                    await queue.put(
+                    await _queue_event(
                         {
                             "schema_version": deps.sse_event_schema_version,
                             "type": "token",
@@ -360,7 +377,7 @@ async def run_graph_pipeline(
             if tool_total_calls <= 0:
                 tool_total_calls = stream_metrics.get("tool_call", 0)
 
-            await queue.put(
+            await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
                     "type": "done",
@@ -388,14 +405,12 @@ async def run_graph_pipeline(
             logger.error(
                 "[execution_service] unhandled: %s", exc, exc_info=True,
             )
-            await queue.put(
-                deps.redact_sensitive_payload(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "error",
-                        "message": "Internal server error",
-                    }
-                )
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "error",
+                    "message": "Internal server error",
+                }
             )
         finally:
             trace_emitter.remove_listener(_enqueue_trace_event)
@@ -435,6 +450,7 @@ async def resume_graph_pipeline(
     *,
     deps: ExecutionDeps,
     thread_id: str,
+    run_id: str | None = None,
     resume_value: Any,
     source: str | None = None,
     trace_raw_enabled: bool = False,
@@ -451,16 +467,32 @@ async def resume_graph_pipeline(
 
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
+    run_id_value = _normalize_run_id(run_id)
     request_started_at = datetime.utcnow().isoformat()
+
+    def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
+        outgoing = deps.redact_sensitive_payload(dict(payload))
+        original_schema = outgoing.get("schema_version")
+        if (
+            isinstance(original_schema, str)
+            and original_schema
+            and original_schema != deps.sse_event_schema_version
+        ):
+            outgoing["trace_schema_version"] = original_schema
+        outgoing["schema_version"] = deps.sse_event_schema_version
+        outgoing.setdefault("session_id", thread_id)
+        outgoing.setdefault("run_id", run_id_value)
+        return outgoing
+
+    async def _queue_event(payload: dict[str, Any]) -> None:
+        await queue.put(_stamp_ids(payload))
 
     # -- internal emitter ---------------------------------------------------
 
     async def _emit(payload: dict) -> None:
         if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
             return
-        outgoing = deps.redact_sensitive_payload(dict(payload))
-        outgoing["schema_version"] = deps.sse_event_schema_version
-        await queue.put(outgoing)
+        await _queue_event(payload)
 
     def _enqueue_trace_event(event: TraceEvent) -> None:
         if event is None:
@@ -471,8 +503,7 @@ async def resume_graph_pipeline(
             return
         if (not trace_raw_enabled) and deps.is_raw_trace_event(payload):
             return
-        outgoing = deps.redact_sensitive_payload(dict(payload))
-        outgoing["schema_version"] = deps.sse_event_schema_version
+        outgoing = _stamp_ids(payload)
         try:
             loop = asyncio.get_running_loop()
             loop.call_soon_threadsafe(queue.put_nowait, outgoing)
@@ -486,7 +517,7 @@ async def resume_graph_pipeline(
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
-            await queue.put(
+            await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
                     "type": "thinking",
@@ -507,7 +538,7 @@ async def resume_graph_pipeline(
                 event_name = event.get("event", "")
                 # Forward interrupt events to the client
                 if "interrupt" in event_name:
-                    await queue.put(
+                    await _queue_event(
                         {
                             "schema_version": deps.sse_event_schema_version,
                             "type": "interrupt",
@@ -552,7 +583,7 @@ async def resume_graph_pipeline(
             for idx in range(0, len(markdown), markdown_chunk_size):
                 chunk = markdown[idx: idx + markdown_chunk_size]
                 if chunk:
-                    await queue.put(
+                    await _queue_event(
                         {
                             "schema_version": deps.sse_event_schema_version,
                             "type": "token",
@@ -562,7 +593,7 @@ async def resume_graph_pipeline(
                 await asyncio.sleep(0)
 
             # Done
-            await queue.put(
+            await _queue_event(
                 {
                     "schema_version": deps.sse_event_schema_version,
                     "type": "done",
@@ -580,14 +611,12 @@ async def resume_graph_pipeline(
             )
         except Exception as exc:
             logger.error("[resume_pipeline] unhandled: %s", exc, exc_info=True)
-            await queue.put(
-                deps.redact_sensitive_payload(
-                    {
-                        "schema_version": deps.sse_event_schema_version,
-                        "type": "error",
-                        "message": "Resume execution failed",
-                    }
-                )
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "error",
+                    "message": "Resume execution failed",
+                }
             )
         finally:
             trace_emitter.remove_listener(_enqueue_trace_event)

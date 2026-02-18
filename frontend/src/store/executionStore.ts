@@ -1,14 +1,10 @@
 /**
- * ExecutionStore — global Zustand store for agent execution state.
+ * ExecutionStore - global Zustand store for agent execution state.
  *
- * Manages active and recent runs, provides event-driven progress
- * tracking from SSE events, and supports cancellation.
- *
- * Contracts (see docs/AGENTIC_SPRINT_TODOLIST.md P1-1a):
+ * Contracts:
  * - runId lifecycle: created in startExecution, immutable until completion
- * - Progress is monotonically increasing (never decreases)
- * - Terminal states (done/error/cancelled) move runs to recentRuns
- * - cancelOnUnmount defaults to false (page navigation won't kill tasks)
+ * - Progress is monotonically increasing
+ * - Terminal states move runs from activeRuns to recentRuns
  */
 import { create } from 'zustand';
 
@@ -19,26 +15,22 @@ import type {
   ExecutionRun,
   AgentRunInfo,
   StartExecutionParams,
+  TimelineEvent,
 } from '../types/execution';
 import type { ReportIR } from '../types/index';
 import { useStore } from './useStore';
 
 const MAX_RECENT_RUNS = 20;
-
-// --- Store interface ---
+const MAX_TIMELINE_EVENTS = 300;
 
 interface ExecutionState {
   activeRuns: ExecutionRun[];
   recentRuns: ExecutionRun[];
-
   startExecution: (params: StartExecutionParams) => string;
   cancelExecution: (runId: string) => void;
   getActiveRunForTicker: (ticker: string) => ExecutionRun | undefined;
-  /** Mark a run as bridged to chat (prevents duplicate injection). */
   markBridged: (runId: string) => void;
 }
-
-// --- Progress calculation (event-driven, monotonically increasing) ---
 
 function calculateAgentProgress(
   agentStatuses: Record<string, AgentRunInfo>,
@@ -47,13 +39,54 @@ function calculateAgentProgress(
   const agents = Object.values(agentStatuses);
   const total = Math.max(agents.length, 1);
   const completed = agents.filter(
-    (a) => a.status === 'done' || a.status === 'error',
+    (agent) => agent.status === 'done' || agent.status === 'error',
   ).length;
   const calculated = 10 + Math.round((completed / total) * 70);
   return Math.max(currentProgress, calculated);
 }
 
-// --- Store ---
+function pushTimeline(
+  run: ExecutionRun,
+  event: TimelineEvent,
+): TimelineEvent[] {
+  return [...run.timeline, event].slice(-MAX_TIMELINE_EVENTS);
+}
+
+function buildTimelineEvent(
+  runId: string,
+  step: any,
+  runIdFromEvent?: string,
+): TimelineEvent {
+  const result = (step?.result && typeof step.result === 'object')
+    ? step.result
+    : {};
+  const raw = result as Record<string, unknown>;
+  const eventType = String(step?.eventType || raw.type || step?.stage || 'thinking');
+  const stage = String(step?.stage || eventType || 'thinking');
+
+  return {
+    id: `${runId}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: String(step?.timestamp || new Date().toISOString()),
+    eventType,
+    stage,
+    message: typeof step?.message === 'string' ? step.message : undefined,
+    runId: runIdFromEvent || runId,
+    sessionId: typeof step?.sessionId === 'string' ? step.sessionId : undefined,
+    stepId: typeof raw.step_id === 'string' ? raw.step_id : undefined,
+    kind: typeof raw.kind === 'string' ? raw.kind : undefined,
+    name: typeof raw.name === 'string' ? raw.name : undefined,
+    agent: typeof raw.agent === 'string' ? raw.agent : undefined,
+    tool: typeof raw.tool === 'string'
+      ? raw.tool
+      : (eventType.startsWith('tool_') && typeof raw.name === 'string' ? raw.name : undefined),
+    durationMs: typeof raw.duration_ms === 'number' ? raw.duration_ms : undefined,
+    cached: raw.cached === true,
+    skipped: raw.skipped === true,
+    status: typeof raw.status === 'string' ? raw.status : undefined,
+    parallelGroup: typeof raw.parallel_group === 'string' ? raw.parallel_group : null,
+    raw,
+  };
+}
 
 export const useExecutionStore = create<ExecutionState>((set, get) => ({
   activeRuns: [],
@@ -75,7 +108,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       status: 'running',
       agentStatuses: {},
       progress: 0,
-      currentStep: '准备中...',
+      currentStep: '准备执行...',
+      timeline: [],
       report: null,
       streamedContent: '',
       fallbackReasons: [],
@@ -91,7 +125,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       activeRuns: [...state.activeRuns, initialRun],
     }));
 
-    // Build API request body (camelCase → snake_case)
     const prefs = getAgentPreferences();
     const request: ExecuteRequest = {
       query: params.query,
@@ -102,6 +135,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       budget: params.budget ?? prefs.maxRounds,
       source: params.source,
       session_id: sessionId,
+      run_id: runId,
       agent_preferences: {
         agents: prefs.agents,
         maxRounds: prefs.maxRounds,
@@ -109,18 +143,16 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       },
     };
 
-    // --- Helpers scoped to this run ---
-
     const updateRun = (patch: Partial<ExecutionRun>) => {
       set((state) => ({
-        activeRuns: state.activeRuns.map((r) =>
-          r.runId === runId ? { ...r, ...patch } : r,
+        activeRuns: state.activeRuns.map((run) =>
+          run.runId === runId ? { ...run, ...patch } : run,
         ),
       }));
     };
 
     const getRun = (): ExecutionRun | undefined =>
-      get().activeRuns.find((r) => r.runId === runId);
+      get().activeRuns.find((run) => run.runId === runId);
 
     const completeRun = (finalPatch: Partial<ExecutionRun>) => {
       const run = getRun();
@@ -134,37 +166,43 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       };
 
       set((state) => ({
-        activeRuns: state.activeRuns.filter((r) => r.runId !== runId),
+        activeRuns: state.activeRuns.filter((item) => item.runId !== runId),
         recentRuns: [completed, ...state.recentRuns].slice(0, MAX_RECENT_RUNS),
       }));
     };
-
-    // --- SSE Callbacks ---
 
     const callbacks: SSECallbacks = {
       onThinking: (step) => {
         const run = getRun();
         if (!run || run.status !== 'running') return;
 
-        const stage: string = step?.stage ?? '';
+        const runIdFromEvent = typeof step?.runId === 'string'
+          ? step.runId
+          : (typeof step?.result?.run_id === 'string' ? step.result.run_id : undefined);
+        if (runIdFromEvent && runIdFromEvent !== runId) return;
+
+        const stage = String(step?.stage ?? '');
         const result = step?.result ?? {};
-        const message: string = step?.message ?? '';
+        const message = String(step?.message ?? '');
+        const timeline = pushTimeline(run, buildTimelineEvent(runId, step, runIdFromEvent));
 
         if (stage === 'supervisor_start') {
-          // Initialize known agents from event payload
-          const agentNames: string[] = Array.isArray(result.agents)
-            ? result.agents
-            : [];
+          const agentNames: string[] = Array.isArray(result.agents) ? result.agents : [];
           const newStatuses: Record<string, AgentRunInfo> = {};
           for (const name of agentNames) {
             newStatuses[name] = { name, status: 'pending' };
           }
+
           updateRun({
             agentStatuses: { ...run.agentStatuses, ...newStatuses },
             progress: Math.max(run.progress, 5),
             currentStep: message || '协调器启动',
+            timeline,
           });
-        } else if (stage === 'agent_start') {
+          return;
+        }
+
+        if (stage === 'agent_start') {
           const agentName: string | undefined = result.agent;
           if (!agentName) return;
 
@@ -172,7 +210,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           if (!latestRun) return;
 
           const statuses = { ...latestRun.agentStatuses };
-          // Dynamic append if not listed in supervisor_start
           if (!statuses[agentName]) {
             statuses[agentName] = { name: agentName, status: 'pending' };
           }
@@ -182,13 +219,16 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             startedAt: new Date().toISOString(),
           };
 
-          const progress = calculateAgentProgress(statuses, latestRun.progress);
           updateRun({
             agentStatuses: statuses,
-            progress,
+            progress: calculateAgentProgress(statuses, latestRun.progress),
             currentStep: `${agentName} 执行中...`,
+            timeline,
           });
-        } else if (stage === 'agent_done') {
+          return;
+        }
+
+        if (stage === 'agent_done') {
           const agentName: string | undefined = result.agent;
           if (!agentName) return;
 
@@ -204,13 +244,16 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             };
           }
 
-          const progress = calculateAgentProgress(statuses, latestRun.progress);
           updateRun({
             agentStatuses: statuses,
-            progress,
+            progress: calculateAgentProgress(statuses, latestRun.progress),
             currentStep: `${agentName} 完成`,
+            timeline,
           });
-        } else if (stage === 'agent_error') {
+          return;
+        }
+
+        if (stage === 'agent_error') {
           const agentName: string | undefined = result.agent;
           if (!agentName) return;
 
@@ -227,7 +270,6 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             };
           }
 
-          const progress = calculateAgentProgress(statuses, latestRun.progress);
           const fallbackReasons = [...latestRun.fallbackReasons];
           if (result.error) {
             fallbackReasons.push(`${agentName}: ${result.error}`);
@@ -235,75 +277,116 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
           updateRun({
             agentStatuses: statuses,
-            progress,
+            progress: calculateAgentProgress(statuses, latestRun.progress),
             currentStep: `${agentName} 异常`,
             fallbackReasons,
+            timeline,
           });
-        } else {
-          // Generic thinking step — update currentStep only
-          const latestRun = getRun() ?? run;
-          const patch: Partial<ExecutionRun> = {};
-          if (message) {
-            patch.currentStep = message;
-          }
-          const normalizedStage = String(stage || '').toLowerCase();
-          if (normalizedStage.includes('synth')) {
+          return;
+        }
+
+        const latestRun = getRun() ?? run;
+        const patch: Partial<ExecutionRun> = { timeline };
+        if (message) patch.currentStep = message;
+
+        const normalizedStage = stage.toLowerCase();
+        if (normalizedStage.includes('synth')) {
+          patch.progress = Math.max(latestRun.progress, 88);
+        } else if (normalizedStage.includes('render')) {
+          patch.progress = Math.max(latestRun.progress, 95);
+        } else if (normalizedStage.startsWith('llm_') && latestRun.progress >= 80) {
+          if (normalizedStage === 'llm_end') {
+            patch.progress = Math.max(latestRun.progress, 96);
+          } else if (normalizedStage === 'llm_start') {
             patch.progress = Math.max(latestRun.progress, 88);
-          } else if (normalizedStage.includes('render')) {
-            patch.progress = Math.max(latestRun.progress, 95);
-          } else if (normalizedStage.startsWith('llm_') && latestRun.progress >= 80) {
-            if (normalizedStage === 'llm_end') {
-              patch.progress = Math.max(latestRun.progress, 96);
-            } else if (normalizedStage === 'llm_start') {
-              patch.progress = Math.max(latestRun.progress, 88);
-            } else {
-              patch.progress = Math.max(latestRun.progress, 92);
-            }
-          }
-          if (Object.keys(patch).length > 0) {
-            updateRun(patch);
+          } else {
+            patch.progress = Math.max(latestRun.progress, 92);
           }
         }
+        updateRun(patch);
       },
 
       onToken: (token) => {
         const run = getRun();
         if (!run || run.status !== 'running') return;
-
         updateRun({
           streamedContent: run.streamedContent + token,
           progress: Math.max(run.progress, 92),
-          currentStep: '生成报告...',
+          currentStep: '生成报告中...',
         });
       },
 
-      onDone: (report?: any) => {
+      onDone: (report?: any, _thinking?: any[], meta?: any) => {
+        const streamRunId = typeof meta?.run_id === 'string' ? meta.run_id : undefined;
+        if (streamRunId && streamRunId !== runId) return;
+
+        const run = getRun();
+        const timeline = run
+          ? pushTimeline(run, {
+              id: `${runId}:${Date.now()}:done`,
+              timestamp: new Date().toISOString(),
+              eventType: 'done',
+              stage: 'done',
+              message: 'execution done',
+              runId: streamRunId || runId,
+              sessionId: typeof meta?.session_id === 'string' ? meta.session_id : undefined,
+              raw: (meta && typeof meta === 'object') ? meta : {},
+            })
+          : [];
+
         completeRun({
           status: 'done',
           progress: 100,
           currentStep: null,
           report: (report as ReportIR) ?? null,
+          timeline,
         });
       },
 
       onError: (error) => {
+        const run = getRun();
+        const timeline = run
+          ? pushTimeline(run, {
+              id: `${runId}:${Date.now()}:error`,
+              timestamp: new Date().toISOString(),
+              eventType: 'error',
+              stage: 'error',
+              message: error ?? 'Unknown error',
+              runId,
+            })
+          : [];
+
         completeRun({
           status: 'error',
           error: error ?? 'Unknown error',
           currentStep: null,
+          timeline,
         });
       },
 
       onInterrupt: (data) => {
+        const run = getRun();
+        const timeline = run
+          ? pushTimeline(run, {
+              id: `${runId}:${Date.now()}:interrupt`,
+              timestamp: new Date().toISOString(),
+              eventType: 'interrupt',
+              stage: 'interrupt',
+              message: data.prompt ?? '等待确认...',
+              runId,
+              raw: data as unknown as Record<string, unknown>,
+            })
+          : [];
+
         updateRun({
           status: 'interrupted',
           currentStep: data.prompt ?? '等待确认...',
           interruptData: data,
+          timeline,
         });
       },
     };
 
-    // Fire-and-forget — errors handled via onError callback
     callbacks.onRawEvent = (event) => {
       useStore.getState().addRawEvent(event);
     };
@@ -322,8 +405,8 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         }
       } catch (err: unknown) {
         if (abortController.signal.aborted) return;
-        const msg = err instanceof Error ? err.message : 'Execution failed';
-        callbacks.onError?.(msg);
+        const message = err instanceof Error ? err.message : 'Execution failed';
+        callbacks.onError?.(message);
       }
     })();
 
@@ -331,7 +414,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   },
 
   cancelExecution: (runId) => {
-    const run = get().activeRuns.find((r) => r.runId === runId);
+    const run = get().activeRuns.find((item) => item.runId === runId);
     if (!run) return;
 
     run.abortController?.abort();
@@ -342,26 +425,28 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       currentStep: null,
       completedAt: new Date().toISOString(),
       abortController: null,
+      timeline: [...run.timeline],
     };
 
     set((state) => ({
-      activeRuns: state.activeRuns.filter((r) => r.runId !== runId),
+      activeRuns: state.activeRuns.filter((item) => item.runId !== runId),
       recentRuns: [cancelledRun, ...state.recentRuns].slice(0, MAX_RECENT_RUNS),
     }));
   },
 
   getActiveRunForTicker: (ticker) => {
-    const upper = ticker.toUpperCase();
-    return get().activeRuns.find((r) =>
-      r.tickers.some((t) => t.toUpperCase() === upper),
+    const target = ticker.toUpperCase();
+    return get().activeRuns.find((run) =>
+      run.tickers.some((symbol) => symbol.toUpperCase() === target),
     );
   },
 
   markBridged: (runId) => {
     set((state) => ({
-      recentRuns: state.recentRuns.map((r) =>
-        r.runId === runId ? { ...r, bridgedToChat: true } : r,
+      recentRuns: state.recentRuns.map((run) =>
+        run.runId === runId ? { ...run, bridgedToChat: true } : run,
       ),
     }));
   },
 }));
+

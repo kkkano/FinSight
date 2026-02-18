@@ -33,3 +33,14 @@ export type AlertSubscription = {
   updatedAt?: string | null;
   source: 'polling';
 };
+
+export type AlertEvent = {
+  id: string;
+  ticker: string;
+  eventType: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | string;
+  title: string;
+  message: string;
+  triggeredAt: string;
+  metadata?: Record<string, unknown>;
+};

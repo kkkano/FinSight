@@ -33,10 +33,15 @@ from backend.dashboard.insights_prompts import (
 from backend.dashboard.insights_scorer import (
     clamp_score,
     score_financial,
+    score_financial_details,
     score_news,
+    score_news_details,
     score_overview,
+    score_overview_details,
     score_peers,
+    score_peers_details,
     score_technical,
+    score_technical_details,
     metrics_financial,
     metrics_news,
     metrics_overview,
@@ -128,6 +133,12 @@ class DigestAgent(ABC):
         Called when LLM is unavailable or times out.
         """
 
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        score, label, points = self._deterministic_fallback(data)
+        return score, label, points, []
+
     async def digest(self, ticker: str, data: dict[str, Any]) -> InsightCard:
         """
         Run a single LLM analysis call, falling back to deterministic scoring.
@@ -181,7 +192,7 @@ class DigestAgent(ABC):
 
         # Validate and clamp
         score = clamp_score(float(parsed.get("score", 5.0)))
-        fallback_score, _, _ = self._deterministic_fallback(data)
+        fallback_score, fallback_label, fallback_points, fallback_breakdown = self._deterministic_fallback_details(data)
 
         # If LLM score diverges too much from deterministic, average them
         if abs(score - fallback_score) > 3.0:
@@ -201,11 +212,12 @@ class DigestAgent(ABC):
             agent_name=self.AGENT_NAME,
             tab=self.TAB,
             score=score,
-            score_label=str(parsed.get("score_label", _label_from_score(score))),
+            score_label=str(parsed.get("score_label", fallback_label or _label_from_score(score))),
             summary=str(parsed.get("summary", ""))[:800],
-            key_points=_ensure_str_list(parsed.get("key_points", []))[:5],
+            key_points=(_ensure_str_list(parsed.get("key_points", []))[:5] or fallback_points[:5]),
             risks=_ensure_str_list(parsed.get("risks", []))[:3],
             key_metrics=key_metrics if key_metrics else None,
+            score_breakdown=fallback_breakdown,
             confidence=0.8,
             as_of=now_iso,
             model_generated=True,
@@ -217,7 +229,7 @@ class DigestAgent(ABC):
 
     def _make_fallback_card(self, data: dict[str, Any], now_iso: str) -> InsightCard:
         """Generate card from deterministic scoring."""
-        score, label, points = self._deterministic_fallback(data)
+        score, label, points, breakdown = self._deterministic_fallback_details(data)
         return InsightCard(
             agent_name=self.AGENT_NAME,
             tab=self.TAB,
@@ -227,6 +239,7 @@ class DigestAgent(ABC):
             key_points=points,
             risks=[],
             key_metrics=self._extract_fallback_metrics(data),
+            score_breakdown=breakdown,
             confidence=0.4,
             as_of=now_iso,
             model_generated=False,
@@ -247,6 +260,11 @@ class TechnicalDigest(DigestAgent):
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_technical(data)
 
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        return score_technical_details(data)
+
     def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
         return metrics_technical(data) or None
 
@@ -260,6 +278,11 @@ class FinancialDigest(DigestAgent):
 
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_financial(data)
+
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        return score_financial_details(data)
 
     def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
         return metrics_financial(data) or None
@@ -275,6 +298,11 @@ class NewsDigest(DigestAgent):
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_news(data)
 
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        return score_news_details(data)
+
     def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
         return metrics_news(data) or None
 
@@ -288,6 +316,11 @@ class PeersDigest(DigestAgent):
 
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_peers(data)
+
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        return score_peers_details(data)
 
     def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
         return metrics_peers(data) or None
@@ -309,6 +342,16 @@ class OverviewDigest(DigestAgent):
 
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_overview(
+            tech_score=self._sub_scores.get("technical", 5.0),
+            fin_score=self._sub_scores.get("financial", 5.0),
+            news_score=self._sub_scores.get("news", 5.0),
+            peers_score=self._sub_scores.get("peers", 5.0),
+        )
+
+    def _deterministic_fallback_details(
+        self, data: dict[str, Any],
+    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+        return score_overview_details(
             tech_score=self._sub_scores.get("technical", 5.0),
             fin_score=self._sub_scores.get("financial", 5.0),
             news_score=self._sub_scores.get("news", 5.0),

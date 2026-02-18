@@ -128,6 +128,19 @@ class PriceChangeScheduler:
                 )
                 continue
             self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
+            self.subscription_service.record_alert_event(
+                sub["email"],
+                sub["ticker"],
+                "price_change",
+                severity="high" if abs(snapshot.change_percent) >= float(threshold) * 2 else "medium",
+                title=f"{sub['ticker']} 价格异动 {snapshot.change_percent:+.2f}%",
+                message=message,
+                metadata={
+                    "threshold": threshold,
+                    "change_percent": snapshot.change_percent,
+                    "current_price": snapshot.price,
+                },
+            )
 
             sent.append(
                 {
@@ -241,6 +254,18 @@ class NewsAlertScheduler:
                 )
                 continue
             self.subscription_service.update_last_news(sub["email"], sub["ticker"])
+            self.subscription_service.record_alert_event(
+                sub["email"],
+                sub["ticker"],
+                "news",
+                severity="high" if len(related) >= 2 else "medium",
+                title=f"{sub['ticker']} 相关新闻触发 ({len(related)} 条)",
+                message=message,
+                metadata={
+                    "article_count": len(related),
+                    "latest_article": related[0].get("title") if related else "",
+                },
+            )
 
             sent.append(
                 {
@@ -384,6 +409,20 @@ class RiskAlertScheduler:
 
             self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
             self.subscription_service.update_last_risk(sub["email"], sub["ticker"])
+            self.subscription_service.record_alert_event(
+                sub["email"],
+                sub["ticker"],
+                "risk",
+                severity=assessment.risk_level.value,
+                title=f"{assessment.ticker} 风险等级 {assessment.risk_level.value}",
+                message=message,
+                metadata={
+                    "risk_score": assessment.risk_score,
+                    "risk_level": assessment.risk_level.value,
+                    "risk_threshold": threshold.value,
+                    "change_percent": snapshot.change_percent,
+                },
+            )
 
             sent.append(
                 {

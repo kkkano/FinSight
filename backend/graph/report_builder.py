@@ -1612,6 +1612,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     if isinstance(validated, dict):
         validated["synthesis_report"] = synthesis_report
         validated["agent_status"] = agent_status
+        validated["conflict_disclosure"] = conflict_disclosure
         validated["report_hints"] = report_hints
         validated["core_viewpoints"] = _build_core_viewpoints(agent_summaries)
         # P0-3d: structured agent diagnostics for frontend observability

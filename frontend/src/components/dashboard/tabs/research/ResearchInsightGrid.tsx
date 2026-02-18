@@ -33,6 +33,7 @@ interface ResearchInsightGridProps {
   loading?: boolean;
   error?: string | null;
   stale?: boolean;
+  onOpenScoreExplain?: (insight: InsightCard, title: string) => void;
 }
 
 // ==================== 单卡子组件 ====================
@@ -52,10 +53,12 @@ function ResearchCard({
   config,
   insight,
   stale,
+  onOpenScoreExplain,
 }: {
   config: CardConfig;
   insight: InsightCard | undefined;
   stale: boolean;
+  onOpenScoreExplain?: (insight: InsightCard, title: string) => void;
 }) {
   if (!insight) return null;
 
@@ -147,12 +150,21 @@ function ResearchCard({
         <span className="text-2xs text-fin-muted">
           {insight.model_generated ? 'AI 分析' : '规则评分'}
         </span>
-        {stale && (
-          <span className="text-2xs text-fin-muted flex items-center gap-0.5">
-            <span className="opacity-60">🕐</span>
-            已过期
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-2xs text-fin-primary hover:text-fin-primary/80 transition-colors"
+            onClick={() => onOpenScoreExplain?.(insight, config.label)}
+          >
+            查看构成
+          </button>
+          {stale && (
+            <span className="text-2xs text-fin-muted flex items-center gap-0.5">
+              <span className="opacity-60">🕐</span>
+              已过期
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -165,6 +177,7 @@ export function ResearchInsightGrid({
   loading = false,
   error = null,
   stale = false,
+  onOpenScoreExplain,
 }: ResearchInsightGridProps) {
   // 加载骨架
   if (loading && !insights) {
@@ -197,6 +210,7 @@ export function ResearchInsightGrid({
           config={config}
           insight={insights[config.key]}
           stale={stale}
+          onOpenScoreExplain={onOpenScoreExplain}
         />
       ))}
     </div>

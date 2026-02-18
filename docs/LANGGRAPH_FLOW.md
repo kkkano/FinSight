@@ -316,3 +316,48 @@ Supports 3 backends (configured via `LANGGRAPH_CHECKPOINTER_BACKEND`):
 - `postgres`: Production-grade with optional pipelining
 
 **Source**: `backend/graph/checkpointer.py`
+
+---
+
+## Phase I Event Contracts (I1-I4)
+
+### A) Execution stream identity contract
+
+- 所有 SSE 事件携带：
+  - `run_id`
+  - `session_id`
+  - `schema_version`
+- 统一注入点：`backend/services/execution_service.py` 的 `_stamp_ids(payload)`。
+- 前端消费：
+  - `frontend/src/api/client.ts` 透传 `runId/sessionId` 到 `onThinking/onRawEvent`
+  - `frontend/src/store/executionStore.ts` 按 `runId` 过滤并写入 `timeline`
+
+```mermaid
+flowchart LR
+  REQ[POST /api/execute run_id] --> PIPE[run_graph_pipeline]
+  PIPE --> STAMP[_stamp_ids]
+  STAMP --> SSE[SSE events]
+  SSE --> PARSE[parseSSEStream]
+  PARSE --> STORE[executionStore timeline]
+  STORE --> PANEL[AgentTimeline UI]
+```
+
+### B) Alert feed contract
+
+- 新增接口：`GET /api/alerts/feed?email&limit&since`
+- 事件源：
+  - `PriceChangeScheduler`
+  - `NewsAlertScheduler`
+  - `RiskAlertScheduler`
+- 持久化：`SubscriptionService.record_alert_event` 写入每个订阅的 `recent_events`
+- 前端消费：`RightPanelAlertsTab` 展示“最近触发事件 + 当前订阅配置”
+
+```mermaid
+flowchart LR
+  S1[Price Scheduler] --> EVT[record_alert_event]
+  S2[News Scheduler] --> EVT
+  S3[Risk Scheduler] --> EVT
+  EVT --> STORE[(subscriptions.json recent_events)]
+  STORE --> API[/api/alerts/feed]
+  API --> RP[RightPanel Alerts]
+```

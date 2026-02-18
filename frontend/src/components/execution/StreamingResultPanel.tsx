@@ -26,6 +26,7 @@ import {
 import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 import { ReportView } from '../report/ReportView';
+import { AgentTimeline } from './AgentTimeline';
 import type { AgentRunInfo } from '../../types/execution';
 
 // --- Constants ---
@@ -219,6 +220,8 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
           </div>
         )}
 
+        <AgentTimeline timeline={run.timeline} compact={compact} />
+
         {/* Cancel */}
         <button
           type="button"
@@ -294,6 +297,8 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
           )}
           </div>
         )}
+
+        <AgentTimeline timeline={run.timeline} compact={compact} />
       </div>
     );
   }
@@ -318,6 +323,7 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
             ))}
           </div>
         )}
+        <AgentTimeline timeline={run.timeline} compact={compact} />
       </div>
     );
   }

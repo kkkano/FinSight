@@ -157,3 +157,47 @@ flowchart LR
 - `GraphState` 尚未显式定义 `agent_preferences` 字段（偏好仍走 `ui_context`）
 - `confirmation_gate` 目前是 run 级中断，非逐 step 人工确认
 - `synthesize` 仍保留 `stub/llm` 双模式，需要按环境切换
+
+---
+
+## 8. Phase I 增量链路（I1-I4）
+
+### 8.1 Execution SSE Event Flow（with `run_id`）
+
+```mermaid
+sequenceDiagram
+  participant FE as frontend/api/client.ts
+  participant API as /api/execute
+  participant SVC as execution_service
+  participant EX as graph.executor
+  participant UI as executionStore + AgentTimeline
+
+  FE->>API: POST /api/execute { run_id, session_id, ... }
+  API->>SVC: run_graph_pipeline(run_id=...)
+  SVC->>EX: execute_plan()
+  EX-->>SVC: step_start/tool_start/agent_start/...
+  SVC-->>API: stamped SSE events (run_id + session_id + schema_version)
+  API-->>FE: text/event-stream
+  FE-->>UI: onThinking/onRawEvent (runId filter)
+  UI-->>UI: append timeline (FIFO<=300), render AgentTimeline
+```
+
+### 8.2 Alert Scheduler -> Alert Feed -> Right Panel
+
+```mermaid
+flowchart LR
+  subgraph Scheduler
+    PRICE[PriceChangeScheduler]
+    NEWS[NewsAlertScheduler]
+    RISK[RiskAlertScheduler]
+  end
+
+  PRICE -->|record_alert_event| SUBS[(subscriptions.json)]
+  NEWS -->|record_alert_event| SUBS
+  RISK -->|record_alert_event| SUBS
+
+  SUBS --> FEED[/GET /api/alerts/feed]
+  FEED --> RP_HOOK[useRightPanelData]
+  RP_HOOK --> RP_TAB[RightPanelAlertsTab]
+  RP_TAB --> USER[事件列表 + 订阅配置 + 未读数]
+```

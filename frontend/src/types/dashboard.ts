@@ -433,6 +433,15 @@ export interface InsightKeyMetric {
   value: string;
 }
 
+export interface ScoreBreakdownItem {
+  factor_key: string;
+  label: string;
+  weight: number;
+  value: number;
+  contribution: number;
+  rationale: string;
+}
+
 export interface InsightCard {
   agent_name: string;
   tab: string;
@@ -442,6 +451,7 @@ export interface InsightCard {
   key_points: string[];
   risks: string[];
   key_metrics?: InsightKeyMetric[] | null;   // 结构化关键指标
+  score_breakdown?: ScoreBreakdownItem[];
   sub_scores?: Record<string, number>;
   confidence: number;
   as_of: string;

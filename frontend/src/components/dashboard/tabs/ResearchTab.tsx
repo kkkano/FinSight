@@ -19,6 +19,7 @@ import { useExecutionStore } from '../../../store/executionStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
 import { useDashboardInsights } from '../../../hooks/useDashboardInsights.ts';
 import { useExecuteAgent } from '../../../hooks/useExecuteAgent.ts';
+import type { InsightCard } from '../../../types/dashboard.ts';
 import { ResearchMetadata } from './research/ResearchMetadata.tsx';
 import { ResearchOverviewBar } from './research/ResearchOverviewBar.tsx';
 import { ResearchInsightGrid } from './research/ResearchInsightGrid.tsx';
@@ -26,6 +27,7 @@ import { ExecutiveSummary } from './research/ExecutiveSummary.tsx';
 import { CoreFindings } from './research/CoreFindings.tsx';
 import { ConflictPanel } from './research/ConflictPanel.tsx';
 import { ReferenceList } from './research/ReferenceList.tsx';
+import { ScoreExplainDrawer } from './research/ScoreExplainDrawer.tsx';
 
 const REPORT_SYNC_MAX_RETRIES = 12;
 const REPORT_SYNC_RETRY_DELAY_MS = 1000;
@@ -56,6 +58,15 @@ export function ResearchTab() {
 
   // ==================== 完整报告折叠状态 ====================
   const [reportExpanded, setReportExpanded] = useState(false);
+  const [scoreDrawerState, setScoreDrawerState] = useState<{
+    open: boolean;
+    title: string;
+    insight: InsightCard | null;
+  }>({
+    open: false,
+    title: '',
+    insight: null,
+  });
 
   const [syncingReport, setSyncingReport] = useState(false);
   const [syncHint, setSyncHint] = useState<string | null>(null);
@@ -151,6 +162,18 @@ export function ResearchTab() {
     });
   };
 
+  const handleOpenScoreExplain = (insight: InsightCard, title: string) => {
+    setScoreDrawerState({
+      open: true,
+      title,
+      insight,
+    });
+  };
+
+  const handleCloseScoreExplain = () => {
+    setScoreDrawerState((prev) => ({ ...prev, open: false }));
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -159,12 +182,20 @@ export function ResearchTab() {
         <ResearchOverviewBar
           overview={insightsData?.overview}
           loading={insightsLoading}
+          onOpenScoreExplain={handleOpenScoreExplain}
         />
         <ResearchInsightGrid
           insights={insightsData}
           loading={insightsLoading}
           error={insightsError}
           stale={insightsStale}
+          onOpenScoreExplain={handleOpenScoreExplain}
+        />
+        <ScoreExplainDrawer
+          open={scoreDrawerState.open}
+          title={scoreDrawerState.title}
+          insight={scoreDrawerState.insight}
+          onClose={handleCloseScoreExplain}
         />
       </div>
     );
@@ -179,12 +210,14 @@ export function ResearchTab() {
         <ResearchOverviewBar
           overview={insightsData?.overview}
           loading={insightsLoading}
+          onOpenScoreExplain={handleOpenScoreExplain}
         />
         <ResearchInsightGrid
           insights={insightsData}
           loading={insightsLoading}
           error={insightsError}
           stale={insightsStale}
+          onOpenScoreExplain={handleOpenScoreExplain}
         />
 
         {/* 深度分析触发区 */}
@@ -229,6 +262,12 @@ export function ResearchTab() {
             </div>
           )}
         </div>
+        <ScoreExplainDrawer
+          open={scoreDrawerState.open}
+          title={scoreDrawerState.title}
+          insight={scoreDrawerState.insight}
+          onClose={handleCloseScoreExplain}
+        />
       </div>
     );
   }
@@ -244,6 +283,7 @@ export function ResearchTab() {
       <ResearchOverviewBar
         overview={insightsData?.overview}
         loading={insightsLoading}
+        onOpenScoreExplain={handleOpenScoreExplain}
       />
 
       {/* AI 洞察卡片网格：财务 / 技术 / 新闻 / 行业 */}
@@ -252,6 +292,7 @@ export function ResearchTab() {
         loading={insightsLoading}
         error={insightsError}
         stale={insightsStale}
+        onOpenScoreExplain={handleOpenScoreExplain}
       />
 
       {/* 可折叠完整报告 */}
@@ -285,6 +326,13 @@ export function ResearchTab() {
 
       {/* 引用列表 */}
       <ReferenceList citations={reportData.citations} />
+
+      <ScoreExplainDrawer
+        open={scoreDrawerState.open}
+        title={scoreDrawerState.title}
+        insight={scoreDrawerState.insight}
+        onClose={handleCloseScoreExplain}
+      />
     </div>
   );
 }

@@ -50,6 +50,7 @@ class ExecuteRequest(BaseModel):
         None, description="Trigger origin (dashboard / workbench / …)",
     )
     session_id: str | None = Field(None, description="Session ID")
+    run_id: str | None = Field(None, description="Client-provided run id for event correlation")
     trace_raw: bool | None = Field(
         None,
         description="Whether to include full raw trace events in SSE stream",
@@ -66,6 +67,7 @@ class ResumeRequest(BaseModel):
     thread_id: str = Field(..., min_length=1, description="Thread / session ID to resume")
     resume_value: Any = Field(..., description="User response to the interrupt prompt")
     session_id: str | None = Field(None, description="Session ID")
+    run_id: str | None = Field(None, description="Client-provided run id for event correlation")
     source: str | None = Field(None, description="Trigger origin")
     trace_raw: bool | None = Field(None)
 
@@ -131,6 +133,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             deps=exec_deps,
             query=request.query,
             thread_id=thread_id,
+            run_id=request.run_id,
             ui_context=ui_context,
             output_mode=request.output_mode,
             source=request.source or "execute",
@@ -192,6 +195,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         pipeline = resume_graph_pipeline(
             deps=exec_deps,
             thread_id=thread_id,
+            run_id=request.run_id,
             resume_value=request.resume_value,
             source=request.source or "resume",
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),

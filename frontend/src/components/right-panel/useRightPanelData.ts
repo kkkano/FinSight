@@ -1,10 +1,17 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
-import { createPollingAlertFeedSource, reduceAlertFeedEvent } from './alertFeed';
-import type { AlertSubscription, PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
+import type {
+  AlertEvent,
+  AlertSubscription,
+  PortfolioSummary,
+  PortfolioRow,
+  WatchlistItem,
+} from './types';
 import { parsePricePayload } from './utils';
+
+const ALERT_LAST_SEEN_KEY = 'fs_alert_last_seen_v1';
 
 const normalizeAlert = (raw: any): AlertSubscription => {
   const ticker = String(raw?.ticker || '--').toUpperCase();
@@ -25,11 +32,30 @@ const normalizeAlert = (raw: any): AlertSubscription => {
   };
 };
 
+const normalizeAlertEvent = (raw: any): AlertEvent => ({
+  id: String(raw?.id || `ae-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`),
+  ticker: String(raw?.ticker || '--').toUpperCase(),
+  eventType: String(raw?.event_type || 'unknown'),
+  severity: String(raw?.severity || 'medium').toLowerCase(),
+  title: String(raw?.title || 'Alert'),
+  message: String(raw?.message || ''),
+  triggeredAt: String(raw?.triggered_at || new Date().toISOString()),
+  metadata: raw?.metadata && typeof raw.metadata === 'object' ? raw.metadata : {},
+});
+
+function parseIso(value?: string | null): number {
+  if (!value) return 0;
+  const ts = Date.parse(value);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
 export function useRightPanelData() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [alerts, setAlerts] = useState<AlertSubscription[]>([]);
+  const [alertEvents, setAlertEvents] = useState<AlertEvent[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isPortfolioEditing, setIsPortfolioEditing] = useState(false);
@@ -38,6 +64,16 @@ export function useRightPanelData() {
 
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition, sessionId } = useStore();
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
+
+  const recomputeUnreadCount = useCallback((events: AlertEvent[]) => {
+    const lastSeen = parseIso(localStorage.getItem(ALERT_LAST_SEEN_KEY));
+    if (!lastSeen) {
+      setUnreadAlertCount(events.length);
+      return;
+    }
+    const unread = events.filter((event) => parseIso(event.triggeredAt) > lastSeen).length;
+    setUnreadAlertCount(unread);
+  }, []);
 
   const loadWatchlist = useCallback(async () => {
     try {
@@ -69,54 +105,63 @@ export function useRightPanelData() {
     }
   }, [dashboardWatchlist, userId]);
 
-  const fetchAlertSnapshot = useCallback(async (): Promise<AlertSubscription[]> => {
-    if (!subscriptionEmail) return [];
-    const response = await apiClient.listSubscriptions(subscriptionEmail);
-    return Array.isArray(response?.subscriptions) ? response.subscriptions.map(normalizeAlert) : [];
-  }, [subscriptionEmail]);
+  const loadAlerts = useCallback(async () => {
+    if (!subscriptionEmail) {
+      setAlerts([]);
+      setAlertEvents([]);
+      setUnreadAlertCount(0);
+      return;
+    }
 
-  const alertFeedSource = useMemo(
-    () => createPollingAlertFeedSource({ fetchAlerts: fetchAlertSnapshot }),
-    [fetchAlertSnapshot],
-  );
+    try {
+      setAlertsLoading(true);
+      setAlertsError(null);
+
+      const [subResponse, feedResponse] = await Promise.all([
+        apiClient.listSubscriptions(subscriptionEmail),
+        apiClient.listAlertFeed({ email: subscriptionEmail, limit: 50 }),
+      ]);
+
+      const subscriptions = Array.isArray(subResponse?.subscriptions)
+        ? subResponse.subscriptions.map(normalizeAlert)
+        : [];
+      const events = Array.isArray(feedResponse?.events)
+        ? feedResponse.events.map(normalizeAlertEvent)
+        : [];
+
+      setAlerts(subscriptions);
+      setAlertEvents(events);
+      recomputeUnreadCount(events);
+      setLastUpdated(new Date());
+    } catch {
+      setAlertsError('告警数据加载失败');
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, [subscriptionEmail, recomputeUnreadCount]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
-    setAlertsLoading(true);
-    setAlertsError(null);
-    await Promise.all([loadWatchlist(), alertFeedSource.pull()]);
+    await Promise.all([loadWatchlist(), loadAlerts()]);
     setLastUpdated(new Date());
     setLoading(false);
-    setAlertsLoading(false);
-  }, [loadWatchlist, alertFeedSource]);
+  }, [loadWatchlist, loadAlerts]);
+
+  const markAlertsRead = useCallback(() => {
+    localStorage.setItem(ALERT_LAST_SEEN_KEY, new Date().toISOString());
+    setUnreadAlertCount(0);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
-    void loadWatchlist().finally(() => setLoading(false));
+    void Promise.all([loadWatchlist(), loadAlerts()]).finally(() => setLoading(false));
+
     const timer = setInterval(() => {
-      void loadWatchlist();
+      void Promise.all([loadWatchlist(), loadAlerts()]);
       setLastUpdated(new Date());
     }, 60_000);
     return () => clearInterval(timer);
-  }, [loadWatchlist]);
-
-  useEffect(() => {
-    setAlertsLoading(true);
-    setAlertsError(null);
-    const unsubscribe = alertFeedSource.connect((event) => {
-      if (event.type === 'error') {
-        setAlertsError(event.message);
-        setAlertsLoading(false);
-        setLastUpdated(new Date());
-        return;
-      }
-      setAlerts((current) => reduceAlertFeedEvent(current, event));
-      setAlertsError(null);
-      setAlertsLoading(false);
-      setLastUpdated(new Date());
-    });
-    return unsubscribe;
-  }, [alertFeedSource]);
+  }, [loadWatchlist, loadAlerts]);
 
   const positionRows = useMemo<PortfolioRow[]>(() => {
     return watchlist.map((item) => {
@@ -178,8 +223,11 @@ export function useRightPanelData() {
   return {
     watchlist,
     alerts,
+    alertEvents,
     alertsLoading,
     alertsError,
+    unreadAlertCount,
+    markAlertsRead,
     loading,
     lastUpdated,
     refreshAll,

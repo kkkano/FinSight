@@ -1,32 +1,54 @@
-import type { AlertSubscription } from './types';
+import type { AlertEvent, AlertSubscription } from './types';
 
 type RightPanelAlertsTabProps = {
-  alerts: AlertSubscription[];
+  subscriptions: AlertSubscription[];
+  events: AlertEvent[];
+  unreadCount: number;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  onMarkRead?: () => void;
   onSubscribeClick?: () => void;
 };
 
 const formatTypes = (alertTypes: string[]) => {
   if (!alertTypes.length) return '--';
-  return alertTypes
-    .map((item) => item.replaceAll('_', ' '))
-    .join(', ');
+  return alertTypes.map((item) => item.replaceAll('_', ' ')).join(', ');
+};
+
+const severityClass: Record<string, string> = {
+  critical: 'bg-fin-danger/20 text-fin-danger border-fin-danger/30',
+  high: 'bg-fin-danger/10 text-fin-danger border-fin-danger/20',
+  medium: 'bg-fin-warning/10 text-fin-warning border-fin-warning/20',
+  low: 'bg-fin-success/10 text-fin-success border-fin-success/20',
 };
 
 export function RightPanelAlertsTab({
-  alerts,
+  subscriptions,
+  events,
+  unreadCount,
   loading = false,
   error = null,
   onRetry,
+  onMarkRead,
   onSubscribeClick,
 }: RightPanelAlertsTabProps) {
   return (
-    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+    <div className="flex-1 overflow-y-auto p-3 space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-fin-text-secondary">Subscriptions</span>
-        <span className="text-2xs text-fin-muted bg-fin-bg px-1.5 rounded">{alerts.length} items</span>
+        <span className="text-xs font-semibold text-fin-text-secondary">最近触发事件</span>
+        <div className="flex items-center gap-2">
+          <span className="text-2xs text-fin-muted bg-fin-bg px-1.5 rounded">
+            未读 {unreadCount}
+          </span>
+          <button
+            type="button"
+            onClick={onMarkRead}
+            className="text-2xs px-2 py-1 rounded border border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors"
+          >
+            标记已读
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -54,43 +76,68 @@ export function RightPanelAlertsTab({
       )}
 
       {!loading && !error && (
-        <div className="space-y-2">
-          {alerts.slice(0, 10).map((item) => (
-            <article key={item.id} className="border border-fin-border rounded-lg p-2 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-semibold text-fin-text">{item.ticker}</div>
-                <span
-                  className={`text-2xs px-1.5 py-0.5 rounded ${
-                    item.disabled
-                      ? 'bg-fin-muted/20 text-fin-muted'
-                      : 'bg-fin-primary/15 text-fin-primary'
-                  }`}
-                >
-                  {item.disabled ? 'disabled' : 'active'}
-                </span>
-              </div>
-              <div className="text-2xs text-fin-text-secondary">{formatTypes(item.alertTypes)}</div>
-              <div className="flex flex-wrap gap-1 text-2xs text-fin-muted">
-                {item.priceThreshold !== null && item.priceThreshold !== undefined && (
-                  <span className="px-1.5 py-0.5 rounded bg-fin-bg-secondary">
-                    price ±{item.priceThreshold}%
+        <>
+          <div className="space-y-2">
+            {events.slice(0, 20).map((event) => (
+              <article key={event.id} className="border border-fin-border rounded-lg p-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-fin-text truncate">
+                    {event.ticker} · {event.title}
+                  </div>
+                  <span
+                    className={`text-2xs px-1.5 py-0.5 rounded border ${
+                      severityClass[event.severity] ?? 'bg-fin-bg text-fin-muted border-fin-border'
+                    }`}
+                  >
+                    {event.severity}
                   </span>
-                )}
-                {item.riskThreshold && (
-                  <span className="px-1.5 py-0.5 rounded bg-fin-bg-secondary">
-                    risk {item.riskThreshold}
-                  </span>
-                )}
-              </div>
-              {item.lastAlertAt && (
-                <div className="text-2xs text-fin-muted">
-                  Last alert: {new Date(item.lastAlertAt).toLocaleString()}
                 </div>
-              )}
-            </article>
-          ))}
-          {!alerts.length && <div className="text-xs text-fin-muted py-4 text-center">No active subscriptions</div>}
-        </div>
+                {event.message && (
+                  <div className="text-2xs text-fin-text-secondary line-clamp-2">{event.message}</div>
+                )}
+                <div className="text-2xs text-fin-muted">
+                  {new Date(event.triggeredAt).toLocaleString()}
+                </div>
+              </article>
+            ))}
+            {!events.length && (
+              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
+                暂无触发事件
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-fin-border/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-fin-text-secondary">当前订阅配置</span>
+              <span className="text-2xs text-fin-muted bg-fin-bg px-1.5 rounded">
+                {subscriptions.length} items
+              </span>
+            </div>
+            {subscriptions.slice(0, 10).map((item) => (
+              <article key={item.id} className="border border-fin-border rounded-lg p-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-fin-text">{item.ticker}</div>
+                  <span
+                    className={`text-2xs px-1.5 py-0.5 rounded ${
+                      item.disabled
+                        ? 'bg-fin-muted/20 text-fin-muted'
+                        : 'bg-fin-primary/15 text-fin-primary'
+                    }`}
+                  >
+                    {item.disabled ? 'disabled' : 'active'}
+                  </span>
+                </div>
+                <div className="text-2xs text-fin-text-secondary">{formatTypes(item.alertTypes)}</div>
+              </article>
+            ))}
+            {!subscriptions.length && (
+              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
+                No active subscriptions
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       <button

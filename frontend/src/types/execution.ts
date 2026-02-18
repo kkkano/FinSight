@@ -20,6 +20,27 @@ export interface AgentRunInfo {
   retryable?: boolean;
 }
 
+export interface TimelineEvent {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  stage: string;
+  message?: string;
+  runId?: string;
+  sessionId?: string;
+  stepId?: string;
+  kind?: string;
+  name?: string;
+  agent?: string;
+  tool?: string;
+  durationMs?: number;
+  cached?: boolean;
+  skipped?: boolean;
+  status?: string;
+  parallelGroup?: string | null;
+  raw?: Record<string, unknown>;
+}
+
 // --- Execution run status ---
 
 export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted';
@@ -39,6 +60,7 @@ export interface ExecutionRun {
   /** 0–100, monotonically increasing (never decreases). */
   progress: number;
   currentStep: string | null;
+  timeline: TimelineEvent[];
   report: ReportIR | null;
   streamedContent: string;
   fallbackReasons: string[];

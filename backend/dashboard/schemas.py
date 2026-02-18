@@ -307,6 +307,17 @@ class DashboardResponse(BaseModel):
 # Insights (Phase F)
 # ---------------------------------------------------------------------------
 
+class ScoreBreakdownItem(BaseModel):
+    """Deterministic score factor item."""
+
+    factor_key: str = Field(..., description="因子键")
+    label: str = Field(..., description="因子名称")
+    weight: float = Field(..., ge=0, le=1, description="权重")
+    value: float = Field(..., description="因子原始值")
+    contribution: float = Field(..., description="对总分贡献（-5~5）")
+    rationale: str = Field("", description="贡献解释")
+
+
 class InsightCard(BaseModel):
     """
     单个维度的 AI 洞察卡片
@@ -325,6 +336,7 @@ class InsightCard(BaseModel):
         None,
         description="结构化关键指标 [{label, value}]，如 [{label:'市盈率', value:'33.24'}]",
     )
+    score_breakdown: List[ScoreBreakdownItem] = Field(default_factory=list, description="评分拆解明细")
     sub_scores: Optional[Dict[str, float]] = Field(None, description="子维度评分 (仅 overview)")
     confidence: float = Field(0.5, ge=0, le=1, description="置信度")
     as_of: str = Field("", description="数据时间 ISO 格式")

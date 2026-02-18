@@ -12,6 +12,7 @@ import { InsightScoreRing } from '../shared/InsightScoreRing';
 interface ResearchOverviewBarProps {
   overview: InsightCard | null | undefined;
   loading?: boolean;
+  onOpenScoreExplain?: (insight: InsightCard, title: string) => void;
 }
 
 // ==================== 组件 ====================
@@ -19,6 +20,7 @@ interface ResearchOverviewBarProps {
 export function ResearchOverviewBar({
   overview,
   loading = false,
+  onOpenScoreExplain,
 }: ResearchOverviewBarProps) {
   // 加载中骨架
   if (loading && !overview) {
@@ -66,6 +68,13 @@ export function ResearchOverviewBar({
                 规则评分
               </span>
             )}
+            <button
+              type="button"
+              className="ml-auto text-2xs text-fin-primary hover:text-fin-primary/80 transition-colors"
+              onClick={() => onOpenScoreExplain?.(overview, '综合评估')}
+            >
+              查看构成
+            </button>
           </div>
 
           {/* 摘要 */}

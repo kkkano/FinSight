@@ -333,6 +333,289 @@ def score_overview(
 
 
 # ---------------------------------------------------------------------------
+# Score breakdown helpers (Phase I - I2)
+# ---------------------------------------------------------------------------
+
+def _clip_contribution(value: float, low: float = -5.0, high: float = 5.0) -> float:
+    return max(low, min(high, float(value)))
+
+
+def score_technical_details(
+    data: dict[str, Any],
+) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+    score, label, points = score_technical(data)
+
+    rsi = _safe_get(data, "rsi")
+    rsi_signal = 0.0
+    if isinstance(rsi, (int, float)) and math.isfinite(rsi):
+        if 30 < rsi < 70:
+            rsi_signal = 1.0
+        elif rsi >= 70:
+            rsi_signal = -1.0
+        else:
+            rsi_signal = -0.5
+
+    trend = str(_safe_get(data, "trend", default="neutral")).lower()
+    trend_signal = 1.0 if trend in {"bullish", "uptrend"} else (-1.0 if trend in {"bearish", "downtrend"} else 0.0)
+
+    momentum_signal = 0.0
+    ma20 = _safe_get(data, "ma20")
+    ma50 = _safe_get(data, "ma50")
+    macd = _safe_get(data, "macd")
+    macd_signal = _safe_get(data, "macd_signal")
+    if isinstance(ma20, (int, float)) and isinstance(ma50, (int, float)):
+        momentum_signal += 1.0 if ma20 > ma50 else -0.5
+    if isinstance(macd, (int, float)) and isinstance(macd_signal, (int, float)):
+        momentum_signal += 0.5 if macd > macd_signal else -0.25
+
+    breakdown = [
+        {
+            "factor_key": "rsi_state",
+            "label": "RSI状态",
+            "weight": 0.35,
+            "value": float(rsi) if isinstance(rsi, (int, float)) and math.isfinite(rsi) else 50.0,
+            "contribution": _clip_contribution(rsi_signal * 1.8),
+            "rationale": "基于 RSI 所处区间评估超买/超卖风险",
+        },
+        {
+            "factor_key": "trend_direction",
+            "label": "趋势方向",
+            "weight": 0.35,
+            "value": trend_signal,
+            "contribution": _clip_contribution(trend_signal * 2.2),
+            "rationale": "趋势方向决定技术面主导偏向",
+        },
+        {
+            "factor_key": "momentum",
+            "label": "动量信号",
+            "weight": 0.30,
+            "value": momentum_signal,
+            "contribution": _clip_contribution(momentum_signal * 1.6),
+            "rationale": "均线与 MACD 共同刻画短中期动量",
+        },
+    ]
+    return score, label, points, breakdown
+
+
+def score_financial_details(
+    data: dict[str, Any],
+) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+    score, label, points = score_financial(data)
+
+    pe = _safe_get(data, "trailing_pe") or _safe_get(data, "valuation", "trailing_pe")
+    rg = _safe_get(data, "revenue_growth") or _safe_get(data, "financials", "revenue_growth")
+    de = _safe_get(data, "debt_to_equity") or _safe_get(data, "financials", "debt_to_equity")
+    fcf = _safe_get(data, "free_cash_flow") or _safe_get(data, "financials", "free_cash_flow")
+
+    pe_signal = 0.0
+    if isinstance(pe, (int, float)) and math.isfinite(pe):
+        pe_signal = 1.0 if pe < 25 else (-0.6 if pe > 35 else 0.3)
+    growth_signal = 0.0
+    if isinstance(rg, (int, float)) and math.isfinite(rg):
+        growth_signal = 1.0 if rg > 0 else -0.8
+    leverage_signal = 0.0
+    if isinstance(de, (int, float)) and math.isfinite(de):
+        leverage_signal = 1.0 if de < 0.8 else (-0.6 if de > 1.5 else 0.1)
+    cashflow_signal = 1.0 if isinstance(fcf, (int, float)) and fcf > 0 else -0.3
+
+    breakdown = [
+        {
+            "factor_key": "valuation",
+            "label": "估值水平",
+            "weight": 0.30,
+            "value": float(pe) if isinstance(pe, (int, float)) and math.isfinite(pe) else 0.0,
+            "contribution": _clip_contribution(pe_signal * 2.0),
+            "rationale": "结合市盈率区间评估估值压力",
+        },
+        {
+            "factor_key": "growth",
+            "label": "增长质量",
+            "weight": 0.30,
+            "value": float(rg) if isinstance(rg, (int, float)) and math.isfinite(rg) else 0.0,
+            "contribution": _clip_contribution(growth_signal * 2.0),
+            "rationale": "营收增速直接影响财务评分弹性",
+        },
+        {
+            "factor_key": "balance_sheet",
+            "label": "资产负债",
+            "weight": 0.20,
+            "value": float(de) if isinstance(de, (int, float)) and math.isfinite(de) else 0.0,
+            "contribution": _clip_contribution(leverage_signal * 1.4),
+            "rationale": "债务杠杆水平影响财务稳健性",
+        },
+        {
+            "factor_key": "cash_flow",
+            "label": "现金流",
+            "weight": 0.20,
+            "value": float(fcf) if isinstance(fcf, (int, float)) and math.isfinite(fcf) else 0.0,
+            "contribution": _clip_contribution(cashflow_signal * 1.2),
+            "rationale": "自由现金流体现盈利兑现质量",
+        },
+    ]
+    return score, label, points, breakdown
+
+
+def score_news_details(
+    data: dict[str, Any],
+) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+    score, label, points = score_news(data)
+
+    market_news = data.get("market", [])
+    impact_news = data.get("impact", [])
+    market_list = market_news if isinstance(market_news, list) else []
+    impact_list = impact_news if isinstance(impact_news, list) else []
+    total = len(market_list) + len(impact_list)
+    impact_ratio = (len(impact_list) / total) if total > 0 else 0.0
+
+    positive_keywords = {"surge", "beat", "record", "upgrade", "buy", "bullish", "上涨", "利好", "突破"}
+    negative_keywords = {"drop", "miss", "downgrade", "sell", "bearish", "risk", "下跌", "利空", "风险"}
+    positive_count = 0
+    negative_count = 0
+    for item in market_list + impact_list:
+        text = ""
+        if isinstance(item, dict):
+            text = f"{item.get('title', '')} {item.get('summary', '')}".lower()
+        else:
+            text = str(item).lower()
+        if any(word in text for word in positive_keywords):
+            positive_count += 1
+        if any(word in text for word in negative_keywords):
+            negative_count += 1
+    sentiment_signal = ((positive_count - negative_count) / total) if total > 0 else 0.0
+
+    breakdown = [
+        {
+            "factor_key": "sentiment_balance",
+            "label": "情绪平衡",
+            "weight": 0.45,
+            "value": sentiment_signal,
+            "contribution": _clip_contribution(sentiment_signal * 3.0),
+            "rationale": "正负面新闻比值决定舆情方向",
+        },
+        {
+            "factor_key": "impact_ratio",
+            "label": "高影响占比",
+            "weight": 0.35,
+            "value": impact_ratio,
+            "contribution": _clip_contribution((impact_ratio - 0.3) * 3.0),
+            "rationale": "高影响事件占比越高，对评分影响越显著",
+        },
+        {
+            "factor_key": "news_volume",
+            "label": "样本规模",
+            "weight": 0.20,
+            "value": float(total),
+            "contribution": _clip_contribution(min(total, 15) / 15 * 1.0 - 0.2),
+            "rationale": "样本数量提升评分稳定性",
+        },
+    ]
+    return score, label, points, breakdown
+
+
+def score_peers_details(
+    data: dict[str, Any],
+) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+    score, label, points = score_peers(data)
+
+    company = _safe_get(data, "company") or {}
+    peers_list = _safe_get(data, "peers") or []
+    peers_list = peers_list if isinstance(peers_list, list) else []
+
+    company_pe = _safe_get(company, "trailing_pe")
+    peer_pes = [p.get("trailing_pe") for p in peers_list if isinstance(p, dict) and isinstance(p.get("trailing_pe"), (int, float))]
+    avg_peer_pe = (sum(peer_pes) / len(peer_pes)) if peer_pes else 0.0
+
+    company_growth = _safe_get(company, "revenue_growth")
+    peer_growths = [p.get("revenue_growth") for p in peers_list if isinstance(p, dict) and isinstance(p.get("revenue_growth"), (int, float))]
+    avg_peer_growth = (sum(peer_growths) / len(peer_growths)) if peer_growths else 0.0
+
+    pe_signal = 0.0
+    if isinstance(company_pe, (int, float)) and avg_peer_pe > 0:
+        pe_signal = 1.0 if company_pe < avg_peer_pe else -0.5
+    growth_signal = 0.0
+    if isinstance(company_growth, (int, float)) and peer_growths:
+        growth_signal = 1.0 if company_growth > avg_peer_growth else -0.5
+
+    breakdown = [
+        {
+            "factor_key": "peer_valuation_gap",
+            "label": "估值相对差",
+            "weight": 0.40,
+            "value": float(company_pe) if isinstance(company_pe, (int, float)) else 0.0,
+            "contribution": _clip_contribution(pe_signal * 2.2),
+            "rationale": "与同行估值差异影响相对性价比判断",
+        },
+        {
+            "factor_key": "peer_growth_gap",
+            "label": "增速相对差",
+            "weight": 0.35,
+            "value": float(company_growth) if isinstance(company_growth, (int, float)) else 0.0,
+            "contribution": _clip_contribution(growth_signal * 1.8),
+            "rationale": "营收增速相对同行的优势或劣势",
+        },
+        {
+            "factor_key": "peer_sample_size",
+            "label": "同行样本数",
+            "weight": 0.25,
+            "value": float(len(peers_list)),
+            "contribution": _clip_contribution(min(len(peers_list), 8) / 8 * 1.0 - 0.1),
+            "rationale": "样本充足时同行结论更稳健",
+        },
+    ]
+    return score, label, points, breakdown
+
+
+def score_overview_details(
+    *,
+    tech_score: float = 5.0,
+    fin_score: float = 5.0,
+    news_score: float = 5.0,
+    peers_score: float = 5.0,
+) -> tuple[float, str, list[str], list[dict[str, Any]]]:
+    score, label, points = score_overview(
+        tech_score=tech_score,
+        fin_score=fin_score,
+        news_score=news_score,
+        peers_score=peers_score,
+    )
+    breakdown = [
+        {
+            "factor_key": "financial",
+            "label": "财务面",
+            "weight": 0.35,
+            "value": fin_score,
+            "contribution": _clip_contribution((fin_score - 5.0) * 0.35),
+            "rationale": "财务质量与估值稳健性",
+        },
+        {
+            "factor_key": "technical",
+            "label": "技术面",
+            "weight": 0.25,
+            "value": tech_score,
+            "contribution": _clip_contribution((tech_score - 5.0) * 0.25),
+            "rationale": "趋势与动量信号",
+        },
+        {
+            "factor_key": "news",
+            "label": "舆情面",
+            "weight": 0.20,
+            "value": news_score,
+            "contribution": _clip_contribution((news_score - 5.0) * 0.20),
+            "rationale": "短期信息流与事件冲击",
+        },
+        {
+            "factor_key": "peers",
+            "label": "同行面",
+            "weight": 0.20,
+            "value": peers_score,
+            "contribution": _clip_contribution((peers_score - 5.0) * 0.20),
+            "rationale": "相对同行表现与估值位置",
+        },
+    ]
+    return score, label, points, breakdown
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

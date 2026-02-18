@@ -30,8 +30,11 @@ export const RightPanel: FC<RightPanelProps> = ({
   const [activeTab, setActiveTab] = useState<RightPanelTab>('alerts');
   const {
     alerts,
+    alertEvents,
     alertsLoading,
     alertsError,
+    unreadAlertCount,
+    markAlertsRead,
     loading,
     lastUpdated,
     refreshAll,
@@ -69,6 +72,12 @@ export const RightPanel: FC<RightPanelProps> = ({
     prevActiveCountRef.current = activeRuns.length;
   }, [activeRuns.length, autoSwitchExecution]);
 
+  useEffect(() => {
+    if (activeTab === 'alerts') {
+      markAlertsRead();
+    }
+  }, [activeTab, markAlertsRead]);
+
   return (
     <section
       data-testid="context-panel"
@@ -76,7 +85,7 @@ export const RightPanel: FC<RightPanelProps> = ({
     >
       <RightPanelHeader
         activeTab={activeTab}
-        alertsCount={alerts.length}
+        alertsCount={unreadAlertCount}
         executionCount={activeRuns.length}
         loading={loading}
         onTabChange={setActiveTab}
@@ -87,10 +96,13 @@ export const RightPanel: FC<RightPanelProps> = ({
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'alerts' && (
           <RightPanelAlertsTab
-            alerts={alerts}
+            subscriptions={alerts}
+            events={alertEvents}
+            unreadCount={unreadAlertCount}
             loading={alertsLoading}
             error={alertsError}
             onRetry={refreshAll}
+            onMarkRead={markAlertsRead}
             onSubscribeClick={onSubscribeClick}
           />
         )}

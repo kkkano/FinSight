@@ -384,6 +384,7 @@ class TestDigestAgent:
         assert card.model_generated is False
         assert card.confidence == 0.4
         assert 1.0 <= card.score <= 10.0
+        assert len(card.score_breakdown) >= 3
 
     @pytest.mark.asyncio
     async def test_digest_llm_success(self):
@@ -411,6 +412,7 @@ class TestDigestAgent:
         assert card.score_label == "偏多"
         assert len(card.key_points) == 2
         assert len(card.risks) == 1
+        assert len(card.score_breakdown) >= 3
 
     @pytest.mark.asyncio
     async def test_digest_llm_timeout_falls_back(self):

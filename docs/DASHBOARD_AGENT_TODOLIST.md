@@ -218,3 +218,11 @@
   - I3: Agent Conflict Matrix (P1) — 冲突可视化
   - I4: Proactive Alerts (P2) — 主动预警
   - I5: Agent Steering (P2) — 用户可操控执行
+
+### 2026-02-18 (Phase I I1-I4 落地)
+- [x] I1 执行链路 run_id 贯通（execute/resume + SSE 全事件打标）
+- [x] I1 Timeline 前端接入（store timeline 模型 + StreamingResultPanel 可视化）
+- [x] I2 score_breakdown 后端输出（deterministic details）+ 前端 Drawer 展示
+- [x] I3 冲突矩阵前端化（agent_diagnostics 结构化优先，conflict_disclosure 兜底）
+- [x] I4 预警事件流（scheduler 落事件 + `/api/alerts/feed` + 右侧面板事件/未读）
+- [x] I1-I4 回归测试通过（见 `docs/feature_logs/2026-02-18_phase_i_i1_i4_execution.md`）

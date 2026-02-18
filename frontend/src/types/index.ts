@@ -156,6 +156,16 @@ export interface ReportIR {
     };
     data_sources?: string[];
   }>;
+  conflict_disclosure?: string;
+  agent_diagnostics?: Record<string, {
+    status?: string;
+    fallback_reason?: string | null;
+    retryable?: boolean;
+    error_stage?: string | null;
+    confidence?: number;
+    has_conflicts?: boolean;
+    conflict_flags?: string[];
+  }>;
 }
 
 export interface KlineResponse {
@@ -265,6 +275,5 @@ export interface RawSSEEvent {
   parsedData: any;               // 解析后的数据对象
   size: number;                  // 数据大小（字节）
   sessionId?: string;            // 会话 ID
+  runId?: string;                // 执行 run ID
 }
-
-

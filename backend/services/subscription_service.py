@@ -13,14 +13,17 @@ logger = logging.getLogger(__name__)
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from pathlib import Path
 import re
+from uuid import uuid4
 
 # 订阅数据存储文件
 SUBSCRIPTIONS_FILE = Path(__file__).parent.parent.parent / "data" / "subscriptions.json"
 ALERT_FAILURE_LIMIT = int(os.getenv("ALERT_FAILURE_LIMIT", "3"))
+ALERT_EVENTS_PER_SUB = int(os.getenv("ALERT_EVENTS_PER_SUB", "30"))
+ALERT_EVENTS_TTL_DAYS = int(os.getenv("ALERT_EVENTS_TTL_DAYS", "7"))
 EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 RISK_THRESHOLD_ALLOWED = {"low", "medium", "high", "critical"}
 
@@ -73,6 +76,14 @@ class SubscriptionService:
                 if "last_risk_at" not in sub:
                     sub["last_risk_at"] = None
                     changed = True
+                if "recent_events" not in sub or not isinstance(sub.get("recent_events"), list):
+                    sub["recent_events"] = []
+                    changed = True
+                else:
+                    pruned = self._prune_recent_events(sub.get("recent_events") or [])
+                    if pruned != sub.get("recent_events"):
+                        sub["recent_events"] = pruned
+                        changed = True
 
         if changed:
             self._save_subscriptions()
@@ -84,6 +95,45 @@ class SubscriptionService:
                 json.dump(self.subscriptions, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.info(f"❌ 保存订阅数据失败: {e}")
+
+    @staticmethod
+    def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            if text.endswith("Z"):
+                text = text[:-1] + "+00:00"
+            return datetime.fromisoformat(text)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _to_utc_naive(value: Optional[datetime]) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def _prune_recent_events(self, events: List[Dict]) -> List[Dict]:
+        if not isinstance(events, list):
+            return []
+        cutoff = datetime.utcnow() - timedelta(days=max(1, ALERT_EVENTS_TTL_DAYS))
+        keep: List[Dict] = []
+        for item in events:
+            if not isinstance(item, dict):
+                continue
+            triggered_at = self._to_utc_naive(self._parse_iso(str(item.get("triggered_at") or "")))
+            if triggered_at is None:
+                continue
+            if triggered_at < cutoff:
+                continue
+            keep.append(item)
+        keep.sort(key=lambda item: str(item.get("triggered_at") or ""), reverse=True)
+        return keep[: max(1, ALERT_EVENTS_PER_SUB)]
     
     def subscribe(
         self,
@@ -124,6 +174,8 @@ class SubscriptionService:
                 sub['price_threshold'] = price_threshold
                 sub['risk_threshold'] = normalized_risk_threshold
                 sub['updated_at'] = datetime.now().isoformat()
+                if "recent_events" not in sub or not isinstance(sub.get("recent_events"), list):
+                    sub["recent_events"] = []
                 # 重新启用并清理失败状态
                 sub['disabled'] = False
                 sub['alert_failures'] = 0
@@ -149,6 +201,7 @@ class SubscriptionService:
             "last_alert_error_at": None,
             "alert_failures": 0,
             "disabled": False,
+            "recent_events": [],
         }
         
         self.subscriptions[email].append(subscription)
@@ -315,6 +368,80 @@ class SubscriptionService:
                 return True
 
         return False
+
+    def record_alert_event(
+        self,
+        email: str,
+        ticker: str,
+        event_type: str,
+        *,
+        severity: str = "medium",
+        title: str = "",
+        message: str = "",
+        metadata: Optional[Dict] = None,
+        triggered_at: Optional[str] = None,
+    ) -> bool:
+        """Append one alert trigger event into subscription.recent_events."""
+        if email not in self.subscriptions:
+            return False
+
+        updated = False
+        now_iso = triggered_at or datetime.utcnow().isoformat()
+        normalized_ticker = str(ticker or "").strip().upper()
+
+        for sub in self.subscriptions[email]:
+            if str(sub.get("ticker") or "").strip().upper() != normalized_ticker:
+                continue
+
+            events = sub.get("recent_events")
+            if not isinstance(events, list):
+                events = []
+
+            payload = {
+                "id": f"ae_{uuid4().hex[:12]}",
+                "email": email,
+                "ticker": normalized_ticker,
+                "event_type": str(event_type or "unknown"),
+                "severity": str(severity or "medium"),
+                "title": str(title or "").strip() or f"{normalized_ticker} {event_type}",
+                "message": str(message or "").strip(),
+                "triggered_at": now_iso,
+                "metadata": metadata if isinstance(metadata, dict) else {},
+            }
+            events.insert(0, payload)
+            sub["recent_events"] = self._prune_recent_events(events)
+            updated = True
+            break
+
+        if updated:
+            self._save_subscriptions()
+        return updated
+
+    def list_alert_events(
+        self,
+        email: str,
+        *,
+        limit: int = 50,
+        since: Optional[str] = None,
+    ) -> List[Dict]:
+        """Aggregate recent alert events for one user across all subscriptions."""
+        subscriptions = self.subscriptions.get(email, [])
+        if not isinstance(subscriptions, list):
+            return []
+
+        since_dt = self._to_utc_naive(self._parse_iso(since)) if since else None
+        events: List[Dict] = []
+        for sub in subscriptions:
+            if not isinstance(sub, dict):
+                continue
+            for item in self._prune_recent_events(sub.get("recent_events") or []):
+                triggered = self._to_utc_naive(self._parse_iso(str(item.get("triggered_at") or "")))
+                if since_dt and triggered and triggered < since_dt:
+                    continue
+                events.append(item)
+
+        events.sort(key=lambda item: str(item.get("triggered_at") or ""), reverse=True)
+        return events[: max(1, int(limit))]
 
 
 
