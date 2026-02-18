@@ -297,10 +297,10 @@ export const MiniChat: React.FC = () => {
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-2xs font-medium max-w-[200px]">
               <Paperclip size={10} className="shrink-0" />
               <span className="truncate">
-                {activeSelections[0].type === 'news' ? '📰' : '📊'}{' '}
+                {activeSelections[0].type === 'news' ? '📰' : activeSelections[0].type === 'risk' ? '🛡️' : activeSelections[0].type === 'insight' ? '🤖' : '📊'}{' '}
                 {activeSelections.length === 1
                   ? `${activeSelections[0].title.slice(0, 25)}${activeSelections[0].title.length > 25 ? '...' : ''}`
-                  : `${activeSelections.length}条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
+                  : `${activeSelections.length}条${activeSelections[0].type === 'news' ? '新闻' : activeSelections[0].type === 'risk' ? '风险' : activeSelections[0].type === 'insight' ? '洞察' : '报告'}`}
               </span>
               <button
                 onClick={clearSelection}

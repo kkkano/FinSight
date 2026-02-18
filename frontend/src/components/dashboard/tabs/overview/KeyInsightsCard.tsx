@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 
 import type { ValuationData, TechnicalData, NewsItem } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
 
 // --- Props ---
 
@@ -109,8 +110,9 @@ export function KeyInsightsCard({ valuation, technicals, news, reportData, insig
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">
+      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         关键洞察
+        <CardInfoTip content="优先级：AI 洞察 > 研报核心观点 > 规则自动生成" />
       </div>
 
       {insights.length === 0 ? (

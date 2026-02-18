@@ -20,6 +20,7 @@ import { useLatestReport } from '../../../hooks/useLatestReport.ts';
 import { useDashboardInsights } from '../../../hooks/useDashboardInsights.ts';
 import { useExecuteAgent } from '../../../hooks/useExecuteAgent.ts';
 import type { InsightCard } from '../../../types/dashboard.ts';
+import { asRecord } from '../../../utils/record.ts';
 import { ResearchMetadata } from './research/ResearchMetadata.tsx';
 import { ResearchOverviewBar } from './research/ResearchOverviewBar.tsx';
 import { ResearchInsightGrid } from './research/ResearchInsightGrid.tsx';
@@ -36,6 +37,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function normalizeGroundingRate(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, value));
 }
 
 export function ResearchTab() {
@@ -273,11 +282,33 @@ export function ResearchTab() {
   }
 
   const report = reportData.report;
+  const reportRecord = asRecord(report);
+  const reportMeta = asRecord(reportRecord?.meta);
+  const reportHints = asRecord(reportRecord?.report_hints);
+  const qualityHints = asRecord(reportHints?.quality);
+
+  const groundingRate =
+    normalizeGroundingRate(reportRecord?.grounding_rate) ??
+    normalizeGroundingRate(asRecord(reportMeta?.grounding)?.grounding_rate) ??
+    normalizeGroundingRate(asRecord(reportHints?.grounding)?.grounding_rate) ??
+    normalizeGroundingRate(asRecord(qualityHints?.grounding)?.grounding_rate);
+
+  const showLowGroundingBanner = groundingRate !== null && groundingRate < 0.6;
+  const groundingRateText = groundingRate !== null ? `${Math.round(groundingRate * 100)}%` : '--';
 
   return (
     <div className="space-y-4">
       {/* 元数据 */}
       <ResearchMetadata reportData={reportData} />
+
+      {showLowGroundingBanner && (
+        <div className="rounded-xl border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
+          <div className="font-medium">⚠ 证据溯源率偏低（{groundingRateText}）</div>
+          <div className="mt-1 text-xs text-yellow-100/85">
+            当前结论中存在较多缺少直接证据锚点的断言，建议优先核对引用列表与原文摘要后再决策。
+          </div>
+        </div>
+      )}
 
       {/* AI 综合评估横条 */}
       <ResearchOverviewBar

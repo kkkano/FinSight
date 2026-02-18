@@ -16,6 +16,7 @@ import { BalanceSheetSummary } from './financial/BalanceSheetSummary';
 import { EarningsSurpriseChart } from './financial/EarningsSurpriseChart';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { AiInsightCard } from './shared/AiInsightCard';
+import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
 
@@ -25,6 +26,11 @@ export function FinancialTab() {
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
+  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+
+  const handleAskAbout = (selection: SelectionItem) => {
+    setActiveSelection(selection);
+  };
 
   const financials = dashboardData?.financials;
   const valuation = dashboardData?.valuation;
@@ -43,6 +49,7 @@ export function FinancialTab() {
         loading={insightsLoading}
         error={insightsError}
         stale={insightsStale}
+        onAskAbout={handleAskAbout}
       />
 
       {/* Row 1: Income table full width */}

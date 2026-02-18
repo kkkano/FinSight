@@ -19,9 +19,9 @@ class ChatMessage(BaseModel):
 
 class SelectionContext(BaseModel):
     """选中对象的上下文（用于 MiniChat 引用特定新闻/报告）"""
-    type: Literal["news", "filing", "doc", "report"] = Field(
+    type: Literal["news", "filing", "doc", "report", "risk", "insight"] = Field(
         ...,
-        description="对象类型: news/filing/doc（兼容旧值 report，会自动归一为 doc）",
+        description="对象类型: news/filing/doc/risk/insight（兼容旧值 report，会自动归一为 doc）",
     )
     id: str = Field(..., description="对象ID（hash）")
     title: str = Field(..., description="标题")

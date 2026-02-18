@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 
 import type { TechnicalData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
 
 // --- Props ---
 
@@ -129,8 +130,9 @@ export function AnalystRatingCard({ technicals, reportData }: AnalystRatingCardP
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">
+      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         综合信号
+        <CardInfoTip content="基于 MA 交叉、RSI、MACD 信号综合判断多空共识" />
       </div>
 
       {/* Main rating badge */}

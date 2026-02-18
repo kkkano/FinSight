@@ -164,9 +164,14 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     false,
   ),
 
-  // 设置当前资产（同时清除 selection 和 insights，因为切换股票后之前的数据不再有效）
+  // 设置当前资产（同时清除 selection、insights、dashboardData，
+  // 因为切换股票后之前的数据不再有效，必须等新请求返回才渲染）
   setActiveAsset: (asset) => {
+    const prev = get().activeAsset;
     saveToStorage(STORAGE_KEYS.ACTIVE_ASSET, asset);
+    // Only clear dashboardData when the symbol actually changes,
+    // to avoid unnecessary flicker on same-symbol refreshes.
+    const symbolChanged = prev?.symbol !== asset.symbol;
     set({
       activeAsset: asset,
       error: null,
@@ -176,6 +181,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
       insightsError: null,
       insightsStale: false,
       insightsCachedAt: null,
+      ...(symbolChanged ? { dashboardData: null } : {}),
     });
   },
 

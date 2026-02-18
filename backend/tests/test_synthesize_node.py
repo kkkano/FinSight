@@ -328,3 +328,26 @@ def test_sanitize_llm_section_flattens_json_lines():
     assert "iPhone 17 AI 换机周期：Q4 iPhone 营收增长 6%" in out
     assert "技术面回调风险：RSI > 80，短期存在均值回归压力" in out
     assert "{" not in out and "}" not in out
+
+
+def test_scrub_unverified_future_claims_removes_unsupported_release_claim():
+    from backend.graph.nodes.synthesize import _scrub_unverified_future_claims
+
+    draft = "预计2026Q2发布Gemini 2.0并推动广告业务增长。"
+    evidence = "当前仅有PE 28.5与RSI 55等指标，无产品发布时间信息。"
+
+    out = _scrub_unverified_future_claims(draft, evidence)
+
+    assert "未经证据验证" in out
+    assert "Gemini 2.0" not in out
+
+
+def test_scrub_unverified_future_claims_keeps_claim_when_grounded():
+    from backend.graph.nodes.synthesize import _scrub_unverified_future_claims
+
+    draft = "预计2026Q2发布Gemini 2.0并推动广告业务增长。"
+    evidence = "公司公告提到：预计2026Q2发布Gemini 2.0，用于广告产品。"
+
+    out = _scrub_unverified_future_claims(draft, evidence)
+
+    assert out == draft

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import type { TechnicalData, ValuationData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
 
 interface HighlightsCardProps {
   valuation?: ValuationData | null;
@@ -111,7 +112,10 @@ export function HighlightsCard({ valuation, technicals, reportData }: Highlights
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">多空亮点</div>
+      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
+        多空亮点
+        <CardInfoTip content="基于均线、RSI、MACD 等技术指标自动判别多空因子" />
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>

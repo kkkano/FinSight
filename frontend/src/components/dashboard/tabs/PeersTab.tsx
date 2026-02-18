@@ -13,6 +13,7 @@ import { ValuationBarChart } from './peers/ValuationBarChart.tsx';
 import { RevenueGrowthChart } from './peers/RevenueGrowthChart.tsx';
 import { AiPeerSummary } from './peers/AiPeerSummary.tsx';
 import { AiInsightCard } from './shared/AiInsightCard';
+import type { SelectionItem } from '../../../types/dashboard';
 
 export function PeersTab() {
   const activeAsset = useDashboardStore((s) => s.activeAsset);
@@ -21,6 +22,11 @@ export function PeersTab() {
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
+  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+
+  const handleAskAbout = (selection: SelectionItem) => {
+    setActiveSelection(selection);
+  };
 
   const ticker = activeAsset?.symbol ?? null;
   const { data: reportData, loading: reportLoading } = useLatestReport(ticker, {
@@ -50,6 +56,7 @@ export function PeersTab() {
           loading={insightsLoading}
           error={insightsError}
           stale={insightsStale}
+          onAskAbout={handleAskAbout}
         />
         {!peersInsight && !insightsLoading && (
           <AiPeerSummary reportData={reportData} loading={reportLoading} />
@@ -72,6 +79,7 @@ export function PeersTab() {
         loading={insightsLoading}
         error={insightsError}
         stale={insightsStale}
+        onAskAbout={handleAskAbout}
       />
       {/* Fallback: report-based peer summary (hidden when insight is present) */}
       {!peersInsight && !insightsLoading && (

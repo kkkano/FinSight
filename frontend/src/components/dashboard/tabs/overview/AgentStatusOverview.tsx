@@ -1,9 +1,13 @@
 import { useMemo } from 'react';
 
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
+import { asRecord } from '../../../../utils/record';
 
 type AgentStatusKind = 'success' | 'fallback' | 'error' | 'not_run' | 'unknown';
 type NotRunReasonKind = 'policy' | 'depth' | 'error' | 'unknown' | null;
+type DiagnosticSeverity = 'info' | 'warn' | 'error';
+type DiagnosticKind = 'execution' | 'evidence';
 
 interface AgentDefinition {
   key: string;
@@ -17,6 +21,14 @@ interface AgentViewModel {
   confidence: number | null;
   reasonKind: NotRunReasonKind;
   reasonText: string | null;
+}
+
+interface DiagnosticItem {
+  id: string;
+  title: string;
+  detail: string;
+  severity: DiagnosticSeverity;
+  kind: DiagnosticKind;
 }
 
 interface AgentStatusOverviewProps {
@@ -48,6 +60,12 @@ const REASON_LABEL: Record<Exclude<NotRunReasonKind, null>, string> = {
   unknown: '未调度',
 };
 
+const DIAGNOSTIC_STYLE: Record<DiagnosticSeverity, { dot: string; text: string }> = {
+  info: { dot: 'bg-fin-muted', text: 'text-fin-muted' },
+  warn: { dot: 'bg-fin-warning', text: 'text-fin-warning' },
+  error: { dot: 'bg-fin-danger', text: 'text-fin-danger' },
+};
+
 const normalizeStatus = (value: unknown): AgentStatusKind => {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'success') return 'success';
@@ -57,11 +75,13 @@ const normalizeStatus = (value: unknown): AgentStatusKind => {
   return 'unknown';
 };
 
-const asRecord = (value: unknown): Record<string, unknown> | null => (
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : null
-);
-
 const asString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const asStringList = (value: unknown): string[] => (
+  Array.isArray(value)
+    ? value.map((item) => asString(item)).filter(Boolean)
+    : []
+);
 
 const asNumberOrNull = (value: unknown): number | null => {
   const num = Number(value);
@@ -71,6 +91,53 @@ const asNumberOrNull = (value: unknown): number | null => {
 
 const containsAny = (text: string, candidates: string[]): boolean => (
   candidates.some((token) => text.includes(token))
+);
+
+const EVIDENCE_QUALITY_KEYWORDS = [
+  '质量门槛',
+  '证据',
+  '引用',
+  'citation',
+  '10-k',
+  '10-q',
+  '业绩电话会',
+  '纪要',
+  '路透',
+  'reuters',
+  'bloomberg',
+  'wsj',
+  'ft',
+  'cnbc',
+  'yahoo',
+  '摘录',
+];
+
+const EXECUTION_DIAGNOSTIC_KEYWORDS = [
+  'agent',
+  'diagnostic',
+  'orchestration',
+  'policy',
+  'analysis_depth',
+  'conflict',
+  '未运行',
+  '未执行',
+  '冲突',
+  '裁决',
+  '可信度受限',
+  '调度',
+];
+
+const isEvidenceQualityText = (text: string): boolean => (
+  containsAny(text.toLowerCase(), EVIDENCE_QUALITY_KEYWORDS)
+);
+
+const isExecutionDiagnosticText = (text: string): boolean => {
+  const lower = text.toLowerCase();
+  return containsAny(lower, EXECUTION_DIAGNOSTIC_KEYWORDS);
+};
+
+const isOperationalDiagnosticText = (text: string): boolean => (
+  isExecutionDiagnosticText(text) || isEvidenceQualityText(text)
 );
 
 function buildAgentRows(reportData: LatestReportData | null | undefined): AgentViewModel[] {
@@ -155,13 +222,95 @@ function buildAgentRows(reportData: LatestReportData | null | undefined): AgentV
   });
 }
 
+function buildDiagnostics(
+  rows: AgentViewModel[],
+  reportData: LatestReportData | null | undefined,
+): DiagnosticItem[] {
+  const diagnostics: DiagnosticItem[] = [];
+  const dedupe = new Set<string>();
+
+  const append = (
+    title: string,
+    detail: string,
+    severity: DiagnosticSeverity,
+    kind: DiagnosticKind,
+  ) => {
+    const cleanTitle = title.trim();
+    const cleanDetail = detail.trim();
+    if (!cleanTitle || !cleanDetail) return;
+    const key = `${cleanTitle}::${cleanDetail}`;
+    if (dedupe.has(key)) return;
+    dedupe.add(key);
+    diagnostics.push({
+      id: `diag-${diagnostics.length + 1}`,
+      title: cleanTitle,
+      detail: cleanDetail,
+      severity,
+      kind,
+    });
+  };
+
+  rows.forEach((row) => {
+    if (row.status === 'error') {
+      append(`${row.label} 执行失败`, row.reasonText || '执行失败', 'error', 'execution');
+      return;
+    }
+    if (row.status === 'not_run') {
+      append(`${row.label} 未运行`, row.reasonText || '未调度', 'warn', 'execution');
+      return;
+    }
+    if (row.status === 'fallback') {
+      append(`${row.label} 降级执行`, row.reasonText || '采用降级路径', 'info', 'execution');
+    }
+  });
+
+  const report = asRecord(reportData?.report);
+  const rawRiskEntries = [
+    ...asStringList(report?.risks),
+    ...asStringList(report?.risk_factors),
+  ];
+
+  rawRiskEntries
+    .filter((text) => isOperationalDiagnosticText(text))
+    .slice(0, 4)
+    .forEach((text) => append(
+      isEvidenceQualityText(text) ? '证据质量诊断' : '跨智能体诊断',
+      text,
+      'warn',
+      isEvidenceQualityText(text) ? 'evidence' : 'execution',
+    ));
+
+  return diagnostics.slice(0, 6);
+}
+
+function buildDiagnosticTipContent(item: DiagnosticItem) {
+  const impact = item.kind === 'evidence'
+    ? '影响：该条结论证据不足，建议仅作参考，避免直接用于交易决策。'
+    : '影响：对应 Agent 结果不可用或降级，综合结论完整性会下降。';
+  const recovery = item.kind === 'evidence'
+    ? '恢复：补齐 10-K/10-Q/业绩会与权威媒体摘录后重跑分析。'
+    : '恢复：检查调度策略与分析深度后重新执行工作台分析。';
+
+  return (
+    <div className="space-y-1">
+      <div>原因：{item.detail}</div>
+      <div>{impact}</div>
+      <div>{recovery}</div>
+    </div>
+  );
+}
+
 export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
   const rows = useMemo(() => buildAgentRows(reportData), [reportData]);
+  const diagnostics = useMemo(() => buildDiagnostics(rows, reportData), [rows, reportData]);
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-fin-muted">Agent 执行总览</span>
+        <span className="text-xs font-medium text-fin-muted flex items-center gap-1">
+          Agent 执行总览
+          <CardInfoTip content="展示各 Agent 执行状态、置信度与执行诊断信息" />
+        </span>
         <span className="text-2xs text-fin-muted">{rows.length} agents</span>
       </div>
 
@@ -189,6 +338,30 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
           );
         })}
       </div>
+
+      {diagnostics.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-fin-border/70 space-y-2">
+          <div className="text-2xs font-medium text-fin-muted">执行诊断</div>
+          {diagnostics.map((item) => {
+            const style = DIAGNOSTIC_STYLE[item.severity];
+            return (
+              <div key={item.id} className="group/diag flex items-start gap-2">
+                <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${style.dot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-xs ${style.text}`}>{item.title}</div>
+                  <div className="text-2xs text-fin-muted leading-relaxed line-clamp-2">{item.detail}</div>
+                </div>
+                <CardInfoTip
+                  icon="alert"
+                  size={13}
+                  className="shrink-0 mt-0.5"
+                  content={buildDiagnosticTipContent(item)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

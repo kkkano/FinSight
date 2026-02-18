@@ -18,7 +18,8 @@
       "last_alert_error": null,
       "last_alert_error_at": null,
       "risk_threshold": "high",
-      "last_risk_at": null
+      "last_risk_at": null,
+      "recent_events": []
     }
   ]
 }

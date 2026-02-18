@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import type { NewsItem, TechnicalData, ValuationData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
 
 interface DimensionRadarProps {
   valuation?: ValuationData | null;
@@ -106,7 +107,10 @@ export function DimensionRadar({ valuation, technicals, news, reportData }: Dime
 
   return (
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">分析维度覆盖</div>
+      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
+        分析维度覆盖
+        <CardInfoTip content="五维评估：技术面 / 基本面 / 新闻舆情 / 宏观 / 深度研究" />
+      </div>
 
       <div className="space-y-2.5">
         {dimensions.map((item) => (

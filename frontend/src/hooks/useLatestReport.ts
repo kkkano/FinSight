@@ -50,6 +50,7 @@ export function useLatestReport(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastTickerRef = useRef<string | null>(null);
+  const requestSeqRef = useRef(0);
 
   const sessionId = useStore((s) => s.sessionId);
   const sourceType = options.sourceType?.trim() || undefined;
@@ -57,8 +58,13 @@ export function useLatestReport(
   const preferredSourceTrigger = options.preferredSourceTrigger?.trim() || undefined;
 
   const fetchReport = useCallback(async (): Promise<LatestReportData | null> => {
+    const requestSeq = ++requestSeqRef.current;
+
     if (!ticker || !sessionId) {
-      setData(null);
+      if (requestSeq === requestSeqRef.current) {
+        setData(null);
+        setError(null);
+      }
       return null;
     }
 
@@ -95,12 +101,15 @@ export function useLatestReport(
           sourceType,
         });
         const fallbackItems = fallbackIndex?.items ?? [];
-        const matched = fallbackItems.filter((item) => matchTickerLoose(ticker, item));
-        items = matched.length > 0 ? matched : fallbackItems;
+        // Only use items that actually match the target ticker (loose match).
+        // Never fall back to unrelated reports — that causes cross-ticker data leaks.
+        items = fallbackItems.filter((item) => matchTickerLoose(ticker, item));
       }
 
       if (items.length === 0) {
-        setData(null);
+        if (requestSeq === requestSeqRef.current) {
+          setData(null);
+        }
         return null;
       }
 
@@ -138,24 +147,35 @@ export function useLatestReport(
           report: replay.report,
           citations: replay.citations ?? [],
         };
-        setData(latest);
+        if (requestSeq === requestSeqRef.current) {
+          setData(latest);
+        }
         return latest;
       } else {
-        setData(null);
+        if (requestSeq === requestSeqRef.current) {
+          setData(null);
+        }
         return null;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report');
-      setData(null);
+      if (requestSeq === requestSeqRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load report');
+        setData(null);
+      }
       return null;
     } finally {
-      setLoading(false);
+      if (requestSeq === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [ticker, sessionId, sourceType, fallbackToAnySource, preferredSourceTrigger]);
 
   useEffect(() => {
     if (ticker !== lastTickerRef.current) {
       lastTickerRef.current = ticker ?? null;
+      // Immediately clear stale data from previous ticker to prevent cross-ticker leaks
+      setData(null);
+      setError(null);
       fetchReport();
     }
   }, [ticker, fetchReport]);

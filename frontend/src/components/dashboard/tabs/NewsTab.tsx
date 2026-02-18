@@ -188,6 +188,7 @@ export function NewsTab() {
         loading={insightsLoading}
         error={insightsError}
         stale={insightsStale}
+        onAskAbout={handleAskAbout}
       />
       {/* Fallback: report-based summary */}
       {!newsInsight && !insightsLoading && (

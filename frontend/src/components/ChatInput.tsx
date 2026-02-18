@@ -499,10 +499,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium max-w-[400px] border border-amber-500/20">
             <Paperclip size={12} className="shrink-0" />
             <span className="truncate">
-              {activeSelections[0].type === 'news' ? '新闻' : '报告'}{' '}
+              {activeSelections[0].type === 'news' ? '新闻' : activeSelections[0].type === 'risk' ? '风险' : activeSelections[0].type === 'insight' ? '洞察' : '报告'}{' '}
               已选: {activeSelections.length === 1
                 ? `${activeSelections[0].title.slice(0, 40)}${activeSelections[0].title.length > 40 ? '...' : ''}`
-                : `${activeSelections.length} 条${activeSelections[0].type === 'news' ? '新闻' : '报告'}`}
+                : `${activeSelections.length} 条${activeSelections[0].type === 'news' ? '新闻' : activeSelections[0].type === 'risk' ? '风险' : activeSelections[0].type === 'insight' ? '洞察' : '报告'}`}
             </span>
             <button
               onClick={clearSelection}

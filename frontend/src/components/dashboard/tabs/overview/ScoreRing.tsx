@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 
 import type { ValuationData, TechnicalData } from '../../../../types/dashboard';
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import { CardInfoTip } from '../../../ui/CardInfoTip';
 
 // --- Props ---
 
@@ -89,8 +90,9 @@ export function ScoreRing({ valuation, technicals, reportData, insightScore }: S
 
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-3">
+      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         综合评分
+        <CardInfoTip content="优先级：AI 洞察 > 研报评分 > 规则计算（PE + 趋势 + RSI + Beta）" />
       </div>
       <div className="relative w-32 h-32">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">

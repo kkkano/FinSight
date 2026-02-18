@@ -160,7 +160,7 @@ export interface MacroSnapshotData {
 
 // === 选中对象（用于 MiniChat 上下文引用） ===
 export interface SelectionItem {
-  type: 'news' | 'filing' | 'doc';
+  type: 'news' | 'filing' | 'doc' | 'insight' | 'risk';
   id: string;           // hash(title + source + ts)
   title: string;
   url?: string;

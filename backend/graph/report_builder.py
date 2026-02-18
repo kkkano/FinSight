@@ -1263,6 +1263,177 @@ def _build_report_quality_hints(
     }
 
 
+_GROUNDING_CLAIM_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?<!\d)\d+(?:\.\d+)?\s*(?:%|倍|x|X|亿美元|万亿美元|亿|万|bps|bp|美元|元|点|亿元|万元)",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"20\d{2}\s*(?:年|Q[1-4])[^\n。；;]{0,16}(?:发布|推出|上线|发售|量产|并购|收购|拆分)",
+        flags=re.IGNORECASE,
+    ),
+)
+
+
+def _normalize_for_grounding(value: Any) -> str:
+    return re.sub(r"\s+", "", _safe_str(value)).lower()
+
+
+def _extract_grounding_claims(text: str, *, max_claims: int = 80) -> list[str]:
+    raw = _safe_str(text).strip()
+    if not raw:
+        return []
+
+    claims: list[str] = []
+    seen: set[str] = set()
+    for pattern in _GROUNDING_CLAIM_PATTERNS:
+        for match in pattern.finditer(raw):
+            claim = _safe_str(match.group(0)).strip()
+            if not claim:
+                continue
+            key = _normalize_for_grounding(claim)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            claims.append(claim)
+            if len(claims) >= max_claims:
+                return claims
+    return claims
+
+
+def _build_grounding_corpus(
+    *,
+    citations: list[dict[str, Any]],
+    agent_summaries: dict[str, str],
+    step_results: dict[str, Any],
+) -> str:
+    parts: list[str] = []
+
+    for citation in citations:
+        if not isinstance(citation, dict):
+            continue
+        parts.extend([
+            _safe_str(citation.get("title")),
+            _safe_str(citation.get("snippet")),
+            _safe_str(citation.get("url")),
+            _safe_str(citation.get("source")),
+            _safe_str(citation.get("published_date")),
+        ])
+
+    for _, summary in (agent_summaries or {}).items():
+        parts.append(_safe_str(summary))
+
+    for _, item in (step_results or {}).items():
+        if not isinstance(item, dict):
+            continue
+        output = item.get("output")
+        if isinstance(output, dict):
+            parts.append(_safe_str(output.get("summary")))
+            parts.append(_safe_str(output.get("analysis")))
+            parts.append(_safe_str(output.get("text")))
+            evidence = output.get("evidence")
+            if isinstance(evidence, list):
+                for ev in evidence[:12]:
+                    if isinstance(ev, dict):
+                        parts.extend([
+                            _safe_str(ev.get("title")),
+                            _safe_str(ev.get("snippet")),
+                            _safe_str(ev.get("url")),
+                            _safe_str(ev.get("source")),
+                        ])
+        else:
+            parts.append(_safe_str(output))
+
+    return "\n".join([p for p in parts if p])
+
+
+def _is_claim_grounded(claim: str, normalized_corpus: str) -> bool:
+    normalized_claim = _normalize_for_grounding(claim)
+    if not normalized_claim or not normalized_corpus:
+        return False
+
+    if normalized_claim in normalized_corpus:
+        return True
+
+    number_tokens = re.findall(r"\d+(?:\.\d+)?", claim)
+    if not number_tokens:
+        return False
+    if not all(num in normalized_corpus for num in number_tokens[:2]):
+        return False
+
+    keyword_match = re.search(
+        r"(发布|推出|上线|并购|收购|营收|利润|增速|增长|同比|环比|eps|pe|rsi|毛利率|现金流|10-k|10-q|业绩会|电话会)",
+        claim,
+        flags=re.IGNORECASE,
+    )
+    if keyword_match:
+        keyword = _normalize_for_grounding(keyword_match.group(0))
+        if keyword and keyword not in normalized_corpus:
+            return False
+
+    return True
+
+
+def _compute_grounding_stats(
+    *,
+    generated_text: str,
+    citations: list[dict[str, Any]],
+    agent_summaries: dict[str, str],
+    render_vars: dict[str, Any],
+    step_results: dict[str, Any],
+) -> dict[str, Any]:
+    claims = _extract_grounding_claims(generated_text)
+    if not claims:
+        render_text = "\n".join(
+            _safe_str(render_vars.get(key))
+            for key in (
+                "investment_summary",
+                "valuation",
+                "analysis",
+                "highlights",
+                "company_overview",
+                "catalysts",
+                "risks",
+                "summary",
+            )
+            if _safe_str(render_vars.get(key)).strip()
+        )
+        claims = _extract_grounding_claims(render_text)
+
+    if not claims:
+        return {
+            "grounding_rate": None,
+            "claim_count": 0,
+            "grounded_count": 0,
+            "sample_ungrounded_claims": [],
+        }
+
+    corpus = _build_grounding_corpus(
+        citations=citations,
+        agent_summaries=agent_summaries,
+        step_results=step_results,
+    )
+    normalized_corpus = _normalize_for_grounding(corpus)
+
+    grounded_count = 0
+    ungrounded: list[str] = []
+    for claim in claims:
+        if _is_claim_grounded(claim, normalized_corpus):
+            grounded_count += 1
+        elif len(ungrounded) < 5:
+            ungrounded.append(claim)
+
+    claim_count = len(claims)
+    grounding_rate = grounded_count / claim_count if claim_count > 0 else None
+
+    return {
+        "grounding_rate": grounding_rate,
+        "claim_count": claim_count,
+        "grounded_count": grounded_count,
+        "sample_ungrounded_claims": ungrounded,
+    }
+
+
 def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -> dict[str, Any] | None:
     """
     Build a frontend-friendly ReportIR payload (used by ReportView cards) from LangGraph state.
@@ -1565,6 +1736,30 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if "conflict" not in report_tags and (has_active_conflicts or is_degraded_conflict):
             report_tags.append("conflict")
 
+    grounding_stats = _compute_grounding_stats(
+        generated_text=synthesis_report,
+        citations=citations,
+        agent_summaries=agent_summaries,
+        render_vars=render_vars,
+        step_results=step_results,
+    )
+    grounding_rate = grounding_stats.get("grounding_rate")
+    if isinstance(quality_hints, dict):
+        quality_hints["grounding"] = grounding_stats
+    if isinstance(report_hints, dict):
+        report_hints["grounding"] = grounding_stats
+
+    if isinstance(grounding_rate, float):
+        if grounding_rate < 0.6:
+            grounding_risk = f"证据溯源率偏低（{grounding_rate:.0%}），部分断言可能缺少直接证据支持"
+            if grounding_risk not in risks:
+                risks.insert(0, grounding_risk)
+            confidence_score = min(confidence_score, 0.6)
+            if "grounding_gap" not in report_tags:
+                report_tags.append("grounding_gap")
+        elif grounding_rate < 0.75:
+            confidence_score = min(confidence_score, 0.7)
+
     # Title by subject type
     if subject_type in ("news_item", "news_set"):
         title = f"{ticker_label} 新闻事件研报"
@@ -1583,6 +1778,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         "summary": summary,
         "sentiment": "neutral",
         "confidence_score": confidence_score,
+        "grounding_rate": grounding_rate,
         "generated_at": _now_iso(),
         "sections": sections,
         "citations": citations,
@@ -1595,6 +1791,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
             "agent_summaries": agent_summaries,
             "filing_section_citations": filing_section_citations,
             "report_hints": report_hints,
+            "grounding": grounding_stats,
             "report_builder_input": {
                 "query": query,
                 "ticker_label": ticker_label,
@@ -1614,6 +1811,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         validated["agent_status"] = agent_status
         validated["conflict_disclosure"] = conflict_disclosure
         validated["report_hints"] = report_hints
+        validated["grounding_rate"] = grounding_rate
         validated["core_viewpoints"] = _build_core_viewpoints(agent_summaries)
         # P0-3d: structured agent diagnostics for frontend observability
         agent_diagnostics: dict[str, dict[str, Any]] = {}
@@ -1635,6 +1833,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
 
         meta = validated.get("meta") if isinstance(validated.get("meta"), dict) else {}
         meta["report_hints"] = report_hints
+        meta["grounding"] = grounding_stats
         validated["meta"] = meta
         return _harden_report_payload(validated)
     return None

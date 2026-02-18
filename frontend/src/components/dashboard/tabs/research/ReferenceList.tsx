@@ -14,15 +14,56 @@ interface ReferenceListProps {
   citations: Record<string, unknown>[];
 }
 
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function domainFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function resolveSourceLabel(citation: Record<string, unknown>): string {
+  const source = asText(citation.source)
+    || asText(citation.name)
+    || asText(citation.publisher)
+    || asText(citation.media)
+    || asText(citation.outlet);
+  if (source) return source;
+
+  const title = asText(citation.title);
+  if (title) {
+    const titleAsDomain = domainFromUrl(title);
+    return titleAsDomain || title;
+  }
+
+  const url = asText(citation.url);
+  if (url) return domainFromUrl(url) || url;
+
+  const sourceId = asText(citation.source_id);
+  if (sourceId) return sourceId;
+
+  return '未知来源';
+}
+
 function aggregateCitations(citations: Record<string, unknown>[]): ReferenceItem[] {
   const map = new Map<string, ReferenceItem>();
 
   for (const citation of citations) {
-    const source = (citation?.source as string) ?? (citation?.name as string) ?? '未知来源';
-    const url = (citation?.url as string) ?? undefined;
+    const source = resolveSourceLabel(citation);
+    const rawUrl = asText(citation?.url);
+    const url = rawUrl || undefined;
     const existing = map.get(source);
     if (existing) {
-      map.set(source, { ...existing, count: existing.count + 1 });
+      map.set(source, {
+        ...existing,
+        url: existing.url || url,
+        count: existing.count + 1,
+      });
     } else {
       map.set(source, { source, url, count: 1 });
     }

@@ -202,6 +202,85 @@ def _sanitize_llm_section(text: str, *, max_lines: int = 8, max_chars: int = 900
     return normalized
 
 
+_HALLUCINATION_EVENT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?:预计|计划|拟于|即将|有望(?:于)?)\s*20\d{2}\s*(?:年|Q[1-4])"
+        r"[^\n。；;]{0,26}(?:发布|推出|上线|发售|量产|落地|开售|开源|并购|收购|拆分)"
+        r"[^\n。；;]{0,28}",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:预计|计划|拟于|即将|有望(?:于)?)\s*[^\n。；;]{0,20}(?:发布|推出|上线|发售|量产|落地|开售|开源|并购|收购|拆分)"
+        r"[^\n。；;]{0,20}(?:20\d{2}\s*(?:年|Q[1-4]))"
+        r"[^\n。；;]{0,16}",
+        flags=re.IGNORECASE,
+    ),
+)
+_HALLUCINATION_SAFE_PLACEHOLDER = "[此处信息未经证据验证，已移除]"
+
+
+def _normalize_for_match(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "")).lower()
+
+
+def _claim_supported_by_evidence(claim: str, evidence_text: str) -> bool:
+    normalized_claim = _normalize_for_match(claim)
+    normalized_evidence = _normalize_for_match(evidence_text)
+    if not normalized_claim or not normalized_evidence:
+        return False
+
+    if normalized_claim in normalized_evidence:
+        return True
+
+    year_match = re.search(r"20\d{2}(?:年|q[1-4])?", claim, flags=re.IGNORECASE)
+    verb_match = re.search(r"(发布|推出|上线|发售|量产|落地|开售|开源|并购|收购|拆分)", claim)
+    tokens = re.findall(r"[A-Za-z][A-Za-z0-9._-]{2,}|[\u4e00-\u9fff]{2,}", claim)
+    stopwords = {"预计", "计划", "拟于", "即将", "有望", "发布", "推出", "上线", "发售", "量产", "落地", "开售", "开源", "并购", "收购", "拆分"}
+
+    key_tokens: list[str] = []
+    if year_match:
+        key_tokens.append(year_match.group(0))
+    if verb_match:
+        key_tokens.append(verb_match.group(0))
+    for token in tokens:
+        token_norm = token.lower()
+        if token in stopwords or token_norm in stopwords:
+            continue
+        key_tokens.append(token)
+
+    hits = 0
+    for token in key_tokens[:8]:
+        if _normalize_for_match(token) in normalized_evidence:
+            hits += 1
+
+    if year_match:
+        return hits >= 2
+    return hits >= 3
+
+
+def _scrub_unverified_future_claims(text: str, evidence_text: str) -> str:
+    if not isinstance(text, str) or not text.strip():
+        return ""
+
+    cleaned = text
+    for pattern in _HALLUCINATION_EVENT_PATTERNS:
+        def _replace(match: re.Match[str]) -> str:
+            claim = match.group(0)
+            if _claim_supported_by_evidence(claim, evidence_text):
+                return claim
+            logger.warning("[Synthesize] scrubbed unverified future claim: %s", claim)
+            return _HALLUCINATION_SAFE_PLACEHOLDER
+
+        cleaned = pattern.sub(_replace, cleaned)
+
+    cleaned = re.sub(
+        rf"(?:{re.escape(_HALLUCINATION_SAFE_PLACEHOLDER)}\s*){{2,}}",
+        _HALLUCINATION_SAFE_PLACEHOLDER + " ",
+        cleaned,
+    ).strip()
+    return cleaned
+
+
 def _section_limits(output_mode: str, key: str) -> tuple[int, int]:
     if output_mode == "investment_report" and key in {
         "investment_thesis",
@@ -1424,6 +1503,10 @@ async def _generate_narrative_draft(
 
     conversation_history = _format_conversation_history_for_synth(state)
     memory_context_block = _format_memory_context_for_synth(state)
+    current_date = utc_now_iso()[:10]
+    narrative_grounding_text = "\n".join(
+        part for part in [evidence_text, conflict_context, "\n".join(agent_sections)] if part
+    )
 
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
 
@@ -1432,6 +1515,11 @@ async def _generate_narrative_draft(
 查询: {query}
 标的: {ticker_label}
 </task>
+
+<time_anchor>
+当前日期: {current_date}
+你的知识可能过时。涉及日期/发布/并购/监管等事件时，仅可使用本提示中明确提供的证据内容。
+</time_anchor>
 
 {conversation_history}{memory_context_block}<agent_outputs>
 {chr(10).join(agent_sections) if agent_sections else "(无智能体输出)"}
@@ -1485,6 +1573,10 @@ async def _generate_narrative_draft(
     - LLM 概览数据：`<chart type="bar" title="标题">{{"labels":["A","B"],"values":[10,20]}}</chart>`
     - 引用前端已有数据：`<chart_ref type="bar" source="peers" fields="trailing_pe" title="PE对比"/>`
     - 支持类型: bar / line / pie / scatter / gauge。规则: 不替代文字分析，仅做辅助展示。
+11) **严格闭卷原则（高优先级）**：你唯一可用的信息来源仅限本提示中的 <agent_outputs>、<evidence_pool>、<cross_agent_conflicts>。
+12) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
+13) 如需提及行业背景，仅允许使用泛化表述（如"行业竞争加剧"），禁止输出具体日期+事件断言。
+14) 违反闭卷原则视为编造数据，与编造财务数字同级错误。
 </constraints>"""
 
     retry_attempts = 0
@@ -1524,6 +1616,7 @@ async def _generate_narrative_draft(
         draft = re.sub(r"^```(?:markdown|md)?\s*", "", draft, flags=re.IGNORECASE)
         draft = re.sub(r"\s*```$", "", draft)
         draft = draft.strip()
+        draft = _scrub_unverified_future_claims(draft, narrative_grounding_text)
 
         if len(draft) < 500:
             logger.warning("[Synthesize/narrative] LLM output too short (%d chars), discarding", len(draft))
@@ -1671,6 +1764,14 @@ async def synthesize(state: GraphState) -> dict:
 
     synth_conversation_history = _format_conversation_history_for_synth(state)
     synth_memory_context = _format_memory_context_for_synth(state)
+    current_date = utc_now_iso()[:10]
+    llm_grounding_text = "\n".join(
+        part for part in [
+            json_dumps_safe(evidence_pool_list[:20], ensure_ascii=False),
+            json_dumps_safe(rag_context_list[:20], ensure_ascii=False),
+            json_dumps_safe(step_results if isinstance(step_results, dict) else {}, ensure_ascii=False),
+        ] if part
+    )
 
     prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
 
@@ -1678,6 +1779,11 @@ async def synthesize(state: GraphState) -> dict:
 根据输入数据填充报告模板变量。仅返回 JSON 对象，禁止 markdown 或注释。
 所有文本值必须为简体中文。
 </task>
+
+<time_anchor>
+当前日期: {current_date}
+你的知识可能过时。涉及日期/发布/并购/监管等事件时，仅可使用本提示中明确提供的证据内容。
+</time_anchor>
 
 {synth_conversation_history}{synth_memory_context}<inputs>
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
@@ -1705,13 +1811,16 @@ summary, highlights, analysis.
 </field_quality_guidelines>
 
 <constraints>
-1) 优先使用 realtime_evidence/historical_knowledge/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
-2) 禁止输出原始工具数据、搜索日志、trace 信息。
-3) 免责声明最多在 risks 字段末尾出现 1 次，其他字段禁止重复。
-4) 每个字段控制在 6 条要点以内，追求信息密度而非长度。
-5) 禁止使用"待实现"、"暂无数据"等占位短语；无数据时输出"[数据缺失]"。
-6) 输出必须为合法 JSON 对象。
-7) 禁止开场白、寒暄。直接输出 JSON。
+1) 严格闭卷：仅可使用 <realtime_evidence>、<historical_knowledge>、<inputs.step_results> 中已出现的信息。
+2) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
+3) 如需提及行业背景，仅允许泛化表述，禁止输出具体日期+事件断言。
+4) 数据不足时明确标注"[数据缺失]"或"数据有限"，禁止补写训练知识中的细节。
+5) 禁止输出原始工具数据、搜索日志、trace 信息。
+6) 免责声明最多在 risks 字段末尾出现 1 次，其他字段禁止重复。
+7) 每个字段控制在 6 条要点以内，追求信息密度而非长度。
+8) 禁止使用"待实现"、"暂无数据"等占位短语；无数据时输出"[数据缺失]"。
+9) 输出必须为合法 JSON 对象。
+10) 禁止开场白、寒暄。直接输出 JSON。
 </constraints>
 """
 
@@ -1765,7 +1874,8 @@ summary, highlights, analysis.
                 continue
             candidate = llm_render_vars.get(key)
             if key == "risks":
-                render_vars[key] = _format_risks(candidate, base_risks=base_risks)
+                formatted_risks = _format_risks(candidate, base_risks=base_risks)
+                render_vars[key] = _scrub_unverified_future_claims(formatted_risks, llm_grounding_text)
                 continue
             if key in (
                 "comparison_conclusion",
@@ -1782,6 +1892,7 @@ summary, highlights, analysis.
                 "analysis",
             ):
                 if isinstance(candidate, str) and candidate.strip():
+                    candidate = _scrub_unverified_future_claims(candidate, llm_grounding_text)
                     max_lines, max_chars = _section_limits(output_mode, key)
                     sanitized = _sanitize_llm_section(candidate, max_lines=max_lines, max_chars=max_chars)
                     render_vars[key] = sanitized if sanitized else stub_value
@@ -1790,6 +1901,7 @@ summary, highlights, analysis.
                 continue
 
             if isinstance(candidate, str) and candidate.strip():
+                candidate = _scrub_unverified_future_claims(candidate, llm_grounding_text)
                 render_vars[key] = candidate
             else:
                 render_vars[key] = stub_value

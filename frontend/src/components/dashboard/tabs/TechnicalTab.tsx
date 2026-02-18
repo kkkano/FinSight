@@ -17,6 +17,7 @@ import { SupportResistanceChart } from './technical/SupportResistanceChart';
 import { BollingerVolumeCard } from './technical/BollingerVolumeCard';
 import { TechnicalSubCharts } from './technical/TechnicalSubCharts';
 import { AiInsightCard } from './shared/AiInsightCard';
+import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
 
@@ -26,6 +27,11 @@ export function TechnicalTab() {
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
+  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+
+  const handleAskAbout = (selection: SelectionItem) => {
+    setActiveSelection(selection);
+  };
 
   const technicals = dashboardData?.technicals;
   const marketChart = dashboardData?.charts?.market_chart;
@@ -41,6 +47,7 @@ export function TechnicalTab() {
         loading={insightsLoading}
         error={insightsError}
         stale={insightsStale}
+        onAskAbout={handleAskAbout}
       />
 
       {/* K-line chart with support/resistance — full width */}
