@@ -3,7 +3,8 @@
  *
  * Renders overview sub-components in a responsive 2-3 column grid layout.
  * First row:  ScoreRing + AnalystRatingCard + DimensionRadar
- * Second row: KeyInsightsCard + RiskMetricsCard + HighlightsCard
+ * Second row: FearGreedGauge + AgentStatusOverview + RiskMetricsCard
+ * Third row:  KeyInsightsCard + HighlightsCard
  * Optional:   AiInsightCard when AI insights are available
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
@@ -14,6 +15,8 @@ import { DimensionRadar } from './overview/DimensionRadar';
 import { KeyInsightsCard } from './overview/KeyInsightsCard';
 import { RiskMetricsCard } from './overview/RiskMetricsCard';
 import { HighlightsCard } from './overview/HighlightsCard';
+import { FearGreedGauge } from './overview/FearGreedGauge';
+import { AgentStatusOverview } from './overview/AgentStatusOverview';
 import { AiInsightCard } from './shared/AiInsightCard';
 
 // --- Component ---
@@ -56,8 +59,12 @@ export function OverviewTab() {
         <DimensionRadar valuation={valuation} technicals={technicals} news={news} reportData={reportData} />
 
         {/* Row 2 */}
-        <KeyInsightsCard valuation={valuation} technicals={technicals} news={news} reportData={reportData} insightPoints={overviewInsight?.key_points} />
+        <FearGreedGauge reportData={reportData} />
+        <AgentStatusOverview reportData={reportData} />
         <RiskMetricsCard valuation={valuation} reportData={reportData} />
+
+        {/* Row 3 */}
+        <KeyInsightsCard valuation={valuation} technicals={technicals} news={news} reportData={reportData} insightPoints={overviewInsight?.key_points} />
         <HighlightsCard valuation={valuation} technicals={technicals} reportData={reportData} />
       </div>
     </div>

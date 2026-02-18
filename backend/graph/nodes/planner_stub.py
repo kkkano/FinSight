@@ -347,26 +347,42 @@ def planner_stub(state: GraphState) -> dict:
             step_id += 1
 
         all_agents = sorted(allowed_agents)
-        try:
-            max_agents = int((os.getenv("LANGGRAPH_REPORT_MAX_AGENTS") or "4").strip())
-        except Exception:
-            max_agents = 4
-        max_agents = max(1, min(max_agents, len(all_agents))) if all_agents else 0
-        try:
-            min_agents = int((os.getenv("LANGGRAPH_REPORT_MIN_AGENTS") or "2").strip())
-        except Exception:
-            min_agents = 2
-        min_agents = max(1, min(min_agents, max_agents)) if max_agents else 0
-
+        policy_agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+        dashboard_forced = bool(policy_agent_selection.get("forced_by_dashboard")) if isinstance(policy_agent_selection, dict) else False
         selected_agents: list[str] = []
-        if all_agents and max_agents > 0:
-            selected = select_agents_for_request(
-                state,
-                all_agents,
-                max_agents=max_agents,
-                min_agents=min_agents,
-            )
-            selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
+
+        if dashboard_forced:
+            ordered = [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "risk_agent",
+                "deep_search_agent",
+            ]
+            selected_agents = [name for name in ordered if name in allowed_agents]
+            max_agents = len(selected_agents)
+        else:
+            try:
+                max_agents = int((os.getenv("LANGGRAPH_REPORT_MAX_AGENTS") or "4").strip())
+            except Exception:
+                max_agents = 4
+            max_agents = max(1, min(max_agents, len(all_agents))) if all_agents else 0
+            try:
+                min_agents = int((os.getenv("LANGGRAPH_REPORT_MIN_AGENTS") or "2").strip())
+            except Exception:
+                min_agents = 2
+            min_agents = max(1, min(min_agents, max_agents)) if max_agents else 0
+
+            if all_agents and max_agents > 0:
+                selected = select_agents_for_request(
+                    state,
+                    all_agents,
+                    max_agents=max_agents,
+                    min_agents=min_agents,
+                )
+                selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
 
         ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
         analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()

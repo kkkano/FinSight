@@ -274,6 +274,18 @@ def _is_deep_hint(query: str, state: GraphState | None = None) -> bool:
     )
 
 
+def _is_dashboard_forced_report(policy: dict[str, Any], state: GraphState) -> bool:
+    if not isinstance(policy, dict):
+        return False
+    agent_selection = policy.get("agent_selection")
+    if isinstance(agent_selection, dict) and bool(agent_selection.get("forced_by_dashboard")):
+        return True
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    source = str((ui_context or {}).get("source") or "").strip().lower()
+    output_mode = str(state.get("output_mode") or "").strip().lower()
+    return output_mode == "investment_report" and source.startswith("dashboard")
+
+
 def _estimate_step_cost_latency(step: dict[str, Any]) -> tuple[float, int]:
     kind = str(step.get("kind") or "")
     name = str(step.get("name") or "")
@@ -339,7 +351,8 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
     selected_agent_order: list[str] = []
     report_agent_cap: int | None = None
-    if output_mode == "investment_report" and allowed_agents:
+    dashboard_forced_report = _is_dashboard_forced_report(policy, state)
+    if output_mode == "investment_report" and allowed_agents and not dashboard_forced_report:
         try:
             report_max_agents = int(_env_str("LANGGRAPH_REPORT_MAX_AGENTS", "4"))
         except Exception:
@@ -551,6 +564,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         "fundamental_agent",
         "technical_agent",
         "macro_agent",
+        "risk_agent",
         "deep_search_agent",
     ]
     if selected_agent_order:

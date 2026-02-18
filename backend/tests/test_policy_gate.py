@@ -405,3 +405,33 @@ def test_policy_gate_analysis_depth_deep_research_forces_deep_search_agent():
     assert "deep_search_agent" in allowed_agents
     assert "deep_search_agent" in (selection.get("required") or [])
     assert int(budget.get("max_rounds") or 0) >= 7
+
+
+def test_policy_gate_dashboard_investment_report_forces_core_six_agents():
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "output_mode": "investment_report",
+            "ui_context": {"source": "dashboard_research_tab"},
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    selection = policy.get("agent_selection") or {}
+
+    assert allowed_agents == [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+    ]
+    assert selection.get("forced_by_dashboard") is True
+    assert selection.get("required") == allowed_agents

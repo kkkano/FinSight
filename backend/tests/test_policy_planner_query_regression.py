@@ -149,3 +149,46 @@ def test_new_query_sec_tools_blocked_under_cn_market():
     assert "get_sec_filings" not in tools
     assert "get_sec_material_events" not in tools
     assert "get_sec_risk_factors" not in tools
+
+
+def test_dashboard_report_path_keeps_core_six_agents_in_stub_plan():
+    state = {
+        "query": "生成 AAPL 一键综合研报",
+        "operation": {"name": "generate_report", "confidence": 0.95, "params": {}},
+        "output_mode": "investment_report",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "ui_context": {"source": "dashboard_research_tab"},
+    }
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    allowed_agents = (policy_out.get("policy") or {}).get("allowed_agents") or []
+    step_agents = [
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        if s.get("kind") == "agent"
+    ]
+
+    assert allowed_agents == [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+    ]
+    assert step_agents == [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+    ]
