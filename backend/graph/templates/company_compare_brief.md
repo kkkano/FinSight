@@ -13,3 +13,7 @@ $comparison_metrics
 ### 风险提示
 
 $risks
+
+### 引用来源
+
+$evidence
