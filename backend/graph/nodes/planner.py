@@ -254,7 +254,12 @@ def _build_json_retry_prompt(
 _HIGH_COST_AGENTS: set[str] = {"macro_agent", "deep_search_agent"}
 
 
-def _is_deep_hint(query: str) -> bool:
+def _is_deep_hint(query: str, state: GraphState | None = None) -> bool:
+    if isinstance(state, dict):
+        ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+        analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+        if analysis_depth == "deep_research":
+            return True
     q = (query or "").lower()
     return any(
         token in q
@@ -363,7 +368,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     operation = state.get("operation") or {}
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
-    has_deep_hint = _is_deep_hint(query)
+    has_deep_hint = _is_deep_hint(query, state)
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     tickers = tickers if isinstance(tickers, list) else []

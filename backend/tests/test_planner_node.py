@@ -518,3 +518,17 @@ def test_planner_report_adds_progressive_escalation_inputs_for_high_cost_agents(
     assert "estimated_latency_ms" in assertions
     assert "cost_within_budget" in assertions
     assert "latency_within_budget" in assertions
+
+
+def test_is_deep_hint_respects_analysis_depth_context():
+    from backend.graph.nodes.planner import _is_deep_hint
+
+    neutral_query = "Assess AAPL trend and valuation"
+    assert _is_deep_hint(
+        neutral_query,
+        {"ui_context": {"analysis_depth": "deep_research"}},
+    )
+    assert not _is_deep_hint(
+        neutral_query,
+        {"ui_context": {"analysis_depth": "report"}},
+    )

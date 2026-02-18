@@ -2,8 +2,10 @@
  * CoreFindings - Render report sections by type.
  *
  * Each section shows a title, summary, and optional citation block
- * with source name and quote text.
+ * with source name and quote text.  Renders content as Markdown.
  */
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ReportSection {
   title?: string;
@@ -15,6 +17,24 @@ interface ReportSection {
 
 interface CoreFindingsProps {
   report: Record<string, unknown> | null;
+}
+
+const remarkPlugins = [remarkGfm];
+
+/**
+ * 从嵌套 contents 数组中提取正文文本（后端结构：contents: [{type, content, ...}]）。
+ */
+function extractContentFromContents(raw: unknown): string | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const parts: string[] = [];
+  for (const item of raw) {
+    const c = item as Record<string, unknown>;
+    const text = c?.content;
+    if (typeof text === 'string' && text.trim()) {
+      parts.push(text.trim());
+    }
+  }
+  return parts.length > 0 ? parts.join('\n\n') : undefined;
 }
 
 function extractSections(report: Record<string, unknown>): ReportSection[] {
@@ -30,10 +50,16 @@ function extractSections(report: Record<string, unknown>): ReportSection[] {
     if (Array.isArray(candidate) && candidate.length > 0) {
       return candidate.map((item: unknown) => {
         const section = item as Record<string, unknown>;
+        // 优先取 top-level summary/content，否则从 contents 数组中提取
+        const summary =
+          (section?.summary as string) ??
+          (section?.content as string) ??
+          extractContentFromContents(section?.contents) ??
+          undefined;
         return {
           title: (section?.title as string) ?? undefined,
-          type: (section?.type as string) ?? undefined,
-          summary: (section?.summary as string) ?? (section?.content as string) ?? undefined,
+          type: (section?.type as string) ?? (section?.agent_name as string) ?? undefined,
+          summary,
           citations: Array.isArray(section?.citations)
             ? (section.citations as Record<string, unknown>[]).map((c) => ({
                 source: (c?.source as string) ?? undefined,
@@ -75,11 +101,11 @@ export function CoreFindings({ report }: CoreFindingsProps) {
             </h5>
           </div>
 
-          {/* Summary */}
+          {/* Summary — 使用 Markdown 渲染 */}
           {section.summary ? (
-            <p className="text-sm text-fin-text-secondary leading-relaxed mb-3">
-              {section.summary}
-            </p>
+            <div className="text-sm text-fin-text-secondary leading-relaxed mb-3 prose prose-sm prose-slate dark:prose-invert max-w-none">
+              <ReactMarkdown remarkPlugins={remarkPlugins}>{section.summary}</ReactMarkdown>
+            </div>
           ) : null}
 
           {/* Citations */}
@@ -91,11 +117,11 @@ export function CoreFindings({ report }: CoreFindingsProps) {
                   className="pl-3 border-l-2 border-fin-primary/30"
                 >
                   {citation.quote ? (
-                    <p className="text-xs text-fin-muted italic">"{citation.quote}"</p>
+                    <p className="text-xs text-fin-muted italic">&ldquo;{citation.quote}&rdquo;</p>
                   ) : null}
                   {citation.source ? (
                     <p className="text-2xs text-fin-muted mt-1">
-                      -- {citation.source}
+                      — {citation.source}
                     </p>
                   ) : null}
                 </div>

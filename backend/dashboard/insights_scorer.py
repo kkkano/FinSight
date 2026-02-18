@@ -347,3 +347,124 @@ def _label(score: float) -> str:
     if score >= 3:
         return "偏空"
     return "弱势"
+
+
+# ---------------------------------------------------------------------------
+# key_metrics extraction (deterministic fallback)
+# ---------------------------------------------------------------------------
+
+def _fmt_float(val: Any, suffix: str = "", pct: bool = False) -> str | None:
+    """安全格式化浮点数为字符串，返回 None 表示无效值。"""
+    if not isinstance(val, (int, float)) or not math.isfinite(val):
+        return None
+    if pct:
+        return f"{val:.2%}{suffix}"
+    return f"{val:.2f}{suffix}"
+
+
+def _fmt_int(val: Any, suffix: str = "") -> str | None:
+    if not isinstance(val, (int, float)) or not math.isfinite(val):
+        return None
+    return f"{int(val):,}{suffix}"
+
+
+def metrics_technical(data: dict[str, Any]) -> list[dict[str, str]]:
+    """从技术指标数据中提取关键指标 k/v 对。"""
+    result: list[dict[str, str]] = []
+
+    rsi = _fmt_float(_safe_get(data, "rsi"))
+    if rsi:
+        result.append({"label": "RSI", "value": rsi})
+
+    price = _fmt_float(_safe_get(data, "close") or _safe_get(data, "price"))
+    if price:
+        result.append({"label": "当前价格", "value": price})
+
+    ma20 = _fmt_float(_safe_get(data, "ma20"))
+    if ma20:
+        result.append({"label": "MA20", "value": ma20})
+
+    ma50 = _fmt_float(_safe_get(data, "ma50"))
+    if ma50:
+        result.append({"label": "MA50", "value": ma50})
+
+    macd = _fmt_float(_safe_get(data, "macd"))
+    if macd:
+        result.append({"label": "MACD", "value": macd})
+
+    return result[:4]
+
+
+def metrics_financial(data: dict[str, Any]) -> list[dict[str, str]]:
+    """从财务数据中提取关键指标 k/v 对。"""
+    result: list[dict[str, str]] = []
+
+    pe = _safe_get(data, "trailing_pe") or _safe_get(data, "valuation", "trailing_pe")
+    v = _fmt_float(pe)
+    if v:
+        result.append({"label": "市盈率", "value": v})
+
+    pb = _safe_get(data, "price_to_book") or _safe_get(data, "valuation", "price_to_book")
+    v = _fmt_float(pb)
+    if v:
+        result.append({"label": "市净率", "value": v})
+
+    rg = _safe_get(data, "revenue_growth") or _safe_get(data, "financials", "revenue_growth")
+    v = _fmt_float(rg, pct=True)
+    if v:
+        result.append({"label": "营收增长", "value": v})
+
+    de = _safe_get(data, "debt_to_equity") or _safe_get(data, "financials", "debt_to_equity")
+    v = _fmt_float(de)
+    if v:
+        result.append({"label": "资产负债率", "value": v})
+
+    return result[:4]
+
+
+def metrics_news(data: dict[str, Any]) -> list[dict[str, str]]:
+    """从新闻数据中提取关键指标 k/v 对。"""
+    market_news = data.get("market", [])
+    impact_news = data.get("impact", [])
+    total = len(market_news if isinstance(market_news, list) else []) + \
+            len(impact_news if isinstance(impact_news, list) else [])
+
+    result: list[dict[str, str]] = []
+    if total > 0:
+        result.append({"label": "新闻数量", "value": str(total)})
+    return result[:4]
+
+
+def metrics_peers(data: dict[str, Any]) -> list[dict[str, str]]:
+    """从同行对比数据中提取关键指标 k/v 对。"""
+    result: list[dict[str, str]] = []
+    company = _safe_get(data, "company") or {}
+    peers_list = _safe_get(data, "peers") or []
+
+    pe = _safe_get(company, "trailing_pe")
+    v = _fmt_float(pe)
+    if v:
+        result.append({"label": "公司PE", "value": v})
+
+    if peers_list:
+        peer_pes = [
+            p.get("trailing_pe") for p in peers_list
+            if isinstance(p.get("trailing_pe"), (int, float))
+            and math.isfinite(p["trailing_pe"])
+        ]
+        if peer_pes:
+            avg_pe = sum(peer_pes) / len(peer_pes)
+            result.append({"label": "行业均值PE", "value": f"{avg_pe:.1f}"})
+        result.append({"label": "对比公司数", "value": str(len(peers_list))})
+
+    return result[:4]
+
+
+def metrics_overview(sub_scores: dict[str, float]) -> list[dict[str, str]]:
+    """从综合子评分中提取关键指标 k/v 对。"""
+    return [
+        {"label": "财务面", "value": f"{sub_scores.get('financial', 5.0):.1f}"},
+        {"label": "技术面", "value": f"{sub_scores.get('technical', 5.0):.1f}"},
+        {"label": "舆情面", "value": f"{sub_scores.get('news', 5.0):.1f}"},
+        {"label": "同行面", "value": f"{sub_scores.get('peers', 5.0):.1f}"},
+    ]

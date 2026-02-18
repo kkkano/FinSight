@@ -137,7 +137,8 @@ async def resolve_subject(state: GraphState) -> dict:
             except Exception:
                 pass
         if not tickers and isinstance(active_symbol, str) and active_symbol.strip():
-            tickers = [active_symbol.strip().upper()]
+            from backend.config.ticker_mapping import normalize_ticker
+            tickers = [normalize_ticker(active_symbol)]
 
     # ------------------------------------------------------------------
     # Path B: No selection → try to resolve from query
@@ -166,21 +167,30 @@ async def resolve_subject(state: GraphState) -> dict:
         and active_symbol.strip()
         and query
     ):
+        from backend.config.ticker_mapping import normalize_ticker
+
         # Tier 2: high-precision keyword match (zero latency)
         if has_financial_intent(query):
             subject_type = "company"
-            tickers = [active_symbol.strip().upper()]
+            tickers = [normalize_ticker(active_symbol)]
             binding_tier = "tier2_keyword"
         else:
             # Tier 3: LLM binary classification (adds ~1-3s latency)
             is_financial, confidence = await _llm_classify_financial(query)
             if is_financial:
                 subject_type = "company"
-                tickers = [active_symbol.strip().upper()]
+                tickers = [normalize_ticker(active_symbol)]
                 binding_tier = f"tier3_llm(confidence={confidence})"
             else:
                 # Default: don't bind → clarify will handle it
                 binding_tier = f"none(llm_confidence={confidence})"
+
+    # 最终防线：对 tickers 做规范化去重
+    try:
+        from backend.config.ticker_mapping import dedup_tickers
+        tickers = dedup_tickers(tickers)
+    except Exception:
+        pass
 
     return {
         "subject": {

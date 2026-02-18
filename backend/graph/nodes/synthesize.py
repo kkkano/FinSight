@@ -1481,6 +1481,10 @@ async def _generate_narrative_draft(
 7) 直接输出 Markdown，禁止 JSON 包装、代码块包裹或开场白。
 8) 末尾附一行免责声明："*以上内容仅供参考，不构成投资建议。*"
 9) 禁止出现"补充分析"、"核心发现"等附录性标题，所有内容必须融入上述五大章节中。
+10) **可选可视化**：当你认为可视化有助于读者理解时，可在正文中插入图表标签（每篇报告最多 2 个）：
+    - LLM 概览数据：`<chart type="bar" title="标题">{{"labels":["A","B"],"values":[10,20]}}</chart>`
+    - 引用前端已有数据：`<chart_ref type="bar" source="peers" fields="trailing_pe" title="PE对比"/>`
+    - 支持类型: bar / line / pie / scatter / gauge。规则: 不替代文字分析，仅做辅助展示。
 </constraints>"""
 
     retry_attempts = 0

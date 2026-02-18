@@ -17,8 +17,12 @@
 | PR-6 回归与门禁 | 🟡 部分完成 | memory gate 完成，postgres gate 受 Docker 阻塞 |
 | Dashboard P0 数据可追踪 | 🟡 进行中 | 本次完成 P0-1~P0-5，剩 P0-6 人工验收 |
 | Dashboard P1 | ⏳ 待开始 | 评分可解释 |
-| Dashboard P2 | ⏳ 待开始 | 向 TradingKey 全面性靠拢 |
+| Dashboard P2 | ✅ 部分完成 (Phase G2) | EPS revision / 分析师目标价 / 因子暴露 / 期权面 / 事件日历 已由 G2 实现 |
 | Dashboard P3 | ⏳ 待开始 | 专业工作流闭环 |
+| Phase E RAG 升级 | ✅ 完成 | E1-E6: bge-m3 + chunker + reranker + router + DeepSearch 持久化 |
+| Phase F Agentic Dashboard | ✅ 完成 (F1-F3) | Digest Agent 引擎 + InsightCard + 全标签页 AI 洞察 |
+| Phase G 可视化升级 | ✅ 完成 (G1-G4) | ECharts 升级 + 新图表 + 智能对话图表 + 工作台优化 |
+| Phase H 新闻系统重构 | ✅ 完成 (H1+H2) | H1: 前端三级筛选 + 富卡片; H2: 后端标签注入 + Schema 加固 + 29 个新测试 |
 
 ---
 
@@ -98,13 +102,13 @@
 
 ## 4. Dashboard P2（增强全面性）
 
-- [ ] P2-1 EPS revision 轨迹
-- [ ] P2-2 分析师目标价分布（均值+分位+离散）
+- [x] P2-1 EPS revision 轨迹 → Phase G2.2 EarningsSurpriseChart 实现
+- [x] P2-2 分析师目标价分布（均值+分位+离散）→ Phase G2.3 AnalystTargetCard 实现
 - [ ] P2-3 机构持仓变化（13F）与资金流
-- [ ] P2-4 期权面（IV Rank / Skew / PCR）
-- [ ] P2-5 事件时间线（财报/FOMC/监管/产品）
-- [ ] P2-6 因子暴露（Beta/Size/Value/Momentum）
-- [ ] P2-7 DoD：分析页输出“结论 + 证据 + 结构化上下文”
+- [x] P2-4 期权面（IV Rank / Skew / PCR）→ price_agent + get_option_chain_metrics 已接入
+- [x] P2-5 事件时间线（财报/FOMC/监管/产品）→ news_agent + get_event_calendar 已接入
+- [x] P2-6 因子暴露（Beta/Size/Value/Momentum）→ risk_agent + get_factor_exposure 已接入
+- [ ] P2-7 DoD：分析页输出"结论 + 证据 + 结构化上下文"
 
 ---
 
@@ -116,7 +120,49 @@
 - [ ] P3-4 导出报告自动附“来源附录”
 - [ ] P3-5 Workbench Agent Timeline
 - [ ] P3-6 Workbench Agent Conflict Matrix
+---
 
+## 6. Phase I: Agentic 工作台进化（规划中）
+
+> 目标：让工作台从「黑箱 API 调用器」进化为「可观测、可解释、可操控的 Agent 协作平台」
+
+### I1: Agent Timeline — 实时执行轨迹（P0）
+- [ ] I1-BE.1 `execute_plan_stub.py` — 每个 step 执行时 `emit_event("agent_step", {...})` 推送结构化事件
+- [ ] I1-BE.2 `event_bus.py` — 新增 `agent_step` / `tool_call` / `evidence_collected` 事件类型
+- [ ] I1-BE.3 `execution_router.py` — SSE 流中新增 `timeline` 事件类型透传
+- [ ] I1-FE.1 `AgentTimeline.tsx` — 垂直时间轴面板，实时动画展示各 Agent 的 step
+- [ ] I1-FE.2 `TimelineStep.tsx` — 单步卡片：图标 + Agent 名 + 动作描述 + 耗时 + 置信度
+- [ ] I1-FE.3 `EvidencePreview.tsx` — 点击 step 展开，预览证据片段
+- [ ] I1-FE.4 TaskSection / StreamingResultPanel 集成 Timeline 面板
+
+### I2: Score Explainability — 评分可解释（P1）
+- [ ] I2-BE.1 `insights_scorer.py` — 所有 `score_*` 函数返回 `ScoreBreakdown` 结构
+- [ ] I2-BE.2 `insights_engine.py` — DigestAgent 输出 `score_breakdown` 字段
+- [ ] I2-BE.3 `schemas.py` — `InsightCard` 新增 `score_breakdown` 字段
+- [ ] I2-FE.1 `ScoreExplainDrawer.tsx` — 右侧抽屉：因子柱状图 + 变化归因
+- [ ] I2-FE.2 `FactorBar.tsx` — 水平柱状图渲染因子权重与贡献
+- [ ] I2-FE.3 ResearchInsightGrid 集成 — 点击分数打开抽屉
+
+### I3: Agent Conflict Matrix — 冲突可视化（P1）
+- [ ] I3-BE.1 `synthesize.py` — 新增 `_detect_conflicts()` 检测跨 Agent 对立信号
+- [ ] I3-BE.2 `report_builder.py` — `ReportIR` 新增 `agent_conflicts` 字段
+- [ ] I3-FE.1 `ConflictMatrix.tsx` — 矩阵视图：行=Agent，列=维度，标注分歧点
+- [ ] I3-FE.2 `ConflictDetailCard.tsx` — 点击单元格展开对立论证
+
+### I4: Proactive Alerts — 主动预警（P2）
+- [ ] I4-BE.1 `alert_scanner.py` — 异步定时扫描 watchlist，检测价格异动/新闻突发/指标突破
+- [ ] I4-BE.2 `alert_rules.py` — 规则引擎（PriceSpike/RSIExtreme/EarningsSurprise/NewsImpact）
+- [ ] I4-BE.3 `alerts_router.py` — `GET /api/alerts` 返回待读取警报列表
+- [ ] I4-FE.1 `AlertBell.tsx` — 顶部铃铛 + 未读计数
+- [ ] I4-FE.2 `AlertDrawer.tsx` — 右侧预警列表（按时间/优先级/标的分组）
+- [ ] I4-FE.3 `AlertCard.tsx` — 单条预警卡片
+
+### I5: Agent Steering — 用户可操控执行（P2）
+- [ ] I5-BE.1 `planner.py` — 支持 `focus_agents` / `skip_agents` 参数
+- [ ] I5-BE.2 `confirmation_gate.py` — per-step confirm/skip 细粒度 HITL
+- [ ] I5-BE.3 GraphState — 新增 `agent_preferences` 字段
+- [ ] I5-FE.1 `AnalysisConfigPanel.tsx` — 执行前配置：选择 Agent、深度、聚焦问题
+- [ ] I5-FE.2 `StepApprovalCard.tsx` — 执行中逐步确认/跳过
 ---
 
 ## 6. 执行记录
@@ -127,3 +173,48 @@
 - [x] Dashboard P0-1 ~ P0-5 完成（后端 meta + 前端来源抽屉 + stale/降级展示）
 - [ ] Dashboard P0-6 待人工验收
 - [ ] PR-6 postgres gate 待环境具备 Docker 后执行
+
+### 2026-02-17 ~ 2026-02-18 (Phase E/F/G)
+- [x] Phase E (E1-E6): RAG 引擎升级 — bge-m3 embedding + chunker + reranker + router + DeepSearch 持久化 + Postgres 升级
+- [x] Phase F (F1-F3): Agentic Dashboard — Digest Agent 引擎 + InsightCard 组件 + 全标签页 AI 洞察集成
+- [x] Phase G (G1-G4): Dashboard 可视化升级
+  - G1: 5 个 CSS 模拟图表 → ECharts 真实图表 (K 线/财务双轴/同行柱状)
+  - G2: 后端 data_service 扩展 (earnings_history/analyst_targets/recommendations/indicator_series) + 3 个新前端图表组件
+  - G3: LLM 智能图表 — synthesize.py prompt 扩展 + SmartChart 组件 + 双模式 `<chart>`/`<chart_ref>`
+  - G4: 工作台可视化 — 持仓分布饼图 + 调仓瀑布图 + 快速分析命令栏
+- [x] 全局验证: 742 tests passed / tsc zero errors / README + 文档同步
+
+### 2026-02-18 (Phase H)
+- [x] Phase H1 前端新闻重构 (纯前端，零后端改动):
+  - H1-FE.1: types/dashboard.ts 扩展 (NewsSubTab/NewsTagGroup/NewsTimeRange 类型 + NEWS_TAG_GROUP_MAP)
+  - H1-FE.2: dashboardStore 新增 3 个持久化状态 (newsSubTab/newsTagFilter/newsTimeRange)
+  - H1-FE.3: 4 个新组件 (NewsSubTabs/NewsTagChips/NewsTimeRange/NewsCard)
+  - H1-FE.4: NewsTab.tsx 全面重写 — 三级筛选 + 富卡片 + 分析影响 + 智能空状态
+  - H1-FE.5: utils/news.ts 统一新闻工具函数 (标签计算/影响分级/情绪分类/时间过滤)
+  - tsc 零错误验证通过
+- [x] Phase H2 后端标签加固:
+  - H2.1: news.py — 删除重复 NEWS_TAG_RULES 定义 + _build_news_item() 注入 tags 字段
+  - H2.2: schemas.py — NewsItem 新增 tags/ranking_score/impact_score/source_reliability 等 Optional 字段
+  - H2.3: data_service.py — _to_news_item() 透传 tags 字段
+  - H2.4: test_news_tags.py — 29 个测试全部通过 (规则完整性/标签计算/字典构建/数据透传/Schema 序列化)
+  - 全量回归: 776 passed, 15 skipped, tsc zero errors
+
+### 2026-02-18 (TradingKey 重设计 + Bug 修复)
+- [x] ResearchTab TradingKey 风格重设计:
+  - schemas.py / insights_prompts.py / insights_scorer.py / insights_engine.py: InsightCard 新增 key_metrics
+  - ResearchOverviewBar.tsx / ResearchInsightGrid.tsx: 2 个新组件
+  - ResearchTab.tsx: 整合 useDashboardInsights + 可折叠报告
+- [x] GOOGL vs GOOGLE 三层去重修复:
+  - ticker_mapping.py: normalize_ticker() + dedup_tickers()
+  - resolve_subject.py: 所有 active_symbol 路径归一化
+  - report_builder.py: ticker_label 构建前去重
+- [x] ExecutiveSummary Markdown 渲染修复 (ReactMarkdown + remark-gfm)
+- [x] CoreFindings 空卡片修复 (extractContentFromContents 提取嵌套 contents[])
+
+### 2026-02-18 (Phase I 规划)
+- [x] Phase I: Agentic 工作台进化路线图制定
+  - I1: Agent Timeline (P0) — 实时执行轨迹
+  - I2: Score Explainability (P1) — 评分可解释
+  - I3: Agent Conflict Matrix (P1) — 冲突可视化
+  - I4: Proactive Alerts (P2) — 主动预警
+  - I5: Agent Steering (P2) — 用户可操控执行

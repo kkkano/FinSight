@@ -29,15 +29,33 @@ def _normalize_report_source_type(source: str | None) -> str:
     return raw[:64]
 
 
+def _resolve_ticker_override(ui_context: dict[str, Any] | None) -> str | None:
+    if not isinstance(ui_context, dict):
+        return None
+    tickers = ui_context.get("tickers_override")
+    if not isinstance(tickers, list):
+        return None
+    for item in tickers:
+        value = str(item or "").strip().upper()
+        if value:
+            return value
+    return None
+
+
 def _annotate_report_source(
     report: dict[str, Any] | None,
     source: str | None,
+    ticker_override: str | None = None,
 ) -> dict[str, Any] | None:
     if not isinstance(report, dict):
         return report
 
     source_type = _normalize_report_source_type(source)
     report["source_type"] = source_type
+
+    normalized_ticker = str(ticker_override or "").strip().upper()
+    if normalized_ticker:
+        report["ticker"] = normalized_ticker
 
     meta = report.get("meta")
     if not isinstance(meta, dict):
@@ -283,7 +301,11 @@ async def run_graph_pipeline(
                 report = build_report_payload(
                     state=state, query=query, thread_id=thread_id,
                 )
-                report = _annotate_report_source(report, source)
+                report = _annotate_report_source(
+                    report,
+                    source,
+                    ticker_override=_resolve_ticker_override(ui_context),
+                )
             except Exception as exc:
                 logger.warning(
                     "[execution_service] report build failed: %s",

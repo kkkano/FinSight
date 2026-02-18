@@ -7,8 +7,7 @@
  */
 import { useEffect, useRef, useCallback } from 'react';
 import { useDashboardStore } from '../store/dashboardStore';
-import type { DashboardInsightsResponse } from '../types/dashboard';
-import { buildApiUrl } from '../config/runtime';
+import { apiClient } from '../api/client';
 
 export function useDashboardInsights(symbol: string | null) {
   const {
@@ -16,6 +15,7 @@ export function useDashboardInsights(symbol: string | null) {
     setInsightsLoading,
     setInsightsError,
     setInsightsStale,
+    setInsightsCachedAt,
   } = useDashboardStore();
 
   const abortRef = useRef<AbortController | null>(null);
@@ -33,29 +33,16 @@ export function useDashboardInsights(symbol: string | null) {
       setInsightsError(null);
 
       try {
-        const params = new URLSearchParams({ symbol: sym });
-        if (opts?.force) params.append('force', 'true');
-
-        const response = await fetch(
-          buildApiUrl(`/api/dashboard/insights?${params.toString()}`),
-          { signal: controller.signal },
-        );
-
-        if (!response.ok) {
-          const err = await response
-            .json()
-            .catch(() => ({ message: 'Unknown error' }));
-          throw new Error(
-            err?.detail?.message || err?.message || `HTTP ${response.status}`,
-          );
-        }
-
-        const json: DashboardInsightsResponse = await response.json();
+        const json = await apiClient.getDashboardInsights(sym, {
+          force: opts?.force,
+          signal: controller.signal,
+        });
 
         // Only update state if request was not aborted
         if (!controller.signal.aborted) {
           setInsightsData(json.insights);
           setInsightsStale(json.cached && json.cache_age_seconds > 3600);
+          setInsightsCachedAt(json.generated_at || null);
         }
       } catch (err: unknown) {
         if (err instanceof Error && err.name !== 'AbortError') {
@@ -67,7 +54,13 @@ export function useDashboardInsights(symbol: string | null) {
         }
       }
     },
-    [setInsightsData, setInsightsLoading, setInsightsError, setInsightsStale],
+    [
+      setInsightsData,
+      setInsightsLoading,
+      setInsightsError,
+      setInsightsStale,
+      setInsightsCachedAt,
+    ],
   );
 
   // Auto-fetch when symbol changes

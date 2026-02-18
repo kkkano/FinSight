@@ -9,6 +9,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 
+const matchTickerLoose = (
+  targetTicker: string,
+  item: { ticker?: string; title?: string; summary?: string },
+): boolean => {
+  const upper = targetTicker.trim().toUpperCase();
+  if (!upper) return false;
+
+  const candidates = [item.ticker, item.title, item.summary]
+    .map((value) => String(value || '').toUpperCase())
+    .filter(Boolean);
+
+  return candidates.some((text) => text.includes(upper));
+};
+
 export interface LatestReportData {
   reportId: string;
   report: Record<string, unknown>;
@@ -25,6 +39,7 @@ interface UseLatestReportReturn {
 interface UseLatestReportOptions {
   sourceType?: string;
   fallbackToAnySource?: boolean;
+  preferredSourceTrigger?: string;
 }
 
 export function useLatestReport(
@@ -39,6 +54,7 @@ export function useLatestReport(
   const sessionId = useStore((s) => s.sessionId);
   const sourceType = options.sourceType?.trim() || undefined;
   const fallbackToAnySource = options.fallbackToAnySource ?? true;
+  const preferredSourceTrigger = options.preferredSourceTrigger?.trim() || undefined;
 
   const fetchReport = useCallback(async (): Promise<LatestReportData | null> => {
     if (!ticker || !sessionId) {
@@ -50,10 +66,12 @@ export function useLatestReport(
     setError(null);
 
     try {
+      const indexLimit = preferredSourceTrigger ? 8 : 1;
+
       let indexResult = await apiClient.listReportIndex({
         sessionId,
         ticker,
-        limit: 1,
+        limit: indexLimit,
         sourceType,
       });
 
@@ -65,25 +83,58 @@ export function useLatestReport(
         indexResult = await apiClient.listReportIndex({
           sessionId,
           ticker,
-          limit: 1,
+          limit: indexLimit,
         });
       }
 
-      const items = indexResult?.items ?? [];
+      let items = indexResult?.items ?? [];
+      if (items.length === 0 && ticker) {
+        const fallbackIndex = await apiClient.listReportIndex({
+          sessionId,
+          limit: indexLimit,
+          sourceType,
+        });
+        const fallbackItems = fallbackIndex?.items ?? [];
+        const matched = fallbackItems.filter((item) => matchTickerLoose(ticker, item));
+        items = matched.length > 0 ? matched : fallbackItems;
+      }
+
       if (items.length === 0) {
         setData(null);
         return null;
       }
 
-      const reportId = items[0].report_id;
-      const replay = await apiClient.getReportReplay({
-        sessionId,
-        reportId,
-      });
+      const fetchReplay = async (reportId: string) =>
+        apiClient.getReportReplay({
+          sessionId,
+          reportId,
+        });
+
+      let selectedReportId = items[0].report_id;
+      let replay = await fetchReplay(selectedReportId);
+
+      if (preferredSourceTrigger) {
+        for (const item of items) {
+          const candidateReportId = item.report_id;
+          const candidateReplay = await fetchReplay(candidateReportId);
+          if (!candidateReplay?.success || !candidateReplay.report) {
+            continue;
+          }
+          const trigger = String(
+            ((candidateReplay.report as Record<string, unknown>)?.meta as Record<string, unknown> | undefined)
+              ?.source_trigger ?? '',
+          ).trim();
+          if (trigger === preferredSourceTrigger) {
+            selectedReportId = candidateReportId;
+            replay = candidateReplay;
+            break;
+          }
+        }
+      }
 
       if (replay?.success && replay.report) {
         const latest: LatestReportData = {
-          reportId,
+          reportId: selectedReportId,
           report: replay.report,
           citations: replay.citations ?? [],
         };
@@ -100,7 +151,7 @@ export function useLatestReport(
     } finally {
       setLoading(false);
     }
-  }, [ticker, sessionId, sourceType, fallbackToAnySource]);
+  }, [ticker, sessionId, sourceType, fallbackToAnySource, preferredSourceTrigger]);
 
   useEffect(() => {
     if (ticker !== lastTickerRef.current) {

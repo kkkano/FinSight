@@ -38,6 +38,8 @@ class DashboardCache:
     TTL_VALUATION = 300        # Valuation metrics (5 min)
     TTL_FINANCIALS = 3600      # Financial statements (1 hour)
     TTL_TECHNICALS = 60        # Technical indicators (1 min)
+    TTL_EARNINGS = 3600         # Earnings history (1 hour - quarterly data)
+    TTL_ANALYST = 1800          # Analyst targets/recommendations (30 min)
     TTL_PEERS = 3600           # Peer comparison (1 hour)
     TTL_INSIGHTS = 3600        # AI insights (1 hour)
     TTL_INSIGHTS_STALE = 14400 # AI insights stale window (4 hours)

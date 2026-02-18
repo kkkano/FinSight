@@ -1327,6 +1327,13 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     tickers = tickers if isinstance(tickers, list) else []
     tickers = [str(t).strip().upper() for t in tickers if isinstance(t, str) and t.strip()]
+    # 规范化去重：防止 "GOOGL" 与 "GOOGLE" 共存
+    try:
+        from backend.config.ticker_mapping import dedup_tickers
+        tickers = dedup_tickers(tickers)
+    except Exception:
+        # 兜底去重（不依赖 COMPANY_MAP）
+        tickers = list(dict.fromkeys(tickers))
     ticker_label = " vs ".join(tickers[:4]) if len(tickers) > 1 else (tickers[0] if tickers else "N/A")
 
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}

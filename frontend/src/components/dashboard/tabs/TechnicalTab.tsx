@@ -3,9 +3,11 @@
  *
  * Renders technical analysis sub-components:
  * AI Insight Card (full width, when available)
- * Row 1: TechnicalSummaryCard (full width)
- * Row 2: MovingAverageTable + OscillatorTable
- * Row 3: SupportResistanceChart + BollingerVolumeCard
+ * Row 1: K-line chart with support/resistance (full width)
+ * Row 2: TechnicalSummaryCard (full width)
+ * Row 3: MovingAverageTable + OscillatorTable
+ * Row 4: RSI + MACD sub-charts (G2 new)
+ * Row 5: BollingerVolumeCard
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
@@ -13,6 +15,7 @@ import { MovingAverageTable } from './technical/MovingAverageTable';
 import { OscillatorTable } from './technical/OscillatorTable';
 import { SupportResistanceChart } from './technical/SupportResistanceChart';
 import { BollingerVolumeCard } from './technical/BollingerVolumeCard';
+import { TechnicalSubCharts } from './technical/TechnicalSubCharts';
 import { AiInsightCard } from './shared/AiInsightCard';
 
 // --- Component ---
@@ -25,6 +28,8 @@ export function TechnicalTab() {
   const insightsStale = useDashboardStore((s) => s.insightsStale);
 
   const technicals = dashboardData?.technicals;
+  const marketChart = dashboardData?.charts?.market_chart;
+  const indicatorSeries = dashboardData?.indicator_series;
   const technicalInsight = insightsData?.technical ?? null;
 
   return (
@@ -38,20 +43,23 @@ export function TechnicalTab() {
         stale={insightsStale}
       />
 
-      {/* Row 1: Summary full width */}
+      {/* K-line chart with support/resistance — full width */}
+      <SupportResistanceChart technicals={technicals} marketChart={marketChart} />
+
+      {/* Row 2: Summary full width */}
       <TechnicalSummaryCard technicals={technicals} />
 
-      {/* Row 2: MA + Oscillators side by side */}
+      {/* Row 3: MA + Oscillators side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <MovingAverageTable technicals={technicals} />
         <OscillatorTable technicals={technicals} />
       </div>
 
-      {/* Row 3: Support/Resistance + Bollinger/Volume */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SupportResistanceChart technicals={technicals} />
-        <BollingerVolumeCard technicals={technicals} />
-      </div>
+      {/* Row 4: RSI + MACD time-series sub-charts (G2 new) */}
+      <TechnicalSubCharts indicatorSeries={indicatorSeries} />
+
+      {/* Row 5: Bollinger/Volume */}
+      <BollingerVolumeCard technicals={technicals} />
     </div>
   );
 }

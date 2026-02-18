@@ -140,27 +140,8 @@ def _headline_is_useful(title: str, snippet: str = "") -> bool:
     return True
 
 
-NEWS_TAG_RULES = [
-    ("科技", ["tech", "technology", "software", "hardware", "cloud", "cyber", "科技", "软件", "硬件", "云", "数据中心", "互联网"]),
-    ("AI", ["ai", "artificial intelligence", "genai", "大模型", "生成式", "人工智能", "AIGC"]),
-    ("半导体", ["semiconductor", "chip", "foundry", "tsmc", "asml", "nvidia", "半导体", "芯片", "晶圆", "光刻"]),
-    ("军事", ["military", "defense", "missile", "army", "navy", "weapon", "drone", "军事", "国防", "导弹", "战机", "无人机", "武器"]),
-    ("能源", ["oil", "crude", "gas", "lng", "opec", "能源", "石油", "原油", "天然气", "煤炭", "电力"]),
-    ("宏观", ["cpi", "ppi", "gdp", "pmi", "fomc", "inflation", "jobs", "payroll", "宏观", "经济", "利率", "通胀", "就业", "非农", "央行"]),
-    ("金融", ["bank", "banking", "credit", "bond", "yield", "金融", "银行", "债券", "收益率", "信贷"]),
-    ("监管", ["regulator", "regulation", "antitrust", "sec", "doj", "监管", "反垄断", "制裁", "罚款"]),
-    ("并购", ["merger", "acquisition", "buyout", "deal", "并购", "收购", "合并", "交易", "要约"]),
-    ("财报", ["earnings", "guidance", "revenue", "profit", "业绩", "财报", "营收", "利润", "指引"]),
-    ("加密", ["crypto", "bitcoin", "ethereum", "blockchain", "加密", "比特币", "以太坊", "区块链"]),
-    ("汽车", ["ev", "electric vehicle", "automotive", "auto", "汽车", "电动车", "新能源车"]),
-    ("消费", ["consumer", "retail", "e-commerce", "消费", "零售", "电商"]),
-    ("医药", ["pharma", "biotech", "drug", "医疗", "医药", "生物", "疫苗"]),
-    ("地产", ["real estate", "property", "housing", "地产", "楼市"]),
-    ("地缘", ["geopolitical", "geopolitics", "war", "conflict", "sanction", "地缘", "冲突", "战争"]),
-    ("中国", ["china", "chinese", "中国", "大陆"]),
-    ("美国", ["united states", "u.s.", "美国", "白宫", "华盛顿"]),
-]
-
+# NOTE: NEWS_TAG_RULES is defined once at module top level (line ~55).
+# Removed duplicate definition that was previously here.
 
 
 def _keyword_match(text: str, keyword: str) -> bool:
@@ -325,6 +306,8 @@ def _build_news_item(
     if "finnhub.io/api/news" in normalized_url.lower():
         normalized_url = ""
     published_date = _normalize_published_date(published_at)
+    # Compute tags from headline + snippet for structured output
+    tags = _headline_tags(f"{title} {snippet}".strip())
     return {
         "headline": title,
         "title": title,
@@ -335,6 +318,7 @@ def _build_news_item(
         "datetime": published_date,
         "ticker": ticker,
         "confidence": confidence,
+        "tags": tags,
     }
 
 

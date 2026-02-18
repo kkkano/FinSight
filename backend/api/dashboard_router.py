@@ -16,10 +16,14 @@ from fastapi import APIRouter, Query
 from backend.dashboard.asset_resolver import is_valid_symbol, resolve_asset
 from backend.dashboard.cache import dashboard_cache
 from backend.dashboard.data_service import (
+    fetch_analyst_targets,
+    fetch_earnings_history,
     fetch_financial_statements,
     fetch_holdings,
+    fetch_indicator_series,
     fetch_market_chart,
     fetch_news,
+    fetch_recommendations,
     fetch_revenue_trend,
     fetch_sector_weights,
     fetch_segment_mix,
@@ -31,15 +35,19 @@ from backend.dashboard.data_service import (
 from backend.dashboard.errors import symbol_not_found
 from backend.dashboard.peer_service import fetch_peer_comparison
 from backend.dashboard.schemas import (
+    AnalystTargets,
     Capabilities,
     DashboardData,
     DashboardInsightsResponse,
     DashboardResponse,
     DashboardState,
+    EarningsHistoryEntry,
     FinancialStatement,
+    IndicatorSeries,
     LayoutPrefs,
     NewsModeConfig,
     PeerComparisonData,
+    RecommendationsSummary,
     TechnicalData,
     ValuationData,
     WatchItem,
@@ -329,6 +337,12 @@ async def get_dashboard(
     v2_technicals_fallback: Optional[str] = None
     v2_peers_fallback: Optional[str] = None
 
+    # Phase G2 new data
+    g2_earnings_history = None
+    g2_analyst_targets = None
+    g2_recommendations = None
+    g2_indicator_series = None
+
     if asset_type == "equity":
         v2_started_map = {
             "valuation": time.perf_counter(),
@@ -342,6 +356,14 @@ async def get_dashboard(
             "technicals": _run_blocking("fetch_technicals", fetch_technical_indicators, sym, timeout=8.0),
             "peers": _run_blocking("fetch_peers", fetch_peer_comparison, sym, timeout=18.0),
         }
+
+        # Phase G2: Additional data fetches (parallel with v2)
+        g2_tasks = {
+            "earnings_history": _run_blocking("fetch_earnings", fetch_earnings_history, sym, timeout=8.0),
+            "analyst_targets": _run_blocking("fetch_analyst_targets", fetch_analyst_targets, sym, timeout=6.0),
+            "recommendations": _run_blocking("fetch_recommendations", fetch_recommendations, sym, timeout=6.0),
+            "indicator_series": _run_blocking("fetch_indicator_series", fetch_indicator_series, sym, timeout=8.0),
+        }
         v2_meta_info: dict[str, tuple[str, str, str]] = {
             "valuation": ("yfinance", "fundamental", "TTM"),
             "financials": ("yfinance", "financial_statement", "8Q"),
@@ -350,6 +372,23 @@ async def get_dashboard(
         }
         v2_results = await asyncio.gather(*v2_tasks.values(), return_exceptions=True)
         v2_map = dict(zip(v2_tasks.keys(), v2_results))
+
+        # Phase G2: gather in parallel
+        g2_results = await asyncio.gather(*g2_tasks.values(), return_exceptions=True)
+        g2_map = dict(zip(g2_tasks.keys(), g2_results))
+
+        # Process G2 results (best-effort, no fallback reasons needed)
+        for key, result in g2_map.items():
+            if isinstance(result, BaseException) or result is None:
+                continue
+            if key == "earnings_history":
+                g2_earnings_history = result
+            elif key == "analyst_targets":
+                g2_analyst_targets = result
+            elif key == "recommendations":
+                g2_recommendations = result
+            elif key == "indicator_series":
+                g2_indicator_series = result
 
         for key, result in v2_map.items():
             fallback_reason = None
@@ -455,6 +494,11 @@ async def get_dashboard(
             technicals_fallback_reason=v2_technicals_fallback,
             peers=PeerComparisonData(**v2_peers) if v2_peers else None,
             peers_fallback_reason=v2_peers_fallback,
+            # Phase G2 new data
+            earnings_history=[EarningsHistoryEntry(**e) for e in g2_earnings_history] if g2_earnings_history else None,
+            analyst_targets=AnalystTargets(**g2_analyst_targets) if g2_analyst_targets else None,
+            recommendations=RecommendationsSummary(**g2_recommendations) if g2_recommendations else None,
+            indicator_series=IndicatorSeries(**g2_indicator_series) if g2_indicator_series else None,
         )
     except Exception as exc:
         logger.warning("[Dashboard] DashboardData construction failed: %s", exc)

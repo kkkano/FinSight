@@ -9,6 +9,7 @@
 import { FileText, Loader2, Zap } from 'lucide-react';
 
 import { useExecuteAgent } from '../../hooks/useExecuteAgent';
+import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData } from '../../types/dashboard';
 
 interface SnapshotCardProps {
@@ -102,6 +103,8 @@ const getMetrics = (data: SnapshotData) => {
 
 export function SnapshotCard({ data, loading, ticker }: SnapshotCardProps) {
   const metrics = getMetrics(data);
+  const deepAnalysisIncludeDeepSearch = useDashboardStore((s) => s.deepAnalysisIncludeDeepSearch);
+  const setDeepAnalysisIncludeDeepSearch = useDashboardStore((s) => s.setDeepAnalysisIncludeDeepSearch);
 
   const { execute, isRunning, runId } = useExecuteAgent();
 
@@ -112,18 +115,23 @@ export function SnapshotCard({ data, loading, ticker }: SnapshotCardProps) {
       query: `快速分析 ${ticker}`,
       tickers: [ticker],
       outputMode: 'brief',
+      analysisDepth: 'quick',
       budget: 3,
       source: 'dashboard_snapshot',
     });
   };
 
-  const handleReport = () => {
+  const handleDeepAnalysis = () => {
     if (!ticker || isRunning) return;
+    const includeDeepSearch = deepAnalysisIncludeDeepSearch;
     execute({
-      query: `生成 ${ticker} 投资报告`,
+      query: includeDeepSearch
+        ? `对 ${ticker} 做深度搜索，输出可追溯证据与关键结论`
+        : `生成 ${ticker} 投资报告`,
       tickers: [ticker],
       outputMode: 'investment_report',
-      source: 'dashboard_snapshot',
+      analysisDepth: includeDeepSearch ? 'deep_research' : 'report',
+      source: includeDeepSearch ? 'dashboard_deep_search' : 'dashboard_snapshot',
     });
   };
 
@@ -183,9 +191,18 @@ export function SnapshotCard({ data, loading, ticker }: SnapshotCardProps) {
             快速分析
             <span className="text-2xs opacity-60">~30s</span>
           </button>
+          <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
+            <input
+              type="checkbox"
+              className="accent-fin-primary"
+              checked={deepAnalysisIncludeDeepSearch}
+              onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
+            />
+            含 deepsearch
+          </label>
           <button
             type="button"
-            onClick={handleReport}
+            onClick={handleDeepAnalysis}
             disabled={isRunning}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -194,7 +211,7 @@ export function SnapshotCard({ data, loading, ticker }: SnapshotCardProps) {
             ) : (
               <FileText size={12} />
             )}
-            生成报告
+            深度分析
             <span className="text-2xs opacity-60">~2min</span>
           </button>
         </div>

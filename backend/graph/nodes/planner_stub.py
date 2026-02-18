@@ -320,6 +320,20 @@ def planner_stub(state: GraphState) -> dict:
             )
             selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
 
+        ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+        analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+        if analysis_depth == "report":
+            selected_agents = [name for name in selected_agents if name != "deep_search_agent"]
+        elif analysis_depth == "deep_research":
+            if "deep_search_agent" in all_agents and "deep_search_agent" not in selected_agents:
+                if max_agents > 0 and len(selected_agents) >= max_agents:
+                    if max_agents == 1:
+                        selected_agents = ["deep_search_agent"]
+                    else:
+                        selected_agents = selected_agents[: max_agents - 1] + ["deep_search_agent"]
+                else:
+                    selected_agents.append("deep_search_agent")
+
         # In report mode, run score-selected expert agents for richer cards (ReportView).
         # All report agents share the same parallel_group so the executor
         # runs them concurrently via asyncio.gather.

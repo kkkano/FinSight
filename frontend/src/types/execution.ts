@@ -23,6 +23,7 @@ export interface AgentRunInfo {
 // --- Execution run status ---
 
 export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted';
+export type AnalysisDepth = 'quick' | 'report' | 'deep_research';
 
 export interface ExecutionRun {
   runId: string;
@@ -31,6 +32,8 @@ export interface ExecutionRun {
   source: string;
   /** Output mode used for this run (brief / investment_report / chat). */
   outputMode: string;
+  /** Explicit analysis depth semantics for planner/policy. */
+  analysisDepth?: AnalysisDepth;
   status: ExecutionRunStatus;
   agentStatuses: Record<string, AgentRunInfo>;
   /** 0–100, monotonically increasing (never decreases). */
@@ -63,6 +66,8 @@ export interface StartExecutionParams {
   tickers?: string[];
   /** Maps to API `output_mode` at request time. */
   outputMode?: string;
+  /** Explicit depth semantics to avoid query-text coupling. */
+  analysisDepth?: AnalysisDepth;
   agents?: string[];
   source: string;
   budget?: number;

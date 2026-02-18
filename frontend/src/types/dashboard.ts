@@ -41,6 +41,22 @@ export interface NewsModeConfig {
   mode: NewsModeType;
 }
 
+// === 新闻子标签 / 标签分组 / 时间范围 (Phase H) ===
+export type NewsSubTab = 'stock' | 'market' | 'breaking';
+export type NewsTagGroup = '全部' | '财报' | '科技' | '宏观' | '并购' | '地缘' | '行业';
+export type NewsTimeRange = '24h' | '7d' | '30d';
+
+/** 用户友好标签分组 → 后端 NEWS_TAG_RULES 标签名映射 */
+export const NEWS_TAG_GROUP_MAP: Record<NewsTagGroup, string[]> = {
+  '全部': [],
+  '财报': ['财报'],
+  '科技': ['科技', 'AI', '半导体'],
+  '宏观': ['宏观', '金融'],
+  '并购': ['并购'],
+  '地缘': ['地缘', '军事'],
+  '行业': ['能源', '汽车', '消费', '医药', '地产', '加密', '中国', '美国', '监管'],
+};
+
 // === Dashboard 状态 ===
 export interface DashboardState {
   active_asset: ActiveAsset;
@@ -83,6 +99,8 @@ export interface NewsItem {
   source?: string;
   ts: string;
   summary?: string;
+  tags?: string[];                                  // 主题标签 (Phase H: 客户端计算或后端注入)
+  impact_level?: 'high' | 'medium' | 'low';         // 影响级别 (Phase H: 客户端派生)
   time_decay?: number;
   source_reliability?: number;
   impact_score?: number;
@@ -158,6 +176,11 @@ export interface DashboardData {
   technicals_fallback_reason?: string | null;
   peers?: PeerComparisonData | null;
   peers_fallback_reason?: string | null;
+  // Phase G2 fields
+  earnings_history?: EarningsHistoryEntry[] | null;
+  analyst_targets?: AnalystTargets | null;
+  recommendations?: RecommendationsSummary | null;
+  indicator_series?: IndicatorSeries | null;
 }
 
 // === API 响应 ===
@@ -305,6 +328,42 @@ export interface PeerComparisonData {
   peers: PeerMetrics[];
 }
 
+// === Phase G2: New data types ===
+
+export interface EarningsHistoryEntry {
+  quarter: string;
+  eps_estimate?: number | null;
+  eps_actual?: number | null;
+  surprise_pct?: number | null;
+}
+
+export interface AnalystTargets {
+  low?: number | null;
+  current?: number | null;
+  mean?: number | null;
+  median?: number | null;
+  high?: number | null;
+}
+
+export interface RecommendationsSummary {
+  buy: number;
+  hold: number;
+  sell: number;
+  strong_buy: number;
+  strong_sell: number;
+}
+
+export interface IndicatorSeries {
+  dates: string[];
+  rsi: (number | null)[];
+  macd: (number | null)[];
+  macd_signal: (number | null)[];
+  macd_histogram: (number | null)[];
+  bb_upper: (number | null)[];
+  bb_middle: (number | null)[];
+  bb_lower: (number | null)[];
+}
+
 // === Rebalance Types ===
 export type ActionType = 'buy' | 'sell' | 'hold' | 'reduce' | 'increase';
 export type RiskTier = 'conservative' | 'moderate' | 'aggressive';
@@ -369,6 +428,11 @@ export interface GenerateRebalanceParams {
 }
 
 // === AI Insights (Phase F) ===
+export interface InsightKeyMetric {
+  label: string;
+  value: string;
+}
+
 export interface InsightCard {
   agent_name: string;
   tab: string;
@@ -377,6 +441,7 @@ export interface InsightCard {
   summary: string;
   key_points: string[];
   risks: string[];
+  key_metrics?: InsightKeyMetric[] | null;   // 结构化关键指标
   sub_scores?: Record<string, number>;
   confidence: number;
   as_of: string;
@@ -398,6 +463,10 @@ export const STORAGE_KEYS = {
   WATCHLIST: 'fs_dashboard_watchlist_v1',
   LAYOUT: 'fs_dashboard_layout_v1',
   NEWS_MODE: 'fs_dashboard_news_mode_v1',
+  NEWS_SUB_TAB: 'fs_dashboard_news_sub_tab_v1',
+  NEWS_TAG_FILTER: 'fs_dashboard_news_tag_filter_v1',
+  NEWS_TIME_RANGE: 'fs_dashboard_news_time_range_v1',
+  DEEP_ANALYSIS_INCLUDE_DEEPSEARCH: 'fs_dashboard_deep_analysis_include_deepsearch_v1',
 } as const;
 
 // === Widget ID 常量 ===

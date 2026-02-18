@@ -29,6 +29,7 @@ export function OverviewTab() {
   const { data: reportData } = useLatestReport(activeAsset?.symbol, {
     sourceType: 'dashboard',
     fallbackToAnySource: false,
+    preferredSourceTrigger: 'dashboard_deep_search',
   });
 
   const valuation = dashboardData?.valuation;

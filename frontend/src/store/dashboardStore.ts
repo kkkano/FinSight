@@ -11,6 +11,9 @@ import type {
   WatchItem,
   LayoutPrefs,
   NewsModeType,
+  NewsSubTab,
+  NewsTagGroup,
+  NewsTimeRange,
   DashboardData,
   SelectionItem,
   InsightCard,
@@ -27,6 +30,9 @@ interface DashboardStore {
   watchlist: WatchItem[];
   layoutPrefs: LayoutPrefs;
   newsMode: NewsModeType;
+  newsSubTab: NewsSubTab;           // Phase H: 个股/市场7x24/重大事件
+  newsTagFilter: NewsTagGroup;      // Phase H: 主题筛选
+  newsTimeRange: NewsTimeRange;     // Phase H: 时间范围
   dashboardData: DashboardData | null;
   isLoading: boolean;
   error: string | null;
@@ -39,6 +45,7 @@ interface DashboardStore {
   insightsError: string | null;
   insightsStale: boolean;
   insightsCachedAt: string | null;
+  deepAnalysisIncludeDeepSearch: boolean;
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -50,6 +57,9 @@ interface DashboardStore {
   toggleWidgetVisibility: (widgetId: string) => void;
   resetLayoutPrefs: () => void;
   setNewsMode: (mode: NewsModeType) => void;
+  setNewsSubTab: (tab: NewsSubTab) => void;
+  setNewsTagFilter: (tag: NewsTagGroup) => void;
+  setNewsTimeRange: (range: NewsTimeRange) => void;
   setDashboardData: (data: DashboardData) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -63,7 +73,9 @@ interface DashboardStore {
   setInsightsLoading: (loading: boolean) => void;
   setInsightsError: (error: string | null) => void;
   setInsightsStale: (stale: boolean) => void;
+  setInsightsCachedAt: (cachedAt: string | null) => void;
   clearInsights: () => void;
+  setDeepAnalysisIncludeDeepSearch: (enabled: boolean) => void;
 
   // Watchlist API methods (API-first, replace localStorage persistence)
   initWatchlist: () => Promise<void>;
@@ -129,6 +141,9 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   watchlist: [],
   layoutPrefs: normalizeLayoutPrefs(loadFromStorage(STORAGE_KEYS.LAYOUT, DEFAULT_LAYOUT_PREFS)),
   newsMode: loadFromStorage<NewsModeType>(STORAGE_KEYS.NEWS_MODE, 'market'),
+  newsSubTab: loadFromStorage<NewsSubTab>(STORAGE_KEYS.NEWS_SUB_TAB, 'stock'),
+  newsTagFilter: loadFromStorage<NewsTagGroup>(STORAGE_KEYS.NEWS_TAG_FILTER, '全部'),
+  newsTimeRange: loadFromStorage<NewsTimeRange>(STORAGE_KEYS.NEWS_TIME_RANGE, '7d'),
   dashboardData: null,
   isLoading: false,
   error: null,
@@ -144,6 +159,10 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   insightsError: null,
   insightsStale: false,
   insightsCachedAt: null,
+  deepAnalysisIncludeDeepSearch: loadFromStorage(
+    STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH,
+    false,
+  ),
 
   // 设置当前资产（同时清除 selection 和 insights，因为切换股票后之前的数据不再有效）
   setActiveAsset: (asset) => {
@@ -224,6 +243,24 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     set({ newsMode: mode });
   },
 
+  // Phase H: 设置新闻子标签 (个股/市场7x24/重大事件)
+  setNewsSubTab: (tab) => {
+    saveToStorage(STORAGE_KEYS.NEWS_SUB_TAB, tab);
+    set({ newsSubTab: tab });
+  },
+
+  // Phase H: 设置新闻主题筛选
+  setNewsTagFilter: (tag) => {
+    saveToStorage(STORAGE_KEYS.NEWS_TAG_FILTER, tag);
+    set({ newsTagFilter: tag });
+  },
+
+  // Phase H: 设置新闻时间范围
+  setNewsTimeRange: (range) => {
+    saveToStorage(STORAGE_KEYS.NEWS_TIME_RANGE, range);
+    set({ newsTimeRange: range });
+  },
+
   // 设置聚合数据
   setDashboardData: (data) => set({ dashboardData: data }),
 
@@ -273,6 +310,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   setInsightsLoading: (loading) => set({ insightsLoading: loading }),
   setInsightsError: (error) => set({ insightsError: error }),
   setInsightsStale: (stale) => set({ insightsStale: stale }),
+  setInsightsCachedAt: (cachedAt) => set({ insightsCachedAt: cachedAt }),
   clearInsights: () => set({
     insightsData: null,
     insightsLoading: false,
@@ -280,6 +318,10 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     insightsStale: false,
     insightsCachedAt: null,
   }),
+  setDeepAnalysisIncludeDeepSearch: (enabled) => {
+    saveToStorage(STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH, enabled);
+    set({ deepAnalysisIncludeDeepSearch: enabled });
+  },
 
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 

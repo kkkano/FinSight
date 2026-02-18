@@ -40,6 +40,14 @@ def policy_gate(state: GraphState) -> dict:
     ui_context = state.get("ui_context") or {}
     agents_override = ui_context.get("agents_override")
     budget_override = ui_context.get("budget_override")
+    analysis_depth_raw = ui_context.get("analysis_depth")
+    analysis_depth = (
+        str(analysis_depth_raw).strip().lower()
+        if isinstance(analysis_depth_raw, str) and str(analysis_depth_raw).strip()
+        else None
+    )
+    if analysis_depth not in {"quick", "report", "deep_research"}:
+        analysis_depth = None
     raw_prefs = ui_context.get("agent_preferences") or {}
     agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
 
@@ -161,6 +169,21 @@ def policy_gate(state: GraphState) -> dict:
             if removed_by_prefs:
                 agent_selection["removed_by_prefs"] = removed_by_prefs
 
+        if analysis_depth == "report" and "deep_search_agent" in allowed_agents:
+            allowed_agents.remove("deep_search_agent")
+            removed = list(agent_selection.get("removed_by_analysis_depth") or [])
+            removed.append("deep_search_agent")
+            agent_selection["removed_by_analysis_depth"] = removed
+
+        if analysis_depth == "deep_research":
+            if "deep_search_agent" not in allowed_agents:
+                allowed_agents.append("deep_search_agent")
+            required_list = [str(x) for x in (agent_selection.get("required") or []) if isinstance(x, str)]
+            if "deep_search_agent" not in required_list:
+                required_list.append("deep_search_agent")
+            agent_selection["required"] = required_list
+            budget["max_rounds"] = min(max(int(budget.get("max_rounds", 6)), 7), 10)
+
     # Tool schemas (Pydantic JSON schema) for planner constraints.
     tool_schemas: dict[str, dict] = {}
     try:  # pragma: no cover - import guard
@@ -183,6 +206,7 @@ def policy_gate(state: GraphState) -> dict:
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
+        "analysis_depth": analysis_depth,
         "agent_selection": agent_selection,
         "agent_schemas": {
             name: {
@@ -208,6 +232,7 @@ def policy_gate(state: GraphState) -> dict:
                 "budget": budget,
                 "allowed_tools": allowed_tools,
                 "allowed_agents": allowed_agents,
+                "analysis_depth": analysis_depth,
                 "agent_selection": {
                     "required": list(agent_selection.get("required") or []),
                     "max_agents": agent_selection.get("max_agents"),

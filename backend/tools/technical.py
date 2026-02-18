@@ -320,3 +320,69 @@ def compute_technical_indicators(df: pd.DataFrame) -> dict[str, Any]:
         # Volume
         "avg_volume": avg_volume,
     }
+
+
+def compute_indicator_series(df: pd.DataFrame, n_days: int = 120) -> dict[str, Any]:
+    """Compute last *n_days* of RSI / MACD / Bollinger Band time series.
+
+    Returns a dict matching the ``IndicatorSeries`` schema.  Returns an
+    empty dict if the input is too short.
+    """
+    if df is None or len(df) < _MIN_POINTS:
+        return {}
+
+    col_map = {c: c.title() for c in df.columns}
+    df = df.rename(columns=col_map)
+
+    if "Close" not in df.columns:
+        return {}
+
+    close = df["Close"].astype(float)
+
+    # --- RSI series ---
+    delta = close.diff()
+    gains = delta.where(delta > 0, 0.0)
+    losses = -delta.where(delta < 0, 0.0)
+    avg_gain = gains.rolling(window=14, min_periods=14).mean()
+    avg_loss = losses.rolling(window=14, min_periods=14).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi_series = 100.0 - (100.0 / (1.0 + rs))
+
+    # --- MACD series ---
+    ema_fast = close.ewm(span=12, adjust=False).mean()
+    ema_slow = close.ewm(span=26, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    macd_hist = macd_line - signal_line
+
+    # --- Bollinger Bands series ---
+    bb_mid = close.rolling(window=20).mean()
+    bb_std = close.rolling(window=20).std()
+    bb_up = bb_mid + 2.0 * bb_std
+    bb_lo = bb_mid - 2.0 * bb_std
+
+    # Slice last n_days
+    n = min(n_days, len(close))
+    idx = df.index[-n:]
+
+    def _to_list(s: pd.Series) -> list[float | None]:
+        sliced = s.reindex(idx)
+        return [safe_float(v) if not pd.isna(v) else None for v in sliced]
+
+    dates: list[str] = []
+    for i in idx:
+        if hasattr(i, "strftime"):
+            dates.append(i.strftime("%Y-%m-%d"))
+        else:
+            dates.append(str(i))
+
+    return {
+        "dates": dates,
+        "rsi": _to_list(rsi_series),
+        "macd": _to_list(macd_line),
+        "macd_signal": _to_list(signal_line),
+        "macd_histogram": _to_list(macd_hist),
+        "bb_upper": _to_list(bb_up),
+        "bb_middle": _to_list(bb_mid),
+        "bb_lower": _to_list(bb_lo),
+    }

@@ -355,3 +355,53 @@ def test_policy_gate_agent_preferences_unknown_agent_ignored():
     allowed_agents = policy.get("allowed_agents") or []
     assert "price_agent" in allowed_agents
     assert "nonexistent_agent" not in allowed_agents
+
+
+def test_policy_gate_analysis_depth_report_removes_deep_search_agent():
+    result = policy_gate(
+        {
+            "query": "Deep research for AAPL and generate investment report",
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+            "output_mode": "investment_report",
+            "ui_context": {"analysis_depth": "report"},
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    selection = policy.get("agent_selection") or {}
+
+    assert "deep_search_agent" not in allowed_agents
+    assert "deep_search_agent" in (selection.get("removed_by_analysis_depth") or [])
+
+
+def test_policy_gate_analysis_depth_deep_research_forces_deep_search_agent():
+    result = policy_gate(
+        {
+            "query": "Generate investment report for AAPL",
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+            "output_mode": "investment_report",
+            "ui_context": {"analysis_depth": "deep_research"},
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    selection = policy.get("agent_selection") or {}
+    budget = policy.get("budget") or {}
+
+    assert "deep_search_agent" in allowed_agents
+    assert "deep_search_agent" in (selection.get("required") or [])
+    assert int(budget.get("max_rounds") or 0) >= 7

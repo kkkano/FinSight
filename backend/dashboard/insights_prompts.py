@@ -21,6 +21,10 @@ _JSON_INSTRUCTION = """\
   "score_label": "<弱势|偏空|中性|偏多|强势>",
   "summary": "<200-400字中文分析摘要，必须引用具体数值>",
   "key_points": ["<要点1>", "<要点2>", "<要点3>"],
+  "key_metrics": [
+    {"label": "<指标名称>", "value": "<具体数值含单位>"},
+    {"label": "<指标名称>", "value": "<具体数值含单位>"}
+  ],
   "risks": ["<风险1>"]
 }
 
@@ -31,6 +35,7 @@ _JSON_INSTRUCTION = """\
 
 约束:
 - key_points 3-5 条，risks 1-3 条
+- key_metrics 2-4 个，必须为 data 中真实存在的数值指标（如 {label:"市盈率", value:"33.24"}, {label:"RSI", value:"55.3"}）
 - 禁止编造不存在于 data 中的数值
 - summary 须引用具体数值（如"PE 28.5"，"RSI 55"）
 """

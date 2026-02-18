@@ -71,6 +71,7 @@ export interface ExecuteRequest {
   query: string;
   tickers?: string[];
   output_mode?: string;
+  analysis_depth?: 'quick' | 'report' | 'deep_research';
   agents?: string[];
   budget?: number;
   source?: string;
@@ -659,10 +660,16 @@ export const apiClient = {
   },
 
   // --- Dashboard Insights ---
-  async getDashboardInsights(symbol: string, opts?: { force?: boolean }): Promise<DashboardInsightsResponse> {
+  async getDashboardInsights(
+    symbol: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<DashboardInsightsResponse> {
     const params: Record<string, string | boolean> = { symbol };
     if (opts?.force) params.force = true;
-    const response = await api.get<DashboardInsightsResponse>('/api/dashboard/insights', { params });
+    const response = await api.get<DashboardInsightsResponse>('/api/dashboard/insights', {
+      params,
+      signal: opts?.signal,
+    });
     return response.data;
   },
 

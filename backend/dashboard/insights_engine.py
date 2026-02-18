@@ -37,6 +37,11 @@ from backend.dashboard.insights_scorer import (
     score_overview,
     score_peers,
     score_technical,
+    metrics_financial,
+    metrics_news,
+    metrics_overview,
+    metrics_peers,
+    metrics_technical,
 )
 from backend.dashboard.schemas import DashboardInsightsResponse, InsightCard
 
@@ -53,6 +58,8 @@ _MAX_CONCURRENT_SYMBOLS = int(os.getenv("INSIGHTS_MAX_CONCURRENT_SYMBOLS", "3"))
 
 # Semaphore to limit concurrent symbol insight generation
 _generation_semaphore: asyncio.Semaphore | None = None
+# Background refresh tasks by symbol (dedupe stale-triggered refreshes)
+_refresh_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -180,6 +187,16 @@ class DigestAgent(ABC):
         if abs(score - fallback_score) > 3.0:
             score = clamp_score((score + fallback_score) / 2)
 
+        # 提取 key_metrics（LLM 生成的结构化指标）
+        raw_metrics = parsed.get("key_metrics")
+        key_metrics: list[dict[str, str]] | None = None
+        if isinstance(raw_metrics, list):
+            key_metrics = [
+                {"label": str(m.get("label", "")), "value": str(m.get("value", ""))}
+                for m in raw_metrics
+                if isinstance(m, dict) and m.get("label") and m.get("value")
+            ][:4]
+
         return InsightCard(
             agent_name=self.AGENT_NAME,
             tab=self.TAB,
@@ -188,10 +205,15 @@ class DigestAgent(ABC):
             summary=str(parsed.get("summary", ""))[:800],
             key_points=_ensure_str_list(parsed.get("key_points", []))[:5],
             risks=_ensure_str_list(parsed.get("risks", []))[:3],
+            key_metrics=key_metrics if key_metrics else None,
             confidence=0.8,
             as_of=now_iso,
             model_generated=True,
         )
+
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        """Override in subclass to provide deterministic key_metrics."""
+        return None
 
     def _make_fallback_card(self, data: dict[str, Any], now_iso: str) -> InsightCard:
         """Generate card from deterministic scoring."""
@@ -204,6 +226,7 @@ class DigestAgent(ABC):
             summary="",
             key_points=points,
             risks=[],
+            key_metrics=self._extract_fallback_metrics(data),
             confidence=0.4,
             as_of=now_iso,
             model_generated=False,
@@ -224,6 +247,9 @@ class TechnicalDigest(DigestAgent):
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_technical(data)
 
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        return metrics_technical(data) or None
+
 
 class FinancialDigest(DigestAgent):
     AGENT_NAME = "financial_digest"
@@ -234,6 +260,9 @@ class FinancialDigest(DigestAgent):
 
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_financial(data)
+
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        return metrics_financial(data) or None
 
 
 class NewsDigest(DigestAgent):
@@ -246,6 +275,9 @@ class NewsDigest(DigestAgent):
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_news(data)
 
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        return metrics_news(data) or None
+
 
 class PeersDigest(DigestAgent):
     AGENT_NAME = "peers_digest"
@@ -256,6 +288,9 @@ class PeersDigest(DigestAgent):
 
     def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
         return score_peers(data)
+
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        return metrics_peers(data) or None
 
 
 class OverviewDigest(DigestAgent):
@@ -279,6 +314,9 @@ class OverviewDigest(DigestAgent):
             news_score=self._sub_scores.get("news", 5.0),
             peers_score=self._sub_scores.get("peers", 5.0),
         )
+
+    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
+        return metrics_overview(self._sub_scores) or None
 
     def _make_fallback_card(self, data: dict[str, Any], now_iso: str) -> InsightCard:
         card = super()._make_fallback_card(data, now_iso)
@@ -356,8 +394,8 @@ class InsightsOrchestrator:
                 )
 
                 if is_stale:
-                    # Schedule background refresh
-                    asyncio.create_task(self._refresh_in_background(sym_upper))
+                    # Schedule deduplicated background refresh
+                    self._schedule_background_refresh(sym_upper)
 
                 return response
 
@@ -468,6 +506,15 @@ class InsightsOrchestrator:
             logger.info("[Insights] Background refresh completed for %s", symbol)
         except Exception as exc:
             logger.warning("[Insights] Background refresh failed for %s: %s", symbol, exc)
+        finally:
+            _refresh_tasks.pop(symbol, None)
+
+    def _schedule_background_refresh(self, symbol: str) -> None:
+        """Schedule one background refresh per symbol at a time."""
+        existing = _refresh_tasks.get(symbol)
+        if existing is not None and not existing.done():
+            return
+        _refresh_tasks[symbol] = asyncio.create_task(self._refresh_in_background(symbol))
 
     def _collect_dashboard_data(self, symbol: str) -> dict[str, Any]:
         """

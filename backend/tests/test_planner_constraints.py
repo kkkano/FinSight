@@ -61,3 +61,65 @@ def test_planner_no_selection_no_summary_step():
     names = [s.get("name") for s in (plan.get("steps") or [])]
     assert "summarize_selection" not in names
 
+
+def test_planner_stub_report_analysis_depth_excludes_deep_search(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "4")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "2")
+
+    state = {
+        "query": "Deep research for AAPL and generate investment report",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "ui_context": {"analysis_depth": "report"},
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 8},
+            "allowed_tools": ["search", "get_stock_price"],
+            "allowed_agents": [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "deep_search_agent",
+            ],
+        },
+    }
+
+    plan = (planner_stub(state).get("plan_ir") or {})
+    names = [s.get("name") for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
+    assert "deep_search_agent" not in names
+
+
+def test_planner_stub_deep_research_forces_deep_search_without_keywords(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "1")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "1")
+
+    state = {
+        "query": "Generate investment report for AAPL",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "ui_context": {"analysis_depth": "deep_research"},
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 8},
+            "allowed_tools": ["search", "get_stock_price"],
+            "allowed_agents": ["price_agent", "deep_search_agent"],
+        },
+    }
+
+    plan = (planner_stub(state).get("plan_ir") or {})
+    names = [s.get("name") for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
+    assert "deep_search_agent" in names

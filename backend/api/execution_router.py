@@ -12,7 +12,7 @@ import json as _json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -35,6 +35,10 @@ class ExecuteRequest(BaseModel):
     tickers: list[str] | None = Field(None, description="Explicit ticker list")
     output_mode: str | None = Field(
         None, description="chat / brief / investment_report",
+    )
+    analysis_depth: Literal["quick", "report", "deep_research"] | None = Field(
+        None,
+        description="Explicit analysis depth semantics (quick/report/deep_research)",
     )
     agents: list[str] | None = Field(
         None, description="Override: only run these agents",
@@ -108,6 +112,8 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             ui_context["budget_override"] = request.budget
         if request.source:
             ui_context["source"] = request.source
+        if request.analysis_depth:
+            ui_context["analysis_depth"] = request.analysis_depth
         if request.agent_preferences:
             ui_context["agent_preferences"] = request.agent_preferences
 
