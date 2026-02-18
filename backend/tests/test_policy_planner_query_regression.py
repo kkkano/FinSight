@@ -94,3 +94,23 @@ def test_new_query_news_tools_are_allowlisted():
     assert "score_news_source_reliability" in tools
     assert "get_event_calendar" in step_names
     assert "score_news_source_reliability" in step_names
+
+
+def test_manifest_market_filter_cn_excludes_us_only_tools():
+    state = {
+        "query": "AAPL earnings estimates",
+        "operation": {"name": "qa", "confidence": 0.9, "params": {}},
+        "output_mode": "brief",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "ui_context": {"market": "CN"},
+    }
+    policy_out = policy_gate(state)
+    tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
+    assert "get_earnings_estimates" not in tools
+    assert "get_eps_revisions" not in tools
