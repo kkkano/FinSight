@@ -57,7 +57,7 @@ export function ResearchTab() {
   useDashboardInsights(ticker);
 
   // ==================== 完整报告折叠状态 ====================
-  const [reportExpanded, setReportExpanded] = useState(false);
+  const [reportExpanded, setReportExpanded] = useState(true);
   const [scoreDrawerState, setScoreDrawerState] = useState<{
     open: boolean;
     title: string;
