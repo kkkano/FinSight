@@ -361,3 +361,20 @@ flowchart LR
   STORE --> API[/api/alerts/feed]
   API --> RP[RightPanel Alerts]
 ```
+
+### B2) Alert feed contract（更新版，2026-02-18）
+
+- 新增接口：`GET /api/alerts/feed?email&limit&since`
+- 事件源：`PriceChangeScheduler`、`NewsAlertScheduler`、`RiskAlertScheduler`
+- 持久化：`SubscriptionService.record_alert_event` 写入 `recent_events`
+- 前端消费：`RightPanelAlertsTab` 展示“最近触发事件 + 当前订阅配置”
+- 轮询策略：`useRightPanelData` 每 `60s` 拉取 `alerts/feed + subscriptions`
+- 空态模型：
+  - 事件：`no_email | loading | error | no_events | ready`
+  - 订阅：`no_email | loading | error | no_subscriptions | ready`
+
+### C) Execution visibility close-out
+
+- `RightPanel` 仅在 `activeRuns` 出现 `0->N` 时自动切到 `execution`。
+- 若用户已锁定非执行标签页（`userPinnedTab`），执行标签页显示脉冲提示，不强切当前视图。
+- 进入 `execution` 标签页后自动清除“未查看执行”提示。

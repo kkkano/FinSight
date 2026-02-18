@@ -201,3 +201,12 @@ flowchart LR
   RP_HOOK --> RP_TAB[RightPanelAlertsTab]
   RP_TAB --> USER[事件列表 + 订阅配置 + 未读数]
 ```
+
+### 8.3 Workbench 收口策略（2026-02-18）
+
+- `RightPanel` 自动切换规则：仅在 `activeRuns` 发生 `0->N` 时触发。
+- 若用户已手动锁定非 `execution` 标签页（`userPinnedTab`），不强制切换，改为 execution 标签脉冲提示。
+- `useRightPanelData` 对 Alerts 状态做类型化输出：
+  - 事件状态：`no_email | loading | error | no_events | ready`
+  - 订阅状态：`no_email | loading | error | no_subscriptions | ready`
+- 当前 Alerts 数据刷新模式仍为轮询（`60s`），后续可按需要演进到推送模型。

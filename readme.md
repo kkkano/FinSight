@@ -24,6 +24,12 @@
 - **I3 Conflict Matrix**: Research tab now surfaces agent conflicts using structured diagnostics first, text fallback second.
 - **I4 Proactive Alerts Feed**: New `GET /api/alerts/feed` endpoint and right-panel event stream with unread badge.
 
+## Known Limitations
+
+- **Frontend lint debt (legacy)**: repository-wide `npm --prefix frontend run lint` still reports historical issues outside current workbench scope.
+- **Alerts delivery model**: right panel currently uses 60-second polling, not server push.
+- **Market scope**: toolchain remains US-focused in this phase (`US-only`).
+
 ## 🏗️ System Architecture
 
 FinSight uses a stateful **LangGraph** pipeline that manages the lifecycle of a request from user input to final rendering.

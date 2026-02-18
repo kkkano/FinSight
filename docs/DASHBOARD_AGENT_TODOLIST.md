@@ -122,47 +122,21 @@
 - [ ] P3-6 Workbench Agent Conflict Matrix
 ---
 
-## 6. Phase I: Agentic 工作台进化（规划中）
+## 6. Phase I: Agentic 工作台进化（已交付，进入收口维护）
 
-> 目标：让工作台从「黑箱 API 调用器」进化为「可观测、可解释、可操控的 Agent 协作平台」
+> 状态说明：I1-I4 已在 2026-02-18 完成交付并上线，本区块保留为“收口与维护清单”，避免与执行记录冲突。
 
-### I1: Agent Timeline — 实时执行轨迹（P0）
-- [ ] I1-BE.1 `execute_plan_stub.py` — 每个 step 执行时 `emit_event("agent_step", {...})` 推送结构化事件
-- [ ] I1-BE.2 `event_bus.py` — 新增 `agent_step` / `tool_call` / `evidence_collected` 事件类型
-- [ ] I1-BE.3 `execution_router.py` — SSE 流中新增 `timeline` 事件类型透传
-- [ ] I1-FE.1 `AgentTimeline.tsx` — 垂直时间轴面板，实时动画展示各 Agent 的 step
-- [ ] I1-FE.2 `TimelineStep.tsx` — 单步卡片：图标 + Agent 名 + 动作描述 + 耗时 + 置信度
-- [ ] I1-FE.3 `EvidencePreview.tsx` — 点击 step 展开，预览证据片段
-- [ ] I1-FE.4 TaskSection / StreamingResultPanel 集成 Timeline 面板
+### 已交付能力（I1-I4）
+- [x] I1 Agent Timeline：`run_id` 贯通 + SSE 全事件打标 + execution timeline 可视化
+- [x] I2 Score Explainability：`score_breakdown` 后端输出 + Research Drawer 可解释展示
+- [x] I3 Conflict Matrix：结构化优先（`agent_diagnostics`）+ 文本兜底（`conflict_disclosure`）
+- [x] I4 Alerts Feed：`/api/alerts/feed` + right-panel 事件流与未读计数
 
-### I2: Score Explainability — 评分可解释（P1）
-- [ ] I2-BE.1 `insights_scorer.py` — 所有 `score_*` 函数返回 `ScoreBreakdown` 结构
-- [ ] I2-BE.2 `insights_engine.py` — DigestAgent 输出 `score_breakdown` 字段
-- [ ] I2-BE.3 `schemas.py` — `InsightCard` 新增 `score_breakdown` 字段
-- [ ] I2-FE.1 `ScoreExplainDrawer.tsx` — 右侧抽屉：因子柱状图 + 变化归因
-- [ ] I2-FE.2 `FactorBar.tsx` — 水平柱状图渲染因子权重与贡献
-- [ ] I2-FE.3 ResearchInsightGrid 集成 — 点击分数打开抽屉
-
-### I3: Agent Conflict Matrix — 冲突可视化（P1）
-- [ ] I3-BE.1 `synthesize.py` — 新增 `_detect_conflicts()` 检测跨 Agent 对立信号
-- [ ] I3-BE.2 `report_builder.py` — `ReportIR` 新增 `agent_conflicts` 字段
-- [ ] I3-FE.1 `ConflictMatrix.tsx` — 矩阵视图：行=Agent，列=维度，标注分歧点
-- [ ] I3-FE.2 `ConflictDetailCard.tsx` — 点击单元格展开对立论证
-
-### I4: Proactive Alerts — 主动预警（P2）
-- [ ] I4-BE.1 `alert_scanner.py` — 异步定时扫描 watchlist，检测价格异动/新闻突发/指标突破
-- [ ] I4-BE.2 `alert_rules.py` — 规则引擎（PriceSpike/RSIExtreme/EarningsSurprise/NewsImpact）
-- [ ] I4-BE.3 `alerts_router.py` — `GET /api/alerts` 返回待读取警报列表
-- [ ] I4-FE.1 `AlertBell.tsx` — 顶部铃铛 + 未读计数
-- [ ] I4-FE.2 `AlertDrawer.tsx` — 右侧预警列表（按时间/优先级/标的分组）
-- [ ] I4-FE.3 `AlertCard.tsx` — 单条预警卡片
-
-### I5: Agent Steering — 用户可操控执行（P2）
-- [ ] I5-BE.1 `planner.py` — 支持 `focus_agents` / `skip_agents` 参数
-- [ ] I5-BE.2 `confirmation_gate.py` — per-step confirm/skip 细粒度 HITL
-- [ ] I5-BE.3 GraphState — 新增 `agent_preferences` 字段
-- [ ] I5-FE.1 `AnalysisConfigPanel.tsx` — 执行前配置：选择 Agent、深度、聚焦问题
-- [ ] I5-FE.2 `StepApprovalCard.tsx` — 执行中逐步确认/跳过
+### 收口维护项（2026-02-18）
+- [x] Workbench：execution tab 新执行脉冲提示（不强切 pinned tab）
+- [x] Alerts：空态逻辑类型化（event/subscription state 枚举化）
+- [x] Timeline：step/tool/agent/cache/api/data_source 文案映射补全
+- [ ] I5 Agent Steering：保留下一轮迭代，不纳入本轮范围
 ---
 
 ## 6. 执行记录
@@ -226,3 +200,10 @@
 - [x] I3 冲突矩阵前端化（agent_diagnostics 结构化优先，conflict_disclosure 兜底）
 - [x] I4 预警事件流（scheduler 落事件 + `/api/alerts/feed` + 右侧面板事件/未读）
 - [x] I1-I4 回归测试通过（见 `docs/feature_logs/2026-02-18_phase_i_i1_i4_execution.md`）
+
+### 2026-02-18 (Phase J 工作台收口)
+- [x] execution 标签新增“未查看执行”脉冲提示（用户锁定其他 tab 时不强切）
+- [x] Alerts 事件/订阅空态类型化（枚举状态统一渲染）
+- [x] Timeline 事件文案映射补全（step/tool/agent/cache/api/data_source）
+- [x] 核心文档与 Todo 对齐（移除 I1-I4 规划与落地冲突）
+- [x] 收口记录归档：`docs/feature_logs/2026-02-18_workbench_closure.md`
