@@ -48,6 +48,43 @@ def _build_ai_reply_message(artifacts: dict) -> AIMessage:
     return AIMessage(content="(analysis completed)")
 
 
+
+def _contains_markdown_link(text: str) -> bool:
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return bool(re.search(r"\[[^\]]+\]\(https?://[^)]+\)", text))
+
+
+def _format_evidence_links(evidence_pool: list[dict] | None) -> str:
+    if not isinstance(evidence_pool, list) or not evidence_pool:
+        return ""
+    lines: list[str] = []
+    for item in evidence_pool:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "(untitled)").strip()
+        url = str(item.get("url") or "").strip()
+        if not url:
+            continue
+        source = str(item.get("source") or "").strip()
+        ts = str(item.get("published_date") or "").strip()
+        meta = " / ".join([x for x in (source, ts) if x])
+        lines.append(f"- [{title}]({url})" + (f" ({meta})" if meta else ""))
+        if len(lines) >= 6:
+            break
+    return "\n".join(lines)
+
+
+def _append_evidence_section_if_missing(markdown: str, evidence_md: str) -> str:
+    if not isinstance(markdown, str) or not markdown.strip():
+        return markdown
+    if not isinstance(evidence_md, str) or not evidence_md.strip():
+        return markdown
+    if _contains_markdown_link(markdown):
+        return markdown
+    return markdown.rstrip() + "\n\n### 引用来源\n\n" + evidence_md + "\n"
+
+
 def render_stub(state: GraphState) -> dict:
     """
     Phase 4 template renderer.
@@ -61,9 +98,15 @@ def render_stub(state: GraphState) -> dict:
     # ── Early-return: honour existing narrative draft ──────────────
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
     artifacts = state.get("artifacts") or {}
+    output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
-        # synthesize already wrote a rich draft — pass through unchanged.
+        # synthesize already wrote a rich draft; keep it, but inject citations for brief mode if needed.
+        if output_mode == "brief":
+            evidence_md = _format_evidence_links((artifacts or {}).get("evidence_pool"))
+            patched = _append_evidence_section_if_missing(existing_draft, evidence_md)
+            if patched != existing_draft:
+                artifacts = {**artifacts, "draft_markdown": patched}
         return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
 
     # ── Regular template rendering (stub / thin-draft fallback) ───
@@ -107,29 +150,19 @@ def render_stub(state: GraphState) -> dict:
         return "\n".join(lines) if lines else "- （selection 为空）"
 
     def _fmt_executor_evidence() -> str:
-        raw_setting = os.getenv("LANGGRAPH_SHOW_EVIDENCE")
-        show_evidence = False if raw_setting is None else raw_setting.lower() in ("true", "1", "yes", "on")
+        # brief mode always shows evidence links when available
+        if output_mode == "brief":
+            show_evidence = True
+        else:
+            raw_setting = os.getenv("LANGGRAPH_SHOW_EVIDENCE")
+            show_evidence = False if raw_setting is None else raw_setting.lower() in ("true", "1", "yes", "on")
+
         if not show_evidence:
             return ""
 
-        artifacts = state.get("artifacts") or {}
-        evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
-        if isinstance(evidence_pool, list) and evidence_pool:
-            lines = []
-            for e in evidence_pool:
-                if not isinstance(e, dict):
-                    continue
-                title = e.get("title") or "(untitled)"
-                url = e.get("url")
-                if not url:
-                    continue
-                source = e.get("source")
-                ts = e.get("published_date")
-                meta = " / ".join([x for x in [source, ts] if x])
-                lines.append(f"- [{title}]({url})" + (f"（{meta}）" if meta else ""))
-                if len(lines) >= 6:
-                    break
-            return "\n".join(lines) if lines else ""
+        evidence_md = _format_evidence_links((artifacts or {}).get("evidence_pool"))
+        if evidence_md:
+            return evidence_md
 
         # Do not leak internal executor step_results into user-facing markdown.
         # The UI already exposes structured traces in the "Agent Trace" panel.

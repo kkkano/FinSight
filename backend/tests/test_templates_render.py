@@ -58,7 +58,7 @@ def test_render_company_report_uses_company_report_template():
     assert "## 投资研报：AAPL" in md
 
 
-def test_render_company_brief_does_not_leak_evidence_pool_by_default():
+def test_render_company_brief_includes_evidence_pool_links_by_default():
     state = {
         "query": "分析",
         "output_mode": "brief",
@@ -73,7 +73,8 @@ def test_render_company_brief_does_not_leak_evidence_pool_by_default():
         "artifacts": {"evidence_pool": [{"title": "T", "url": "https://example.com", "snippet": "S"}]},
     }
     md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
-    assert "[T](https://example.com)" not in md
+    assert "### 引用来源" in md
+    assert "[T](https://example.com)" in md
 
 
 def test_render_company_brief_includes_price_and_technical_sections():
