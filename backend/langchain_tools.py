@@ -49,6 +49,9 @@ try:  # pragma: no cover - optional tools
         get_event_calendar as _get_event_calendar,
         get_factor_exposure as _get_factor_exposure,
         get_option_chain_metrics as _get_option_chain_metrics,
+        get_sec_filings as _get_sec_filings,
+        get_sec_material_events as _get_sec_material_events,
+        get_sec_risk_factors as _get_sec_risk_factors,
         run_portfolio_stress_test as _run_portfolio_stress_test,
         score_news_source_reliability as _score_news_source_reliability,
     )
@@ -60,6 +63,9 @@ except Exception:  # pragma: no cover - optional tools fallback
             get_event_calendar as _get_event_calendar,
             get_factor_exposure as _get_factor_exposure,
             get_option_chain_metrics as _get_option_chain_metrics,
+            get_sec_filings as _get_sec_filings,
+            get_sec_material_events as _get_sec_material_events,
+            get_sec_risk_factors as _get_sec_risk_factors,
             run_portfolio_stress_test as _run_portfolio_stress_test,
             score_news_source_reliability as _score_news_source_reliability,
         )
@@ -71,6 +77,9 @@ except Exception:  # pragma: no cover - optional tools fallback
         _run_portfolio_stress_test = None
         _get_event_calendar = None
         _score_news_source_reliability = None
+        _get_sec_filings = None
+        _get_sec_material_events = None
+        _get_sec_risk_factors = None
 
 
 # ============================================
@@ -121,6 +130,24 @@ class SourceReliabilityInput(BaseModel):
 
     source: str = Field(default="", description="Source name, e.g. Reuters")
     url: str = Field(default="", description="Optional article URL")
+
+
+class SecFilingsInput(BaseModel):
+    """SEC filing lookup inputs."""
+
+    ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
+    forms: str = Field(
+        default="10-K,10-Q,8-K",
+        description="Comma-separated SEC form types, e.g. '10-K,8-K'",
+    )
+    limit: int = Field(default=12, ge=1, le=50, description="Maximum filing rows to return")
+
+
+class SecMaterialEventsInput(BaseModel):
+    """SEC 8-K material events lookup inputs."""
+
+    ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum event rows to return")
 
 
 class FactorExposureInput(BaseModel):
@@ -462,6 +489,45 @@ def score_news_source_reliability(source: str = "", url: str = "") -> str:
         return f"score_news_source_reliability failed: {exc}"
 
 
+@tool("get_sec_filings", args_schema=SecFilingsInput, return_direct=False)
+def get_sec_filings(ticker: str, forms: str = "10-K,10-Q,8-K", limit: int = 12) -> str:
+    """Get recent SEC filings for a US ticker from EDGAR submissions."""
+
+    if not callable(_get_sec_filings):
+        return "get_sec_filings unavailable: backend.tools function not found"
+    try:
+        payload = _get_sec_filings(ticker=ticker, forms=forms, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_sec_filings failed: {exc}"
+
+
+@tool("get_sec_material_events", args_schema=SecMaterialEventsInput, return_direct=False)
+def get_sec_material_events(ticker: str, limit: int = 10) -> str:
+    """Get SEC 8-K material event filings for a US ticker."""
+
+    if not callable(_get_sec_material_events):
+        return "get_sec_material_events unavailable: backend.tools function not found"
+    try:
+        payload = _get_sec_material_events(ticker=ticker, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_sec_material_events failed: {exc}"
+
+
+@tool("get_sec_risk_factors", args_schema=StockTickerInput, return_direct=False)
+def get_sec_risk_factors(ticker: str) -> str:
+    """Extract latest SEC Item 1A risk factor excerpt for a US ticker."""
+
+    if not callable(_get_sec_risk_factors):
+        return "get_sec_risk_factors unavailable: backend.tools function not found"
+    try:
+        payload = _get_sec_risk_factors(ticker=ticker)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_sec_risk_factors failed: {exc}"
+
+
 # ============================================
 # Registry helpers
 # ============================================
@@ -471,6 +537,9 @@ FINANCIAL_TOOLS = [
     get_stock_price,
     get_technical_snapshot,
     get_option_chain_metrics,
+    get_sec_filings,
+    get_sec_material_events,
+    get_sec_risk_factors,
     get_company_info,
     get_company_news,
     get_event_calendar,
@@ -519,6 +588,9 @@ __all__ = [
     "get_stock_price",
     "get_technical_snapshot",
     "get_option_chain_metrics",
+    "get_sec_filings",
+    "get_sec_material_events",
+    "get_sec_risk_factors",
     "get_company_news",
     "get_event_calendar",
     "score_news_source_reliability",

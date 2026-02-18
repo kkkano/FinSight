@@ -114,3 +114,38 @@ def test_manifest_market_filter_cn_excludes_us_only_tools():
     tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
     assert "get_earnings_estimates" not in tools
     assert "get_eps_revisions" not in tools
+
+
+def test_new_query_sec_tools_are_allowlisted():
+    policy_out, plan_out = _run_policy_and_planner(
+        "AAPL latest sec filings and item 1a risk factors",
+        "qa",
+        ["AAPL"],
+    )
+    tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
+    step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+    assert "get_sec_filings" in tools
+    assert "get_sec_risk_factors" in tools
+    assert "get_sec_filings" in step_names
+    assert "get_sec_risk_factors" in step_names
+
+
+def test_new_query_sec_tools_blocked_under_cn_market():
+    state = {
+        "query": "AAPL sec filing history",
+        "operation": {"name": "qa", "confidence": 0.9, "params": {}},
+        "output_mode": "brief",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "ui_context": {"market": "CN"},
+    }
+    policy_out = policy_gate(state)
+    tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
+    assert "get_sec_filings" not in tools
+    assert "get_sec_material_events" not in tools
+    assert "get_sec_risk_factors" not in tools

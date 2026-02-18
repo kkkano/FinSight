@@ -30,4 +30,20 @@ def test_select_tools_market_filter_for_cn_excludes_us_only_tools():
     )
     assert "get_earnings_estimates" not in tools
     assert "get_eps_revisions" not in tools
+    assert "get_sec_filings" not in tools
+    assert "get_sec_material_events" not in tools
+    assert "get_sec_risk_factors" not in tools
     assert "get_stock_price" in tools
+
+
+def test_select_tools_us_includes_sec_tools_for_company_qa():
+    tools = select_tools(
+        subject_type="company",
+        operation_name="qa",
+        output_mode="brief",
+        analysis_depth="report",
+        market="US",
+    )
+    assert "get_sec_filings" in tools
+    assert "get_sec_material_events" in tools
+    assert "get_sec_risk_factors" in tools
