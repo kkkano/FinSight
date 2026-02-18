@@ -8,7 +8,6 @@ import type {
 type RightPanelAlertsTabProps = {
   subscriptions: AlertSubscription[];
   events: AlertEvent[];
-  emailConfigured: boolean;
   eventState: AlertEventState;
   subscriptionState: AlertSubscriptionState;
   unreadCount: number;
@@ -48,7 +47,6 @@ function renderSubscriptionEmptyState(state: AlertSubscriptionState) {
 export function RightPanelAlertsTab({
   subscriptions,
   events,
-  emailConfigured,
   eventState,
   subscriptionState,
   unreadCount,
@@ -131,11 +129,6 @@ export function RightPanelAlertsTab({
             {eventState !== 'ready' && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
                 {renderEventEmptyState(eventState)}
-              </div>
-            )}
-            {!emailConfigured && eventState === 'ready' && (
-              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                未配置订阅邮箱，无法加载预警事件
               </div>
             )}
           </div>

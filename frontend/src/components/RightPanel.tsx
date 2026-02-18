@@ -36,7 +36,6 @@ export const RightPanel: FC<RightPanelProps> = ({
   const {
     alerts,
     alertEvents,
-    emailConfigured,
     eventState,
     subscriptionState,
     alertsLoading,
@@ -125,7 +124,6 @@ export const RightPanel: FC<RightPanelProps> = ({
           <RightPanelAlertsTab
             subscriptions={alerts}
             events={alertEvents}
-            emailConfigured={emailConfigured}
             eventState={eventState}
             subscriptionState={subscriptionState}
             unreadCount={unreadAlertCount}
