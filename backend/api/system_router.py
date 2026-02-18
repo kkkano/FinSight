@@ -60,6 +60,34 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
         live_tools = os.getenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false").lower() in ("true", "1", "yes", "on")
         components["live_tools"] = {"status": "active" if live_tools else "dry_run"}
 
+        try:
+            from backend.rag.hybrid_service import get_rag_service
+
+            rag_service = get_rag_service()
+            rag_component: Dict[str, Any] = {
+                "status": "ok",
+                "backend": rag_service.backend_name,
+                "embedding_model": getattr(rag_service, "embedding_model", "unknown"),
+                "vector_dim": int(getattr(rag_service, "vector_dim", 0) or 0),
+                "doc_count": int(rag_service.count_documents()),
+            }
+            fallback_reason = getattr(rag_service, "fallback_reason", None)
+            if fallback_reason:
+                rag_component["fallback_reason"] = str(fallback_reason)
+
+            expected_backend = str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower()
+            if expected_backend == "postgres" and rag_service.backend_name != "postgres":
+                rag_component["status"] = "degraded"
+                status = "degraded"
+
+            components["rag"] = rag_component
+        except Exception as exc:
+            status = "degraded"
+            components["rag"] = {
+                "status": "error",
+                "error": str(exc),
+            }
+
         return {
             "status": status,
             "components": components,

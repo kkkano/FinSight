@@ -16,6 +16,7 @@ type DashboardWorkspaceProps = {
     onCollapse: () => void;
     onResizeStart: (event: MouseEvent) => void;
     onSubscribeClick: () => void;
+    autoSwitchExecution?: boolean;
     onNavigateToChat?: () => void;
   };
 };
@@ -50,6 +51,7 @@ export function DashboardWorkspace({
         onCollapse={contextPanel.onCollapse}
         onResizeStart={contextPanel.onResizeStart}
         onSubscribeClick={contextPanel.onSubscribeClick}
+        autoSwitchExecution={contextPanel.autoSwitchExecution}
         onNavigateToChat={contextPanel.onNavigateToChat}
         showMiniChat
       />

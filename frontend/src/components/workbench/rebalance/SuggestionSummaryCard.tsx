@@ -70,6 +70,11 @@ export function SuggestionSummaryCard({ suggestion }: SuggestionSummaryCardProps
       </div>
 
       {/* Warnings */}
+      {suggestion.degraded_mode && (
+        <div className="text-2xs text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+          当前为仅诊断模式，未输出目标仓位。{suggestion.fallback_reason ? `原因：${suggestion.fallback_reason}` : ''}
+        </div>
+      )}
       {suggestion.warnings.length > 0 && (
         <ul className="space-y-1">
           {suggestion.warnings.map((w, i) => (

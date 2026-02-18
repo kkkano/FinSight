@@ -10,6 +10,8 @@ import { FileText, Loader2, Star, Zap } from 'lucide-react';
 import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
+import { useToast } from '../ui';
+import { MiniPriceChart } from './tabs/overview/MiniPriceChart';
 
 // --- Props ---
 
@@ -62,8 +64,15 @@ export function StockHeader({
   valuation,
   loading,
 }: StockHeaderProps) {
-  const { watchlist, addWatchItemApi, removeWatchItemApi } = useDashboardStore();
+  const {
+    watchlist,
+    addWatchItemApi,
+    removeWatchItemApi,
+    deepAnalysisIncludeDeepSearch,
+    setDeepAnalysisIncludeDeepSearch,
+  } = useDashboardStore();
   const { execute, isRunning, runId } = useExecuteAgent();
+  const { toast } = useToast();
 
   // Watchlist toggle state
   const isInWatchlist = watchlist.some(
@@ -77,8 +86,13 @@ export function StockHeader({
       } else {
         await addWatchItemApi(ticker);
       }
-    } catch {
-      // Silently handle watchlist API errors
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '操作失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '自选操作失败',
+        message,
+      });
     }
   };
 
@@ -88,18 +102,23 @@ export function StockHeader({
       query: `快速分析 ${ticker}`,
       tickers: [ticker],
       outputMode: 'brief',
+      analysisDepth: 'quick',
       budget: 3,
       source: 'dashboard_header',
     });
   };
 
-  const handleGenerateReport = () => {
+  const handleDeepAnalysis = () => {
     if (!ticker || isRunning) return;
+    const includeDeepSearch = deepAnalysisIncludeDeepSearch;
     execute({
-      query: `生成 ${ticker} 投资报告`,
+      query: includeDeepSearch
+        ? `对 ${ticker} 做深度搜索，输出可追溯证据与关键结论`
+        : `生成 ${ticker} 投资报告`,
       tickers: [ticker],
       outputMode: 'investment_report',
-      source: 'dashboard_header',
+      analysisDepth: includeDeepSearch ? 'deep_research' : 'report',
+      source: includeDeepSearch ? 'dashboard_deep_search' : 'dashboard_header',
     });
   };
 
@@ -119,7 +138,7 @@ export function StockHeader({
           </span>
         </div>
 
-        {/* Price + Market Cap */}
+        {/* Price + Market Cap + Sparkline */}
         {loading ? (
           <div className="h-6 w-24 bg-fin-border rounded animate-pulse" />
         ) : (
@@ -133,6 +152,10 @@ export function StockHeader({
               <span className="text-xs text-fin-muted">
                 {formatMarketCap(marketCap)}
               </span>
+            )}
+            {/* Mini sparkline */}
+            {charts?.market_chart && charts.market_chart.length > 0 && (
+              <MiniPriceChart data={charts.market_chart} />
             )}
           </div>
         )}
@@ -169,10 +192,19 @@ export function StockHeader({
           快速分析
         </button>
 
-        {/* Generate Report */}
+        {/* Deep analysis toggle + action */}
+        <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
+          <input
+            type="checkbox"
+            className="accent-fin-primary"
+            checked={deepAnalysisIncludeDeepSearch}
+            onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
+          />
+          含 deepsearch
+        </label>
         <button
           type="button"
-          onClick={handleGenerateReport}
+          onClick={handleDeepAnalysis}
           disabled={isRunning}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -181,7 +213,7 @@ export function StockHeader({
           ) : (
             <FileText size={12} />
           )}
-          生成报告
+          深度分析
         </button>
       </div>
     </div>

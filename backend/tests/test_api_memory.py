@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+from uuid import uuid4
 from backend.api.main import app
 
 client = TestClient(app)
@@ -53,3 +54,46 @@ def test_watchlist_endpoints():
     response = client.get(f"/api/user/profile?user_id={user_id}")
     data = response.json()
     assert "NVDA" not in data["profile"]["watchlist"]
+
+
+def test_agent_preferences_endpoints():
+    user_id = f"test_api_user_agent_prefs_{uuid4().hex}"
+
+    # Get defaults
+    response = client.get(f"/api/agents/preferences?user_id={user_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["preferences"]["maxRounds"] == 3
+    assert data["preferences"]["concurrentMode"] is True
+    assert data["preferences"]["agents"]["price_agent"] == "standard"
+
+    # Update with mixed valid/invalid payload
+    update_payload = {
+        "user_id": user_id,
+        "preferences": {
+            "agents": {
+                "news_agent": "deep",
+                "technical_agent": "off",
+                "unknown_agent": "off",
+            },
+            "maxRounds": 99,
+            "concurrentMode": False,
+        },
+    }
+    response = client.put("/api/agents/preferences", json=update_payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["preferences"]["maxRounds"] == 10
+    assert data["preferences"]["concurrentMode"] is False
+    assert data["preferences"]["agents"]["news_agent"] == "deep"
+    assert data["preferences"]["agents"]["technical_agent"] == "off"
+    assert "unknown_agent" not in data["preferences"]["agents"]
+
+    # Verify persistence
+    response = client.get(f"/api/agents/preferences?user_id={user_id}")
+    data = response.json()
+    assert data["success"] is True
+    assert data["preferences"]["agents"]["news_agent"] == "deep"
+    assert data["preferences"]["agents"]["technical_agent"] == "off"

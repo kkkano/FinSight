@@ -1,41 +1,106 @@
 /**
- * RevenueGrowthChart - CSS-based horizontal bar chart for revenue growth comparison.
+ * RevenueGrowthChart - ECharts diverging horizontal bar chart for revenue growth.
  *
- * Highlights the current stock in primary color.
- * Handles negative growth values with left-aligned bars.
+ * Replaces the old CSS bidirectional bar version with a real ECharts chart.
+ * Positive growth extends right (green), negative extends left (red).
+ * Current stock is highlighted.
  */
 import { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
-import type { PeerMetrics } from '../../../../types/dashboard.ts';
+import { useChartTheme } from '../../../../hooks/useChartTheme';
+import type { PeerMetrics } from '../../../../types/dashboard';
+
+// --- Props ---
 
 interface RevenueGrowthChartProps {
   peers: PeerMetrics[];
   subjectSymbol: string;
 }
 
+// --- Component ---
+
 export function RevenueGrowthChart({ peers, subjectSymbol }: RevenueGrowthChartProps) {
-  const chartData = useMemo(() => {
+  const theme = useChartTheme();
+
+  const option = useMemo(() => {
     const withGrowth = peers
       .filter((p) => p.revenue_growth != null)
       .map((p) => ({
         symbol: p.symbol,
-        value: (p.revenue_growth as number) * 100,
+        value: Math.round((p.revenue_growth as number) * 1000) / 10,
         isCurrent: p.symbol.toUpperCase() === subjectSymbol.toUpperCase(),
       }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => a.value - b.value); // ascending for horizontal bar
 
-    const maxAbs = withGrowth.length > 0
-      ? Math.max(...withGrowth.map((d) => Math.abs(d.value)), 1)
-      : 1;
+    if (withGrowth.length === 0) return null;
 
-    return withGrowth.map((d) => ({
-      ...d,
-      pct: (Math.abs(d.value) / maxAbs) * 50,
-      isNegative: d.value < 0,
-    }));
-  }, [peers, subjectSymbol]);
+    const symbols = withGrowth.map((d) => d.symbol);
 
-  if (chartData.length === 0) {
+    return {
+      tooltip: {
+        trigger: 'axis' as const,
+        axisPointer: { type: 'shadow' },
+        backgroundColor: theme.tooltipBackground,
+        borderColor: theme.tooltipBorder,
+        textStyle: { color: theme.tooltipText, fontSize: 11 },
+        formatter: (params: Array<{ name: string; value: number }>) => {
+          const p = params[0];
+          if (!p) return '';
+          const sign = p.value >= 0 ? '+' : '';
+          return `<b>${p.name}</b><br/>营收增长: ${sign}${p.value.toFixed(1)}%`;
+        },
+      },
+      grid: { left: 56, right: 48, top: 8, bottom: 8 },
+      xAxis: {
+        type: 'value' as const,
+        axisLabel: {
+          color: theme.muted,
+          fontSize: 9,
+          formatter: (v: number) => `${v >= 0 ? '+' : ''}${v}%`,
+        },
+        splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
+      },
+      yAxis: {
+        type: 'category' as const,
+        data: symbols,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisLabel: {
+          color: (value: string) =>
+            value.toUpperCase() === subjectSymbol.toUpperCase() ? theme.primary : theme.muted,
+          fontSize: 10,
+        },
+      },
+      series: [
+        {
+          type: 'bar',
+          data: withGrowth.map((d) => ({
+            value: d.value,
+            itemStyle: {
+              color: d.isCurrent
+                ? (d.value >= 0 ? theme.warning : theme.danger)
+                : (d.value >= 0 ? theme.success : theme.danger),
+              opacity: d.isCurrent ? 1 : 0.5,
+              borderRadius: d.value >= 0 ? [0, 3, 3, 0] : [3, 0, 0, 3],
+            },
+          })),
+          barMaxWidth: 18,
+          label: {
+            show: true,
+            position: 'right' as const,
+            formatter: (p: { value: number }) => {
+              const sign = p.value >= 0 ? '+' : '';
+              return `${sign}${p.value.toFixed(1)}%`;
+            },
+            fontSize: 9,
+            color: theme.textSecondary,
+          },
+        },
+      ],
+    };
+  }, [peers, subjectSymbol, theme]);
+
+  if (!option) {
     return (
       <div className="flex items-center justify-center h-32 text-fin-muted text-sm">
         暂无营收增长数据
@@ -43,42 +108,18 @@ export function RevenueGrowthChart({ peers, subjectSymbol }: RevenueGrowthChartP
     );
   }
 
+  const chartHeight = Math.max(120, option.yAxis.data.length * 32 + 24);
+
   return (
     <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-fin-text mb-3">营收增长对比</h4>
-      <div className="space-y-2">
-        {chartData.map((item) => (
-          <div key={item.symbol} className="flex items-center gap-3">
-            <span className={`text-xs w-14 text-right shrink-0 ${
-              item.isCurrent ? 'text-fin-primary font-semibold' : 'text-fin-muted'
-            }`}>
-              {item.symbol}
-            </span>
-            <div className="flex-1 h-5 relative bg-fin-border/30 rounded overflow-hidden">
-              {/* Center line for zero reference */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-fin-border" />
-              {/* Bar */}
-              <div
-                className={`absolute top-0 h-full rounded transition-all duration-500 ${
-                  item.isCurrent
-                    ? item.isNegative ? 'bg-fin-danger' : 'bg-amber-500'
-                    : item.isNegative ? 'bg-fin-danger/40' : 'bg-fin-success/40'
-                }`}
-                style={
-                  item.isNegative
-                    ? { right: '50%', width: `${item.pct}%` }
-                    : { left: '50%', width: `${item.pct}%` }
-                }
-              />
-            </div>
-            <span className={`text-xs w-16 text-right shrink-0 ${
-              item.isCurrent ? 'text-fin-primary font-semibold' : 'text-fin-text'
-            }`}>
-              {item.value >= 0 ? '+' : ''}{item.value.toFixed(1)}%
-            </span>
-          </div>
-        ))}
-      </div>
+      <h4 className="text-sm font-semibold text-fin-text mb-2">营收增长对比</h4>
+      <ReactECharts
+        option={option}
+        style={{ width: '100%', height: chartHeight }}
+        opts={{ renderer: 'svg' }}
+        notMerge
+        lazyUpdate
+      />
     </div>
   );
 }

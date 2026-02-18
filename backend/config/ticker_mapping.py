@@ -273,6 +273,43 @@ def is_probably_ticker(ticker: str) -> bool:
     return bool(re.match(r"^[A-Z0-9]{1,6}([.-][A-Z0-9]{1,4})?$", ticker))
 
 
+def normalize_ticker(raw: str) -> str:
+    """
+    将任意用户输入（公司名 / 别名 / ticker）规范化为标准 ticker。
+
+    优先级：CN_TO_TICKER → COMPANY_MAP（小写别名 → ticker）→ 原样返回大写。
+    """
+    stripped = raw.strip()
+    if not stripped:
+        return stripped
+
+    # 中文名 → ticker
+    if stripped in CN_TO_TICKER:
+        return CN_TO_TICKER[stripped]
+
+    lower = stripped.lower()
+    mapped = COMPANY_MAP.get(lower)
+    # COMPANY_MAP 中 value 为大写 ticker 的项是「别名 → ticker」映射
+    if mapped and mapped == mapped.upper() and len(mapped) <= 6:
+        return mapped
+
+    return stripped.upper()
+
+
+def dedup_tickers(tickers: List[str]) -> List[str]:
+    """
+    对 ticker 列表做规范化 + 去重（保留首次出现顺序）。
+    """
+    seen: set[str] = set()
+    result: List[str] = []
+    for t in tickers:
+        canonical = normalize_ticker(t)
+        if canonical and canonical not in seen:
+            seen.add(canonical)
+            result.append(canonical)
+    return result
+
+
 def extract_tickers(query: str) -> Dict[str, Any]:
     """
     Extract tickers and company names from query
@@ -348,5 +385,8 @@ def extract_tickers(query: str) -> Dict[str, Any]:
             if ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
                 metadata['company_names'].append(name)
+
+    # 最后统一规范化 + 去重，防止别名与标准 ticker 共存
+    metadata['tickers'] = dedup_tickers(metadata['tickers'])
 
     return metadata

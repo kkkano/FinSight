@@ -15,6 +15,7 @@ type RightPanelProps = {
   onSubscribeClick?: () => void;
   onNavigateToChat?: () => void;
   showMiniChat?: boolean;
+  autoSwitchExecution?: boolean;
   className?: string;
 };
 
@@ -23,6 +24,7 @@ export const RightPanel: FC<RightPanelProps> = ({
   onSubscribeClick,
   onNavigateToChat,
   showMiniChat = true,
+  autoSwitchExecution = true,
   className,
 }) => {
   const [activeTab, setActiveTab] = useState<RightPanelTab>('alerts');
@@ -57,11 +59,15 @@ export const RightPanel: FC<RightPanelProps> = ({
   // Auto-switch to execution tab ONLY on 0→N transition
   const prevActiveCountRef = useRef(activeRuns.length);
   useEffect(() => {
+    if (!autoSwitchExecution) {
+      prevActiveCountRef.current = activeRuns.length;
+      return;
+    }
     if (prevActiveCountRef.current === 0 && activeRuns.length > 0) {
       setActiveTab('execution');
     }
     prevActiveCountRef.current = activeRuns.length;
-  }, [activeRuns.length]);
+  }, [activeRuns.length, autoSwitchExecution]);
 
   return (
     <section

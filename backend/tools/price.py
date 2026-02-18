@@ -1319,7 +1319,6 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     # 策略 3: 尝试使用 Finnhub（如果有 API key）
     if FINNHUB_API_KEY and finnhub_client:
         try:
-            import time
             from datetime import datetime, timedelta
             
             # 根据 period 计算天数
@@ -1542,6 +1541,410 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     # 所有策略都失败，返回错误
     return {"error": f"Failed to fetch historical data for {ticker}: All data sources failed. Please try again later or check your internet connection."}
 
+
+
+def _safe_float_value(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _nearest_strike_iv(option_df: Any, target_strike: float) -> Optional[float]:
+    if option_df is None or getattr(option_df, "empty", True):
+        return None
+    if "strike" not in option_df.columns or "impliedVolatility" not in option_df.columns:
+        return None
+    subset = option_df[["strike", "impliedVolatility"]].dropna()
+    if subset.empty:
+        return None
+    try:
+        idx = (subset["strike"] - target_strike).abs().idxmin()
+        value = _safe_float_value(subset.loc[idx, "impliedVolatility"])
+        if value is None or value <= 0:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def get_option_chain_metrics(ticker: str, expiry: Optional[str] = None) -> Dict[str, Any]:
+    """Free option-chain derived signals via yfinance: IV / PCR / skew."""
+    result: Dict[str, Any] = {
+        "ticker": str(ticker or "").upper(),
+        "source": "yfinance_options",
+        "as_of": datetime.now().isoformat(),
+        "expiry": None,
+        "spot_price": None,
+        "iv_atm": None,
+        "put_call_ratio_oi": None,
+        "put_call_ratio_volume": None,
+        "iv_skew_25d": None,
+        "call_open_interest": None,
+        "put_open_interest": None,
+        "call_volume": None,
+        "put_volume": None,
+        "error": None,
+    }
+    if not ticker:
+        result["error"] = "ticker_required"
+        return result
+
+    try:
+        stock = yf.Ticker(ticker)
+        options = list(getattr(stock, "options", []) or [])
+        if not options:
+            result["error"] = "no_option_chain_available"
+            return result
+
+        selected_expiry = expiry if expiry in options else options[0]
+        chain = stock.option_chain(selected_expiry)
+        calls = getattr(chain, "calls", None)
+        puts = getattr(chain, "puts", None)
+        if calls is None or puts is None or calls.empty or puts.empty:
+            result["error"] = "empty_option_chain"
+            return result
+
+        spot_price = None
+        try:
+            hist = stock.history(period="5d")
+            if hist is not None and not hist.empty and "Close" in hist.columns:
+                spot_price = _safe_float_value(hist["Close"].iloc[-1])
+        except Exception:
+            spot_price = None
+        if spot_price is None:
+            info = getattr(stock, "info", {}) or {}
+            spot_price = _safe_float_value(info.get("regularMarketPrice"))
+        if spot_price is None or spot_price <= 0:
+            result["error"] = "spot_price_unavailable"
+            return result
+
+        call_oi = int(calls["openInterest"].fillna(0).sum()) if "openInterest" in calls.columns else 0
+        put_oi = int(puts["openInterest"].fillna(0).sum()) if "openInterest" in puts.columns else 0
+        call_volume = int(calls["volume"].fillna(0).sum()) if "volume" in calls.columns else 0
+        put_volume = int(puts["volume"].fillna(0).sum()) if "volume" in puts.columns else 0
+
+        call_atm_iv = _nearest_strike_iv(calls, float(spot_price))
+        put_atm_iv = _nearest_strike_iv(puts, float(spot_price))
+        iv_values = [v for v in [call_atm_iv, put_atm_iv] if isinstance(v, float)]
+        iv_atm = float(sum(iv_values) / len(iv_values)) if iv_values else None
+
+        put_25d_iv = _nearest_strike_iv(puts, float(spot_price) * 0.95)
+        call_25d_iv = _nearest_strike_iv(calls, float(spot_price) * 1.05)
+        iv_skew = (put_25d_iv - call_25d_iv) if (put_25d_iv is not None and call_25d_iv is not None) else None
+
+        result.update(
+            {
+                "expiry": selected_expiry,
+                "spot_price": float(spot_price),
+                "iv_atm": iv_atm,
+                "put_call_ratio_oi": (float(put_oi) / float(call_oi)) if call_oi > 0 else None,
+                "put_call_ratio_volume": (float(put_volume) / float(call_volume)) if call_volume > 0 else None,
+                "iv_skew_25d": float(iv_skew) if iv_skew is not None else None,
+                "call_open_interest": call_oi,
+                "put_open_interest": put_oi,
+                "call_volume": call_volume,
+                "put_volume": put_volume,
+            }
+        )
+        return result
+    except Exception as e:
+        logger.info(f"[Options] get_option_chain_metrics failed for {ticker}: {e}")
+        result["error"] = f"fetch_failed:{e.__class__.__name__}"
+        return result
+
+
+def _normalize_positions(positions: Any) -> List[Dict[str, Any]]:
+    parsed: List[Dict[str, Any]] = []
+    if not isinstance(positions, list):
+        return parsed
+
+    for item in positions:
+        if not isinstance(item, dict):
+            continue
+        ticker = str(item.get("ticker") or item.get("symbol") or "").strip().upper()
+        if not ticker:
+            continue
+        weight = _safe_float_value(item.get("weight"))
+        quantity = _safe_float_value(item.get("quantity"))
+        parsed.append({"ticker": ticker, "weight": weight, "quantity": quantity})
+
+    if not parsed:
+        return []
+
+    weight_sum = sum((entry["weight"] or 0.0) for entry in parsed if entry["weight"] is not None)
+    if weight_sum > 0:
+        for entry in parsed:
+            raw_weight = entry["weight"] or 0.0
+            entry["weight"] = float(raw_weight / weight_sum)
+        return parsed
+
+    qty_sum = sum(abs(entry["quantity"] or 0.0) for entry in parsed if entry["quantity"] is not None)
+    if qty_sum > 0:
+        for entry in parsed:
+            raw_qty = abs(entry["quantity"] or 0.0)
+            entry["weight"] = float(raw_qty / qty_sum)
+        return parsed
+
+    equal_weight = 1.0 / float(len(parsed))
+    for entry in parsed:
+        entry["weight"] = equal_weight
+    return parsed
+
+
+def _download_close_frame(symbols: List[str], lookback_days: int) -> Optional[pd.DataFrame]:
+    if not symbols:
+        return None
+    period_days = max(lookback_days, 30)
+    period = f"{period_days}d"
+
+    try:
+        raw = yf.download(
+            tickers=symbols if len(symbols) > 1 else symbols[0],
+            period=period,
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            threads=False,
+        )
+    except Exception:
+        return None
+
+    if raw is None or getattr(raw, "empty", True):
+        return None
+
+    try:
+        if isinstance(raw.columns, pd.MultiIndex):
+            level0 = set(raw.columns.get_level_values(0))
+            if "Close" in level0:
+                close_df = raw["Close"].copy()
+            elif "Adj Close" in level0:
+                close_df = raw["Adj Close"].copy()
+            else:
+                return None
+            if isinstance(close_df, pd.Series):
+                close_df = close_df.to_frame(name=symbols[0])
+            return close_df.dropna(how="all")
+
+        if "Close" in raw.columns:
+            return raw[["Close"]].rename(columns={"Close": symbols[0]}).dropna(how="all")
+        if "Adj Close" in raw.columns:
+            return raw[["Adj Close"]].rename(columns={"Adj Close": symbols[0]}).dropna(how="all")
+    except Exception:
+        return None
+    return None
+
+
+def _compute_beta(portfolio_returns: pd.Series, factor_returns: pd.Series) -> Optional[float]:
+    joined = pd.concat([portfolio_returns, factor_returns], axis=1).dropna()
+    if joined.empty or len(joined) < 20:
+        return None
+    p = joined.iloc[:, 0]
+    f = joined.iloc[:, 1]
+    variance = f.var()
+    if variance is None or variance <= 1e-12:
+        return None
+    covariance = p.cov(f)
+    if covariance is None:
+        return None
+    return float(covariance / variance)
+
+
+def get_factor_exposure(positions: Any, lookback_days: int = 252) -> Dict[str, Any]:
+    """Estimate simple portfolio factor beta exposures from free yfinance history."""
+    normalized = _normalize_positions(positions)
+    result: Dict[str, Any] = {
+        "source": "yfinance_factor_model",
+        "as_of": datetime.now().isoformat(),
+        "lookback_days": int(lookback_days),
+        "positions": normalized,
+        "factor_beta": {},
+        "annualized_volatility": None,
+        "max_drawdown": None,
+        "market_r2": None,
+        "observation_count": 0,
+        "error": None,
+    }
+    if not normalized:
+        result["error"] = "positions_required"
+        return result
+
+    factor_map = {
+        "market": "SPY",
+        "growth": "QQQ",
+        "small_cap": "IWM",
+        "rates": "TLT",
+        "gold": "GLD",
+        "usd": "UUP",
+    }
+
+    portfolio_symbols = [item["ticker"] for item in normalized]
+    all_symbols = list(dict.fromkeys(portfolio_symbols + list(factor_map.values())))
+    close_df = _download_close_frame(all_symbols, lookback_days=lookback_days)
+    if close_df is None or close_df.empty:
+        result["error"] = "historical_data_unavailable"
+        return result
+
+    returns = close_df.pct_change().dropna(how="all")
+    if returns.empty:
+        result["error"] = "insufficient_returns_data"
+        return result
+
+    available_symbols = [sym for sym in portfolio_symbols if sym in returns.columns]
+    if not available_symbols:
+        result["error"] = "portfolio_symbols_missing_in_history"
+        return result
+
+    weighted_series: List[pd.Series] = []
+    for position in normalized:
+        symbol = position["ticker"]
+        if symbol not in returns.columns:
+            continue
+        weight = float(position.get("weight") or 0.0)
+        weighted_series.append(returns[symbol] * weight)
+
+    if not weighted_series:
+        result["error"] = "portfolio_returns_unavailable"
+        return result
+
+    portfolio_returns = sum(weighted_series)
+    portfolio_returns = portfolio_returns.dropna()
+    if portfolio_returns.empty:
+        result["error"] = "portfolio_returns_empty"
+        return result
+
+    factor_beta: Dict[str, Optional[float]] = {}
+    for factor_name, factor_symbol in factor_map.items():
+        if factor_symbol not in returns.columns:
+            factor_beta[factor_name] = None
+            continue
+        beta = _compute_beta(portfolio_returns, returns[factor_symbol])
+        factor_beta[factor_name] = round(beta, 4) if beta is not None else None
+
+    ann_vol = float(portfolio_returns.std() * (252 ** 0.5))
+    cumulative = (1.0 + portfolio_returns).cumprod()
+    drawdown_series = cumulative / cumulative.cummax() - 1.0
+    max_drawdown = float(drawdown_series.min()) if not drawdown_series.empty else None
+
+    market_symbol = factor_map["market"]
+    market_r2 = None
+    if market_symbol in returns.columns:
+        joined = pd.concat([portfolio_returns, returns[market_symbol]], axis=1).dropna()
+        if len(joined) >= 20:
+            corr = joined.iloc[:, 0].corr(joined.iloc[:, 1])
+            if corr is not None:
+                market_r2 = float(corr ** 2)
+
+    result.update(
+        {
+            "factor_beta": factor_beta,
+            "annualized_volatility": round(ann_vol, 4),
+            "max_drawdown": round(max_drawdown, 4) if max_drawdown is not None else None,
+            "market_r2": round(market_r2, 4) if market_r2 is not None else None,
+            "observation_count": int(len(portfolio_returns)),
+        }
+    )
+    return result
+
+
+def run_portfolio_stress_test(
+    positions: Any,
+    scenarios: Optional[Dict[str, Dict[str, float]]] = None,
+    lookback_days: int = 252,
+) -> Dict[str, Any]:
+    """Run lightweight factor-based stress tests (free, no paid risk engine)."""
+    factor_payload = get_factor_exposure(positions, lookback_days=lookback_days)
+    result: Dict[str, Any] = {
+        "source": "factor_stress_model",
+        "as_of": datetime.now().isoformat(),
+        "lookback_days": int(lookback_days),
+        "factor_exposure": factor_payload,
+        "scenarios": [],
+        "worst_case_return": None,
+        "error": None,
+    }
+    if factor_payload.get("error"):
+        result["error"] = f"factor_exposure_error:{factor_payload.get('error')}"
+        return result
+
+    factor_beta = factor_payload.get("factor_beta")
+    if not isinstance(factor_beta, dict):
+        result["error"] = "missing_factor_beta"
+        return result
+
+    scenario_map = scenarios or {
+        "equity_selloff": {
+            "market": -0.10,
+            "growth": -0.14,
+            "small_cap": -0.16,
+            "rates": 0.04,
+            "gold": 0.02,
+            "usd": 0.02,
+        },
+        "rate_shock_up": {
+            "market": -0.04,
+            "growth": -0.08,
+            "small_cap": -0.06,
+            "rates": -0.09,
+            "gold": -0.03,
+            "usd": 0.03,
+        },
+        "volatility_spike": {
+            "market": -0.06,
+            "growth": -0.09,
+            "small_cap": -0.10,
+            "rates": 0.03,
+            "gold": 0.01,
+            "usd": 0.01,
+        },
+    }
+
+    annualized_vol = _safe_float_value(factor_payload.get("annualized_volatility")) or 0.0
+    scenarios_out: List[Dict[str, Any]] = []
+    for scenario_name, shocks in scenario_map.items():
+        if not isinstance(shocks, dict):
+            continue
+        projected_return = 0.0
+        used_factors: Dict[str, float] = {}
+        for factor_name, shock in shocks.items():
+            beta = _safe_float_value(factor_beta.get(factor_name))
+            shock_value = _safe_float_value(shock)
+            if beta is None or shock_value is None:
+                continue
+            used_factors[factor_name] = round(beta * shock_value, 4)
+            projected_return += beta * shock_value
+
+        if "volatility" in scenario_name.lower():
+            projected_return -= 0.25 * annualized_vol
+        elif projected_return < 0:
+            projected_return -= 0.10 * annualized_vol
+        else:
+            projected_return -= 0.05 * annualized_vol
+
+        projected_drawdown = min(0.0, projected_return * 1.2)
+        scenarios_out.append(
+            {
+                "name": scenario_name,
+                "projected_return": round(float(projected_return), 4),
+                "projected_drawdown": round(float(projected_drawdown), 4),
+                "factor_contribution": used_factors,
+            }
+        )
+
+    if not scenarios_out:
+        result["error"] = "no_valid_scenarios"
+        return result
+
+    worst_case = min(item["projected_return"] for item in scenarios_out)
+    result.update(
+        {
+            "scenarios": sorted(scenarios_out, key=lambda item: item["projected_return"]),
+            "worst_case_return": round(float(worst_case), 4),
+        }
+    )
+    return result
 
 
 def get_performance_comparison(tickers: Union[dict, list]) -> str:

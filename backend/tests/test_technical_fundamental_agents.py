@@ -94,6 +94,26 @@ async def test_fundamental_agent_financials():
         },
         "error": None,
     })
+    tools.get_earnings_estimates = MagicMock(return_value={
+        "ticker": "AAPL",
+        "source": "yfinance",
+        "as_of": "2026-01-10T00:00:00",
+        "earnings_estimate": [{"period": "0q", "avg": 2.15}],
+        "eps_trend": [{"period": "0q", "current": 2.15}],
+        "eps_revisions": [{"period": "0q", "upLast7days": 3, "downLast7Days": 0}],
+        "calendar": {"Earnings Date": ["2026-01-30"]},
+        "revision_signal": "positive",
+        "error": None,
+    })
+    tools.get_eps_revisions = MagicMock(return_value={
+        "ticker": "AAPL",
+        "source": "yfinance",
+        "as_of": "2026-01-10T00:00:00",
+        "eps_revisions": [{"period": "0q", "upLast7days": 3, "downLast7Days": 0}],
+        "eps_trend": [{"period": "0q", "current": 2.15}],
+        "revision_signal": "positive",
+        "error": None,
+    })
 
     agent = FundamentalAgent(mock_llm, cache, tools)
     result = await agent.research("fundamental analysis", "AAPL")
@@ -105,6 +125,8 @@ async def test_fundamental_agent_financials():
     assert revenue_item is not None
     assert "yoy" in revenue_item.meta
     assert "qoq" in revenue_item.meta
+    eps_item = next((item for item in result.evidence if item.meta.get("metric_key") == "eps_revision_signal"), None)
+    assert eps_item is not None
     assert result.evidence_quality.get("overall_score", 0) > 0
     assert result.evidence_quality.get("metric_coverage", 0) > 0
 

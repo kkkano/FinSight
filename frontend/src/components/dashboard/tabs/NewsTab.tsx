@@ -1,92 +1,175 @@
-import { useMemo, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+/**
+ * NewsTab — Main news tab with three sub-views.
+ *
+ * Phase H redesign:
+ * - Three sub-tabs: stock-specific / market 7x24 / breaking events
+ * - Secondary topic filter chips (7 groups from 18 backend tags)
+ * - Time range selector (24h / 7d / 30d)
+ * - Rich NewsCard with tags, impact badges, and action buttons
+ */
+import { useMemo } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useLatestReport } from '../../../hooks/useLatestReport';
-import type { NewsItem, SelectionItem } from '../../../types/dashboard';
+import { useExecuteAgent } from '../../../hooks/useExecuteAgent';
+import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
+import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
+import {
+  computeNewsTags,
+  filterByTimeRange,
+  filterBreakingNews,
+} from '../../../utils/news';
 import { generateNewsId } from '../../../utils/hash';
 import { SentimentStatsBar } from './news/SentimentStatsBar';
-import { NewsFilterPills } from './news/NewsFilterPills';
-import type { NewsFilterType } from './news/NewsFilterPills';
 import { AiNewsSummaryCard } from './news/AiNewsSummaryCard';
+import { AiInsightCard } from './shared/AiInsightCard';
+import { NewsSubTabs } from './news/NewsSubTabs';
+import { NewsTagChips } from './news/NewsTagChips';
+import { NewsTimeRange } from './news/NewsTimeRange';
+import { NewsCard } from './news/NewsCard';
 
-const POSITIVE_KEYWORDS = [
-  'surge', 'jump', 'rise', 'gain', 'bull', 'rally', 'upgrade', 'beat',
-  'profit', 'growth', 'record', 'high', 'strong', 'positive', 'optimis',
-  'outperform', 'buy', 'upside',
-];
-
-const NEGATIVE_KEYWORDS = [
-  'drop', 'fall', 'decline', 'loss', 'bear', 'crash', 'downgrade', 'miss',
-  'debt', 'risk', 'weak', 'negative', 'pessimis', 'sell', 'cut', 'low',
-  'slump', 'warning', 'fear',
-];
-
-function classifySentiment(item: NewsItem): 'bullish' | 'bearish' | 'neutral' {
-  const text = `${item.title ?? ''} ${item.summary ?? ''}`.toLowerCase();
-  const positiveHits = POSITIVE_KEYWORDS.filter((keyword) => text.includes(keyword)).length;
-  const negativeHits = NEGATIVE_KEYWORDS.filter((keyword) => text.includes(keyword)).length;
-
-  if (positiveHits > negativeHits) return 'bullish';
-  if (negativeHits > positiveHits) return 'bearish';
-  return 'neutral';
-}
-
-function formatNewsTime(ts: string): string {
-  if (!ts) return '';
-  try {
-    const date = new Date(ts);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-
-    if (hours < 1) return '刚刚';
-    if (hours < 24) return `${hours}小时前`;
-    if (days < 7) return `${days}天前`;
-    return ts.split('T')[0] ?? ts;
-  } catch {
-    return ts;
+// ---------------------------------------------------------------------------
+// Deduplicate news items by title+source key
+// ---------------------------------------------------------------------------
+function deduplicateNews(items: NewsItem[]): NewsItem[] {
+  const seen = new Set<string>();
+  const result: NewsItem[] = [];
+  for (const item of items) {
+    const key = `${item.title || ''}::${item.source || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
   }
+  return result;
 }
 
+// ---------------------------------------------------------------------------
+// Detect which tag groups have matching items
+// ---------------------------------------------------------------------------
+function detectAvailableGroups(items: NewsItem[]): NewsTagGroup[] {
+  const groups: NewsTagGroup[] = [];
+  const groupKeys = Object.keys(NEWS_TAG_GROUP_MAP) as NewsTagGroup[];
+
+  for (const group of groupKeys) {
+    if (group === '全部') continue;
+    const allowed = NEWS_TAG_GROUP_MAP[group];
+    const hasMatch = items.some((item) => {
+      const tags = computeNewsTags(item);
+      return tags.some((t) => allowed.includes(t));
+    });
+    if (hasMatch) groups.push(group);
+  }
+
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Filter by tag group
+// ---------------------------------------------------------------------------
+function filterByTagGroup(items: NewsItem[], group: NewsTagGroup): NewsItem[] {
+  if (group === '全部') return items;
+  const allowed = NEWS_TAG_GROUP_MAP[group];
+  return items.filter((item) => {
+    const tags = computeNewsTags(item);
+    return tags.some((t) => allowed.includes(t));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export function NewsTab() {
+  // --- Store ---
   const activeAsset = useDashboardStore((s) => s.activeAsset);
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const newsSubTab = useDashboardStore((s) => s.newsSubTab);
+  const newsTagFilter = useDashboardStore((s) => s.newsTagFilter);
+  const newsTimeRange = useDashboardStore((s) => s.newsTimeRange);
+  const setNewsSubTab = useDashboardStore((s) => s.setNewsSubTab);
+  const setNewsTagFilter = useDashboardStore((s) => s.setNewsTagFilter);
+  const setNewsTimeRange = useDashboardStore((s) => s.setNewsTimeRange);
   const activeSelections = useDashboardStore((s) => s.activeSelections);
   const toggleSelection = useDashboardStore((s) => s.toggleSelection);
+  const setActiveSelection = useDashboardStore((s) => s.setActiveSelection);
+  const insightsData = useDashboardStore((s) => s.insightsData);
+  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
+  const insightsError = useDashboardStore((s) => s.insightsError);
+  const insightsStale = useDashboardStore((s) => s.insightsStale);
 
-  const [activeFilter, setActiveFilter] = useState<NewsFilterType>('all');
-
+  // --- Report fallback ---
   const ticker = activeAsset?.symbol ?? null;
-  const { data: reportData, loading: reportLoading } = useLatestReport(ticker);
+  const { data: reportData, loading: reportLoading } = useLatestReport(ticker, {
+    sourceType: 'dashboard',
+    fallbackToAnySource: false,
+  });
+  const newsInsight = insightsData?.news ?? null;
 
-  const newsMarket = dashboardData?.news?.market;
-  const newsImpact = dashboardData?.news?.impact;
+  // --- Agent execution for "分析影响" ---
+  const { execute: executeAnalysis, isRunning: isAnalyzing } = useExecuteAgent();
 
-  const allNews = useMemo<NewsItem[]>(() => {
-    if (!newsMarket && !newsImpact) return [];
-    const market = newsMarket ?? [];
-    const impact = newsImpact ?? [];
+  // --- Raw data arrays ---
+  const marketNews = useMemo(() => dashboardData?.news?.market ?? [], [dashboardData]);
+  const impactNews = useMemo(() => dashboardData?.news?.impact ?? [], [dashboardData]);
 
-    const seen = new Set<string>();
-    const merged: NewsItem[] = [];
+  // --- Sub-tab counts (before time/tag filtering) ---
+  const allCombined = useMemo(
+    () => deduplicateNews([...marketNews, ...impactNews]),
+    [marketNews, impactNews],
+  );
+  const breakingAll = useMemo(() => filterBreakingNews(allCombined), [allCombined]);
+  const counts = useMemo(() => ({
+    stock: impactNews.length,
+    market: marketNews.length,
+    breaking: breakingAll.length,
+  }), [impactNews, marketNews, breakingAll]);
 
-    for (const item of [...market, ...impact]) {
-      const dedupeKey = `${item.title || ''}::${item.source || ''}`;
-      if (seen.has(dedupeKey)) continue;
-      seen.add(dedupeKey);
-      merged.push(item);
+  // --- Step 1: Select data source by sub-tab ---
+  const sourceNews = useMemo<NewsItem[]>(() => {
+    switch (newsSubTab) {
+      case 'stock':    return impactNews;
+      case 'market':   return marketNews;
+      case 'breaking': return breakingAll;
     }
+  }, [newsSubTab, impactNews, marketNews, breakingAll]);
 
-    return merged;
-  }, [newsMarket, newsImpact]);
+  // --- Step 2: Filter by tag group ---
+  const tagFiltered = useMemo(
+    () => filterByTagGroup(sourceNews, newsTagFilter),
+    [sourceNews, newsTagFilter],
+  );
 
-  const filteredNews = useMemo(() => {
-    if (activeFilter === 'all') return allNews;
-    return allNews.filter((item) => classifySentiment(item) === activeFilter);
-  }, [allNews, activeFilter]);
+  // --- Step 3: Filter by time range ---
+  const timeFiltered = useMemo(
+    () => filterByTimeRange(tagFiltered, newsTimeRange),
+    [tagFiltered, newsTimeRange],
+  );
 
+  // --- Available tag groups (for dynamic chip rendering) ---
+  const availableGroups = useMemo(
+    () => detectAvailableGroups(sourceNews),
+    [sourceNews],
+  );
+
+  // --- Handlers ---
+  const handleAskAbout = (selection: SelectionItem) => {
+    setActiveSelection(selection);
+  };
+
+  const handleAnalyze = (title: string) => {
+    if (isAnalyzing || !ticker) return;
+    executeAnalysis({
+      query: `分析这条新闻的市场影响: ${title}`,
+      tickers: [ticker],
+      agents: ['news_agent'],
+      source: 'dashboard_news',
+    });
+  };
+
+  const handleToggleSelect = (selection: SelectionItem) => {
+    toggleSelection(selection);
+  };
+
+  // --- Empty state ---
   if (!dashboardData) {
     return (
       <div className="flex items-center justify-center h-64 text-fin-muted text-sm">
@@ -95,111 +178,90 @@ export function NewsTab() {
     );
   }
 
+  // --- Render ---
   return (
     <div className="space-y-4">
-      <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
-      <SentimentStatsBar news={allNews} />
+      {/* AI News Insight Card (Phase F) */}
+      <AiInsightCard
+        tab="news"
+        insight={newsInsight}
+        loading={insightsLoading}
+        error={insightsError}
+        stale={insightsStale}
+      />
+      {/* Fallback: report-based summary */}
+      {!newsInsight && !insightsLoading && (
+        <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />
+      )}
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-fin-text">
-          新闻列表
-          <span className="ml-2 text-xs text-fin-muted font-normal">({filteredNews.length})</span>
-        </h3>
-        <NewsFilterPills activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+      {/* Sub-tabs: stock / market / breaking */}
+      <NewsSubTabs
+        activeTab={newsSubTab}
+        onTabChange={setNewsSubTab}
+        ticker={ticker ?? undefined}
+        counts={counts}
+      />
+
+      {/* Filters: tag chips + time range (same row) */}
+      <div className="flex items-center justify-between gap-3">
+        <NewsTagChips
+          activeTag={newsTagFilter}
+          onTagChange={setNewsTagFilter}
+          availableGroups={availableGroups}
+        />
+        <NewsTimeRange
+          activeRange={newsTimeRange}
+          onRangeChange={setNewsTimeRange}
+        />
       </div>
 
-      {filteredNews.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-fin-muted text-sm">
-          暂无匹配的新闻
+      {/* Sentiment stats bar */}
+      <SentimentStatsBar news={timeFiltered} />
+
+      {/* Results header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-fin-text">
+          {newsSubTab === 'stock' && `${ticker ?? '个股'} 相关新闻`}
+          {newsSubTab === 'market' && '市场快讯'}
+          {newsSubTab === 'breaking' && '重大事件'}
+          <span className="ml-2 text-xs text-fin-muted font-normal">
+            ({timeFiltered.length})
+          </span>
+        </h3>
+      </div>
+
+      {/* News list */}
+      {timeFiltered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-32 text-fin-muted text-sm gap-1">
+          {newsSubTab === 'breaking' ? (
+            <>
+              <span className="text-lg">✅</span>
+              <span>近期无重大事件</span>
+            </>
+          ) : (
+            <span>
+              暂无匹配的新闻
+              {newsTagFilter !== '全部' && ` (${newsTagFilter})`}
+              {newsTimeRange !== '30d' && ` · ${newsTimeRange}内`}
+            </span>
+          )}
         </div>
       ) : (
-        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-          {filteredNews.map((news, idx) => {
-            const newsId = generateNewsId(news.title, news.source, news.ts);
-            const isSelected = activeSelections.some((item) => item.id === newsId);
-            const selection: SelectionItem = {
-              type: 'news',
-              id: newsId,
-              title: news.title,
-              url: news.url,
-              source: news.source,
-              ts: news.ts,
-              snippet: (news.summary || news.title || '').slice(0, 100),
-            };
-
-            return (
-              <a
-                key={`${news.title}-${idx}`}
-                href={news.url && news.url !== '#' ? news.url : undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`group block p-3 rounded-lg border transition-colors ${
-                  isSelected
-                    ? 'border-fin-primary bg-fin-primary/5'
-                    : 'border-transparent hover:border-fin-border hover:bg-fin-hover/40'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    data-testid={`news-select-${newsId}`}
-                    title={isSelected ? '取消选择' : '选择'}
-                    aria-label={isSelected ? `取消选择 ${news.title}` : `选择 ${news.title}`}
-                    aria-pressed={isSelected}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      toggleSelection(selection);
-                    }}
-                    className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                      isSelected
-                        ? 'bg-fin-primary border-fin-primary'
-                        : 'border-fin-border bg-transparent hover:border-fin-primary'
-                    }`}
-                  >
-                    {isSelected ? <span className="text-white text-2xs leading-none">✓</span> : null}
-                  </button>
-
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-fin-text line-clamp-2 group-hover:text-fin-primary transition-colors">
-                      {news.title}
-                    </h4>
-
-                    {news.summary ? (
-                      <p className="text-xs text-fin-muted mt-1 line-clamp-2">{news.summary}</p>
-                    ) : null}
-
-                    <div className="flex items-center gap-2 mt-1.5 text-2xs text-fin-muted">
-                      {news.source ? <span>{news.source}</span> : null}
-                      {news.source ? <span>·</span> : null}
-                      <span>{formatNewsTime(news.ts)}</span>
-                      {typeof news.ranking_score === 'number' ? (
-                        <>
-                          <span>·</span>
-                          <span className="text-fin-primary">score {news.ranking_score.toFixed(2)}</span>
-                        </>
-                      ) : null}
-                      {typeof news.asset_relevance === 'number' ? (
-                        <>
-                          <span>·</span>
-                          <span className="text-fin-warning">
-                            relevance {(news.asset_relevance * 100).toFixed(0)}%
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {news.url && news.url !== '#' ? (
-                    <ExternalLink
-                      size={14}
-                      className="text-fin-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1"
-                    />
-                  ) : null}
-                </div>
-              </a>
-            );
-          })}
+        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+          {timeFiltered.map((news) => (
+            <NewsCard
+              key={`${news.title}-${news.source}-${news.ts}`}
+              news={news}
+              ticker={ticker ?? undefined}
+              isSelected={activeSelections.some(
+                (s) => s.id === generateNewsId(news.title, news.source, news.ts),
+              )}
+              onToggleSelect={handleToggleSelect}
+              onAskAbout={handleAskAbout}
+              onAnalyze={handleAnalyze}
+              isAnalyzing={isAnalyzing}
+            />
+          ))}
         </div>
       )}
     </div>

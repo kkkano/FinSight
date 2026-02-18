@@ -5,9 +5,12 @@ import { apiClient, type ReportIndexItem } from '../api/client';
 import { useStore } from '../store/useStore';
 import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
+import { PortfolioPieChart } from '../components/workbench/PortfolioPieChart';
+import { QuickAnalysisBar } from '../components/workbench/QuickAnalysisBar';
 import { RebalanceEntryCard } from '../components/workbench/RebalanceEntryCard';
 import { ReportSection } from '../components/workbench/ReportSection';
 import { TaskSection } from '../components/workbench/TaskSection';
+import { usePortfolioSummary } from '../hooks/usePortfolioSummary';
 
 type WorkbenchProps = {
   symbol: string;
@@ -22,6 +25,7 @@ export function Workbench({
 }: WorkbenchProps) {
   const navigate = useNavigate();
   const { sessionId, portfolioPositions } = useStore();
+  const portfolioSummary = usePortfolioSummary(sessionId);
 
   const [latestReports, setLatestReports] = useState<ReportIndexItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -93,6 +97,9 @@ export function Workbench({
       {/* Portfolio Summary Bar */}
       <PortfolioSummaryBar />
 
+      {/* Quick Analysis Bar (G4) */}
+      <QuickAnalysisBar defaultTicker={symbol} />
+
       {/* Main content: two-column layout */}
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Left: Tasks + Rebalance (main, emphasized) */}
@@ -104,8 +111,15 @@ export function Workbench({
           <RebalanceEntryCard />
         </div>
 
-        {/* Right: Reports (sidebar) */}
+        {/* Right: Portfolio Pie + Reports (sidebar) */}
         <div className="space-y-4">
+          {/* Portfolio distribution pie chart (G4) */}
+          {portfolioSummary.data && portfolioSummary.data.positions.length > 0 && (
+            <PortfolioPieChart
+              positions={portfolioSummary.data.positions}
+              totalValue={portfolioSummary.data.total_value}
+            />
+          )}
           <ReportSection
             symbol={symbol}
             reports={latestReports}

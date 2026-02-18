@@ -424,6 +424,7 @@ def _to_news_item(item: Any) -> dict[str, Any]:
         source = item.get("source") or item.get("publisher") or ""
         ts = item.get("ts") or item.get("published_at") or item.get("datetime") or ""
         summary = item.get("summary") or item.get("snippet") or item.get("content") or ""
+        tags = item.get("tags")  # Phase H: pass through server-computed tags
 
         if isinstance(ts, (int, float)):
             try:
@@ -433,13 +434,17 @@ def _to_news_item(item: Any) -> dict[str, Any]:
         elif not isinstance(ts, str):
             ts = str(ts) if ts else ""
 
-        return {
+        result: dict[str, Any] = {
             "title": str(title).strip(),
             "url": str(url).strip(),
             "source": str(source).strip(),
             "ts": ts,
             "summary": str(summary).strip(),
         }
+        # Attach tags if present (Phase H)
+        if tags and isinstance(tags, list):
+            result["tags"] = tags
+        return result
 
     text = str(item).strip() if item is not None else ""
     return {"title": text, "url": "", "source": "", "ts": "", "summary": ""}
@@ -827,6 +832,127 @@ def fetch_technical_indicators(symbol: str) -> dict[str, Any] | None:
         return None
 
 
+def fetch_indicator_series(symbol: str, n_days: int = 120) -> dict[str, Any] | None:
+    """Compute RSI/MACD/BB time series for *symbol* (Phase G2)."""
+    try:
+        import yfinance as yf
+        from backend.tools.technical import compute_indicator_series
+
+        hist = yf.Ticker(symbol).history(period="1y", interval="1d")
+        if hist is None or hist.empty:
+            return None
+
+        result = compute_indicator_series(hist, n_days)
+        return result if result else None
+    except Exception as exc:
+        logger.info("[DataService] fetch_indicator_series failed for %s: %s", symbol, exc)
+        return None
+
+
+def fetch_earnings_history(symbol: str) -> list[dict[str, Any]] | None:
+    """Fetch EPS estimate vs actual history from yfinance (Phase G2)."""
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        eh = getattr(ticker, "earnings_history", None)
+        if eh is None or (hasattr(eh, "empty") and eh.empty):
+            return None
+
+        # yfinance returns a DataFrame with columns like
+        # 'epsEstimate', 'epsActual', 'epsDifference', 'surprisePercent'
+        import pandas as pd
+        if isinstance(eh, pd.DataFrame):
+            entries: list[dict[str, Any]] = []
+            for idx, row in eh.iterrows():
+                quarter_str = str(idx) if idx is not None else ""
+                if hasattr(idx, "strftime"):
+                    quarter_str = idx.strftime("%Y-%m-%d")
+                entries.append({
+                    "quarter": quarter_str,
+                    "eps_estimate": safe_float(row.get("epsEstimate")),
+                    "eps_actual": safe_float(row.get("epsActual")),
+                    "surprise_pct": safe_float(row.get("surprisePercent")),
+                })
+            return entries if entries else None
+        return None
+    except Exception as exc:
+        logger.info("[DataService] fetch_earnings_history failed for %s: %s", symbol, exc)
+        return None
+
+
+def fetch_analyst_targets(symbol: str) -> dict[str, Any] | None:
+    """Fetch analyst price targets from yfinance (Phase G2)."""
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        targets = getattr(ticker, "analyst_price_targets", None)
+        if targets is None:
+            return None
+
+        import pandas as pd
+        if isinstance(targets, pd.DataFrame):
+            # Some yfinance versions return a DataFrame, others a dict
+            if targets.empty:
+                return None
+            row = targets.iloc[0] if len(targets) > 0 else {}
+            result = {
+                "low": safe_float(row.get("low")),
+                "current": safe_float(row.get("current")),
+                "mean": safe_float(row.get("mean")),
+                "median": safe_float(row.get("median")),
+                "high": safe_float(row.get("high")),
+            }
+        elif isinstance(targets, dict):
+            result = {
+                "low": safe_float(targets.get("low")),
+                "current": safe_float(targets.get("current")),
+                "mean": safe_float(targets.get("mean")),
+                "median": safe_float(targets.get("median")),
+                "high": safe_float(targets.get("high")),
+            }
+        else:
+            return None
+
+        if all(v is None for v in result.values()):
+            return None
+        return result
+    except Exception as exc:
+        logger.info("[DataService] fetch_analyst_targets failed for %s: %s", symbol, exc)
+        return None
+
+
+def fetch_recommendations(symbol: str) -> dict[str, Any] | None:
+    """Fetch analyst recommendation summary from yfinance (Phase G2)."""
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker(symbol)
+        rec = getattr(ticker, "recommendations_summary", None)
+        if rec is None:
+            return None
+
+        import pandas as pd
+        if isinstance(rec, pd.DataFrame) and not rec.empty:
+            # Take the most recent period row
+            row = rec.iloc[0]
+            result = {
+                "strong_buy": int(row.get("strongBuy", 0)),
+                "buy": int(row.get("buy", 0)),
+                "hold": int(row.get("hold", 0)),
+                "sell": int(row.get("sell", 0)),
+                "strong_sell": int(row.get("strongSell", 0)),
+            }
+            if sum(result.values()) == 0:
+                return None
+            return result
+        return None
+    except Exception as exc:
+        logger.info("[DataService] fetch_recommendations failed for %s: %s", symbol, exc)
+        return None
+
+
 class DashboardDataService:
     """Lightweight wrapper with cache-aware helper methods."""
 
@@ -936,6 +1062,48 @@ class DashboardDataService:
         data = fetch_technical_indicators(symbol)
         if data is not None:
             self.cache.set(symbol, "technicals", data, ttl=self.cache.TTL_TECHNICALS)
+        return data
+
+    # ── Phase G2 data methods ────────────────────────────────────
+
+    def get_indicator_series(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "indicator_series")
+            if cached is not None:
+                return cached
+        data = fetch_indicator_series(symbol)
+        if data is not None:
+            self.cache.set(symbol, "indicator_series", data, ttl=self.cache.TTL_TECHNICALS)
+        return data
+
+    def get_earnings_history(self, symbol: str, use_cache: bool = True) -> list[dict[str, Any]] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "earnings_history")
+            if cached is not None:
+                return cached
+        data = fetch_earnings_history(symbol)
+        if data is not None:
+            self.cache.set(symbol, "earnings_history", data, ttl=self.cache.TTL_EARNINGS)
+        return data
+
+    def get_analyst_targets(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "analyst_targets")
+            if cached is not None:
+                return cached
+        data = fetch_analyst_targets(symbol)
+        if data is not None:
+            self.cache.set(symbol, "analyst_targets", data, ttl=self.cache.TTL_ANALYST)
+        return data
+
+    def get_recommendations(self, symbol: str, use_cache: bool = True) -> dict[str, Any] | None:
+        if use_cache:
+            cached = self.cache.get(symbol, "recommendations")
+            if cached is not None:
+                return cached
+        data = fetch_recommendations(symbol)
+        if data is not None:
+            self.cache.set(symbol, "recommendations", data, ttl=self.cache.TTL_ANALYST)
         return data
 
 

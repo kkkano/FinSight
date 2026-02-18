@@ -33,11 +33,11 @@ const ACTION_STYLES: Record<ActionType, ActionStyle> = {
 };
 
 function formatWeight(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
+  return `${value.toFixed(1)}%`;
 }
 
 function formatDelta(value: number): string {
-  const pct = (value * 100).toFixed(1);
+  const pct = value.toFixed(1);
   return value >= 0 ? `+${pct}%` : `${pct}%`;
 }
 

@@ -2,7 +2,7 @@
 // 确保 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
-import type { SelectionItem } from '../types/dashboard';
+import type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
 import { API_BASE_URL, buildApiUrl } from '../config/runtime';
 
 /**
@@ -32,6 +32,7 @@ export interface ReportIndexItem {
   confidence_score?: number;
   is_favorite?: boolean;
   tags?: string[];
+  source_type?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -70,15 +71,18 @@ export interface ExecuteRequest {
   query: string;
   tickers?: string[];
   output_mode?: string;
+  analysis_depth?: 'quick' | 'report' | 'deep_research';
   agents?: string[];
   budget?: number;
   source?: string;
   session_id?: string;
-  agent_preferences?: {
-    agents?: Record<string, string>;
-    maxRounds?: number;
-    concurrentMode?: boolean;
-  };
+  agent_preferences?: AgentPreferencesPayload;
+}
+
+export interface AgentPreferencesPayload {
+  agents?: Record<string, string>;
+  maxRounds?: number;
+  concurrentMode?: boolean;
 }
 
 /**
@@ -91,6 +95,10 @@ export interface DailyTask {
   priority: number;
   action_url: string;
   icon: string;
+  status?: 'pending' | 'done' | 'expired';
+  expires_at?: string | null;
+  report_id?: string | null;
+  reason?: string;
   /** 可执行任务的参数 — 直接传给 executeAgent()。导航型任务为 null。 */
   execution_params: ExecuteRequest | null;
 }
@@ -356,6 +364,7 @@ export const apiClient = {
     dateFrom?: string;
     dateTo?: string;
     tag?: string;
+    sourceType?: string;
     favoriteOnly?: boolean;
     limit?: number;
   }): Promise<{ success: boolean; session_id: string; items: ReportIndexItem[]; count: number }> {
@@ -367,6 +376,7 @@ export const apiClient = {
         date_from: params.dateFrom,
         date_to: params.dateTo,
         tag: params.tag,
+        source_type: params.sourceType,
         favorite_only: params.favoriteOnly,
         limit: params.limit,
       },
@@ -434,6 +444,31 @@ export const apiClient = {
 
   async removeWatchlist(payload: { user_id?: string; ticker: string }): Promise<any> {
     const response = await api.post('/api/user/watchlist/remove', payload);
+    return response.data;
+  },
+
+  async getAgentPreferences(user_id?: string): Promise<{
+    success: boolean;
+    user_id?: string;
+    preferences?: AgentPreferencesPayload;
+    error?: string;
+  }> {
+    const response = await api.get('/api/agents/preferences', {
+      params: user_id ? { user_id } : {},
+    });
+    return response.data;
+  },
+
+  async updateAgentPreferences(payload: {
+    user_id?: string;
+    preferences: AgentPreferencesPayload;
+  }): Promise<{
+    success: boolean;
+    user_id?: string;
+    preferences?: AgentPreferencesPayload;
+    error?: string;
+  }> {
+    const response = await api.put('/api/agents/preferences', payload);
     return response.data;
   },
 
@@ -622,6 +657,20 @@ export const apiClient = {
     }
 
     return response;
+  },
+
+  // --- Dashboard Insights ---
+  async getDashboardInsights(
+    symbol: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<DashboardInsightsResponse> {
+    const params: Record<string, string | boolean> = { symbol };
+    if (opts?.force) params.force = true;
+    const response = await api.get<DashboardInsightsResponse>('/api/dashboard/insights', {
+      params,
+      signal: opts?.signal,
+    });
+    return response.data;
   },
 
   // --- Portfolio ---

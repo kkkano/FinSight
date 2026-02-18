@@ -13,9 +13,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-# ── Enums ───────────────────────────────────────────────────
-
-
 class ActionType(str, Enum):
     BUY = "buy"
     SELL = "sell"
@@ -30,11 +27,9 @@ class RiskTier(str, Enum):
     AGGRESSIVE = "aggressive"
 
 
-# ── Evidence Snapshot (Gate-6) ──────────────────────────────
-
-
 class EvidenceSnapshot(BaseModel):
     """Immutable evidence captured at suggestion-generation time."""
+
     evidence_id: str
     source: str
     quote: str = Field(default="", max_length=200)
@@ -42,17 +37,11 @@ class EvidenceSnapshot(BaseModel):
     captured_at: str = ""
 
 
-# ── Constraints ─────────────────────────────────────────────
-
-
 class RebalanceConstraints(BaseModel):
     max_single_position_pct: float = Field(default=25.0, ge=1, le=100)
     max_turnover_pct: float = Field(default=30.0, ge=0, le=100)
     sector_concentration_limit: float = Field(default=40.0, ge=0, le=100)
     min_action_delta_pct: float = Field(default=1.0, ge=0)
-
-
-# ── Action ──────────────────────────────────────────────────
 
 
 class RebalanceAction(BaseModel):
@@ -67,16 +56,10 @@ class RebalanceAction(BaseModel):
     evidence_snapshots: list[EvidenceSnapshot] = Field(default_factory=list)
 
 
-# ── Expected Impact ─────────────────────────────────────────
-
-
 class ExpectedImpact(BaseModel):
     diversification_delta: str = ""
     risk_delta: str = ""
     estimated_turnover_pct: float = 0.0
-
-
-# ── Suggestion ──────────────────────────────────────────────
 
 
 class RebalanceSuggestion(BaseModel):
@@ -92,9 +75,8 @@ class RebalanceSuggestion(BaseModel):
     disclaimer: str = "本建议仅供参考，不构成投资建议。请结合自身情况独立判断。"
     status: Literal["draft", "viewed", "dismissed", "sent_to_chat"] = "draft"
     created_at: str = ""
-
-
-# ── Request / Patch ─────────────────────────────────────────
+    degraded_mode: bool = False
+    fallback_reason: str | None = None
 
 
 class GenerateRebalanceRequest(BaseModel):

@@ -1,11 +1,14 @@
 /**
- * ProfitabilityChart - Profitability trends display (table-based).
+ * ProfitabilityChart - Dual-axis bar + line combo chart for profitability trends.
  *
- * Shows gross margin + net margin trends across available periods.
- * Uses bar representation since ECharts may not be available.
+ * Replaces the old CSS table version with a real ECharts dual-axis chart.
+ * Left Y-axis: Revenue/Net Income bars. Right Y-axis: Gross/Net margin lines.
+ * Shows up to 8 quarters of data.
  */
 import { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
+import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { FinancialStatement } from '../../../../types/dashboard';
 
 // --- Props ---
@@ -14,57 +17,156 @@ interface ProfitabilityChartProps {
   financials?: FinancialStatement | null;
 }
 
-// --- Types ---
-
-interface MarginEntry {
-  period: string;
-  grossMargin: number | null;
-  netMargin: number | null;
-}
-
 // --- Helpers ---
 
-const fmtPct = (v: number | null): string => {
-  if (v === null) return '--';
-  return `${(v * 100).toFixed(1)}%`;
+/** Format large numbers compactly: $1.2B, $340M, etc. */
+const formatLargeNumber = (value: number): string => {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
+  return `${sign}$${abs.toFixed(0)}`;
 };
 
-function computeMargins(financials: FinancialStatement | null | undefined): MarginEntry[] {
-  if (!financials) return [];
+interface ChartData {
+  periods: string[];
+  revenues: number[];
+  netIncomes: number[];
+  grossMargins: (number | null)[];
+  netMargins: (number | null)[];
+}
+
+function extractChartData(financials: FinancialStatement | null | undefined): ChartData | null {
+  if (!financials) return null;
 
   const periods = financials.periods ?? [];
   const revenue = financials.revenue ?? [];
   const grossProfit = financials.gross_profit ?? [];
   const netIncome = financials.net_income ?? [];
 
+  if (periods.length === 0) return null;
+
   // Take last 8 periods
   const start = Math.max(0, periods.length - 8);
 
-  return periods.slice(start).map((period, i) => {
-    const idx = start + i;
-    const rev = revenue[idx];
+  const slicedPeriods: string[] = [];
+  const revenues: number[] = [];
+  const netIncomes: number[] = [];
+  const grossMargins: (number | null)[] = [];
+  const netMargins: (number | null)[] = [];
 
-    let grossMargin: number | null = null;
-    let netMargin: number | null = null;
+  for (let i = start; i < periods.length; i++) {
+    slicedPeriods.push(periods[i]);
+    const rev = revenue[i] ?? 0;
+    const ni = netIncome[i] ?? 0;
+    revenues.push(rev);
+    netIncomes.push(ni);
 
-    if (rev != null && rev !== 0) {
-      const gp = grossProfit[idx];
-      if (gp != null) grossMargin = gp / rev;
+    const gp = grossProfit[i];
+    grossMargins.push(rev !== 0 && gp != null ? Math.round((gp / rev) * 1000) / 10 : null);
+    netMargins.push(rev !== 0 ? Math.round((ni / rev) * 1000) / 10 : null);
+  }
 
-      const ni = netIncome[idx];
-      if (ni != null) netMargin = ni / rev;
-    }
-
-    return { period, grossMargin, netMargin };
-  });
+  return { periods: slicedPeriods, revenues, netIncomes, grossMargins, netMargins };
 }
 
 // --- Component ---
 
 export function ProfitabilityChart({ financials }: ProfitabilityChartProps) {
-  const margins = useMemo(() => computeMargins(financials), [financials]);
+  const theme = useChartTheme();
 
-  if (margins.length === 0) {
+  const option = useMemo(() => {
+    const data = extractChartData(financials);
+    if (!data) return null;
+
+    return {
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: theme.tooltipBackground,
+        borderColor: theme.tooltipBorder,
+        textStyle: { color: theme.tooltipText, fontSize: 11 },
+      },
+      legend: {
+        data: ['营收', '净利润', '毛利率', '净利率'],
+        textStyle: { color: theme.muted, fontSize: 10 },
+        top: 0,
+        itemWidth: 12,
+        itemHeight: 8,
+      },
+      grid: { left: 56, right: 48, top: 32, bottom: 8, containLabel: false },
+      xAxis: {
+        type: 'category' as const,
+        data: data.periods,
+        axisLine: { lineStyle: { color: theme.border } },
+        axisLabel: { color: theme.muted, fontSize: 9, rotate: 30 },
+      },
+      yAxis: [
+        {
+          type: 'value' as const,
+          name: '',
+          axisLabel: {
+            color: theme.muted,
+            fontSize: 9,
+            formatter: (v: number) => formatLargeNumber(v),
+          },
+          splitLine: { lineStyle: { color: theme.grid, type: 'dashed' } },
+        },
+        {
+          type: 'value' as const,
+          name: '',
+          axisLabel: {
+            color: theme.muted,
+            fontSize: 9,
+            formatter: '{value}%',
+          },
+          splitLine: { show: false },
+        },
+      ],
+      series: [
+        {
+          name: '营收',
+          type: 'bar',
+          data: data.revenues,
+          barMaxWidth: 20,
+          itemStyle: { color: theme.primary, borderRadius: [2, 2, 0, 0] },
+        },
+        {
+          name: '净利润',
+          type: 'bar',
+          data: data.netIncomes,
+          barMaxWidth: 20,
+          itemStyle: { color: theme.success, borderRadius: [2, 2, 0, 0] },
+        },
+        {
+          name: '毛利率',
+          type: 'line',
+          yAxisIndex: 1,
+          data: data.grossMargins,
+          smooth: true,
+          showSymbol: true,
+          symbolSize: 4,
+          lineStyle: { color: theme.warning, width: 2 },
+          itemStyle: { color: theme.warning },
+        },
+        {
+          name: '净利率',
+          type: 'line',
+          yAxisIndex: 1,
+          data: data.netMargins,
+          smooth: true,
+          showSymbol: true,
+          symbolSize: 4,
+          lineStyle: { color: theme.danger, width: 2, type: 'dashed' },
+          itemStyle: { color: theme.danger },
+        },
+      ],
+    };
+  }, [financials, theme]);
+
+  if (!option) {
     return (
       <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
         <div className="text-xs font-medium text-fin-muted mb-3">盈利能力趋势</div>
@@ -73,62 +175,16 @@ export function ProfitabilityChart({ financials }: ProfitabilityChartProps) {
     );
   }
 
-  // Find max margin for bar scaling
-  const maxVal = margins.reduce((max, m) => {
-    const gm = m.grossMargin ?? 0;
-    const nm = m.netMargin ?? 0;
-    return Math.max(max, Math.abs(gm), Math.abs(nm));
-  }, 0);
-  const scale = maxVal > 0 ? maxVal : 1;
-
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border overflow-x-auto">
-      <div className="text-xs font-medium text-fin-muted mb-3">盈利能力趋势</div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-3">
-        <div className="flex items-center gap-1.5 text-2xs">
-          <span className="w-3 h-2 rounded-sm bg-fin-success inline-block" />
-          <span className="text-fin-muted">毛利率</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-2xs">
-          <span className="w-3 h-2 rounded-sm bg-fin-primary inline-block" />
-          <span className="text-fin-muted">净利率</span>
-        </div>
-      </div>
-
-      {/* Table with bars */}
-      <table className="w-full text-2xs">
-        <thead>
-          <tr className="border-b border-fin-border">
-            <th className="text-left py-1.5 pr-3 text-fin-muted font-medium">期间</th>
-            <th className="text-left py-1.5 text-fin-muted font-medium">利润率</th>
-            <th className="text-right py-1.5 pl-3 text-fin-muted font-medium">毛利率</th>
-            <th className="text-right py-1.5 pl-3 text-fin-muted font-medium">净利率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {margins.map((m) => (
-            <tr key={m.period} className="border-b border-fin-border/50 last:border-b-0">
-              <td className="py-1.5 pr-3 text-fin-text whitespace-nowrap">{m.period}</td>
-              <td className="py-1.5 w-40">
-                <div className="flex flex-col gap-0.5">
-                  <div
-                    className="h-1.5 rounded-full bg-fin-success"
-                    style={{ width: `${Math.max(0, ((m.grossMargin ?? 0) / scale) * 100)}%` }}
-                  />
-                  <div
-                    className="h-1.5 rounded-full bg-fin-primary"
-                    style={{ width: `${Math.max(0, ((m.netMargin ?? 0) / scale) * 100)}%` }}
-                  />
-                </div>
-              </td>
-              <td className="text-right py-1.5 pl-3 tabular-nums text-fin-text">{fmtPct(m.grossMargin)}</td>
-              <td className="text-right py-1.5 pl-3 tabular-nums text-fin-text">{fmtPct(m.netMargin)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
+      <div className="text-xs font-medium text-fin-muted mb-2">盈利能力趋势</div>
+      <ReactECharts
+        option={option}
+        style={{ width: '100%', height: 260 }}
+        opts={{ renderer: 'svg' }}
+        notMerge
+        lazyUpdate
+      />
     </div>
   );
 }

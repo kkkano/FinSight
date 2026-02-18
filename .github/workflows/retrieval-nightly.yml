@@ -35,10 +35,38 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verify retrieval dependency versions
+        run: |
+          python - <<'PY'
+          import importlib.metadata as md
+          import transformers
+
+          flag_ver = md.version("FlagEmbedding")
+          st_ver = md.version("sentence-transformers")
+          tf_ver = transformers.__version__
+          print(f"FlagEmbedding={flag_ver}")
+          print(f"sentence-transformers={st_ver}")
+          print(f"transformers={tf_ver}")
+
+          major = int(tf_ver.split(".")[0])
+          if major >= 5:
+              raise SystemExit("transformers major version must be <5 for FlagEmbedding compatibility")
+          PY
+
       - name: Run nightly retrieval benchmark (postgres + drift gate)
         env:
-          RAG_V2_POSTGRES_DSN: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/postgres
+          RAG_EMBEDDING: bge-m3
+          RAG_V2_VECTOR_DIM: "1024"
+          RAG_V2_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/postgres
         run: |
+          python - <<'PY'
+          from backend.rag.embedder import EmbeddingService
+          model = EmbeddingService().model_name
+          print(f"Nightly embedding backend: {model}")
+          if model == "hash":
+              raise SystemExit("Nightly must run with bge-m3, but got hash fallback.")
+          PY
+
           python tests/retrieval_eval/run_retrieval_eval.py \
             --backend postgres \
             --postgres-dsn "$RAG_V2_POSTGRES_DSN" \

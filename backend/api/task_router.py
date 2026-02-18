@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -44,8 +45,6 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
         report_tickers = {str(item["ticker"]).strip().upper() for item in reports if item.get("ticker")}
         extra_tickers = {value.strip().upper() for value in (watchlist or "").split(",") if value.strip()}
         merged_watchlist = sorted(report_tickers | extra_tickers)
-
-        from datetime import datetime, timezone
 
         recent_reports: dict[str, dict[str, Any]] = {}
         for report in reports:
@@ -118,14 +117,27 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
         )
 
         tasks = await _task_generator.generate(context)
+        now = datetime.now(timezone.utc)
+        serialized_tasks: list[dict[str, Any]] = []
+        for task in tasks:
+            payload = task.model_dump()
+            expires_at_raw = payload.get("expires_at")
+            if isinstance(expires_at_raw, str) and expires_at_raw:
+                try:
+                    expires_at_dt = datetime.fromisoformat(expires_at_raw.replace("Z", "+00:00"))
+                    if now > expires_at_dt and payload.get("status") != "done":
+                        payload["status"] = "expired"
+                except Exception:
+                    pass
+            serialized_tasks.append(payload)
+
         return {
             "success": True,
             "session_id": normalized_session,
             "risk_preference": risk_preference,
             "watchlist": merged_watchlist,
-            "tasks": [task.model_dump() for task in tasks],
+            "tasks": serialized_tasks,
             "count": len(tasks),
         }
 
     return router
-

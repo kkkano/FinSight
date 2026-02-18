@@ -16,7 +16,9 @@
       "disabled": true,
       "last_alert_attempt_at": "2026-02-01T01:53:08.958162",
       "last_alert_error": null,
-      "last_alert_error_at": null
+      "last_alert_error_at": null,
+      "risk_threshold": "high",
+      "last_risk_at": null
     }
   ]
 }

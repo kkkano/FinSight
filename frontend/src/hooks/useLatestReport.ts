@@ -9,6 +9,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
 
+const matchTickerLoose = (
+  targetTicker: string,
+  item: { ticker?: string; title?: string; summary?: string },
+): boolean => {
+  const upper = targetTicker.trim().toUpperCase();
+  if (!upper) return false;
+
+  const candidates = [item.ticker, item.title, item.summary]
+    .map((value) => String(value || '').toUpperCase())
+    .filter(Boolean);
+
+  return candidates.some((text) => text.includes(upper));
+};
+
 export interface LatestReportData {
   reportId: string;
   report: Record<string, unknown>;
@@ -19,62 +33,125 @@ interface UseLatestReportReturn {
   data: LatestReportData | null;
   loading: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<LatestReportData | null>;
 }
 
-export function useLatestReport(ticker: string | null | undefined): UseLatestReportReturn {
+interface UseLatestReportOptions {
+  sourceType?: string;
+  fallbackToAnySource?: boolean;
+  preferredSourceTrigger?: string;
+}
+
+export function useLatestReport(
+  ticker: string | null | undefined,
+  options: UseLatestReportOptions = {},
+): UseLatestReportReturn {
   const [data, setData] = useState<LatestReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastTickerRef = useRef<string | null>(null);
 
   const sessionId = useStore((s) => s.sessionId);
+  const sourceType = options.sourceType?.trim() || undefined;
+  const fallbackToAnySource = options.fallbackToAnySource ?? true;
+  const preferredSourceTrigger = options.preferredSourceTrigger?.trim() || undefined;
 
-  const fetchReport = useCallback(async () => {
+  const fetchReport = useCallback(async (): Promise<LatestReportData | null> => {
     if (!ticker || !sessionId) {
       setData(null);
-      return;
+      return null;
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      const indexResult = await apiClient.listReportIndex({
+      const indexLimit = preferredSourceTrigger ? 8 : 1;
+
+      let indexResult = await apiClient.listReportIndex({
         sessionId,
         ticker,
-        limit: 1,
+        limit: indexLimit,
+        sourceType,
       });
 
-      const items = indexResult?.items ?? [];
-      if (items.length === 0) {
-        setData(null);
-        setLoading(false);
-        return;
+      if (
+        sourceType
+        && fallbackToAnySource
+        && (!Array.isArray(indexResult?.items) || indexResult.items.length === 0)
+      ) {
+        indexResult = await apiClient.listReportIndex({
+          sessionId,
+          ticker,
+          limit: indexLimit,
+        });
       }
 
-      const reportId = items[0].report_id;
-      const replay = await apiClient.getReportReplay({
-        sessionId,
-        reportId,
-      });
+      let items = indexResult?.items ?? [];
+      if (items.length === 0 && ticker) {
+        const fallbackIndex = await apiClient.listReportIndex({
+          sessionId,
+          limit: indexLimit,
+          sourceType,
+        });
+        const fallbackItems = fallbackIndex?.items ?? [];
+        const matched = fallbackItems.filter((item) => matchTickerLoose(ticker, item));
+        items = matched.length > 0 ? matched : fallbackItems;
+      }
+
+      if (items.length === 0) {
+        setData(null);
+        return null;
+      }
+
+      const fetchReplay = async (reportId: string) =>
+        apiClient.getReportReplay({
+          sessionId,
+          reportId,
+        });
+
+      let selectedReportId = items[0].report_id;
+      let replay = await fetchReplay(selectedReportId);
+
+      if (preferredSourceTrigger) {
+        for (const item of items) {
+          const candidateReportId = item.report_id;
+          const candidateReplay = await fetchReplay(candidateReportId);
+          if (!candidateReplay?.success || !candidateReplay.report) {
+            continue;
+          }
+          const trigger = String(
+            ((candidateReplay.report as Record<string, unknown>)?.meta as Record<string, unknown> | undefined)
+              ?.source_trigger ?? '',
+          ).trim();
+          if (trigger === preferredSourceTrigger) {
+            selectedReportId = candidateReportId;
+            replay = candidateReplay;
+            break;
+          }
+        }
+      }
 
       if (replay?.success && replay.report) {
-        setData({
-          reportId,
+        const latest: LatestReportData = {
+          reportId: selectedReportId,
           report: replay.report,
           citations: replay.citations ?? [],
-        });
+        };
+        setData(latest);
+        return latest;
       } else {
         setData(null);
+        return null;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
       setData(null);
+      return null;
     } finally {
       setLoading(false);
     }
-  }, [ticker, sessionId]);
+  }, [ticker, sessionId, sourceType, fallbackToAnySource, preferredSourceTrigger]);
 
   useEffect(() => {
     if (ticker !== lastTickerRef.current) {

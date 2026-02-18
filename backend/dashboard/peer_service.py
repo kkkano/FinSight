@@ -7,7 +7,7 @@ valuation metrics for a target symbol and its peers.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout, as_completed
 from typing import Any, Optional
 
 from backend.utils.quote import safe_float
@@ -142,18 +142,26 @@ def fetch_peer_comparison(
 
         all_symbols = [symbol] + [p for p in peers if p.upper() != symbol.upper()]
 
-        # Fetch metrics in parallel (max 3 workers for budget constraint)
-        results: list[dict[str, Any]] = []
+        # Fetch metrics in parallel (max 3 workers for budget constraint).
+        # Use a global timeout to avoid cumulative per-future waits.
+        results_by_symbol: dict[str, dict[str, Any]] = {
+            s: {"symbol": s, "name": s} for s in all_symbols
+        }
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {pool.submit(_fetch_single_peer_metrics, s): s for s in all_symbols}
-            for future in futures:
-                try:
-                    result = future.result(timeout=10)
-                    results.append(result)
-                except (FuturesTimeout, Exception) as exc:
+            try:
+                for future in as_completed(futures, timeout=12):
                     sym = futures[future]
-                    logger.info("[PeerService] peer %s timed out or failed: %s", sym, exc)
-                    results.append({"symbol": sym, "name": sym})
+                    try:
+                        result = future.result()
+                        if isinstance(result, dict):
+                            results_by_symbol[sym] = result
+                    except Exception as exc:
+                        logger.info("[PeerService] peer %s failed: %s", sym, exc)
+            except FuturesTimeout:
+                logger.info("[PeerService] global timeout while fetching peers for %s", symbol)
+
+        results: list[dict[str, Any]] = [results_by_symbol[s] for s in all_symbols]
 
         return {
             "subject_symbol": symbol,

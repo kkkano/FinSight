@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X } from 'lucide-react';
 import { apiClient } from '../api/client';
-import { useStore } from '../store/useStore';
+import { deriveUserIdFromSessionId, useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { parseQuotePayload } from '../utils/quote';
+import { useToast } from './ui';
 
 interface QuoteInfo {
   price?: string;
@@ -22,7 +23,6 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
-const DEFAULT_USER_ID = 'default_user';
 const DEFAULT_DASHBOARD_SYMBOL = 'AAPL';
 
 const RISK_LABELS: Record<string, string> = {
@@ -50,7 +50,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [alertCount, setAlertCount] = useState(0);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newTicker, setNewTicker] = useState('');
-  const { subscriptionEmail, portfolioPositions, currentTicker } = useStore();
+  const { toast } = useToast();
+  const { subscriptionEmail, portfolioPositions, currentTicker, sessionId } = useStore();
+  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   // Unified watchlist from dashboardStore (API-first)
   const { watchlist, initWatchlist, addWatchItemApi, removeWatchItemApi } = useDashboardStore();
@@ -73,8 +75,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       setNewTicker('');
       setShowAddInput(false);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Failed to add ticker:', error);
+      const message = error instanceof Error ? error.message : '添加失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '添加自选失败',
+        message,
+      });
     }
   };
 
@@ -82,15 +89,20 @@ const Sidebar: React.FC<SidebarProps> = ({
     try {
       await removeWatchItemApi(ticker);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('Failed to remove ticker:', error);
+      const message = error instanceof Error ? error.message : '移除失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '移除自选失败',
+        message,
+      });
     }
   };
 
   // Load user profile info only (name, risk preference) — watchlist handled by store
   const loadUserProfileInfo = useCallback(async () => {
     try {
-      const response = await apiClient.getUserProfile(DEFAULT_USER_ID);
+      const response = await apiClient.getUserProfile(userId);
       const profile = response?.profile;
       if (!profile) return;
       setUserName(profile.name || '用户');
@@ -98,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     } catch {
       // Profile load failed — keep defaults
     }
-  }, []);
+  }, [userId]);
 
   // Fetch price quotes for watchlist symbols
   const loadWatchlistQuotes = useCallback(async () => {

@@ -8,11 +8,85 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 
 logger = logging.getLogger("execution_service")
+
+
+def _normalize_report_source_type(source: str | None) -> str:
+    raw = str(source or "").strip().lower()
+    if not raw:
+        return "ai_generated"
+    if raw.startswith("dashboard"):
+        return "dashboard"
+    if raw.startswith("chat"):
+        return "chat"
+    if raw.startswith("workbench"):
+        return "workbench"
+    return raw[:64]
+
+
+def _resolve_ticker_override(ui_context: dict[str, Any] | None) -> str | None:
+    if not isinstance(ui_context, dict):
+        return None
+    tickers = ui_context.get("tickers_override")
+    if not isinstance(tickers, list):
+        return None
+    for item in tickers:
+        value = str(item or "").strip().upper()
+        if value:
+            return value
+    return None
+
+
+def _annotate_report_source(
+    report: dict[str, Any] | None,
+    source: str | None,
+    ticker_override: str | None = None,
+) -> dict[str, Any] | None:
+    if not isinstance(report, dict):
+        return report
+
+    source_type = _normalize_report_source_type(source)
+    report["source_type"] = source_type
+
+    normalized_ticker = str(ticker_override or "").strip().upper()
+    if normalized_ticker:
+        report["ticker"] = normalized_ticker
+
+    meta = report.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    meta["source_type"] = source_type
+    if source:
+        meta["source_trigger"] = str(source).strip()
+    report["meta"] = meta
+    return report
+
+
+def _execution_timeout_seconds(output_mode: str | None = None) -> float:
+    """
+    Resolve execution timeout with mode-aware defaults.
+
+    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 300s)
+    - investment_report: LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS (default 900s)
+      fallback to LANGGRAPH_EXECUTION_TIMEOUT_SECONDS when report-specific key is absent.
+    """
+    mode = (output_mode or "").strip().lower()
+    default_base = "300"
+    default_report = "900"
+    raw = (
+        os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS", default_report)
+        if mode == "investment_report"
+        else os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_SECONDS", default_base)
+    )
+    try:
+        return max(60.0, float(raw))
+    except Exception:
+        return 900.0 if mode == "investment_report" else 300.0
 
 
 # ---------------------------------------------------------------------------
@@ -164,14 +238,34 @@ async def run_graph_pipeline(
             runner = await deps.get_graph_runner()
 
             from backend.graph.runner import run_graph_traced
-            state = await run_graph_traced(
-                runner,
-                thread_id=thread_id,
-                query=query,
-                ui_context=ui_context or {},
-                output_mode=output_mode,
-                strict_selection=strict_selection,
-            )
+            timeout_seconds = _execution_timeout_seconds(output_mode)
+            try:
+                state = await asyncio.wait_for(
+                    run_graph_traced(
+                        runner,
+                        thread_id=thread_id,
+                        query=query,
+                        ui_context=ui_context or {},
+                        output_mode=output_mode,
+                        strict_selection=strict_selection,
+                    ),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "[execution_service] graph timeout thread_id=%s timeout=%ss query=%s",
+                    thread_id,
+                    timeout_seconds,
+                    (query or "")[:120],
+                )
+                await queue.put(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "error",
+                        "message": f"Execution timed out after {int(timeout_seconds)}s; please retry with brief mode or fewer agents.",
+                    }
+                )
+                return
 
             # 2b. Check if the graph was interrupted (human-in-the-loop)
             # LangGraph stores pending interrupts in __interrupt__ state key
@@ -207,6 +301,11 @@ async def run_graph_pipeline(
                 report = build_report_payload(
                     state=state, query=query, thread_id=thread_id,
                 )
+                report = _annotate_report_source(
+                    report,
+                    source,
+                    ticker_override=_resolve_ticker_override(ui_context),
+                )
             except Exception as exc:
                 logger.warning(
                     "[execution_service] report build failed: %s",
@@ -226,6 +325,18 @@ async def run_graph_pipeline(
                 response_markdown=markdown,
                 subject=state.get("subject"),
             )
+
+            # 5b. Persist lightweight long-term memory snapshot (best-effort)
+            try:
+                from backend.graph.store import persist_memory_snapshot
+
+                persist_memory_snapshot(
+                    thread_id=thread_id,
+                    state=state,
+                    report=report,
+                )
+            except Exception as exc:
+                logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
 
             # 6. Stream markdown in chunks
             for idx in range(0, len(markdown), markdown_chunk_size):
@@ -416,6 +527,7 @@ async def resume_graph_pipeline(
                 report = build_report_payload(
                     state=final_state, query=final_state.get("query", ""), thread_id=thread_id,
                 )
+                report = _annotate_report_source(report, source)
             except Exception as exc:
                 logger.warning("[resume_pipeline] report build failed: %s", exc)
 
@@ -423,6 +535,18 @@ async def resume_graph_pipeline(
             deps.schedule_report_index(
                 session_id=thread_id, report=report, state=final_state,
             )
+
+            # Persist lightweight long-term memory snapshot (best-effort)
+            try:
+                from backend.graph.store import persist_memory_snapshot
+
+                persist_memory_snapshot(
+                    thread_id=thread_id,
+                    state=final_state,
+                    report=report,
+                )
+            except Exception as exc:
+                logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
 
             # Stream markdown
             for idx in range(0, len(markdown), markdown_chunk_size):

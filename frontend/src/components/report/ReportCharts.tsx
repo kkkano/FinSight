@@ -104,10 +104,30 @@ const formatErrorStage = (stage: string | undefined): string | null => {
 export const AgentStatusGrid: React.FC<AgentStatusGridProps> = ({ report }) => {
   const agentStatus = (report as any).agent_status;
   if (!agentStatus) return null;
+  const statusEntries = Object.entries(agentStatus) as Array<[string, any]>;
+  const normalizeAgentName = (name: string): string => name.replace(/_agent$/i, '');
+  const executedAgents = statusEntries
+    .filter(([, status]) => status?.status === 'success' || status?.status === 'fallback')
+    .map(([name]) => normalizeAgentName(name));
+  const skippedAgents = statusEntries
+    .filter(([, status]) => status?.status === 'not_run')
+    .map(([name]) => normalizeAgentName(name));
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-      {Object.entries(agentStatus).map(([key, status]: [string, any]) => {
+    <>
+      <div className="mb-2 text-2xs text-slate-500 dark:text-slate-400">
+        <span className="font-medium">实际执行：</span>
+        {executedAgents.length > 0 ? executedAgents.join('、') : '无'}
+        {skippedAgents.length > 0 && (
+          <span className="ml-2">
+            <span className="font-medium">未执行：</span>
+            {skippedAgents.join('、')}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+      {statusEntries.map(([key, status]: [string, any]) => {
         const visual = deriveAgentVisual(status);
         const qualityScore = typeof status?.evidence_quality?.overall_score === 'number'
           ? status.evidence_quality.overall_score
@@ -166,7 +186,8 @@ export const AgentStatusGrid: React.FC<AgentStatusGridProps> = ({ report }) => {
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -1,34 +1,171 @@
 /**
- * ResearchTab - Container component for the Research tab panel.
+ * ResearchTab - TradingKey 风格结构化洞察面板
  *
- * Combines ResearchMetadata, ExecutiveSummary, CoreFindings,
- * ConflictPanel, and ReferenceList from the latest report.
+ * 布局（从上到下）：
+ *   1. ResearchMetadata    — 报告元数据（来源、时间）
+ *   2. ResearchOverviewBar — 综合评估大横条
+ *   3. ResearchInsightGrid — 4 张洞察卡片（财务/技术/新闻/行业）
+ *   4. 可折叠完整报告（ExecutiveSummary + CoreFindings + ConflictPanel）
+ *   5. ReferenceList       — 引用列表
+ *
+ * 数据来源二合一：
+ *   - useDashboardInsights   → InsightCard 评分卡
+ *   - useLatestReport        → 完整报告文本
  */
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
+import { useExecutionStore } from '../../../store/executionStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
+import { useDashboardInsights } from '../../../hooks/useDashboardInsights.ts';
+import { useExecuteAgent } from '../../../hooks/useExecuteAgent.ts';
 import { ResearchMetadata } from './research/ResearchMetadata.tsx';
+import { ResearchOverviewBar } from './research/ResearchOverviewBar.tsx';
+import { ResearchInsightGrid } from './research/ResearchInsightGrid.tsx';
 import { ExecutiveSummary } from './research/ExecutiveSummary.tsx';
 import { CoreFindings } from './research/CoreFindings.tsx';
 import { ConflictPanel } from './research/ConflictPanel.tsx';
 import { ReferenceList } from './research/ReferenceList.tsx';
 
+const REPORT_SYNC_MAX_RETRIES = 12;
+const REPORT_SYNC_RETRY_DELAY_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 export function ResearchTab() {
   const activeAsset = useDashboardStore((s) => s.activeAsset);
+  const deepAnalysisIncludeDeepSearch = useDashboardStore((s) => s.deepAnalysisIncludeDeepSearch);
+  const setDeepAnalysisIncludeDeepSearch = useDashboardStore((s) => s.setDeepAnalysisIncludeDeepSearch);
   const ticker = activeAsset?.symbol ?? null;
-  const { data: reportData, loading } = useLatestReport(ticker);
+  const { data: reportData, loading, refetch } = useLatestReport(ticker, {
+    sourceType: 'dashboard',
+    fallbackToAnySource: false,
+    preferredSourceTrigger: 'dashboard_deep_search',
+  });
+
+  // ==================== AI Insights 数据 ====================
+  const insightsData = useDashboardStore((s) => s.insightsData);
+  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
+  const insightsError = useDashboardStore((s) => s.insightsError);
+  const insightsStale = useDashboardStore((s) => s.insightsStale);
+  useDashboardInsights(ticker);
+
+  // ==================== 完整报告折叠状态 ====================
+  const [reportExpanded, setReportExpanded] = useState(false);
+
+  const [syncingReport, setSyncingReport] = useState(false);
+  const [syncHint, setSyncHint] = useState<string | null>(null);
+
+  // ==================== 跨实例执行完成感知 ====================
+  // 检测 executionStore 中任何 dashboard 来源、匹配当前 ticker 的已完成执行
+  // 解决: StockHeader 触发执行 → ResearchTab 无法感知完成的问题
+  const latestDashboardCompletion = useExecutionStore((s) => {
+    const upperTicker = ticker?.toUpperCase();
+    if (!upperTicker) return null;
+    for (const r of s.recentRuns) {
+      if (
+        r.status === 'done' &&
+        r.source?.startsWith('dashboard') &&
+        r.outputMode === 'investment_report' &&
+        r.tickers?.some((t) => t.toUpperCase() === upperTicker)
+      ) {
+        return r.completedAt;
+      }
+    }
+    return null;
+  });
+  const lastSyncedCompletionRef = useRef<string | null>(null);
+
+  const pollReportAfterComplete = useCallback(async () => {
+    setSyncingReport(true);
+    setSyncHint('报告已生成，正在同步到索引...');
+
+    for (let i = 0; i < REPORT_SYNC_MAX_RETRIES; i += 1) {
+      const latest = await refetch();
+      if (latest) {
+        setSyncingReport(false);
+        setSyncHint(null);
+        return;
+      }
+
+      if (i < REPORT_SYNC_MAX_RETRIES - 1) {
+        setSyncHint(`报告已生成，等待索引同步（${i + 1}/${REPORT_SYNC_MAX_RETRIES}）...`);
+        await sleep(REPORT_SYNC_RETRY_DELAY_MS);
+      }
+    }
+
+    setSyncingReport(false);
+    setSyncHint('报告已生成但索引尚未完成，请稍后重试或刷新页面。');
+  }, [refetch]);
+
+  const { execute, isRunning, currentStep, error } = useExecuteAgent({
+    onComplete: () => {
+      void pollReportAfterComplete();
+    },
+    onError: () => {
+      setSyncingReport(false);
+      setSyncHint(null);
+    },
+  });
+
+  // ==================== 外部执行完成 → 自动拉取报告 ====================
+  // 当 StockHeader 或其他来源触发的 dashboard 执行完成时，自动 poll 报告索引
+  useEffect(() => {
+    if (
+      latestDashboardCompletion &&
+      latestDashboardCompletion !== lastSyncedCompletionRef.current &&
+      ticker &&
+      !syncingReport &&
+      !isRunning
+    ) {
+      lastSyncedCompletionRef.current = latestDashboardCompletion;
+      void pollReportAfterComplete();
+    }
+  }, [latestDashboardCompletion, ticker, syncingReport, isRunning, pollReportAfterComplete]);
+
+  const handleDeepAnalysis = () => {
+    if (!ticker || isRunning || syncingReport) return;
+
+    // 当通过 ResearchTab 自身按钮发起时，重置外部完成追踪标记
+    // 防止 pollReportAfterComplete 被触发两次（自身 onComplete + 外部感知）
+    lastSyncedCompletionRef.current = null;
+
+    const includeDeepSearch = deepAnalysisIncludeDeepSearch;
+    setSyncHint(
+      includeDeepSearch
+        ? '已提交任务，正在执行深度搜索并回填研究卡片...'
+        : '已提交任务，正在生成深度报告并回填研究卡片...',
+    );
+    execute({
+      query: includeDeepSearch
+        ? `对 ${ticker} 做深度搜索，输出可追溯证据与关键结论`
+        : `生成 ${ticker} 投资报告`,
+      tickers: [ticker],
+      outputMode: 'investment_report',
+      analysisDepth: includeDeepSearch ? 'deep_research' : 'report',
+      source: includeDeepSearch ? 'dashboard_deep_search' : 'dashboard_header',
+    });
+  };
 
   if (loading) {
     return (
       <div className="space-y-4">
         <ResearchMetadata reportData={null} loading />
-        <div className="bg-fin-card border border-fin-border rounded-lg p-4 animate-pulse">
-          <div className="h-4 bg-fin-border rounded w-32 mb-3" />
-          <div className="space-y-2">
-            <div className="h-3 bg-fin-border rounded w-full" />
-            <div className="h-3 bg-fin-border rounded w-5/6" />
-            <div className="h-3 bg-fin-border rounded w-3/4" />
-          </div>
-        </div>
+        {/* 加载时也展示 insights 数据（可能已有缓存） */}
+        <ResearchOverviewBar
+          overview={insightsData?.overview}
+          loading={insightsLoading}
+        />
+        <ResearchInsightGrid
+          insights={insightsData}
+          loading={insightsLoading}
+          error={insightsError}
+          stale={insightsStale}
+        />
       </div>
     );
   }
@@ -37,8 +174,60 @@ export function ResearchTab() {
     return (
       <div className="space-y-4">
         <ResearchMetadata reportData={null} />
-        <div className="flex items-center justify-center h-48 text-fin-muted text-sm">
-          执行分析以获取深度研究报告
+
+        {/* 即使没有报告，也展示 AI 洞察卡片 */}
+        <ResearchOverviewBar
+          overview={insightsData?.overview}
+          loading={insightsLoading}
+        />
+        <ResearchInsightGrid
+          insights={insightsData}
+          loading={insightsLoading}
+          error={insightsError}
+          stale={insightsStale}
+        />
+
+        {/* 深度分析触发区 */}
+        <div className="flex flex-col items-center justify-center py-8 text-fin-muted text-sm gap-3">
+          <div>尚未生成完整研究报告</div>
+          <button
+            type="button"
+            onClick={handleDeepAnalysis}
+            disabled={!ticker || isRunning || syncingReport}
+            className="px-3 py-1.5 rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning || syncingReport ? '执行中...' : '生成深度报告'}
+          </button>
+          <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
+            <input
+              type="checkbox"
+              className="accent-fin-primary"
+              checked={deepAnalysisIncludeDeepSearch}
+              onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
+            />
+            含 deepsearch
+          </label>
+          <div className="text-2xs text-fin-muted text-center max-w-[32rem]">
+            深度分析统一走 report 模式；勾选“含 deepsearch”会强制加入 deep_search_agent。
+          </div>
+
+          {(isRunning || syncingReport) && (
+            <div className="text-xs text-fin-muted">
+              {currentStep || syncHint || '任务执行中...'}
+            </div>
+          )}
+
+          {error && (
+            <div className="text-xs text-red-400 max-w-[28rem] text-center">
+              生成失败：{error}
+            </div>
+          )}
+
+          {!error && syncHint && !isRunning && (
+            <div className="text-xs text-fin-muted max-w-[28rem] text-center">
+              {syncHint}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -48,19 +237,53 @@ export function ResearchTab() {
 
   return (
     <div className="space-y-4">
-      {/* Quality metrics */}
+      {/* 元数据 */}
       <ResearchMetadata reportData={reportData} />
 
-      {/* Executive summary */}
-      <ExecutiveSummary report={report} />
+      {/* AI 综合评估横条 */}
+      <ResearchOverviewBar
+        overview={insightsData?.overview}
+        loading={insightsLoading}
+      />
 
-      {/* Core findings / sections */}
-      <CoreFindings report={report} />
+      {/* AI 洞察卡片网格：财务 / 技术 / 新闻 / 行业 */}
+      <ResearchInsightGrid
+        insights={insightsData}
+        loading={insightsLoading}
+        error={insightsError}
+        stale={insightsStale}
+      />
 
-      {/* Conflict panel (only renders when conflicts exist) */}
-      <ConflictPanel report={report} />
+      {/* 可折叠完整报告 */}
+      <div className="bg-fin-card rounded-xl border border-fin-border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setReportExpanded((prev) => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-fin-text hover:bg-fin-border/10 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <span>📄</span>
+            完整研究报告
+          </span>
+          <span
+            className={`text-fin-muted transition-transform duration-200 ${
+              reportExpanded ? 'rotate-180' : ''
+            }`}
+          >
+            ▼
+          </span>
+        </button>
 
-      {/* Reference / citation list */}
+        {reportExpanded && (
+          <div className="border-t border-fin-border px-4 py-4 space-y-4">
+            <ExecutiveSummary report={report} />
+            <CoreFindings report={report} />
+            <ConflictPanel report={report} />
+          </div>
+        )}
+      </div>
+
+      {/* 引用列表 */}
       <ReferenceList citations={reportData.citations} />
     </div>
   );

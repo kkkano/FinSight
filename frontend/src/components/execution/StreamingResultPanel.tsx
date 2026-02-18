@@ -202,6 +202,12 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
           </div>
         </div>
 
+        {run.fallbackReasons.length > 0 && (
+          <div className="text-2xs text-amber-300 bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2">
+            部分 Agent 已降级（主流程继续）：{run.fallbackReasons[run.fallbackReasons.length - 1]}
+          </div>
+        )}
+
         {/* Streaming text */}
         {run.streamedContent && (
           <div
@@ -230,17 +236,19 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
   if (run.status === 'done') {
     const isReport = run.outputMode === 'investment_report';
     const isBridged = run.bridgedToChat === true;
+    const isDashboardRun = run.source?.startsWith('dashboard');
+    const inlineReport = !isDashboardRun ? run.report : null;
 
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
         {/* Result content */}
-        {run.report ? (
-          <ReportView report={run.report} />
+        {inlineReport ? (
+          <ReportView report={inlineReport} />
         ) : (
           <>
             <div className="flex items-center gap-2 text-xs text-emerald-400">
               <CheckCircle2 size={14} />
-              执行完成
+              {isDashboardRun ? '执行完成，结果已同步到仪表盘' : '执行完成'}
             </div>
             {run.streamedContent && (
               <div className="text-sm text-fin-text whitespace-pre-wrap break-words overflow-y-auto max-h-96 border border-fin-border rounded-lg p-3 bg-fin-bg/50">
@@ -251,7 +259,8 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
         )}
 
         {/* Bridge buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t border-fin-border/50">
+        {!isDashboardRun && (
+          <div className="flex items-center gap-2 pt-2 border-t border-fin-border/50">
           {isReport ? (
             /* 投资报告 → 主按钮：继续追问 */
             <button
@@ -283,7 +292,8 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
               {isBridged ? '已发送到聊天' : '发送摘要到聊天'}
             </button>
           )}
-        </div>
+          </div>
+        )}
       </div>
     );
   }

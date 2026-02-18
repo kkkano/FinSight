@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.state import GraphState
@@ -47,6 +48,32 @@ def planner_stub(state: GraphState) -> dict:
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     primary_ticker = (tickers or [None])[0] if isinstance(tickers, list) else None
     subject_type = subject.get("subject_type") if isinstance(subject, dict) else None
+    query_lower = query.lower()
+
+    def _contains_any(tokens: tuple[str, ...]) -> bool:
+        return any(token in query_lower for token in tokens)
+
+    def _append_tool_step(
+        name: str,
+        inputs: dict,
+        *,
+        why: str,
+        optional: bool = True,
+    ) -> None:
+        nonlocal step_id
+        if name not in allowed_tools:
+            return
+        steps.append(
+            {
+                "id": f"s{step_id}",
+                "kind": "tool",
+                "name": name,
+                "inputs": inputs,
+                "why": why,
+                "optional": optional,
+            }
+        )
+        step_id += 1
 
     # Rule-based minimal plan (Phase 3 scaffolding).
     if operation == "fetch" and primary_ticker and "get_company_news" in allowed_tools:
@@ -123,6 +150,127 @@ def planner_stub(state: GraphState) -> dict:
         )
         step_id += 1
 
+    # Keyword routing for new tools (stub mode fallback).
+    normalized_tickers = [
+        str(t).strip().upper()
+        for t in (tickers if isinstance(tickers, list) else [])
+        if isinstance(t, str) and str(t).strip()
+    ]
+    if not normalized_tickers and isinstance(primary_ticker, str) and primary_ticker.strip():
+        normalized_tickers = [primary_ticker.strip().upper()]
+
+    if primary_ticker and _contains_any(
+        (
+            "eps",
+            "earnings estimate",
+            "earnings estimates",
+            "earnings revision",
+            "eps revision",
+            "consensus estimate",
+            "guidance",
+        )
+    ):
+        _append_tool_step(
+            "get_earnings_estimates",
+            {"ticker": primary_ticker},
+            why="关键词命中盈利预期，补充 forward EPS 与预期分歧数据。",
+        )
+        _append_tool_step(
+            "get_eps_revisions",
+            {"ticker": primary_ticker},
+            why="关键词命中 EPS 修正，补充上修/下修趋势信号。",
+        )
+
+    if primary_ticker and _contains_any(
+        (
+            "option",
+            "options",
+            "implied volatility",
+            " iv ",
+            " pcr ",
+            "put/call",
+            "put call ratio",
+            "skew",
+            "vol smile",
+        )
+    ):
+        _append_tool_step(
+            "get_option_chain_metrics",
+            {"ticker": primary_ticker},
+            why="关键词命中期权衍生指标，补充 IV/PCR/Skew。",
+        )
+
+    if normalized_tickers and _contains_any(
+        (
+            "factor exposure",
+            "stress test",
+            "scenario shock",
+            "volatility shock",
+            "drawdown shock",
+            "beta exposure",
+            "risk factor",
+        )
+    ):
+        weight = round(1.0 / len(normalized_tickers), 4)
+        positions = [{"ticker": ticker, "weight": weight} for ticker in normalized_tickers[:6]]
+        _append_tool_step(
+            "get_factor_exposure",
+            {"positions": positions, "lookback_days": 252},
+            why="关键词命中因子暴露分析，生成组合 beta 与因子敞口。",
+        )
+        _append_tool_step(
+            "run_portfolio_stress_test",
+            {"positions": positions, "lookback_days": 252},
+            why="关键词命中压力测试，生成情景冲击下的收益敏感性。",
+        )
+
+    if primary_ticker and _contains_any(
+        (
+            "event calendar",
+            "earnings calendar",
+            "earnings date",
+            "dividend",
+            "ex-dividend",
+            "macro event",
+            "fomc",
+            "cpi",
+            "payroll",
+            "nfp",
+            "calendar",
+        )
+    ):
+        _append_tool_step(
+            "get_event_calendar",
+            {"ticker": primary_ticker, "days_ahead": 30},
+            why="关键词命中事件日历，补充财报/分红/宏观事件时间点。",
+        )
+
+    if _contains_any(
+        (
+            "source reliability",
+            "reliability score",
+            "credible source",
+            "news source",
+            "rumor",
+            "可信",
+            "信源",
+            "来源可靠",
+        )
+    ):
+        reliability_inputs: dict[str, str] = {}
+        url_match = re.search(r"https?://[^\s]+", query)
+        if url_match:
+            reliability_inputs["url"] = url_match.group(0).rstrip(".,)")
+        for source_hint in ("reuters", "bloomberg", "wsj", "ft", "cnbc", "marketwatch", "seekingalpha"):
+            if source_hint in query_lower:
+                reliability_inputs["source"] = source_hint
+                break
+        _append_tool_step(
+            "score_news_source_reliability",
+            reliability_inputs,
+            why="关键词命中信源可靠度评估，补充来源可信度分级。",
+        )
+
     # Report mode can expand information gathering, but should remain minimal by default.
     if output_mode == "investment_report" and primary_ticker:
         if "get_stock_price" in allowed_tools:
@@ -171,6 +319,20 @@ def planner_stub(state: GraphState) -> dict:
                 min_agents=min_agents,
             )
             selected_agents = [str(name) for name in (selected.get("selected") or []) if isinstance(name, str) and name]
+
+        ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+        analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+        if analysis_depth == "report":
+            selected_agents = [name for name in selected_agents if name != "deep_search_agent"]
+        elif analysis_depth == "deep_research":
+            if "deep_search_agent" in all_agents and "deep_search_agent" not in selected_agents:
+                if max_agents > 0 and len(selected_agents) >= max_agents:
+                    if max_agents == 1:
+                        selected_agents = ["deep_search_agent"]
+                    else:
+                        selected_agents = selected_agents[: max_agents - 1] + ["deep_search_agent"]
+                else:
+                    selected_agents.append("deep_search_agent")
 
         # In report mode, run score-selected expert agents for richer cards (ReportView).
         # All report agents share the same parallel_group so the executor

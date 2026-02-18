@@ -38,7 +38,11 @@ class DashboardCache:
     TTL_VALUATION = 300        # Valuation metrics (5 min)
     TTL_FINANCIALS = 3600      # Financial statements (1 hour)
     TTL_TECHNICALS = 60        # Technical indicators (1 min)
+    TTL_EARNINGS = 3600         # Earnings history (1 hour - quarterly data)
+    TTL_ANALYST = 1800          # Analyst targets/recommendations (30 min)
     TTL_PEERS = 3600           # Peer comparison (1 hour)
+    TTL_INSIGHTS = 3600        # AI insights (1 hour)
+    TTL_INSIGHTS_STALE = 14400 # AI insights stale window (4 hours)
 
     def __init__(self) -> None:
         """初始化缓存存储"""
@@ -84,6 +88,50 @@ class DashboardCache:
 
         logger.debug(f"Cache hit: {key}")
         return value
+
+    def get_with_stale(
+        self,
+        symbol: str,
+        data_type: str,
+        stale_ttl: int = 14400,
+    ) -> tuple[Optional[Any], bool]:
+        """
+        获取缓存数据（支持 stale-while-revalidate 模式）
+
+        如果数据在 stale_ttl 内（即使已过 TTL），仍返回数据并标记 is_stale=True。
+
+        Args:
+            symbol: 资产代码
+            data_type: 数据类型
+            stale_ttl: 过期后仍可返回的最大秒数
+
+        Returns:
+            (data, is_stale): data 为缓存数据或 None; is_stale 表示是否已过期
+        """
+        key = self._key(symbol, data_type)
+        entry = self._store.get(key)
+
+        if entry is None:
+            return None, False
+
+        expires_at, value = entry
+        now = time.time()
+
+        if now <= expires_at:
+            # Fresh
+            logger.debug(f"Cache hit (fresh): {key}")
+            return value, False
+
+        # Expired but within stale window?
+        stale_deadline = expires_at + stale_ttl
+        if now <= stale_deadline:
+            logger.debug(f"Cache hit (stale): {key}")
+            return value, True
+
+        # Beyond stale window — treat as miss
+        del self._store[key]
+        logger.debug(f"Cache expired beyond stale window: {key}")
+        return None, False
 
     def set(
         self,

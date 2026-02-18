@@ -65,6 +65,28 @@ def _format_conversation_history_for_synth(state: GraphState) -> str:
     )
 
 
+def _format_memory_context_for_synth(state: GraphState) -> str:
+    memory_context = state.get("memory_context")
+    if not isinstance(memory_context, dict) or not memory_context:
+        return ""
+
+    payload: dict[str, Any] = {}
+    for key in ("user_id", "risk_tolerance", "investment_style", "watchlist", "last_focus", "recent_focuses"):
+        value = memory_context.get(key)
+        if value is None:
+            continue
+        payload[key] = value
+
+    if not payload:
+        return ""
+
+    return (
+        "<memory_context>\n"
+        + json_dumps_safe(payload, ensure_ascii=False, indent=2)
+        + "\n</memory_context>\n"
+    )
+
+
 def _env_str(key: str, default: str) -> str:
     raw = os.getenv(key)
     return raw.strip() if isinstance(raw, str) and raw.strip() else default
@@ -1401,6 +1423,7 @@ async def _generate_narrative_draft(
             evidence_text = "\n".join(ev_lines)
 
     conversation_history = _format_conversation_history_for_synth(state)
+    memory_context_block = _format_memory_context_for_synth(state)
 
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
 
@@ -1410,7 +1433,7 @@ async def _generate_narrative_draft(
 标的: {ticker_label}
 </task>
 
-{conversation_history}<agent_outputs>
+{conversation_history}{memory_context_block}<agent_outputs>
 {chr(10).join(agent_sections) if agent_sections else "(无智能体输出)"}
 </agent_outputs>
 
@@ -1458,6 +1481,10 @@ async def _generate_narrative_draft(
 7) 直接输出 Markdown，禁止 JSON 包装、代码块包裹或开场白。
 8) 末尾附一行免责声明："*以上内容仅供参考，不构成投资建议。*"
 9) 禁止出现"补充分析"、"核心发现"等附录性标题，所有内容必须融入上述五大章节中。
+10) **可选可视化**：当你认为可视化有助于读者理解时，可在正文中插入图表标签（每篇报告最多 2 个）：
+    - LLM 概览数据：`<chart type="bar" title="标题">{{"labels":["A","B"],"values":[10,20]}}</chart>`
+    - 引用前端已有数据：`<chart_ref type="bar" source="peers" fields="trailing_pe" title="PE对比"/>`
+    - 支持类型: bar / line / pie / scatter / gauge。规则: 不替代文字分析，仅做辅助展示。
 </constraints>"""
 
     retry_attempts = 0
@@ -1612,17 +1639,38 @@ async def synthesize(state: GraphState) -> dict:
     rag_context = artifacts.get("rag_context") if isinstance(artifacts, dict) else None
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
 
+    # Build separated evidence sections for structured prompt
+    evidence_pool_list = evidence_pool if isinstance(evidence_pool, list) else []
+    rag_context_list = rag_context if isinstance(rag_context, list) else []
+
     inputs = {
         "query": state.get("query") or "",
         "subject": subject,
         "operation": operation,
         "output_mode": output_mode,
-        "evidence_pool": evidence_pool if isinstance(evidence_pool, list) else [],
-        "rag_context": rag_context if isinstance(rag_context, list) else [],
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
 
+    # Format evidence sections with XML tags
+    realtime_section = ""
+    if evidence_pool_list:
+        realtime_section = "<realtime_evidence>\n" + json_dumps_safe(evidence_pool_list[:20], ensure_ascii=False, indent=2) + "\n</realtime_evidence>\n"
+
+    historical_section = ""
+    if rag_context_list:
+        historical_section = "<historical_knowledge>\n" + json_dumps_safe(rag_context_list[:20], ensure_ascii=False, indent=2) + "\n</historical_knowledge>\n"
+
+    evidence_rules = ""
+    if realtime_section or historical_section:
+        evidence_rules = """<evidence_priority_rules>
+1. 实时数据与历史数据冲突时，以实时数据为准
+2. 引用历史数据时必须标注数据时间（如"根据 2025 Q3 财报..."）
+3. 无法确认时效性的数据需注明"截至某日期"
+</evidence_priority_rules>
+"""
+
     synth_conversation_history = _format_conversation_history_for_synth(state)
+    synth_memory_context = _format_memory_context_for_synth(state)
 
     prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
 
@@ -1631,11 +1679,11 @@ async def synthesize(state: GraphState) -> dict:
 所有文本值必须为简体中文。
 </task>
 
-{synth_conversation_history}<inputs>
+{synth_conversation_history}{synth_memory_context}<inputs>
 {json_dumps_safe(inputs, ensure_ascii=False, indent=2)}
 </inputs>
 
-<output_format>
+{realtime_section}{historical_section}{evidence_rules}<output_format>
 返回 JSON 对象，键为以下模板变量的子集：
 news_summary, impact_analysis, next_watch, risks,
 conclusion, investment_summary, company_overview, catalysts, valuation,
@@ -1657,7 +1705,7 @@ summary, highlights, analysis.
 </field_quality_guidelines>
 
 <constraints>
-1) 优先使用 evidence_pool/rag_context/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
+1) 优先使用 realtime_evidence/historical_knowledge/step_results 中的实际数据；数据不足时明确标注"数据有限"而非编造。
 2) 禁止输出原始工具数据、搜索日志、trace 信息。
 3) 免责声明最多在 risks 字段末尾出现 1 次，其他字段禁止重复。
 4) 每个字段控制在 6 条要点以内，追求信息密度而非长度。

@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart2, CheckCircle2, FileSearch,
-  ListTodo, Loader2, Newspaper, PauseCircle, Shield,
-  Sparkles, TrendingUp, XCircle,
+  AlertTriangle,
+  BarChart2,
+  CheckCircle2,
+  Clock3,
+  FileSearch,
+  ListTodo,
+  Loader2,
+  Newspaper,
+  PauseCircle,
+  Shield,
+  Sparkles,
+  TrendingUp,
+  XCircle,
 } from 'lucide-react';
 
 import { apiClient } from '../../api/client';
@@ -14,16 +24,12 @@ import { Card } from '../ui/Card';
 import { useToast } from '../ui';
 import { InterruptCard } from '../execution/InterruptCard';
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
 interface TaskSectionProps {
   symbol: string;
   onNavigateToChat?: () => void;
 }
 
-type TaskRunStatus = 'idle' | 'running' | 'done' | 'error' | 'interrupted';
+type TaskRunStatus = 'pending' | 'running' | 'done' | 'error' | 'interrupted' | 'expired';
 
 interface InterruptInfo {
   thread_id: string;
@@ -40,20 +46,41 @@ interface TaskRunState {
   reportId: string | null;
   error: string | null;
   interruptData: InterruptInfo | null;
+  updatedAt: string;
+  expiresAt: string | null;
 }
 
-const INITIAL_RUN_STATE: TaskRunState = {
-  status: 'idle',
-  step: null,
-  progress: 0,
-  reportId: null,
-  error: null,
-  interruptData: null,
+interface TaskHistoryItem {
+  taskId: string;
+  title: string;
+  status: TaskRunStatus;
+  reportId: string | null;
+  error: string | null;
+  at: string;
+}
+
+interface PersistedTaskSectionState {
+  runs: Record<string, TaskRunState>;
+  history: TaskHistoryItem[];
+}
+
+const STORAGE_PREFIX = 'finsight-workbench-task-state';
+const HISTORY_MAX = 30;
+const HISTORY_STATUS_LABEL: Record<TaskRunStatus, string> = {
+  pending: '待执行',
+  running: '执行中',
+  done: '已完成',
+  error: '失败',
+  interrupted: '已中断',
+  expired: '已过期',
 };
 
-/* ------------------------------------------------------------------ */
-/*  Icon registry — maps backend icon names to Lucide components       */
-/* ------------------------------------------------------------------ */
+const TERMINAL_STATUSES = new Set<TaskRunStatus>([
+  'done',
+  'error',
+  'interrupted',
+  'expired',
+]);
 
 const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> = {
   AlertTriangle,
@@ -65,33 +92,151 @@ const ICON_MAP: Record<string, React.FC<{ size?: number; className?: string }>> 
   BarChart2,
 };
 
-/* ------------------------------------------------------------------ */
-/*  TaskSection                                                        */
-/* ------------------------------------------------------------------ */
+const buildStorageKey = (sessionId: string) => `${STORAGE_PREFIX}:${sessionId}`;
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function TaskSection(_props: TaskSectionProps) {
+const nowIso = () => new Date().toISOString();
+
+const createDefaultRunState = (): TaskRunState => ({
+  status: 'pending',
+  step: null,
+  progress: 0,
+  reportId: null,
+  error: null,
+  interruptData: null,
+  updatedAt: nowIso(),
+  expiresAt: null,
+});
+
+const parseDateMs = (value?: string | null): number | null => {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+};
+
+const withExpiration = (run: TaskRunState): TaskRunState => {
+  const expiresMs = parseDateMs(run.expiresAt);
+  if (expiresMs === null) return run;
+  if (Date.now() <= expiresMs) return run;
+  if (run.status === 'running' || run.status === 'expired') return run;
+  return {
+    ...run,
+    status: 'expired',
+    step: '任务已过期，请刷新任务列表',
+    updatedAt: nowIso(),
+  };
+};
+
+const toRunStateFromTask = (task: DailyTask): TaskRunState => {
+  const status = task.status ?? 'pending';
+  const base = createDefaultRunState();
+  const next: TaskRunState = {
+    ...base,
+    status: status === 'done' || status === 'expired' ? status : 'pending',
+    reportId: task.report_id ?? null,
+    progress: status === 'done' ? 100 : 0,
+    expiresAt: task.expires_at ?? null,
+  };
+  return withExpiration(next);
+};
+
+const loadPersistedState = (sessionId: string): PersistedTaskSectionState => {
+  if (typeof window === 'undefined') return { runs: {}, history: [] };
+  try {
+    const raw = window.localStorage.getItem(buildStorageKey(sessionId));
+    if (!raw) return { runs: {}, history: [] };
+    const parsed = JSON.parse(raw) as Partial<PersistedTaskSectionState>;
+    const runs = parsed.runs && typeof parsed.runs === 'object' ? parsed.runs : {};
+    const history = Array.isArray(parsed.history) ? parsed.history : [];
+    return { runs: runs as Record<string, TaskRunState>, history: history as TaskHistoryItem[] };
+  } catch {
+    return { runs: {}, history: [] };
+  }
+};
+
+const savePersistedState = (sessionId: string, state: PersistedTaskSectionState): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(buildStorageKey(sessionId), JSON.stringify(state));
+  } catch {
+    // ignore quota/storage errors
+  }
+};
+
+const formatTime = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+function TaskSection({ symbol }: TaskSectionProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const sessionId = useStore((s) => s.sessionId);
+  const addRawEvent = useStore((s) => s.addRawEvent);
+  const traceRawEnabled = useStore((s) => s.traceRawEnabled);
   const watchlist = useDashboardStore((s) => s.watchlist ?? []);
   const watchlistSymbols = useMemo(
     () => watchlist.map((item) => item.symbol).filter(Boolean),
     [watchlist],
   );
-  const watchlistKey = useMemo(() => watchlistSymbols.join(','), [watchlistSymbols]);
+  const effectiveWatchlist = useMemo(() => {
+    if (watchlistSymbols.length > 0) return watchlistSymbols;
+    return symbol ? [symbol.trim().toUpperCase()] : [];
+  }, [symbol, watchlistSymbols]);
+  const watchlistKey = useMemo(() => effectiveWatchlist.join(','), [effectiveWatchlist]);
 
-  // Tasks from API
   const [tasks, setTasks] = useState<DailyTask[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
-  // Per-task execution state (keyed by task.id)
   const [runStates, setRunStates] = useState<Record<string, TaskRunState>>({});
-  const abortRef = useRef<Record<string, AbortController>>({});
-  const lastErrorRef = useRef<string | null>(null);
+  const [history, setHistory] = useState<TaskHistoryItem[]>([]);
 
-  /* ---- Fetch tasks from API ---- */
+  const runStatesRef = useRef<Record<string, TaskRunState>>({});
+  const abortRef = useRef<Record<string, AbortController>>({});
+  const titlesRef = useRef<Record<string, string>>({});
+  const lastErrorRef = useRef<string | null>(null);
+  const prevStatusRef = useRef<Record<string, TaskRunStatus>>({});
+
+  useEffect(() => {
+    runStatesRef.current = runStates;
+  }, [runStates]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const persisted = loadPersistedState(sessionId);
+    const hydratedRuns: Record<string, TaskRunState> = {};
+    const hydratedStatusMap: Record<string, TaskRunStatus> = {};
+    for (const [taskId, run] of Object.entries(persisted.runs || {})) {
+      const base = {
+        ...createDefaultRunState(),
+        ...run,
+        updatedAt: run.updatedAt || nowIso(),
+      };
+      const hydrated = withExpiration(base);
+      hydratedRuns[taskId] = hydrated;
+      hydratedStatusMap[taskId] = hydrated.status;
+    }
+    prevStatusRef.current = hydratedStatusMap;
+    setRunStates(hydratedRuns);
+    setHistory((persisted.history || []).slice(0, HISTORY_MAX));
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    savePersistedState(sessionId, {
+      runs: runStates,
+      history: history.slice(0, HISTORY_MAX),
+    });
+  }, [sessionId, runStates, history]);
+
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const task of tasks) {
+      map[task.id] = task.title;
+    }
+    titlesRef.current = map;
+  }, [tasks]);
+
   useEffect(() => {
     if (!sessionId) return;
 
@@ -102,18 +247,41 @@ function TaskSection(_props: TaskSectionProps) {
     apiClient
       .getDailyTasks({
         session_id: sessionId,
-        watchlist: watchlistSymbols,
+        watchlist: effectiveWatchlist,
       })
       .then((res) => {
-        if (!cancelled) {
-          setTasks(res.tasks);
-        }
+        if (cancelled) return;
+        const nextTasks = Array.isArray(res.tasks) ? res.tasks : [];
+        setTasks(nextTasks);
+        setRunStates((prev) => {
+          const next: Record<string, TaskRunState> = {};
+          for (const task of nextTasks) {
+            const existing = prev[task.id];
+            const taskDefault = toRunStateFromTask(task);
+            const merged: TaskRunState = withExpiration({
+              ...taskDefault,
+              ...(existing ?? {}),
+              reportId: existing?.reportId ?? task.report_id ?? taskDefault.reportId,
+              expiresAt: task.expires_at ?? existing?.expiresAt ?? null,
+              status: (() => {
+                if (task.status === 'expired') return 'expired';
+                if (existing?.status === 'running') return 'running';
+                if (existing?.status === 'interrupted') return 'interrupted';
+                if (existing?.status === 'done') return 'done';
+                if (task.status === 'done') return 'done';
+                return 'pending';
+              })(),
+              progress: existing?.status === 'done' || task.status === 'done' ? 100 : (existing?.progress ?? 0),
+            });
+            next[task.id] = merged;
+          }
+          return next;
+        });
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to load tasks';
-          setFetchError(message);
-        }
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'Failed to load tasks';
+        setFetchError(message);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -122,16 +290,14 @@ function TaskSection(_props: TaskSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, watchlistKey]);
+  }, [sessionId, watchlistKey, effectiveWatchlist]);
 
   useEffect(() => {
     if (!fetchError) {
       lastErrorRef.current = null;
       return;
     }
-    if (lastErrorRef.current === fetchError) {
-      return;
-    }
+    if (lastErrorRef.current === fetchError) return;
     lastErrorRef.current = fetchError;
     toast({
       type: 'error',
@@ -140,18 +306,79 @@ function TaskSection(_props: TaskSectionProps) {
     });
   }, [fetchError, toast]);
 
-  /* ---- Update run state immutably ---- */
-  const updateRun = useCallback(
-    (taskId: string, patch: Partial<TaskRunState>) => {
-      setRunStates((prev) => ({
-        ...prev,
-        [taskId]: { ...(prev[taskId] || INITIAL_RUN_STATE), ...patch },
-      }));
-    },
-    [],
-  );
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRunStates((prev) => {
+        let changed = false;
+        const next: Record<string, TaskRunState> = {};
+        for (const [taskId, run] of Object.entries(prev)) {
+          const expired = withExpiration(run);
+          if (expired.status !== run.status || expired.step !== run.step || expired.updatedAt !== run.updatedAt) {
+            changed = true;
+          }
+          next[taskId] = expired;
+        }
+        return changed ? next : prev;
+      });
+    }, 30_000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
-  /* ---- Execute a task in-place via SSE ---- */
+  useEffect(() => {
+    const previous = prevStatusRef.current;
+    const additions: TaskHistoryItem[] = [];
+    const nextStatusMap: Record<string, TaskRunStatus> = {};
+
+    for (const [taskId, run] of Object.entries(runStates)) {
+      const prevStatus = previous[taskId];
+      nextStatusMap[taskId] = run.status;
+      if (run.status === prevStatus) continue;
+      if (!TERMINAL_STATUSES.has(run.status)) continue;
+      additions.push({
+        taskId,
+        title: titlesRef.current[taskId] || taskId,
+        status: run.status,
+        reportId: run.reportId,
+        error: run.error,
+        at: run.updatedAt || nowIso(),
+      });
+    }
+
+    prevStatusRef.current = nextStatusMap;
+    if (additions.length > 0) {
+      setHistory((prev) => {
+        const merged = [...additions.reverse(), ...prev];
+        const seen = new Set<string>();
+        const deduped: TaskHistoryItem[] = [];
+        for (const item of merged) {
+          const key = `${item.taskId}:${item.status}:${item.reportId || ''}:${item.at}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(item);
+          if (deduped.length >= HISTORY_MAX) break;
+        }
+        return deduped;
+      });
+    }
+  }, [runStates]);
+
+  const updateRun = useCallback((taskId: string, patch: Partial<TaskRunState>) => {
+    setRunStates((prev) => {
+      const current = prev[taskId] || createDefaultRunState();
+      const next = withExpiration({
+        ...current,
+        ...patch,
+        updatedAt: nowIso(),
+      });
+      return {
+        ...prev,
+        [taskId]: next,
+      };
+    });
+  }, []);
+
   const executeTask = useCallback(
     (task: DailyTask) => {
       if (!task.execution_params) return;
@@ -175,46 +402,71 @@ function TaskSection(_props: TaskSectionProps) {
       });
 
       apiClient
-        .executeAgent(request, {
-          onThinking: (step: any) => {
-            const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
-            updateRun(task.id, { step: message, progress: Math.min(90, (runStates[task.id]?.progress || 10) + 10) });
+        .executeAgent(
+          request,
+          {
+            onThinking: (step: any) => {
+              const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
+              const current = runStatesRef.current[task.id] || createDefaultRunState();
+              updateRun(task.id, {
+                step: message,
+                progress: Math.min(90, Math.max(10, current.progress + 10)),
+              });
+            },
+            onToken: () => {
+              updateRun(task.id, { step: '生成报告...', progress: 85 });
+            },
+            onDone: (report?: any) => {
+              const reportId = report?.report_id || task.report_id || null;
+              updateRun(task.id, { status: 'done', step: null, progress: 100, reportId });
+            },
+            onError: (error: string) => {
+              updateRun(task.id, { status: 'error', step: null, error });
+            },
+            onInterrupt: (data) => {
+              updateRun(task.id, {
+                status: 'interrupted',
+                step: data.prompt ?? '等待确认...',
+                interruptData: data,
+              });
+            },
+            onRawEvent: (event) => {
+              addRawEvent(event);
+            },
           },
-          onToken: () => {
-            updateRun(task.id, { step: '生成报告...', progress: 85 });
-          },
-          onDone: (report?: any) => {
-            const reportId = report?.report_id || null;
-            updateRun(task.id, { status: 'done', step: null, progress: 100, reportId });
-          },
-          onError: (error: string) => {
-            updateRun(task.id, { status: 'error', step: null, error });
-          },
-          onInterrupt: (data) => {
+          { signal: controller.signal, traceRawEnabled },
+        )
+        .then(() => {
+          const current = runStatesRef.current[task.id];
+          if (current?.status === 'running') {
             updateRun(task.id, {
-              status: 'interrupted',
-              step: data.prompt ?? '等待确认...',
-              interruptData: data,
+              status: 'error',
+              step: null,
+              error: 'Execution stream ended unexpectedly (missing done event)',
             });
-          },
-        }, { signal: controller.signal })
+          }
+        })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
           const message = err instanceof Error ? err.message : 'Execution failed';
           updateRun(task.id, { status: 'error', step: null, error: message });
         });
     },
-    [sessionId, updateRun, runStates],
+    [addRawEvent, sessionId, traceRawEnabled, updateRun],
   );
 
-  /* ---- Resume an interrupted task ---- */
   const handleResume = useCallback(
     (taskId: string, threadId: string, resumeValue: string) => {
       updateRun(taskId, { status: 'running', step: '恢复执行...', interruptData: null });
 
       apiClient
         .resumeExecution(
-          { thread_id: threadId, resume_value: resumeValue, session_id: sessionId, source: 'workbench_resume' },
+          {
+            thread_id: threadId,
+            resume_value: resumeValue,
+            session_id: sessionId,
+            source: 'workbench_resume',
+          },
           {
             onThinking: (step: any) => {
               const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
@@ -231,61 +483,84 @@ function TaskSection(_props: TaskSectionProps) {
               updateRun(taskId, { status: 'error', step: null, error });
             },
             onInterrupt: (data) => {
-              updateRun(taskId, { status: 'interrupted', step: data.prompt ?? '等待确认...', interruptData: data });
+              updateRun(taskId, {
+                status: 'interrupted',
+                step: data.prompt ?? '等待确认...',
+                interruptData: data,
+              });
+            },
+            onRawEvent: (event) => {
+              addRawEvent(event);
             },
           },
+          { traceRawEnabled },
         )
+        .then(() => {
+          const current = runStatesRef.current[taskId];
+          if (current?.status === 'running') {
+            updateRun(taskId, {
+              status: 'error',
+              step: null,
+              error: 'Resume stream ended unexpectedly (missing done event)',
+            });
+          }
+        })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : 'Resume failed';
           updateRun(taskId, { status: 'error', step: null, error: message });
         });
     },
-    [sessionId, updateRun],
+    [addRawEvent, sessionId, traceRawEnabled, updateRun],
   );
 
-  /* ---- Cancel an interrupted task ---- */
   const handleCancelInterrupt = useCallback(
     (taskId: string) => {
-      updateRun(taskId, { status: 'idle', step: null, interruptData: null });
+      updateRun(taskId, { status: 'pending', step: null, interruptData: null, progress: 0 });
     },
     [updateRun],
   );
 
-  /* ---- Handle task click ---- */
   const handleClick = useCallback(
     (task: DailyTask) => {
-      const run = runStates[task.id];
+      const run = runStatesRef.current[task.id] || toRunStateFromTask(task);
 
-      // If done → navigate to report
-      if (run?.status === 'done' && run.reportId) {
+      if (run.status === 'done' && run.reportId) {
         navigate(`/chat?report_id=${encodeURIComponent(run.reportId)}`);
         return;
       }
 
-      // If already running or interrupted → ignore
-      if (run?.status === 'running' || run?.status === 'interrupted') return;
+      if (run.status === 'expired') {
+        toast({
+          type: 'warning',
+          title: '任务已过期',
+          message: '请等待下一轮任务刷新或重新发起分析',
+        });
+        return;
+      }
 
-      // If has execution_params → execute in-place
+      if (run.status === 'running' || run.status === 'interrupted') return;
+
       if (task.execution_params) {
         executeTask(task);
         return;
       }
 
-      // Otherwise → navigate
-      navigate(task.action_url);
+      if (task.action_url) {
+        navigate(task.action_url);
+      }
     },
-    [runStates, navigate, executeTask],
+    [executeTask, navigate, toast],
   );
 
-  /* ---- Cleanup abort controllers on unmount ---- */
   useEffect(() => {
     const refs = abortRef.current;
     return () => {
-      Object.values(refs).forEach((c) => c.abort());
+      Object.values(refs).forEach((controller) => controller.abort());
     };
   }, []);
 
-  /* ---- Render ---- */
+  const recentHistory = history.slice(0, 5);
+
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2 mb-3 text-fin-text font-semibold text-sm">
@@ -311,11 +586,13 @@ function TaskSection(_props: TaskSectionProps) {
 
         {tasks.map((task) => {
           const IconComponent = ICON_MAP[task.icon] || ListTodo;
-          const run = runStates[task.id] || INITIAL_RUN_STATE;
+          const run = runStates[task.id] || toRunStateFromTask(task);
           const isRunning = run.status === 'running';
           const isDone = run.status === 'done';
           const isError = run.status === 'error';
           const isInterrupted = run.status === 'interrupted';
+          const isExpired = run.status === 'expired';
+          const isPending = run.status === 'pending';
           const isExecutable = !!task.execution_params;
 
           return (
@@ -333,10 +610,11 @@ function TaskSection(_props: TaskSectionProps) {
                         ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30'
                         : isInterrupted
                           ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300 cursor-default'
-                          : 'text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text'
+                          : isExpired
+                            ? 'bg-slate-100 dark:bg-slate-800/60 text-slate-500 dark:text-slate-300'
+                            : 'text-fin-text-secondary hover:bg-fin-hover hover:text-fin-text'
                 }`}
               >
-                {/* Icon — swap based on state */}
                 {isRunning ? (
                   <Loader2 size={14} className="animate-spin shrink-0 text-blue-500" />
                 ) : isDone ? (
@@ -345,6 +623,8 @@ function TaskSection(_props: TaskSectionProps) {
                   <XCircle size={14} className="shrink-0 text-red-500" />
                 ) : isInterrupted ? (
                   <PauseCircle size={14} className="shrink-0 text-amber-500" />
+                ) : isExpired ? (
+                  <Clock3 size={14} className="shrink-0 text-slate-500" />
                 ) : (
                   <IconComponent
                     size={14}
@@ -353,18 +633,16 @@ function TaskSection(_props: TaskSectionProps) {
                 )}
 
                 <span className="truncate flex-1">
-                  {isDone && run.reportId ? '查看报告' : isInterrupted ? '等待确认' : task.title}
+                  {isDone && run.reportId ? '查看报告' : isInterrupted ? '等待确认' : isExpired ? '任务已过期' : task.title}
                 </span>
 
-                {/* Executable badge */}
-                {isExecutable && run.status === 'idle' && (
+                {isExecutable && isPending && (
                   <span className="ml-auto px-1.5 py-0.5 rounded text-2xs bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 shrink-0">
-                    执行
+                    待执行
                   </span>
                 )}
               </button>
 
-              {/* Progress bar for running tasks */}
               {isRunning && (
                 <div className="px-2">
                   <div className="flex items-center gap-2 text-2xs text-blue-500 dark:text-blue-300 mb-0.5">
@@ -380,7 +658,6 @@ function TaskSection(_props: TaskSectionProps) {
                 </div>
               )}
 
-              {/* InterruptCard for interrupted tasks */}
               {isInterrupted && run.interruptData && (
                 <div className="mt-2">
                   <InterruptCard
@@ -391,16 +668,46 @@ function TaskSection(_props: TaskSectionProps) {
                 </div>
               )}
 
-              {/* Error message */}
               {isError && run.error && (
                 <div className="px-2 text-2xs text-red-400 truncate" title={run.error}>
                   {run.error}
                 </div>
               )}
+
+              {isExpired && (
+                <div className="px-2 text-2xs text-slate-400">任务已过期，等待下一轮任务刷新</div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {recentHistory.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-fin-border">
+          <div className="text-2xs font-medium text-fin-text-secondary mb-2">执行历史</div>
+          <div className="space-y-1">
+            {recentHistory.map((item, idx) => (
+              <div key={`${item.taskId}-${item.at}-${String(idx)}`} className="text-2xs text-fin-muted flex items-center gap-2">
+                <span className="w-10 shrink-0">{formatTime(item.at)}</span>
+                <span
+                  className={`w-14 shrink-0 ${
+                    item.status === 'done'
+                      ? 'text-emerald-500'
+                      : item.status === 'error'
+                        ? 'text-red-500'
+                        : item.status === 'expired'
+                          ? 'text-slate-400'
+                          : 'text-amber-500'
+                  }`}
+                >
+                  {HISTORY_STATUS_LABEL[item.status] ?? item.status}
+                </span>
+                <span className="truncate flex-1">{item.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

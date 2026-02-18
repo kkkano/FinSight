@@ -5,6 +5,8 @@ type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
 type PortfolioPositions = Record<string, number>;
 
+const DEFAULT_USER_ID = 'default_user';
+
 const getInitialLayout = (): LayoutMode => {
   if (typeof window === 'undefined') return 'centered';
   const stored = window.localStorage.getItem('finsight-layout');
@@ -30,6 +32,23 @@ const buildSessionId = (): string => {
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   return `public:anonymous:${randomPart}`;
+};
+
+export const deriveUserIdFromSessionId = (sessionId: string | null | undefined): string => {
+  const raw = (sessionId || '').trim();
+  if (!raw) return DEFAULT_USER_ID;
+
+  const parts = raw.split(':');
+  if (parts.length >= 2) {
+    const candidate = parts[1]?.trim();
+    if (candidate) return candidate;
+  }
+
+  if (parts.length === 1) {
+    return DEFAULT_USER_ID;
+  }
+
+  return DEFAULT_USER_ID;
 };
 
 const getInitialSessionId = (): string | null => {
@@ -450,7 +469,6 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
-
 
 
 

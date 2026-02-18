@@ -17,6 +17,7 @@ from backend.api.schemas import (
     ChatRequest,
 )
 from backend.api.chat_router import ChatRouterDeps, create_chat_router
+from backend.api.agent_router import AgentRouterDeps, create_agent_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.dashboard_router import dashboard_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
@@ -59,12 +60,26 @@ if not logging.getLogger().handlers:
 
 # 灏濊瘯瀵煎叆鏍稿績宸ュ叿
 try:
-    from backend.tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
+    from backend.tools import (
+        get_stock_price,
+        get_company_news,
+        get_stock_historical_data,
+        get_financial_statements,
+        get_financial_statements_summary,
+        get_company_info,
+    )
     logger.info("[Init] Core tools imported successfully.")
 except ImportError as e:
     # 濡傛灉 backend.tools 澶辫触锛屽皾璇曚粠鏍圭洰褰?tools 瀵煎叆锛堝吋瀹规棫缁撴瀯锛?
     try:
-        from tools import get_stock_price, get_company_news, get_stock_historical_data, get_financial_statements, get_financial_statements_summary
+        from tools import (
+            get_stock_price,
+            get_company_news,
+            get_stock_historical_data,
+            get_financial_statements,
+            get_financial_statements_summary,
+            get_company_info,
+        )
         logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
         logger.info(f"鉂?Error importing tools: {e2}")
@@ -609,6 +624,12 @@ user_router = create_user_router(
     )
 )
 
+agent_router = create_agent_router(
+    AgentRouterDeps(
+        memory_service=memory_service,
+    )
+)
+
 market_router = create_market_router(
     MarketRouterDeps(
         get_orchestrator_safe=_get_orchestrator_safe,
@@ -668,11 +689,14 @@ _rebalance_engine = _RebalanceEngine()
 rebalance_router = create_rebalance_router(
     RebalanceRouterDeps(
         rebalance_engine=_rebalance_engine,
+        get_stock_price=globals().get("get_stock_price"),
+        get_company_info=globals().get("get_company_info"),
     )
 )
 
 app.include_router(system_router)
 app.include_router(user_router)
+app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(market_router)
 app.include_router(subscription_router)

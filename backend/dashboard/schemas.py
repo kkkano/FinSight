@@ -103,13 +103,22 @@ class NewsItem(BaseModel):
     """
     新闻条目
 
-    单条新闻的结构化表示。
+    单条新闻的结构化表示。Phase H 扩展: 增加标签、排名和影响分数字段。
     """
     title: str
     url: str = ""
     source: str = ""
     ts: str = ""
     summary: str = ""
+    # Phase H: server-computed topic tags (max 3)
+    tags: Optional[list[str]] = None
+    # Ranking fields (injected by _rank_news_items)
+    ranking_score: Optional[float] = None
+    time_decay: Optional[float] = None
+    source_reliability: Optional[float] = None
+    impact_score: Optional[float] = None
+    asset_relevance: Optional[float] = None
+    ranking_reason: Optional[str] = None
 
 
 # ── Dashboard Data v2 新增模型 ────────────────────────────────
@@ -190,6 +199,48 @@ class TechnicalData(BaseModel):
     avg_volume: Optional[float] = None
 
 
+# ── Phase G2: 新增技术指标时间序列 ──────────────────────────────
+
+class IndicatorSeries(BaseModel):
+    """最近 120 日技术指标时间序列 (Phase G2)"""
+    dates: List[str] = Field(default_factory=list, description="ISO date strings")
+    rsi: List[Optional[float]] = Field(default_factory=list)
+    macd: List[Optional[float]] = Field(default_factory=list)
+    macd_signal: List[Optional[float]] = Field(default_factory=list)
+    macd_histogram: List[Optional[float]] = Field(default_factory=list)
+    bb_upper: List[Optional[float]] = Field(default_factory=list)
+    bb_middle: List[Optional[float]] = Field(default_factory=list)
+    bb_lower: List[Optional[float]] = Field(default_factory=list)
+
+
+# ── Phase G2: 新增 Earnings / Analyst 数据 ──────────────────────
+
+class EarningsHistoryEntry(BaseModel):
+    """单季度 EPS 历史记录"""
+    quarter: str = Field("", description="e.g. '2024Q4'")
+    eps_estimate: Optional[float] = None
+    eps_actual: Optional[float] = None
+    surprise_pct: Optional[float] = None
+
+
+class AnalystTargets(BaseModel):
+    """分析师目标价"""
+    low: Optional[float] = None
+    current: Optional[float] = None
+    mean: Optional[float] = None
+    median: Optional[float] = None
+    high: Optional[float] = None
+
+
+class RecommendationsSummary(BaseModel):
+    """分析师评级汇总"""
+    buy: int = 0
+    hold: int = 0
+    sell: int = 0
+    strong_buy: int = 0
+    strong_sell: int = 0
+
+
 class PeerMetrics(BaseModel):
     """同行单项指标"""
     symbol: str
@@ -222,6 +273,7 @@ class DashboardData(BaseModel):
     snapshot: Dict[str, Any] = Field(default_factory=dict)
     charts: Dict[str, Any] = Field(default_factory=dict)
     news: Dict[str, Any] = Field(default_factory=dict)
+    meta: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
     # v2 新增 (HC-1: 可空 + fallback_reason)
     valuation: Optional[ValuationData] = None
@@ -233,6 +285,12 @@ class DashboardData(BaseModel):
     peers: Optional[PeerComparisonData] = None
     peers_fallback_reason: Optional[str] = None
 
+    # Phase G2 新增 (可空)
+    earnings_history: Optional[List[EarningsHistoryEntry]] = None
+    analyst_targets: Optional[AnalystTargets] = None
+    recommendations: Optional[RecommendationsSummary] = None
+    indicator_series: Optional[IndicatorSeries] = None
+
 
 class DashboardResponse(BaseModel):
     """
@@ -243,6 +301,48 @@ class DashboardResponse(BaseModel):
     success: bool = True
     state: DashboardState
     data: DashboardData
+
+
+# ---------------------------------------------------------------------------
+# Insights (Phase F)
+# ---------------------------------------------------------------------------
+
+class InsightCard(BaseModel):
+    """
+    单个维度的 AI 洞察卡片
+
+    由 DigestAgent 生成，包含评分、摘要、要点和风险。
+    当 LLM 不可用时，由确定性评分逻辑生成（model_generated=False）。
+    """
+    agent_name: str = Field(..., description="生成该卡片的 digest agent 名称")
+    tab: str = Field(..., description="对应的 Dashboard Tab 名称")
+    score: float = Field(..., ge=0, le=10, description="综合评分 (0-10)")
+    score_label: str = Field(..., description="评分标签 (弱势/偏空/中性/偏多/强势)")
+    summary: str = Field("", description="200-400 字中文分析摘要")
+    key_points: List[str] = Field(default_factory=list, description="3-5 条要点")
+    risks: List[str] = Field(default_factory=list, description="1-3 条风险")
+    key_metrics: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="结构化关键指标 [{label, value}]，如 [{label:'市盈率', value:'33.24'}]",
+    )
+    sub_scores: Optional[Dict[str, float]] = Field(None, description="子维度评分 (仅 overview)")
+    confidence: float = Field(0.5, ge=0, le=1, description="置信度")
+    as_of: str = Field("", description="数据时间 ISO 格式")
+    model_generated: bool = Field(True, description="True=LLM 生成, False=规则 fallback")
+
+
+class DashboardInsightsResponse(BaseModel):
+    """
+    Dashboard Insights API 响应
+
+    包含各 Tab 的 AI 洞察卡片。
+    """
+    success: bool = True
+    symbol: str = Field(..., description="资产代码")
+    insights: Dict[str, InsightCard] = Field(default_factory=dict, description="tab_name → InsightCard")
+    generated_at: str = Field("", description="生成时间 ISO 格式")
+    cached: bool = Field(False, description="是否来自缓存")
+    cache_age_seconds: float = Field(0, description="缓存年龄（秒）")
 
 
 class DashboardErrorDetail(BaseModel):

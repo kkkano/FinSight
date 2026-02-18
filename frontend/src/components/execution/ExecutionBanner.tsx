@@ -73,7 +73,7 @@ function AgentPipeline({ agents }: { agents: Record<string, AgentRunInfo> }) {
         <div
           key={agent.name}
           className="flex items-center gap-0.5"
-          title={`${AGENT_SHORT_NAMES[agent.name] ?? agent.name}: ${agent.status}`}
+          title={`${AGENT_SHORT_NAMES[agent.name] ?? agent.name}: ${agent.status}${agent.error ? ` (${agent.error})` : ''}`}
         >
           <MiniAgentDot status={agent.status} />
           <span className="text-2xs text-fin-muted hidden sm:inline">

@@ -83,6 +83,7 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
     tool_schemas = policy.get("tool_schemas") if isinstance(policy, dict) else None
     allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else None
     agent_schemas = policy.get("agent_schemas") if isinstance(policy, dict) else None
+    memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else None
 
     planner_variant = str(variant or "A").strip().upper()
     if planner_variant not in {"A", "B"}:
@@ -102,6 +103,8 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
         "allowed_agents": allowed_agents,
         "agent_schemas": agent_schemas,
     }
+    if memory_context:
+        inputs["memory_context"] = memory_context
 
     variant_guidance = (
         "- Variant A: 优先最小化步骤数，强确定性，低执行成本。\n"

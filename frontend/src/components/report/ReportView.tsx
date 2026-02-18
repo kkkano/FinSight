@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { ReportIR, ReportSection as ReportSectionType } from '../../types/index';
 import { Maximize2, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
-import { useStore } from '../../store/useStore';
+import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import {
   normalizeAnchor,
   buildSourceSummary,
@@ -24,15 +24,14 @@ import {
 } from './ReportCharts';
 import { useToast } from '../ui';
 
-const DEFAULT_USER_ID = 'default_user';
-
 export interface ReportViewProps {
   report: ReportIR;
 }
 
 export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
-  const { subscriptionEmail } = useStore();
+  const { subscriptionEmail, sessionId } = useStore();
   const { toast } = useToast();
+  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   /* ---------------------------------------------------------------- */
   /*  State                                                            */
@@ -106,7 +105,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     setActiveCitation(null);
 
     apiClient
-      .getUserProfile(DEFAULT_USER_ID)
+      .getUserProfile(userId)
       .then((response) => {
         if (!mounted || !response?.success) return;
         const list = response.profile?.watchlist || [];
@@ -134,7 +133,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     return () => {
       mounted = false;
     };
-  }, [report.ticker, report.report_id, subscriptionEmail]);
+  }, [report.ticker, report.report_id, subscriptionEmail, userId]);
 
   useEffect(() => {
     const root = document.getElementById('chat-scroll-container');
@@ -233,7 +232,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     if (actionState.watchlist) return;
     setActionState((prev) => ({ ...prev, watchlist: true }));
     try {
-      const payload = { user_id: DEFAULT_USER_ID, ticker: report.ticker };
+      const payload = { user_id: userId, ticker: report.ticker };
       if (watchlisted) {
         await apiClient.removeWatchlist(payload);
         setWatchlisted(false);

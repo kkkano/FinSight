@@ -1,12 +1,10 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
-import { useStore } from '../../store/useStore';
+import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
 import { createPollingAlertFeedSource, reduceAlertFeedEvent } from './alertFeed';
 import type { AlertSubscription, PortfolioSummary, PortfolioRow, WatchlistItem } from './types';
 import { parsePricePayload } from './utils';
-
-const DEFAULT_USER_ID = 'default_user';
 
 const normalizeAlert = (raw: any): AlertSubscription => {
   const ticker = String(raw?.ticker || '--').toUpperCase();
@@ -38,11 +36,12 @@ export function useRightPanelData() {
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const dashboardWatchlist = useDashboardStore((s) => s.watchlist ?? []);
 
-  const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition } = useStore();
+  const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition, sessionId } = useStore();
+  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   const loadWatchlist = useCallback(async () => {
     try {
-      const profile = await apiClient.getUserProfile(DEFAULT_USER_ID);
+      const profile = await apiClient.getUserProfile(userId);
       const listFromProfile = Array.isArray(profile?.profile?.watchlist) ? profile.profile.watchlist : [];
       const list = listFromProfile.length
         ? listFromProfile
@@ -68,7 +67,7 @@ export function useRightPanelData() {
     } catch {
       setWatchlist([]);
     }
-  }, [dashboardWatchlist]);
+  }, [dashboardWatchlist, userId]);
 
   const fetchAlertSnapshot = useCallback(async (): Promise<AlertSubscription[]> => {
     if (!subscriptionEmail) return [];

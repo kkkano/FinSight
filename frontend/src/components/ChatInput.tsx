@@ -472,8 +472,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput(draft || '');
     if (draft && inputRef.current) {
       inputRef.current.focus();
+      setDraft('');
     }
-  }, [draft]);
+  }, [draft, setDraft]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

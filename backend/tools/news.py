@@ -140,27 +140,8 @@ def _headline_is_useful(title: str, snippet: str = "") -> bool:
     return True
 
 
-NEWS_TAG_RULES = [
-    ("科技", ["tech", "technology", "software", "hardware", "cloud", "cyber", "科技", "软件", "硬件", "云", "数据中心", "互联网"]),
-    ("AI", ["ai", "artificial intelligence", "genai", "大模型", "生成式", "人工智能", "AIGC"]),
-    ("半导体", ["semiconductor", "chip", "foundry", "tsmc", "asml", "nvidia", "半导体", "芯片", "晶圆", "光刻"]),
-    ("军事", ["military", "defense", "missile", "army", "navy", "weapon", "drone", "军事", "国防", "导弹", "战机", "无人机", "武器"]),
-    ("能源", ["oil", "crude", "gas", "lng", "opec", "能源", "石油", "原油", "天然气", "煤炭", "电力"]),
-    ("宏观", ["cpi", "ppi", "gdp", "pmi", "fomc", "inflation", "jobs", "payroll", "宏观", "经济", "利率", "通胀", "就业", "非农", "央行"]),
-    ("金融", ["bank", "banking", "credit", "bond", "yield", "金融", "银行", "债券", "收益率", "信贷"]),
-    ("监管", ["regulator", "regulation", "antitrust", "sec", "doj", "监管", "反垄断", "制裁", "罚款"]),
-    ("并购", ["merger", "acquisition", "buyout", "deal", "并购", "收购", "合并", "交易", "要约"]),
-    ("财报", ["earnings", "guidance", "revenue", "profit", "业绩", "财报", "营收", "利润", "指引"]),
-    ("加密", ["crypto", "bitcoin", "ethereum", "blockchain", "加密", "比特币", "以太坊", "区块链"]),
-    ("汽车", ["ev", "electric vehicle", "automotive", "auto", "汽车", "电动车", "新能源车"]),
-    ("消费", ["consumer", "retail", "e-commerce", "消费", "零售", "电商"]),
-    ("医药", ["pharma", "biotech", "drug", "医疗", "医药", "生物", "疫苗"]),
-    ("地产", ["real estate", "property", "housing", "地产", "楼市"]),
-    ("地缘", ["geopolitical", "geopolitics", "war", "conflict", "sanction", "地缘", "冲突", "战争"]),
-    ("中国", ["china", "chinese", "中国", "大陆"]),
-    ("美国", ["united states", "u.s.", "美国", "白宫", "华盛顿"]),
-]
-
+# NOTE: NEWS_TAG_RULES is defined once at module top level (line ~55).
+# Removed duplicate definition that was previously here.
 
 
 def _keyword_match(text: str, keyword: str) -> bool:
@@ -325,6 +306,8 @@ def _build_news_item(
     if "finnhub.io/api/news" in normalized_url.lower():
         normalized_url = ""
     published_date = _normalize_published_date(published_at)
+    # Compute tags from headline + snippet for structured output
+    tags = _headline_tags(f"{title} {snippet}".strip())
     return {
         "headline": title,
         "title": title,
@@ -335,6 +318,7 @@ def _build_news_item(
         "datetime": published_date,
         "ticker": ticker,
         "confidence": confidence,
+        "tags": tags,
     }
 
 
@@ -907,6 +891,250 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         return items
     return []
 
+
+
+_RELIABILITY_DOMAIN_SCORE_HINTS: Dict[str, float] = {
+    "sec.gov": 0.98,
+    "reuters.com": 0.95,
+    "bloomberg.com": 0.94,
+    "wsj.com": 0.92,
+    "ft.com": 0.90,
+    "cnbc.com": 0.88,
+    "marketwatch.com": 0.86,
+    "finance.yahoo.com": 0.84,
+    "nasdaq.com": 0.84,
+    "investing.com": 0.80,
+    "fool.com": 0.72,
+    "seekingalpha.com": 0.74,
+}
+
+_RELIABILITY_SOURCE_SCORE_HINTS: Dict[str, float] = {
+    "sec": 0.98,
+    "reuters": 0.95,
+    "bloomberg": 0.94,
+    "wall street journal": 0.92,
+    "wsj": 0.92,
+    "financial times": 0.90,
+    "cnbc": 0.88,
+    "marketwatch": 0.86,
+    "yahoo": 0.84,
+    "nasdaq": 0.84,
+    "investing": 0.80,
+    "fool": 0.72,
+    "seeking alpha": 0.74,
+}
+
+
+def score_news_source_reliability(source: str = "", url: str = "") -> Dict[str, Any]:
+    """Rule-based source reliability score for a news item."""
+    source_text = str(source or "").strip()
+    domain = _domain_from_url(str(url or ""))
+    score = 0.55
+    reason = "default"
+
+    if domain:
+        for hint, hint_score in _RELIABILITY_DOMAIN_SCORE_HINTS.items():
+            if hint in domain:
+                score = hint_score
+                reason = f"domain:{hint}"
+                break
+
+    if reason == "default" and source_text:
+        lowered = source_text.lower()
+        for hint, hint_score in _RELIABILITY_SOURCE_SCORE_HINTS.items():
+            if hint in lowered:
+                score = hint_score
+                reason = f"source:{hint}"
+                break
+
+    if score >= 0.9:
+        tier = "high"
+    elif score >= 0.8:
+        tier = "medium_high"
+    elif score >= 0.65:
+        tier = "medium"
+    else:
+        tier = "low"
+
+    return {
+        "source": source_text,
+        "url": url,
+        "domain": domain,
+        "reliability_score": round(float(score), 4),
+        "reliability_tier": tier,
+        "reason": reason,
+    }
+
+
+def _to_date_candidate(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.utcfromtimestamp(float(value)).date()
+        except Exception:
+            return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    text = text.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(text).date()
+    except Exception:
+        pass
+
+    fmts = [
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%b %d, %Y",
+        "%B %d, %Y",
+        "%d %b %Y",
+        "%d %B %Y",
+    ]
+    for fmt in fmts:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except Exception:
+            continue
+    return None
+
+
+def _within_window(candidate: Optional[date], start_date: date, end_date: date) -> bool:
+    if candidate is None:
+        return False
+    return start_date <= candidate <= end_date
+
+
+def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
+    """Get upcoming earnings/dividend/macro events (free-first)."""
+    today = datetime.utcnow().date()
+    days = max(1, min(int(days_ahead or 30), 120))
+    end_date = today + timedelta(days=days)
+    result: Dict[str, Any] = {
+        "ticker": str(ticker or "").upper(),
+        "source": "yfinance+search",
+        "as_of": datetime.utcnow().isoformat(),
+        "days_ahead": days,
+        "earnings_events": [],
+        "dividend_events": [],
+        "macro_events": [],
+        "error": None,
+    }
+    if not ticker:
+        result["error"] = "ticker_required"
+        return result
+
+    try:
+        stock = yf.Ticker(ticker)
+        calendar_payload = getattr(stock, "calendar", None)
+        if isinstance(calendar_payload, dict):
+            for key, raw_value in calendar_payload.items():
+                values = raw_value if isinstance(raw_value, list) else [raw_value]
+                for item in values:
+                    candidate = _to_date_candidate(item)
+                    if not _within_window(candidate, today, end_date):
+                        continue
+                    key_text = str(key or "").lower()
+                    event = {
+                        "date": candidate.isoformat(),
+                        "title": str(key or "calendar_event"),
+                        "source": "yfinance_calendar",
+                    }
+                    if "earn" in key_text:
+                        result["earnings_events"].append(event)
+                    elif "dividend" in key_text or "ex-dividend" in key_text:
+                        result["dividend_events"].append(event)
+
+        earnings_dates = getattr(stock, "earnings_dates", None)
+        if earnings_dates is not None and not getattr(earnings_dates, "empty", True):
+            for idx, _row in earnings_dates.head(8).iterrows():
+                candidate = _to_date_candidate(idx)
+                if not _within_window(candidate, today, end_date):
+                    continue
+                result["earnings_events"].append(
+                    {
+                        "date": candidate.isoformat(),
+                        "title": "Earnings Date",
+                        "source": "yfinance_earnings_dates",
+                    }
+                )
+    except Exception as e:
+        logger.info(f"[News] get_event_calendar yfinance failed for {ticker}: {e}")
+
+    macro_query = (
+        f"US economic calendar next {days} days CPI PCE FOMC NFP GDP release dates"
+    )
+    macro_keywords = ("fomc", "cpi", "pce", "nonfarm", "payroll", "gdp", "inflation")
+    try:
+        text = search(macro_query)
+        if isinstance(text, str) and text.strip():
+            lines = [line.strip("-• ").strip() for line in text.splitlines() if line.strip()]
+            for line in lines[:40]:
+                lowered = line.lower()
+                if not any(k in lowered for k in macro_keywords):
+                    continue
+                candidate = None
+                iso_match = re.search(r"(20\d{2}-\d{2}-\d{2})", line)
+                if iso_match:
+                    candidate = _to_date_candidate(iso_match.group(1))
+                else:
+                    md_match = re.search(
+                        r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+20\d{2})",
+                        line,
+                        flags=re.IGNORECASE,
+                    )
+                    if md_match:
+                        candidate = _to_date_candidate(md_match.group(1))
+
+                if candidate and not _within_window(candidate, today, end_date):
+                    continue
+
+                result["macro_events"].append(
+                    {
+                        "date": candidate.isoformat() if candidate else None,
+                        "title": line[:160],
+                        "source": "search_macro_calendar",
+                    }
+                )
+                if len(result["macro_events"]) >= 8:
+                    break
+    except Exception as e:
+        logger.info(f"[News] get_event_calendar macro search failed: {e}")
+
+    if not result["macro_events"]:
+        result["macro_events"] = [
+            {"date": None, "title": "Monitor upcoming CPI release window", "source": "macro_watchlist"},
+            {"date": None, "title": "Monitor upcoming FOMC decision window", "source": "macro_watchlist"},
+            {"date": None, "title": "Monitor upcoming Nonfarm Payrolls release window", "source": "macro_watchlist"},
+        ]
+
+    def _dedupe_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen = set()
+        output = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            key = (event.get("date"), event.get("title"), event.get("source"))
+            if key in seen:
+                continue
+            seen.add(key)
+            output.append(event)
+        output.sort(key=lambda item: str(item.get("date") or "9999-99-99"))
+        return output
+
+    result["earnings_events"] = _dedupe_events(result["earnings_events"])
+    result["dividend_events"] = _dedupe_events(result["dividend_events"])
+    result["macro_events"] = _dedupe_events(result["macro_events"])
+
+    if not result["earnings_events"] and not result["dividend_events"] and not result["macro_events"]:
+        result["error"] = "no_calendar_events"
+    return result
 
 
 def get_news_sentiment(ticker: str, limit: int = 5) -> str:

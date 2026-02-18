@@ -6,6 +6,7 @@ import { normalizeMarkdown } from '../utils/markdown';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
+import { SmartChartRenderer, parseSmartChartBlocks, stripSmartChartTags } from './SmartChart';
 import { ThinkingProcess } from './thinking';
 import { ReportView } from './report';
 import { apiClient } from '../api/client';
@@ -346,6 +347,9 @@ export const ChatList: React.FC = () => {
 const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
   const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
 
+  // Step 1: Extract smart chart blocks (before Markdown rendering)
+  const smartChartBlocks = useMemo(() => parseSmartChartBlocks(content), [content]);
+
   useEffect(() => {
     const matches = Array.from(content.matchAll(/\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g));
     if (matches.length === 0) {
@@ -380,7 +384,10 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
     }
   };
 
-  const textContent = content.replace(/\[CHART:[^\]]+\]/g, '');
+  // Step 2: Clean text — remove both [CHART:] and <chart>/<chart_ref> tags
+  const textContent = stripSmartChartTags(
+    content.replace(/\[CHART:[^\]]+\]/g, '')
+  );
 
   return (
     <div className="prose prose-invert prose-sm max-w-none">
@@ -394,6 +401,7 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       >
         {normalizeMarkdown(textContent)}
       </ReactMarkdown>
+      {/* Existing InlineChart rendering (API-fetched K-line data) */}
       {chartData.map((chart) => (
         <InlineChart
           key={`${chart.ticker}-${chart.chartType}`}
@@ -401,6 +409,10 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
           chartType={chart.chartType}
           onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
+      ))}
+      {/* G3 SmartChart rendering (LLM-generated or API-ref data) */}
+      {smartChartBlocks.map((block, idx) => (
+        <SmartChartRenderer key={`smart-${idx}-${block.type}-${block.title}`} block={block} />
       ))}
     </div>
   );

@@ -9,11 +9,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, Sun, Moon } from 'lucide-react';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useDashboardInsights } from '../hooks/useDashboardInsights';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
 import { StockHeader } from '../components/dashboard/StockHeader';
 import { MetricsBar } from '../components/dashboard/MetricsBar';
 import { DashboardTabs } from '../components/dashboard/DashboardTabs';
+import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
 import { useStore } from '../store/useStore';
 import { useToast } from '../components/ui';
 
@@ -44,6 +46,8 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   }, [activeAsset, currentSymbol, initialSymbol, setActiveAsset]);
 
   const { refetch } = useDashboardData(currentSymbol);
+  // AI Insights: parallel fetch alongside dashboard data
+  const { refetch: refetchInsights } = useDashboardInsights(currentSymbol);
 
   useEffect(() => {
     if (!error) {
@@ -73,6 +77,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
 
   const handleRefresh = () => {
     refetch(currentSymbol);
+    refetchInsights(currentSymbol, { force: true });
   };
 
   // Derived data for sub-components
@@ -117,6 +122,8 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <DataSourceTrace meta={dashboardData?.meta} />
+
             <button
               type="button"
               onClick={handleRefresh}

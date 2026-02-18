@@ -385,3 +385,64 @@ Pass criteria (all must be true):
 - rollback rehearsal pass (data restored + schema rollback verified)
 - failover drill pass (backup takeover + primary recovery)
 - security final checks pass (`pytest` bundle exit code 0)
+
+## 13. PR-6 本地门禁执行模板
+
+### 13.1 必跑顺序
+
+```powershell
+# 1) memory gate
+python tests/retrieval_eval/run_retrieval_eval.py --backend memory --gate --report-prefix local_memory --output-dir tests/retrieval_eval/reports/local-memory
+
+# 2) postgres gate（优先一键）
+scripts\run_stage4_postgres_gate.cmd -DriftGate
+```
+
+### 13.2 产物检查
+
+- `tests/retrieval_eval/reports/local-memory/gate_summary.json`
+- `tests/retrieval_eval/reports/local-postgres/gate_summary.json`
+
+### 13.3 若本机无 Docker
+
+- 现象：`Required command not found: docker`
+- 处理：
+  1. 安装并启动 Docker Desktop 后重跑 `13.1` 第 2 步；或
+  2. 提供外部 Postgres 并执行：
+
+```powershell
+scripts\run_stage4_postgres_gate.cmd -NoDockerStart -PgHost 127.0.0.1 -PgPort 5432 -PostgresUser postgres -PostgresPassword postgres -PostgresDb postgres -DriftGate
+```
+## 13. 本地 Stage4 Postgres Gate 联调
+
+用于上线前在本地复刻 CI 的 `stage4-retrieval-gate`（postgres 路径）。
+
+### 13.1 一键执行
+
+```powershell
+scripts\run_stage4_postgres_gate.cmd -DriftGate
+```
+
+输出产物：
+- `tests/retrieval_eval/reports/local-postgres/gate_summary.json`
+
+### 13.2 复用外部 Postgres
+
+```powershell
+scripts\run_stage4_postgres_gate.cmd -NoDockerStart -PgHost 127.0.0.1 -PgPort 5432 -PostgresUser postgres -PostgresPassword postgres -PostgresDb postgres -DriftGate
+```
+
+### 13.3 排障清单
+
+1. `Required command not found: docker`
+   - 安装并启动 Docker Desktop，或使用 `-NoDockerStart`。
+
+2. `No module named psycopg2`
+   - DSN 改为 `postgresql+psycopg://...`，不要使用 `postgresql+psycopg2://...`。
+
+3. `CREATE EXTENSION vector` 失败
+   - 确认数据库是 `pgvector` 镜像，且用户有扩展权限。
+
+4. gate 指标异常
+   - 检查 `tests/retrieval_eval/reports/local-postgres/*.json|*.md`
+   - 对比 `tests/retrieval_eval/thresholds.json` 与 baseline 版本

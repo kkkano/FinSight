@@ -1,9 +1,9 @@
 /**
  * PeersTab - Container component for the Peers tab panel.
  *
- * Combines PeerScoreGrid, PeerComparisonTable, ValuationBarChart,
- * RevenueGrowthChart, and AiPeerSummary using peer data from dashboardStore
- * and report data from useLatestReport.
+ * Combines AiInsightCard (from Digest), PeerScoreGrid, PeerComparisonTable,
+ * ValuationBarChart, RevenueGrowthChart, and AiPeerSummary (report fallback)
+ * using peer data from dashboardStore and report data from useLatestReport.
  */
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
@@ -12,16 +12,26 @@ import { PeerComparisonTable } from './peers/PeerComparisonTable.tsx';
 import { ValuationBarChart } from './peers/ValuationBarChart.tsx';
 import { RevenueGrowthChart } from './peers/RevenueGrowthChart.tsx';
 import { AiPeerSummary } from './peers/AiPeerSummary.tsx';
+import { AiInsightCard } from './shared/AiInsightCard';
 
 export function PeersTab() {
   const activeAsset = useDashboardStore((s) => s.activeAsset);
   const dashboardData = useDashboardStore((s) => s.dashboardData);
+  const insightsData = useDashboardStore((s) => s.insightsData);
+  const insightsLoading = useDashboardStore((s) => s.insightsLoading);
+  const insightsError = useDashboardStore((s) => s.insightsError);
+  const insightsStale = useDashboardStore((s) => s.insightsStale);
+
   const ticker = activeAsset?.symbol ?? null;
-  const { data: reportData, loading: reportLoading } = useLatestReport(ticker);
+  const { data: reportData, loading: reportLoading } = useLatestReport(ticker, {
+    sourceType: 'dashboard',
+    fallbackToAnySource: false,
+  });
 
   const peerData = dashboardData?.peers ?? null;
   const subjectSymbol = peerData?.subject_symbol ?? ticker ?? '';
   const peers = peerData?.peers ?? [];
+  const peersInsight = insightsData?.peers ?? null;
 
   if (!dashboardData) {
     return (
@@ -34,7 +44,16 @@ export function PeersTab() {
   if (peers.length === 0 && !peerData) {
     return (
       <div className="space-y-4">
-        <AiPeerSummary reportData={reportData} loading={reportLoading} />
+        <AiInsightCard
+          tab="peers"
+          insight={peersInsight}
+          loading={insightsLoading}
+          error={insightsError}
+          stale={insightsStale}
+        />
+        {!peersInsight && !insightsLoading && (
+          <AiPeerSummary reportData={reportData} loading={reportLoading} />
+        )}
         <div className="flex items-center justify-center h-48 text-fin-muted text-sm">
           {dashboardData.peers_fallback_reason
             ? `同行数据不可用: ${dashboardData.peers_fallback_reason}`
@@ -46,8 +65,18 @@ export function PeersTab() {
 
   return (
     <div className="space-y-4">
-      {/* AI Summary */}
-      <AiPeerSummary reportData={reportData} loading={reportLoading} />
+      {/* AI Peers Insight Card — replaces AiPeerSummary when insights available */}
+      <AiInsightCard
+        tab="peers"
+        insight={peersInsight}
+        loading={insightsLoading}
+        error={insightsError}
+        stale={insightsStale}
+      />
+      {/* Fallback: report-based peer summary (hidden when insight is present) */}
+      {!peersInsight && !insightsLoading && (
+        <AiPeerSummary reportData={reportData} loading={reportLoading} />
+      )}
 
       {/* Score grid (top 6) */}
       <PeerScoreGrid peers={peers} subjectSymbol={subjectSymbol} />

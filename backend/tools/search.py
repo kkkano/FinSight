@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import time
 from typing import List
@@ -7,6 +8,28 @@ from .env import EXA_API_KEY, TAVILY_API_KEY
 from .utils import _normalize_published_date
 
 logger = logging.getLogger(__name__)
+
+_SEARCH_QUOTA_COOLDOWN_SECONDS = int(os.getenv("SEARCH_QUOTA_COOLDOWN_SECONDS", "1800"))
+_EXA_QUOTA_BLOCKED_UNTIL = 0.0
+_TAVILY_QUOTA_BLOCKED_UNTIL = 0.0
+
+
+def _is_quota_error(message: str) -> bool:
+    text = (message or "").lower()
+    return any(
+        key in text
+        for key in (
+            "no_more_credits",
+            "exceeded your credits limit",
+            "usage limit",
+            "forbiddenerror",
+            "status code 402",
+        )
+    )
+
+
+def _is_provider_blocked(blocked_until: float) -> bool:
+    return blocked_until > time.time()
 
 # Search dependencies (optional)
 try:
@@ -59,11 +82,13 @@ def search(query: str) -> str:
     Returns:
         格式化的合并搜索结果
     """
+    global _EXA_QUOTA_BLOCKED_UNTIL, _TAVILY_QUOTA_BLOCKED_UNTIL
+
     all_results = []
     sources_used = []
 
     # 0. 尝试 Exa Search (语义搜索，优先级最高)
-    if EXA_API_KEY and EXA_AVAILABLE:
+    if EXA_API_KEY and EXA_AVAILABLE and not _is_provider_blocked(_EXA_QUOTA_BLOCKED_UNTIL):
         try:
             exa_result = _search_with_exa(query)
             if exa_result and len(exa_result) > 200:  # 确保结果足够长
@@ -87,11 +112,17 @@ def search(query: str) -> str:
                 sources_used.append('Exa')
         except Exception as e:
             error_msg = str(e) if e else "未知错误"
+            if _is_quota_error(error_msg):
+                _EXA_QUOTA_BLOCKED_UNTIL = time.time() + max(60, _SEARCH_QUOTA_COOLDOWN_SECONDS)
+                logger.warning(
+                    "[Search] Exa quota exhausted, disable for %ss",
+                    max(60, _SEARCH_QUOTA_COOLDOWN_SECONDS),
+                )
             logger.info(f"[Search] Exa 搜索失败: {error_msg}")
 
     # 1.尝试 Tavily Search (AI搜索)
     # 如果 Exa 失败或结果不足，尝试 Tavily
-    if TAVILY_API_KEY and TAVILY_AVAILABLE:
+    if TAVILY_API_KEY and TAVILY_AVAILABLE and not _is_provider_blocked(_TAVILY_QUOTA_BLOCKED_UNTIL):
         try:
             tavily_result = _search_with_tavily(query)
             if tavily_result and len(tavily_result) > 50:
@@ -109,6 +140,12 @@ def search(query: str) -> str:
 
         except Exception as e:
             error_msg = str(e) if e else "未知错误"
+            if _is_quota_error(error_msg):
+                _TAVILY_QUOTA_BLOCKED_UNTIL = time.time() + max(60, _SEARCH_QUOTA_COOLDOWN_SECONDS)
+                logger.warning(
+                    "[Search] Tavily quota exhausted, disable for %ss",
+                    max(60, _SEARCH_QUOTA_COOLDOWN_SECONDS),
+                )
             # 忽略 Tavily 错误，继续尝试下一个源
             logger.info(f"[Search] Tavily 搜索失败: {error_msg}")
 
