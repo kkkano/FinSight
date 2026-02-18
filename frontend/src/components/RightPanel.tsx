@@ -27,10 +27,14 @@ export const RightPanel: FC<RightPanelProps> = ({
   autoSwitchExecution = true,
   className,
 }) => {
-  const [activeTab, setActiveTab] = useState<RightPanelTab>('alerts');
+  const [activeTab, setActiveTab] = useState<RightPanelTab>(() =>
+    useExecutionStore.getState().activeRuns.length > 0 ? 'execution' : 'alerts',
+  );
+  const [userPinnedTab, setUserPinnedTab] = useState<RightPanelTab | null>(null);
   const {
     alerts,
     alertEvents,
+    emailConfigured,
     alertsLoading,
     alertsError,
     unreadAlertCount,
@@ -52,6 +56,11 @@ export const RightPanel: FC<RightPanelProps> = ({
   const activeRuns = useExecutionStore((s) => s.activeRuns);
   const recentRuns = useExecutionStore((s) => s.recentRuns);
 
+  const handleTabChange = (tab: RightPanelTab) => {
+    setActiveTab(tab);
+    setUserPinnedTab(tab);
+  };
+
   // Latest runId for StreamingResultPanel
   const latestRunId = activeRuns.length > 0
     ? activeRuns[activeRuns.length - 1].runId
@@ -66,11 +75,16 @@ export const RightPanel: FC<RightPanelProps> = ({
       prevActiveCountRef.current = activeRuns.length;
       return;
     }
-    if (prevActiveCountRef.current === 0 && activeRuns.length > 0) {
+    const hasNewRun = prevActiveCountRef.current === 0 && activeRuns.length > 0;
+    const pinnedNonExecution = userPinnedTab !== null && userPinnedTab !== 'execution';
+    if (hasNewRun && !pinnedNonExecution) {
       setActiveTab('execution');
     }
+    if (prevActiveCountRef.current > 0 && activeRuns.length === 0) {
+      setUserPinnedTab(null);
+    }
     prevActiveCountRef.current = activeRuns.length;
-  }, [activeRuns.length, autoSwitchExecution]);
+  }, [activeRuns.length, autoSwitchExecution, userPinnedTab]);
 
   useEffect(() => {
     if (activeTab === 'alerts') {
@@ -88,7 +102,7 @@ export const RightPanel: FC<RightPanelProps> = ({
         alertsCount={unreadAlertCount}
         executionCount={activeRuns.length}
         loading={loading}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         onRefresh={refreshAll}
         onCollapse={onCollapse}
       />
@@ -98,6 +112,7 @@ export const RightPanel: FC<RightPanelProps> = ({
           <RightPanelAlertsTab
             subscriptions={alerts}
             events={alertEvents}
+            emailConfigured={emailConfigured}
             unreadCount={unreadAlertCount}
             loading={alertsLoading}
             error={alertsError}

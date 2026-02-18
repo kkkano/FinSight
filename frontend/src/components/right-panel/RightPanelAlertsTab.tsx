@@ -3,6 +3,7 @@ import type { AlertEvent, AlertSubscription } from './types';
 type RightPanelAlertsTabProps = {
   subscriptions: AlertSubscription[];
   events: AlertEvent[];
+  emailConfigured: boolean;
   unreadCount: number;
   loading?: boolean;
   error?: string | null;
@@ -26,6 +27,7 @@ const severityClass: Record<string, string> = {
 export function RightPanelAlertsTab({
   subscriptions,
   events,
+  emailConfigured,
   unreadCount,
   loading = false,
   error = null,
@@ -100,7 +102,12 @@ export function RightPanelAlertsTab({
                 </div>
               </article>
             ))}
-            {!events.length && (
+            {!emailConfigured && (
+              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
+                未配置订阅邮箱，无法加载预警事件
+              </div>
+            )}
+            {emailConfigured && !events.length && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
                 暂无触发事件
               </div>
@@ -131,9 +138,14 @@ export function RightPanelAlertsTab({
                 <div className="text-2xs text-fin-text-secondary">{formatTypes(item.alertTypes)}</div>
               </article>
             ))}
-            {!subscriptions.length && (
+            {!emailConfigured && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                No active subscriptions
+                先配置订阅邮箱后再管理订阅
+              </div>
+            )}
+            {emailConfigured && !subscriptions.length && (
+              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
+                无活跃订阅配置
               </div>
             )}
           </div>

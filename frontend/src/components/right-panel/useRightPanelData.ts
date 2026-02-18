@@ -63,6 +63,7 @@ export function useRightPanelData() {
   const dashboardWatchlist = useDashboardStore((s) => s.watchlist ?? []);
 
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition, sessionId } = useStore();
+  const emailConfigured = Boolean(subscriptionEmail && subscriptionEmail.trim());
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   const recomputeUnreadCount = useCallback((events: AlertEvent[]) => {
@@ -106,7 +107,7 @@ export function useRightPanelData() {
   }, [dashboardWatchlist, userId]);
 
   const loadAlerts = useCallback(async () => {
-    if (!subscriptionEmail) {
+    if (!emailConfigured) {
       setAlerts([]);
       setAlertEvents([]);
       setUnreadAlertCount(0);
@@ -138,7 +139,7 @@ export function useRightPanelData() {
     } finally {
       setAlertsLoading(false);
     }
-  }, [subscriptionEmail, recomputeUnreadCount]);
+  }, [subscriptionEmail, recomputeUnreadCount, emailConfigured]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -224,6 +225,7 @@ export function useRightPanelData() {
     watchlist,
     alerts,
     alertEvents,
+    emailConfigured,
     alertsLoading,
     alertsError,
     unreadAlertCount,

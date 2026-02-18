@@ -7,8 +7,7 @@
 import { useState, useCallback, useRef, type KeyboardEvent } from 'react';
 import { Search, Zap, Loader2 } from 'lucide-react';
 
-import { apiClient, type ExecuteRequest } from '../../api/client';
-import { useStore } from '../../store/useStore';
+import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 
 // --- Props ---
 
@@ -25,7 +24,7 @@ export function QuickAnalysisBar({ defaultTicker, onAnalysisStarted }: QuickAnal
   const [query, setQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { sessionId } = useStore();
+  const { execute } = useExecuteAgent();
 
   const handleSubmit = useCallback(async () => {
     const trimmed = query.trim();
@@ -37,24 +36,21 @@ export function QuickAnalysisBar({ defaultTicker, onAnalysisStarted }: QuickAnal
         ? `分析 ${trimmed.toUpperCase()} 的投资价值`
         : trimmed;
 
-      const request: ExecuteRequest = {
+      const tickerMatch = trimmed.match(/^[A-Z]{1,5}$/i);
+      execute({
         query: analysisQuery,
-        session_id: sessionId,
-        output_mode: 'concise',
-      };
-
-      await apiClient.executeAgent(request, {
-        onDone: () => {
-          onAnalysisStarted?.(analysisQuery);
-        },
+        tickers: tickerMatch ? [trimmed.toUpperCase()] : undefined,
+        outputMode: 'brief',
+        source: 'workbench_quick_analysis',
       });
+      onAnalysisStarted?.(analysisQuery);
       setQuery('');
     } catch {
       // Silently handle — the execution store will show status
     } finally {
       setSubmitting(false);
     }
-  }, [query, submitting, sessionId, onAnalysisStarted]);
+  }, [query, submitting, onAnalysisStarted, execute]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

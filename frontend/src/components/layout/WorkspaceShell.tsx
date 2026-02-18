@@ -173,7 +173,7 @@ export function WorkspaceShell({
     onCollapse: () => setShowRightPanel(false),
     onResizeStart: handleResizeStart,
     onSubscribeClick: () => setIsSubscribeOpen(true),
-    autoSwitchExecution: view !== 'dashboard',
+    autoSwitchExecution: true,
     onNavigateToChat: navigateToChat,
   };
 
