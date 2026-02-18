@@ -98,6 +98,33 @@ export interface AlertFeedEvent {
   metadata?: Record<string, unknown>;
 }
 
+export interface ToolCapability {
+  name: string;
+  group: string;
+  markets: string[];
+  operations: string[];
+  depths: string[];
+  risk_level: string;
+  timeout_ms: number;
+  cache_ttl_s: number;
+  requires_env: string[];
+  default_enabled: boolean;
+  env_ready: boolean;
+  missing_env: string[];
+  selected: boolean;
+}
+
+export interface ToolCapabilitiesResponse {
+  success: boolean;
+  market: string;
+  operation: string;
+  analysis_depth: 'quick' | 'report' | 'deep_research';
+  output_mode: string;
+  agents: string[];
+  selected_tools: string[];
+  tools: ToolCapability[];
+}
+
 /**
  * Daily task item — GET /api/tasks/daily
  */
@@ -558,6 +585,18 @@ export const apiClient = {
         limit: params.limit,
         since: params.since,
       },
+    });
+    return response.data;
+  },
+
+  async getToolCapabilities(params?: {
+    market?: string;
+    operation?: string;
+    analysis_depth?: 'quick' | 'report' | 'deep_research';
+    output_mode?: string;
+  }): Promise<ToolCapabilitiesResponse> {
+    const response = await api.get<ToolCapabilitiesResponse>('/api/tools/capabilities', {
+      params,
     });
     return response.data;
   },

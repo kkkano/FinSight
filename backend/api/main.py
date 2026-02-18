@@ -29,6 +29,7 @@ from backend.api.subscription_router import create_subscription_router
 from backend.api.alerts_router import create_alerts_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
 from backend.api.task_router import TaskRouterDeps, create_task_router
+from backend.api.tools_router import create_tools_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
@@ -669,6 +670,7 @@ task_router = create_task_router(
         get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
     )
 )
+tools_router = create_tools_router()
 
 execution_router = create_execution_router(
     ExecutionRouterDeps(
@@ -706,6 +708,7 @@ app.include_router(alerts_router)
 app.include_router(config_router)
 app.include_router(report_router)
 app.include_router(task_router)
+app.include_router(tools_router)
 app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)
