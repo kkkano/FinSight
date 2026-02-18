@@ -18,6 +18,53 @@ def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
     return max(min_value, min(max_value, value))
 
 
+def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
+    """Legacy hardcoded allowlist selector kept as manifest fallback."""
+    if subject_type in ("news_item", "news_set"):
+        return [
+            "get_company_news",
+            "get_event_calendar",
+            "score_news_source_reliability",
+            "search",
+            "get_current_datetime",
+        ]
+    if subject_type == "company":
+        if op_name == "price":
+            return [
+                "get_stock_price",
+                "get_option_chain_metrics",
+                "get_current_datetime",
+                "search",
+            ]
+        if op_name == "technical":
+            return [
+                "get_stock_price",
+                "get_technical_snapshot",
+                "get_option_chain_metrics",
+                "get_current_datetime",
+                "search",
+            ]
+        if op_name == "compare":
+            return ["get_performance_comparison", "get_current_datetime", "search"]
+        return [
+            "get_stock_price",
+            "get_technical_snapshot",
+            "get_option_chain_metrics",
+            "get_company_info",
+            "get_company_news",
+            "get_event_calendar",
+            "score_news_source_reliability",
+            "get_earnings_estimates",
+            "get_eps_revisions",
+            "analyze_historical_drawdowns",
+            "get_factor_exposure",
+            "run_portfolio_stress_test",
+            "get_current_datetime",
+            "search",
+        ]
+    return ["search", "get_current_datetime"]
+
+
 def policy_gate(state: GraphState) -> dict:
     """
     Phase 3 stub policy gate.
@@ -64,53 +111,26 @@ def policy_gate(state: GraphState) -> dict:
         clamped = max(1, min(10, int(budget_override)))
         budget["max_rounds"] = clamped
 
-    # Tool whitelist (minimal, can expand later)
-    if subject_type in ("news_item", "news_set"):
-        allowed_tools = [
-            "get_company_news",
-            "get_event_calendar",
-            "score_news_source_reliability",
-            "search",
-            "get_current_datetime",
-        ]
-    elif subject_type == "company":
-        # Keep allowlist tight for better planner accuracy (avoid "grab everything").
-        if op_name == "price":
-            allowed_tools = [
-                "get_stock_price",
-                "get_option_chain_metrics",
-                "get_current_datetime",
-                "search",
-            ]
-        elif op_name == "technical":
-            allowed_tools = [
-                "get_stock_price",
-                "get_technical_snapshot",
-                "get_option_chain_metrics",
-                "get_current_datetime",
-                "search",
-            ]
-        elif op_name == "compare":
-            allowed_tools = ["get_performance_comparison", "get_current_datetime", "search"]
-        else:
-            allowed_tools = [
-                "get_stock_price",
-                "get_technical_snapshot",
-                "get_option_chain_metrics",
-                "get_company_info",
-                "get_company_news",
-                "get_event_calendar",
-                "score_news_source_reliability",
-                "get_earnings_estimates",
-                "get_eps_revisions",
-                "analyze_historical_drawdowns",
-                "get_factor_exposure",
-                "run_portfolio_stress_test",
-                "get_current_datetime",
-                "search",
-            ]
-    else:
-        allowed_tools = ["search", "get_current_datetime"]
+    # Tool whitelist (manifest-first, legacy fallback)
+    market_raw = ui_context.get("market") if isinstance(ui_context, dict) else None
+    market = str(market_raw).strip().upper() if isinstance(market_raw, str) and market_raw.strip() else "US"
+    fallback_reason: str | None = None
+    try:
+        from backend.tools.manifest import select_tools
+
+        allowed_tools = select_tools(
+            subject_type=subject_type,
+            operation_name=op_name,
+            output_mode=output_mode,
+            analysis_depth=analysis_depth,
+            market=market,
+        )
+        if not allowed_tools:
+            allowed_tools = _legacy_select_tools(subject_type, op_name)
+            fallback_reason = "manifest_empty_selection"
+    except Exception:
+        allowed_tools = _legacy_select_tools(subject_type, op_name)
+        fallback_reason = "manifest_exception"
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
@@ -233,6 +253,8 @@ def policy_gate(state: GraphState) -> dict:
                 "allowed_tools": allowed_tools,
                 "allowed_agents": allowed_agents,
                 "analysis_depth": analysis_depth,
+                "market": market,
+                "tool_selection_fallback": fallback_reason,
                 "agent_selection": {
                     "required": list(agent_selection.get("required") or []),
                     "max_agents": agent_selection.get("max_agents"),
