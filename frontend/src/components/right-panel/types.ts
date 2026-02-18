@@ -1,5 +1,8 @@
 export type RightPanelTab = 'alerts' | 'portfolio' | 'chart' | 'execution';
 
+export type AlertEventState = 'no_email' | 'loading' | 'error' | 'no_events' | 'ready';
+export type AlertSubscriptionState = 'no_email' | 'loading' | 'error' | 'no_subscriptions' | 'ready';
+
 export type WatchlistItem = {
   ticker: string;
   label: string;

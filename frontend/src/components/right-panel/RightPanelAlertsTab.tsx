@@ -1,9 +1,16 @@
-import type { AlertEvent, AlertSubscription } from './types';
+import type {
+  AlertEvent,
+  AlertEventState,
+  AlertSubscription,
+  AlertSubscriptionState,
+} from './types';
 
 type RightPanelAlertsTabProps = {
   subscriptions: AlertSubscription[];
   events: AlertEvent[];
   emailConfigured: boolean;
+  eventState: AlertEventState;
+  subscriptionState: AlertSubscriptionState;
   unreadCount: number;
   loading?: boolean;
   error?: string | null;
@@ -24,10 +31,26 @@ const severityClass: Record<string, string> = {
   low: 'bg-fin-success/10 text-fin-success border-fin-success/20',
 };
 
+function renderEventEmptyState(state: AlertEventState) {
+  if (state === 'no_email') return '未配置订阅邮箱，无法加载预警事件';
+  if (state === 'no_events') return '暂无触发事件';
+  if (state === 'error') return '预警事件加载失败';
+  return '暂无触发事件';
+}
+
+function renderSubscriptionEmptyState(state: AlertSubscriptionState) {
+  if (state === 'no_email') return '先配置订阅邮箱后再管理订阅';
+  if (state === 'no_subscriptions') return '无活跃订阅配置';
+  if (state === 'error') return '订阅配置加载失败';
+  return '无活跃订阅配置';
+}
+
 export function RightPanelAlertsTab({
   subscriptions,
   events,
   emailConfigured,
+  eventState,
+  subscriptionState,
   unreadCount,
   loading = false,
   error = null,
@@ -35,6 +58,9 @@ export function RightPanelAlertsTab({
   onMarkRead,
   onSubscribeClick,
 }: RightPanelAlertsTabProps) {
+  const showLoading = loading || eventState === 'loading' || subscriptionState === 'loading';
+  const showError = Boolean(error) || eventState === 'error' || subscriptionState === 'error';
+
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-4">
       <div className="flex items-center justify-between">
@@ -53,7 +79,7 @@ export function RightPanelAlertsTab({
         </div>
       </div>
 
-      {loading && (
+      {showLoading && (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, idx) => (
             <div key={`alerts-skeleton-${idx}`} className="border border-fin-border rounded-lg p-2 animate-pulse">
@@ -64,9 +90,9 @@ export function RightPanelAlertsTab({
         </div>
       )}
 
-      {!loading && error && (
+      {!showLoading && showError && (
         <div className="border border-fin-danger/30 bg-fin-danger/10 rounded-lg p-3 space-y-2">
-          <p className="text-xs text-fin-danger">{error}</p>
+          <p className="text-xs text-fin-danger">{error || '预警数据加载失败'}</p>
           <button
             type="button"
             onClick={onRetry}
@@ -77,10 +103,10 @@ export function RightPanelAlertsTab({
         </div>
       )}
 
-      {!loading && !error && (
+      {!showLoading && !showError && (
         <>
           <div className="space-y-2">
-            {events.slice(0, 20).map((event) => (
+            {eventState === 'ready' && events.slice(0, 20).map((event) => (
               <article key={event.id} className="border border-fin-border rounded-lg p-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs font-semibold text-fin-text truncate">
@@ -102,14 +128,14 @@ export function RightPanelAlertsTab({
                 </div>
               </article>
             ))}
-            {!emailConfigured && (
+            {eventState !== 'ready' && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                未配置订阅邮箱，无法加载预警事件
+                {renderEventEmptyState(eventState)}
               </div>
             )}
-            {emailConfigured && !events.length && (
+            {!emailConfigured && eventState === 'ready' && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                暂无触发事件
+                未配置订阅邮箱，无法加载预警事件
               </div>
             )}
           </div>
@@ -121,7 +147,7 @@ export function RightPanelAlertsTab({
                 {subscriptions.length} items
               </span>
             </div>
-            {subscriptions.slice(0, 10).map((item) => (
+            {subscriptionState === 'ready' && subscriptions.slice(0, 10).map((item) => (
               <article key={item.id} className="border border-fin-border rounded-lg p-2 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-semibold text-fin-text">{item.ticker}</div>
@@ -138,14 +164,9 @@ export function RightPanelAlertsTab({
                 <div className="text-2xs text-fin-text-secondary">{formatTypes(item.alertTypes)}</div>
               </article>
             ))}
-            {!emailConfigured && (
+            {subscriptionState !== 'ready' && (
               <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                先配置订阅邮箱后再管理订阅
-              </div>
-            )}
-            {emailConfigured && !subscriptions.length && (
-              <div className="text-xs text-fin-muted py-3 text-center border border-fin-border rounded-lg">
-                无活跃订阅配置
+                {renderSubscriptionEmptyState(subscriptionState)}
               </div>
             )}
           </div>

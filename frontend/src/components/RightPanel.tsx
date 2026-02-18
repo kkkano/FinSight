@@ -31,10 +31,14 @@ export const RightPanel: FC<RightPanelProps> = ({
     useExecutionStore.getState().activeRuns.length > 0 ? 'execution' : 'alerts',
   );
   const [userPinnedTab, setUserPinnedTab] = useState<RightPanelTab | null>(null);
+  const [hasUnseenExecution, setHasUnseenExecution] = useState(false);
+
   const {
     alerts,
     alertEvents,
     emailConfigured,
+    eventState,
+    subscriptionState,
     alertsLoading,
     alertsError,
     unreadAlertCount,
@@ -59,6 +63,9 @@ export const RightPanel: FC<RightPanelProps> = ({
   const handleTabChange = (tab: RightPanelTab) => {
     setActiveTab(tab);
     setUserPinnedTab(tab);
+    if (tab === 'execution') {
+      setHasUnseenExecution(false);
+    }
   };
 
   // Latest runId for StreamingResultPanel
@@ -68,7 +75,8 @@ export const RightPanel: FC<RightPanelProps> = ({
       ? recentRuns[recentRuns.length - 1].runId
       : null;
 
-  // Auto-switch to execution tab ONLY on 0→N transition
+  // Auto-switch to execution tab ONLY on 0->N transition.
+  // If user explicitly pinned a non-execution tab, keep current tab and show pulse instead.
   const prevActiveCountRef = useRef(activeRuns.length);
   useEffect(() => {
     if (!autoSwitchExecution) {
@@ -79,9 +87,13 @@ export const RightPanel: FC<RightPanelProps> = ({
     const pinnedNonExecution = userPinnedTab !== null && userPinnedTab !== 'execution';
     if (hasNewRun && !pinnedNonExecution) {
       setActiveTab('execution');
+      setHasUnseenExecution(false);
+    } else if (hasNewRun && pinnedNonExecution) {
+      setHasUnseenExecution(true);
     }
     if (prevActiveCountRef.current > 0 && activeRuns.length === 0) {
       setUserPinnedTab(null);
+      setHasUnseenExecution(false);
     }
     prevActiveCountRef.current = activeRuns.length;
   }, [activeRuns.length, autoSwitchExecution, userPinnedTab]);
@@ -101,6 +113,7 @@ export const RightPanel: FC<RightPanelProps> = ({
         activeTab={activeTab}
         alertsCount={unreadAlertCount}
         executionCount={activeRuns.length}
+        hasUnseenExecution={hasUnseenExecution}
         loading={loading}
         onTabChange={handleTabChange}
         onRefresh={refreshAll}
@@ -113,6 +126,8 @@ export const RightPanel: FC<RightPanelProps> = ({
             subscriptions={alerts}
             events={alertEvents}
             emailConfigured={emailConfigured}
+            eventState={eventState}
+            subscriptionState={subscriptionState}
             unreadCount={unreadAlertCount}
             loading={alertsLoading}
             error={alertsError}

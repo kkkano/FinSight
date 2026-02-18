@@ -9,8 +9,9 @@ const TabButton: FC<{
   title: string;
   icon: ReactNode;
   badge?: number;
+  pulse?: boolean;
   testId?: string;
-}> = ({ active, onClick, title, icon, badge, testId }) => (
+}> = ({ active, onClick, title, icon, badge, pulse = false, testId }) => (
   <Tooltip content={title}>
     <button
       type="button"
@@ -18,10 +19,18 @@ const TabButton: FC<{
       onClick={onClick}
       data-testid={testId}
       className={`relative p-2 rounded-lg transition-colors ${
-        active ? 'bg-fin-primary/10 text-fin-primary' : 'text-fin-muted hover:text-fin-text hover:bg-fin-hover'
+        active
+          ? 'bg-fin-primary/10 text-fin-primary'
+          : `text-fin-muted hover:text-fin-text hover:bg-fin-hover ${pulse ? 'ring-1 ring-fin-primary/50' : ''}`
       }`}
     >
       {icon}
+      {pulse && (
+        <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-fin-primary/50 opacity-80" />
+          <span className="relative inline-flex h-3 w-3 rounded-full bg-fin-primary" />
+        </span>
+      )}
       {badge !== undefined && badge > 0 && (
         <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-fin-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center">
           {badge > 9 ? '9+' : badge}
@@ -35,6 +44,7 @@ type RightPanelHeaderProps = {
   activeTab: RightPanelTab;
   alertsCount: number;
   executionCount: number;
+  hasUnseenExecution: boolean;
   loading: boolean;
   onTabChange: (tab: RightPanelTab) => void;
   onRefresh: () => void;
@@ -45,6 +55,7 @@ export function RightPanelHeader({
   activeTab,
   alertsCount,
   executionCount,
+  hasUnseenExecution,
   loading,
   onTabChange,
   onRefresh,
@@ -81,6 +92,7 @@ export function RightPanelHeader({
           title="执行状态"
           icon={<Sparkles size={14} />}
           badge={executionCount}
+          pulse={hasUnseenExecution && activeTab !== 'execution'}
           testId="context-tab-execution"
         />
       </div>
