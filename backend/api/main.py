@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -72,7 +72,7 @@ try:
     )
     logger.info("[Init] Core tools imported successfully.")
 except ImportError as e:
-    # 濡傛灉 backend.tools 澶辫触锛屽皾璇曚粠鏍圭洰褰?tools 瀵煎叆锛堝吋瀹规棫缁撴瀯锛?
+    # 如果 backend.tools 导入失败，则尝试从根目录 tools 导入（兼容旧结构）
     try:
         from tools import (
             get_stock_price,
@@ -84,7 +84,7 @@ except ImportError as e:
         )
         logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
-        logger.info(f"鉂?Error importing tools: {e2}")
+        logger.info(f"❌ Error importing tools: {e2}")
 
 # 瀵煎叆鍥捐〃妫€娴嬪櫒
 try:
@@ -713,6 +713,6 @@ app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)
 app.include_router(rebalance_router)
-# 鍚姩鍏ュ彛
+# 启动入口
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
