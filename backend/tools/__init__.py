@@ -76,6 +76,11 @@ from .macro import (
 )
 from .utils import get_current_datetime
 from .web import fetch_url_content
+from .sec import (
+    get_sec_filings,
+    get_sec_material_events,
+    get_sec_risk_factors,
+)
 
 __all__ = [
     "ALPHA_VANTAGE_API_KEY",
@@ -144,4 +149,7 @@ __all__ = [
     "get_fred_data",
     "get_current_datetime",
     "fetch_url_content",
+    "get_sec_filings",
+    "get_sec_material_events",
+    "get_sec_risk_factors",
 ]

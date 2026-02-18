@@ -200,6 +200,54 @@ def planner_stub(state: GraphState) -> dict:
             why="关键词命中期权衍生指标，补充 IV/PCR/Skew。",
         )
 
+    if primary_ticker and _contains_any(
+        (
+            "sec filing",
+            "sec filings",
+            "edgar",
+            "10-k",
+            "10-q",
+            "filing history",
+            "annual report filing",
+            "quarterly filing",
+            "regulatory filing",
+        )
+    ):
+        _append_tool_step(
+            "get_sec_filings",
+            {"ticker": primary_ticker, "forms": "10-K,10-Q,8-K", "limit": 12},
+            why="鍏抽敭璇嶅懡涓洃绠℃姭闇诧紝琛ュ厖 SEC EDGAR 鎶湶鍘嗗彶銆?",
+        )
+
+    if primary_ticker and _contains_any(
+        (
+            "material event",
+            "material events",
+            "8-k",
+            "current report",
+            "major event filing",
+        )
+    ):
+        _append_tool_step(
+            "get_sec_material_events",
+            {"ticker": primary_ticker, "limit": 10},
+            why="鍏抽敭璇嶅懡涓噸澶т簨浠舵姭闇诧紝琛ュ厖 SEC 8-K 淇℃伅銆?",
+        )
+
+    if primary_ticker and _contains_any(
+        (
+            "risk factor",
+            "risk factors",
+            "item 1a",
+            "1a risk",
+        )
+    ):
+        _append_tool_step(
+            "get_sec_risk_factors",
+            {"ticker": primary_ticker},
+            why="鍏抽敭璇嶅懡涓闄╁洜瀛愶紝浠庢渶鏂?10-K/10-Q 鎶藉彇 Item 1A 鎽樿銆?",
+        )
+
     if normalized_tickers and _contains_any(
         (
             "factor exposure",
