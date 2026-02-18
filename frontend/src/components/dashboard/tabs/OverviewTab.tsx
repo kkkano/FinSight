@@ -59,7 +59,7 @@ export function OverviewTab() {
         <DimensionRadar valuation={valuation} technicals={technicals} news={news} reportData={reportData} />
 
         {/* Row 2 */}
-        <FearGreedGauge reportData={reportData} />
+        <FearGreedGauge reportData={reportData} macroSnapshot={dashboardData?.macro_snapshot} />
         <AgentStatusOverview reportData={reportData} />
         <RiskMetricsCard valuation={valuation} reportData={reportData} />
 

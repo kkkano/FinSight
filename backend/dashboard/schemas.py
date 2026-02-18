@@ -263,6 +263,23 @@ class PeerComparisonData(BaseModel):
     peers: List[PeerMetrics] = Field(default_factory=list)
 
 
+class MacroSnapshotData(BaseModel):
+    """Macro snapshot for dashboard first paint (P1)."""
+
+    fear_greed_index: Optional[float] = None
+    fear_greed_label: str = ""
+    sentiment_text: str = ""
+    fed_rate: Optional[float] = None
+    cpi: Optional[float] = None
+    unemployment: Optional[float] = None
+    gdp_growth: Optional[float] = None
+    treasury_10y: Optional[float] = None
+    yield_spread: Optional[float] = None
+    source: str = ""
+    as_of: str = ""
+    status: str = "unavailable"
+
+
 class DashboardData(BaseModel):
     """
     Dashboard 聚合数据 (v2)
@@ -284,6 +301,8 @@ class DashboardData(BaseModel):
     technicals_fallback_reason: Optional[str] = None
     peers: Optional[PeerComparisonData] = None
     peers_fallback_reason: Optional[str] = None
+    macro_snapshot: Optional[MacroSnapshotData] = None
+    macro_snapshot_fallback_reason: Optional[str] = None
 
     # Phase G2 新增 (可空)
     earnings_history: Optional[List[EarningsHistoryEntry]] = None

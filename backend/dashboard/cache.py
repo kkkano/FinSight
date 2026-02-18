@@ -38,6 +38,7 @@ class DashboardCache:
     TTL_VALUATION = 300        # Valuation metrics (5 min)
     TTL_FINANCIALS = 3600      # Financial statements (1 hour)
     TTL_TECHNICALS = 60        # Technical indicators (1 min)
+    TTL_MACRO = 300            # Macro snapshot (5 min)
     TTL_EARNINGS = 3600         # Earnings history (1 hour - quarterly data)
     TTL_ANALYST = 1800          # Analyst targets/recommendations (30 min)
     TTL_PEERS = 3600           # Peer comparison (1 hour)
@@ -162,6 +163,7 @@ class DashboardCache:
                 "valuation": self.TTL_VALUATION,
                 "financials": self.TTL_FINANCIALS,
                 "technicals": self.TTL_TECHNICALS,
+                "macro_snapshot": self.TTL_MACRO,
                 "peers": self.TTL_PEERS,
             }
             ttl = ttl_map.get(data_type, self.TTL_CHARTS)

@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
 import type { LatestReportData } from '../../../../hooks/useLatestReport';
+import type { MacroSnapshotData } from '../../../../types/dashboard';
 
 interface FearGreedGaugeProps {
   reportData?: LatestReportData | null;
+  macroSnapshot?: MacroSnapshotData | null;
 }
 
 interface FearGreedValue {
@@ -72,8 +74,39 @@ function resolveFearGreed(reportData: LatestReportData | null | undefined): Fear
   return { value: null, label: '--', source: 'macro_agent 未提供情绪值' };
 }
 
-export function FearGreedGauge({ reportData }: FearGreedGaugeProps) {
-  const fearGreed = useMemo(() => resolveFearGreed(reportData), [reportData]);
+function resolveFearGreedFromMacroSnapshot(macroSnapshot: MacroSnapshotData | null | undefined): FearGreedValue {
+  if (!macroSnapshot) return { value: null, label: '--', source: 'dashboard 宏观快照不可用' };
+
+  const directValue = Number(macroSnapshot.fear_greed_index);
+  if (Number.isFinite(directValue)) {
+    const normalized = Math.max(0, Math.min(100, directValue));
+    const label = String(macroSnapshot.fear_greed_label || '').trim() || scoreLabel(normalized);
+    return {
+      value: normalized,
+      label,
+      source: '来源：/api/dashboard macro_snapshot',
+    };
+  }
+
+  const sentimentText = String(macroSnapshot.sentiment_text || '').trim();
+  const parsed = extractFearGreedFromText(sentimentText);
+  if (parsed != null) {
+    return {
+      value: parsed,
+      label: scoreLabel(parsed),
+      source: '来源：macro_snapshot.sentiment_text 解析',
+    };
+  }
+
+  return { value: null, label: '--', source: 'macro_snapshot 未包含 Fear & Greed' };
+}
+
+export function FearGreedGauge({ reportData, macroSnapshot }: FearGreedGaugeProps) {
+  const fearGreed = useMemo(() => {
+    const fromReport = resolveFearGreed(reportData);
+    if (fromReport.value != null) return fromReport;
+    return resolveFearGreedFromMacroSnapshot(macroSnapshot);
+  }, [reportData, macroSnapshot]);
 
   const option = useMemo(() => {
     if (fearGreed.value == null) return null;

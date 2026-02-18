@@ -44,3 +44,20 @@ class TestDashboardDataSchema:
         news = {"market": [], "impact": []}
         data = DashboardData(snapshot={}, charts={}, news=news)
         assert data.news == {"market": [], "impact": []}
+
+    def test_macro_snapshot_field_accepted(self):
+        """DashboardData accepts optional macro_snapshot payload."""
+        data = DashboardData(
+            snapshot={},
+            charts={},
+            news={},
+            macro_snapshot={
+                "fear_greed_index": 62.0,
+                "fear_greed_label": "greed",
+                "sentiment_text": "CNN Fear & Greed Index: 62 (Greed)",
+                "status": "ok",
+                "as_of": "2026-02-18T00:00:00+00:00",
+            },
+        )
+        assert data.macro_snapshot is not None
+        assert data.macro_snapshot.fear_greed_index == 62.0

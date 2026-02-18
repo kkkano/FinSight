@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -98,6 +99,103 @@ _NEWS_RANKING_HALF_LIFE_HOURS = {
     "market": 24.0,
     "impact": 36.0,
 }
+
+
+_FEAR_GREED_PATTERN = re.compile(
+    r"(?:fear\s*&?\s*greed(?:\s*index)?|恐惧贪婪指数)[^0-9]{0,20}([0-9]{1,3}(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def _label_fear_greed(value: float) -> str:
+    score = max(0.0, min(100.0, float(value)))
+    if score <= 20:
+        return "extreme_fear"
+    if score <= 40:
+        return "fear"
+    if score <= 60:
+        return "neutral"
+    if score <= 80:
+        return "greed"
+    return "extreme_greed"
+
+
+def _parse_fear_greed_value(text: str) -> Optional[float]:
+    if not isinstance(text, str) or not text.strip():
+        return None
+    m = _FEAR_GREED_PATTERN.search(text)
+    if not m:
+        return None
+    try:
+        value = float(m.group(1))
+    except Exception:
+        return None
+    return max(0.0, min(100.0, value))
+
+
+def fetch_macro_snapshot() -> dict[str, Any]:
+    """
+    Build a lightweight macro snapshot for dashboard first paint.
+
+    Data sources:
+    - get_market_sentiment(): CNN Fear & Greed text
+    - get_fred_data(): macro fundamentals (rates, CPI, unemployment, etc.)
+    """
+    snapshot: dict[str, Any] = {
+        "fear_greed_index": None,
+        "fear_greed_label": "",
+        "sentiment_text": "",
+        "fed_rate": None,
+        "cpi": None,
+        "unemployment": None,
+        "gdp_growth": None,
+        "treasury_10y": None,
+        "yield_spread": None,
+        "source": "macro_tools",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "status": "unavailable",
+    }
+
+    has_fear_greed = False
+    has_fred = False
+
+    try:
+        from backend.tools.macro import get_market_sentiment
+
+        sentiment_text = str(get_market_sentiment() or "").strip()
+        if sentiment_text:
+            snapshot["sentiment_text"] = sentiment_text
+            fear_greed_value = _parse_fear_greed_value(sentiment_text)
+            if fear_greed_value is not None:
+                snapshot["fear_greed_index"] = fear_greed_value
+                snapshot["fear_greed_label"] = _label_fear_greed(fear_greed_value)
+                has_fear_greed = True
+    except Exception as exc:
+        logger.info("[DataService] fetch_macro_snapshot sentiment failed: %s", exc)
+
+    try:
+        from backend.tools.macro import get_fred_data
+
+        fred_payload = get_fred_data()
+        if isinstance(fred_payload, dict):
+            for key in ("fed_rate", "cpi", "unemployment", "gdp_growth", "treasury_10y", "yield_spread"):
+                value = safe_float(fred_payload.get(key))
+                if value is not None:
+                    snapshot[key] = value
+                    has_fred = True
+            fred_as_of = str(fred_payload.get("as_of") or "").strip()
+            if fred_as_of:
+                snapshot["as_of"] = fred_as_of
+    except Exception as exc:
+        logger.info("[DataService] fetch_macro_snapshot FRED failed: %s", exc)
+
+    if has_fear_greed and has_fred:
+        snapshot["status"] = "ok"
+    elif has_fear_greed or has_fred:
+        snapshot["status"] = "partial"
+
+    return snapshot
+
 
 def _ts_seconds(ts: Any) -> Optional[int]:
     if ts is None:
@@ -1003,6 +1101,15 @@ class DashboardDataService:
                 return cached
         data = fetch_news(symbol, limit)
         self.cache.set(symbol, "news", data, ttl=self.cache.TTL_NEWS)
+        return data
+
+    def get_macro_snapshot(self, symbol: str, use_cache: bool = True) -> dict[str, Any]:
+        if use_cache:
+            cached = self.cache.get(symbol, "macro_snapshot")
+            if cached is not None:
+                return cached
+        data = fetch_macro_snapshot()
+        self.cache.set(symbol, "macro_snapshot", data, ttl=self.cache.TTL_MACRO)
         return data
 
     def get_sector_weights(self, symbol: str, asset_type: str, use_cache: bool = True) -> list[dict[str, Any]]:

@@ -21,6 +21,7 @@ from backend.dashboard.data_service import (
     fetch_financial_statements,
     fetch_holdings,
     fetch_indicator_series,
+    fetch_macro_snapshot,
     fetch_market_chart,
     fetch_news,
     fetch_recommendations,
@@ -45,6 +46,7 @@ from backend.dashboard.schemas import (
     FinancialStatement,
     IndicatorSeries,
     LayoutPrefs,
+    MacroSnapshotData,
     NewsModeConfig,
     PeerComparisonData,
     RecommendationsSummary,
@@ -199,7 +201,7 @@ async def get_dashboard(
             "mock": False,
             "resolver_type": active_asset.type,
             "data_source": "multi-source",
-            "cache": {"snapshot": False, "charts": False, "news": False},
+            "cache": {"snapshot": False, "charts": False, "news": False, "macro_snapshot": False},
         },
     )
 
@@ -475,7 +477,37 @@ async def get_dashboard(
         calc_window="latest20",
     )
 
-    raw_data = {"snapshot": snapshot or {}, "charts": charts or {}, "news": news or {}}
+    macro_started = time.perf_counter()
+    macro_snapshot = dashboard_cache.get(symbol, "macro_snapshot")
+    macro_source_type = "cache"
+    macro_fallback_reason: Optional[str] = None
+    if macro_snapshot is None:
+        macro_source_type = "macro_snapshot"
+        macro_snapshot = await _run_blocking("fetch_macro_snapshot", fetch_macro_snapshot, timeout=12.0)
+        if not isinstance(macro_snapshot, dict) or not macro_snapshot:
+            macro_snapshot = {}
+            macro_fallback_reason = "macro_snapshot_unavailable"
+            fallback_reasons.append(macro_fallback_reason)
+        dashboard_cache.set(symbol, "macro_snapshot", macro_snapshot, ttl=dashboard_cache.TTL_MACRO)
+    else:
+        state.debug["cache"]["macro_snapshot"] = True
+
+    _set_meta(
+        "macro_snapshot",
+        provider="macro_tools",
+        source_type=macro_source_type,
+        payload=macro_snapshot,
+        started_at=macro_started,
+        fallback_reason=macro_fallback_reason,
+        calc_window="near_real_time",
+    )
+
+    raw_data = {
+        "snapshot": snapshot or {},
+        "charts": charts or {},
+        "news": news or {},
+        "macro_snapshot": macro_snapshot or {},
+    }
     filtered_charts = _filter_charts_by_capabilities(raw_data.get("charts", {}), capabilities)
     if fallback_reasons:
         state.debug["fallback_reasons"] = fallback_reasons
@@ -494,6 +526,8 @@ async def get_dashboard(
             technicals_fallback_reason=v2_technicals_fallback,
             peers=PeerComparisonData(**v2_peers) if v2_peers else None,
             peers_fallback_reason=v2_peers_fallback,
+            macro_snapshot=MacroSnapshotData(**raw_data["macro_snapshot"]) if raw_data["macro_snapshot"] else None,
+            macro_snapshot_fallback_reason=macro_fallback_reason,
             # Phase G2 new data
             earnings_history=[EarningsHistoryEntry(**e) for e in g2_earnings_history] if g2_earnings_history else None,
             analyst_targets=AnalystTargets(**g2_analyst_targets) if g2_analyst_targets else None,

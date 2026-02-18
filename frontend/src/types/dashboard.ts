@@ -143,6 +143,21 @@ export interface DataSourceMeta {
   fallback_reason?: string | null;
 }
 
+export interface MacroSnapshotData {
+  fear_greed_index?: number | null;
+  fear_greed_label?: string;
+  sentiment_text?: string;
+  fed_rate?: number | null;
+  cpi?: number | null;
+  unemployment?: number | null;
+  gdp_growth?: number | null;
+  treasury_10y?: number | null;
+  yield_spread?: number | null;
+  source?: string;
+  as_of?: string;
+  status?: string;
+}
+
 // === 选中对象（用于 MiniChat 上下文引用） ===
 export interface SelectionItem {
   type: 'news' | 'filing' | 'doc';
@@ -176,6 +191,8 @@ export interface DashboardData {
   technicals_fallback_reason?: string | null;
   peers?: PeerComparisonData | null;
   peers_fallback_reason?: string | null;
+  macro_snapshot?: MacroSnapshotData | null;
+  macro_snapshot_fallback_reason?: string | null;
   // Phase G2 fields
   earnings_history?: EarningsHistoryEntry[] | null;
   analyst_targets?: AnalystTargets | null;
