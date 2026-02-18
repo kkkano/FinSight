@@ -1,68 +1,49 @@
-# 文档导航与状态（2026-02）
+# 文档索引（2026-02-18）
 
-本页用于标记当前有效文档、历史文档与归档位置，避免继续在过期文档上开发。
+本页用于区分“当前有效文档”与“历史归档文档”，避免继续引用过期方案。
 
-## 1. 当前有效（生产与开发以这些为准）
+## 1) 当前有效（开发与运维优先阅读）
 
-- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：**LangGraph 设计 SSOT（唯一开发标准）**
-- `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 变更日志（配合 06a 使用）
-- `docs/11_PRODUCTION_RUNBOOK.md`：生产部署/回滚/排障 Runbook
-- `docs/01_ARCHITECTURE.md`：当前生产架构与模块边界
-- `docs/05_RAG_ARCHITECTURE.md`：RAG v2 当前架构与检索策略
-- `docs/LANGGRAPH_FLOW.md`：LangGraph 15 节点完整数据流文档（含 Mermaid 图）
-- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 全流程深度拆解（12 张 Mermaid 图 + 详细表格 + 端到端数据流）
-- `docs/AGENTS_GUIDE.md`：6 个子 Agent 详细文档（数据源/输出/容错/熔断器/选择逻辑）
-- `docs/PROMPT_OPTIMIZATION_CHANGELOG.md`：全项目 18 个 LLM 提示词优化前后对比报告
-- `docs/Thinking/ADR-2026-02-07-agent-routing.md`：Agent 评分选路决策
-- `docs/Thinking/ADR-2026-02-07-rag-data-boundary.md`：RAG 数据边界决策
-- `docs/Thinking/ADR-2026-02-07-deepsearch-evolution.md`：DeepSearch 演进决策
-- `README.md`：项目入口说明（版本/架构/评分口径/API/工具）
-- `tests/retrieval_eval/*`：检索质量评测基线（dataset/thresholds/baseline/CI gate）
+- `readme.md`：项目入口、启动与关键链路摘要
+- `readme_cn.md`：中文版架构与使用说明
+- `docs/01_ARCHITECTURE.md`：当前系统架构与流程图（Mermaid）
+- `docs/AGENTS_GUIDE.md`：Agent 与 Tool 链路矩阵（与代码对齐）
+- `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`：Dashboard 前后端开发指南
+- `docs/DASHBOARD_AGENT_TODOLIST.md`：Dashboard/Workbench 迭代路线
+- `docs/11_PRODUCTION_RUNBOOK.md`：生产运行与排障手册
+- `docs/05_RAG_ARCHITECTURE.md`：RAG 体系结构说明
+- `docs/LANGGRAPH_FLOW.md`：LangGraph 流程文档
+- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 深度拆解
 
-## 2. 次级参考文档
+## 2) 设计与计划文档（按需参考）
 
-- `docs/PROJECT_STRUCTURE.md`
-- `docs/ROUTING_ARCHITECTURE_STANDARD.md`
-- `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`
-- `docs/REPORT_CHART_SPEC.md`
+- `docs/plans/*`：规划类文档
+- `docs/design/*`：视觉/方案设计稿
+- `docs/prototype/*`：原型页面
+- `docs/feature_logs/*`：阶段功能日志
 
-## 3. 已归档（2026-02 大扫除）
+## 3) 思考与决策记录（保留，不删除）
 
-以下文件已迁移到 `docs/archive/`：
+- `docs/Thinking/*`：思考过程、ADR、问题分析
 
-**阶段文档（历史参考）：**
-- `02_PHASE0_COMPLETION.md`
-- `03_PHASE1_IMPLEMENTATION.md`
-- `04_PHASE2_DEEP_RESEARCH.md`
-- `05_PHASE3_ACTIVE_SERVICE.md`
-- `06_LANGGRAPH_REFACTOR_GUIDE.md`（**DEPRECATED** — 已由 06a + 06b 取代）
+> 规则：`docs/Thinking` 为保留区，不做清理删除。
 
-**执行记录 & 路线图（已完成）：**
-- `AGENTIC_SPRINT_TODOLIST.md`
-- `EXECUTION_PLAN_DETAILED.md`
-- `SPRINT2_DEVLOG.md`
-- `V1_RELEASE_SUMMARY.md`
-- `WORKBENCH_ROADMAP.md`
-- `ROADMAP.md`
-- `TEAM_EXECUTION_MEMORY.md`
+## 4) 归档区
 
-**问题追踪 & 技术问答（已关闭）：**
-- `ISSUE_TRACKER.md`
-- `TECHNICAL_QNA.md`
-- `QUERY_MATRIX_REPORT.md`
-- `AGENT_ARCHITECTURE_DESIGN.md`
+- `docs/archive/*`
+- `docs/archive/2026-02-doc-cleanup/*`
 
-**设计预览（已实现）：**
-- `dashboard_v2_preview.html`
-- `design_concept_v2.html`
+历史方案、旧阶段报告、已完成临时文档统一进入归档目录。
 
-**旧一批归档（2026-02 早期清理）：**
-- `PROJECT_ANALYSIS_V1.md`、`PROJECT_STATUS.md`、`fix_summary_2026-01-24.md` 等
-- 完整列表见 `docs/archive/2026-02-doc-cleanup/`
+## 5) 本轮清理记录
 
-## 4. 文档治理规则
+- 已将 `docs/workbench_v2_preview.html` 归档到 `docs/archive/2026-02-doc-cleanup/workbench_v2_preview.html`
 
-- 新增核心设计/规则，先写入 `docs/06a_LANGGRAPH_DESIGN_SPEC.md`（SSOT）。
-- 与代码冲突时，以代码与 06a 为准，并同步更新 01/README。
-- 历史文档允许保留，但必须在首屏标注 `Archived` 或 `Superseded`。
-- `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` 已废弃并归档，不再作为开发依据。
+## 6) 文档治理规则
+
+- 任何架构链路变化，至少同步更新：
+  - `readme.md`
+  - `docs/01_ARCHITECTURE.md`
+  - `docs/AGENTS_GUIDE.md`
+- 新文档创建后，必须在本索引登记。
+- 不确定是否废弃时，优先“归档 + 索引备注”，不直接删除。

@@ -1,369 +1,113 @@
-# FinSight Sub-Agent Guide
+# FinSight Agent & Tool 链路指南
 
-> Detailed documentation for all 6 financial analysis agents and the orchestration system.
+> 更新时间：2026-02-18  
+> 目标：让「Agent -> Tool -> 输出 -> 消费节点」一目了然。
 
----
-
-## Architecture Overview
+## 1. 执行链路概览
 
 ```mermaid
-graph LR
-    Planner[Planner Node] -->|PlanIR| Executor[Execute Plan]
-    Executor --> PA[PriceAgent]
-    Executor --> NA[NewsAgent]
-    Executor --> FA[FundamentalAgent]
-    Executor --> TA[TechnicalAgent]
-    Executor --> MA[MacroAgent]
-    Executor --> DSA[DeepSearchAgent]
-
-    PA --> EP[Evidence Pool]
-    NA --> EP
-    FA --> EP
-    TA --> EP
-    MA --> EP
-    DSA --> EP
-
-    EP --> Synthesize[Synthesize Node]
+flowchart LR
+  PLAN[planner / planner_stub] --> EXEC[execute_plan_stub]
+  EXEC --> EXECORE[graph.executor]
+  EXECORE --> TOOL_ADAPTER[tool_adapter]
+  EXECORE --> AGENT_ADAPTER[agent_adapter]
+  TOOL_ADAPTER --> TOOLS[langchain_tools FINANCIAL_TOOLS]
+  AGENT_ADAPTER --> AGENTS[7 agents]
+  EXECORE --> ARTIFACTS[step_results + errors + signals]
+  ARTIFACTS --> SYNTH[synthesize]
+  SYNTH --> REPORT[report_builder/render]
 ```
 
----
-
-## Base Class: BaseFinancialAgent
-
-**File**: `backend/agents/base_agent.py`
-
-### Core Data Structures
+## 2. Agent 清单
 
-```python
-@dataclass
-class EvidenceItem:
-    text: str              # Evidence content
-    source: str            # Data source name
-    url: str               # Source URL (if available)
-    timestamp: str         # ISO timestamp
-    confidence: float      # 0.0 - 1.0
-    title: str             # Evidence title
-    meta: dict             # Arbitrary metadata
+| Agent | 文件 | 典型职责 | 主要依赖工具 |
+|---|---|---|---|
+| `price_agent` | `backend/agents/price_agent.py` | 价格与短期行情信号 | `get_stock_price`, `get_option_chain_metrics`, `search` |
+| `news_agent` | `backend/agents/news_agent.py` | 新闻提要、事件影响、信源质量 | `get_company_news`, `get_event_calendar`, `score_news_source_reliability`, `search` |
+| `fundamental_agent` | `backend/agents/fundamental_agent.py` | 基本面/估值/财务解释 | `get_company_info`, `get_earnings_estimates`, `get_eps_revisions`, `search` |
+| `technical_agent` | `backend/agents/technical_agent.py` | 技术指标与形态判断 | `get_stock_historical_data`, `search` |
+| `macro_agent` | `backend/agents/macro_agent.py` | 宏观环境与市场风险背景 | `get_market_sentiment`, `get_economic_events`, `get_fred_data`, `search` |
+| `risk_agent` | `backend/agents/risk_agent.py` | 因子暴露与压力测试信号 | `get_stock_price`, `get_factor_exposure`, `run_portfolio_stress_test` |
+| `deep_search_agent` | `backend/agents/deep_search_agent.py` | 深度检索与高可靠证据补强 | `search` + 外部检索策略（Tavily/Exa 等） |
 
-@dataclass
-class AgentOutput:
-    agent_name: str
-    summary: str           # LLM or template-generated summary
-    evidence: list[EvidenceItem]
-    confidence: float      # Overall confidence score
-    data_sources: list[str]
-    as_of: str             # Timestamp
-    evidence_quality: dict  # Quality metrics
-    fallback_used: bool    # Whether fallback was activated
-    risks: list[str]       # Identified risk factors
-    trace: list[dict]      # Step-by-step trace
-```
+## 3. Tool 注册（执行白名单基础）
 
-### Standard research() Flow
+注册文件：`backend/langchain_tools.py`
 
-```
-1. _initial_search(query, ticker)    → Raw data from primary source
-2. _first_summary(data)              → Initial LLM summary
-3. Reflection loop (max MAX_REFLECTIONS rounds):
-   a. _identify_gaps(summary)        → LLM identifies info gaps
-   b. _targeted_search(gaps, ticker) → Supplementary data fetch
-   c. _update_summary(summary, data) → LLM integrates new data
-4. _format_output(summary, results)  → AgentOutput
-```
+### 3.1 FINANCIAL_TOOLS（当前注册顺序）
 
-### Circuit Breaker (3-State)
+1. `get_current_datetime`
+2. `get_stock_price`
+3. `get_technical_snapshot`
+4. `get_option_chain_metrics`
+5. `get_company_info`
+6. `get_company_news`
+7. `get_event_calendar`
+8. `score_news_source_reliability`
+9. `search`
+10. `get_market_sentiment`
+11. `get_economic_events`
+12. `get_earnings_estimates`
+13. `get_eps_revisions`
+14. `get_performance_comparison`
+15. `analyze_historical_drawdowns`
+16. `get_factor_exposure`
+17. `run_portfolio_stress_test`
 
-```
-CLOSED → (failures >= threshold) → OPEN → (recovery_timeout) → HALF_OPEN → (success) → CLOSED
-```
+### 3.2 allowlist 入口
 
-**File**: `backend/services/circuit_breaker.py`
+- 入口文件：`backend/graph/nodes/policy_gate.py`
+- subject/company/report 等场景会裁剪 tool 白名单
+- `analysis_depth=deep_research` 时会强制补入 `deep_search_agent`
 
----
+## 4. Planner 与 Stub 路由
 
-## 1. PriceAgent
+### 4.1 LLM Planner
 
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/price_agent.py` |
-| **Class** | `PriceAgent` |
-| **AGENT_NAME** | `"PriceAgent"` |
-| **Cache TTL** | 30 seconds |
-| **Reflections** | 0 (disabled) |
-| **CB Config** | 5 failures / 60s cooldown |
+文件：`backend/graph/nodes/planner.py`
 
-### Data Sources (Priority Cascade)
+- 支持 `LANGGRAPH_PLANNER_MODE=llm|stub`
+- LLM 输出 JSON parse 失败时回落 stub
+- A/B 分流与观测：`LANGGRAPH_PLANNER_AB_*`
 
-```
-yfinance → finnhub → alpha_vantage → tavily → search (fallback)
-```
+### 4.2 Stub Planner（关键）
 
-Each source is independently circuit-breaker protected. Failure triggers cascade to next source.
+文件：`backend/graph/nodes/planner_stub.py`
 
-### Output
+已支持关键词注入以下工具步骤：
 
-```
-summary: "The current price of AAPL is USD 185.50. Day change +1.2%."
-confidence: 1.0 (primary) | 0.5 (fallback)
-```
+- EPS/预期相关 -> `get_earnings_estimates`, `get_eps_revisions`
+- 期权/IV/PCR/Skew -> `get_option_chain_metrics`
+- 风险因子/压力测试 -> `get_factor_exposure`, `run_portfolio_stress_test`
+- 财报/FOMC/CPI/分红日历 -> `get_event_calendar`
+- 信源可信度 -> `score_news_source_reliability`
 
-### Error: `AllSourcesFailedError`
+## 5. 执行与事件可观测性
 
-Raised when all 5 sources are exhausted or circuit-broken.
+执行核心：`backend/graph/executor.py`
 
----
+输出事件：
 
-## 2. NewsAgent
+- step：`step_start`, `step_done`, `step_error`
+- tool：`tool_start`, `tool_end`
+- agent：`agent_start`, `agent_done`
 
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/news_agent.py` |
-| **Class** | `NewsAgent` |
-| **AGENT_NAME** | `"NewsAgent"` |
-| **Cache TTL** | 600 seconds (10 min) |
-| **Reflections** | 2 (base default) |
-| **CB Config** | 3 failures / 180s cooldown |
+前端消费：`frontend/src/api/client.ts`
 
-### Data Sources (Priority Cascade)
+- 已兼容 `tool_call`, `agent_step`, `agent_start/agent_done`, `thinking`, `done`
 
-```
-finnhub_news → news_api → tavily → search (fallback)
-```
+## 6. 结果整合与冲突处理
 
-Auto-cascades when results < 3 items.
+整合节点：`backend/graph/nodes/synthesize.py`
 
-### Deduplication
+- 支持多 agent 交叉冲突收集（technical/news/fundamental/macro/price）
+- 可在深度报告中输出冲突与裁决上下文
+- 与 `report_builder.py` 一起生成结构化报告与引用
 
-- **Title-level**: `seen_titles` set
-- **Content-level**: `SearchConvergence` with Jaccard similarity (threshold: 0.7)
-- **Information gain scoring**: `doc_score * 0.3 + novelty * 0.5 + diversity * 0.2`
+## 7. 常见排查入口
 
-### Special: Streaming Mode
-
-`analyze_stream()` provides per-source streaming search + LLM streaming summary via `llm.astream()`.
-
----
-
-## 3. FundamentalAgent
-
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/fundamental_agent.py` |
-| **Class** | `FundamentalAgent` |
-| **AGENT_NAME** | `"fundamental"` |
-| **Cache TTL** | 86,400 seconds (24h) |
-| **Reflections** | 2 (base default) |
-| **CB Config** | Default (3 / 300s) |
-
-### Data Sources
-
-- `tools.get_financial_statements(ticker)` — Income / Balance / Cash flow
-- `tools.get_company_info(ticker)` — Company profile
-
-Underlying source: `yfinance`
-
-### Tracked Metrics
-
-| Key | Label | Source Table |
-|-----|-------|-------------|
-| `revenue` | Revenue | income |
-| `net_income` | Net Income | income |
-| `operating_income` | Operating Income | income |
-| `operating_cash_flow` | Operating Cash Flow | cashflow |
-| `total_assets` | Total Assets | balance |
-| `total_liabilities` | Total Liabilities | balance |
-
-### Standardization
-
-- Auto-infers period type: `quarterly` (<=130 days) or `annual` (>=300 days)
-- Calculates **YoY** and **QoQ** growth rates for each metric
-- Evidence quality: `metric_coverage * 0.60 + growth_coverage * 0.40`
-
-### Auto-Risk Detection
-
-- Net income negative → risk flag
-- Leverage ratio > 60% → risk flag
-- Financial data degraded → risk flag
-
----
-
-## 4. TechnicalAgent
-
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/technical_agent.py` |
-| **Class** | `TechnicalAgent` |
-| **AGENT_NAME** | `"technical"` |
-| **Cache TTL** | 1,800 seconds (30 min) |
-| **Reflections** | 2 (base default) |
-| **CB Config** | Default (3 / 300s) |
-
-### Data Sources
-
-- `tools.get_stock_historical_data(ticker, period="6mo", interval="1d")` — K-line data
-
-### Calculated Indicators (Local, No LLM)
-
-| Indicator | Method |
-|-----------|--------|
-| MA20 / MA50 / MA200 | Pandas rolling mean |
-| RSI(14) | Wilder's RSI |
-| MACD | EMA(12) - EMA(26), Signal = EMA(9) of MACD |
-| Trend | close > MA20 > MA50 → uptrend / reverse → downtrend |
-| RSI State | ≥70 overbought / ≤30 oversold / else neutral |
-| Momentum | MACD > Signal → bullish / else bearish |
-
-**Minimum data**: 30 data points required (`MIN_POINTS = 30`)
-
----
-
-## 5. MacroAgent
-
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/macro_agent.py` |
-| **Class** | `MacroAgent` |
-| **AGENT_NAME** | `"macro"` |
-| **Cache TTL** | None (no explicit cache) |
-| **Reflections** | 2 (base default) |
-| **CB Config** | Default (3 / 300s) |
-
-### Data Sources (Multi-Source Merge)
-
-| Priority | Source | Type |
-|----------|--------|------|
-| 1 | FRED API | Numeric indicators |
-| 2 | CNN Fear & Greed | Sentiment text |
-| 3 | Economic Calendar | Event text |
-| 4 | Web Search | Cross-check text |
-
-### Tracked Indicators
-
-| Key | Label | Conflict Tolerance |
-|-----|-------|--------------------|
-| `fed_rate` | Federal Funds Rate | ±0.35% |
-| `cpi` | CPI | ±0.60% |
-| `unemployment` | Unemployment Rate | ±0.40% |
-| `gdp_growth` | GDP Growth | ±0.80% |
-| `treasury_10y` | 10Y Treasury Yield | ±0.35% |
-| `yield_spread` | 10Y-2Y Spread | ±0.35% |
-
-### Conflict Detection
-
-When sources disagree beyond tolerance threshold:
-- Winning value selected by source priority
-- Conflict flagged in `evidence.meta.conflict_flag`
-- Risk added: "Cross-source macro conflicts detected"
-
-### Recession Warning
-
-`yield_spread < 0` → automatic recession warning risk flag
-
-### Evidence Quality
-
-```
-overall = coverage * 0.45 + diversity * 0.20 + source_health * 0.35 - conflict_penalty
-```
-
----
-
-## 6. DeepSearchAgent
-
-| Property | Value |
-|----------|-------|
-| **File** | `backend/agents/deep_search_agent.py` |
-| **Class** | `DeepSearchAgent` |
-| **AGENT_NAME** | `"deep_search"` |
-| **Cache TTL** | 3,600 seconds (1h) |
-| **Reflections** | 2 (configurable via `DEEPSEARCH_MAX_REFLECTIONS`) |
-| **CB Config** | Default (3 / 300s) |
-
-### Data Sources
-
-| Priority | Source | Max Results |
-|----------|--------|-------------|
-| 1 | Tavily (advanced search) | 8 |
-| 2 | Exa (neural search) | 8 |
-| 3 | tools.search (fallback) | — |
-| + | HTTP document fetch | Up to 4 docs |
-
-### Self-RAG Flow
-
-```
-1. _build_queries()         → Generate 1-3 search queries
-2. _initial_search()        → Multi-source web search + document fetch
-3. _first_summary()         → LLM structured research memo
-4. SearchConvergence        → Information gain scoring
-5. Reflection loop:
-   a. _identify_gaps()      → LLM gap analysis (JSON output)
-   b. _targeted_search()    → Supplementary search + fetch
-   c. Convergence check     → Stop if gain < 0.05
-   d. _update_summary()     → LLM integration
-6. _compute_evidence_quality()
-7. _format_output()
-```
-
-### Stop Conditions
-
-- Max 3 reflection rounds
-- No new documents found
-- 2 consecutive low-gain rounds (< 0.15)
-- Extremely low gain (< 0.05) → immediate stop
-
-### Security
-
-- **SSRF Protection**: `is_safe_url()` checks both URL and redirect targets
-- Document limits: `DEEPSEARCH_MIN_TEXT_CHARS=400`, `DEEPSEARCH_MAX_TEXT_CHARS=12000`
-
-### Conflict Detection
-
-Sentiment-based document-level conflict detection:
-- **Positive signals**: beat, strong, growth, upside, raised, outperform, bullish
-- **Negative signals**: miss, weak, decline, downside, cut, underperform, bearish, risk
-
-### Source Reliability Tiers
-
-| Tier | Sources | Reliability |
-|------|---------|-------------|
-| High | sec.gov, reuters.com, bloomberg.com, wsj.com, ft.com, investor.* | 0.9 |
-| High | PDF documents | 0.9 |
-| Medium | Tavily, Exa results | 0.75 |
-| Standard | General web search | 0.6 |
-
----
-
-## Agent Selection: Capability Registry
-
-**File**: `backend/graph/capability_registry.py`
-
-### Scoring Formula
-
-```
-score = 0.05 (base)
-      + subject_weights[subject_type]
-      + operation_weights[operation]
-      + output_mode_weights[output_mode]
-      + keyword_boost (if query matches keyword_hints)
-      + special_bonuses
-```
-
-### Required Agents (investment_report mode)
-
-| Condition | Required |
-|-----------|----------|
-| operation=technical | price_agent, technical_agent |
-| operation=price | price_agent |
-| operation=compare | price_agent, fundamental_agent |
-| subject=company | price_agent, news_agent, fundamental_agent |
-| subject=filing | deep_search_agent, fundamental_agent |
-| subject=news_item | news_agent, price_agent |
-| Query has macro keywords | +macro_agent |
-| Query has tech keywords | +technical_agent |
-| Query has deep keywords | +deep_search_agent |
-
-### High-Cost Escalation
-
-`macro_agent` and `deep_search_agent` are tagged as high-cost:
-- `__escalation_stage: "high_cost"`
-- `__run_if_min_confidence: 0.72`
-- Only force-run if in required list or query has deep hint
+- 看策略：`backend/graph/nodes/policy_gate.py`
+- 看规划：`backend/graph/nodes/planner.py`, `backend/graph/nodes/planner_stub.py`
+- 看执行：`backend/graph/nodes/execute_plan_stub.py`, `backend/graph/executor.py`
+- 看 SSE：`backend/services/execution_service.py`, `frontend/src/api/client.ts`
+- 看仪表盘洞察：`backend/dashboard/insights_engine.py`
