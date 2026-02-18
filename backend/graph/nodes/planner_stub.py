@@ -216,7 +216,7 @@ def planner_stub(state: GraphState) -> dict:
         _append_tool_step(
             "get_sec_filings",
             {"ticker": primary_ticker, "forms": "10-K,10-Q,8-K", "limit": 12},
-            why="鍏抽敭璇嶅懡涓洃绠℃姭闇诧紝琛ュ厖 SEC EDGAR 鎶湶鍘嗗彶銆?",
+            why="关键词命中监管披露需求，补充 SEC EDGAR 披露历史。",
         )
 
     if primary_ticker and _contains_any(
@@ -231,7 +231,7 @@ def planner_stub(state: GraphState) -> dict:
         _append_tool_step(
             "get_sec_material_events",
             {"ticker": primary_ticker, "limit": 10},
-            why="鍏抽敭璇嶅懡涓噸澶т簨浠舵姭闇诧紝琛ュ厖 SEC 8-K 淇℃伅銆?",
+            why="关键词命中重大事件披露需求，补充 SEC 8-K 信息。",
         )
 
     if primary_ticker and _contains_any(
@@ -245,7 +245,7 @@ def planner_stub(state: GraphState) -> dict:
         _append_tool_step(
             "get_sec_risk_factors",
             {"ticker": primary_ticker},
-            why="鍏抽敭璇嶅懡涓闄╁洜瀛愶紝浠庢渶鏂?10-K/10-Q 鎶藉彇 Item 1A 鎽樿銆?",
+            why="关键词命中风险因子分析，从最新 10-K/10-Q 提取 Item 1A 摘要。",
         )
 
     if normalized_tickers and _contains_any(

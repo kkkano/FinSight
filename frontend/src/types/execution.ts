@@ -45,6 +45,26 @@ export interface TimelineEvent {
 
 export type ExecutionRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted';
 export type AnalysisDepth = 'quick' | 'report' | 'deep_research';
+export type AgentPreferenceDepth = 'standard' | 'deep' | 'off';
+
+export interface ToolCapability {
+  name: string;
+  group: string;
+  markets: string[];
+  operations: string[];
+  depths: string[];
+  riskLevel: string;
+  selected: boolean;
+  envReady: boolean;
+  missingEnv: string[];
+}
+
+export interface AnalysisConfig {
+  analysisDepth: AnalysisDepth;
+  budget: number;
+  agentDepths: Record<string, AgentPreferenceDepth>;
+  concurrentMode: boolean;
+}
 
 export interface ExecutionRun {
   runId: string;
@@ -93,4 +113,9 @@ export interface StartExecutionParams {
   agents?: string[];
   source: string;
   budget?: number;
+  agentPreferencesOverride?: {
+    agents?: Record<string, AgentPreferenceDepth>;
+    maxRounds?: number;
+    concurrentMode?: boolean;
+  };
 }

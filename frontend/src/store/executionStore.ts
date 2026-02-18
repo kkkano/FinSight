@@ -126,21 +126,23 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }));
 
     const prefs = getAgentPreferences();
+    const override = params.agentPreferencesOverride;
+    const requestPrefs = {
+      agents: override?.agents ?? prefs.agents,
+      maxRounds: override?.maxRounds ?? prefs.maxRounds,
+      concurrentMode: override?.concurrentMode ?? prefs.concurrentMode,
+    };
     const request: ExecuteRequest = {
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
       analysis_depth: params.analysisDepth,
       agents: params.agents,
-      budget: params.budget ?? prefs.maxRounds,
+      budget: params.budget ?? requestPrefs.maxRounds,
       source: params.source,
       session_id: sessionId,
       run_id: runId,
-      agent_preferences: {
-        agents: prefs.agents,
-        maxRounds: prefs.maxRounds,
-        concurrentMode: prefs.concurrentMode,
-      },
+      agent_preferences: requestPrefs,
     };
 
     const updateRun = (patch: Partial<ExecutionRun>) => {
@@ -449,4 +451,3 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }));
   },
 }));
-
