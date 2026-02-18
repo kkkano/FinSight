@@ -4,7 +4,9 @@ import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type {
   AlertEvent,
+  AlertEventState,
   AlertSubscription,
+  AlertSubscriptionState,
   PortfolioSummary,
   PortfolioRow,
   WatchlistItem,
@@ -63,7 +65,8 @@ export function useRightPanelData() {
   const dashboardWatchlist = useDashboardStore((s) => s.watchlist ?? []);
 
   const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition, sessionId } = useStore();
-  const emailConfigured = Boolean(subscriptionEmail && subscriptionEmail.trim());
+  const trimmedSubscriptionEmail = subscriptionEmail.trim();
+  const emailConfigured = Boolean(trimmedSubscriptionEmail);
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   const recomputeUnreadCount = useCallback((events: AlertEvent[]) => {
@@ -119,8 +122,8 @@ export function useRightPanelData() {
       setAlertsError(null);
 
       const [subResponse, feedResponse] = await Promise.all([
-        apiClient.listSubscriptions(subscriptionEmail),
-        apiClient.listAlertFeed({ email: subscriptionEmail, limit: 50 }),
+        apiClient.listSubscriptions(trimmedSubscriptionEmail),
+        apiClient.listAlertFeed({ email: trimmedSubscriptionEmail, limit: 50 }),
       ]);
 
       const subscriptions = Array.isArray(subResponse?.subscriptions)
@@ -139,7 +142,7 @@ export function useRightPanelData() {
     } finally {
       setAlertsLoading(false);
     }
-  }, [subscriptionEmail, recomputeUnreadCount, emailConfigured]);
+  }, [trimmedSubscriptionEmail, recomputeUnreadCount, emailConfigured]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
@@ -221,11 +224,30 @@ export function useRightPanelData() {
     setIsPortfolioEditing(false);
   };
 
+  const eventState = useMemo<AlertEventState>(() => {
+    if (!emailConfigured) return 'no_email';
+    if (alertsLoading) return 'loading';
+    if (alertsError) return 'error';
+    if (!alertEvents.length) return 'no_events';
+    return 'ready';
+  }, [emailConfigured, alertsLoading, alertsError, alertEvents.length]);
+
+  const subscriptionState = useMemo<AlertSubscriptionState>(() => {
+    if (!emailConfigured) return 'no_email';
+    if (alertsLoading) return 'loading';
+    if (alertsError) return 'error';
+    if (!alerts.length) return 'no_subscriptions';
+    return 'ready';
+  }, [emailConfigured, alertsLoading, alertsError, alerts.length]);
+
   return {
     watchlist,
     alerts,
     alertEvents,
     emailConfigured,
+    subscriptionEmail: trimmedSubscriptionEmail,
+    eventState,
+    subscriptionState,
     alertsLoading,
     alertsError,
     unreadAlertCount,
