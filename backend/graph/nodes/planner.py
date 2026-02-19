@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
-from backend.graph.capability_registry import select_agents_for_request
+from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.plan_ir import PlanIR, PlanBudget
 from backend.graph.planner_prompt import build_planner_prompt
 from backend.graph.event_bus import emit_event
@@ -274,6 +274,13 @@ def _is_deep_hint(query: str, state: GraphState | None = None) -> bool:
     )
 
 
+def _is_dashboard_source(state: GraphState) -> bool:
+    """来源是否为 dashboard（包括 dashboard_news、dashboard_header 等）。"""
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    source = str((ui_context or {}).get("source") or "").strip().lower()
+    return source.startswith("dashboard")
+
+
 def _is_dashboard_forced_report(policy: dict[str, Any], state: GraphState) -> bool:
     if not isinstance(policy, dict):
         return False
@@ -460,9 +467,13 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 mapping = {str(t).strip().upper(): str(t).strip().upper() for t in tickers_value if str(t).strip()}
                 inputs = {**inputs, "tickers": mapping}
         elif kind == "tool" and name in ("get_stock_price", "get_technical_snapshot", "get_company_info", "get_company_news"):
-            # Fill missing ticker for common company tools.
             ticker_value = inputs.get("ticker")
-            if (not isinstance(ticker_value, str) or not ticker_value.strip()) and primary_ticker:
+            if _is_dashboard_source(state) and primary_ticker:
+                # Dashboard 场景强制使用 subject 中的 ticker，
+                # 防止 LLM 从新闻标题中误提取无关 ticker（如 KLM）。
+                inputs = {**inputs, "ticker": primary_ticker}
+            elif (not isinstance(ticker_value, str) or not ticker_value.strip()) and primary_ticker:
+                # 非 dashboard 场景仅在 ticker 缺失时回填。
                 inputs = {**inputs, "ticker": primary_ticker}
 
         if kind == "agent":
@@ -472,7 +483,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 inputs = {**inputs, "query": query}
 
             t = inputs.get("ticker")
-            if (not isinstance(t, str) or not t.strip()) and primary_ticker:
+            if _is_dashboard_source(state) and primary_ticker:
+                # Dashboard 场景同样强制使用 subject ticker。
+                inputs = {**inputs, "ticker": primary_ticker}
+            elif (not isinstance(t, str) or not t.strip()) and primary_ticker:
                 inputs = {**inputs, "ticker": primary_ticker}
 
             if selection_ids and "selection_ids" not in inputs:
@@ -731,6 +745,166 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     }, budget_assertions)
 
 
+def _dedupe_agent_names(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in items:
+        name = str(raw or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        ordered.append(name)
+    return ordered
+
+
+def _extract_selected_agents(plan_dict: dict[str, Any]) -> list[str]:
+    steps = plan_dict.get("steps")
+    if not isinstance(steps, list):
+        return []
+    names: list[str] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("kind") or "") != "agent":
+            continue
+        name = str(step.get("name") or "").strip()
+        if name:
+            names.append(name)
+    return _dedupe_agent_names(names)
+
+
+def _candidate_agents_for_plan(state: GraphState) -> list[str]:
+    policy = state.get("policy") if isinstance(state.get("policy"), dict) else {}
+    allowed = policy.get("allowed_agents") if isinstance(policy, dict) else None
+    if isinstance(allowed, list):
+        candidates = [str(item or "").strip() for item in allowed]
+        deduped = _dedupe_agent_names(candidates)
+        if deduped:
+            return deduped
+    return list(REPORT_AGENT_CANDIDATES)
+
+
+def _build_plan_steps_summary(plan_dict: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_steps = plan_dict.get("steps")
+    if not isinstance(raw_steps, list):
+        return []
+    summary: list[dict[str, Any]] = []
+    for step in raw_steps[:24]:
+        if not isinstance(step, dict):
+            continue
+        summary.append(
+            {
+                "id": str(step.get("id") or "").strip() or "unknown",
+                "kind": str(step.get("kind") or "").strip() or "unknown",
+                "name": str(step.get("name") or "").strip() or "unknown",
+                "parallel_group": (
+                    str(step.get("parallel_group") or "").strip()
+                    if step.get("parallel_group") is not None
+                    else None
+                ),
+                "optional": bool(step.get("optional")),
+            }
+        )
+    return summary
+
+
+def _build_planner_reasoning_brief(
+    *,
+    state: GraphState,
+    selected_agents: list[str],
+    skipped_agents: list[str],
+    plan_steps_count: int,
+    fallback: bool,
+    fallback_reason: str | None = None,
+) -> str:
+    output_mode = str(state.get("output_mode") or "brief").strip() or "brief"
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    source = str((ui_context or {}).get("source") or "").strip() or "unknown"
+    selected_preview = ", ".join(selected_agents[:5]) if selected_agents else "none"
+    skipped_preview = ", ".join(skipped_agents[:5]) if skipped_agents else "none"
+    if fallback:
+        reason = str(fallback_reason or "planner_fallback").strip()
+        return (
+            f"Planner fallback mode ({reason}); output_mode={output_mode}; source={source}; "
+            f"selected={selected_preview}; skipped={skipped_preview}; steps={plan_steps_count}."
+        )
+    return (
+        f"Planner completed; output_mode={output_mode}; source={source}; "
+        f"selected={selected_preview}; skipped={skipped_preview}; steps={plan_steps_count}."
+    )
+
+
+async def _emit_pipeline_stage(
+    *,
+    stage: str,
+    status: str,
+    message: str,
+    duration_ms: int | None = None,
+    error: str | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "type": "pipeline_stage",
+        "stage": stage,
+        "status": status,
+        "message": message,
+        "timestamp": utc_now_iso(),
+    }
+    if isinstance(duration_ms, int) and duration_ms >= 0:
+        payload["duration_ms"] = duration_ms
+    if error:
+        payload["error"] = str(error)[:300]
+    await emit_event(payload)
+
+
+async def _emit_plan_ready(
+    *,
+    state: GraphState,
+    plan_dict: dict[str, Any],
+    fallback: bool,
+    fallback_reason: str | None = None,
+) -> None:
+    selected_agents = _extract_selected_agents(plan_dict)
+    candidate_agents = _candidate_agents_for_plan(state)
+    selected_set = set(selected_agents)
+    skipped_agents = [name for name in candidate_agents if name not in selected_set]
+    reasoning_brief = _build_planner_reasoning_brief(
+        state=state,
+        selected_agents=selected_agents,
+        skipped_agents=skipped_agents,
+        plan_steps_count=len(plan_dict.get("steps") or []),
+        fallback=fallback,
+        fallback_reason=fallback_reason,
+    )
+    plan_steps = _build_plan_steps_summary(plan_dict)
+    has_parallel = any(step.get("parallel_group") for step in plan_steps)
+    await emit_event(
+        {
+            "type": "plan_ready",
+            "plan_steps": plan_steps,
+            "plan_steps_count": len(plan_steps),
+            "agents": selected_agents,
+            "selected_agents": selected_agents,
+            "skipped_agents": skipped_agents,
+            "has_parallel": has_parallel,
+            "reasoning_brief": reasoning_brief,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    )
+    await emit_event(
+        {
+            "type": "decision_note",
+            "scope": "planner",
+            "title": "Planner selection summary",
+            "reason": reasoning_brief,
+            "impact": (
+                f"selected_agents={len(selected_agents)}; skipped_agents={len(skipped_agents)}; "
+                f"parallel={'yes' if has_parallel else 'no'}"
+            ),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    )
+
+
 async def planner(state: GraphState) -> dict:
     """
     Planner node.
@@ -742,12 +916,30 @@ async def planner(state: GraphState) -> dict:
     mode = _env_str("LANGGRAPH_PLANNER_MODE", "stub").lower()
     trace = state.get("trace") or {}
     planner_variant = _resolve_planner_variant(state)
+    planner_started_at = time.perf_counter()
+
+    await _emit_pipeline_stage(
+        stage="planning",
+        status="start",
+        message="Planner started",
+    )
 
     if mode != "llm":
         trace.update({"planner_runtime": {**build_runtime(mode="stub", fallback=False), "variant": planner_variant}})
         out = {**planner_stub(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=False,
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
         return out
 
     try:
@@ -779,6 +971,18 @@ async def planner(state: GraphState) -> dict:
         out = {**planner_stub(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=True, retry_attempts=0, steps=steps)
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=True,
+            fallback_reason=f"llm_unavailable:{exc.__class__.__name__}",
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner fallback completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
         return out
 
     prompt = build_planner_prompt(state, variant=planner_variant)
@@ -913,14 +1117,19 @@ async def planner(state: GraphState) -> dict:
             retry_attempts=retry_attempts,
             steps=len(plan.steps),
         )
-        await emit_event({
-            "type": "plan_ready",
-            "plan_steps": len(plan.steps),
-            "agents": [s.name for s in plan.steps if s.kind == "agent"],
-            "has_parallel": any(s.parallel_group for s in plan.steps),
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        })
-        return {"plan_ir": plan.model_dump(), "trace": trace}
+        plan_dict = plan.model_dump()
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=plan_dict,
+            fallback=False,
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
+        return {"plan_ir": plan_dict, "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
         append_failure(
@@ -965,5 +1174,18 @@ async def planner(state: GraphState) -> dict:
             fallback=True,
             retry_attempts=retry_attempts,
             steps=steps,
+        )
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=True,
+            fallback_reason=str(exc),
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="error",
+            message="Planner failed, fallback plan emitted",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+            error=str(exc),
         )
         return out

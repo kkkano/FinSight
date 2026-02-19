@@ -77,12 +77,12 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
 
-    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 300s)
+    - brief/chat/default: LANGGRAPH_EXECUTION_TIMEOUT_SECONDS (default 500s)
     - investment_report: LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS (default 900s)
       fallback to LANGGRAPH_EXECUTION_TIMEOUT_SECONDS when report-specific key is absent.
     """
     mode = (output_mode or "").strip().lower()
-    default_base = "300"
+    default_base = "500"
     default_report = "900"
     raw = (
         os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_REPORT_SECONDS", default_report)
@@ -92,7 +92,7 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     try:
         return max(60.0, float(raw))
     except Exception:
-        return 900.0 if mode == "investment_report" else 300.0
+        return 900.0 if mode == "investment_report" else 500.0
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +356,16 @@ async def run_graph_pipeline(
                 logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
 
             # 6. Stream markdown in chunks
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "pipeline_stage",
+                    "stage": "rendering",
+                    "status": "start",
+                    "message": "Rendering markdown stream",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
             for idx in range(0, len(markdown), markdown_chunk_size):
                 chunk = markdown[idx: idx + markdown_chunk_size]
                 if chunk:
@@ -367,6 +377,17 @@ async def run_graph_pipeline(
                         }
                     )
                 await asyncio.sleep(0)
+
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "pipeline_stage",
+                    "stage": "rendering",
+                    "status": "done",
+                    "message": "Rendering stream completed",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
             # 7. Final "done" event
             llm_total_calls = stream_metrics.get("llm_start", 0)
@@ -580,6 +601,16 @@ async def resume_graph_pipeline(
                 logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
 
             # Stream markdown
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "pipeline_stage",
+                    "stage": "rendering",
+                    "status": "start",
+                    "message": "Rendering markdown stream",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
             for idx in range(0, len(markdown), markdown_chunk_size):
                 chunk = markdown[idx: idx + markdown_chunk_size]
                 if chunk:
@@ -591,6 +622,17 @@ async def resume_graph_pipeline(
                         }
                     )
                 await asyncio.sleep(0)
+
+            await _queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "pipeline_stage",
+                    "stage": "rendering",
+                    "status": "done",
+                    "message": "Rendering stream completed",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
             # Done
             await _queue_event(
