@@ -1513,6 +1513,9 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     errors = artifacts.get("errors") if isinstance(artifacts.get("errors"), list) else []
     draft_markdown = _safe_str(artifacts.get("draft_markdown") or "")
+    verifier_result = artifacts.get("verifier_result") if isinstance(artifacts.get("verifier_result"), dict) else {}
+    verifier_claims_raw = verifier_result.get("unsupported_claims") if isinstance(verifier_result, dict) else []
+    verifier_claims = verifier_claims_raw if isinstance(verifier_claims_raw, list) else []
 
     plan_ir = state.get("plan_ir") if isinstance(state.get("plan_ir"), dict) else {}
     plan_steps = plan_ir.get("steps") if isinstance(plan_ir.get("steps"), list) else []
@@ -1649,6 +1652,13 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     )
     quality_hints = _build_report_quality_hints(query=query, citations=citations)
     report_hints["quality"] = quality_hints
+    if isinstance(verifier_result, dict) and verifier_result:
+        report_hints["verifier"] = {
+            "enabled": bool(verifier_result.get("enabled")),
+            "checked": bool(verifier_result.get("checked")),
+            "unsupported_count": len(verifier_claims),
+            "unsupported_claims": verifier_claims[:6],
+        }
 
     # Confidence: average of successful agents, else 0.5.
     confidences = []
@@ -1760,6 +1770,14 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         elif grounding_rate < 0.75:
             confidence_score = min(confidence_score, 0.7)
 
+    if verifier_claims:
+        verifier_risk = f"二次事实核查发现 {len(verifier_claims)} 条断言缺少直接证据，请重点复核引用与摘录。"
+        if verifier_risk not in risks:
+            risks.insert(0, verifier_risk)
+        confidence_score = min(confidence_score, 0.58)
+        if "verifier_gap" not in report_tags:
+            report_tags.append("verifier_gap")
+
     # Title by subject type
     if subject_type in ("news_item", "news_set"):
         title = f"{ticker_label} 新闻事件研报"
@@ -1792,6 +1810,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
             "filing_section_citations": filing_section_citations,
             "report_hints": report_hints,
             "grounding": grounding_stats,
+            "verifier": verifier_result,
             "report_builder_input": {
                 "query": query,
                 "ticker_label": ticker_label,
@@ -1834,6 +1853,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         meta = validated.get("meta") if isinstance(validated.get("meta"), dict) else {}
         meta["report_hints"] = report_hints
         meta["grounding"] = grounding_stats
+        meta["verifier"] = verifier_result
         validated["meta"] = meta
         return _harden_report_payload(validated)
     return None

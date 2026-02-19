@@ -17,6 +17,8 @@ interface CardInfoTipProps {
   icon?: 'info' | 'alert';
   /** Additional CSS classes on the wrapper */
   className?: string;
+  /** Optional test id for E2E */
+  testId?: string;
 }
 
 export function CardInfoTip({
@@ -24,6 +26,7 @@ export function CardInfoTip({
   size = 12,
   icon = 'info',
   className = '',
+  testId,
 }: CardInfoTipProps) {
   const Icon = icon === 'alert' ? AlertCircle : Info;
   const iconClassName = icon === 'alert'
@@ -31,7 +34,7 @@ export function CardInfoTip({
     : 'text-fin-muted/50 group-hover/tip:text-fin-muted';
 
   return (
-    <span className={`relative inline-flex group/tip ${className}`}>
+    <span className={`relative inline-flex group/tip ${className}`} data-testid={testId}>
       <Icon
         size={size}
         className={`${iconClassName} transition-colors cursor-help`}

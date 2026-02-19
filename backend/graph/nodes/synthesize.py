@@ -102,6 +102,13 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _extract_json_object(text: str) -> str:
     if not text:
         raise ValueError("empty model output")
@@ -279,6 +286,151 @@ def _scrub_unverified_future_claims(text: str, evidence_text: str) -> str:
         cleaned,
     ).strip()
     return cleaned
+
+
+def _is_deep_research_run(state: GraphState) -> bool:
+    output_mode = str(state.get("output_mode") or "").strip().lower()
+    if output_mode != "investment_report":
+        return False
+
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    analysis_depth = str(ui_context.get("analysis_depth") or "").strip().lower()
+    return analysis_depth == "deep_research"
+
+
+def _normalize_verifier_claims(raw_claims: Any, *, max_items: int) -> list[dict[str, str]]:
+    if not isinstance(raw_claims, list):
+        return []
+
+    claims: list[dict[str, str]] = []
+    for item in raw_claims:
+        if len(claims) >= max_items:
+            break
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        if not claim:
+            continue
+        claims.append(
+            {
+                "claim": claim[:240],
+                "reason": reason[:240] if reason else "证据池中未找到明确支撑",
+            }
+        )
+    return claims
+
+
+def _apply_verifier_redactions(text: str, claims: list[dict[str, str]]) -> str:
+    cleaned = str(text or "")
+    if not cleaned.strip() or not claims:
+        return cleaned
+
+    for item in claims:
+        claim = str(item.get("claim") or "").strip()
+        if not claim:
+            continue
+        if claim in cleaned:
+            cleaned = cleaned.replace(claim, _HALLUCINATION_SAFE_PLACEHOLDER)
+
+    cleaned = re.sub(
+        rf"(?:{re.escape(_HALLUCINATION_SAFE_PLACEHOLDER)}\s*){{2,}}",
+        _HALLUCINATION_SAFE_PLACEHOLDER + " ",
+        cleaned,
+    ).strip()
+    return cleaned
+
+
+async def _run_deep_report_verifier(
+    *,
+    state: GraphState,
+    generated_text: str,
+    grounding_text: str,
+) -> dict[str, Any]:
+    enabled = _env_bool("LANGGRAPH_DEEP_VERIFIER_ENABLED", True)
+    if not enabled or not _is_deep_research_run(state):
+        return {"enabled": False, "checked": False, "unsupported_claims": []}
+
+    candidate_text = str(generated_text or "").strip()
+    if not candidate_text:
+        return {"enabled": True, "checked": False, "unsupported_claims": [], "reason": "empty_text"}
+
+    max_issues = max(1, _env_int("LANGGRAPH_DEEP_VERIFIER_MAX_ISSUES", 6))
+    verifier_tokens = max(256, _env_int("LANGGRAPH_DEEP_VERIFIER_MAX_TOKENS", 900))
+    retry_attempts = 0
+
+    try:
+        from backend.llm_config import create_llm
+    except Exception as exc:
+        logger.warning("[Synthesize/verifier] create_llm unavailable: %s", exc)
+        return {"enabled": True, "checked": False, "unsupported_claims": [], "error": str(exc)}
+
+    def _new_verifier_llm():
+        try:
+            return create_llm(temperature=0.0, max_tokens=verifier_tokens, request_timeout=120)
+        except TypeError:
+            # Test doubles may only accept `temperature`.
+            return create_llm(temperature=0.0)
+
+    verifier_llm = _new_verifier_llm()
+
+    current_date = utc_now_iso()[:10]
+    prompt = f"""你是金融报告事实核查员，只做一件事：识别报告中缺少证据支撑的“事实性断言”。
+
+当前日期：{current_date}
+
+<report>
+{candidate_text[:9000]}
+</report>
+
+<evidence>
+{str(grounding_text or '')[:16000]}
+</evidence>
+
+核查规则：
+1) 只检查“事实性断言”（数字、日期、产品发布、并购、监管事件等）。
+2) 若 evidence 中找不到直接支撑，标记 unsupported。
+3) 主观判断/泛化表述（如“竞争加剧”）不算 unsupported。
+4) 输出最多 {max_issues} 条。
+
+仅输出 JSON：
+{{
+  "unsupported_claims": [
+    {{"claim": "...", "reason": "..."}}
+  ]
+}}"""
+
+    def _on_retry(attempt: int, _exc: BaseException) -> None:
+        nonlocal retry_attempts
+        retry_attempts = max(retry_attempts, int(attempt))
+
+    try:
+        resp = await ainvoke_with_rate_limit_retry(
+            verifier_llm,
+            [HumanMessage(content=prompt)],
+            llm_factory=_new_verifier_llm,
+            acquire_token=True,
+            agent_name="deep_report_verifier",
+            on_retry=_on_retry,
+        )
+        content = resp.content if hasattr(resp, "content") else str(resp)
+        payload = json.loads(_extract_json_object(str(content)))
+        claims = _normalize_verifier_claims(payload.get("unsupported_claims"), max_items=max_issues)
+        return {
+            "enabled": True,
+            "checked": True,
+            "retry_attempts": retry_attempts,
+            "unsupported_claims": claims,
+        }
+    except Exception as exc:
+        logger.warning("[Synthesize/verifier] verification failed: %s", exc)
+        return {
+            "enabled": True,
+            "checked": False,
+            "retry_attempts": retry_attempts,
+            "unsupported_claims": [],
+            "error": str(exc)[:300],
+        }
 
 
 def _section_limits(output_mode: str, key: str) -> tuple[int, int]:
@@ -1351,12 +1503,13 @@ async def _generate_narrative_draft(
     state: GraphState,
     render_vars: dict[str, str],
     trace: dict[str, Any],
-) -> str:
+) -> tuple[str, dict[str, Any] | None]:
     """
     Call LLM to produce a complete markdown research report (narrative mode).
 
-    Returns the markdown string on success, or empty string on failure
-    (caller falls back to template-rendered draft_markdown).
+    Returns:
+    - markdown string on success (or empty string on failure)
+    - optional verifier result payload
     """
     try:
         from backend.llm_config import create_llm
@@ -1366,7 +1519,7 @@ async def _generate_narrative_draft(
         llm_factory = lambda: create_llm(temperature=_synth_temp)  # noqa: E731
     except Exception as exc:
         logger.warning("[Synthesize/narrative] LLM init failed: %s", exc)
-        return ""
+        return "", None
 
     artifacts = state.get("artifacts") or {}
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
@@ -1618,12 +1771,25 @@ async def _generate_narrative_draft(
         draft = draft.strip()
         draft = _scrub_unverified_future_claims(draft, narrative_grounding_text)
 
+        verifier_result = await _run_deep_report_verifier(
+            state=state,
+            generated_text=draft,
+            grounding_text=narrative_grounding_text,
+        )
+        unsupported_claims = (
+            verifier_result.get("unsupported_claims")
+            if isinstance(verifier_result, dict)
+            else []
+        )
+        if isinstance(unsupported_claims, list) and unsupported_claims:
+            draft = _apply_verifier_redactions(draft, unsupported_claims)
+
         if len(draft) < 500:
             logger.warning("[Synthesize/narrative] LLM output too short (%d chars), discarding", len(draft))
-            return ""
+            return "", verifier_result
 
         logger.info("[Synthesize/narrative] Generated %d-char narrative draft (retries=%d)", len(draft), retry_attempts)
-        return draft
+        return draft, verifier_result
 
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
@@ -1648,7 +1814,7 @@ async def _generate_narrative_draft(
                 "timestamp": utc_now_iso(),
             }
         )
-        return ""
+        return "", None
 
 
 async def synthesize(state: GraphState) -> dict:
@@ -1668,17 +1834,29 @@ async def synthesize(state: GraphState) -> dict:
         logger.info("[Synthesize] Running in NARRATIVE mode — LLM writes full report draft")
         render_vars = _stub_render_vars(state)
 
-        draft_markdown = await _generate_narrative_draft(state, render_vars, trace)
+        draft_markdown, verifier_result = await _generate_narrative_draft(state, render_vars, trace)
+        verifier_claims = (
+            verifier_result.get("unsupported_claims")
+            if isinstance(verifier_result, dict)
+            else []
+        )
+        synth_runtime: dict[str, Any] = {
+            **build_runtime(mode="narrative", fallback=not bool(draft_markdown)),
+            "keys": sorted(render_vars.keys()),
+        }
+        if isinstance(verifier_result, dict):
+            synth_runtime["verifier_enabled"] = bool(verifier_result.get("enabled"))
+            synth_runtime["verifier_checked"] = bool(verifier_result.get("checked"))
+            synth_runtime["verifier_unsupported_count"] = (
+                len(verifier_claims) if isinstance(verifier_claims, list) else 0
+            )
 
-        trace.update({
-            "synthesize_runtime": {
-                **build_runtime(mode="narrative", fallback=not bool(draft_markdown)),
-                "keys": sorted(render_vars.keys()),
-            }
-        })
+        trace.update({"synthesize_runtime": synth_runtime})
         artifacts = {**(state.get("artifacts") or {}), "render_vars": render_vars}
         if draft_markdown:
             artifacts["draft_markdown"] = draft_markdown
+        if isinstance(verifier_result, dict):
+            artifacts["verifier_result"] = verifier_result
         return {"artifacts": artifacts, "trace": trace}
 
     # ── stub mode (default): deterministic render_vars ──
@@ -1911,15 +2089,67 @@ summary, highlights, analysis.
         if any("待实现" in str(v) for v in render_vars.values()):
             raise ValueError("render_vars contains placeholder tokens")
 
-        trace.update(
-            {
-                "synthesize_runtime": {
-                    **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
-                    "keys": sorted(render_vars.keys()),
-                }
-            }
+        verifier_result = await _run_deep_report_verifier(
+            state=state,
+            generated_text="\n".join(
+                [
+                    section
+                    for section in (
+                        str(render_vars.get("summary") or ""),
+                        str(render_vars.get("highlights") or ""),
+                        str(render_vars.get("analysis") or ""),
+                        str(render_vars.get("investment_summary") or ""),
+                        str(render_vars.get("investment_thesis") or ""),
+                        str(render_vars.get("valuation") or ""),
+                        str(render_vars.get("conclusion") or ""),
+                        str(render_vars.get("impact_analysis") or ""),
+                        str(render_vars.get("next_watch") or ""),
+                        str(render_vars.get("risks") or ""),
+                    )
+                    if section.strip()
+                ]
+            ),
+            grounding_text=llm_grounding_text,
         )
-        return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
+        verifier_claims = (
+            verifier_result.get("unsupported_claims")
+            if isinstance(verifier_result, dict)
+            else []
+        )
+        if isinstance(verifier_claims, list) and verifier_claims:
+            redact_keys = (
+                "summary",
+                "highlights",
+                "analysis",
+                "investment_summary",
+                "investment_thesis",
+                "valuation",
+                "conclusion",
+                "impact_analysis",
+                "next_watch",
+                "risks",
+            )
+            for key in redact_keys:
+                value = render_vars.get(key)
+                if isinstance(value, str) and value.strip():
+                    render_vars[key] = _apply_verifier_redactions(value, verifier_claims)
+
+        synth_runtime: dict[str, Any] = {
+            **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
+            "keys": sorted(render_vars.keys()),
+        }
+        if isinstance(verifier_result, dict):
+            synth_runtime["verifier_enabled"] = bool(verifier_result.get("enabled"))
+            synth_runtime["verifier_checked"] = bool(verifier_result.get("checked"))
+            synth_runtime["verifier_unsupported_count"] = (
+                len(verifier_claims) if isinstance(verifier_claims, list) else 0
+            )
+
+        trace.update({"synthesize_runtime": synth_runtime})
+        merged_artifacts = {**(state.get("artifacts") or {}), "render_vars": render_vars}
+        if isinstance(verifier_result, dict):
+            merged_artifacts["verifier_result"] = verifier_result
+        return {"artifacts": merged_artifacts, "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
         logger.warning(

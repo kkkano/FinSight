@@ -309,7 +309,10 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-fin-muted flex items-center gap-1">
           Agent 执行总览
-          <CardInfoTip content="展示各 Agent 执行状态、置信度与执行诊断信息" />
+          <CardInfoTip
+            content="展示各 Agent 执行状态、置信度与执行诊断信息"
+            testId="agent-status-overview-tip"
+          />
         </span>
         <span className="text-2xs text-fin-muted">{rows.length} agents</span>
       </div>
@@ -342,7 +345,7 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
       {diagnostics.length > 0 && (
         <div className="mt-3 pt-3 border-t border-fin-border/70 space-y-2">
           <div className="text-2xs font-medium text-fin-muted">执行诊断</div>
-          {diagnostics.map((item) => {
+          {diagnostics.map((item, index) => {
             const style = DIAGNOSTIC_STYLE[item.severity];
             return (
               <div key={item.id} className="group/diag flex items-start gap-2">
@@ -356,6 +359,7 @@ export function AgentStatusOverview({ reportData }: AgentStatusOverviewProps) {
                   size={13}
                   className="shrink-0 mt-0.5"
                   content={buildDiagnosticTipContent(item)}
+                  testId={`agent-diagnostic-tip-${index}`}
                 />
               </div>
             );

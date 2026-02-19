@@ -1,16 +1,11 @@
 /**
- * ResearchTab - TradingKey 风格结构化洞察面板
+ * ResearchTab - 深度研究面板
  *
- * 布局（从上到下）：
- *   1. ResearchMetadata    — 报告元数据（来源、时间）
- *   2. ResearchOverviewBar — 综合评估大横条
- *   3. ResearchInsightGrid — 4 张洞察卡片（财务/技术/新闻/行业）
- *   4. 可折叠完整报告（ExecutiveSummary + CoreFindings + ConflictPanel）
- *   5. ReferenceList       — 引用列表
- *
- * 数据来源二合一：
- *   - useDashboardInsights   → InsightCard 评分卡
- *   - useLatestReport        → 完整报告文本
+ * 关键增强：
+ * 1) 串票硬拦截：report.ticker 与 activeTicker 不一致时，红条告警并禁用结论区。
+ * 2) 三态占位：无数据 / 执行中 / 证据不足。
+ * 3) 新鲜度标签：价格时间戳、财报期、新闻窗口。
+ * 4) 证据不足条目支持一键展开到引用片段（非“问这条”对话链路）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -33,18 +28,227 @@ import { ScoreExplainDrawer } from './research/ScoreExplainDrawer.tsx';
 const REPORT_SYNC_MAX_RETRIES = 12;
 const REPORT_SYNC_RETRY_DELAY_MS = 1000;
 
+type FreshnessTone = 'default' | 'warning';
+
+interface FreshnessBadge {
+  key: string;
+  label: string;
+  value: string;
+  tone: FreshnessTone;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
 }
 
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => asString(item)).filter(Boolean);
+}
+
 function normalizeGroundingRate(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;
   }
-
   return Math.max(0, Math.min(1, value));
+}
+
+function parseIsoMillis(value: string): number | null {
+  if (!value) return null;
+  const millis = Date.parse(value);
+  return Number.isFinite(millis) ? millis : null;
+}
+
+function formatUtcTimestamp(value: string): string {
+  const millis = parseIsoMillis(value);
+  if (millis == null) return '--';
+  const date = new Date(millis);
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${month}-${day} ${hour}:${minute} UTC`;
+}
+
+function formatAgeLabel(hours: number): string {
+  if (!Number.isFinite(hours) || hours < 0) return '--';
+  if (hours < 1) return '<1h';
+  if (hours < 24) return `${Math.round(hours)}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+function normalizeTickerToken(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9.\-_]/g, '');
+}
+
+function isTickerEquivalent(left: string, right: string): boolean {
+  const l = normalizeTickerToken(left);
+  const r = normalizeTickerToken(right);
+  if (!l || !r) return false;
+  if (l === r) return true;
+
+  const aliasGroups = [
+    ['GOOG', 'GOOGL'],
+    ['BRK.B', 'BRK-B'],
+    ['BRKB', 'BRK-B', 'BRK.B'],
+  ];
+
+  return aliasGroups.some((group) => group.includes(l) && group.includes(r));
+}
+
+function isReportTickerAligned(activeTicker: string, reportTickerLabel: string): boolean {
+  const active = normalizeTickerToken(activeTicker);
+  if (!active) return true;
+
+  const reportLabel = normalizeTickerToken(reportTickerLabel);
+  if (!reportLabel) return true;
+  if (isTickerEquivalent(active, reportLabel)) return true;
+
+  const tokens = reportTickerLabel
+    .toUpperCase()
+    .split(/[^A-Z0-9.\-_]+/)
+    .map((token) => normalizeTickerToken(token))
+    .filter(Boolean);
+
+  return tokens.some((token) => isTickerEquivalent(active, token));
+}
+
+function resolveFocusHintFromRequirement(requirement: string): string | null {
+  const lower = requirement.toLowerCase();
+  if (lower.includes('10-k')) return '10-k annual report sec';
+  if (lower.includes('10-q')) return '10-q quarterly report sec';
+  if (lower.includes('电话会') || lower.includes('纪要') || lower.includes('transcript') || lower.includes('earnings')) {
+    return 'earnings transcript conference call';
+  }
+  if (
+    lower.includes('reuters')
+    || lower.includes('bloomberg')
+    || lower.includes('wsj')
+    || lower.includes('ft')
+    || lower.includes('cnbc')
+    || lower.includes('yahoo')
+  ) {
+    return 'reuters bloomberg wsj ft cnbc yahoo';
+  }
+  if (lower.includes('摘录') || lower.includes('snippet')) return 'snippet quote excerpt';
+  return null;
+}
+
+function extractPriceAsOf(reportMeta: Record<string, unknown> | null): string {
+  const agentSummaries = Array.isArray(reportMeta?.agent_summaries)
+    ? reportMeta?.agent_summaries
+    : [];
+
+  for (const item of agentSummaries) {
+    const summary = asRecord(item);
+    if (!summary) continue;
+    const agentName = asString(summary.agent_name);
+    if (agentName !== 'price_agent') continue;
+
+    const rawOutput = asRecord(summary.raw_output);
+    const asOf = asString(rawOutput?.as_of) || asString(rawOutput?.timestamp) || asString(summary.as_of);
+    if (asOf) return asOf;
+  }
+
+  return '';
+}
+
+function extractFilingPeriodLabel(
+  reportRecord: Record<string, unknown> | null,
+  qualityHints: Record<string, unknown> | null,
+): string {
+  const synthesisReport = asString(reportRecord?.synthesis_report);
+  const quarterMatch = synthesisReport.match(/\b(20\d{2}\s*Q[1-4])\b/i);
+  if (quarterMatch?.[1]) return quarterMatch[1].replace(/\s+/g, '').toUpperCase();
+
+  const qualityStats = asRecord(qualityHints?.stats);
+  const has10k = qualityStats?.has_10k === true;
+  const has10q = qualityStats?.has_10q === true;
+  if (has10k && has10q) return '10-K + 10-Q';
+  if (has10k) return '10-K';
+  if (has10q) return '10-Q';
+
+  const secCountRaw = Number(qualityStats?.sec_filing_count);
+  if (Number.isFinite(secCountRaw) && secCountRaw > 0) {
+    return `SEC ${Math.round(secCountRaw)}条`;
+  }
+  return '--';
+}
+
+function buildFreshnessBadges(
+  reportRecord: Record<string, unknown> | null,
+  reportMeta: Record<string, unknown> | null,
+  qualityHints: Record<string, unknown> | null,
+  citations: Record<string, unknown>[],
+): FreshnessBadge[] {
+  const now = Date.now();
+
+  const priceAsOf = extractPriceAsOf(reportMeta) || asString(reportRecord?.generated_at);
+  const priceMillis = parseIsoMillis(priceAsOf);
+  const priceAgeHours = priceMillis != null ? (now - priceMillis) / 3600000 : Number.NaN;
+  const priceBadge: FreshnessBadge = {
+    key: 'price_as_of',
+    label: '价格时间戳',
+    value: priceAsOf ? `${formatUtcTimestamp(priceAsOf)} (${formatAgeLabel(priceAgeHours)}前)` : '--',
+    tone: Number.isFinite(priceAgeHours) && priceAgeHours > 24 ? 'warning' : 'default',
+  };
+
+  const filingLabel = extractFilingPeriodLabel(reportRecord, qualityHints);
+  const filingBadge: FreshnessBadge = {
+    key: 'filing_period',
+    label: '财报期',
+    value: filingLabel,
+    tone: filingLabel === '--' ? 'warning' : 'default',
+  };
+
+  const publishedMillis = citations
+    .map((citation) => parseIsoMillis(asString(asRecord(citation)?.published_date)))
+    .filter((value): value is number => value != null)
+    .sort((a, b) => a - b);
+
+  let newsValue = '--';
+  let newsTone: FreshnessTone = 'warning';
+  if (publishedMillis.length > 0) {
+    const oldest = publishedMillis[0];
+    const newest = publishedMillis[publishedMillis.length - 1];
+    const newestAgeHours = (now - newest) / 3600000;
+    const spanHours = Math.max(0, (newest - oldest) / 3600000);
+    const spanLabel = spanHours < 24 ? `${Math.max(1, Math.round(spanHours))}h` : `${Math.round(spanHours / 24)}d`;
+    newsValue = `最新 ${formatAgeLabel(newestAgeHours)} · 窗口 ${spanLabel}`;
+    newsTone = newestAgeHours > 72 ? 'warning' : 'default';
+  }
+
+  const newsBadge: FreshnessBadge = {
+    key: 'news_window',
+    label: '新闻窗口',
+    value: newsValue,
+    tone: newsTone,
+  };
+
+  return [priceBadge, filingBadge, newsBadge];
+}
+
+function renderFreshnessBadge(badge: FreshnessBadge) {
+  const className = badge.tone === 'warning'
+    ? 'border-yellow-400/40 bg-yellow-500/10 text-yellow-100'
+    : 'border-fin-border/80 bg-fin-card text-fin-text';
+
+  return (
+    <div
+      key={badge.key}
+      className={`rounded-lg border px-3 py-2 text-xs ${className}`}
+      data-testid={`research-freshness-${badge.key}`}
+    >
+      <div className="text-2xs opacity-80">{badge.label}</div>
+      <div className="mt-0.5 font-medium">{badge.value}</div>
+    </div>
+  );
 }
 
 export function ResearchTab() {
@@ -58,14 +262,12 @@ export function ResearchTab() {
     preferredSourceTrigger: 'dashboard_deep_search',
   });
 
-  // ==================== AI Insights 数据 ====================
   const insightsData = useDashboardStore((s) => s.insightsData);
   const insightsLoading = useDashboardStore((s) => s.insightsLoading);
   const insightsError = useDashboardStore((s) => s.insightsError);
   const insightsStale = useDashboardStore((s) => s.insightsStale);
   useDashboardInsights(ticker);
 
-  // ==================== 完整报告折叠状态 ====================
   const [reportExpanded, setReportExpanded] = useState(true);
   const [scoreDrawerState, setScoreDrawerState] = useState<{
     open: boolean;
@@ -76,24 +278,27 @@ export function ResearchTab() {
     title: '',
     insight: null,
   });
-
   const [syncingReport, setSyncingReport] = useState(false);
   const [syncHint, setSyncHint] = useState<string | null>(null);
+  const [referenceFocusHint, setReferenceFocusHint] = useState<string | null>(null);
+  const [referenceFocusToken, setReferenceFocusToken] = useState(0);
 
-  // ==================== 跨实例执行完成感知 ====================
-  // 检测 executionStore 中任何 dashboard 来源、匹配当前 ticker 的已完成执行
-  // 解决: StockHeader 触发执行 → ResearchTab 无法感知完成的问题
+  useEffect(() => {
+    setReferenceFocusHint(null);
+    setReferenceFocusToken(0);
+  }, [ticker]);
+
   const latestDashboardCompletion = useExecutionStore((s) => {
     const upperTicker = ticker?.toUpperCase();
     if (!upperTicker) return null;
-    for (const r of s.recentRuns) {
+    for (const run of s.recentRuns) {
       if (
-        r.status === 'done' &&
-        r.source?.startsWith('dashboard') &&
-        r.outputMode === 'investment_report' &&
-        r.tickers?.some((t) => t.toUpperCase() === upperTicker)
+        run.status === 'done'
+        && run.source?.startsWith('dashboard')
+        && run.outputMode === 'investment_report'
+        && run.tickers?.some((item) => item.toUpperCase() === upperTicker)
       ) {
-        return r.completedAt;
+        return run.completedAt;
       }
     }
     return null;
@@ -102,7 +307,7 @@ export function ResearchTab() {
 
   const pollReportAfterComplete = useCallback(async () => {
     setSyncingReport(true);
-    setSyncHint('报告已生成，正在同步到索引...');
+    setSyncHint('报告已生成，正在同步索引…');
 
     for (let i = 0; i < REPORT_SYNC_MAX_RETRIES; i += 1) {
       const latest = await refetch();
@@ -111,9 +316,8 @@ export function ResearchTab() {
         setSyncHint(null);
         return;
       }
-
       if (i < REPORT_SYNC_MAX_RETRIES - 1) {
-        setSyncHint(`报告已生成，等待索引同步（${i + 1}/${REPORT_SYNC_MAX_RETRIES}）...`);
+        setSyncHint(`报告已生成，等待索引同步（${i + 1}/${REPORT_SYNC_MAX_RETRIES}）…`);
         await sleep(REPORT_SYNC_RETRY_DELAY_MS);
       }
     }
@@ -132,15 +336,13 @@ export function ResearchTab() {
     },
   });
 
-  // ==================== 外部执行完成 → 自动拉取报告 ====================
-  // 当 StockHeader 或其他来源触发的 dashboard 执行完成时，自动 poll 报告索引
   useEffect(() => {
     if (
-      latestDashboardCompletion &&
-      latestDashboardCompletion !== lastSyncedCompletionRef.current &&
-      ticker &&
-      !syncingReport &&
-      !isRunning
+      latestDashboardCompletion
+      && latestDashboardCompletion !== lastSyncedCompletionRef.current
+      && ticker
+      && !syncingReport
+      && !isRunning
     ) {
       lastSyncedCompletionRef.current = latestDashboardCompletion;
       void pollReportAfterComplete();
@@ -150,15 +352,12 @@ export function ResearchTab() {
   const handleDeepAnalysis = () => {
     if (!ticker || isRunning || syncingReport) return;
 
-    // 当通过 ResearchTab 自身按钮发起时，重置外部完成追踪标记
-    // 防止 pollReportAfterComplete 被触发两次（自身 onComplete + 外部感知）
     lastSyncedCompletionRef.current = null;
-
     const includeDeepSearch = deepAnalysisIncludeDeepSearch;
     setSyncHint(
       includeDeepSearch
-        ? '已提交任务，正在执行深度搜索并回填研究卡片...'
-        : '已提交任务，正在生成深度报告并回填研究卡片...',
+        ? '已提交任务，正在执行 deep_search 并回填研究卡片…'
+        : '已提交任务，正在生成深度报告并回填研究卡片…',
     );
     execute({
       query: includeDeepSearch
@@ -183,11 +382,21 @@ export function ResearchTab() {
     setScoreDrawerState((prev) => ({ ...prev, open: false }));
   };
 
+  const handleFocusRequirement = useCallback((requirement: string) => {
+    const focusHint = resolveFocusHintFromRequirement(requirement);
+    setReferenceFocusHint(focusHint);
+    setReferenceFocusToken((prev) => prev + 1);
+
+    const anchor = document.getElementById('research-reference-list');
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="space-y-4">
         <ResearchMetadata reportData={null} loading />
-        {/* 加载时也展示 insights 数据（可能已有缓存） */}
         <ResearchOverviewBar
           overview={insightsData?.overview}
           loading={insightsLoading}
@@ -211,11 +420,12 @@ export function ResearchTab() {
   }
 
   if (!reportData) {
+    const runningState = isRunning || syncingReport;
+
     return (
       <div className="space-y-4">
         <ResearchMetadata reportData={null} />
 
-        {/* 即使没有报告，也展示 AI 洞察卡片 */}
         <ResearchOverviewBar
           overview={insightsData?.overview}
           loading={insightsLoading}
@@ -229,48 +439,47 @@ export function ResearchTab() {
           onOpenScoreExplain={handleOpenScoreExplain}
         />
 
-        {/* 深度分析触发区 */}
-        <div className="flex flex-col items-center justify-center py-8 text-fin-muted text-sm gap-3">
-          <div>尚未生成完整研究报告</div>
-          <button
-            type="button"
-            onClick={handleDeepAnalysis}
-            disabled={!ticker || isRunning || syncingReport}
-            className="px-3 py-1.5 rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isRunning || syncingReport ? '执行中...' : '生成深度报告'}
-          </button>
-          <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
-            <input
-              type="checkbox"
-              className="accent-fin-primary"
-              checked={deepAnalysisIncludeDeepSearch}
-              onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
-            />
-            含 deepsearch
-          </label>
-          <div className="text-2xs text-fin-muted text-center max-w-[32rem]">
-            深度分析统一走 report 模式；勾选“含 deepsearch”会强制加入 deep_search_agent。
+        <div
+          className="rounded-xl border border-fin-border bg-fin-card px-4 py-4"
+          data-testid="research-empty-state"
+          data-state={runningState ? 'running' : 'empty'}
+        >
+          <div className="text-sm font-medium text-fin-text">
+            {runningState ? '深度分析执行中' : '暂无深度分析数据'}
+          </div>
+          <div className="mt-1 text-xs text-fin-muted">
+            {runningState
+              ? (currentStep || syncHint || '任务执行中，结果会自动回填。')
+              : '尚未生成完整研究报告，请先执行一次深度分析。'}
           </div>
 
-          {(isRunning || syncingReport) && (
-            <div className="text-xs text-fin-muted">
-              {currentStep || syncHint || '任务执行中...'}
-            </div>
-          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDeepAnalysis}
+              disabled={!ticker || runningState}
+              className="px-3 py-1.5 rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {runningState ? '执行中…' : '生成深度报告'}
+            </button>
+            <label className="flex items-center gap-1.5 px-2 py-1 text-2xs text-fin-muted border border-fin-border rounded-lg">
+              <input
+                type="checkbox"
+                className="accent-fin-primary"
+                checked={deepAnalysisIncludeDeepSearch}
+                onChange={(event) => setDeepAnalysisIncludeDeepSearch(event.target.checked)}
+              />
+              含 deepsearch
+            </label>
+          </div>
 
           {error && (
-            <div className="text-xs text-red-400 max-w-[28rem] text-center">
+            <div className="mt-2 text-xs text-fin-danger">
               生成失败：{error}
             </div>
           )}
-
-          {!error && syncHint && !isRunning && (
-            <div className="text-xs text-fin-muted max-w-[28rem] text-center">
-              {syncHint}
-            </div>
-          )}
         </div>
+
         <ScoreExplainDrawer
           open={scoreDrawerState.open}
           title={scoreDrawerState.title}
@@ -286,6 +495,13 @@ export function ResearchTab() {
   const reportMeta = asRecord(reportRecord?.meta);
   const reportHints = asRecord(reportRecord?.report_hints);
   const qualityHints = asRecord(reportHints?.quality);
+  const qualityMissing = asStringList(qualityHints?.missing_requirements);
+  const freshnessBadges = buildFreshnessBadges(
+    reportRecord,
+    reportMeta,
+    qualityHints,
+    reportData.citations || [],
+  );
 
   const groundingRate =
     normalizeGroundingRate(reportRecord?.grounding_rate) ??
@@ -296,13 +512,75 @@ export function ResearchTab() {
   const showLowGroundingBanner = groundingRate !== null && groundingRate < 0.6;
   const groundingRateText = groundingRate !== null ? `${Math.round(groundingRate * 100)}%` : '--';
 
+  const activeTicker = asString(ticker).toUpperCase();
+  const reportTicker = asString(reportRecord?.ticker).toUpperCase();
+  const hasTickerMismatch = Boolean(
+    activeTicker
+    && reportTicker
+    && !isReportTickerAligned(activeTicker, reportTicker),
+  );
+
+  if (hasTickerMismatch) {
+    return (
+      <div className="space-y-4">
+        <ResearchMetadata reportData={reportData} />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2" data-testid="research-freshness-badges">
+          {freshnessBadges.map(renderFreshnessBadge)}
+        </div>
+
+        <div
+          className="rounded-xl border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
+          data-testid="research-ticker-mismatch"
+        >
+          <div className="text-sm font-semibold text-fin-danger">
+            ⚠ 报告标的不匹配，结论区已禁用
+          </div>
+          <div className="mt-1 text-xs text-fin-text/90">
+            当前标的：{activeTicker || '--'}；报告标的：{reportTicker || '--'}。为避免串票误导，已阻断结论展示。
+          </div>
+          <button
+            type="button"
+            onClick={handleDeepAnalysis}
+            disabled={!ticker || isRunning || syncingReport}
+            className="mt-3 px-3 py-1.5 rounded-lg border border-fin-danger/40 bg-fin-danger/15 text-fin-danger hover:bg-fin-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            重新生成当前标的报告
+          </button>
+        </div>
+
+        <div
+          className="rounded-xl border border-fin-border bg-fin-card/60 px-4 py-6 text-sm text-fin-muted"
+          data-testid="research-conclusion-disabled"
+        >
+          结论区已禁用：请先修复串票后再查看“综合评估 / 完整研究报告”。
+        </div>
+
+        <ReferenceList citations={reportData.citations} />
+
+        <ScoreExplainDrawer
+          open={scoreDrawerState.open}
+          title={scoreDrawerState.title}
+          insight={scoreDrawerState.insight}
+          onClose={handleCloseScoreExplain}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {/* 元数据 */}
       <ResearchMetadata reportData={reportData} />
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2" data-testid="research-freshness-badges">
+        {freshnessBadges.map(renderFreshnessBadge)}
+      </div>
+
       {showLowGroundingBanner && (
-        <div className="rounded-xl border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
+        <div
+          className="rounded-xl border border-yellow-400/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100"
+          data-testid="research-grounding-warning"
+        >
           <div className="font-medium">⚠ 证据溯源率偏低（{groundingRateText}）</div>
           <div className="mt-1 text-xs text-yellow-100/85">
             当前结论中存在较多缺少直接证据锚点的断言，建议优先核对引用列表与原文摘要后再决策。
@@ -310,14 +588,40 @@ export function ResearchTab() {
         </div>
       )}
 
-      {/* AI 综合评估横条 */}
+      {qualityMissing.length > 0 && (
+        <div
+          className="rounded-xl border border-fin-warning/40 bg-fin-warning/10 px-4 py-3"
+          data-testid="research-empty-state"
+          data-state="quality-gap"
+        >
+          <div className="text-sm font-semibold text-fin-warning">证据不足（质量门槛未满足）</div>
+          <div className="mt-1 text-xs text-fin-text/80">
+            已检测到关键证据缺口。你可以直接展开对应引用片段核对，不需要走“问这条”对话链路。
+          </div>
+          <div className="mt-2 space-y-2">
+            {qualityMissing.slice(0, 6).map((item, idx) => (
+              <div key={`${idx}-${item}`} className="flex items-start gap-2 text-xs">
+                <span className="text-fin-warning mt-0.5">•</span>
+                <span className="flex-1 text-fin-text/85">{item}</span>
+                <button
+                  type="button"
+                  className="shrink-0 px-2 py-0.5 rounded border border-fin-border text-fin-primary hover:bg-fin-primary/10 transition-colors"
+                  onClick={() => handleFocusRequirement(item)}
+                >
+                  查看引用片段
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <ResearchOverviewBar
         overview={insightsData?.overview}
         loading={insightsLoading}
         onOpenScoreExplain={handleOpenScoreExplain}
       />
 
-      {/* AI 洞察卡片网格：财务 / 技术 / 新闻 / 行业 */}
       <ResearchInsightGrid
         insights={insightsData}
         loading={insightsLoading}
@@ -326,7 +630,6 @@ export function ResearchTab() {
         onOpenScoreExplain={handleOpenScoreExplain}
       />
 
-      {/* 可折叠完整报告 */}
       <div className="bg-fin-card rounded-xl border border-fin-border overflow-hidden">
         <button
           type="button"
@@ -334,7 +637,7 @@ export function ResearchTab() {
           className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-fin-text hover:bg-fin-border/10 transition-colors"
         >
           <span className="flex items-center gap-2">
-            <span>📄</span>
+            <span>📚</span>
             完整研究报告
           </span>
           <span
@@ -355,8 +658,11 @@ export function ResearchTab() {
         )}
       </div>
 
-      {/* 引用列表 */}
-      <ReferenceList citations={reportData.citations} />
+      <ReferenceList
+        citations={reportData.citations}
+        focusHint={referenceFocusHint}
+        focusToken={referenceFocusToken}
+      />
 
       <ScoreExplainDrawer
         open={scoreDrawerState.open}

@@ -205,3 +205,59 @@ def test_build_report_payload_adds_grounding_gap_when_rate_low():
 
     risks = report.get("risks") or []
     assert any("证据溯源率偏低" in str(item) for item in risks)
+def test_build_report_payload_marks_verifier_gap_when_unsupported_claims_exist():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["GOOG"]},
+        "policy": {"allowed_agents": []},
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：GOOG\n\n",
+            "evidence_pool": [
+                {
+                    "title": "GOOG fundamentals",
+                    "url": "https://example.com/goog-fundamentals",
+                    "snippet": "Revenue growth 11%, PE 28x, cloud margin improving.",
+                    "source": "example",
+                    "published_date": "2026-02-18T00:00:00Z",
+                    "confidence": 0.8,
+                }
+            ],
+            "step_results": {},
+            "errors": [],
+            "render_vars": {
+                "investment_summary": "基于当前估值与增长，维持中性偏多。",
+                "conclusion": "结论偏中性，等待更多证据。",
+            },
+            "verifier_result": {
+                "enabled": True,
+                "checked": True,
+                "unsupported_claims": [
+                    {"claim": "Gemini 2.0 will launch in 2026Q2", "reason": "missing in evidence"}
+                ],
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(
+        state=state,
+        query="请做 GOOG 深度投资报告",
+        thread_id="t-verifier-gap",
+    )
+    assert isinstance(report, dict)
+
+    tags = report.get("tags") or []
+    assert "verifier_gap" in tags
+
+    risks = report.get("risks") or []
+    assert any("二次事实核查发现" in str(item) for item in risks)
+
+    hints = report.get("report_hints") or {}
+    verifier_hint = hints.get("verifier") or {}
+    assert verifier_hint.get("checked") is True
+    assert verifier_hint.get("unsupported_count") == 1
+
+    meta = report.get("meta") or {}
+    verifier_meta = meta.get("verifier") or {}
+    assert verifier_meta.get("checked") is True

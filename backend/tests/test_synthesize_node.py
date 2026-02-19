@@ -351,3 +351,99 @@ def test_scrub_unverified_future_claims_keeps_claim_when_grounded():
     out = _scrub_unverified_future_claims(draft, evidence)
 
     assert out == draft
+
+
+def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    class _FakeResp:
+        def __init__(self, content: str):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _FakeResp(
+                '{"summary":"Gemini 2.0 will launch in 2026Q2.","conclusion":"Gemini 2.0 will launch in 2026Q2 and accelerate ad growth.","risks":"- risk"}'
+            )
+
+    import importlib
+    import backend.llm_config as llm_config_mod
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda temperature=0.2, **_kwargs: _FakeLLM())
+
+    async def _fake_verifier(*, state, generated_text, grounding_text):
+        assert "Gemini 2.0 will launch in 2026Q2" in generated_text
+        assert isinstance(grounding_text, str)
+        return {
+            "enabled": True,
+            "checked": True,
+            "unsupported_claims": [
+                {"claim": "Gemini 2.0 will launch in 2026Q2", "reason": "missing evidence"}
+            ],
+        }
+
+    monkeypatch.setattr(synth_mod, "_run_deep_report_verifier", _fake_verifier)
+
+    state = {
+        "query": "deep report on GOOG",
+        "output_mode": "investment_report",
+        "ui_context": {"analysis_depth": "deep_research"},
+        "operation": {"name": "investment_report", "confidence": 0.8, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["GOOG"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    artifacts = out.get("artifacts") or {}
+    render_vars = artifacts.get("render_vars") or {}
+    conclusion = str(render_vars.get("conclusion") or "")
+
+    assert "Gemini 2.0 will launch in 2026Q2" not in conclusion
+    assert synth_mod._HALLUCINATION_SAFE_PLACEHOLDER in conclusion
+    verifier = artifacts.get("verifier_result") or {}
+    assert verifier.get("checked") is True
+    assert len(verifier.get("unsupported_claims") or []) == 1
+
+
+def test_synthesize_narrative_persists_verifier_result(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+
+    import importlib
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    async def _fake_generate(_state, _render_vars, _trace):
+        return (
+            "## report\n\ncontent",
+            {
+                "enabled": True,
+                "checked": True,
+                "unsupported_claims": [{"claim": "c1", "reason": "r1"}],
+            },
+        )
+
+    monkeypatch.setattr(synth_mod, "_generate_narrative_draft", _fake_generate)
+
+    state = {
+        "query": "investment report",
+        "output_mode": "investment_report",
+        "ui_context": {"analysis_depth": "deep_research"},
+        "operation": {"name": "investment_report", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    artifacts = out.get("artifacts") or {}
+    assert artifacts.get("draft_markdown")
+    verifier = artifacts.get("verifier_result") or {}
+    assert verifier.get("checked") is True
+    assert len(verifier.get("unsupported_claims") or []) == 1
