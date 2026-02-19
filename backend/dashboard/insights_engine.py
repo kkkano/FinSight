@@ -1,69 +1,59 @@
+# -*- coding: utf-8 -*-
 """
-Dashboard Insights Engine - Lightweight Dashboard Scorers.
+Dashboard Insights Engine - Orchestration layer for dashboard scorers.
 
-Provides AI-powered analysis cards for each Dashboard tab.
-Each scorer takes pre-fetched API data and produces a structured
-InsightCard via a single LLM call (target latency: 1-3s per scorer).
-
-Architecture:
-    - DigestAgent (ABC): scorer base class (historical name kept for compatibility)
-    - 5 concrete scorers: Technical / Financial / News / Peers / Overview
-    - InsightsOrchestrator: parallel execution + caching + fallback
+Responsibilities:
+- Orchestrate parallel scorer execution with cache strategy.
+- Keep external import compatibility (`insights_engine` as stable entrypoint).
+- Re-export scorer symbols (new and legacy names) during migration window.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import time
-from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
 
-from backend.dashboard.cache import dashboard_cache, DashboardCache
-from backend.dashboard.insights_prompts import (
-    build_financial_prompt,
-    build_news_prompt,
-    build_overview_prompt,
-    build_peers_prompt,
-    build_technical_prompt,
-)
-from backend.dashboard.insights_scorer import (
-    clamp_score,
-    score_financial,
-    score_financial_details,
-    score_news,
-    score_news_details,
-    score_overview,
-    score_overview_details,
-    score_peers,
-    score_peers_details,
-    score_technical,
-    score_technical_details,
-    metrics_financial,
-    metrics_news,
-    metrics_overview,
-    metrics_peers,
-    metrics_technical,
+from backend.dashboard import scorers as scorer_runtime
+from backend.dashboard.cache import DashboardCache, dashboard_cache
+from backend.dashboard.scorers import (
+    DashboardScorer,
+    DigestAgent,
+    FinancialDigest,
+    FinancialScorer,
+    NewsDigest,
+    NewsScorer,
+    OverviewDigest,
+    OverviewScorer,
+    PeersDigest,
+    PeersScorer,
+    TechnicalDigest,
+    TechnicalScorer,
 )
 from backend.dashboard.schemas import DashboardInsightsResponse, InsightCard
 
 logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 _INSIGHTS_ENABLED = os.getenv("INSIGHTS_ENABLED", "true").lower() in ("true", "1", "yes")
-_DIGEST_TIMEOUT_SECONDS = float(os.getenv("INSIGHTS_DIGEST_TIMEOUT", "5"))
 _OVERALL_TIMEOUT_SECONDS = float(os.getenv("INSIGHTS_OVERALL_TIMEOUT", "8"))
 _MAX_CONCURRENT_SYMBOLS = int(os.getenv("INSIGHTS_MAX_CONCURRENT_SYMBOLS", "3"))
 
-# Semaphore to limit concurrent symbol insight generation
+# Backward-compatible aliases for tests/utilities that import from this module.
+_DIGEST_TIMEOUT_SECONDS = scorer_runtime._DIGEST_TIMEOUT_SECONDS
+_get_llm = scorer_runtime._get_llm
+_label_from_score = scorer_runtime._label_from_score
+_ensure_str_list = scorer_runtime._ensure_str_list
+
+# Semaphore to limit concurrent symbol insight generation.
 _generation_semaphore: asyncio.Semaphore | None = None
-# Background refresh tasks by symbol (dedupe stale-triggered refreshes)
+# Background refresh tasks by symbol (dedupe stale-triggered refreshes).
 _refresh_tasks: dict[str, asyncio.Task[None]] = {}
 
 
@@ -75,308 +65,9 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 
 # ---------------------------------------------------------------------------
-# LLM singleton (lazy init)
-# ---------------------------------------------------------------------------
-
-_llm_instance = None
-_llm_init_attempted = False
-
-
-def _get_llm():
-    """Lazy-init LLM instance for dashboard scorers."""
-    global _llm_instance, _llm_init_attempted
-    if _llm_instance is not None:
-        return _llm_instance
-    if _llm_init_attempted:
-        return None
-    _llm_init_attempted = True
-    try:
-        from backend.llm_config import create_llm
-
-        _llm_instance = create_llm(
-            temperature=0.2,
-            max_tokens=1024,
-            request_timeout=8,
-        )
-        logger.info("[Insights] LLM initialized for dashboard scorers")
-        return _llm_instance
-    except Exception as exc:
-        logger.warning("[Insights] LLM init failed, dashboard scorers will use fallback: %s", exc)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# DigestAgent base class
-# ---------------------------------------------------------------------------
-
-class DigestAgent(ABC):
-    """
-    Lightweight dashboard scorer (historical class name: DigestAgent).
-
-    This component does NOT inherit BaseFinancialAgent and does not perform
-    autonomous planning, tool orchestration, or reflection loops.
-    The class name is intentionally retained for backward compatibility with
-    InsightCard.agent_name / AGENT_NAME identifiers and related cache mappings.
-
-    Each subclass implements:
-      - _build_prompt(): construct LLM prompt from pre-fetched data
-      - _deterministic_fallback(): rule-based scoring when LLM unavailable
-    """
-
-    AGENT_NAME: str = "base_digest"
-    TAB: str = "overview"
-
-    @abstractmethod
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        """Build LLM prompt from dashboard data."""
-
-    @abstractmethod
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        """
-        Deterministic fallback: (score, label, key_points).
-
-        Called when LLM is unavailable or times out.
-        """
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        score, label, points = self._deterministic_fallback(data)
-        return score, label, points, []
-
-    async def digest(self, ticker: str, data: dict[str, Any]) -> InsightCard:
-        """
-        Run a single LLM analysis call, falling back to deterministic scoring.
-
-        Returns an InsightCard regardless of LLM availability.
-        """
-        now_iso = datetime.now(timezone.utc).isoformat()
-
-        llm = _get_llm()
-        if llm is None:
-            return self._make_fallback_card(data, now_iso)
-
-        try:
-            prompt = self._build_prompt(ticker, data)
-            response = await asyncio.wait_for(
-                self._call_llm(llm, prompt),
-                timeout=_DIGEST_TIMEOUT_SECONDS,
-            )
-            return self._parse_response(response, data, now_iso)
-        except asyncio.TimeoutError:
-            logger.warning("[Insights] %s timed out for %s", self.AGENT_NAME, ticker)
-            return self._make_fallback_card(data, now_iso)
-        except Exception as exc:
-            logger.warning("[Insights] %s failed for %s: %s", self.AGENT_NAME, ticker, exc)
-            return self._make_fallback_card(data, now_iso)
-
-    async def _call_llm(self, llm: Any, prompt: str) -> str:
-        """Invoke LLM and return raw text response."""
-        result = await llm.ainvoke(prompt)
-        # LangChain ChatOpenAI returns AIMessage
-        if hasattr(result, "content"):
-            return str(result.content)
-        return str(result)
-
-    def _parse_response(
-        self, raw: str, data: dict[str, Any], now_iso: str
-    ) -> InsightCard:
-        """Parse LLM JSON response into InsightCard, with fallback."""
-        # Strip markdown fences if present
-        text = raw.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            text = "\n".join(lines).strip()
-
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            logger.warning("[Insights] %s JSON parse failed, using fallback", self.AGENT_NAME)
-            return self._make_fallback_card(data, now_iso)
-
-        # Validate and clamp
-        score = clamp_score(float(parsed.get("score", 5.0)))
-        fallback_score, fallback_label, fallback_points, fallback_breakdown = self._deterministic_fallback_details(data)
-
-        # If LLM score diverges too much from deterministic, average them
-        if abs(score - fallback_score) > 3.0:
-            score = clamp_score((score + fallback_score) / 2)
-
-        # 提取 key_metrics（LLM 生成的结构化指标）
-        raw_metrics = parsed.get("key_metrics")
-        key_metrics: list[dict[str, str]] | None = None
-        if isinstance(raw_metrics, list):
-            key_metrics = [
-                {"label": str(m.get("label", "")), "value": str(m.get("value", ""))}
-                for m in raw_metrics
-                if isinstance(m, dict) and m.get("label") and m.get("value")
-            ][:4]
-
-        return InsightCard(
-            agent_name=self.AGENT_NAME,
-            tab=self.TAB,
-            score=score,
-            score_label=str(parsed.get("score_label", fallback_label or _label_from_score(score))),
-            summary=str(parsed.get("summary", ""))[:800],
-            key_points=(_ensure_str_list(parsed.get("key_points", []))[:5] or fallback_points[:5]),
-            risks=_ensure_str_list(parsed.get("risks", []))[:3],
-            key_metrics=key_metrics if key_metrics else None,
-            score_breakdown=fallback_breakdown,
-            confidence=0.8,
-            as_of=now_iso,
-            model_generated=True,
-        )
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        """Override in subclass to provide deterministic key_metrics."""
-        return None
-
-    def _make_fallback_card(self, data: dict[str, Any], now_iso: str) -> InsightCard:
-        """Generate card from deterministic scoring."""
-        score, label, points, breakdown = self._deterministic_fallback_details(data)
-        return InsightCard(
-            agent_name=self.AGENT_NAME,
-            tab=self.TAB,
-            score=score,
-            score_label=label,
-            summary="",
-            key_points=points,
-            risks=[],
-            key_metrics=self._extract_fallback_metrics(data),
-            score_breakdown=breakdown,
-            confidence=0.4,
-            as_of=now_iso,
-            model_generated=False,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Concrete Digest Agents
-# ---------------------------------------------------------------------------
-
-class TechnicalDigest(DigestAgent):
-    AGENT_NAME = "technical_digest"
-    TAB = "technical"
-
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        return build_technical_prompt(ticker, data)
-
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        return score_technical(data)
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        return score_technical_details(data)
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        return metrics_technical(data) or None
-
-
-class FinancialDigest(DigestAgent):
-    AGENT_NAME = "financial_digest"
-    TAB = "financial"
-
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        return build_financial_prompt(ticker, data)
-
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        return score_financial(data)
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        return score_financial_details(data)
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        return metrics_financial(data) or None
-
-
-class NewsDigest(DigestAgent):
-    AGENT_NAME = "news_digest"
-    TAB = "news"
-
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        return build_news_prompt(ticker, data)
-
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        return score_news(data)
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        return score_news_details(data)
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        return metrics_news(data) or None
-
-
-class PeersDigest(DigestAgent):
-    AGENT_NAME = "peers_digest"
-    TAB = "peers"
-
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        return build_peers_prompt(ticker, data)
-
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        return score_peers(data)
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        return score_peers_details(data)
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        return metrics_peers(data) or None
-
-
-class OverviewDigest(DigestAgent):
-    AGENT_NAME = "overview_digest"
-    TAB = "overview"
-
-    def __init__(self) -> None:
-        self._sub_scores: dict[str, float] = {}
-
-    def set_sub_scores(self, sub_scores: dict[str, float]) -> None:
-        """Set dimension sub-scores before calling digest()."""
-        self._sub_scores = sub_scores
-
-    def _build_prompt(self, ticker: str, data: dict[str, Any]) -> str:
-        return build_overview_prompt(ticker, data, sub_scores=self._sub_scores)
-
-    def _deterministic_fallback(self, data: dict[str, Any]) -> tuple[float, str, list[str]]:
-        return score_overview(
-            tech_score=self._sub_scores.get("technical", 5.0),
-            fin_score=self._sub_scores.get("financial", 5.0),
-            news_score=self._sub_scores.get("news", 5.0),
-            peers_score=self._sub_scores.get("peers", 5.0),
-        )
-
-    def _deterministic_fallback_details(
-        self, data: dict[str, Any],
-    ) -> tuple[float, str, list[str], list[dict[str, Any]]]:
-        return score_overview_details(
-            tech_score=self._sub_scores.get("technical", 5.0),
-            fin_score=self._sub_scores.get("financial", 5.0),
-            news_score=self._sub_scores.get("news", 5.0),
-            peers_score=self._sub_scores.get("peers", 5.0),
-        )
-
-    def _extract_fallback_metrics(self, data: dict[str, Any]) -> list[dict[str, str]] | None:
-        return metrics_overview(self._sub_scores) or None
-
-    def _make_fallback_card(self, data: dict[str, Any], now_iso: str) -> InsightCard:
-        card = super()._make_fallback_card(data, now_iso)
-        # Attach sub_scores to overview card
-        return InsightCard(
-            **{**card.model_dump(), "sub_scores": dict(self._sub_scores)}
-        )
-
-
-# ---------------------------------------------------------------------------
 # InsightsOrchestrator
 # ---------------------------------------------------------------------------
+
 
 class InsightsOrchestrator:
     """
@@ -390,11 +81,11 @@ class InsightsOrchestrator:
 
     def __init__(self, cache: DashboardCache | None = None) -> None:
         self._cache = cache or dashboard_cache
-        self._technical = TechnicalDigest()
-        self._financial = FinancialDigest()
-        self._news = NewsDigest()
-        self._peers = PeersDigest()
-        self._overview = OverviewDigest()
+        self._technical = TechnicalScorer()
+        self._financial = FinancialScorer()
+        self._news = NewsScorer()
+        self._peers = PeersScorer()
+        self._overview = OverviewScorer()
 
     async def generate(
         self,
@@ -406,9 +97,9 @@ class InsightsOrchestrator:
         Generate insights for a symbol.
 
         1. Check cache (stale-while-revalidate)
-        2. If fresh → return immediately
-        3. If stale → return stale, schedule background refresh
-        4. If miss → generate and return
+        2. If fresh -> return immediately
+        3. If stale -> return stale, schedule background refresh
+        4. If miss -> generate and return
         """
         now_iso = datetime.now(timezone.utc).isoformat()
         sym_upper = symbol.upper()
@@ -442,30 +133,33 @@ class InsightsOrchestrator:
                 )
 
                 if is_stale:
-                    # Schedule deduplicated background refresh
+                    # Schedule deduplicated background refresh.
                     self._schedule_background_refresh(sym_upper)
 
                 return response
 
-        # Generate fresh insights
+        # Generate fresh insights.
         return await self._generate_fresh(sym_upper)
 
     async def _generate_fresh(self, symbol: str) -> DashboardInsightsResponse:
         """Run all dashboard scorers in parallel."""
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        # Acquire semaphore to limit concurrent generations
+        # Acquire semaphore to limit concurrent generations.
         semaphore = _get_semaphore()
         async with semaphore:
-            # Gather pre-fetched dashboard data from cache
+            # Gather pre-fetched dashboard data from cache.
             data = self._collect_dashboard_data(symbol)
 
-            # Phase 1: Run the 4 dimension agents in parallel
+            # Phase 1: run the 4 dimension scorers in parallel.
             tech_task = self._technical.digest(symbol, data.get("technicals", {}))
-            fin_task = self._financial.digest(symbol, {
-                **(data.get("financials", {}) or {}),
-                "valuation": data.get("valuation", {}),
-            })
+            fin_task = self._financial.digest(
+                symbol,
+                {
+                    **(data.get("financials", {}) or {}),
+                    "valuation": data.get("valuation", {}),
+                },
+            )
             news_task = self._news.digest(symbol, data.get("news", {}))
             peers_task = self._peers.digest(symbol, data.get("peers", {}))
 
@@ -477,22 +171,28 @@ class InsightsOrchestrator:
             except asyncio.TimeoutError:
                 logger.warning("[Insights] Overall timeout for %s, using fallbacks", symbol)
                 tech_card = self._technical._make_fallback_card(
-                    data.get("technicals", {}), now_iso
+                    data.get("technicals", {}),
+                    now_iso,
                 )
                 fin_card = self._financial._make_fallback_card(
-                    {**(data.get("financials", {}) or {}), "valuation": data.get("valuation", {})},
+                    {
+                        **(data.get("financials", {}) or {}),
+                        "valuation": data.get("valuation", {}),
+                    },
                     now_iso,
                 )
                 news_card = self._news._make_fallback_card(data.get("news", {}), now_iso)
                 peers_card = self._peers._make_fallback_card(data.get("peers", {}), now_iso)
 
-            # Phase 2: Overview uses sub-scores from phase 1
-            self._overview.set_sub_scores({
-                "technical": tech_card.score,
-                "financial": fin_card.score,
-                "news": news_card.score,
-                "peers": peers_card.score,
-            })
+            # Phase 2: overview uses phase-1 sub-scores.
+            self._overview.set_sub_scores(
+                {
+                    "technical": tech_card.score,
+                    "financial": fin_card.score,
+                    "news": news_card.score,
+                    "peers": peers_card.score,
+                }
+            )
             overview_data = {
                 "valuation": data.get("valuation", {}),
                 "technicals": data.get("technicals", {}),
@@ -501,12 +201,12 @@ class InsightsOrchestrator:
             try:
                 overview_card = await asyncio.wait_for(
                     self._overview.digest(symbol, overview_data),
-                    timeout=_DIGEST_TIMEOUT_SECONDS,
+                    timeout=scorer_runtime._DIGEST_TIMEOUT_SECONDS,
                 )
             except (asyncio.TimeoutError, Exception):
                 overview_card = self._overview._make_fallback_card(overview_data, now_iso)
 
-            # Attach sub_scores to overview
+            # Attach sub_scores to overview if not present.
             if overview_card.sub_scores is None:
                 overview_card = InsightCard(
                     **{
@@ -528,7 +228,7 @@ class InsightsOrchestrator:
                 "peers": peers_card,
             }
 
-            # Cache the results
+            # Cache the results.
             self._cache.set(
                 symbol,
                 "insights",
@@ -600,23 +300,6 @@ def get_insights_orchestrator() -> InsightsOrchestrator:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _label_from_score(score: float) -> str:
-    if score >= 8:
-        return "强势"
-    if score >= 6.5:
-        return "偏多"
-    if score >= 4.5:
-        return "中性"
-    if score >= 3:
-        return "偏空"
-    return "弱势"
-
-
-def _ensure_str_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if item]
-
 
 def _compute_cache_age(generated_at: str) -> float:
     """Compute seconds since generated_at ISO timestamp."""
@@ -639,3 +322,32 @@ def _deserialize_insights(raw: dict[str, Any]) -> dict[str, InsightCard]:
             except Exception:
                 logger.warning("[Insights] Failed to deserialize insight for tab=%s", tab_name)
     return result
+
+
+__all__ = [
+    # Preferred names
+    "DashboardScorer",
+    "TechnicalScorer",
+    "FinancialScorer",
+    "NewsScorer",
+    "PeersScorer",
+    "OverviewScorer",
+    # Backward-compatible aliases
+    "DigestAgent",
+    "TechnicalDigest",
+    "FinancialDigest",
+    "NewsDigest",
+    "PeersDigest",
+    "OverviewDigest",
+    # Orchestration entrypoints
+    "InsightsOrchestrator",
+    "get_insights_orchestrator",
+    # Backward-compatible helpers used by tests and diagnostics
+    "_DIGEST_TIMEOUT_SECONDS",
+    "_get_llm",
+    "_label_from_score",
+    "_ensure_str_list",
+    "_compute_cache_age",
+    "_deserialize_insights",
+]
+

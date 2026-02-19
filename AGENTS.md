@@ -613,4 +613,34 @@ docs/
             <item>新增：前端 ETA（当次运行平均耗时估算），并在专家视图展示。</item>
         </change_log>
     </execution_trace_update>
+    <dashboard_scorer_refactor_update date="2026-02-19">
+        <summary>Stage 2 complete: split dashboard scorer implementations out of insights engine while preserving import and API compatibility.</summary>
+        <directory_tree>
+            <![CDATA[
+backend/dashboard/
+  scorers.py                                  # scorer runtime + classes + legacy alias exports
+  insights_engine.py                          # orchestrator/cache pipeline + compatibility re-exports
+  insights_scorer.py                          # deterministic scoring rules shared by scorers
+  schemas.py                                  # InsightCard docs clarified for compatibility naming
+backend/tests/
+  test_insights_engine.py                     # patch targets moved to backend.dashboard.scorers
+            ]]>
+        </directory_tree>
+        <dependencies>
+            <item>`insights_engine.py` depends on `scorers.py` for scorer runtime helpers and concrete scorer classes.</item>
+            <item>`scorers.py` depends on `insights_prompts.py`, `insights_scorer.py`, and `schemas.py` only.</item>
+            <item>Router entrypoint `get_insights_orchestrator` remains in `insights_engine.py` to keep external integrations stable.</item>
+        </dependencies>
+        <boundaries>
+            <item>`scorers.py`: single-call LLM + deterministic fallback card generation.</item>
+            <item>`insights_engine.py`: symbol-level orchestration, stale cache strategy, timeout coordination, and response assembly.</item>
+            <item>Legacy names (`DigestAgent`, `TechnicalDigest`, etc.) are aliases only; semantic preferred names are `DashboardScorer` and `*Scorer`.</item>
+        </boundaries>
+        <change_log>
+            <item>Added `backend/dashboard/scorers.py` and moved scorer implementations there.</item>
+            <item>Replaced in-engine scorer class definitions with imports and compatibility re-exports.</item>
+            <item>Kept `AGENT_NAME` / `InsightCard.agent_name` unchanged to avoid cache/API/front-end breakage.</item>
+            <item>Updated tests to patch `backend.dashboard.scorers._get_llm` and `backend.dashboard.scorers._DIGEST_TIMEOUT_SECONDS`.</item>
+        </change_log>
+    </dashboard_scorer_refactor_update>
                 </persona_configuration>

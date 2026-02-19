@@ -2,7 +2,8 @@
 Deterministic scoring logic for Dashboard Insights.
 
 Provides rule-based fallback scores when LLM is unavailable.
-Each scorer mirrors the corresponding DigestAgent's domain logic.
+Each scorer mirrors the corresponding DashboardScorer domain logic
+(legacy name: DigestAgent).
 """
 
 from __future__ import annotations

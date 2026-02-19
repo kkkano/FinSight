@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for Dashboard Insights Engine — DigestAgents, Orchestrator, Scorers, Prompts."""
+"""Tests for Dashboard Insights Engine — Scorers, Orchestrator, Prompts."""
 
 import asyncio
 import json
@@ -10,12 +10,18 @@ import pytest
 
 from backend.dashboard.cache import DashboardCache
 from backend.dashboard.insights_engine import (
+    DashboardScorer,
     DigestAgent,
+    FinancialScorer,
     FinancialDigest,
     InsightsOrchestrator,
+    NewsScorer,
     NewsDigest,
+    OverviewScorer,
     OverviewDigest,
+    PeersScorer,
     PeersDigest,
+    TechnicalScorer,
     TechnicalDigest,
     _compute_cache_age,
     _deserialize_insights,
@@ -108,6 +114,27 @@ class TestHelpers:
     def test_deserialize_insights_non_dict(self):
         result = _deserialize_insights({"x": "not a dict"})
         assert len(result) == 0
+
+
+class TestNamingCompatibility:
+    """Phase 1 compatibility checks for Agent→Scorer semantic refactor."""
+
+    def test_base_alias_points_to_same_class(self):
+        assert DashboardScorer is DigestAgent
+
+    def test_concrete_aliases_point_to_same_class(self):
+        assert TechnicalScorer is TechnicalDigest
+        assert FinancialScorer is FinancialDigest
+        assert NewsScorer is NewsDigest
+        assert PeersScorer is PeersDigest
+        assert OverviewScorer is OverviewDigest
+
+    def test_legacy_identifiers_remain_stable(self):
+        assert TechnicalScorer.AGENT_NAME == "technical_digest"
+        assert FinancialScorer.AGENT_NAME == "financial_digest"
+        assert NewsScorer.AGENT_NAME == "news_digest"
+        assert PeersScorer.AGENT_NAME == "peers_digest"
+        assert OverviewScorer.AGENT_NAME == "overview_digest"
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +402,7 @@ class TestDigestAgent:
         agent = TechnicalDigest()
         data = {"rsi": 55.0, "trend": "bullish"}
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             card = await agent.digest("AAPL", data)
 
         assert isinstance(card, InsightCard)
@@ -403,7 +430,7 @@ class TestDigestAgent:
         })
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=mock_llm):
+        with patch("backend.dashboard.scorers._get_llm", return_value=mock_llm):
             card = await agent.digest("AAPL", data)
 
         assert isinstance(card, InsightCard)
@@ -427,8 +454,8 @@ class TestDigestAgent:
 
         mock_llm.ainvoke = slow_invoke
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=mock_llm):
-            with patch("backend.dashboard.insights_engine._DIGEST_TIMEOUT_SECONDS", 0.01):
+        with patch("backend.dashboard.scorers._get_llm", return_value=mock_llm):
+            with patch("backend.dashboard.scorers._DIGEST_TIMEOUT_SECONDS", 0.01):
                 card = await agent.digest("AAPL", data)
 
         assert card.model_generated is False
@@ -444,7 +471,7 @@ class TestDigestAgent:
         mock_response.content = "This is not JSON at all"
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=mock_llm):
+        with patch("backend.dashboard.scorers._get_llm", return_value=mock_llm):
             card = await agent.digest("AAPL", data)
 
         assert card.model_generated is False
@@ -460,7 +487,7 @@ class TestDigestAgent:
         mock_response.content = '```json\n{"score": 6.0, "score_label": "中性", "summary": "新闻中性。", "key_points": ["test"], "risks": ["none"]}\n```'
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=mock_llm):
+        with patch("backend.dashboard.scorers._get_llm", return_value=mock_llm):
             card = await agent.digest("AAPL", data)
 
         assert card.model_generated is True
@@ -483,7 +510,7 @@ class TestDigestAgent:
         })
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=mock_llm):
+        with patch("backend.dashboard.scorers._get_llm", return_value=mock_llm):
             card = await agent.digest("AAPL", data)
 
         # Should be averaged: (10 + 5) / 2 = 7.5
@@ -509,7 +536,7 @@ class TestOverviewDigest:
             "peers": 6.0,
         })
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             card = await agent.digest("AAPL", {})
 
         assert card.sub_scores is not None
@@ -527,7 +554,7 @@ class TestOverviewDigest:
             "peers": 8.0,
         })
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             card = await agent.digest("AAPL", {})
 
         assert card.score == 8.0
@@ -567,7 +594,7 @@ class TestInsightsOrchestrator:
 
         orchestrator = InsightsOrchestrator(cache=cache)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             response = await orchestrator.generate("AAPL", force=True)
 
         assert response.symbol == "AAPL"
@@ -596,7 +623,7 @@ class TestInsightsOrchestrator:
 
         orchestrator = InsightsOrchestrator(cache=cache)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             first = await orchestrator.generate("AAPL", force=True)
             second = await orchestrator.generate("AAPL")
 
@@ -617,7 +644,7 @@ class TestInsightsOrchestrator:
 
         orchestrator = InsightsOrchestrator(cache=cache)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             first = await orchestrator.generate("AAPL", force=True)
             second = await orchestrator.generate("AAPL", force=True)
 
@@ -637,7 +664,7 @@ class TestInsightsOrchestrator:
 
         orchestrator = InsightsOrchestrator(cache=cache)
 
-        with patch("backend.dashboard.insights_engine._get_llm", return_value=None):
+        with patch("backend.dashboard.scorers._get_llm", return_value=None):
             response = await orchestrator.generate("AAPL", force=True)
 
         overview = response.insights["overview"]
