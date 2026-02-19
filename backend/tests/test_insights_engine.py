@@ -106,6 +106,7 @@ class TestHelpers:
         assert "overview" in result
         assert isinstance(result["overview"], InsightCard)
         assert result["overview"].score == 7.0
+        assert result["overview"].scorer_name is None
 
     def test_deserialize_insights_invalid_skips(self):
         result = _deserialize_insights({"bad": {"score": "not-a-number"}})
@@ -407,6 +408,7 @@ class TestDigestAgent:
 
         assert isinstance(card, InsightCard)
         assert card.agent_name == "technical_digest"
+        assert card.scorer_name == "technical_scorer"
         assert card.tab == "technical"
         assert card.model_generated is False
         assert card.confidence == 0.4
@@ -435,6 +437,7 @@ class TestDigestAgent:
 
         assert isinstance(card, InsightCard)
         assert card.model_generated is True
+        assert card.scorer_name == "technical_scorer"
         assert card.confidence == 0.8
         assert card.score_label == "偏多"
         assert len(card.key_points) == 2
@@ -608,6 +611,8 @@ class TestInsightsOrchestrator:
         for tab_name, card in response.insights.items():
             assert isinstance(card, InsightCard)
             assert card.model_generated is False
+            assert card.scorer_name is not None
+            assert card.scorer_name.endswith("_scorer")
             assert 1.0 <= card.score <= 10.0
 
     @pytest.mark.asyncio
@@ -699,6 +704,7 @@ class TestInsightCardSchema:
     def test_valid_card(self):
         card = InsightCard(
             agent_name="test",
+            scorer_name="test_scorer",
             tab="technical",
             score=7.5,
             score_label="偏多",
@@ -711,6 +717,7 @@ class TestInsightCardSchema:
         )
         assert card.score == 7.5
         assert card.model_generated is True
+        assert card.scorer_name == "test_scorer"
 
     def test_score_clamped_by_schema(self):
         """Score must be between 0 and 10."""
@@ -741,6 +748,7 @@ class TestInsightCardSchema:
         )
         data = card.model_dump()
         assert data["agent_name"] == "test"
+        assert data["scorer_name"] is None
         assert data["score"] == 5.0
         restored = InsightCard(**data)
         assert restored.score == card.score

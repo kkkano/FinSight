@@ -346,6 +346,11 @@ class InsightCard(BaseModel):
     当 LLM 不可用时，由确定性评分逻辑生成（model_generated=False）。
     """
     agent_name: str = Field(..., description="生成该卡片的历史标识名（兼容字段）")
+    # Preferred semantic identifier for scorer naming migration.
+    scorer_name: Optional[str] = Field(
+        None,
+        description="Dashboard scorer semantic identifier, e.g. technical_scorer",
+    )
     tab: str = Field(..., description="对应的 Dashboard Tab 名称")
     score: float = Field(..., ge=0, le=10, description="综合评分 (0-10)")
     score_label: str = Field(..., description="评分标签 (弱势/偏空/中性/偏多/强势)")

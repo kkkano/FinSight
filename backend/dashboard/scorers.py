@@ -145,6 +145,16 @@ class DashboardScorer(ABC):
         score, label, points = self._deterministic_fallback(data)
         return score, label, points, []
 
+    def _scorer_name(self) -> str:
+        """
+        Canonical scorer identifier for semantic naming migration.
+
+        `agent_name` remains the historical compatibility field.
+        """
+        if self.AGENT_NAME.endswith("_digest"):
+            return f"{self.AGENT_NAME[:-7]}_scorer"
+        return f"{self.AGENT_NAME}_scorer"
+
     async def digest(self, ticker: str, data: dict[str, Any]) -> InsightCard:
         """
         Run a single LLM analysis call, falling back to deterministic scoring.
@@ -215,6 +225,7 @@ class DashboardScorer(ABC):
 
         return InsightCard(
             agent_name=self.AGENT_NAME,
+            scorer_name=self._scorer_name(),
             tab=self.TAB,
             score=score,
             score_label=str(parsed.get("score_label", fallback_label or _label_from_score(score))),
@@ -237,6 +248,7 @@ class DashboardScorer(ABC):
         score, label, points, breakdown = self._deterministic_fallback_details(data)
         return InsightCard(
             agent_name=self.AGENT_NAME,
+            scorer_name=self._scorer_name(),
             tab=self.TAB,
             score=score,
             score_label=label,
@@ -408,4 +420,3 @@ __all__ = [
     "_label_from_score",
     "_ensure_str_list",
 ]
-

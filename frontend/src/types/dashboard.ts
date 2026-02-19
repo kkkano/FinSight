@@ -461,6 +461,7 @@ export interface ScoreBreakdownItem {
 
 export interface InsightCard {
   agent_name: string;
+  scorer_name?: string;      // preferred semantic identifier, e.g. technical_scorer
   tab: string;
   score: number;             // 0-10
   score_label: string;       // 弱势 | 偏空 | 中性 | 偏多 | 强势
