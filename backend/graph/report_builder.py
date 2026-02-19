@@ -1304,7 +1304,7 @@ def _extract_grounding_claims(text: str, *, max_claims: int = 80) -> list[str]:
 def _build_grounding_corpus(
     *,
     citations: list[dict[str, Any]],
-    agent_summaries: dict[str, str],
+    agent_summaries: list[dict[str, Any]] | dict[str, str],
     step_results: dict[str, Any],
 ) -> str:
     parts: list[str] = []
@@ -1320,8 +1320,16 @@ def _build_grounding_corpus(
             _safe_str(citation.get("published_date")),
         ])
 
-    for _, summary in (agent_summaries or {}).items():
-        parts.append(_safe_str(summary))
+    # agent_summaries may be list[dict] (from _agent_summaries_from_steps) or dict[str, str]
+    if isinstance(agent_summaries, list):
+        for item in agent_summaries:
+            if isinstance(item, dict):
+                parts.append(_safe_str(item.get("summary", "")))
+            else:
+                parts.append(_safe_str(item))
+    elif isinstance(agent_summaries, dict):
+        for _, summary in agent_summaries.items():
+            parts.append(_safe_str(summary))
 
     for _, item in (step_results or {}).items():
         if not isinstance(item, dict):
@@ -1378,7 +1386,7 @@ def _compute_grounding_stats(
     *,
     generated_text: str,
     citations: list[dict[str, Any]],
-    agent_summaries: dict[str, str],
+    agent_summaries: list[dict[str, Any]] | dict[str, str],
     render_vars: dict[str, Any],
     step_results: dict[str, Any],
 ) -> dict[str, Any]:
