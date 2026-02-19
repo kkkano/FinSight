@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -1828,6 +1829,30 @@ async def synthesize(state: GraphState) -> dict:
     """
     mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
     trace = state.get("trace") or {}
+    synth_started_at = time.perf_counter()
+
+    await emit_event(
+        {
+            "type": "pipeline_stage",
+            "stage": "synthesizing",
+            "status": "start",
+            "message": "Synthesize started",
+            "timestamp": utc_now_iso(),
+        }
+    )
+
+    async def _emit_synth_stage_done(*, status: str, message: str, error: str | None = None) -> None:
+        payload: dict[str, Any] = {
+            "type": "pipeline_stage",
+            "stage": "synthesizing",
+            "status": status,
+            "message": message,
+            "duration_ms": int((time.perf_counter() - synth_started_at) * 1000),
+            "timestamp": utc_now_iso(),
+        }
+        if error:
+            payload["error"] = str(error)[:300]
+        await emit_event(payload)
 
     # ── narrative mode: LLM writes full markdown report; render_vars kept for cards ──
     if mode == "narrative":
@@ -1857,6 +1882,18 @@ async def synthesize(state: GraphState) -> dict:
             artifacts["draft_markdown"] = draft_markdown
         if isinstance(verifier_result, dict):
             artifacts["verifier_result"] = verifier_result
+        if isinstance(verifier_claims, list) and verifier_claims:
+            await emit_event(
+                {
+                    "type": "decision_note",
+                    "scope": "verifier",
+                    "title": "Deep report verifier redactions",
+                    "reason": "Detected unsupported factual claims and redacted them.",
+                    "impact": f"unsupported_claims={len(verifier_claims)}",
+                    "timestamp": utc_now_iso(),
+                }
+            )
+        await _emit_synth_stage_done(status="done", message="Synthesize completed")
         return {"artifacts": artifacts, "trace": trace}
 
     # ── stub mode (default): deterministic render_vars ──
@@ -1871,6 +1908,7 @@ async def synthesize(state: GraphState) -> dict:
                 }
             }
         )
+        await _emit_synth_stage_done(status="done", message="Synthesize completed in stub mode")
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 
     # ── llm mode: LLM fills render_vars JSON ──
@@ -1899,6 +1937,11 @@ async def synthesize(state: GraphState) -> dict:
                     retry_attempts=0,
                 )
             }
+        )
+        await _emit_synth_stage_done(
+            status="error",
+            message="Synthesize LLM unavailable, fallback emitted",
+            error=str(exc),
         )
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 
@@ -2149,6 +2192,18 @@ summary, highlights, analysis.
         merged_artifacts = {**(state.get("artifacts") or {}), "render_vars": render_vars}
         if isinstance(verifier_result, dict):
             merged_artifacts["verifier_result"] = verifier_result
+        if isinstance(verifier_claims, list) and verifier_claims:
+            await emit_event(
+                {
+                    "type": "decision_note",
+                    "scope": "verifier",
+                    "title": "Verifier unsupported claims",
+                    "reason": "Unsupported factual claims were identified in synthesis output.",
+                    "impact": f"unsupported_claims={len(verifier_claims)}",
+                    "timestamp": utc_now_iso(),
+                }
+            )
+        await _emit_synth_stage_done(status="done", message="Synthesize completed")
         return {"artifacts": merged_artifacts, "trace": trace}
     except Exception as exc:
         retryable = is_rate_limit_error(exc)
@@ -2183,6 +2238,11 @@ summary, highlights, analysis.
                     retry_attempts=retry_attempts,
                 )
             }
+        )
+        await _emit_synth_stage_done(
+            status="error",
+            message="Synthesize failed, fallback to stub",
+            error=str(exc),
         )
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 

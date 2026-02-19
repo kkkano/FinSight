@@ -2,11 +2,13 @@ import { Moon, Sun } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
+import { ExecutionPanel } from '../execution/ExecutionPanel';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
 import { ContextPanelShell } from './ContextPanelShell';
 import type { MarketQuote } from '../../hooks/useMarketQuotes';
 import { apiClient } from '../../api/client';
+import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 
 type ChatWorkspaceProps = {
@@ -43,6 +45,13 @@ export function ChatWorkspace({
   marketQuotes,
   initialReportId,
 }: ChatWorkspaceProps) {
+  const traceViewMode = useStore((state) => state.traceViewMode);
+  const latestRunId = useExecutionStore((state) => (
+    state.activeRuns[state.activeRuns.length - 1]?.runId
+      ?? state.recentRuns[0]?.runId
+      ?? null
+  ));
+
   // --- P0-2: report_id replay ---
   const replayLoadedRef = useRef<string | null>(null);
 
@@ -122,7 +131,14 @@ export function ChatWorkspace({
             <ChatInput onDashboardRequest={onDashboardRequest} />
           </div>
           <div className="shrink-0">
-            <AgentLogPanel />
+            {traceViewMode === 'dev' ? (
+              <AgentLogPanel />
+            ) : (
+              <ExecutionPanel
+                runId={latestRunId}
+                mode={traceViewMode === 'expert' ? 'expert' : 'user'}
+              />
+            )}
           </div>
         </div>
 

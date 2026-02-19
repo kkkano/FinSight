@@ -120,7 +120,21 @@ _SENSITIVE_KEY_FRAGMENTS = (
     "password",
     "secret",
 )
-_ESSENTIAL_SSE_TYPES = {"token", "done", "error"}
+_ESSENTIAL_SSE_TYPES = {
+    "token",
+    "done",
+    "error",
+    # Execution visibility essentials (kept even when trace_raw is OFF)
+    "plan_ready",
+    "pipeline_stage",
+    "step_start",
+    "step_done",
+    "step_error",
+    "agent_start",
+    "agent_done",
+    "agent_error",
+    "decision_note",
+}
 
 
 def _mask_secret(value: str) -> str:

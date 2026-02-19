@@ -119,6 +119,16 @@ async def execute_plan(
     steps = plan_ir.get("steps") or []
     if not isinstance(steps, list):
         steps = []
+    execution_started_at = time.perf_counter()
+    await emit_event(
+        {
+            "type": "pipeline_stage",
+            "stage": "executing",
+            "status": "start",
+            "message": "Executor started",
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    )
 
     tool_invokers = tool_invokers or {}
     agent_invokers = agent_invokers or {}
@@ -386,12 +396,37 @@ async def execute_plan(
                 raise
 
     groups = group_steps_by_parallel_group(steps)
+    aborted_by_required_error = False
     for group in groups:
         try:
             await asyncio.gather(*[_run_step(step) for step in group])
-        except Exception:
+        except Exception as exc:
             # Required step failed; stop further execution but return partial artifacts.
+            aborted_by_required_error = True
+            await emit_event(
+                {
+                    "type": "pipeline_stage",
+                    "stage": "executing",
+                    "status": "error",
+                    "message": "Executor aborted by required step failure",
+                    "error": str(exc)[:300],
+                    "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+            )
             break
+
+    if not aborted_by_required_error:
+        await emit_event(
+            {
+                "type": "pipeline_stage",
+                "stage": "executing",
+                "status": "done",
+                "message": "Executor completed",
+                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        )
 
     return artifacts, exec_events
 

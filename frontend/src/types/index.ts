@@ -253,6 +253,10 @@ export type RawEventType =
   | 'step_error'
   // Planner output
   | 'plan_ready'
+  // Pipeline stage events
+  | 'pipeline_stage'
+  // Structured decision summaries
+  | 'decision_note'
   // Supervisor 执行
   | 'supervisor_start'
   | 'supervisor_done'

@@ -1,6 +1,9 @@
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
+import { ExecutionPanel } from '../execution/ExecutionPanel';
 import { Dashboard } from '../../pages/Dashboard';
+import { useExecutionStore } from '../../store/executionStore';
+import { useStore } from '../../store/useStore';
 import { ContextPanelShell } from './ContextPanelShell';
 
 type DashboardWorkspaceProps = {
@@ -29,6 +32,13 @@ export function DashboardWorkspace({
   onGoWorkbench,
   contextPanel,
 }: DashboardWorkspaceProps) {
+  const traceViewMode = useStore((state) => state.traceViewMode);
+  const latestRunId = useExecutionStore((state) => (
+    state.activeRuns[state.activeRuns.length - 1]?.runId
+      ?? state.recentRuns[0]?.runId
+      ?? null
+  ));
+
   return (
     <div className="h-full flex-1 min-w-0 flex min-h-0 overflow-hidden relative max-lg:flex-col">
       <div className="h-full flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
@@ -39,7 +49,14 @@ export function DashboardWorkspace({
           onGoWorkbench={onGoWorkbench}
         />
         <div className="shrink-0 px-4 pb-4 max-lg:px-3 max-lg:pb-3">
-          <AgentLogPanel />
+          {traceViewMode === 'dev' ? (
+            <AgentLogPanel />
+          ) : (
+            <ExecutionPanel
+              runId={latestRunId}
+              mode={traceViewMode === 'expert' ? 'expert' : 'user'}
+            />
+          )}
         </div>
       </div>
 

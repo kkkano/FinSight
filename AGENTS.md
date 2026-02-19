@@ -565,4 +565,52 @@
             <statement>代码可解释性先于一切</statement>
         </evolutionary_view>
     </ultimate_truth>
+    <execution_trace_update date="2026-02-19">
+        <summary>Execution trace 升级为阶段状态机 + 分组时间线 + 决策摘要，并在 Chat/Dashboard/Workbench 统一挂载。</summary>
+        <directory_tree>
+            <![CDATA[
+backend/
+  api/main.py                                  # SSE 关键事件白名单（Raw OFF 仍保留执行关键事件）
+  graph/nodes/planner.py                       # planning 阶段事件 + plan_ready 扩展 + decision_note
+  graph/executor.py                            # executing 阶段事件
+  graph/nodes/synthesize.py                    # synthesizing 阶段事件 + verifier decision_note
+  services/execution_service.py                # rendering 阶段事件（run + resume）
+  tests/test_trace_and_session_security.py     # 白名单过滤测试
+  tests/test_execution_stage_events.py         # planner/executor/synthesize 阶段事件测试
+
+frontend/
+  src/types/execution.ts                       # PipelineStage/PlanStep/DecisionNote/AgentRunInfo 扩展
+  src/types/index.ts                           # RawEventType 扩展（pipeline_stage/decision_note）
+  src/api/client.ts                            # parseSSEStream 支持 pipeline_stage/decision_note 全量透传
+  src/store/executionStore.ts                  # pipelineReducer + plan_ready 消费 + ETA + decision_note
+  src/components/execution/
+    PipelineStageBar.tsx                       # 顶部阶段条
+    GroupedTimeline.tsx                        # 分组时间线
+    ExecutionStats.tsx                         # 执行统计
+    ExecutionPanel.tsx                         # 统一执行面板容器
+  src/components/layout/ChatWorkspace.tsx      # user/expert 显示 ExecutionPanel，dev 显示 AgentLogPanel
+  src/components/layout/DashboardWorkspace.tsx # 同上
+  src/components/layout/WorkbenchWorkspace.tsx # 同上，并补齐 Workbench 底部执行追踪入口
+  e2e/execution-trace.spec.ts                  # trace 视图模式 + 执行面板回归用例
+
+docs/
+  execution-event-contract.md                  # 执行事件契约文档（阶段枚举、payload、兼容与降级）
+            ]]>
+        </directory_tree>
+        <dependencies>
+            <item>后端职责：仅发结构化事件，不暴露思维链；前端职责：聚合与可视化。</item>
+            <item>`plan_ready` / `pipeline_stage` / `decision_note` 为用户态可见关键事件。</item>
+            <item>traceViewMode 映射：user=简洁、expert=详细、dev=原始事件。</item>
+        </dependencies>
+        <boundaries>
+            <item>ExecutionPanel 负责用户可读追踪，不替代 AgentLogPanel 的开发者原始调试能力。</item>
+            <item>Raw OFF 场景只保留关键进度事件，llm/tool/cache/data_source/api_call 继续保留为 raw-only。</item>
+        </boundaries>
+        <change_log>
+            <item>新增：pipeline_stage 全链路发射点（planning/executing/synthesizing/rendering）。</item>
+            <item>新增：plan_ready 扩展字段（plan_steps/selected/skipped/reasoning_brief/has_parallel）。</item>
+            <item>新增：decision_note 结构化决策说明事件。</item>
+            <item>新增：前端 ETA（当次运行平均耗时估算），并在专家视图展示。</item>
+        </change_log>
+    </execution_trace_update>
                 </persona_configuration>

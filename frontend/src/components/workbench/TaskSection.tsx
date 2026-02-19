@@ -20,6 +20,7 @@ import { apiClient } from '../../api/client';
 import type { DailyTask, ExecuteRequest } from '../../api/client';
 import { useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
+import { useExecutionStore } from '../../store/executionStore';
 import { Card } from '../ui/Card';
 import { useToast } from '../ui';
 import { InterruptCard } from '../execution/InterruptCard';
@@ -174,6 +175,11 @@ function TaskSection({ symbol }: TaskSectionProps) {
   const sessionId = useStore((s) => s.sessionId);
   const addRawEvent = useStore((s) => s.addRawEvent);
   const traceRawEnabled = useStore((s) => s.traceRawEnabled);
+  const beginExternalExecution = useExecutionStore((s) => s.beginExternalExecution);
+  const ingestExternalThinking = useExecutionStore((s) => s.ingestExternalThinking);
+  const ingestExternalToken = useExecutionStore((s) => s.ingestExternalToken);
+  const completeExternalExecution = useExecutionStore((s) => s.completeExternalExecution);
+  const interruptExternalExecution = useExecutionStore((s) => s.interruptExternalExecution);
   const watchlist = useDashboardStore((s) => s.watchlist ?? []);
   const watchlistSymbols = useMemo(
     () => watchlist.map((item) => item.symbol).filter(Boolean),
@@ -193,6 +199,7 @@ function TaskSection({ symbol }: TaskSectionProps) {
 
   const runStatesRef = useRef<Record<string, TaskRunState>>({});
   const abortRef = useRef<Record<string, AbortController>>({});
+  const executionRunRef = useRef<Record<string, string>>({});
   const titlesRef = useRef<Record<string, string>>({});
   const lastErrorRef = useRef<string | null>(null);
   const prevStatusRef = useRef<Record<string, TaskRunStatus>>({});
@@ -379,6 +386,31 @@ function TaskSection({ symbol }: TaskSectionProps) {
     });
   }, []);
 
+  const ensureExecutionRun = useCallback(
+    (taskId: string, request: ExecuteRequest, fallbackTitle: string, mode: 'start' | 'resume' = 'start') => {
+      const existing = executionRunRef.current[taskId];
+      const shouldReuse = mode === 'resume' && Boolean(existing);
+      const runId = shouldReuse
+        ? String(existing)
+        : `workbench-task-${taskId}-${Date.now().toString(36)}`;
+
+      executionRunRef.current[taskId] = runId;
+      const fallbackTicker = symbol ? symbol.trim().toUpperCase() : '';
+      beginExternalExecution({
+        runId,
+        query: request.query || fallbackTitle,
+        tickers: Array.isArray(request.tickers) && request.tickers.length > 0
+          ? request.tickers
+          : (fallbackTicker ? [fallbackTicker] : []),
+        source: request.source || (mode === 'resume' ? 'workbench_resume' : 'workbench_task'),
+        outputMode: request.output_mode || 'brief',
+        analysisDepth: request.analysis_depth,
+      });
+      return runId;
+    },
+    [beginExternalExecution, symbol],
+  );
+
   const executeTask = useCallback(
     (task: DailyTask) => {
       if (!task.execution_params) return;
@@ -391,6 +423,7 @@ function TaskSection({ symbol }: TaskSectionProps) {
         session_id: sessionId,
         source: 'workbench_task',
       };
+      const executionRunId = ensureExecutionRun(task.id, request, task.title, 'start');
 
       updateRun(task.id, {
         status: 'running',
@@ -412,18 +445,32 @@ function TaskSection({ symbol }: TaskSectionProps) {
                 step: message,
                 progress: Math.min(90, Math.max(10, current.progress + 10)),
               });
+              ingestExternalThinking(executionRunId, step);
             },
             onToken: () => {
+              ingestExternalToken(executionRunId, '');
               updateRun(task.id, { step: '生成报告...', progress: 85 });
             },
             onDone: (report?: any) => {
               const reportId = report?.report_id || task.report_id || null;
               updateRun(task.id, { status: 'done', step: null, progress: 100, reportId });
+              completeExternalExecution({
+                runId: executionRunId,
+                status: 'done',
+                report: report ?? null,
+                meta: reportId ? { report_id: reportId } : undefined,
+              });
             },
             onError: (error: string) => {
               updateRun(task.id, { status: 'error', step: null, error });
+              completeExternalExecution({
+                runId: executionRunId,
+                status: 'error',
+                error,
+              });
             },
             onInterrupt: (data) => {
+              interruptExternalExecution(executionRunId, data);
               updateRun(task.id, {
                 status: 'interrupted',
                 step: data.prompt ?? '等待确认...',
@@ -444,20 +491,46 @@ function TaskSection({ symbol }: TaskSectionProps) {
               step: null,
               error: 'Execution stream ended unexpectedly (missing done event)',
             });
+            completeExternalExecution({
+              runId: executionRunId,
+              status: 'error',
+              error: 'Execution stream ended unexpectedly (missing done event)',
+            });
           }
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return;
           const message = err instanceof Error ? err.message : 'Execution failed';
           updateRun(task.id, { status: 'error', step: null, error: message });
+          completeExternalExecution({
+            runId: executionRunId,
+            status: 'error',
+            error: message,
+          });
         });
     },
-    [addRawEvent, sessionId, traceRawEnabled, updateRun],
+    [
+      addRawEvent,
+      completeExternalExecution,
+      ensureExecutionRun,
+      ingestExternalThinking,
+      ingestExternalToken,
+      interruptExternalExecution,
+      sessionId,
+      traceRawEnabled,
+      updateRun,
+    ],
   );
 
   const handleResume = useCallback(
     (taskId: string, threadId: string, resumeValue: string) => {
       updateRun(taskId, { status: 'running', step: '恢复执行...', interruptData: null });
+      const request: ExecuteRequest = {
+        query: titlesRef.current[taskId] || `Resume task ${taskId}`,
+        tickers: symbol ? [symbol.trim().toUpperCase()] : [],
+        source: 'workbench_resume',
+      };
+      const executionRunId = ensureExecutionRun(taskId, request, request.query, 'resume');
 
       apiClient
         .resumeExecution(
@@ -471,18 +544,32 @@ function TaskSection({ symbol }: TaskSectionProps) {
             onThinking: (step: any) => {
               const message = typeof step === 'string' ? step : (step?.message || step?.stage || '执行中...');
               updateRun(taskId, { step: message });
+              ingestExternalThinking(executionRunId, step);
             },
             onToken: () => {
+              ingestExternalToken(executionRunId, '');
               updateRun(taskId, { step: '生成报告...', progress: 85 });
             },
             onDone: (report?: any) => {
               const reportId = report?.report_id || null;
               updateRun(taskId, { status: 'done', step: null, progress: 100, reportId });
+              completeExternalExecution({
+                runId: executionRunId,
+                status: 'done',
+                report: report ?? null,
+                meta: reportId ? { report_id: reportId } : undefined,
+              });
             },
             onError: (error: string) => {
               updateRun(taskId, { status: 'error', step: null, error });
+              completeExternalExecution({
+                runId: executionRunId,
+                status: 'error',
+                error,
+              });
             },
             onInterrupt: (data) => {
+              interruptExternalExecution(executionRunId, data);
               updateRun(taskId, {
                 status: 'interrupted',
                 step: data.prompt ?? '等待确认...',
@@ -503,21 +590,50 @@ function TaskSection({ symbol }: TaskSectionProps) {
               step: null,
               error: 'Resume stream ended unexpectedly (missing done event)',
             });
+            completeExternalExecution({
+              runId: executionRunId,
+              status: 'error',
+              error: 'Resume stream ended unexpectedly (missing done event)',
+            });
           }
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : 'Resume failed';
           updateRun(taskId, { status: 'error', step: null, error: message });
+          completeExternalExecution({
+            runId: executionRunId,
+            status: 'error',
+            error: message,
+          });
         });
     },
-    [addRawEvent, sessionId, traceRawEnabled, updateRun],
+    [
+      addRawEvent,
+      completeExternalExecution,
+      ensureExecutionRun,
+      ingestExternalThinking,
+      ingestExternalToken,
+      interruptExternalExecution,
+      sessionId,
+      symbol,
+      traceRawEnabled,
+      updateRun,
+    ],
   );
 
   const handleCancelInterrupt = useCallback(
     (taskId: string) => {
       updateRun(taskId, { status: 'pending', step: null, interruptData: null, progress: 0 });
+      const runId = executionRunRef.current[taskId];
+      if (runId) {
+        completeExternalExecution({
+          runId,
+          status: 'cancelled',
+          error: 'Interrupted task cancelled by user',
+        });
+      }
     },
-    [updateRun],
+    [completeExternalExecution, updateRun],
   );
 
   const handleClick = useCallback(

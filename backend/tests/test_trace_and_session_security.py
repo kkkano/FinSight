@@ -50,6 +50,23 @@ def test_trace_raw_override_priority(monkeypatch):
     assert main._resolve_trace_raw_enabled(req_off) is False
 
 
+def test_is_raw_trace_event_keeps_execution_progress_events():
+    main = _load_main_module()
+
+    assert main._is_raw_trace_event({"type": "pipeline_stage"}) is False
+    assert main._is_raw_trace_event({"type": "plan_ready"}) is False
+    assert main._is_raw_trace_event({"type": "decision_note"}) is False
+    assert main._is_raw_trace_event({"type": "step_start"}) is False
+
+
+def test_is_raw_trace_event_filters_verbose_events():
+    main = _load_main_module()
+
+    assert main._is_raw_trace_event({"type": "tool_start"}) is True
+    assert main._is_raw_trace_event({"type": "llm_start"}) is True
+    assert main._is_raw_trace_event({"type": "cache_hit"}) is True
+
+
 def test_redact_sensitive_payload_masks_values():
     main = _load_main_module()
 

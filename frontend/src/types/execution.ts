@@ -9,6 +9,36 @@ import type { ReportIR } from './index';
 // --- Agent run status within a single execution ---
 
 export type AgentRunStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
+export type PipelineStage = 'planning' | 'executing' | 'synthesizing' | 'rendering' | 'done';
+export type PipelineStageStatus = 'pending' | 'running' | 'done' | 'error';
+
+export interface PlanStepSummary {
+  id: string;
+  kind: string;
+  name: string;
+  parallelGroup?: string | null;
+  optional?: boolean;
+}
+
+export interface PipelineStageState {
+  stage: PipelineStage;
+  status: PipelineStageStatus;
+  message?: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface DecisionNote {
+  id: string;
+  scope?: string;
+  title: string;
+  reason?: string;
+  impact?: string;
+  nextStep?: string;
+  timestamp: string;
+}
 
 export interface AgentRunInfo {
   name: string;
@@ -18,6 +48,10 @@ export interface AgentRunInfo {
   error?: string;
   fallbackReason?: string;
   retryable?: boolean;
+  confidence?: number;
+  dataSources?: string[];
+  evidenceCount?: number;
+  durationMs?: number;
 }
 
 export interface TimelineEvent {
@@ -77,6 +111,15 @@ export interface ExecutionRun {
   analysisDepth?: AnalysisDepth;
   status: ExecutionRunStatus;
   agentStatuses: Record<string, AgentRunInfo>;
+  pipelineStages?: Record<PipelineStage, PipelineStageState>;
+  pipelineCurrentStage?: PipelineStage | null;
+  selectedAgents?: string[];
+  skippedAgents?: string[];
+  planSteps?: PlanStepSummary[];
+  hasParallelPlan?: boolean;
+  reasoningBrief?: string;
+  decisionNotes?: DecisionNote[];
+  etaSeconds?: number | null;
   /** 0–100, monotonically increasing (never decreases). */
   progress: number;
   currentStep: string | null;
