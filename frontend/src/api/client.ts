@@ -26,6 +26,8 @@ export interface ReportIndexItem {
   report_id: string;
   session_id: string;
   ticker?: string;
+  analysis_depth?: 'quick' | 'report' | 'deep_research' | string;
+  source_trigger?: string;
   title?: string;
   summary?: string;
   generated_at?: string;
@@ -279,7 +281,7 @@ export async function parseSSEStream(
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (
-            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'system'].includes(data.type)
+            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system'].includes(data.type)
           ) {
             const stage = data.stage || data.type;
             const message =
@@ -327,12 +329,8 @@ export async function parseSSEStream(
               stage: data.type,
               message: agentName ? `${agentName} Agent` : (data.message || ''),
               result: {
+                ...data,
                 agent: agentName,
-                status: data.status,
-                step_id: data.step_id,
-                inputs: data.inputs,
-                error: data.error,
-                agents: data.agents,
               },
               timestamp: data.timestamp || new Date().toISOString(),
               eventType: data.type,

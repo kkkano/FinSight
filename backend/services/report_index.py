@@ -56,6 +56,44 @@ def _normalize_citation_item(item: Any) -> dict[str, Any] | None:
     return normalized
 
 
+def _extract_report_meta(report_json: str | None) -> dict[str, Any]:
+    if not report_json:
+        return {}
+    try:
+        payload = json.loads(report_json)
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    meta = payload.get("meta")
+    return meta if isinstance(meta, dict) else {}
+
+
+def _derive_analysis_depth(
+    *,
+    source_trigger: str | None,
+    report_meta: dict[str, Any],
+) -> str | None:
+    normalized = str(report_meta.get("analysis_depth") or "").strip().lower()
+    if normalized in {"quick", "report", "deep_research"}:
+        return normalized
+
+    ui_context = report_meta.get("ui_context")
+    if isinstance(ui_context, dict):
+        context_depth = str(ui_context.get("analysis_depth") or "").strip().lower()
+        if context_depth in {"quick", "report", "deep_research"}:
+            return context_depth
+
+    trigger = str(source_trigger or "").strip().lower()
+    if not trigger:
+        return None
+    if "deep" in trigger and ("search" in trigger or "research" in trigger):
+        return "deep_research"
+    if "quick" in trigger:
+        return "quick"
+    return "report"
+
+
 class ReportIndexStore:
     def __init__(self) -> None:
         path = os.getenv("REPORT_INDEX_SQLITE_PATH", "backend/data/report_index.sqlite")
@@ -239,7 +277,7 @@ class ReportIndexStore:
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT report_id, session_id, ticker, title, summary, generated_at,
-                   confidence_score, is_favorite, tags_json, source_type,
+                   confidence_score, is_favorite, tags_json, source_type, report_json,
                    filing_type, publisher, created_at, updated_at
             FROM report_index
             WHERE session_id = ?
@@ -281,6 +319,12 @@ class ReportIndexStore:
                             tags = parsed
                     except Exception:
                         tags = []
+                report_meta = _extract_report_meta(row["report_json"])
+                source_trigger = str(report_meta.get("source_trigger") or "").strip() or None
+                analysis_depth = _derive_analysis_depth(
+                    source_trigger=source_trigger,
+                    report_meta=report_meta,
+                )
                 result.append(
                     {
                         "report_id": row["report_id"],
@@ -293,6 +337,8 @@ class ReportIndexStore:
                         "is_favorite": bool(row["is_favorite"]),
                         "tags": tags,
                         "source_type": row["source_type"],
+                        "source_trigger": source_trigger,
+                        "analysis_depth": analysis_depth,
                         "filing_type": row["filing_type"],
                         "publisher": row["publisher"],
                         "created_at": row["created_at"],

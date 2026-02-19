@@ -21,6 +21,8 @@ interface ReportSectionProps {
   symbol: string;
   reports: ReportIndexItem[];
   loading: boolean;
+  selectedReportId?: string | null;
+  onSelectReport?: (reportId: string) => void;
 }
 
 interface DateGroup {
@@ -142,6 +144,7 @@ function formatTime(dateStr: string | undefined): string {
 interface TimelineGroupProps {
   group: DateGroup;
   defaultExpanded: boolean;
+  selectedReportId?: string | null;
   compareIds: Set<string>;
   compareMode: boolean;
   onToggleCompare: (id: string) => void;
@@ -151,6 +154,7 @@ interface TimelineGroupProps {
 function TimelineGroup({
   group,
   defaultExpanded,
+  selectedReportId,
   compareIds,
   compareMode,
   onToggleCompare,
@@ -174,6 +178,7 @@ function TimelineGroup({
         <div className="ml-2 border-l border-fin-border pl-3 space-y-1.5 mt-1">
           {group.items.map((item) => {
             const isSelected = compareIds.has(item.report_id);
+            const isPreviewActive = selectedReportId === item.report_id;
 
             return (
               <div
@@ -181,7 +186,9 @@ function TimelineGroup({
                 className={`p-2 rounded-lg border transition-colors ${
                   isSelected
                     ? 'border-fin-primary/60 bg-fin-primary/5'
-                    : 'border-fin-border hover:border-fin-primary/30 hover:bg-fin-bg'
+                    : isPreviewActive
+                      ? 'border-fin-primary/40 bg-fin-primary/5'
+                      : 'border-fin-border hover:border-fin-primary/30 hover:bg-fin-bg'
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -203,6 +210,7 @@ function TimelineGroup({
                     type="button"
                     onClick={() => onViewReport(item.report_id)}
                     className="flex-1 min-w-0 text-left"
+                    data-testid={`workbench-report-item-${item.report_id}`}
                   >
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-fin-text font-medium truncate flex-1">
@@ -218,6 +226,30 @@ function TimelineGroup({
                       <span>{formatTime(item.generated_at || item.created_at)}</span>
                       {item.summary && (
                         <span className="truncate max-w-[160px]">&middot; {item.summary}</span>
+                      )}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {item.ticker && (
+                        <Badge variant="info" data-testid={`workbench-report-tag-ticker-${item.report_id}`}>
+                          {item.ticker}
+                        </Badge>
+                      )}
+                      {item.analysis_depth && (
+                        <Badge
+                          variant={item.analysis_depth === 'deep_research' ? 'warning' : 'default'}
+                          data-testid={`workbench-report-tag-depth-${item.report_id}`}
+                        >
+                          {item.analysis_depth}
+                        </Badge>
+                      )}
+                      {item.source_trigger && (
+                        <Badge
+                          variant="default"
+                          data-testid={`workbench-report-tag-trigger-${item.report_id}`}
+                        >
+                          {item.source_trigger}
+                        </Badge>
                       )}
                     </div>
 
@@ -243,7 +275,7 @@ function TimelineGroup({
 /*  ReportSection (main)                                               */
 /* ------------------------------------------------------------------ */
 
-function ReportSection({ reports, loading }: ReportSectionProps) {
+function ReportSection({ reports, loading, selectedReportId, onSelectReport }: ReportSectionProps) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('date');
@@ -259,7 +291,15 @@ function ReportSection({ reports, loading }: ReportSectionProps) {
           const title = (item.title || '').toLowerCase();
           const ticker = (item.ticker || '').toLowerCase();
           const reportId = (item.report_id || '').toLowerCase();
-          return title.includes(query) || ticker.includes(query) || reportId.includes(query);
+          const analysisDepth = String(item.analysis_depth || '').toLowerCase();
+          const sourceTrigger = String(item.source_trigger || '').toLowerCase();
+          return (
+            title.includes(query)
+            || ticker.includes(query)
+            || reportId.includes(query)
+            || analysisDepth.includes(query)
+            || sourceTrigger.includes(query)
+          );
         })
       : reports;
 
@@ -300,9 +340,13 @@ function ReportSection({ reports, loading }: ReportSectionProps) {
 
   const handleViewReport = useCallback(
     (reportId: string) => {
+      if (typeof onSelectReport === 'function') {
+        onSelectReport(reportId);
+        return;
+      }
       navigate(`/chat?report_id=${encodeURIComponent(reportId)}`);
     },
-    [navigate],
+    [navigate, onSelectReport],
   );
 
   const compareArray = useMemo(() => Array.from(compareIds), [compareIds]);
@@ -405,6 +449,7 @@ function ReportSection({ reports, loading }: ReportSectionProps) {
               key={group.key}
               group={group}
               defaultExpanded={group.key === 'today' || group.key === 'yesterday'}
+              selectedReportId={selectedReportId}
               compareIds={compareIds}
               compareMode={compareMode}
               onToggleCompare={handleToggleCompare}

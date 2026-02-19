@@ -47,6 +47,8 @@ def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
     assert list_data.get("success") is True
     assert list_data.get("count") == 1
     assert list_data["items"][0]["report_id"] == "rpt-001"
+    assert list_data["items"][0]["source_trigger"] is None
+    assert list_data["items"][0]["analysis_depth"] is None
 
     replay_resp = client.get(
         "/api/reports/replay/rpt-001",
@@ -86,6 +88,7 @@ def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_pat
             "summary": "focus on ai",
             "tags": ["ai", "us-tech"],
             "generated_at": "2026-02-06T09:00:00Z",
+            "meta": {"source_trigger": "dashboard_deep_search"},
             "citations": [
                 {
                     "source_id": "legacy-source-id",
@@ -126,6 +129,8 @@ def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_pat
     tag_data = tag_resp.json()
     assert tag_data.get("count") == 1
     assert tag_data["items"][0]["report_id"] == "rpt-ai-1"
+    assert tag_data["items"][0]["source_trigger"] == "dashboard_deep_search"
+    assert tag_data["items"][0]["analysis_depth"] == "deep_research"
 
     date_resp = client.get(
         "/api/reports/index",

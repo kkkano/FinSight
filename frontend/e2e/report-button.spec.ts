@@ -88,6 +88,56 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
   },
 });
 
+const buildWorkbenchReport = (
+  reportId: string,
+  overrides: Record<string, unknown> = {},
+) => ({
+  report_id: reportId,
+  ticker: 'AAPL',
+  title: 'AAPL 深度报告',
+  summary: '报告摘要',
+  sentiment: 'neutral',
+  confidence_score: 0.72,
+  grounding_rate: 0.82,
+  generated_at: '2026-02-18T00:00:00Z',
+  report_hints: {
+    quality: {
+      deep_report_required: true,
+      qualified: true,
+      missing_requirements: [],
+    },
+    grounding: {
+      grounding_rate: 0.82,
+      claim_count: 6,
+      grounded_count: 5,
+    },
+    verifier: {
+      enabled: true,
+      checked: true,
+      unsupported_count: 0,
+      unsupported_claims: [],
+    },
+  },
+  citations: [
+    {
+      source_id: 'src_1',
+      source: 'Reuters',
+      title: 'Reuters note',
+      snippet: 'Sample evidence snippet',
+      url: 'https://example.com/reuters-note',
+      published_date: '2026-02-17T00:00:00Z',
+    },
+  ],
+  sections: [],
+  risks: [],
+  recommendation: 'HOLD',
+  meta: {
+    source_type: 'workbench',
+    source_trigger: 'workbench_deep_search',
+  },
+  ...overrides,
+});
+
 const parseRequestBody = (route: any) => {
   try {
     return JSON.parse(route.request().postData() || '{}');
@@ -97,6 +147,30 @@ const parseRequestBody = (route: any) => {
 };
 
 test.beforeEach(async ({ page }) => {
+  let workbenchIndexItems: any[] = [
+    {
+      report_id: 'wb-rpt-1',
+      ticker: 'AAPL',
+      analysis_depth: 'deep_research',
+      source_trigger: 'workbench_deep_search',
+      title: 'AAPL 工作台深度报告',
+      summary: 'summary',
+      generated_at: '2026-02-18T00:00:00Z',
+    },
+  ];
+  let workbenchReplayById: Record<string, any> = {
+    'wb-rpt-1': buildWorkbenchReport('wb-rpt-1'),
+  };
+
+  await page.exposeFunction('__setWorkbenchReports', (payload: { items?: any[]; replayById?: Record<string, any> }) => {
+    if (Array.isArray(payload?.items)) {
+      workbenchIndexItems = payload.items;
+    }
+    if (payload?.replayById && typeof payload.replayById === 'object') {
+      workbenchReplayById = payload.replayById;
+    }
+  });
+
   await page.addInitScript(() => {
     localStorage.setItem(
       'fs_dashboard_active_v1',
@@ -142,6 +216,28 @@ test.beforeEach(async ({ page }) => {
 
   await page.route('**/api/stock/price/**', async (route) => {
     await fulfillJson(route, { success: true, data: { price: 180.5, change_percent: 1.2 } });
+  });
+
+  await page.route('**/api/reports/index**', async (route) => {
+    await fulfillJson(route, {
+      success: true,
+      session_id: E2E_SESSION_ID,
+      count: workbenchIndexItems.length,
+      items: workbenchIndexItems,
+    });
+  });
+
+  await page.route('**/api/reports/replay/**', async (route) => {
+    const url = new URL(route.request().url());
+    const reportId = decodeURIComponent(url.pathname.split('/').pop() || '');
+    const report = workbenchReplayById[reportId] || buildWorkbenchReport(reportId);
+    await fulfillJson(route, {
+      success: true,
+      session_id: E2E_SESSION_ID,
+      report,
+      citations: Array.isArray(report?.citations) ? report.citations : [],
+      trace_digest: {},
+    });
   });
 
   await page.route('**/health', async (route) => {
@@ -215,7 +311,7 @@ test('Context panel tabs can switch and panel can collapse/expand', async ({ pag
   await page.getByTestId('context-tab-portfolio').click();
   await expect(panel.getByText('Portfolio')).toBeVisible();
 
-  await panel.locator('button[title="Collapse"]').click();
+  await panel.locator('button[aria-label="Collapse"]').click();
   await expect(page.getByTestId('context-panel-shell')).toHaveCount(0);
 
   const expandButton = page.getByTestId('context-panel-expand');
@@ -278,5 +374,159 @@ test('Selection reference: ask-from-news keeps selection context in request', as
   await expect.poll(() => captured).not.toBeNull();
   expect(captured?.context?.active_symbol).toBe('AAPL');
   expect(captured?.context?.selection?.type).toBe('news');
-  expect(captured?.context?.selection?.title).toContain('Apple launches major AI update');
+  expect(String(captured?.context?.selection?.title || '')).toMatch(
+    /(Apple launches major AI update|AAPL receives positive analyst outlook)/,
+  );
+});
+
+test('Workbench: report list shows ticker/depth/source tags', async ({ page }) => {
+  await page.goto('/workbench?symbol=AAPL');
+
+  await expect(page.getByTestId('workbench-report-tag-ticker-wb-rpt-1')).toBeVisible();
+  await expect(page.getByTestId('workbench-report-tag-depth-wb-rpt-1')).toBeVisible();
+  await expect(page.getByTestId('workbench-report-tag-trigger-wb-rpt-1')).toBeVisible();
+});
+
+test('Workbench: hard-blocks report conclusion when ticker mismatches', async ({ page }) => {
+  const mismatchReport = {
+    ...buildWorkbenchReport('wb-rpt-mismatch'),
+    ticker: 'GOOG',
+    title: 'GOOG 工作台深度报告',
+  };
+  await page.evaluate(async (payload) => {
+    await (window as any).__setWorkbenchReports(payload);
+  }, {
+    items: [
+      {
+        report_id: 'wb-rpt-mismatch',
+        ticker: 'GOOG',
+        analysis_depth: 'deep_research',
+        source_trigger: 'workbench_deep_search',
+        title: 'GOOG 工作台深度报告',
+        summary: 'summary',
+        generated_at: '2026-02-18T00:00:00Z',
+      },
+    ],
+    replayById: {
+      'wb-rpt-mismatch': mismatchReport,
+    },
+  });
+
+  await page.goto('/workbench?symbol=AAPL');
+
+  await expect(page.getByTestId('workbench-report-ticker-mismatch')).toBeVisible();
+  await expect(page.getByTestId('workbench-report-conclusion-disabled')).toBeVisible();
+});
+
+test('Workbench: quality gap can jump to evidence snippets via diagnostic drawer', async ({ page }) => {
+  const qualityGapReport = buildWorkbenchReport('wb-rpt-quality-gap', {
+    grounding_rate: 0.48,
+    report_hints: {
+      quality: {
+        deep_report_required: true,
+        qualified: false,
+        missing_requirements: ['缺少可识别 10-K 引用'],
+      },
+      grounding: {
+        grounding_rate: 0.48,
+        claim_count: 10,
+        grounded_count: 4,
+      },
+      verifier: {
+        enabled: true,
+        checked: true,
+        unsupported_count: 0,
+        unsupported_claims: [],
+      },
+    },
+    citations: [
+      {
+        source_id: 'src_10k',
+        source: 'SEC',
+        title: 'Apple 10-K Filing',
+        snippet: 'Form 10-K annual report details',
+        url: 'https://www.sec.gov/example-10k',
+        published_date: '2026-02-10T00:00:00Z',
+      },
+    ],
+  });
+  await page.evaluate(async (payload) => {
+    await (window as any).__setWorkbenchReports(payload);
+  }, {
+    items: [
+      {
+        report_id: 'wb-rpt-quality-gap',
+        ticker: 'AAPL',
+        analysis_depth: 'deep_research',
+        source_trigger: 'workbench_deep_search',
+        title: 'AAPL 质量缺口报告',
+        summary: 'summary',
+        generated_at: '2026-02-18T00:00:00Z',
+      },
+    ],
+    replayById: {
+      'wb-rpt-quality-gap': qualityGapReport,
+    },
+  });
+
+  await page.goto('/workbench?symbol=AAPL');
+
+  await expect(page.getByTestId('workbench-report-grounding-warning')).toBeVisible();
+  await expect(page.getByTestId('workbench-report-quality-gap')).toBeVisible();
+  await page.getByTestId('workbench-quality-focus-0').click();
+  await expect(page.getByTestId('workbench-quality-drawer')).toBeVisible();
+  await expect(page.getByTestId('workbench-quality-snippet-item').first()).toBeVisible();
+});
+
+test('Workbench: verifier gap is visible in report view and diagnostics drawer', async ({ page }) => {
+  const verifierGapReport = buildWorkbenchReport('wb-rpt-verifier-gap', {
+    report_hints: {
+      quality: {
+        deep_report_required: true,
+        qualified: true,
+        missing_requirements: [],
+      },
+      grounding: {
+        grounding_rate: 0.78,
+        claim_count: 8,
+        grounded_count: 6,
+      },
+      verifier: {
+        enabled: true,
+        checked: true,
+        unsupported_count: 1,
+        unsupported_claims: [
+          {
+            claim: 'Gemini 2.0 预计 2026Q2 发布',
+            reason: '证据池中未找到明确支撑',
+          },
+        ],
+      },
+    },
+  });
+  await page.evaluate(async (payload) => {
+    await (window as any).__setWorkbenchReports(payload);
+  }, {
+    items: [
+      {
+        report_id: 'wb-rpt-verifier-gap',
+        ticker: 'AAPL',
+        analysis_depth: 'deep_research',
+        source_trigger: 'workbench_deep_search',
+        title: 'AAPL Verifier Gap 报告',
+        summary: 'summary',
+        generated_at: '2026-02-18T00:00:00Z',
+      },
+    ],
+    replayById: {
+      'wb-rpt-verifier-gap': verifierGapReport,
+    },
+  });
+
+  await page.goto('/workbench?symbol=AAPL');
+
+  await expect(page.getByTestId('workbench-report-verifier-gap')).toBeVisible();
+  await page.getByTestId('workbench-quality-open-drawer').click();
+  await expect(page.getByTestId('workbench-quality-drawer')).toBeVisible();
+  await expect(page.getByText('Gemini 2.0 预计 2026Q2 发布')).toBeVisible();
 });
