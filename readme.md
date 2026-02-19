@@ -18,7 +18,7 @@
 
 **FinSight AI** is a production-grade, multi-agent financial research system built on **LangGraph**. It unifies conversational AI analysis, a professional dashboard with 6 analytical tabs, autonomous task execution (Workbench), and proactive email alerts into one coherent platform.
 
-> 7 specialized research agents + 5 digest agents | Hybrid RAG (bge-m3) | Real-time ECharts | LLM-driven Smart Charts | Conflict detection across 8 agent pairs | Email subscription alerts
+> 7 Research Agents (autonomous, multi-tool) · 1 Synthesize Node (conflict detection + hallucination guard) · 5 Dashboard Scorers (per-tab AI cards) | Hybrid RAG (bge-m3) | Real-time ECharts | LLM-driven Smart Charts | Conflict detection across 8 agent pairs | Email subscription alerts
 
 ---
 
@@ -53,7 +53,7 @@
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
 | **LangGraph Pipeline** | 15-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
-| **AI-Powered Insights** | 5 Digest Agents generate real-time AI analysis cards for each dashboard tab (1-3s per agent) |
+| **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
 | **Smart Charts** | Dual-mode LLM-driven charts: `<chart>` (inline data) + `<chart_ref>` (real data reference) |
 | **Conflict Detection** | Automatic cross-agent conflict analysis across 8 comparable dimension pairs |
@@ -167,7 +167,7 @@ graph TB
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
         GRAPH[LangGraph Pipeline<br/>15-node Stateful Graph]
-        AGENTS[Agent Layer<br/>7 Research + 5 Digest]
+        AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
         TOOLS[Tool Layer<br/>17 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
     end
@@ -203,6 +203,7 @@ graph TB
 ## 🔄 LangGraph Pipeline (15 Nodes)
 
 The core of FinSight is a **15-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
+Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 15-node pipeline.
 
 ```mermaid
 flowchart TD
@@ -431,11 +432,11 @@ graph TB
 
 </details>
 
-### Digest Agents (5) — Dashboard AI
+### Dashboard Insight Scorers (5)
 
-Lightweight agents that generate AI insight cards for each dashboard tab. They accept already-fetched API data (zero network calls) and produce structured JSON via a single LLM call.
+Lightweight scorers (**not** autonomous agents — no tool use, no planning, no reflection loops) that generate AI insight cards for each dashboard tab. They accept already-fetched API data (zero network calls) and produce structured JSON via a **single LLM call**, with deterministic rule-based fallback when LLM is unavailable. These run independently from the LangGraph research pipeline via `/api/dashboard/insights`.
 
-| Digest Agent | Tab | Input Data | Analysis Focus | Latency |
+| Scorer | Tab | Input Data | Analysis Focus | Latency |
 |-------------|-----|------------|----------------|---------|
 | `OverviewDigest` | Overview | valuation + technicals + news | Composite score, key insights, overall risk | 1-3s |
 | `FinancialDigest` | Financial | financials + valuation | Earnings quality, financial health, valuation | 1-3s |
@@ -443,7 +444,7 @@ Lightweight agents that generate AI insight cards for each dashboard tab. They a
 | `NewsDigest` | News | market_news + impact_news | Topic extraction, sentiment analysis, risk events | 1-3s |
 | `PeersDigest` | Peers | peers + valuation | Competitive positioning, industry ranking | 1-3s |
 
-Each digest has a **deterministic fallback scorer** (rule-based) that activates when LLM is unavailable:
+Each scorer has a **deterministic fallback** (rule-based) that activates when LLM is unavailable:
 
 ```
 Score = Base(5) + RSI_normal(+1) + Trend_up(+2) + MACD_aligned(+1) + MA_bullish(+1) + Overbought(-1)
@@ -833,7 +834,7 @@ FinSight is designed for production reliability with multiple fallback layers:
 | **Embedding** | `BAAI/bge-m3` (1024-dim) | SHA1 hash embedding (96-dim) | Graceful degradation if model not loaded |
 | **Reranker** | `bge-reranker-v2-m3` | Skip reranking, use RRF scores directly | Silent passthrough |
 | **Price Data** | yfinance | 10 fallback sources (FMP → Finnhub → ...) | 11-level cascade |
-| **AI Insights** | LLM Digest Agents | Deterministic rule-based scoring | `model_generated=false` flag |
+| **AI Insights** | LLM Insight Scorers | Deterministic rule-based scoring | `model_generated=false` flag |
 | **Dashboard Data** | Live API fetch | In-memory cache (stale-while-revalidate) | TTL-based freshness |
 | **Checkpoints** | PostgreSQL | SQLite local file | Auto-detect on startup |
 | **RAG Store** | PostgreSQL + pgvector | In-memory store | Auto-fallback |
@@ -1003,7 +1004,7 @@ FinSight/
 │   ├── dashboard/              # Dashboard data & AI insights
 │   │   ├── data_service.py     # yfinance/FMP data fetching
 │   │   ├── cache.py            # DashboardCache (16 TTL categories)
-│   │   ├── insights_engine.py  # DigestAgent orchestrator
+│   │   ├── insights_engine.py  # Insight Scorer orchestrator (single-LLM-call, not autonomous agents)
 │   │   ├── insights_scorer.py  # Deterministic scoring fallback
 │   │   ├── insights_prompts.py # LLM prompt templates
 │   │   └── schemas.py          # Pydantic schemas

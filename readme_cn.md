@@ -18,7 +18,7 @@
 
 **FinSight AI** 是一个生产级多智能体金融研究系统，基于 **LangGraph** 构建。它将对话式 AI 分析、6 标签页专业仪表盘、自主任务执行（工作台）和邮件主动预警统一在一个平台中。
 
-> 7 个研究智能体 + 5 个摘要智能体 | 混合 RAG（bge-m3）| 实时 ECharts 图表 | LLM 驱动智能图表 | 8 组智能体交叉冲突检测 | 邮件订阅预警
+> 7 个研究智能体（自主多工具）· 1 个 Synthesize 节点（冲突检测 + 幻觉防护）· 5 个仪表盘评分器（按标签页生成 AI 卡片）| 混合 RAG（bge-m3）| 实时 ECharts 图表 | LLM 驱动智能图表 | 8 组智能体交叉冲突检测 | 邮件订阅预警
 
 ---
 
@@ -53,7 +53,7 @@
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
 | **LangGraph 管线** | 15 节点有状态图，处理聊天、快速分析和深度投研报告，自适应路由 |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
-| **AI 驱动洞察** | 5 个 Digest 智能体为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
+| **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |
 | **智能图表** | 双模式 LLM 图表：`<chart>`（内联数据）+ `<chart_ref>`（真实数据引用） |
 | **冲突检测** | 自动跨智能体冲突分析，涵盖 8 组可比较维度 |
@@ -167,7 +167,7 @@ graph TB
     subgraph "后端 (FastAPI)"
         ROUTER[API 路由<br/>chat · dashboard · execute · alerts]
         GRAPH[LangGraph 管线<br/>15 节点有状态图]
-        AGENTS[智能体层<br/>7 研究 + 5 摘要]
+        AGENTS[智能体层<br/>7 研究智能体 + 5 洞察评分器]
         TOOLS[工具层<br/>17 个注册工具]
         SYNTH[合成节点<br/>冲突检测 · 幻觉洗涤]
     end
@@ -203,6 +203,7 @@ graph TB
 ## 🔄 LangGraph 管线（15 节点）
 
 FinSight 的核心是一个 **15 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
+仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 15 节点 LangGraph 主链路。
 
 ```mermaid
 flowchart TD
@@ -431,11 +432,11 @@ graph TB
 
 </details>
 
-### 摘要智能体（5 个） — 仪表盘 AI
+### 仪表盘洞察评分器（5 个）
 
-轻量级智能体，为每个仪表盘标签页生成 AI 洞察卡片。它们接受已获取的 API 数据（零网络调用），通过单次 LLM 调用输出结构化 JSON。
+轻量级评分器（**非**自主智能体——无工具调用、无规划、无反思循环），为每个仪表盘标签页生成 AI 洞察卡片。它们接受已获取的 API 数据（零网络调用），通过**单次 LLM 调用**输出结构化 JSON，LLM 不可用时自动降级为确定性规则评分。这些评分器通过 `/api/dashboard/insights` 独立运行，不在 LangGraph 研究管线内。
 
-| 摘要智能体 | 标签页 | 输入数据 | 分析焦点 | 延迟 |
+| 评分器 | 标签页 | 输入数据 | 分析焦点 | 延迟 |
 |-----------|--------|---------|---------|------|
 | `OverviewDigest` | 总览 | 估值 + 技术 + 新闻 | 综合评分、关键洞察、整体风险 | 1-3s |
 | `FinancialDigest` | 财务 | 财务 + 估值 | 盈利质量、财务健康、估值合理性 | 1-3s |
@@ -443,7 +444,7 @@ graph TB
 | `NewsDigest` | 新闻 | 市场新闻 + 影响新闻 | 主题提取、情绪分析、风险事件 | 1-3s |
 | `PeersDigest` | 同行 | 同行 + 估值 | 竞争力评价、行业排名 | 1-3s |
 
-每个摘要智能体均有**确定性回退评分器**（规则驱动），在 LLM 不可用时激活：
+每个评分器均有**确定性回退**（规则驱动），在 LLM 不可用时激活：
 
 ```
 评分 = 基准(5) + RSI正常(+1) + 上升趋势(+2) + MACD顺向(+1) + 均线多头(+1) + 超买(-1)
@@ -833,7 +834,7 @@ FinSight 为生产可靠性设计了多层回退机制：
 | **嵌入** | `BAAI/bge-m3`（1024 维） | SHA1 哈希嵌入（96 维） | 模型未加载时优雅降级 |
 | **精排器** | `bge-reranker-v2-m3` | 跳过精排，直接用 RRF 分数 | 静默穿透 |
 | **价格数据** | yfinance | 10 个回退源（FMP → Finnhub → ...） | 11 级级联 |
-| **AI 洞察** | LLM 摘要智能体 | 确定性规则评分 | `model_generated=false` 标志 |
+| **AI 洞察** | LLM 洞察评分器 | 确定性规则评分 | `model_generated=false` 标志 |
 | **仪表盘数据** | 实时 API 获取 | 内存缓存（stale-while-revalidate） | 基于 TTL 的新鲜度 |
 | **检查点** | PostgreSQL | SQLite 本地文件 | 启动时自动检测 |
 | **RAG 存储** | PostgreSQL + pgvector | 内存存储 | 自动回退 |
@@ -1003,7 +1004,7 @@ FinSight/
 │   ├── dashboard/              # 仪表盘数据 & AI 洞察
 │   │   ├── data_service.py     # yfinance/FMP 数据获取
 │   │   ├── cache.py            # DashboardCache（16 类 TTL）
-│   │   ├── insights_engine.py  # DigestAgent 编排器
+│   │   ├── insights_engine.py  # 洞察评分器编排（单次 LLM 调用，非自主智能体）
 │   │   ├── insights_scorer.py  # 确定性评分回退
 │   │   ├── insights_prompts.py # LLM Prompt 模板
 │   │   └── schemas.py          # Pydantic Schema

@@ -1,13 +1,13 @@
 """
-Dashboard Insights Engine — Lightweight Digest Agents.
+Dashboard Insights Engine - Lightweight Dashboard Scorers.
 
 Provides AI-powered analysis cards for each Dashboard tab.
-Each DigestAgent takes pre-fetched API data and produces a structured
-InsightCard via a single LLM call (target latency: 1-3s per agent).
+Each scorer takes pre-fetched API data and produces a structured
+InsightCard via a single LLM call (target latency: 1-3s per scorer).
 
 Architecture:
-    - DigestAgent (ABC): base class with digest() method
-    - 5 concrete agents: Technical / Financial / News / Peers / Overview
+    - DigestAgent (ABC): scorer base class (historical name kept for compatibility)
+    - 5 concrete scorers: Technical / Financial / News / Peers / Overview
     - InsightsOrchestrator: parallel execution + caching + fallback
 """
 
@@ -83,7 +83,7 @@ _llm_init_attempted = False
 
 
 def _get_llm():
-    """Lazy-init LLM instance for digest agents."""
+    """Lazy-init LLM instance for dashboard scorers."""
     global _llm_instance, _llm_init_attempted
     if _llm_instance is not None:
         return _llm_instance
@@ -98,10 +98,10 @@ def _get_llm():
             max_tokens=1024,
             request_timeout=8,
         )
-        logger.info("[Insights] LLM initialized for digest agents")
+        logger.info("[Insights] LLM initialized for dashboard scorers")
         return _llm_instance
     except Exception as exc:
-        logger.warning("[Insights] LLM init failed, digest agents will use fallback: %s", exc)
+        logger.warning("[Insights] LLM init failed, dashboard scorers will use fallback: %s", exc)
         return None
 
 
@@ -111,7 +111,12 @@ def _get_llm():
 
 class DigestAgent(ABC):
     """
-    Lightweight digest agent — does NOT inherit BaseFinancialAgent.
+    Lightweight dashboard scorer (historical class name: DigestAgent).
+
+    This component does NOT inherit BaseFinancialAgent and does not perform
+    autonomous planning, tool orchestration, or reflection loops.
+    The class name is intentionally retained for backward compatibility with
+    InsightCard.agent_name / AGENT_NAME identifiers and related cache mappings.
 
     Each subclass implements:
       - _build_prompt(): construct LLM prompt from pre-fetched data
@@ -375,7 +380,7 @@ class OverviewDigest(DigestAgent):
 
 class InsightsOrchestrator:
     """
-    Orchestrate parallel digest agent execution with caching.
+    Orchestrate parallel dashboard scorer execution with caching.
 
     Usage::
 
@@ -446,7 +451,7 @@ class InsightsOrchestrator:
         return await self._generate_fresh(sym_upper)
 
     async def _generate_fresh(self, symbol: str) -> DashboardInsightsResponse:
-        """Run all digest agents in parallel."""
+        """Run all dashboard scorers in parallel."""
         now_iso = datetime.now(timezone.utc).isoformat()
 
         # Acquire semaphore to limit concurrent generations
