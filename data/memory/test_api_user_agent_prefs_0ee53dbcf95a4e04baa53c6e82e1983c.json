@@ -1,0 +1,22 @@
+{
+  "user_id": "test_api_user_agent_prefs_0ee53dbcf95a4e04baa53c6e82e1983c",
+  "risk_tolerance": "medium",
+  "investment_style": "balanced",
+  "watchlist": [],
+  "preferences": {
+    "agent_preferences": {
+      "agents": {
+        "price_agent": "standard",
+        "news_agent": "deep",
+        "fundamental_agent": "standard",
+        "technical_agent": "off",
+        "macro_agent": "standard",
+        "risk_agent": "standard",
+        "deep_search_agent": "standard"
+      },
+      "maxRounds": 10,
+      "concurrentMode": false
+    }
+  },
+  "last_active": "2026-02-21T02:29:05.712220"
+}
