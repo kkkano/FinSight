@@ -52,3 +52,4 @@ def test_tools_capabilities_reports_env_and_market_filters(monkeypatch):
     assert "get_sec_filings" not in selected
     assert "get_sec_material_events" not in selected
     assert "get_sec_risk_factors" not in selected
+    assert "get_local_market_filings" in selected

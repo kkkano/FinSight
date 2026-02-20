@@ -53,6 +53,24 @@ def planner_stub(state: GraphState) -> dict:
     def _contains_any(tokens: tuple[str, ...]) -> bool:
         return any(token in query_lower for token in tokens)
 
+    deep_financial_tokens = (
+        "deep report",
+        "deep research",
+        "longform",
+        "filing",
+        "10-k",
+        "10-q",
+        "earnings call",
+        "transcript",
+        "研报",
+        "深度",
+        "财报",
+        "电话会",
+    )
+    is_deep_financial_report = output_mode == "investment_report" and (
+        _contains_any(deep_financial_tokens) or "deep_search_agent" in allowed_agents
+    )
+
     def _append_tool_step(
         name: str,
         inputs: dict,
@@ -341,6 +359,69 @@ def planner_stub(state: GraphState) -> dict:
                     "name": "analyze_historical_drawdowns",
                     "inputs": {"ticker": primary_ticker},
                     "why": "研报模式补充历史回撤信息用于风险章节",
+                    "optional": True,
+                }
+            )
+            step_id += 1
+        if "get_local_market_filings" in allowed_tools:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "tool",
+                    "name": "get_local_market_filings",
+                    "inputs": {"ticker": primary_ticker, "limit": 8},
+                    "why": "Report mode: add CN/HK local market disclosures for non-US issuers.",
+                    "optional": True,
+                }
+            )
+            step_id += 1
+        else:
+            if "get_sec_filings" in allowed_tools:
+                steps.append(
+                    {
+                        "id": f"s{step_id}",
+                        "kind": "tool",
+                        "name": "get_sec_filings",
+                        "inputs": {"ticker": primary_ticker, "forms": "10-K,10-Q", "limit": 6},
+                        "why": "Report mode: add SEC EDGAR 10-K/10-Q filing evidence.",
+                        "optional": True,
+                    }
+                )
+                step_id += 1
+            if "get_sec_material_events" in allowed_tools:
+                steps.append(
+                    {
+                        "id": f"s{step_id}",
+                        "kind": "tool",
+                        "name": "get_sec_material_events",
+                        "inputs": {"ticker": primary_ticker, "limit": 5},
+                        "why": "Report mode: add SEC 8-K material events as event evidence.",
+                        "optional": True,
+                    }
+                )
+                step_id += 1
+
+        if is_deep_financial_report and "get_authoritative_media_news" in allowed_tools:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "tool",
+                    "name": "get_authoritative_media_news",
+                    "inputs": {"query": f"{primary_ticker} earnings outlook", "max_results": 6, "authoritative_only": True},
+                    "why": "Deep financial report: force authoritative media retrieval step.",
+                    "optional": True,
+                }
+            )
+            step_id += 1
+
+        if is_deep_financial_report and "get_earnings_call_transcripts" in allowed_tools:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "tool",
+                    "name": "get_earnings_call_transcripts",
+                    "inputs": {"ticker": primary_ticker, "limit": 5},
+                    "why": "Deep financial report: add free earnings-call transcript evidence.",
                     "optional": True,
                 }
             )

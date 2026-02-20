@@ -723,6 +723,43 @@ queries 要求：
             except Exception as exc:
                 logger.info(f"[DeepSearch] Search fallback failed: {exc}")
 
+        trusted_count = 0
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            domain = self._normalized_domain_from_url(item.get("url") or "")
+            if self._is_trusted_finance_domain(domain):
+                trusted_count += 1
+
+        if trusted_count < 2:
+            try:
+                from backend.tools.authoritative_feeds import search_authoritative_feeds
+
+                feed_items = search_authoritative_feeds(query, max_results=5, authoritative_only=True)
+                existing_urls = {
+                    str(item.get("url") or "").strip()
+                    for item in results
+                    if isinstance(item, dict) and str(item.get("url") or "").strip()
+                }
+                for item in feed_items:
+                    if not isinstance(item, dict):
+                        continue
+                    url = str(item.get("url") or "").strip()
+                    if not url or url in existing_urls:
+                        continue
+                    existing_urls.add(url)
+                    results.append(
+                        {
+                            "title": item.get("title", ""),
+                            "url": url,
+                            "snippet": item.get("snippet") or item.get("title") or "",
+                            "source": "authoritative_feed",
+                            "published_date": item.get("published_date"),
+                        }
+                    )
+            except Exception as exc:
+                logger.info(f"[DeepSearch] Authoritative feed supplement failed: {exc}")
+
         return results
 
     def _is_finance_research_intent(self, query: str) -> bool:
@@ -964,6 +1001,26 @@ queries 要求：
             text = self._extract_html_text(response.text)
 
         text = self._trim_text(text)
+        domain = self._normalized_domain_from_url(url)
+
+        enable_jina_fallback = str(os.getenv("DEEPSEARCH_ENABLE_JINA_FALLBACK", "true")).strip().lower() in {"1", "true", "yes", "on"}
+        if (
+            enable_jina_fallback
+            and not is_pdf
+            and len(text) < self.MIN_TEXT_CHARS
+            and domain != "news.google.com"
+            and self._is_trusted_finance_domain(domain)
+        ):
+            try:
+                from backend.tools.jina_reader import fetch_via_jina
+
+                jina_text = fetch_via_jina(url)
+                if jina_text and len(jina_text) > len(text):
+                    text = self._trim_text(jina_text)
+                    logger.info("[DeepSearch] Jina fallback: %s (%d chars)", url, len(text))
+            except Exception:
+                pass
+
         title = item.get("title") or self._infer_title(url)
         snippet = str(item.get("snippet") or "").strip()
 

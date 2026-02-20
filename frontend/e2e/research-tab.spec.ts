@@ -315,4 +315,37 @@ test.describe('Research tab regressions', () => {
     await diagnosticTip.hover();
     await expect(diagnosticTip.locator('[role="tooltip"]')).toBeVisible();
   });
+
+  test('quality gap focus action expands and locates reference snippets', async ({ page }) => {
+    reportId = 'r-quality-focus';
+    replayReport = buildReplayReport({
+      report_id: reportId,
+      report_hints: {
+        quality: {
+          deep_report_required: true,
+          qualified: false,
+          missing_requirements: ['证据摘录质量不足（多数仅URL，缺少正文摘录）'],
+        },
+      },
+      citations: [
+        {
+          source_id: 'src_1',
+          source: 'Reuters',
+          title: 'Reuters note',
+          snippet: 'This is a longer evidence snippet used for focus and scroll validation.',
+          url: 'https://www.reuters.com/world/us/apple-coverage-2026-02-18/',
+          published_date: '2026-02-17T00:00:00Z',
+        },
+      ],
+    });
+
+    await page.goto('/dashboard/AAPL?tab=research');
+
+    const qualityGap = page.getByTestId('research-empty-state');
+    await expect(qualityGap).toBeVisible();
+    await qualityGap.locator('button').first().click();
+
+    await expect(page.getByTestId('research-reference-snippets')).toBeVisible();
+    await expect(page.getByTestId('research-reference-snippet-item').first()).toBeVisible();
+  });
 });

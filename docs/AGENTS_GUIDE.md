@@ -111,3 +111,53 @@ flowchart LR
 - 看执行：`backend/graph/nodes/execute_plan_stub.py`, `backend/graph/executor.py`
 - 看 SSE：`backend/services/execution_service.py`, `frontend/src/api/client.ts`
 - 看仪表盘洞察：`backend/dashboard/insights_engine.py`
+
+## 8. Phase J 证据质量增强（2026-02-19）
+
+- SEC 证据链路激活：
+  - `planner_stub.py` / `planner.py` 在 `investment_report` 模式自动补充可选 SEC 步骤（US 市场）。
+  - `execute_plan_stub.py` 将 SEC 输出展开为逐条 evidence（10-K/10-Q/8-K 可直接被 quality gate 识别）。
+- 免费增强源：
+  - `backend/tools/jina_reader.py`：正文不足时补充抓取（可配置开关）。
+  - `backend/tools/authoritative_feeds.py`：权威媒体 RSS 补充。
+- 质量门槛分级：
+  - `backend/graph/report_builder.py` 按 report type 选择检查项，并使用 graded penalty 代替统一钳制。
+- 前端片段定位修复：
+  - `ResearchTab.tsx`：中文 requirement fallback + 延迟滚动。
+  - `ReferenceList.tsx`：展开后下一帧滚动，修复 ref 竞态。
+
+## 9. Phase J P0/P1 Tool Matrix Update (2026-02-20)
+
+### 9.1 Newly Added Report-Quality Tools
+- `get_authoritative_media_news`
+  - file: `backend/tools/authoritative_feeds.py`
+  - role: free authoritative RSS aggregation (Reuters/Bloomberg/WSJ/FT/CNBC/Yahoo domain set)
+  - fail mode: fail-open (returns empty list, no pipeline break)
+- `get_earnings_call_transcripts`
+  - file: `backend/tools/earnings_transcripts.py`
+  - role: free transcript discovery + optional Jina enrichment for short snippets
+  - fail mode: fail-open
+- `get_local_market_filings`
+  - file: `backend/tools/local_disclosure.py`
+  - role: CN/HK local disclosure retrieval for non-US deep financial reports
+  - fail mode: fail-open
+
+### 9.2 Planner Enforcement Rules
+- `deep_financial` report now force-includes:
+  - authoritative media retrieval
+  - earnings transcript retrieval
+- market switch:
+  - US -> SEC filing chain
+  - CN/HK -> local disclosure chain
+- budget pruning keeps required report tools pinned (cannot be dropped by tool budget trimming).
+
+### 9.3 Quality Gate Mapping
+- US deep financial checks: `10-K + 10-Q + transcript + authoritative_media + rich_snippet`
+- CN/HK deep financial checks: `local_filing + transcript + authoritative_media + rich_snippet`
+- penalty strategy: graded deduction (instead of one hard cap for all cases).
+
+### 9.4 Real Smoke Status
+- See `scripts/phase_j_smoke_before_after_2026-02-19.json`
+- Latest run (live tools):
+  - `AAPL`: all deep-financial checks pass
+  - `600519.SS`: local-market profile checks pass

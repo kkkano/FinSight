@@ -81,6 +81,12 @@ from .sec import (
     get_sec_material_events,
     get_sec_risk_factors,
 )
+from .authoritative_feeds import (
+    search_authoritative_feeds,
+    get_authoritative_media_news,
+)
+from .earnings_transcripts import get_earnings_call_transcripts
+from .local_disclosure import get_local_market_filings
 
 __all__ = [
     "ALPHA_VANTAGE_API_KEY",
@@ -152,4 +158,8 @@ __all__ = [
     "get_sec_filings",
     "get_sec_material_events",
     "get_sec_risk_factors",
+    "search_authoritative_feeds",
+    "get_authoritative_media_news",
+    "get_earnings_call_transcripts",
+    "get_local_market_filings",
 ]

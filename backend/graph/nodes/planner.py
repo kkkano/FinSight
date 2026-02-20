@@ -535,11 +535,16 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
 
     # Enforce operation-specific required steps for reliability.
     existing_tool_names = {s.get("name") for s in sanitized_steps if s.get("kind") == "tool"}
+    required_tool_names: set[str] = set()
 
     def _insert_required_tool(name: str, inputs: dict[str, Any], why: str) -> None:
         if name not in allowed_tools:
             return
         if name in existing_tool_names:
+            required_tool_names.add(name)
+            for existing_step in sanitized_steps:
+                if existing_step.get("kind") == "tool" and existing_step.get("name") == name:
+                    existing_step["optional"] = False
             return
         step = {
             "id": _next_step_id(existing_ids),
@@ -552,6 +557,34 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         }
         # Insert right after selection summary (if present), else at start.
         insert_at = 1 if (sanitized_steps and sanitized_steps[0].get("name") == "summarize_selection") else 0
+        sanitized_steps.insert(insert_at, step)
+        existing_tool_names.add(name)
+        required_tool_names.add(name)
+
+    def _insert_optional_tool(name: str, inputs: dict[str, Any], why: str) -> None:
+        if name not in allowed_tools:
+            return
+        if name in existing_tool_names:
+            return
+        step = {
+            "id": _next_step_id(existing_ids),
+            "kind": "tool",
+            "name": name,
+            "inputs": inputs,
+            "parallel_group": None,
+            "why": why,
+            "optional": True,
+        }
+        # Keep optional enrichment tools after required tools / selection summary.
+        insert_at = 0
+        if sanitized_steps and sanitized_steps[0].get("name") == "summarize_selection":
+            insert_at = 1
+        while (
+            insert_at < len(sanitized_steps)
+            and sanitized_steps[insert_at].get("kind") == "tool"
+            and sanitized_steps[insert_at].get("optional") is False
+        ):
+            insert_at += 1
         sanitized_steps.insert(insert_at, step)
         existing_tool_names.add(name)
 
@@ -571,6 +604,36 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             {"tickers": mapping},
             "Compare request: fetch multi-ticker performance baseline (YTD/1Y) first",
         )
+    if output_mode == "investment_report" and primary_ticker:
+        filing_inserter = _insert_required_tool if has_deep_hint else _insert_optional_tool
+        if "get_local_market_filings" in allowed_tools:
+            filing_inserter(
+                "get_local_market_filings",
+                {"ticker": primary_ticker, "limit": 8},
+                "Report mode: add CN/HK local market disclosures for non-US issuers.",
+            )
+        else:
+            filing_inserter(
+                "get_sec_filings",
+                {"ticker": primary_ticker, "forms": "10-K,10-Q", "limit": 6},
+                "Report mode: add SEC EDGAR 10-K/10-Q filing evidence.",
+            )
+            _insert_optional_tool(
+                "get_sec_material_events",
+                {"ticker": primary_ticker, "limit": 5},
+                "Report mode: add SEC 8-K material events as event evidence.",
+            )
+        if has_deep_hint:
+            _insert_required_tool(
+                "get_authoritative_media_news",
+                {"query": f"{primary_ticker} earnings outlook", "max_results": 6, "authoritative_only": True},
+                "Deep financial report: force authoritative media retrieval step.",
+            )
+            _insert_required_tool(
+                "get_earnings_call_transcripts",
+                {"ticker": primary_ticker, "limit": 5},
+                "Deep financial report: add free earnings-call transcript evidence.",
+            )
 
     default_agent_order = [
         "price_agent",
@@ -661,6 +724,11 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
 
     # Cap tool/agent steps count (rough) to budget.max_tools. Keep required tools first.
     max_tools = int(safe_budget.get("max_tools", 0) or 0)
+    if output_mode == "investment_report" and has_deep_hint and primary_ticker:
+        # Deep financial reports must keep filing + transcript + authoritative media
+        # enrichment in addition to baseline report agents.
+        max_tools = max(max_tools, 10)
+        safe_budget["max_tools"] = max_tools
     if max_tools > 0:
         # In report mode, prioritize keeping the baseline agent cards so the UI is stable/readable.
         baseline_agents: set[str] = set()
@@ -671,7 +739,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             pinned_remaining = sum(
                 1
                 for step in sanitized_steps
-                if step.get("kind") == "agent" and step.get("name") in baseline_agents
+                if (
+                    (step.get("kind") == "agent" and step.get("name") in baseline_agents)
+                    or (step.get("kind") == "tool" and step.get("name") in required_tool_names)
+                )
             )
             kept: list[dict[str, Any]] = []
             tool_count = 0
@@ -682,7 +753,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                     kept.append(step)
                     continue
 
-                is_pinned = kind == "agent" and step.get("name") in baseline_agents
+                is_pinned = (
+                    (kind == "agent" and step.get("name") in baseline_agents)
+                    or (kind == "tool" and step.get("name") in required_tool_names)
+                )
                 if is_pinned:
                     kept.append(step)
                     tool_count += 1
@@ -725,8 +799,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 continue
             is_high_cost_agent = kind == "agent" and name in _HIGH_COST_AGENTS
             drop_order.append((0 if is_high_cost_agent else 1, idx))
-        drop_order.sort()
+        drop_order.sort(key=lambda pair: (pair[0], -pair[1]))
         for _priority, idx in drop_order:
+            if idx < 0 or idx >= len(sanitized_steps):
+                continue
             step = sanitized_steps[idx]
             dropped_for_budget.append(str(step.get("id") or step.get("name") or f"idx:{idx}"))
             sanitized_steps.pop(idx)

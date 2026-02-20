@@ -44,10 +44,13 @@ except ImportError:  # pragma: no cover - backwards compatibility
 
 try:  # pragma: no cover - optional tools
     from backend.tools import (  # type: ignore
+        get_authoritative_media_news as _get_authoritative_media_news,
+        get_earnings_call_transcripts as _get_earnings_call_transcripts,
         get_earnings_estimates as _get_earnings_estimates,
         get_eps_revisions as _get_eps_revisions,
         get_event_calendar as _get_event_calendar,
         get_factor_exposure as _get_factor_exposure,
+        get_local_market_filings as _get_local_market_filings,
         get_option_chain_metrics as _get_option_chain_metrics,
         get_sec_filings as _get_sec_filings,
         get_sec_material_events as _get_sec_material_events,
@@ -58,10 +61,13 @@ try:  # pragma: no cover - optional tools
 except Exception:  # pragma: no cover - optional tools fallback
     try:
         from tools import (  # type: ignore
+            get_authoritative_media_news as _get_authoritative_media_news,
+            get_earnings_call_transcripts as _get_earnings_call_transcripts,
             get_earnings_estimates as _get_earnings_estimates,
             get_eps_revisions as _get_eps_revisions,
             get_event_calendar as _get_event_calendar,
             get_factor_exposure as _get_factor_exposure,
+            get_local_market_filings as _get_local_market_filings,
             get_option_chain_metrics as _get_option_chain_metrics,
             get_sec_filings as _get_sec_filings,
             get_sec_material_events as _get_sec_material_events,
@@ -70,10 +76,13 @@ except Exception:  # pragma: no cover - optional tools fallback
             score_news_source_reliability as _score_news_source_reliability,
         )
     except Exception:  # pragma: no cover - compatibility mode
+        _get_authoritative_media_news = None
+        _get_earnings_call_transcripts = None
         _get_earnings_estimates = None
         _get_eps_revisions = None
         _get_option_chain_metrics = None
         _get_factor_exposure = None
+        _get_local_market_filings = None
         _run_portfolio_stress_test = None
         _get_event_calendar = None
         _score_news_source_reliability = None
@@ -130,6 +139,28 @@ class SourceReliabilityInput(BaseModel):
 
     source: str = Field(default="", description="Source name, e.g. Reuters")
     url: str = Field(default="", description="Optional article URL")
+
+
+class AuthoritativeMediaInput(BaseModel):
+    """Authoritative media retrieval inputs."""
+
+    query: str = Field(description="Query for authoritative media coverage")
+    max_results: int = Field(default=8, ge=1, le=20, description="Maximum article rows")
+    authoritative_only: bool = Field(default=True, description="Keep only trusted media domains")
+
+
+class EarningsTranscriptInput(BaseModel):
+    """Free transcript lookup inputs."""
+
+    ticker: str = Field(description="Ticker symbol, e.g. 'AAPL'")
+    limit: int = Field(default=6, ge=1, le=20, description="Maximum transcript rows")
+
+
+class LocalFilingsInput(BaseModel):
+    """Local market filing lookup inputs for CN/HK symbols."""
+
+    ticker: str = Field(description="Ticker symbol, e.g. '600519.SS' or '0700.HK'")
+    limit: int = Field(default=8, ge=1, le=20, description="Maximum filing rows")
 
 
 class SecFilingsInput(BaseModel):
@@ -489,6 +520,49 @@ def score_news_source_reliability(source: str = "", url: str = "") -> str:
         return f"score_news_source_reliability failed: {exc}"
 
 
+@tool("get_authoritative_media_news", args_schema=AuthoritativeMediaInput, return_direct=False)
+def get_authoritative_media_news(query: str, max_results: int = 8, authoritative_only: bool = True) -> str:
+    """Get authoritative media links from free publisher feeds."""
+
+    if not callable(_get_authoritative_media_news):
+        return "get_authoritative_media_news unavailable: backend.tools function not found"
+    try:
+        payload = _get_authoritative_media_news(
+            query=query,
+            max_results=max_results,
+            authoritative_only=authoritative_only,
+        )
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_authoritative_media_news failed: {exc}"
+
+
+@tool("get_earnings_call_transcripts", args_schema=EarningsTranscriptInput, return_direct=False)
+def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> str:
+    """Find free earnings-call transcript links and snippets."""
+
+    if not callable(_get_earnings_call_transcripts):
+        return "get_earnings_call_transcripts unavailable: backend.tools function not found"
+    try:
+        payload = _get_earnings_call_transcripts(ticker=ticker, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_earnings_call_transcripts failed: {exc}"
+
+
+@tool("get_local_market_filings", args_schema=LocalFilingsInput, return_direct=False)
+def get_local_market_filings(ticker: str, limit: int = 8) -> str:
+    """Find CN/HK exchange disclosures via free local filing sources."""
+
+    if not callable(_get_local_market_filings):
+        return "get_local_market_filings unavailable: backend.tools function not found"
+    try:
+        payload = _get_local_market_filings(ticker=ticker, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_local_market_filings failed: {exc}"
+
+
 @tool("get_sec_filings", args_schema=SecFilingsInput, return_direct=False)
 def get_sec_filings(ticker: str, forms: str = "10-K,10-Q,8-K", limit: int = 12) -> str:
     """Get recent SEC filings for a US ticker from EDGAR submissions."""
@@ -543,7 +617,10 @@ FINANCIAL_TOOLS = [
     get_company_info,
     get_company_news,
     get_event_calendar,
+    get_authoritative_media_news,
+    get_earnings_call_transcripts,
     score_news_source_reliability,
+    get_local_market_filings,
     search,
     get_market_sentiment,
     get_economic_events,
@@ -593,7 +670,10 @@ __all__ = [
     "get_sec_risk_factors",
     "get_company_news",
     "get_event_calendar",
+    "get_authoritative_media_news",
+    "get_earnings_call_transcripts",
     "score_news_source_reliability",
+    "get_local_market_filings",
     "get_company_info",
     "search",
     "get_market_sentiment",

@@ -264,13 +264,20 @@ COMMON_WORDS = {
 def is_probably_ticker(ticker: str) -> bool:
     if not ticker:
         return False
+    if _is_structured_market_ticker(ticker):
+        return True
     if ticker in COMMON_WORDS:
         return False
     if ticker.startswith("^"):
         return True
-    if len(ticker) > 8:
+    if len(ticker) > 12:
         return False
     return bool(re.match(r"^[A-Z0-9]{1,6}([.-][A-Z0-9]{1,4})?$", ticker))
+
+
+def _is_structured_market_ticker(ticker: str) -> bool:
+    text = str(ticker or "").strip().upper()
+    return bool(re.match(r"^\d{5,6}\.(SS|SZ|BJ|HK)$", text))
 
 
 def normalize_ticker(raw: str) -> str:
@@ -344,12 +351,14 @@ def extract_tickers(query: str) -> Dict[str, Any]:
 
     # 2. Match English tickers
     # Keep original case to distinguish user-typed TICKER from ordinary words
-    raw_matches = re.findall(r'(?<![A-Za-z])([A-Za-z]{2,5})(?![A-Za-z])', query)
+    raw_matches = re.findall(r'(?<![A-Za-z0-9.])([A-Za-z]{2,5})(?![A-Za-z0-9])', query)
     originally_upper = {m for m in raw_matches if m == m.upper() and len(m) >= 2}
     index_tickers = re.findall(r'(\^[A-Za-z]{3,})', query)
     raw_matches.extend(index_tickers)
     dotted_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{1,5}[.-][A-Za-z]{1,4})(?![A-Za-z])', query)
     raw_matches.extend(dotted_tickers)
+    cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])(\d{5,6}\.(?:SS|SZ|BJ|HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
+    raw_matches.extend(cn_dotted_tickers)
     potential_tickers = [t.upper() for t in raw_matches]
 
     for ticker in potential_tickers:
@@ -367,7 +376,7 @@ def extract_tickers(query: str) -> Dict[str, Any]:
             # the original query — this filters out ordinary English words
             # (e.g. "with", "view") while preserving user-typed symbols
             # (e.g. "PLTR", "SOFI").
-            if ticker in originally_upper and ticker not in metadata['tickers']:
+            if (ticker in originally_upper or _is_structured_market_ticker(ticker)) and ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)
 
     # 3. Match Chinese company names

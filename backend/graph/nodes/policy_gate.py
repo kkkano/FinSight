@@ -35,6 +35,32 @@ def _is_dashboard_source(ui_context: dict | None) -> bool:
     return bool(source) and source.startswith("dashboard")
 
 
+def _infer_market_from_ticker(ticker: str) -> str | None:
+    symbol = str(ticker or "").strip().upper()
+    if not symbol:
+        return None
+    if symbol.endswith((".SS", ".SZ", ".BJ")):
+        return "CN"
+    if symbol.endswith(".HK"):
+        return "HK"
+    return "US"
+
+
+def _infer_market_from_subject(subject: dict | None) -> str | None:
+    if not isinstance(subject, dict):
+        return None
+    tickers = subject.get("tickers")
+    if not isinstance(tickers, list):
+        return None
+    for ticker in tickers:
+        if not isinstance(ticker, str):
+            continue
+        inferred = _infer_market_from_ticker(ticker)
+        if inferred:
+            return inferred
+    return None
+
+
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
     if subject_type in ("news_item", "news_set"):
@@ -42,6 +68,7 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "get_company_news",
             "get_event_calendar",
             "score_news_source_reliability",
+            "get_authoritative_media_news",
             "search",
             "get_current_datetime",
         ]
@@ -70,7 +97,10 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "get_company_info",
             "get_company_news",
             "get_event_calendar",
+            "get_authoritative_media_news",
+            "get_earnings_call_transcripts",
             "score_news_source_reliability",
+            "get_local_market_filings",
             "get_earnings_estimates",
             "get_eps_revisions",
             "analyze_historical_drawdowns",
@@ -130,7 +160,10 @@ def policy_gate(state: GraphState) -> dict:
 
     # Tool whitelist (manifest-first, legacy fallback)
     market_raw = ui_context.get("market") if isinstance(ui_context, dict) else None
-    market = str(market_raw).strip().upper() if isinstance(market_raw, str) and market_raw.strip() else "US"
+    if isinstance(market_raw, str) and market_raw.strip():
+        market = str(market_raw).strip().upper()
+    else:
+        market = _infer_market_from_subject(subject) or "US"
     fallback_reason: str | None = None
     try:
         from backend.tools.manifest import select_tools

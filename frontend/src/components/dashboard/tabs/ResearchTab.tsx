@@ -137,7 +137,11 @@ function resolveFocusHintFromRequirement(requirement: string): string | null {
     return 'reuters bloomberg wsj ft cnbc yahoo';
   }
   if (lower.includes('摘录') || lower.includes('snippet')) return 'snippet quote excerpt';
-  return null;
+  const chineseTokens = lower.match(/[\u4e00-\u9fff]{2,}/g);
+  if (chineseTokens && chineseTokens.length > 0) {
+    return chineseTokens.slice(0, 3).join(' ');
+  }
+  return requirement.slice(0, 20).trim() || null;
 }
 
 function extractPriceAsOf(reportMeta: Record<string, unknown> | null): string {
@@ -387,10 +391,12 @@ export function ResearchTab() {
     setReferenceFocusHint(focusHint);
     setReferenceFocusToken((prev) => prev + 1);
 
-    const anchor = document.getElementById('research-reference-list');
-    if (anchor) {
-      anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    requestAnimationFrame(() => {
+      const anchor = document.getElementById('research-reference-list');
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
   }, []);
 
   if (loading) {

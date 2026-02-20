@@ -1160,10 +1160,63 @@ def _derive_report_tags_and_hints(
 
 
 def _is_deep_report_query(query: str) -> bool:
+    return _classify_report_type(query) == "deep_financial"
+
+
+_QUALITY_PROFILES: dict[str, dict[str, bool]] = {
+    "deep_financial": {
+        "10k": True,
+        "10q": True,
+        "local_filing": False,
+        "transcript": True,
+        "media": True,
+        "snippets": True,
+    },
+    "general": {
+        "10k": False,
+        "10q": False,
+        "local_filing": False,
+        "transcript": False,
+        "media": True,
+        "snippets": True,
+    },
+    "technical": {
+        "10k": False,
+        "10q": False,
+        "local_filing": False,
+        "transcript": False,
+        "media": False,
+        "snippets": True,
+    },
+    "news": {
+        "10k": False,
+        "10q": False,
+        "local_filing": False,
+        "transcript": False,
+        "media": True,
+        "snippets": True,
+    },
+}
+
+
+def _classify_report_type(query: str) -> str:
     q = _safe_str(query).strip().lower()
-    if not q:
-        return False
-    keywords = (
+    technical_tokens = (
+        "technical",
+        "macd",
+        "rsi",
+        "技术分析",
+        "支撑",
+        "阻力",
+        "趋势",
+    )
+    news_tokens = (
+        "news",
+        "新闻",
+        "影响分析",
+        "事件",
+    )
+    deep_tokens = (
         "deep report",
         "longform",
         "filing",
@@ -1171,18 +1224,44 @@ def _is_deep_report_query(query: str) -> bool:
         "10-q",
         "earnings call",
         "transcript",
+        "deep research",
         "深度",
         "研报",
         "财报",
         "电话会",
     )
-    return any(token in q for token in keywords)
+    if any(token in q for token in technical_tokens):
+        return "technical"
+    if any(token in q for token in news_tokens):
+        return "news"
+    if any(token in q for token in deep_tokens):
+        return "deep_financial"
+    return "general"
+
+
+def _infer_market_from_context(*, tickers: list[str] | None = None, market: str | None = None) -> str:
+    market_text = _safe_str(market).strip().upper()
+    if market_text in {"US", "CN", "HK"}:
+        return market_text
+
+    for ticker in tickers or []:
+        symbol = _safe_str(ticker).strip().upper()
+        if not symbol:
+            continue
+        if symbol.endswith((".SS", ".SZ", ".BJ")):
+            return "CN"
+        if symbol.endswith(".HK"):
+            return "HK"
+        return "US"
+    return "US"
 
 
 def _build_report_quality_hints(
     *,
     query: str,
     citations: list[dict[str, Any]],
+    tickers: list[str] | None = None,
+    market: str | None = None,
 ) -> dict[str, Any]:
     authoritative_media_domains = (
         "reuters.com",
@@ -1192,19 +1271,43 @@ def _build_report_quality_hints(
         "cnbc.com",
         "finance.yahoo.com",
     )
-    deep_required = _is_deep_report_query(query)
+    local_filing_domains = (
+        "cninfo.com.cn",
+        "sse.com.cn",
+        "szse.cn",
+        "hkexnews.hk",
+        "hkex.com.hk",
+    )
+
+    report_type = _classify_report_type(query)
+    profile = dict(_QUALITY_PROFILES.get(report_type, _QUALITY_PROFILES["general"]))
+    report_market = _infer_market_from_context(tickers=tickers, market=market)
+    if report_type == "deep_financial":
+        if report_market == "US":
+            profile["10k"] = True
+            profile["10q"] = True
+            profile["local_filing"] = False
+        else:
+            profile["10k"] = False
+            profile["10q"] = False
+            profile["local_filing"] = True
+
+    deep_required = report_type == "deep_financial"
 
     has_10k = False
     has_10q = False
+    has_local_filing = False
     has_earnings_transcript = False
     authoritative_media_count = 0
     sec_filing_count = 0
+    local_filing_count = 0
     rich_snippet_count = 0
 
     for item in citations:
         if not isinstance(item, dict):
             continue
         url = _safe_str(item.get("url") or "").strip().lower()
+        source = _safe_str(item.get("source") or "").strip().lower()
         title = _safe_str(item.get("title") or "").strip().lower()
         snippet = _safe_str(item.get("snippet") or "").strip()
         parsed = urlparse(url)
@@ -1218,7 +1321,11 @@ def _build_report_quality_hints(
             if re.search(r"\b10-q\b|quarterly report|form\s*10q", joined, flags=re.I):
                 has_10q = True
 
-        if re.search(r"earnings|conference call|transcript|电话会|业绩会", joined, flags=re.I):
+        if any(domain.endswith(d) for d in local_filing_domains) or source == "local_disclosure":
+            local_filing_count += 1
+            has_local_filing = True
+
+        if re.search(r"earnings|conference call|transcript|业绩电话会|电话会纪要", joined, flags=re.I):
             has_earnings_transcript = True
 
         if any(domain.endswith(d) for d in authoritative_media_domains):
@@ -1235,29 +1342,44 @@ def _build_report_quality_hints(
             rich_snippet_count += 1
 
     missing: list[str] = []
+    missing_counts = {"critical": 0, "important": 0, "minor": 0}
+
+    def _append_missing(message: str, severity: str) -> None:
+        missing.append(message)
+        if severity in missing_counts:
+            missing_counts[severity] += 1
+
     if deep_required:
-        if not has_10k:
-            missing.append("缺少可识别 10-K 引用")
-        if not has_10q:
-            missing.append("缺少可识别 10-Q 引用")
-        if not has_earnings_transcript:
-            missing.append("缺少业绩电话会/业绩会纪要引用")
-        if authoritative_media_count <= 0:
-            missing.append("缺少权威媒体交叉引用（Reuters/Bloomberg/WSJ/FT/CNBC/Yahoo）")
-        if rich_snippet_count < 2:
-            missing.append("证据摘录质量不足（大多仅URL，缺少正文摘录）")
+        if profile.get("10k") and not has_10k:
+            _append_missing("缺少可识别的 10-K 引用", "critical")
+        if profile.get("10q") and not has_10q:
+            _append_missing("缺少可识别的 10-Q 引用", "critical")
+        if profile.get("local_filing") and not has_local_filing:
+            _append_missing("缺少本地市场披露引用（CN/HK）", "critical")
+        if profile.get("transcript") and not has_earnings_transcript:
+            _append_missing("缺少业绩电话会纪要/Transcript 引用", "important")
+        if profile.get("media") and authoritative_media_count <= 0:
+            _append_missing("缺少权威媒体交叉引用（Reuters/Bloomberg/WSJ/FT/CNBC/Yahoo）", "important")
+        if profile.get("snippets") and rich_snippet_count < 2:
+            _append_missing("证据摘录质量不足（多数仅 URL，缺少正文摘录）", "minor")
 
     return {
         "deep_report_required": deep_required,
+        "report_type": report_type,
+        "market": report_market,
+        "applied_profile": profile,
         "qualified": not missing,
         "missing_requirements": missing,
+        "missing_counts": missing_counts,
         "stats": {
             "citation_count": len(citations),
             "sec_filing_count": sec_filing_count,
+            "local_filing_count": local_filing_count,
             "authoritative_media_count": authoritative_media_count,
             "rich_snippet_count": rich_snippet_count,
             "has_10k": has_10k,
             "has_10q": has_10q,
+            "has_local_filing": has_local_filing,
             "has_earnings_transcript": has_earnings_transcript,
         },
     }
@@ -1658,7 +1780,14 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         render_vars=render_vars,
         agent_status=agent_status,
     )
-    quality_hints = _build_report_quality_hints(query=query, citations=citations)
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    market_hint = _safe_str((ui_context or {}).get("market") or "").strip().upper() or None
+    quality_hints = _build_report_quality_hints(
+        query=query,
+        citations=citations,
+        tickers=tickers,
+        market=market_hint,
+    )
     report_hints["quality"] = quality_hints
     if isinstance(verifier_result, dict) and verifier_result:
         report_hints["verifier"] = {
@@ -1702,6 +1831,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     )
 
     quality_missing = quality_hints.get("missing_requirements") if isinstance(quality_hints, dict) else []
+    quality_missing_counts = quality_hints.get("missing_counts") if isinstance(quality_hints, dict) else {}
     if (
         isinstance(quality_missing, list)
         and quality_missing
@@ -1711,7 +1841,11 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         quality_warning = f"深度报告质量门槛未满足：{gap}"
         if quality_warning not in risks:
             risks.insert(0, quality_warning)
-        confidence_score = min(confidence_score, 0.62)
+        critical = int((quality_missing_counts or {}).get("critical") or 0)
+        important = int((quality_missing_counts or {}).get("important") or 0)
+        minor = int((quality_missing_counts or {}).get("minor") or 0)
+        penalty = critical * 0.08 + important * 0.05 + minor * 0.03
+        confidence_score = max(0.45, confidence_score - penalty)
         if quality_warning not in summary:
             summary = f"{summary}（{quality_warning}）"
         synthesis_report = (

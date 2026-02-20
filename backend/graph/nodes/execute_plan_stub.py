@@ -235,6 +235,122 @@ async def execute_plan_stub(state: GraphState) -> dict:
             )
             return
 
+        if tool_name in ("get_sec_filings", "get_sec_material_events", "get_sec_risk_factors") and isinstance(output, dict):
+            filings = output.get("filings") or output.get("events") or []
+            company_name = output.get("company_name") or output.get("ticker") or ""
+            for i, filing in enumerate(filings[:10]):
+                if not isinstance(filing, dict):
+                    continue
+                form_type = str(filing.get("form") or "SEC").strip() or "SEC"
+                filing_url = str(filing.get("filing_url") or "").strip()
+                filing_date = str(filing.get("filing_date") or "").strip() or None
+                description = str(filing.get("primary_doc_description") or form_type).strip()
+                evidence_pool.append(
+                    {
+                        "title": f"{company_name} {form_type} ({filing_date or 'N/A'})".strip(),
+                        "url": filing_url or None,
+                        "snippet": f"SEC EDGAR {form_type} filing. Filed: {filing_date or 'N/A'}. {description}",
+                        "source": "sec_edgar",
+                        "published_date": filing_date,
+                        "confidence": 0.85,
+                        "type": "filing",
+                        "id": f"{tool_name}:{step_id}:{i+1}",
+                    }
+                )
+
+            risk_excerpt = str(output.get("risk_factors_excerpt") or "").strip()
+            if risk_excerpt:
+                selected = output.get("selected_filing") if isinstance(output.get("selected_filing"), dict) else {}
+                evidence_pool.append(
+                    {
+                        "title": f"{company_name} Risk Factors (Item 1A)".strip(),
+                        "url": str(selected.get("filing_url") or "").strip() or None,
+                        "snippet": risk_excerpt[:800],
+                        "source": "sec_edgar",
+                        "published_date": selected.get("filing_date"),
+                        "confidence": 0.9,
+                        "type": "filing",
+                        "id": f"{tool_name}:{step_id}:risk",
+                    }
+                )
+            return
+
+        if tool_name == "get_local_market_filings" and isinstance(output, dict):
+            filings = output.get("filings") or []
+            ticker = str(output.get("ticker") or "").strip()
+            market = str(output.get("market") or "").strip().upper()
+            for i, filing in enumerate(filings[:10]):
+                if not isinstance(filing, dict):
+                    continue
+                form_type = str(filing.get("form") or "filing").strip() or "filing"
+                filing_url = str(filing.get("filing_url") or filing.get("url") or "").strip()
+                filing_date = str(filing.get("filing_date") or filing.get("published_date") or "").strip() or None
+                title = str(filing.get("title") or "").strip()
+                description = str(
+                    filing.get("primary_doc_description") or filing.get("snippet") or title or form_type
+                ).strip()
+                evidence_pool.append(
+                    {
+                        "title": title or f"{ticker} {form_type} ({filing_date or 'N/A'})".strip(),
+                        "url": filing_url or None,
+                        "snippet": f"{market} local disclosure {form_type}. Filed: {filing_date or 'N/A'}. {description}",
+                        "source": filing.get("source") or "local_disclosure",
+                        "published_date": filing_date,
+                        "confidence": filing.get("confidence", 0.8),
+                        "type": "filing",
+                        "id": f"{tool_name}:{step_id}:{i+1}",
+                    }
+                )
+            return
+
+        if tool_name == "get_authoritative_media_news" and isinstance(output, dict):
+            articles = output.get("articles") or []
+            for i, article in enumerate(articles[:10]):
+                if not isinstance(article, dict):
+                    continue
+                title = str(article.get("title") or "").strip()
+                url = str(article.get("url") or "").strip()
+                snippet = str(article.get("snippet") or title).strip()
+                if not title and not url:
+                    continue
+                evidence_pool.append(
+                    {
+                        "title": title or f"authoritative media {i+1}",
+                        "url": url or None,
+                        "snippet": snippet[:800],
+                        "source": article.get("source") or "authoritative_feed",
+                        "published_date": article.get("published_date"),
+                        "confidence": article.get("confidence", 0.78),
+                        "type": "news",
+                        "id": article.get("id") or f"{tool_name}:{step_id}:{i+1}",
+                    }
+                )
+            return
+
+        if tool_name == "get_earnings_call_transcripts" and isinstance(output, dict):
+            transcripts = output.get("transcripts") or output.get("articles") or []
+            for i, item in enumerate(transcripts[:10]):
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or "").strip()
+                url = str(item.get("url") or "").strip()
+                snippet = str(item.get("snippet") or title).strip()
+                if not title and not url:
+                    continue
+                evidence_pool.append(
+                    {
+                        "title": title or f"earnings transcript {i+1}",
+                        "url": url or None,
+                        "snippet": snippet[:800],
+                        "source": item.get("source") or "earnings_transcript",
+                        "published_date": item.get("published_date"),
+                        "confidence": item.get("confidence", 0.8),
+                        "type": "transcript",
+                        "id": item.get("id") or f"{tool_name}:{step_id}:{i+1}",
+                    }
+                )
+            return
+
         if isinstance(output, list):
             for i, item in enumerate(output[:10]):
                 if not isinstance(item, dict):
@@ -264,8 +380,33 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 "confidence": 0.6,
                 "type": "tool",
                 "id": f"{tool_name}:{step_id}",
-            }
-        )
+                }
+            )
+
+    jina_enrich_enabled = str(os.getenv("JINA_ENRICH_EVIDENCE", "true")).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _maybe_enrich_snippet_from_jina(url: str | None, snippet: Any) -> Any:
+        if not jina_enrich_enabled:
+            return snippet
+        target = str(url or "").strip()
+        snippet_text = str(snippet or "").strip()
+        if not target.startswith(("http://", "https://")):
+            return snippet
+        if len(snippet_text) >= 80:
+            return snippet
+        if "news.google.com" in target:
+            return snippet
+        try:
+            from backend.tools.jina_reader import fetch_via_jina
+        except Exception:
+            return snippet
+        try:
+            jina_text = fetch_via_jina(target)
+            if jina_text and len(jina_text) > len(snippet_text):
+                return jina_text[:800]
+        except Exception:
+            return snippet
+        return snippet
 
     def _append_agent_evidence(agent_name: str, step_id: str, output: Any) -> None:
         if output is None:
@@ -324,11 +465,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
             snippet = item.get("text") or item.get("snippet") or item.get("summary")
             if not snippet:
                 continue
+            url = item.get("url")
+            snippet = _maybe_enrich_snippet_from_jina(url, snippet)
             source = item.get("source") or agent_name
             evidence_pool.append(
                 {
                     "title": item.get("title") or f"{agent_name} evidence {i+1}",
-                    "url": item.get("url"),
+                    "url": url,
                     "snippet": str(snippet).strip()[:800],
                     "source": source,
                     "published_date": item.get("timestamp") or as_of,

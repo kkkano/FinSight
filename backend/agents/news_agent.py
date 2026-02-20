@@ -1,8 +1,9 @@
 from typing import Any, Dict, List, Optional
 import os
 import logging
+import json
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -109,6 +110,40 @@ class NewsAgent(BaseFinancialAgent):
         except Exception:
             host = ""
         return host.lstrip("www.")
+
+    def _recover_original_article_url(self, url: str) -> str:
+        text = str(url or "").strip()
+        if not text.startswith(("http://", "https://")):
+            return ""
+        try:
+            parsed = urlparse(text)
+        except Exception:
+            return ""
+
+        domain = (parsed.netloc or "").lower().lstrip("www.")
+        path = (parsed.path or "").lower()
+        query = parse_qs(parsed.query)
+
+        if domain == "finnhub.io" and path.startswith("/api/news"):
+            for key in ("url", "article_url", "link", "u"):
+                value = query.get(key, [None])[0]
+                if not value:
+                    continue
+                decoded = unquote(str(value)).strip()
+                if decoded.startswith(("http://", "https://")):
+                    return decoded
+            return ""
+
+        if domain == "news.google.com":
+            for key in ("url", "u"):
+                value = query.get(key, [None])[0]
+                if not value:
+                    continue
+                decoded = unquote(str(value)).strip()
+                if decoded.startswith(("http://", "https://")):
+                    return decoded
+
+        return text
 
     def _is_authoritative_domain(self, domain: str) -> bool:
         host = str(domain or "").strip().lower()
@@ -284,9 +319,17 @@ class NewsAgent(BaseFinancialAgent):
                 self.circuit_breaker.record_failure("search")
 
         # Deduplicate (title-level)
+        normalized_results: List[Dict[str, Any]] = []
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            cloned = dict(item)
+            cloned["url"] = self._recover_original_article_url(cloned.get("url"))
+            normalized_results.append(cloned)
+
         seen_titles = set()
         unique_results = []
-        for item in results:
+        for item in normalized_results:
             title = item.get("headline", item.get("title", ""))
             if title and title not in seen_titles:
                 seen_titles.add(title)
@@ -319,6 +362,43 @@ class NewsAgent(BaseFinancialAgent):
         }
         if strict_sources and self._is_finance_research_intent(query):
             authoritative = self._filter_authoritative_news(unique_results)
+            if not authoritative:
+                feed_tool = getattr(self.tools, "get_authoritative_media_news", None)
+                if callable(feed_tool):
+                    try:
+                        payload = feed_tool(
+                            query=f"{ticker} earnings outlook",
+                            max_results=5,
+                            authoritative_only=True,
+                        )
+                        if isinstance(payload, str):
+                            try:
+                                payload = json.loads(payload)
+                            except Exception:
+                                payload = {}
+                        articles = payload.get("articles") if isinstance(payload, dict) else []
+                        if isinstance(articles, list):
+                            for article in articles:
+                                if not isinstance(article, dict):
+                                    continue
+                                url = self._recover_original_article_url(article.get("url"))
+                                if not url:
+                                    continue
+                                unique_results.append(
+                                    {
+                                        "headline": article.get("title") or "",
+                                        "title": article.get("title") or "",
+                                        "url": url,
+                                        "source": article.get("source") or "authoritative_feed",
+                                        "datetime": article.get("published_date"),
+                                        "published_at": article.get("published_date"),
+                                        "ticker": ticker,
+                                        "confidence": article.get("confidence", 0.8),
+                                    }
+                                )
+                    except Exception:
+                        pass
+                authoritative = self._filter_authoritative_news(unique_results)
             if authoritative:
                 unique_results = authoritative
 

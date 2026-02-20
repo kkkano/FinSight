@@ -138,3 +138,41 @@
 | 2026-02-08 | 11.14 T0 alignment + T1/T2/T3 incremental execution | Ran T0 alignment and executed first incremental batch for T1/T2/T3: (1) dashboard fallback symbol policy fixed (`currentTicker -> position -> AAPL`), (2) trace.v2 fields extended (`decision_type/summary/fallback_reason` + plan `parallel_group` + execute `duration/status`), (3) citation index query endpoint `/api/reports/citations` added with `source_id/query/date` filters, (4) checkpointer memory fallback default hardened to `false`, and env sample updated. | `pytest -q backend/tests/test_report_index_api.py backend/tests/test_graph_checkpointer.py backend/tests/test_trace_and_session_security.py backend/tests/test_trace_v2_observability.py backend/tests/test_executor.py` (28 passed) + `npm run lint --prefix frontend` (pass) + `npm run build --prefix frontend` (success) | T0 completed for this batch; unresolved 11.14 items are now consolidated in 11.16 realistic backlog. |
 | 2026-02-08 | 11.15 dashboard default-symbol fix | Root-caused `/dashboard/GOOGL` to Sidebar fallback using `watchlist[0]`; `default_user` persisted watchlist starts with `GOOGL`, so dashboard entry inherited it. Updated fallback strategy to deterministic priority: `currentTicker -> first portfolio symbol -> AAPL` (no longer `watchlist[0]`). | `npm run lint --prefix frontend` (pass) + `npm run build --prefix frontend` (success) | Dashboard no longer jumps to Google by default when watchlist head is `GOOGL`; behavior is now predictable and product-aligned. |
 | 2026-02-08 | 11.16.6 T5-3 文档深度对齐（去黑盒） | Completed T5 summary backfill (mark T5-1/2/3 as DONE in 11.16 overview with evidence links to `11.16.4~11.16.6`), expanded T5-3 with black-box-removal architecture notes (planner AB decision path, prompt variant boundaries, policy/agent invariants, fallback + diagnostics observability), and synced Chinese entry docs with new runtime/diagnostics contract. | `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` (11.16/T5 + 11.16.6.A) + `readme_cn.md` (runtime flags + diagnostics endpoints) + `docs/feature_logs/2026-02-08_t5_prompt_plan_ab.md` | Documentation state now matches code/runtime behavior; readers can trace T5-3 end-to-end without relying on code spelunking. |
+
+## 2026-02-19 Phase J Evidence Quality Upgrade
+- Activated SEC evidence wiring in investment report planning and executor evidence expansion.
+- Added free enrichment tools: `backend/tools/jina_reader.py` and `backend/tools/authoritative_feeds.py`.
+- DeepSearch now supports Jina fallback for short-content pages and authoritative RSS supplementation.
+- Quality gate in `report_builder.py` is now report-type aware with graded confidence penalties.
+- Fixed research snippet-focus UX race (`ResearchTab.tsx`, `ReferenceList.tsx`) and added E2E regression.
+- Added hallucination regression tests (`backend/tests/test_synthesize_hallucination.py`) and expanded Phase J backend test coverage.
+- Validation snapshot: `pytest backend/tests -x` => `832 passed, 8 skipped`; `npx tsc -b --noEmit` => pass; `npx playwright test e2e/research-tab.spec.ts` => `4 passed`.
+
+## 2026-02-19 Phase J P0 Hotfix (post-smoke)
+- Fixed CN dotted ticker parsing regression causing `600519.SS -> SS` truncation in query extraction path.
+- Fixed `backend/tools/financial.py` fallback runtime error by importing `search`.
+- Rotated local Exa/Tavily keys and revalidated provider connectivity.
+- Verification:
+  - `pytest backend/tests/test_ticker_mapping_cn_market_suffix.py backend/tests/test_resolve_subject.py -q` -> `10 passed`
+  - `pytest backend/tests/test_policy_planner_query_regression.py backend/tests/test_router_regression_baseline.py -q` -> `70 passed`
+  - Real smoke (`600519.SS`) confirms `subject.tickers=["600519.SS"]` and no `symbol: SS` delisted errors in logs.
+
+## 2026-02-20 Phase J P0/P1 Completion
+- Added free evidence tools and wiring:
+  - `get_authoritative_media_news` (`backend/tools/authoritative_feeds.py`)
+  - `get_earnings_call_transcripts` (`backend/tools/earnings_transcripts.py`)
+  - `get_local_market_filings` (`backend/tools/local_disclosure.py`)
+- Planner hardening:
+  - `deep_financial` now force-includes authoritative media + transcript retrieval.
+  - US uses SEC chain; CN/HK uses local disclosure chain.
+  - Budget pruning now preserves required report tools.
+- Execution/reporting:
+  - Expanded new tool outputs into citation-grade evidence rows in `execute_plan_stub.py`.
+  - Quality gate is now market-aware (`US: 10-K/10-Q`, `CN/HK: local filing`).
+- Smoke verification (`LANGGRAPH_EXECUTE_LIVE_TOOLS=true`):
+  - `AAPL`: citations=24, 10-K/10-Q/transcript/media/snippet checks all pass.
+  - `600519.SS`: citations=24, local filing/transcript/media/snippet checks all pass.
+  - details: `scripts/phase_j_smoke_before_after_2026-02-19.json`.
+- Regression snapshot:
+  - `pytest backend/tests -x` => `839 passed, 8 skipped`
+  - `npx tsc -b --noEmit` => pass

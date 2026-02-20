@@ -479,6 +479,96 @@ def test_build_queries_default_does_not_force_pdf_bias(monkeypatch):
     assert queries
     assert all("filetype:pdf" not in q.lower() for q in queries)
 
+
+def test_search_web_supplements_authoritative_feeds_when_trusted_results_insufficient(monkeypatch):
+    mock_tools = MagicMock()
+    mock_tools.TAVILY_API_KEY = ""
+    mock_tools.TAVILY_AVAILABLE = False
+    mock_tools.EXA_API_KEY = ""
+    mock_tools.EXA_AVAILABLE = False
+    mock_tools.search.return_value = "fallback search"
+
+    agent = DeepSearchAgent(None, MagicMock(), mock_tools)
+    agent._parse_search_text = MagicMock(
+        return_value=[
+            {
+                "title": "Untrusted source",
+                "url": "https://example.com/aapl",
+                "snippet": "noise",
+                "source": "search",
+            }
+        ]
+    )
+
+    import backend.tools.authoritative_feeds as feeds_mod
+
+    monkeypatch.setattr(
+        feeds_mod,
+        "search_authoritative_feeds",
+        lambda query, max_results=5, authoritative_only=True: [
+            {
+                "title": "Reuters Apple coverage",
+                "url": "https://www.reuters.com/technology/apple-coverage-2026-02-18/",
+                "snippet": "Reuters follow-up on Apple outlook.",
+                "source": "Reuters",
+                "published_date": "2026-02-18T00:00:00Z",
+            }
+        ],
+    )
+
+    results = agent._search_web("AAPL deep report")
+    urls = [str(item.get("url") or "") for item in results]
+
+    assert "https://www.reuters.com/technology/apple-coverage-2026-02-18/" in urls
+    assert any(item.get("source") == "authoritative_feed" for item in results)
+
+
+def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch):
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+
+    class _MockResponse:
+        def __init__(self, url: str):
+            self.url = url
+            self.headers = {"Content-Type": "text/html; charset=utf-8"}
+            self.text = "<html><body>short</body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    class _MockSession:
+        def __init__(self, response):
+            self._response = response
+
+        def get(self, *_args, **_kwargs):
+            return self._response
+
+    url = "https://www.reuters.com/technology/apple-longform-2026-02-18/"
+    monkeypatch.setattr(agent, "_get_session", lambda: _MockSession(_MockResponse(url)))
+    monkeypatch.setenv("DEEPSEARCH_ENABLE_JINA_FALLBACK", "true")
+
+    import backend.tools.jina_reader as jina_mod
+
+    monkeypatch.setattr(
+        jina_mod,
+        "fetch_via_jina",
+        lambda target_url: "A" * 1200 if target_url == url else None,
+    )
+
+    doc = agent._fetch_document(
+        {
+            "title": "Reuters Apple note",
+            "url": url,
+            "snippet": "short snippet",
+            "source": "search",
+        }
+    )
+
+    assert isinstance(doc, dict)
+    assert len(str(doc.get("content") or "")) >= 1000
+    assert bool(doc.get("degraded")) is False
+
 if __name__ == "__main__":
     asyncio.run(test_deep_search_agent())
     asyncio.run(test_macro_agent())

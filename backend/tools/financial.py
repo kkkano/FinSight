@@ -10,6 +10,7 @@ import yfinance as yf
 
 from .env import ALPHA_VANTAGE_API_KEY, OPENFIGI_API_KEY, EODHD_API_KEY, finnhub_client
 from .http import _http_get, _http_post
+from .search import search
 
 logger = logging.getLogger(__name__)
 

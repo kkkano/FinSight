@@ -1,0 +1,141 @@
+[
+  {
+    "mode": "baseline",
+    "ticker": "AAPL",
+    "elapsed_sec": 433.2,
+    "confidence_score": 0.58,
+    "citation_count": 0,
+    "missing_requirements": [
+      "缺少可识别的 10-K 引用",
+      "缺少可识别的 10-Q 引用",
+      "缺少业绩电话会纪要/Transcript 引用",
+      "缺少权威媒体交叉引用（Reuters/Bloomberg/WSJ/FT/CNBC/Yahoo）",
+      "证据摘录质量不足（多数仅 URL，缺少正文摘录）"
+    ],
+    "stats": {
+      "citation_count": 0,
+      "sec_filing_count": 0,
+      "authoritative_media_count": 0,
+      "rich_snippet_count": 0,
+      "has_10k": false,
+      "has_10q": false,
+      "has_earnings_transcript": false
+    },
+    "quality_deep_required": true
+  },
+  {
+    "mode": "after_fix",
+    "ticker": "AAPL",
+    "elapsed_sec": 299.04,
+    "confidence_score": 0.58,
+    "citation_count": 24,
+    "missing_requirements": [],
+    "quality_deep_required": true,
+    "report_type": "deep_financial",
+    "market": "US",
+    "applied_profile": {
+      "10k": true,
+      "10q": true,
+      "local_filing": false,
+      "transcript": true,
+      "media": true,
+      "snippets": true
+    },
+    "missing_counts": {
+      "critical": 0,
+      "important": 0,
+      "minor": 0
+    },
+    "stats": {
+      "citation_count": 24,
+      "sec_filing_count": 13,
+      "local_filing_count": 0,
+      "authoritative_media_count": 7,
+      "rich_snippet_count": 22,
+      "has_10k": true,
+      "has_10q": true,
+      "has_local_filing": false,
+      "has_earnings_transcript": true
+    },
+    "tool_steps": [
+      "get_company_info",
+      "get_sec_filings",
+      "get_stock_price",
+      "analyze_historical_drawdowns",
+      "get_sec_filings",
+      "get_sec_material_events",
+      "get_authoritative_media_news",
+      "get_earnings_call_transcripts"
+    ],
+    "step_error_count": 0,
+    "step_result_count": 14
+  },
+  {
+    "mode": "baseline",
+    "ticker": "600519.SS",
+    "elapsed_sec": 293.96,
+    "confidence_score": 0.5425,
+    "citation_count": 1,
+    "missing_requirements": [
+      "缺少可识别的 10-K 引用",
+      "缺少可识别的 10-Q 引用",
+      "缺少业绩电话会纪要/Transcript 引用",
+      "证据摘录质量不足（多数仅 URL，缺少正文摘录）"
+    ],
+    "stats": {
+      "citation_count": 1,
+      "sec_filing_count": 0,
+      "authoritative_media_count": 1,
+      "rich_snippet_count": 1,
+      "has_10k": false,
+      "has_10q": false,
+      "has_earnings_transcript": false
+    },
+    "quality_deep_required": true
+  },
+  {
+    "mode": "after_fix",
+    "ticker": "600519.SS",
+    "elapsed_sec": 257.01,
+    "confidence_score": 0.58,
+    "citation_count": 24,
+    "missing_requirements": [],
+    "quality_deep_required": true,
+    "report_type": "deep_financial",
+    "market": "CN",
+    "applied_profile": {
+      "10k": false,
+      "10q": false,
+      "local_filing": true,
+      "transcript": true,
+      "media": true,
+      "snippets": true
+    },
+    "missing_counts": {
+      "critical": 0,
+      "important": 0,
+      "minor": 0
+    },
+    "stats": {
+      "citation_count": 24,
+      "sec_filing_count": 3,
+      "local_filing_count": 8,
+      "authoritative_media_count": 7,
+      "rich_snippet_count": 24,
+      "has_10k": false,
+      "has_10q": false,
+      "has_local_filing": true,
+      "has_earnings_transcript": true
+    },
+    "tool_steps": [
+      "get_company_info",
+      "get_stock_price",
+      "analyze_historical_drawdowns",
+      "get_local_market_filings",
+      "get_authoritative_media_news",
+      "get_earnings_call_transcripts"
+    ],
+    "step_error_count": 0,
+    "step_result_count": 12
+  }
+]

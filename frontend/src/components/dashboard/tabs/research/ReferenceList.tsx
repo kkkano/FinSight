@@ -175,7 +175,10 @@ export function ReferenceList({
   useEffect(() => {
     if (focusToken == null) return;
     setShowSnippets(true);
-    snippetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const raf = requestAnimationFrame(() => {
+      snippetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [focusToken]);
 
   if (!citations || citations.length === 0) {

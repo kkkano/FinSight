@@ -178,3 +178,213 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
     assert rag_stats.get("backend") == "memory"
     assert rag_stats.get("collection") == "session:thread-rag-1"
     assert any("Apple" in str(item.get("title") or item.get("content") or "") for item in rag_context)
+
+
+def test_execute_plan_stub_expands_sec_filings_into_individual_evidence(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "true")
+
+    class _FakeTool:
+        def __init__(self, name: str):
+            self.name = name
+
+        def invoke(self, _inputs):
+            return {
+                "ticker": "AAPL",
+                "company_name": "Apple Inc.",
+                "filings": [
+                    {
+                        "form": "10-K",
+                        "filing_date": "2026-01-31",
+                        "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000001/aapl-20250928.htm",
+                        "primary_doc_description": "Annual report",
+                    },
+                    {
+                        "form": "10-Q",
+                        "filing_date": "2026-02-15",
+                        "filing_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000002/aapl-20251228.htm",
+                        "primary_doc_description": "Quarterly report",
+                    },
+                ],
+            }
+
+    import backend.langchain_tools as tools_mod
+
+    monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
+
+    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+
+    state = {
+        "plan_ir": {
+            "goal": "x",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_ids": [], "selection_types": [], "selection_payload": []},
+            "output_mode": "investment_report",
+            "steps": [
+                {
+                    "id": "s1",
+                    "kind": "tool",
+                    "name": "get_sec_filings",
+                    "inputs": {"ticker": "AAPL", "forms": "10-K,10-Q", "limit": 6},
+                    "why": "unit",
+                    "optional": True,
+                }
+            ],
+            "budget": {"max_rounds": 1, "max_tools": 1},
+            "synthesis": {"style": "concise", "sections": []},
+        },
+        "policy": {"allowed_tools": ["get_sec_filings"], "allowed_agents": [], "budget": {"max_rounds": 1, "max_tools": 1}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "trace": {},
+    }
+
+    out = _run(execute_plan_stub(state))
+    artifacts = out.get("artifacts") or {}
+    pool = artifacts.get("evidence_pool") or []
+
+    sec_rows = [item for item in pool if isinstance(item, dict) and item.get("source") == "sec_edgar"]
+    assert len(sec_rows) >= 2
+    assert any("10-K" in str(item.get("title") or "") for item in sec_rows)
+    assert any("10-Q" in str(item.get("title") or "") for item in sec_rows)
+    assert all(str(item.get("url") or "").startswith("https://www.sec.gov/") for item in sec_rows if item.get("url"))
+
+
+def test_execute_plan_stub_expands_local_filings_into_evidence(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "true")
+
+    class _FakeTool:
+        def __init__(self, name: str):
+            self.name = name
+
+        def invoke(self, _inputs):
+            return {
+                "ticker": "600519.SS",
+                "market": "CN",
+                "filings": [
+                    {
+                        "title": "贵州茅台 2025 年年度报告",
+                        "form": "annual_report",
+                        "filing_date": "2026-03-28",
+                        "filing_url": "https://www.cninfo.com.cn/new/disclosure/detail?stockCode=600519",
+                        "primary_doc_description": "年度报告正文",
+                        "source": "cninfo.com.cn",
+                    }
+                ],
+            }
+
+    import backend.langchain_tools as tools_mod
+
+    monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
+
+    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+
+    state = {
+        "plan_ir": {
+            "goal": "x",
+            "subject": {"subject_type": "company", "tickers": ["600519.SS"], "selection_ids": [], "selection_types": [], "selection_payload": []},
+            "output_mode": "investment_report",
+            "steps": [
+                {
+                    "id": "s1",
+                    "kind": "tool",
+                    "name": "get_local_market_filings",
+                    "inputs": {"ticker": "600519.SS", "limit": 8},
+                    "why": "unit",
+                    "optional": True,
+                }
+            ],
+            "budget": {"max_rounds": 1, "max_tools": 1},
+            "synthesis": {"style": "concise", "sections": []},
+        },
+        "policy": {"allowed_tools": ["get_local_market_filings"], "allowed_agents": [], "budget": {"max_rounds": 1, "max_tools": 1}},
+        "subject": {"subject_type": "company", "tickers": ["600519.SS"], "selection_payload": []},
+        "trace": {},
+    }
+
+    out = _run(execute_plan_stub(state))
+    artifacts = out.get("artifacts") or {}
+    pool = artifacts.get("evidence_pool") or []
+
+    local_rows = [item for item in pool if isinstance(item, dict) and item.get("type") == "filing"]
+    assert local_rows
+    assert any("local disclosure" in str(item.get("snippet") or "").lower() for item in local_rows)
+    assert any("cninfo.com.cn" in str(item.get("source") or "") for item in local_rows)
+
+
+def test_execute_plan_stub_expands_media_and_transcript_tools(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "true")
+
+    class _FakeTool:
+        def __init__(self, name: str):
+            self.name = name
+
+        def invoke(self, _inputs):
+            if self.name == "get_authoritative_media_news":
+                return {
+                    "articles": [
+                        {
+                            "title": "Reuters Apple outlook",
+                            "url": "https://www.reuters.com/technology/apple-outlook-2026-02-18/",
+                            "snippet": "Reuters discusses guidance risk and demand mix.",
+                            "source": "Reuters",
+                            "published_date": "2026-02-18T00:00:00Z",
+                        }
+                    ]
+                }
+            return {
+                "transcripts": [
+                    {
+                        "title": "Apple Q1 earnings call transcript",
+                        "url": "https://www.fool.com/earnings/call-transcripts/2026/02/10/apple-q1-2026-earnings-call-transcript/",
+                        "snippet": "Prepared remarks and Q&A on margin outlook.",
+                        "source": "fool.com",
+                        "published_date": "2026-02-10T00:00:00Z",
+                    }
+                ]
+            }
+
+    import backend.langchain_tools as tools_mod
+
+    monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
+
+    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+
+    state = {
+        "plan_ir": {
+            "goal": "x",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_ids": [], "selection_types": [], "selection_payload": []},
+            "output_mode": "investment_report",
+            "steps": [
+                {
+                    "id": "s1",
+                    "kind": "tool",
+                    "name": "get_authoritative_media_news",
+                    "inputs": {"query": "AAPL earnings outlook", "max_results": 5, "authoritative_only": True},
+                    "why": "unit",
+                    "optional": True,
+                },
+                {
+                    "id": "s2",
+                    "kind": "tool",
+                    "name": "get_earnings_call_transcripts",
+                    "inputs": {"ticker": "AAPL", "limit": 5},
+                    "why": "unit",
+                    "optional": True,
+                },
+            ],
+            "budget": {"max_rounds": 1, "max_tools": 2},
+            "synthesis": {"style": "concise", "sections": []},
+        },
+        "policy": {
+            "allowed_tools": ["get_authoritative_media_news", "get_earnings_call_transcripts"],
+            "allowed_agents": [],
+            "budget": {"max_rounds": 1, "max_tools": 2},
+        },
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "trace": {},
+    }
+
+    out = _run(execute_plan_stub(state))
+    artifacts = out.get("artifacts") or {}
+    pool = artifacts.get("evidence_pool") or []
+
+    assert any(item.get("type") == "news" and "Reuters" in str(item.get("source") or "") for item in pool)
+    assert any(item.get("type") == "transcript" and "transcript" in str(item.get("title") or "").lower() for item in pool)

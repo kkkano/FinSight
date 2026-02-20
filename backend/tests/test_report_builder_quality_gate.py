@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
-from backend.graph.report_builder import build_report_payload
+from backend.graph.report_builder import _build_report_quality_hints, build_report_payload
 
 
 def test_build_report_payload_adds_quality_gap_for_deep_report_when_requirements_missing():
@@ -39,7 +39,7 @@ def test_build_report_payload_adds_quality_gap_for_deep_report_when_requirements
     assert "quality_gap" in tags
 
     risks = report.get("risks") or []
-    assert any("深度报告质量门槛未满足" in str(item) for item in risks)
+    assert any("质量门槛未满足" in str(item) for item in risks)
 
     synthesis_report = report.get("synthesis_report") or ""
     assert "## 研究完整性校验" in synthesis_report
@@ -79,9 +79,9 @@ def test_build_report_payload_no_quality_gap_when_deep_report_requirements_are_m
                 },
                 {
                     "title": "Apple earnings call transcript",
-                    "url": "https://www.fool.com/earnings/call-transcripts/2024/10/31/apple-aapl-q4-2024-earnings-call-transcript/",
+                    "url": "https://www.cnbc.com/2026/02/10/apple-earnings-call-transcript.html",
                     "snippet": "Management answered questions on guidance, iPhone demand, AI roadmap, and margin outlook.",
-                    "source": "fool",
+                    "source": "cnbc",
                     "published_date": "2026-02-05T00:00:00Z",
                     "confidence": 0.8,
                 },
@@ -115,6 +115,85 @@ def test_build_report_payload_no_quality_gap_when_deep_report_requirements_are_m
     quality = hints.get("quality") or {}
     assert quality.get("deep_report_required") is True
     assert quality.get("qualified") is True
+
+
+def test_quality_hints_technical_query_does_not_require_10k_or_10q():
+    quality = _build_report_quality_hints(
+        query="AAPL technical analysis with RSI and MACD",
+        citations=[
+            {
+                "title": "AAPL technical snapshot",
+                "url": "https://www.cnbc.com/quotes/AAPL",
+                "snippet": "RSI and MACD indicate neutral momentum while price stays near short-term support.",
+            }
+        ],
+    )
+
+    assert quality.get("report_type") == "technical"
+    assert quality.get("deep_report_required") is False
+    missing = quality.get("missing_requirements") or []
+    assert all("10-K" not in str(item) and "10-Q" not in str(item) for item in missing)
+
+
+def test_build_report_payload_quality_penalty_is_graded_not_hard_capped():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["price_agent", "news_agent"]},
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "kind": "agent", "name": "price_agent", "inputs": {}},
+                {"id": "s2", "kind": "agent", "name": "news_agent", "inputs": {}},
+            ]
+        },
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n",
+            "evidence_pool": [
+                {
+                    "title": "Apple 10-K annual report",
+                    "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm",
+                    "snippet": "short",
+                    "source": "sec",
+                    "published_date": "2026-02-05T00:00:00Z",
+                    "confidence": 0.8,
+                },
+                {
+                    "title": "Apple 10-Q quarterly report",
+                    "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/aapl-20241228.htm",
+                    "snippet": "short",
+                    "source": "sec",
+                    "published_date": "2026-02-05T00:00:00Z",
+                    "confidence": 0.8,
+                },
+                {
+                    "title": "Apple earnings call transcript",
+                    "url": "https://www.cnbc.com/2026/02/10/apple-earnings-call-transcript.html",
+                    "snippet": "short",
+                    "source": "cnbc",
+                    "published_date": "2026-02-10T00:00:00Z",
+                    "confidence": 0.8,
+                },
+            ],
+            "step_results": {
+                "s1": {"output": {"summary": "price ok", "confidence": 0.95}},
+                "s2": {"output": {"summary": "news ok", "confidence": 0.95}},
+            },
+            "errors": [],
+            "render_vars": {"investment_summary": "测试摘要"},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(
+        state=state,
+        query="AAPL deep report with filing and transcript checks",
+        thread_id="t-quality-graded-penalty",
+    )
+    assert isinstance(report, dict)
+
+    confidence = float(report.get("confidence_score") or 0.0)
+    # Only snippet quality missing => minor penalty, should stay well above legacy hard cap 0.62.
+    assert confidence > 0.85
 
 
 def test_build_report_payload_populates_grounding_metadata():
@@ -205,6 +284,8 @@ def test_build_report_payload_adds_grounding_gap_when_rate_low():
 
     risks = report.get("risks") or []
     assert any("证据溯源率偏低" in str(item) for item in risks)
+
+
 def test_build_report_payload_marks_verifier_gap_when_unsupported_claims_exist():
     state = {
         "output_mode": "investment_report",

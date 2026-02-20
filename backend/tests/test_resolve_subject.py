@@ -82,3 +82,12 @@ class TestResolveSubjectTierGate:
         result = await resolve_subject(_make_state(query="hello", active_symbol="AAPL"))
         subject = result["subject"]
         assert "binding_tier" in subject
+
+    @pytest.mark.asyncio
+    async def test_tier1_cn_dotted_symbol_keeps_full_ticker(self):
+        """CN dotted symbols (e.g. 600519.SS) should not be truncated to suffix."""
+        result = await resolve_subject(_make_state(query="分析 600519.SS 的估值", active_symbol="AAPL"))
+        subject = result["subject"]
+        assert subject["subject_type"] == "company"
+        assert "600519.SS" in subject["tickers"]
+        assert "SS" not in subject["tickers"]
