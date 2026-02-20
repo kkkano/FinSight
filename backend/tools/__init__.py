@@ -74,6 +74,10 @@ from .macro import (
     get_economic_events,
     get_fred_data,
 )
+from .macro_official import (
+    search_official_macro_releases,
+    get_official_macro_releases,
+)
 from .utils import get_current_datetime
 from .web import fetch_url_content
 from .sec import (
@@ -87,6 +91,7 @@ from .authoritative_feeds import (
 )
 from .earnings_transcripts import get_earnings_call_transcripts
 from .local_disclosure import get_local_market_filings
+from .wayback import resolve_wayback_snapshot, fetch_via_wayback
 
 __all__ = [
     "ALPHA_VANTAGE_API_KEY",
@@ -153,6 +158,8 @@ __all__ = [
     "get_market_sentiment",
     "get_economic_events",
     "get_fred_data",
+    "search_official_macro_releases",
+    "get_official_macro_releases",
     "get_current_datetime",
     "fetch_url_content",
     "get_sec_filings",
@@ -162,4 +169,6 @@ __all__ = [
     "get_authoritative_media_news",
     "get_earnings_call_transcripts",
     "get_local_market_filings",
+    "resolve_wayback_snapshot",
+    "fetch_via_wayback",
 ]

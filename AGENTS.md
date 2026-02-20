@@ -713,3 +713,28 @@ backend/agents/
 
 </persona_configuration>
 
+
+<!-- 2026-02-20 Phase J P2 architecture sync -->
+<phase_j_p2_update date="2026-02-20">
+  <summary>Wayback fallback added for hard paywalls, transcript coverage expanded for CN/HK, and macro official sources wired into evidence.</summary>
+  <files>
+    <item>backend/tools/wayback.py (new)</item>
+    <item>backend/tools/macro_official.py (new)</item>
+    <item>backend/tools/earnings_transcripts.py (enhanced)</item>
+    <item>backend/agents/deep_search_agent.py (Wayback fallback chain)</item>
+    <item>backend/agents/macro_agent.py (official macro release evidence)</item>
+    <item>backend/langchain_tools.py + backend/tools/manifest.py + backend/tools/__init__.py (tool registration)</item>
+  </files>
+  <tests>
+    <item>backend/tests/test_wayback_tool.py</item>
+    <item>backend/tests/test_earnings_transcripts_tool.py</item>
+    <item>backend/tests/test_macro_official_tool.py</item>
+    <item>backend/tests/test_deep_research.py</item>
+    <item>backend/tests/test_tool_manifest.py</item>
+    <item>backend/tests/test_tools_capabilities_api.py</item>
+  </tests>
+  <verification>
+    <item>targeted: 32 passed</item>
+    <item>full backend: 847 passed, 8 skipped</item>
+  </verification>
+</phase_j_p2_update>

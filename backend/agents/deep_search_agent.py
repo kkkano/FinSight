@@ -1021,6 +1021,29 @@ queries 要求：
             except Exception:
                 pass
 
+        enable_wayback_fallback = str(os.getenv("DEEPSEARCH_ENABLE_WAYBACK_FALLBACK", "true")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if (
+            enable_wayback_fallback
+            and not is_pdf
+            and len(text) < self.MIN_TEXT_CHARS
+            and domain != "news.google.com"
+            and self._is_trusted_finance_domain(domain)
+        ):
+            try:
+                from backend.tools.wayback import fetch_via_wayback
+
+                wayback_text = fetch_via_wayback(url)
+                if wayback_text and len(wayback_text) > len(text):
+                    text = self._trim_text(wayback_text)
+                    logger.info("[DeepSearch] Wayback fallback: %s (%d chars)", url, len(text))
+            except Exception:
+                pass
+
         title = item.get("title") or self._infer_title(url)
         snippet = str(item.get("snippet") or "").strip()
 

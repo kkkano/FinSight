@@ -10,7 +10,7 @@ from .search import search
 
 logger = logging.getLogger(__name__)
 
-_TRANSCRIPT_DOMAIN_HINTS = (
+_US_TRANSCRIPT_DOMAIN_HINTS = (
     "fool.com",
     "seekingalpha.com",
     "finance.yahoo.com",
@@ -20,11 +20,75 @@ _TRANSCRIPT_DOMAIN_HINTS = (
     "thestreet.com",
 )
 
-_TRANSCRIPT_QUERY_TEMPLATES = (
-    "{ticker} earnings call transcript",
-    "{ticker} quarterly earnings transcript",
-    "{ticker} conference call transcript",
-    "{ticker} prepared remarks transcript",
+_CN_TRANSCRIPT_DOMAIN_HINTS = (
+    "cninfo.com.cn",
+    "eastmoney.com",
+    "10jqka.com.cn",
+    "finance.sina.com.cn",
+    "stcn.com",
+)
+
+_HK_TRANSCRIPT_DOMAIN_HINTS = (
+    "hkexnews.hk",
+    "disclosure.hkex.com.hk",
+    "irasia.com",
+    "aastocks.com",
+    "etnet.com.hk",
+)
+
+_TRANSCRIPT_DOMAIN_HINTS = _US_TRANSCRIPT_DOMAIN_HINTS + _CN_TRANSCRIPT_DOMAIN_HINTS + _HK_TRANSCRIPT_DOMAIN_HINTS
+
+_TRANSCRIPT_QUERY_TEMPLATES_BY_MARKET = {
+    "US": (
+        "{ticker} earnings call transcript",
+        "{ticker} quarterly earnings transcript",
+        "{ticker} conference call transcript",
+        "{ticker} prepared remarks transcript",
+    ),
+    "CN": (
+        "{ticker} 业绩说明会 纪要",
+        "{ticker} 电话会议 纪要",
+        "{ticker} 投资者关系活动记录表",
+        "{ticker} 业绩会 管理层问答",
+    ),
+    "HK": (
+        "{ticker} earnings call transcript",
+        "{ticker} results presentation transcript",
+        "{ticker} 业绩发布会 纪要",
+        "{ticker} investor relations webcast transcript",
+    ),
+}
+
+_TRANSCRIPT_KEYWORDS = (
+    "transcript",
+    "earnings call",
+    "conference call",
+    "prepared remarks",
+    "q&a",
+    "results presentation",
+    "investor relations",
+    "webcast",
+    "业绩说明会",
+    "业绩会",
+    "电话会议",
+    "电话会",
+    "纪要",
+    "管理层问答",
+    "实录",
+    "投资者关系活动记录表",
+)
+
+_URL_TRANSCRIPT_HINTS = (
+    "transcript",
+    "earnings",
+    "results",
+    "presentation",
+    "webcast",
+    "conference-call",
+    "业绩",
+    "纪要",
+    "说明会",
+    "电话会",
 )
 
 _URL_RE = re.compile(r"https?://[^\s\]\)\"'>]+", flags=re.IGNORECASE)
@@ -39,6 +103,38 @@ def _normalize_domain(url: str) -> str:
 
 def _normalize_ticker(ticker: str) -> str:
     return str(ticker or "").strip().upper()
+
+
+def _infer_market(ticker: str) -> str:
+    symbol = _normalize_ticker(ticker)
+    if symbol.endswith((".SS", ".SZ", ".BJ")):
+        return "CN"
+    if symbol.endswith(".HK"):
+        return "HK"
+    return "US"
+
+
+def _build_market_queries(ticker_norm: str, market: str) -> list[str]:
+    core = ticker_norm.split(".", 1)[0]
+    symbols: list[str] = [ticker_norm]
+    if core and core != ticker_norm:
+        symbols.append(core)
+    if market == "HK" and core:
+        hk_short = core.lstrip("0")
+        if hk_short and hk_short not in symbols:
+            symbols.append(hk_short)
+
+    templates = _TRANSCRIPT_QUERY_TEMPLATES_BY_MARKET.get(market) or _TRANSCRIPT_QUERY_TEMPLATES_BY_MARKET["US"]
+    queries: list[str] = []
+    seen: set[str] = set()
+    for template in templates:
+        for symbol in symbols[:2]:
+            query = template.format(ticker=symbol).strip()
+            if not query or query in seen:
+                continue
+            seen.add(query)
+            queries.append(query)
+    return queries
 
 
 def _parse_search_text(raw: str) -> list[dict[str, str]]:
@@ -108,9 +204,7 @@ def _parse_search_text(raw: str) -> list[dict[str, str]]:
 
 def _looks_like_transcript(title: str, snippet: str, url: str) -> bool:
     text = " ".join((str(title or ""), str(snippet or ""), str(url or ""))).lower()
-    if any(token in text for token in ("transcript", "earnings call", "conference call", "prepared remarks", "q&a")):
-        return True
-    return False
+    return any(token in text for token in _TRANSCRIPT_KEYWORDS)
 
 
 def _is_transcript_domain(domain: str) -> bool:
@@ -118,6 +212,13 @@ def _is_transcript_domain(domain: str) -> bool:
     if not host:
         return False
     return any(host == hint or host.endswith(f".{hint}") for hint in _TRANSCRIPT_DOMAIN_HINTS)
+
+
+def _has_url_transcript_hint(url: str) -> bool:
+    text = str(url or "").strip().lower()
+    if not text:
+        return False
+    return any(token in text for token in _URL_TRANSCRIPT_HINTS)
 
 
 def _maybe_enrich_snippet(url: str, snippet: str) -> str:
@@ -147,10 +248,12 @@ def _maybe_enrich_snippet(url: str, snippet: str) -> str:
 def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]:
     """Best-effort free transcript discovery via public web sources."""
     ticker_norm = _normalize_ticker(ticker)
+    market = _infer_market(ticker_norm)
     capped_limit = max(1, min(int(limit or 6), 20))
     if not ticker_norm:
         return {
             "ticker": ticker_norm,
+            "market": market,
             "source": "earnings_transcripts_free",
             "transcripts": [],
             "count": 0,
@@ -159,9 +262,9 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
 
     rows: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    queries = _build_market_queries(ticker_norm, market)
 
-    for template in _TRANSCRIPT_QUERY_TEMPLATES:
-        query = template.format(ticker=ticker_norm)
+    for query in queries:
         try:
             raw = search(query)
         except Exception as exc:
@@ -177,13 +280,11 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
             title = str(item.get("title") or "").strip()
             snippet = str(item.get("snippet") or "").strip()
 
-            if not (_is_transcript_domain(domain) or _looks_like_transcript(title, snippet, url)):
+            looks_like = _looks_like_transcript(title, snippet, url)
+            if not (_is_transcript_domain(domain) or looks_like):
                 continue
-
-            if not _looks_like_transcript(title, snippet, url):
-                # Domain matches but content signal is weak; keep only obviously transcript-like URLs.
-                if "transcript" not in url.lower() and "earnings" not in url.lower():
-                    continue
+            if not looks_like and not _has_url_transcript_hint(url):
+                continue
 
             seen_urls.add(url)
             snippet = _maybe_enrich_snippet(url, snippet or title)
@@ -196,6 +297,7 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
                     "published_date": None,
                     "domain": domain,
                     "type": "transcript",
+                    "market": market,
                     "confidence": 0.78,
                 }
             )
@@ -206,9 +308,11 @@ def get_earnings_call_transcripts(ticker: str, limit: int = 6) -> dict[str, Any]
 
     return {
         "ticker": ticker_norm,
+        "market": market,
         "source": "earnings_transcripts_free",
         "transcripts": rows,
         "count": len(rows),
+        "searched_queries": queries,
         "error": None,
     }
 

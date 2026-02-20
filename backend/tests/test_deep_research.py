@@ -134,6 +134,21 @@ async def test_macro_agent():
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     mock_tools.get_fred_data.return_value = {"fed_rate": 5.0, "cpi": 3.2, "unemployment": 4.1}
+    mock_tools.get_official_macro_releases.return_value = {
+        "releases": [
+            {
+                "title": "BLS CPI News Release",
+                "url": "https://www.bls.gov/news.release/cpi.nr0.htm",
+                "snippet": "Consumer Price Index increased 0.3 percent in January.",
+                "source": "BLS",
+                "published_date": "2026-02-11T13:30:00Z",
+                "domain": "bls.gov",
+            }
+        ],
+        "sources": ["BLS"],
+        "count": 1,
+        "error": None,
+    }
     mock_tools.get_market_sentiment.return_value = "CNN Fear & Greed Index: 60 (Greed)"
     mock_tools.get_economic_events.return_value = "FOMC this week"
     mock_tools.search.return_value = "Federal funds rate 4.9%, CPI 3.1%, unemployment rate 4.2%"
@@ -147,9 +162,11 @@ async def test_macro_agent():
     assert result.agent_name == "macro"
     assert result.evidence
     assert any(item.source == "FRED" for item in result.evidence)
+    assert any(item.source == "BLS" for item in result.evidence)
     assert result.evidence_quality.get("overall_score", 0) > 0
     assert result.evidence_quality.get("source_diversity", 0) >= 1
     assert "FRED" in result.data_sources
+    assert "US Official Releases" in result.data_sources
 
 @pytest.mark.asyncio
 async def test_macro_agent_fallback_structured():
@@ -157,6 +174,7 @@ async def test_macro_agent_fallback_structured():
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     mock_tools.get_fred_data.side_effect = Exception("FRED down")
+    mock_tools.get_official_macro_releases.return_value = {"releases": [], "count": 0}
     mock_tools.search.return_value = "latest CPI 3.0% and unemployment rate 4.0%"
     mock_tools.get_market_sentiment.return_value = ""
     mock_tools.get_economic_events.return_value = ""
@@ -164,7 +182,7 @@ async def test_macro_agent_fallback_structured():
     agent = MacroAgent(mock_llm, mock_cache, mock_tools)
     result = await agent.research("inflation analysis", "N/A")
 
-    assert "备用" in result.summary or "不可用" in result.summary
+    assert "fallback" in result.summary.lower() or "unavailable" in result.summary.lower()
     assert "Web Search" in result.data_sources
     assert result.evidence is not None
     assert len(result.evidence) > 0
@@ -177,6 +195,7 @@ async def test_macro_agent_conflict_merge_prefers_fred():
     mock_cache = MagicMock()
     mock_tools = MagicMock()
     mock_tools.get_fred_data.return_value = {"fed_rate": 5.5, "cpi": 3.0, "unemployment": 3.9}
+    mock_tools.get_official_macro_releases.return_value = {"releases": [], "count": 0}
     mock_tools.get_market_sentiment.return_value = ""
     mock_tools.get_economic_events.return_value = ""
     mock_tools.search.return_value = "Federal funds rate 4.4%, CPI 2.1%, unemployment rate 4.8%"
@@ -186,7 +205,7 @@ async def test_macro_agent_conflict_merge_prefers_fred():
 
     assert result.agent_name == "macro"
     assert result.evidence_quality.get("has_conflicts") is True
-    assert any("冲突" in risk for risk in result.risks)
+    assert any("conflicting" in str(risk).lower() for risk in result.risks)
 
 @pytest.mark.asyncio
 async def test_supervisor_integration_phase2():
@@ -567,6 +586,56 @@ def test_fetch_document_uses_jina_fallback_for_short_trusted_content(monkeypatch
 
     assert isinstance(doc, dict)
     assert len(str(doc.get("content") or "")) >= 1000
+    assert bool(doc.get("degraded")) is False
+
+
+def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch):
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+
+    class _MockResponse:
+        def __init__(self, url: str):
+            self.url = url
+            self.headers = {"Content-Type": "text/html; charset=utf-8"}
+            self.text = "<html><body>blocked</body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    class _MockSession:
+        def __init__(self, response):
+            self._response = response
+
+        def get(self, *_args, **_kwargs):
+            return self._response
+
+    url = "https://www.wsj.com/markets/earnings/apple-hard-paywall-2026-02-20"
+    monkeypatch.setattr(agent, "_get_session", lambda: _MockSession(_MockResponse(url)))
+    monkeypatch.setenv("DEEPSEARCH_ENABLE_JINA_FALLBACK", "true")
+    monkeypatch.setenv("DEEPSEARCH_ENABLE_WAYBACK_FALLBACK", "true")
+
+    import backend.tools.jina_reader as jina_mod
+    import backend.tools.wayback as wayback_mod
+
+    monkeypatch.setattr(jina_mod, "fetch_via_jina", lambda _target_url: None)
+    monkeypatch.setattr(
+        wayback_mod,
+        "fetch_via_wayback",
+        lambda target_url: "W" * 1500 if target_url == url else None,
+    )
+
+    doc = agent._fetch_document(
+        {
+            "title": "WSJ paywalled note",
+            "url": url,
+            "snippet": "short snippet",
+            "source": "search",
+        }
+    )
+
+    assert isinstance(doc, dict)
+    assert len(str(doc.get("content") or "")) >= 1200
     assert bool(doc.get("degraded")) is False
 
 if __name__ == "__main__":

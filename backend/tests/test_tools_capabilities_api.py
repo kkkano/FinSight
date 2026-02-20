@@ -23,6 +23,7 @@ def test_tools_capabilities_returns_selected_tools():
     assert isinstance(payload.get("tools"), list)
     assert isinstance(payload.get("selected_tools"), list)
     assert "get_stock_price" in payload.get("selected_tools", [])
+    assert "get_official_macro_releases" in payload.get("selected_tools", [])
     assert payload.get("analysis_depth") == "report"
 
 
@@ -52,4 +53,5 @@ def test_tools_capabilities_reports_env_and_market_filters(monkeypatch):
     assert "get_sec_filings" not in selected
     assert "get_sec_material_events" not in selected
     assert "get_sec_risk_factors" not in selected
+    assert "get_official_macro_releases" not in selected
     assert "get_local_market_filings" in selected

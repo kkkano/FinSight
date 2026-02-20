@@ -50,6 +50,7 @@ try:  # pragma: no cover - optional tools
         get_eps_revisions as _get_eps_revisions,
         get_event_calendar as _get_event_calendar,
         get_factor_exposure as _get_factor_exposure,
+        get_official_macro_releases as _get_official_macro_releases,
         get_local_market_filings as _get_local_market_filings,
         get_option_chain_metrics as _get_option_chain_metrics,
         get_sec_filings as _get_sec_filings,
@@ -67,6 +68,7 @@ except Exception:  # pragma: no cover - optional tools fallback
             get_eps_revisions as _get_eps_revisions,
             get_event_calendar as _get_event_calendar,
             get_factor_exposure as _get_factor_exposure,
+            get_official_macro_releases as _get_official_macro_releases,
             get_local_market_filings as _get_local_market_filings,
             get_option_chain_metrics as _get_option_chain_metrics,
             get_sec_filings as _get_sec_filings,
@@ -82,6 +84,7 @@ except Exception:  # pragma: no cover - optional tools fallback
         _get_eps_revisions = None
         _get_option_chain_metrics = None
         _get_factor_exposure = None
+        _get_official_macro_releases = None
         _get_local_market_filings = None
         _run_portfolio_stress_test = None
         _get_event_calendar = None
@@ -154,6 +157,13 @@ class EarningsTranscriptInput(BaseModel):
 
     ticker: str = Field(description="Ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=6, ge=1, le=20, description="Maximum transcript rows")
+
+
+class MacroOfficialInput(BaseModel):
+    """Official macro release inputs (BLS/BEA/FED)."""
+
+    query: str = Field(default="", description="Optional macro topic query, e.g. 'US CPI payrolls'")
+    max_results: int = Field(default=10, ge=1, le=30, description="Maximum official release rows")
 
 
 class LocalFilingsInput(BaseModel):
@@ -274,6 +284,19 @@ def get_economic_events() -> str:
         return _get_economic_events()
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"get_economic_events failed: {exc}"
+
+
+@tool("get_official_macro_releases", args_schema=MacroOfficialInput, return_direct=False)
+def get_official_macro_releases(query: str = "", max_results: int = 10) -> str:
+    """Get official macro release links from BLS/BEA/FED feeds."""
+
+    if not callable(_get_official_macro_releases):
+        return "get_official_macro_releases unavailable: backend.tools function not found"
+    try:
+        payload = _get_official_macro_releases(query=query, max_results=max_results)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_official_macro_releases failed: {exc}"
 
 
 @tool("get_performance_comparison", args_schema=TickerComparisonInput, return_direct=False)
@@ -624,6 +647,7 @@ FINANCIAL_TOOLS = [
     search,
     get_market_sentiment,
     get_economic_events,
+    get_official_macro_releases,
     get_earnings_estimates,
     get_eps_revisions,
     get_performance_comparison,
@@ -678,6 +702,7 @@ __all__ = [
     "search",
     "get_market_sentiment",
     "get_economic_events",
+    "get_official_macro_releases",
     "get_earnings_estimates",
     "get_eps_revisions",
     "get_performance_comparison",

@@ -161,3 +161,42 @@ flowchart LR
 - Latest run (live tools):
   - `AAPL`: all deep-financial checks pass
   - `600519.SS`: local-market profile checks pass
+
+## 10. Phase J P2 Tool Matrix Update (2026-02-20)
+
+### 10.1 DeepSearch Fallback Chain
+- Updated file: `backend/agents/deep_search_agent.py`
+- Current fallback order (for short-body pages):
+  1. direct HTTP fetch
+  2. Jina Reader (`backend/tools/jina_reader.py`)
+  3. Wayback snapshot (`backend/tools/wayback.py`)
+- Control flag:
+  - `DEEPSEARCH_ENABLE_WAYBACK_FALLBACK`
+- Rule:
+  - fail-open only (no pipeline interruption on fallback failure)
+
+### 10.2 Transcript Source Expansion
+- Updated file: `backend/tools/earnings_transcripts.py`
+- Capabilities:
+  - market inference (`US/CN/HK`)
+  - market-specific query templates
+  - localized transcript keyword matching
+  - structured return fields: `market`, `searched_queries`
+
+### 10.3 Official Macro Release Tool
+- New tool: `get_official_macro_releases`
+- File: `backend/tools/macro_official.py`
+- Source scope:
+  - BLS
+  - BEA
+  - FED
+- Integration points:
+  - `backend/agents/macro_agent.py`
+  - `backend/langchain_tools.py`
+  - `backend/tools/manifest.py`
+
+### 10.4 Validation Snapshot
+- `pytest -q backend/tests/test_wayback_tool.py backend/tests/test_earnings_transcripts_tool.py backend/tests/test_macro_official_tool.py backend/tests/test_deep_research.py backend/tests/test_tool_manifest.py backend/tests/test_tools_capabilities_api.py`
+- Result: `32 passed`
+- `pytest backend/tests -x`
+- Result: `847 passed, 8 skipped`

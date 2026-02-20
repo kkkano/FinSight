@@ -55,3 +55,14 @@
   - `docs/06b_LANGGRAPH_CHANGELOG.md`（Phase J P0/P1 completion）
   - `scripts/phase_j_smoke_before_after_2026-02-19.json`（AAPL/600519 before-after 对比）
 - 这三个文件一起阅读可完整还原本轮从“质量门槛长期失败”到“免费 API 驱动高质量引用”的落地路径。
+
+## 2026-02-20 Incremental Sync (Phase J P2)
+- Updated docs:
+  - `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md` (added P2 section)
+  - `docs/06b_LANGGRAPH_CHANGELOG.md` (added Phase J P2 completion)
+  - `docs/AGENTS_GUIDE.md` (added P2 tool matrix and routing notes)
+  - `AGENTS.md` (added architecture sync block for P2)
+- New/updated runtime evidence path summary:
+  - DeepSearch fallback order now includes Wayback for hard paywalls.
+  - Transcript retrieval expanded for CN/HK markets.
+  - Macro agent now emits official-source release evidence (BLS/BEA/FED).

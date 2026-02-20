@@ -176,3 +176,25 @@
 - Regression snapshot:
   - `pytest backend/tests -x` => `839 passed, 8 skipped`
   - `npx tsc -b --noEmit` => pass
+
+## 2026-02-20 Phase J P2 Completion
+- Added Wayback fallback utility (`backend/tools/wayback.py`) and integrated fallback order in `backend/agents/deep_search_agent.py` for hard-paywall scenarios.
+- Upgraded transcript discovery (`backend/tools/earnings_transcripts.py`) with market-aware query expansion and CN/HK coverage improvements.
+- Added official macro release tool (`backend/tools/macro_official.py`) for BLS/BEA/FED document-level references.
+- Integrated official macro tool into:
+  - `backend/agents/macro_agent.py`
+  - `backend/langchain_tools.py`
+  - `backend/tools/manifest.py`
+  - `backend/tools/__init__.py`
+- Added env controls in `.env.example` for Wayback and official macro retrieval limits/timeouts.
+- Added regression tests:
+  - `backend/tests/test_wayback_tool.py`
+  - `backend/tests/test_earnings_transcripts_tool.py`
+  - `backend/tests/test_macro_official_tool.py`
+- Updated integration tests:
+  - `backend/tests/test_deep_research.py`
+  - `backend/tests/test_tool_manifest.py`
+  - `backend/tests/test_tools_capabilities_api.py`
+- Verification:
+  - Targeted: `32 passed`
+  - Full backend: `pytest backend/tests -x` -> `847 passed, 8 skipped`
