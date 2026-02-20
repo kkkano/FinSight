@@ -448,7 +448,12 @@ function ReportSection({ reports, loading, selectedReportId, onSelectReport }: R
             <TimelineGroup
               key={group.key}
               group={group}
-              defaultExpanded={group.key === 'today' || group.key === 'yesterday'}
+              defaultExpanded={
+                group.key === 'today'
+                || group.key === 'yesterday'
+                || groups.length === 1
+                || group.items.some((item) => item.report_id === selectedReportId)
+              }
               selectedReportId={selectedReportId}
               compareIds={compareIds}
               compareMode={compareMode}

@@ -173,3 +173,69 @@ def test_get_sec_risk_factors_extracts_item_1a(monkeypatch):
     assert payload.get("error") is None
     assert payload.get("extracted") is True
     assert "Risk Factors" in (payload.get("risk_factors_excerpt") or "")
+
+
+def test_get_sec_company_facts_quarterly_success(monkeypatch):
+    _reset_cache()
+    monkeypatch.setenv("SEC_USER_AGENT", "FinSight admin@finsight.app")
+
+    def _fake_http_get(url, **kwargs):
+        if url.endswith("company_tickers.json"):
+            return _FakeResponse(
+                200,
+                {
+                    "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
+                },
+            )
+        if "companyfacts/CIK0000320193.json" in url:
+            return _FakeResponse(
+                200,
+                {
+                    "facts": {
+                        "us-gaap": {
+                            "Revenues": {
+                                "units": {
+                                    "USD": [
+                                        {"end": "2025-06-30", "val": 100.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"end": "2025-03-31", "val": 90.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                    ]
+                                }
+                            },
+                            "NetIncomeLoss": {
+                                "units": {
+                                    "USD": [
+                                        {"end": "2025-06-30", "val": 25.0, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"end": "2025-03-31", "val": 21.0, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                    ]
+                                }
+                            },
+                            "EarningsPerShareDiluted": {
+                                "units": {
+                                    "USD/shares": [
+                                        {"end": "2025-06-30", "val": 1.55, "form": "10-Q", "fp": "Q3", "filed": "2025-08-01"},
+                                        {"end": "2025-03-31", "val": 1.42, "form": "10-Q", "fp": "Q2", "filed": "2025-05-01"},
+                                    ]
+                                }
+                            },
+                        }
+                    }
+                },
+            )
+        raise AssertionError(f"unexpected url: {url}")
+
+    monkeypatch.setattr(sec, "_http_get", _fake_http_get)
+    payload = sec.get_sec_company_facts_quarterly("AAPL", limit=4)
+    assert payload.get("error") is None
+    assert payload.get("source") == "sec_companyfacts"
+    assert payload.get("periods")[:2] == ["2025Q3", "2025Q2"]
+    assert (payload.get("revenue") or [None])[0] == 100.0
+    assert (payload.get("net_income") or [None])[0] == 25.0
+    assert (payload.get("eps") or [None])[0] == 1.55
+
+
+def test_get_sec_company_facts_quarterly_rejects_non_us(monkeypatch):
+    _reset_cache()
+    monkeypatch.setenv("SEC_USER_AGENT", "FinSight admin@finsight.app")
+    payload = sec.get_sec_company_facts_quarterly("600519.SS")
+    assert payload.get("error") == "unsupported_market"
+    assert payload.get("market") == "CN"

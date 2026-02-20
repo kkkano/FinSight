@@ -388,6 +388,18 @@ def planner_stub(state: GraphState) -> dict:
                     }
                 )
                 step_id += 1
+            if "get_sec_company_facts_quarterly" in allowed_tools:
+                steps.append(
+                    {
+                        "id": f"s{step_id}",
+                        "kind": "tool",
+                        "name": "get_sec_company_facts_quarterly",
+                        "inputs": {"ticker": primary_ticker, "limit": 8},
+                        "why": "Report mode: add SEC CompanyFacts quarterly financial metrics.",
+                        "optional": True,
+                    }
+                )
+                step_id += 1
             if "get_sec_material_events" in allowed_tools:
                 steps.append(
                     {

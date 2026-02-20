@@ -5,6 +5,7 @@ interface DialogProps {
   onClose: () => void;
   children: ReactNode;
   labelledBy?: string;
+  ariaLabel?: string;
   panelClassName?: string;
   overlayClassName?: string;
 }
@@ -14,6 +15,7 @@ export function Dialog({
   onClose,
   children,
   labelledBy,
+  ariaLabel,
   panelClassName = '',
   overlayClassName = '',
 }: DialogProps) {
@@ -31,6 +33,7 @@ export function Dialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
+      aria-label={ariaLabel}
       onMouseDown={handleBackdropClick}
     >
       <div className={panelClassName}>{children}</div>

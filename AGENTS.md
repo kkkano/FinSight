@@ -738,3 +738,27 @@ backend/agents/
     <item>full backend: 847 passed, 8 skipped</item>
   </verification>
 </phase_j_p2_update>
+
+<!-- 2026-02-20 Phase J P3 architecture sync -->
+<phase_j_p3_update date="2026-02-20">
+  <summary>Added SEC CompanyFacts quarterly fallback, CN/HK dedicated market routing, and market-specific peer defaults.</summary>
+  <files>
+    <item>backend/tools/cn_hk_market.py (new)</item>
+    <item>backend/tools/sec.py (added get_sec_company_facts_quarterly)</item>
+    <item>backend/tools/__init__.py (exports updated)</item>
+    <item>backend/dashboard/data_service.py (US/CN/HK routing + fallback order)</item>
+    <item>backend/dashboard/peer_service.py (market peer pools + CN/HK metrics fallback)</item>
+    <item>backend/tests/test_sec_tools.py (CompanyFacts tests)</item>
+    <item>backend/tests/test_dashboard_finnhub_fallback.py (routing regression tests)</item>
+  </files>
+  <boundaries>
+    <item>US financial statements fallback order: yfinance -> SEC CompanyFacts -> Finnhub.</item>
+    <item>CN/HK symbols use Eastmoney-based free source for valuation, kline, and statements.</item>
+    <item>Peer fallback baskets are now market-scoped (US/CN/HK), not one global US basket.</item>
+  </boundaries>
+  <verification>
+    <item>`pytest -q backend/tests/test_sec_tools.py backend/tests/test_dashboard_finnhub_fallback.py` => `14 passed`.</item>
+    <item>`pytest backend/tests -x` => `856 passed, 8 skipped`.</item>
+    <item>function smoke: `AAPL` / `600519.SS` valuation+financials+technicals+peers all non-empty.</item>
+  </verification>
+</phase_j_p3_update>

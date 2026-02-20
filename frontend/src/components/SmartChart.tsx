@@ -44,6 +44,7 @@ const VALID_TYPES: SmartChartType[] = ['bar', 'line', 'pie', 'scatter', 'gauge']
  * Parse raw `<chart ...>JSON</chart>` or `<chart_ref .../>` block strings
  * into structured SmartChartBlock objects.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
 export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
   const blocks: SmartChartBlock[] = [];
 
@@ -77,6 +78,7 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
 /**
  * Remove all <chart>...</chart> and <chart_ref .../> tags from content.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- shared parser utility for ChatList
 export function stripSmartChartTags(content: string): string {
   return content
     .replace(/<chart\s+[^>]*>[\s\S]*?<\/chart>/g, '')

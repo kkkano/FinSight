@@ -618,6 +618,11 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 {"ticker": primary_ticker, "forms": "10-K,10-Q", "limit": 6},
                 "Report mode: add SEC EDGAR 10-K/10-Q filing evidence.",
             )
+            filing_inserter(
+                "get_sec_company_facts_quarterly",
+                {"ticker": primary_ticker, "limit": 8},
+                "Report mode: add SEC CompanyFacts quarterly financial metrics.",
+            )
             _insert_optional_tool(
                 "get_sec_material_events",
                 {"ticker": primary_ticker, "limit": 5},

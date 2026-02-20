@@ -188,6 +188,7 @@ export const CommandPalette: FC<CommandPaletteProps> = ({ isOpen, onClose }) => 
       open={isOpen}
       onClose={onClose}
       labelledBy="command-palette-title"
+      ariaLabel="命令面板"
       overlayClassName="items-start pt-[20vh]"
       panelClassName="bg-fin-card border border-fin-border rounded-xl w-full max-w-lg shadow-2xl overflow-hidden"
     >

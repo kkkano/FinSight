@@ -37,8 +37,8 @@ class DataSource:
     """Data source definition."""
     name: str
     fetch_func: Callable
-    priority: int  # 浼樺厛绾э紝鏁板瓧瓒婂皬瓒婁紭鍏?
-    rate_limit: int  # 姣忓垎閽熻姹傞檺鍒?
+    priority: int  # Smaller value means higher priority
+    rate_limit: int  # Maximum calls per minute
     last_success: Optional[datetime] = None
     consecutive_failures: int = 0
     total_calls: int = 0
@@ -61,7 +61,7 @@ class FetchResult:
     currency: Optional[str] = None
     adjustment: Optional[str] = None
     data_context: Optional[Dict[str, Any]] = None
-    # 鏂板锛氳緟鍔╁彲瑙傛祴鎬х殑瀛楁
+    # Additional observability fields for fallback and trace metadata
     fallback_used: bool = False
     tried_sources: List[str] = field(default_factory=list)
     trace: Dict[str, Any] = field(default_factory=dict)
@@ -112,7 +112,6 @@ class ToolOrchestrator:
             'total_failures': 0,
             'sources': {},  # name -> {'calls': int, 'success': int, 'fail': int}
         }
-        # 鍋ュ悍闃堝€奸粯璁ゅ€硷紙鍙湪 _init_sources 鏃剁敤 ENV 瑕嗙洊锛?
         self.health_fail_rate_threshold = 0.6
         self.health_min_calls = 3
         self.health_skip_seconds = 300
@@ -127,7 +126,6 @@ class ToolOrchestrator:
         if not self.tools_module:
             return
         
-        # 鍋ュ悍闃堝€硷紙鐢ㄤ簬璺宠繃鍧忔簮 / 鍔ㄦ€佷紭鍏堢骇锛?
         self.health_fail_rate_threshold = float(os.getenv("PRICE_HEALTH_FAIL_RATE", "0.6"))
         self.health_min_calls = int(os.getenv("PRICE_HEALTH_MIN_CALLS", "3"))
         self.health_skip_seconds = int(os.getenv("PRICE_HEALTH_SKIP_SECONDS", "300"))
@@ -152,10 +150,7 @@ class ToolOrchestrator:
             val = getattr(self.tools_module, key_attr, "") if self.tools_module else ""
             return bool(val)
         
-        # 浠?backend.tools 涓幏鍙栧悇涓暟鎹幏鍙栧嚱鏁?
-        # 娉ㄦ剰锛氳繖閲屼娇鐢?getattr 瀹夊叏鑾峰彇锛岄伩鍏嶆ā鍧椾腑涓嶅瓨鍦ㄦ煇鍑芥暟鏃舵姤閿?
         
-        # 鑲′环鏁版嵁婧?
         self.sources['price'] = []
         price_funcs = [
             ('index_price', getattr(self.tools_module, '_fetch_index_price', None), _cfg_int('PRICE_PRIORITY_INDEX', 1), _cfg_int('PRICE_RATE_INDEX', 10), _cfg_int('PRICE_COOLDOWN_INDEX', 0)),
@@ -206,23 +201,22 @@ class ToolOrchestrator:
         **kwargs
     ) -> FetchResult:
         """
-        鑾峰彇鏁版嵁锛屽甫鏅鸿兘鍥為€€
+        Fetch data with intelligent fallback across configured sources.
         
         Args:
-            data_type: 鏁版嵁绫诲瀷锛坧rice, company_info, news 绛夛級
-            ticker: 鑲＄エ浠ｇ爜
-            force_refresh: 鏄惁寮哄埗鍒锋柊锛堝拷鐣ョ紦瀛橈級
-            **kwargs: 浼犻€掔粰鏁版嵁婧愬嚱鏁扮殑棰濆鍙傛暟
+            data_type: Data category (price, company_info, news, etc.)
+            ticker: Ticker symbol
+            force_refresh: Whether to bypass cache and force fresh fetch
+            **kwargs: Extra arguments forwarded to source fetch functions
             
         Returns:
-            FetchResult 鑾峰彇缁撴灉
+            FetchResult object containing data, source, validation, and trace
         """
         self._stats['total_requests'] += 1
         start_time = time.time()
         now_iso = datetime.now(timezone.utc).isoformat()
         trace_emitter = get_trace_emitter()
 
-        # 1. 妫€鏌ョ紦瀛橈紙闄ら潪寮哄埗鍒锋柊锛?
         if not force_refresh:
             cache_key = f"{data_type}:{ticker}"
             cached_data = self.cache.get(cache_key)
@@ -259,27 +253,23 @@ class ToolOrchestrator:
                     },
                 )
         
-        # 2. 鎸変紭鍏堢骇灏濊瘯鏁版嵁婧?
         sources = self.sources.get(data_type, [])
         if not sources:
-            # 娌℃湁閰嶇疆鏁版嵁婧愶紝灏濊瘯鐩存帴璋冪敤宸ュ叿妯″潡鐨勫嚱鏁?
             trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
             return self._fallback_direct_call(data_type, ticker, start_time)
         
-        # 鍔ㄦ€佹帓搴忥細鎸夊け璐ョ巼 / 杩炵画澶辫触 / 鎵嬪伐浼樺厛绾?
         def _fail_rate(src: DataSource) -> float:
             if src.total_calls == 0:
                 return 0.0
             return 1.0 - (src.total_successes / src.total_calls)
         
         def _latency_penalty(src: DataSource) -> float:
-            # 绠€鍖栵細鐢ㄥ钩鍧囪€楁椂锛堝鏋滄湁 trace 涓褰曠殑璇濓級; 杩欓噷淇濈暀鎺ュ彛锛屾殏涓嶆敼鍙樻帓搴?
             return 0.0
         
         now_dt = datetime.now()
         sorted_sources = []
         for src in sources:
-            # 鍋ュ悍璺宠繃锛氳揪鍒版渶灏忚皟鐢ㄦ暟涓斿け璐ョ巼杩囬珮锛屼笖浠嶅湪 skip 绐楀彛
+            # Health-aware skip: temporarily skip unstable sources during cooldown window
             fr = _fail_rate(src)
             if (
                 src.total_calls >= self.health_min_calls
@@ -299,11 +289,10 @@ class ToolOrchestrator:
         tried_sources = []
         last_error = None
 
-        # 缂撳瓨鏈懡涓紝寮€濮嬪皾璇曟暟鎹簮
+        # Emit cache miss trace before iterating through live sources
         trace_emitter.emit_cache_miss(f"{data_type}:{ticker}", source="orchestrator")
 
         for i, source in enumerate(sources):
-            # 鍐峰嵈鏈熻烦杩?
             if source.cooldown_seconds > 0 and source.last_fail:
                 elapsed = (datetime.now() - source.last_fail).total_seconds()
                 if elapsed < source.cooldown_seconds:
@@ -317,7 +306,6 @@ class ToolOrchestrator:
             self._stats['sources'].setdefault(source.name, {'calls': 0, 'success': 0, 'fail': 0})
             self._stats['sources'][source.name]['calls'] += 1
 
-            # 鍙戝皠鏁版嵁婧愯皟鐢ㄥ紑濮嬩簨浠?
             source_start_time = time.time()
             trace_emitter.emit_data_source_query(
                 source.name, data_type, ticker=ticker,
@@ -372,7 +360,6 @@ class ToolOrchestrator:
                     )
                     duration = (time.time() - start_time) * 1000
 
-                    # 鍙戝皠鏁版嵁婧愭垚鍔熶簨浠?
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
                         success=True, duration_ms=source_duration_ms,
@@ -433,7 +420,6 @@ class ToolOrchestrator:
                 logger.info(f"[Orchestrator] {source.name} 澶辫触: {e}")
                 continue
             
-            # 鐭殏寤惰繜锛岄伩鍏嶈姹傝繃蹇?
             time.sleep(0.3)
         duration = (time.time() - start_time) * 1000
         observe_orch_latency(data_type, duration)
@@ -449,7 +435,7 @@ class ToolOrchestrator:
 
         return FetchResult(
             success=False,
-            error=f"鎵€鏈夋暟鎹簮鍧囧け璐? {last_error}",
+            error=f"All data sources failed: {last_error}",
             source=f"tried: {', '.join(tried_sources)}",
             duration_ms=duration,
             as_of=now_iso,
@@ -487,12 +473,11 @@ class ToolOrchestrator:
         try:
             result = source.fetch_func(ticker, **kwargs) if kwargs else source.fetch_func(ticker)
             
-            # 妫€鏌ユ槸鍚︿负鏈夋晥缁撴灉
+            # Check whether the returned payload is valid.
             if result is None:
                 return None
             
             if isinstance(result, str):
-                # 瀛楃涓茬粨鏋滄鏌ラ敊璇爣璁?
                 if "Error" in result or "error" in result.lower():
                     if "rate limit" in result.lower() or "too many requests" in result.lower():
                         logger.info(f"[Orchestrator] {source.name} rate limited")

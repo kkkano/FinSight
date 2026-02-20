@@ -250,11 +250,6 @@ class FundamentalAgent(BaseFinancialAgent):
             or "unknown"
         ).lower()
         signal_text_map = {
-            "positive": "EPS棰勬湡淇鍋忔闈?positive)",
-            "neutral": "EPS棰勬湡淇涓€?neutral)",
-            "negative": "EPS棰勬湡淇鍋忚礋闈?negative)",
-        }
-        signal_text_map = {
             "positive": "EPS revisions trend is positive.",
             "neutral": "EPS revisions trend is neutral.",
             "negative": "EPS revisions trend is negative.",

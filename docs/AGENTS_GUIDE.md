@@ -200,3 +200,42 @@ flowchart LR
 - Result: `32 passed`
 - `pytest backend/tests -x`
 - Result: `847 passed, 8 skipped`
+
+## 11. Phase J P3 Market Data Routing Update (2026-02-20)
+
+### 11.1 New Runtime Data Source
+- `backend/tools/cn_hk_market.py` (new)
+  - quote: Eastmoney `push2` endpoint (`CN/HK` valuation fallback)
+  - kline: Eastmoney `push2his` endpoint (`CN/HK` technical fallback)
+  - financials: Eastmoney datacenter endpoints (`CN/HK` quarterly statement fallback)
+
+### 11.2 SEC CompanyFacts Quarterly Fallback
+- Updated file: `backend/tools/sec.py`
+  - added `get_sec_company_facts_quarterly`
+  - source: SEC XBRL CompanyFacts API
+  - output: normalized quarterly fields for dashboard schema
+
+### 11.3 Dashboard Routing Changes
+- Updated file: `backend/dashboard/data_service.py`
+  - `fetch_valuation`:
+    - CN/HK -> Eastmoney first
+    - US -> yfinance, then fallback
+  - `fetch_financial_statements`:
+    - CN/HK -> Eastmoney financials
+    - US -> yfinance -> SEC CompanyFacts -> Finnhub
+  - `_load_ohlcv_frame`:
+    - CN/HK -> Eastmoney kline fallback added
+
+### 11.4 Peer Routing Changes
+- Updated file: `backend/dashboard/peer_service.py`
+  - default peer pool split by market (`US/CN/HK`)
+  - CN/HK peer metrics fallback uses Eastmoney quote metrics
+  - non-US symbols no longer fall back to US default peer basket
+
+### 11.5 Validation Snapshot
+- Targeted:
+  - `pytest -q backend/tests/test_sec_tools.py backend/tests/test_dashboard_finnhub_fallback.py` -> `14 passed`
+- Full backend:
+  - `pytest backend/tests -x` -> `856 passed, 8 skipped`
+- Function-level smoke:
+  - `AAPL` / `600519.SS` valuation + financials + technicals + peers all return non-empty payloads.

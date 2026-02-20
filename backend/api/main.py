@@ -43,8 +43,7 @@ from backend.services.report_index import get_report_index_store
 
 logger = logging.getLogger(__name__)
 
-# 灏嗛」鐩牴鐩綍娣诲姞鍒?sys.path
-# 杩欐牱鍙互纭繚 backend modules 绛夋ā鍧楄兘琚壘鍒?
+# Ensure project root is on sys.path for backend imports.
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -86,12 +85,12 @@ except ImportError as e:
     except ImportError as e2:
         logger.info(f"❌ Error importing tools: {e2}")
 
-# 瀵煎叆鍥捐〃妫€娴嬪櫒
+# Import chart detector.
 try:
     from backend.api.chart_detector import ChartTypeDetector
     logger.info("[Init] Chart detector imported successfully.")
 except ImportError as e:
-    logger.info(f"鉂?Error importing chart detector: {e}")
+    logger.info(f"[Init] Error importing chart detector: {e}")
     ChartTypeDetector = None
 
 # 瀵煎叆 MemoryService
@@ -560,7 +559,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.info(f"[Scheduler] shutdown error: {e}")
 
-# 鍒濆鍖?FastAPI
 app = FastAPI(
     title="FinSight API",
     description="FinSight 鍚庣鏈嶅姟",

@@ -54,6 +54,7 @@ try:  # pragma: no cover - optional tools
         get_local_market_filings as _get_local_market_filings,
         get_option_chain_metrics as _get_option_chain_metrics,
         get_sec_filings as _get_sec_filings,
+        get_sec_company_facts_quarterly as _get_sec_company_facts_quarterly,
         get_sec_material_events as _get_sec_material_events,
         get_sec_risk_factors as _get_sec_risk_factors,
         run_portfolio_stress_test as _run_portfolio_stress_test,
@@ -72,6 +73,7 @@ except Exception:  # pragma: no cover - optional tools fallback
             get_local_market_filings as _get_local_market_filings,
             get_option_chain_metrics as _get_option_chain_metrics,
             get_sec_filings as _get_sec_filings,
+            get_sec_company_facts_quarterly as _get_sec_company_facts_quarterly,
             get_sec_material_events as _get_sec_material_events,
             get_sec_risk_factors as _get_sec_risk_factors,
             run_portfolio_stress_test as _run_portfolio_stress_test,
@@ -90,6 +92,7 @@ except Exception:  # pragma: no cover - optional tools fallback
         _get_event_calendar = None
         _score_news_source_reliability = None
         _get_sec_filings = None
+        _get_sec_company_facts_quarterly = None
         _get_sec_material_events = None
         _get_sec_risk_factors = None
 
@@ -189,6 +192,13 @@ class SecMaterialEventsInput(BaseModel):
 
     ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=10, ge=1, le=50, description="Maximum event rows to return")
+
+
+class SecCompanyFactsInput(BaseModel):
+    """SEC company facts quarterly inputs."""
+
+    ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
+    limit: int = Field(default=8, ge=1, le=12, description="Maximum quarterly periods to return")
 
 
 class FactorExposureInput(BaseModel):
@@ -612,6 +622,19 @@ def get_sec_material_events(ticker: str, limit: int = 10) -> str:
         return f"get_sec_material_events failed: {exc}"
 
 
+@tool("get_sec_company_facts_quarterly", args_schema=SecCompanyFactsInput, return_direct=False)
+def get_sec_company_facts_quarterly(ticker: str, limit: int = 8) -> str:
+    """Get quarterly SEC CompanyFacts (XBRL) normalized metrics for a US ticker."""
+
+    if not callable(_get_sec_company_facts_quarterly):
+        return "get_sec_company_facts_quarterly unavailable: backend.tools function not found"
+    try:
+        payload = _get_sec_company_facts_quarterly(ticker=ticker, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_sec_company_facts_quarterly failed: {exc}"
+
+
 @tool("get_sec_risk_factors", args_schema=StockTickerInput, return_direct=False)
 def get_sec_risk_factors(ticker: str) -> str:
     """Extract latest SEC Item 1A risk factor excerpt for a US ticker."""
@@ -636,6 +659,7 @@ FINANCIAL_TOOLS = [
     get_option_chain_metrics,
     get_sec_filings,
     get_sec_material_events,
+    get_sec_company_facts_quarterly,
     get_sec_risk_factors,
     get_company_info,
     get_company_news,
@@ -691,6 +715,7 @@ __all__ = [
     "get_option_chain_metrics",
     "get_sec_filings",
     "get_sec_material_events",
+    "get_sec_company_facts_quarterly",
     "get_sec_risk_factors",
     "get_company_news",
     "get_event_calendar",

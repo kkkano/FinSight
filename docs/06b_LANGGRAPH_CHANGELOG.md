@@ -198,3 +198,23 @@
 - Verification:
   - Targeted: `32 passed`
   - Full backend: `pytest backend/tests -x` -> `847 passed, 8 skipped`
+
+## 2026-02-20 Phase J P3 Completion
+- Added SEC quarterly XBRL fallback:
+  - `backend/tools/sec.py`: `get_sec_company_facts_quarterly`
+- Added CN/HK dedicated market source:
+  - `backend/tools/cn_hk_market.py` (Eastmoney quote/kline/financials)
+- Dashboard routing update:
+  - `backend/dashboard/data_service.py`
+    - CN/HK valuation/financials/technicals route to dedicated source
+    - US financials fallback order now prefers SEC CompanyFacts before Finnhub
+- Peer routing update:
+  - `backend/dashboard/peer_service.py`
+    - default peers split by market (`US/CN/HK`)
+    - CN/HK peer metrics fallback wired to dedicated source
+- Tests:
+  - `backend/tests/test_sec_tools.py` (added CompanyFacts coverage)
+  - `backend/tests/test_dashboard_finnhub_fallback.py` (added routing/fallback coverage)
+- Validation:
+  - `pytest -q backend/tests/test_sec_tools.py backend/tests/test_dashboard_finnhub_fallback.py` -> `14 passed`
+  - `pytest backend/tests -x` -> `856 passed, 8 skipped`

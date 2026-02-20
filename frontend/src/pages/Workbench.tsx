@@ -470,8 +470,9 @@ export function Workbench({
         setSelectedReport(null);
         setSelectedReportError(error instanceof Error ? error.message : '报告加载失败。');
       } finally {
-        if (cancelled || requestSeq !== replayRequestSeqRef.current) return;
-        setLoadingSelectedReport(false);
+        if (!cancelled && requestSeq === replayRequestSeqRef.current) {
+          setLoadingSelectedReport(false);
+        }
       }
     };
 

@@ -126,6 +126,7 @@ def test_new_query_sec_tools_are_allowlisted():
     tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
     step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
     assert "get_sec_filings" in tools
+    assert "get_sec_company_facts_quarterly" in tools
     assert "get_sec_risk_factors" in tools
     assert "get_sec_filings" in step_names
     assert "get_sec_risk_factors" in step_names
@@ -216,10 +217,12 @@ def test_investment_report_us_auto_adds_sec_steps():
     tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
     step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
     assert "get_sec_filings" in tools
+    assert "get_sec_company_facts_quarterly" in tools
     assert "get_sec_material_events" in tools
     assert "get_authoritative_media_news" in tools
     assert "get_earnings_call_transcripts" in tools
     assert "get_sec_filings" in step_names
+    assert "get_sec_company_facts_quarterly" in step_names
     assert "get_sec_material_events" in step_names
     assert "get_authoritative_media_news" in step_names
     assert "get_earnings_call_transcripts" in step_names

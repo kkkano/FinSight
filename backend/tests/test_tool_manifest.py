@@ -49,6 +49,7 @@ def test_select_tools_us_includes_sec_tools_for_company_qa():
     assert "get_sec_filings" in tools
     assert "get_sec_material_events" in tools
     assert "get_sec_risk_factors" in tools
+    assert "get_sec_company_facts_quarterly" in tools
     assert "get_official_macro_releases" in tools
     assert "get_authoritative_media_news" in tools
     assert "get_earnings_call_transcripts" in tools

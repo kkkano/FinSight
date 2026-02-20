@@ -151,3 +151,32 @@
 - Validation snapshot:
   - `pytest -q backend/tests/test_wayback_tool.py backend/tests/test_earnings_transcripts_tool.py backend/tests/test_macro_official_tool.py backend/tests/test_deep_research.py backend/tests/test_tool_manifest.py backend/tests/test_tools_capabilities_api.py` -> `32 passed`
   - `pytest backend/tests -x` -> `847 passed, 8 skipped`
+
+## 2026-02-20 Phase J P3 Completion (SEC CompanyFacts + CN/HK routing + market peers)
+- New tool module:
+  - `backend/tools/cn_hk_market.py`
+    - `fetch_cn_hk_quote_metrics`
+    - `fetch_cn_hk_kline`
+    - `fetch_cn_hk_financial_statements`
+    - market normalization helpers (`CN/HK`)
+- SEC enhancement:
+  - `backend/tools/sec.py`
+    - added `get_sec_company_facts_quarterly` (SEC XBRL CompanyFacts quarterly normalization)
+- Dashboard routing:
+  - `backend/dashboard/data_service.py`
+    - CN/HK valuation routed to Eastmoney fallback
+    - CN/HK financials routed to Eastmoney fallback
+    - US financials fallback order updated: `yfinance -> SEC CompanyFacts -> Finnhub`
+    - CN/HK OHLCV route added in `_load_ohlcv_frame`
+- Peer routing:
+  - `backend/dashboard/peer_service.py`
+    - default peers split by market (`US/CN/HK`)
+    - CN/HK peer metrics fallback from Eastmoney
+    - non-US symbols no longer use US default basket
+- Tests:
+  - updated `backend/tests/test_sec_tools.py`
+  - updated `backend/tests/test_dashboard_finnhub_fallback.py`
+- Validation:
+  - `pytest -q backend/tests/test_sec_tools.py backend/tests/test_dashboard_finnhub_fallback.py` -> `14 passed`
+  - `pytest backend/tests -x` -> `856 passed, 8 skipped`
+  - function smoke (`AAPL` / `600519.SS`) confirms valuation/financials/technicals/peers all available.

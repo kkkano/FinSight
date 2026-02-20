@@ -84,6 +84,7 @@ from .sec import (
     get_sec_filings,
     get_sec_material_events,
     get_sec_risk_factors,
+    get_sec_company_facts_quarterly,
 )
 from .authoritative_feeds import (
     search_authoritative_feeds,
@@ -91,6 +92,12 @@ from .authoritative_feeds import (
 )
 from .earnings_transcripts import get_earnings_call_transcripts
 from .local_disclosure import get_local_market_filings
+from .cn_hk_market import (
+    detect_market as detect_cn_hk_market,
+    fetch_cn_hk_quote_metrics,
+    fetch_cn_hk_kline,
+    fetch_cn_hk_financial_statements,
+)
 from .wayback import resolve_wayback_snapshot, fetch_via_wayback
 
 __all__ = [
@@ -165,10 +172,15 @@ __all__ = [
     "get_sec_filings",
     "get_sec_material_events",
     "get_sec_risk_factors",
+    "get_sec_company_facts_quarterly",
     "search_authoritative_feeds",
     "get_authoritative_media_news",
     "get_earnings_call_transcripts",
     "get_local_market_filings",
+    "detect_cn_hk_market",
+    "fetch_cn_hk_quote_metrics",
+    "fetch_cn_hk_kline",
+    "fetch_cn_hk_financial_statements",
     "resolve_wayback_snapshot",
     "fetch_via_wayback",
 ]

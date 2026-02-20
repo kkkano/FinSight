@@ -26,7 +26,7 @@
   {
     "mode": "after_fix",
     "ticker": "AAPL",
-    "elapsed_sec": 299.04,
+    "elapsed_sec": 342.38,
     "confidence_score": 0.58,
     "citation_count": 24,
     "missing_requirements": [],
@@ -57,18 +57,10 @@
       "has_local_filing": false,
       "has_earnings_transcript": true
     },
-    "tool_steps": [
-      "get_company_info",
-      "get_sec_filings",
-      "get_stock_price",
-      "analyze_historical_drawdowns",
-      "get_sec_filings",
-      "get_sec_material_events",
-      "get_authoritative_media_news",
-      "get_earnings_call_transcripts"
-    ],
+    "tool_steps": [],
     "step_error_count": 0,
-    "step_result_count": 14
+    "step_result_count": 0,
+    "smoke_at": "2026-02-20 21:29:36"
   },
   {
     "mode": "baseline",
@@ -96,7 +88,7 @@
   {
     "mode": "after_fix",
     "ticker": "600519.SS",
-    "elapsed_sec": 257.01,
+    "elapsed_sec": 431.37,
     "confidence_score": 0.58,
     "citation_count": 24,
     "missing_requirements": [],
@@ -121,21 +113,15 @@
       "sec_filing_count": 3,
       "local_filing_count": 8,
       "authoritative_media_count": 7,
-      "rich_snippet_count": 24,
-      "has_10k": false,
+      "rich_snippet_count": 23,
+      "has_10k": true,
       "has_10q": false,
       "has_local_filing": true,
       "has_earnings_transcript": true
     },
-    "tool_steps": [
-      "get_company_info",
-      "get_stock_price",
-      "analyze_historical_drawdowns",
-      "get_local_market_filings",
-      "get_authoritative_media_news",
-      "get_earnings_call_transcripts"
-    ],
+    "tool_steps": [],
     "step_error_count": 0,
-    "step_result_count": 12
+    "step_result_count": 0,
+    "smoke_at": "2026-02-20 21:36:47"
   }
 ]

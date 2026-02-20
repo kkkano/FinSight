@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for backend.graph.nodes.query_intent"""
+"""Unit tests for backend.graph.nodes.query_intent."""
 
 import pytest
 
@@ -88,7 +88,7 @@ class TestIsCasualChat:
         [
             "分析 AAPL",
             "NVDA 最新股价和技术面分析",
-            "苹果财报怎么看",
+            "苹果财报怎么看？",
             "帮我生成投资报告",
             "特斯拉和比亚迪对比",
             "最近美股大盘怎么样",
@@ -99,7 +99,8 @@ class TestIsCasualChat:
         assert is_casual_chat(query) is False
 
     def test_punctuation_tolerance(self):
-        assert is_casual_chat("谢谢！") is True
+        assert is_casual_chat("谢谢？") is True
         assert is_casual_chat("你好。") is True
         assert is_casual_chat("ok!") is True
-        assert is_casual_chat("再见？") is True
+        assert is_casual_chat("再见！") is True
+

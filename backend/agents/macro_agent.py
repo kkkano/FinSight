@@ -443,7 +443,7 @@ class MacroAgent(BaseFinancialAgent):
             else:
                 fallback_reason = None
 
-            # --- Conflict tracking: convert raw conflicts 鈫?ConflictClaim ---
+            # --- Conflict tracking: convert raw conflicts -> ConflictClaim ---
             conflict_flags: List[str] = []
             conflicting_claims: List[ConflictClaim] = []
             source_name_map_for_conflict = {
@@ -463,7 +463,7 @@ class MacroAgent(BaseFinancialAgent):
                 severity = "high" if delta > threshold * 2 else ("medium" if delta > threshold else "low")
                 chosen_src = str(conflict_item.get("chosen_source", ""))
                 other_src = str(conflict_item.get("other_source", ""))
-                conflict_flags.append(f"{indicator_label}({chosen_src} vs {other_src}, 螖={delta:.2f})")
+                conflict_flags.append(f"{indicator_label}({chosen_src} vs {other_src}, Δ={delta:.2f})")
                 conflicting_claims.append(ConflictClaim(
                     claim=indicator_label,
                     source_a=source_name_map_for_conflict.get(chosen_src, chosen_src),
@@ -472,7 +472,7 @@ class MacroAgent(BaseFinancialAgent):
                     value_b=f"{conflict_item.get('other_value', 'N/A')}",
                     severity=severity,
                     resolved=True,
-                    resolution=f"閲囦俊浼樺厛绾ф洿楂樼殑 {source_name_map_for_conflict.get(chosen_src, chosen_src)} 鏁版嵁",
+                    resolution=f"采信优先级更高的 {source_name_map_for_conflict.get(chosen_src, chosen_src)} 数据",
                 ))
         else:
             fallback_reason = None

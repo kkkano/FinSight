@@ -66,3 +66,14 @@
   - DeepSearch fallback order now includes Wayback for hard paywalls.
   - Transcript retrieval expanded for CN/HK markets.
   - Macro agent now emits official-source release evidence (BLS/BEA/FED).
+
+## 2026-02-20 Incremental Sync (Phase J P3)
+- Updated docs:
+  - `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md` (added P3 section)
+  - `docs/06b_LANGGRAPH_CHANGELOG.md` (added Phase J P3 completion)
+  - `docs/AGENTS_GUIDE.md` (added market-routing tool matrix)
+  - `AGENTS.md` (added architecture sync block for P3)
+- Runtime capability summary:
+  - US quarterly financial fallback now includes SEC CompanyFacts (XBRL).
+  - CN/HK valuation + financials + kline now have dedicated free source routing.
+  - Peer defaults are now split by market to avoid US-basket fallback on CN/HK symbols.
