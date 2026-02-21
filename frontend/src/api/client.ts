@@ -18,6 +18,7 @@ export interface ChatContext {
 export interface ChatOptions {
   output_mode?: 'chat' | 'brief' | 'investment_report';
   strict_selection?: boolean;
+  confirmation_mode?: 'auto' | 'required' | 'skip';
   locale?: string;
   trace_raw_override?: 'on' | 'off' | 'inherit';
 }
@@ -35,6 +36,16 @@ export interface ReportIndexItem {
   is_favorite?: boolean;
   tags?: string[];
   source_type?: string;
+  quality_state?: 'pass' | 'warn' | 'block';
+  publishable?: boolean;
+  quality_reasons?: Array<{
+    code: string;
+    severity: 'warn' | 'block';
+    metric: string;
+    actual?: unknown;
+    threshold?: unknown;
+    message: string;
+  }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -73,6 +84,7 @@ export interface ExecuteRequest {
   query: string;
   tickers?: string[];
   output_mode?: string;
+  confirmation_mode?: 'auto' | 'required' | 'skip';
   analysis_depth?: 'quick' | 'report' | 'deep_research';
   agents?: string[];
   budget?: number;
@@ -281,7 +293,7 @@ export async function parseSSEStream(
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (
-            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system'].includes(data.type)
+            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system', 'quality_blocked'].includes(data.type)
           ) {
             const stage = data.stage || data.type;
             const message =
@@ -438,6 +450,7 @@ export const apiClient = {
     tag?: string;
     sourceType?: string;
     favoriteOnly?: boolean;
+    includeBlocked?: boolean;
     limit?: number;
   }): Promise<{ success: boolean; session_id: string; items: ReportIndexItem[]; count: number }> {
     const response = await api.get('/api/reports/index', {
@@ -450,6 +463,7 @@ export const apiClient = {
         tag: params.tag,
         source_type: params.sourceType,
         favorite_only: params.favoriteOnly,
+        include_blocked: params.includeBlocked,
         limit: params.limit,
       },
     });
@@ -459,9 +473,10 @@ export const apiClient = {
   async getReportReplay(params: {
     sessionId: string;
     reportId: string;
+    includeBlocked?: boolean;
   }): Promise<{ success: boolean; session_id: string; report: any; citations: any[]; trace_digest: Record<string, any> }> {
     const response = await api.get(`/api/reports/replay/${encodeURIComponent(params.reportId)}`, {
-      params: { session_id: params.sessionId },
+      params: { session_id: params.sessionId, include_blocked: params.includeBlocked },
     });
     return response.data;
   },
@@ -483,6 +498,7 @@ export const apiClient = {
     sessionId: string;
     reportId1: string;
     reportId2: string;
+    includeBlocked?: boolean;
   }): Promise<{
     confidence_score: { a: number | null; b: number | null; delta: number | null };
     sentiment: { a: string | null; b: string | null; changed: boolean };
@@ -494,6 +510,7 @@ export const apiClient = {
         session_id: params.sessionId,
         id1: params.reportId1,
         id2: params.reportId2,
+        include_blocked: params.includeBlocked,
       },
     });
     // Backend wraps diff data in { success, report_a, report_b, diff: {...} }

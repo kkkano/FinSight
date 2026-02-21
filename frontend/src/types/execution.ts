@@ -151,6 +151,8 @@ export interface StartExecutionParams {
   tickers?: string[];
   /** Maps to API `output_mode` at request time. */
   outputMode?: string;
+  /** Maps to API `confirmation_mode` at request time. */
+  confirmationMode?: 'auto' | 'required' | 'skip';
   /** Explicit depth semantics to avoid query-text coupling. */
   analysisDepth?: AnalysisDepth;
   agents?: string[];

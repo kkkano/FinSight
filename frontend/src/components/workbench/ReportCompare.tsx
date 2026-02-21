@@ -89,6 +89,7 @@ function ReportCompare({ reportId1, reportId2, onClose }: ReportCompareProps) {
         sessionId,
         reportId1,
         reportId2,
+        includeBlocked: true,
       })
       .then((result) => {
         if (!cancelled) setData(result);

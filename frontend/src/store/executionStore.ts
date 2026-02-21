@@ -519,6 +519,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
+      confirmation_mode: params.confirmationMode,
       analysis_depth: params.analysisDepth,
       agents: params.agents,
       budget: params.budget ?? requestPrefs.maxRounds,

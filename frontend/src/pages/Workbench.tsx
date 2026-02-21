@@ -26,6 +26,15 @@ interface VerifierClaim {
   reason: string;
 }
 
+interface QualityReason {
+  code: string;
+  severity: 'warn' | 'block';
+  metric: string;
+  actual?: unknown;
+  threshold?: unknown;
+  message: string;
+}
+
 interface CitationSnippet {
   id: string;
   source: string;
@@ -65,6 +74,22 @@ function asVerifierClaims(value: unknown): VerifierClaim[] {
       reason: asString(item.reason).slice(0, 240) || '证据池中未找到明确支撑',
     }))
     .filter((item) => Boolean(item.claim));
+}
+
+function asQualityReasons(value: unknown): QualityReason[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .map((item) => ({
+      code: asString(item.code),
+      severity: (asString(item.severity) === 'block' ? 'block' : 'warn') as 'warn' | 'block',
+      metric: asString(item.metric),
+      actual: item.actual,
+      threshold: item.threshold,
+      message: asString(item.message),
+    }))
+    .filter((item) => Boolean(item.code));
 }
 
 function normalizeGroundingRate(value: unknown): number | null {
@@ -496,11 +521,20 @@ export function Workbench({
 
   const selectedReportRecord = asRecord(selectedReport);
   const selectedReportMeta = asRecord(selectedReportRecord?.meta);
+  const selectedReportQuality = asRecord(selectedReportRecord?.report_quality)
+    ?? asRecord(selectedReportMeta?.report_quality);
+  const qualityState = asString(selectedReportQuality?.state).toLowerCase();
+  const qualityReasons = asQualityReasons(selectedReportQuality?.reasons);
   const selectedReportHints = asRecord(selectedReportRecord?.report_hints)
     ?? asRecord(selectedReportMeta?.report_hints);
   const selectedQualityHints = asRecord(selectedReportHints?.quality);
   const selectedVerifierHints = asRecord(selectedReportHints?.verifier);
-  const qualityMissing = asStringList(selectedQualityHints?.missing_requirements);
+  const qualityMissingFromHints = asStringList(selectedQualityHints?.missing_requirements);
+  const qualityMissingFromReasons = qualityReasons
+    .filter((item) => item.code.startsWith('QUALITY_PROFILE_') || item.code.startsWith('EVIDENCE_'))
+    .map((item) => item.message)
+    .filter(Boolean);
+  const qualityMissing = Array.from(new Set([...qualityMissingFromHints, ...qualityMissingFromReasons]));
   const verifierClaims = asVerifierClaims(selectedVerifierHints?.unsupported_claims);
   const citations = Array.isArray(selectedReportRecord?.citations)
     ? (selectedReportRecord?.citations as Record<string, unknown>[])
@@ -515,6 +549,8 @@ export function Workbench({
 
   const showLowGroundingBanner = groundingRate !== null && groundingRate < 0.6;
   const groundingRateText = groundingRate !== null ? `${Math.round(groundingRate * 100)}%` : '--';
+  const blockedReasons = qualityReasons.filter((item) => item.severity === 'block');
+  const showQualityBlockedBanner = qualityState === 'block';
   const reportTicker = asString(selectedReportRecord?.ticker).toUpperCase();
   const activeTicker = asString(symbol).toUpperCase();
   const hasTickerMismatch = Boolean(
@@ -613,7 +649,7 @@ export function Workbench({
               type="button"
               className="px-3 py-1.5 rounded-lg border border-fin-warning/40 bg-fin-warning/10 text-xs text-fin-warning hover:bg-fin-warning/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => openQualityDrawer()}
-              disabled={!selectedReport || (qualityMissing.length === 0 && verifierClaims.length === 0)}
+              disabled={!selectedReport || (qualityMissing.length === 0 && verifierClaims.length === 0 && qualityReasons.length === 0)}
               data-testid="workbench-quality-open-drawer"
             >
               证据质量诊断
@@ -652,6 +688,35 @@ export function Workbench({
                 <div className="mt-1 text-xs text-fin-text/90">
                   当前标的：{activeTicker || '--'}；报告标的：{reportTicker || '--'}。为避免串票误导，已阻断结论展示。
                 </div>
+              </div>
+            )}
+
+            {showQualityBlockedBanner && (
+              <div
+                className="rounded-xl border border-fin-danger/50 bg-fin-danger/10 px-4 py-3"
+                data-testid="workbench-report-quality-blocked"
+              >
+                <div className="text-sm font-semibold text-fin-danger">
+                  报告质量状态：BLOCK（不可发布）
+                </div>
+                <div className="mt-1 text-xs text-fin-text/85">
+                  以下硬阈值未满足，请先补齐证据后再复用该报告。
+                </div>
+                {blockedReasons.length > 0 && (
+                  <div className="mt-2 space-y-1 text-xs text-fin-text/85">
+                    {blockedReasons.slice(0, 5).map((item, idx) => (
+                      <div key={`${item.code}-${idx}`}>
+                        <div>• {item.message || item.code}</div>
+                        <div className="text-2xs text-fin-text/65">
+                          code={item.code}
+                          {item.metric ? ` | metric=${item.metric}` : ''}
+                          {item.actual !== undefined ? ` | actual=${String(item.actual)}` : ''}
+                          {item.threshold !== undefined ? ` | threshold=${String(item.threshold)}` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
