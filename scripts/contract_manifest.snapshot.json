@@ -1,0 +1,9 @@
+{
+  "chat_request": "chat.request.v1",
+  "chat_response": "chat.response.v1",
+  "dashboard_data": "dashboard.data.v2",
+  "graph_state": "graph.state.v1",
+  "report_quality": "report.quality.v1",
+  "sse_event": "chat.sse.v1",
+  "trace": "trace.v1"
+}
