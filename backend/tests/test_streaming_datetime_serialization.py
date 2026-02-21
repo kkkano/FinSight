@@ -27,18 +27,17 @@ def test_chat_supervisor_stream_serializes_datetime(monkeypatch):
 
     monkeypatch.setattr(main, "aget_graph_runner", _stub_get_runner)
 
-    client = TestClient(main.app)
     events = []
-
-    with client.stream("POST", "/chat/supervisor/stream", json={"query": "NVDA 最新情况"}) as response:
-        assert response.status_code == 200
-        for raw in response.iter_lines():
-            if not raw:
-                continue
-            line = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
-            if not line.startswith("data: "):
-                continue
-            events.append(json.loads(line[len("data: ") :]))
+    with TestClient(main.app) as client:
+        with client.stream("POST", "/chat/supervisor/stream", json={"query": "NVDA 最新情况"}) as response:
+            assert response.status_code == 200
+            for raw in response.iter_lines():
+                if not raw:
+                    continue
+                line = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+                if not line.startswith("data: "):
+                    continue
+                events.append(json.loads(line[len("data: ") :]))
 
     done_event = next((item for item in events if item.get("type") == "done"), None)
     assert done_event is not None

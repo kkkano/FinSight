@@ -3,9 +3,14 @@ from fastapi.testclient import TestClient
 from uuid import uuid4
 from backend.api.main import app
 
-client = TestClient(app)
 
-def test_get_user_profile():
+@pytest.fixture()
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_get_user_profile(client):
     response = client.get("/api/user/profile?user_id=test_api_user")
     assert response.status_code == 200
     data = response.json()
@@ -13,7 +18,7 @@ def test_get_user_profile():
     assert data["profile"]["user_id"] == "test_api_user"
     assert data["profile"]["risk_tolerance"] == "medium"
 
-def test_update_user_profile():
+def test_update_user_profile(client):
     # Update profile
     profile_update = {
         "user_id": "test_api_user",
@@ -32,7 +37,7 @@ def test_update_user_profile():
     assert data["profile"]["risk_tolerance"] == "aggressive"
     assert data["profile"]["investment_style"] == "growth"
 
-def test_watchlist_endpoints():
+def test_watchlist_endpoints(client):
     user_id = "test_api_user_wl"
 
     # Add to watchlist
@@ -56,7 +61,7 @@ def test_watchlist_endpoints():
     assert "NVDA" not in data["profile"]["watchlist"]
 
 
-def test_agent_preferences_endpoints():
+def test_agent_preferences_endpoints(client):
     user_id = f"test_api_user_agent_prefs_{uuid4().hex}"
 
     # Get defaults

@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timedelta, date
+from datetime import UTC, datetime, timedelta, date
 from typing import Optional, List, Dict, Any, Union
 from urllib.parse import quote
 
@@ -1509,7 +1509,7 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
             data = []
             if interval.endswith('h'):
                 # 生成过去24小时的逐小时平滑序列
-                now = datetime.utcnow()
+                now = datetime.now(UTC).replace(tzinfo=None)
                 for i in range(24, 0, -1):
                     t = now - timedelta(hours=i)
                     data.append({

@@ -497,7 +497,7 @@ class ToolOrchestrator:
         """
         Direct tool fallback when no data sources are configured.
         """
-        fallback_as_of = datetime.utcnow().isoformat() + "Z"
+        fallback_as_of = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         if not self.tools_module:
             duration = (time.time() - start_time) * 1000
             observe_orch_latency(data_type, duration)

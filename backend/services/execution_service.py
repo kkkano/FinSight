@@ -351,13 +351,21 @@ async def run_graph_pipeline(
                 report=report,
                 source="execute_run",
             )
+            response_markdown = "" if quality_blocked else markdown
+            persisted_report = None if quality_blocked else report
 
             if quality_blocked:
+                blocked_reason_codes = [
+                    str(item.get("code") or "").strip()
+                    for item in (report_quality.get("reasons") or [])
+                    if isinstance(item, dict)
+                ]
                 await _queue_event(
                     {
                         "type": "quality_blocked",
                         "message": "Report blocked by quality gate",
                         "quality": report_quality,
+                        "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": False,
                     }
                 )
@@ -371,55 +379,56 @@ async def run_graph_pipeline(
             deps.update_session_context(
                 thread_id=thread_id,
                 original_query=original_query or query,
-                response_markdown=markdown,
+                response_markdown=response_markdown,
                 subject=state.get("subject"),
             )
 
             # 5b. Persist lightweight long-term memory snapshot (best-effort)
-            try:
-                from backend.graph.store import persist_memory_snapshot
+            if not quality_blocked:
+                try:
+                    from backend.graph.store import persist_memory_snapshot
 
-                persist_memory_snapshot(
-                    thread_id=thread_id,
-                    state=state,
-                    report=report,
-                )
-            except Exception as exc:
-                logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
-
-            # 6. Stream markdown in chunks
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "start",
-                    "message": "Rendering markdown stream",
-                    "timestamp": _utc_iso_now(),
-                }
-            )
-            for idx in range(0, len(markdown), markdown_chunk_size):
-                chunk = markdown[idx: idx + markdown_chunk_size]
-                if chunk:
-                    await _queue_event(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "token",
-                            "content": chunk,
-                        }
+                    persist_memory_snapshot(
+                        thread_id=thread_id,
+                        state=state,
+                        report=report,
                     )
-                await asyncio.sleep(0)
+                except Exception as exc:
+                    logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
 
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "done",
-                    "message": "Rendering stream completed",
-                    "timestamp": _utc_iso_now(),
-                }
-            )
+                # 6. Stream markdown in chunks
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "start",
+                        "message": "Rendering markdown stream",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+                for idx in range(0, len(markdown), markdown_chunk_size):
+                    chunk = markdown[idx: idx + markdown_chunk_size]
+                    if chunk:
+                        await _queue_event(
+                            {
+                                "schema_version": deps.sse_event_schema_version,
+                                "type": "token",
+                                "content": chunk,
+                            }
+                        )
+                    await asyncio.sleep(0)
+
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "done",
+                        "message": "Rendering stream completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
 
             # 7. Final "done" event
             llm_total_calls = stream_metrics.get("llm_start", 0)
@@ -438,8 +447,8 @@ async def run_graph_pipeline(
                     "intent": "chat",
                     "session_id": thread_id,
                     "source": source,
-                    "response": markdown,
-                    "report": report,
+                    "response": response_markdown,
+                    "report": persisted_report,
                     "quality": report_quality,
                     "quality_blocked": quality_blocked,
                     "publishable": not quality_blocked,
@@ -621,13 +630,21 @@ async def resume_graph_pipeline(
                 report=report,
                 source="execute_resume",
             )
+            response_markdown = "" if quality_blocked else markdown
+            persisted_report = None if quality_blocked else report
 
             if quality_blocked:
+                blocked_reason_codes = [
+                    str(item.get("code") or "").strip()
+                    for item in (report_quality.get("reasons") or [])
+                    if isinstance(item, dict)
+                ]
                 await _queue_event(
                     {
                         "type": "quality_blocked",
                         "message": "Report blocked by quality gate",
                         "quality": report_quality,
+                        "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": False,
                     }
                 )
@@ -638,50 +655,51 @@ async def resume_graph_pipeline(
                 )
 
             # Persist lightweight long-term memory snapshot (best-effort)
-            try:
-                from backend.graph.store import persist_memory_snapshot
+            if not quality_blocked:
+                try:
+                    from backend.graph.store import persist_memory_snapshot
 
-                persist_memory_snapshot(
-                    thread_id=thread_id,
-                    state=final_state,
-                    report=report,
-                )
-            except Exception as exc:
-                logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
-
-            # Stream markdown
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "start",
-                    "message": "Rendering markdown stream",
-                    "timestamp": _utc_iso_now(),
-                }
-            )
-            for idx in range(0, len(markdown), markdown_chunk_size):
-                chunk = markdown[idx: idx + markdown_chunk_size]
-                if chunk:
-                    await _queue_event(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "token",
-                            "content": chunk,
-                        }
+                    persist_memory_snapshot(
+                        thread_id=thread_id,
+                        state=final_state,
+                        report=report,
                     )
-                await asyncio.sleep(0)
+                except Exception as exc:
+                    logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
 
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "done",
-                    "message": "Rendering stream completed",
-                    "timestamp": _utc_iso_now(),
-                }
-            )
+                # Stream markdown
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "start",
+                        "message": "Rendering markdown stream",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+                for idx in range(0, len(markdown), markdown_chunk_size):
+                    chunk = markdown[idx: idx + markdown_chunk_size]
+                    if chunk:
+                        await _queue_event(
+                            {
+                                "schema_version": deps.sse_event_schema_version,
+                                "type": "token",
+                                "content": chunk,
+                            }
+                        )
+                    await asyncio.sleep(0)
+
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "done",
+                        "message": "Rendering stream completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
 
             # Done
             await _queue_event(
@@ -692,8 +710,8 @@ async def resume_graph_pipeline(
                     "intent": "resume",
                     "session_id": thread_id,
                     "source": source,
-                    "response": markdown,
-                    "report": report,
+                    "response": response_markdown,
+                    "report": persisted_report,
                     "quality": report_quality,
                     "quality_blocked": quality_blocked,
                     "publishable": not quality_blocked,

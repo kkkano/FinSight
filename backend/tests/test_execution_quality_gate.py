@@ -102,13 +102,16 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
     blocked_events = [event for event in events if isinstance(event, dict) and event.get("type") == "quality_blocked"]
     assert blocked_events, "SSE stream should emit quality_blocked"
     assert blocked_events[0].get("publishable") is False
+    assert "EVIDENCE_COVERAGE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "pipeline should still emit done"
     done = done_events[0]
     assert done.get("quality_blocked") is True
     assert done.get("publishable") is False
-    assert isinstance(done.get("report"), dict)
+    assert done.get("response") == ""
+    assert done.get("report") is None
+    assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))
 
 
 def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
@@ -189,9 +192,13 @@ def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch
     blocked_events = [event for event in events if isinstance(event, dict) and event.get("type") == "quality_blocked"]
     assert blocked_events, "SSE stream should emit quality_blocked"
     assert blocked_events[0].get("publishable") is False
+    assert "GROUNDING_RATE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "resume pipeline should still emit done"
     done = done_events[0]
     assert done.get("quality_blocked") is True
     assert done.get("publishable") is False
+    assert done.get("response") == ""
+    assert done.get("report") is None
+    assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))

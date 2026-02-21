@@ -3,7 +3,7 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, date
+from datetime import UTC, datetime, timedelta, date
 from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
@@ -371,7 +371,7 @@ def _format_search_news_items(
     max_age_days: int = 7,
     now: Optional[datetime] = None,
 ) -> tuple[list[str], bool]:
-    now = now or datetime.utcnow()
+    now = now or datetime.now(UTC).replace(tzinfo=None)
     items = _extract_search_items(text)
     enriched = []
 
@@ -430,7 +430,7 @@ def _build_search_news_items(
     max_age_days: int = 7,
     now: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
-    now = now or datetime.utcnow()
+    now = now or datetime.now(UTC).replace(tzinfo=None)
     items = _extract_search_items(text)
     enriched = []
 
@@ -487,7 +487,7 @@ def _parse_rss_items(
     max_age_days: int = 2,
     now: Optional[datetime] = None,
 ) -> tuple[list[str], bool]:
-    now = now or datetime.utcnow()
+    now = now or datetime.now(UTC).replace(tzinfo=None)
     lines: List[str] = []
     try:
         root = ET.fromstring(xml_text)
@@ -553,7 +553,7 @@ def _fetch_finnhub_market_news(limit: int = 5, max_age_hours: int = 48) -> tuple
     if not finnhub_client:
         return [], False
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     try:
         items = finnhub_client.general_news("general")
     except Exception:
@@ -1013,13 +1013,13 @@ def _within_window(candidate: Optional[date], start_date: date, end_date: date) 
 
 def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
     """Get upcoming earnings/dividend/macro events (free-first)."""
-    today = datetime.utcnow().date()
+    today = datetime.now(UTC).date()
     days = max(1, min(int(days_ahead or 30), 120))
     end_date = today + timedelta(days=days)
     result: Dict[str, Any] = {
         "ticker": str(ticker or "").upper(),
         "source": "yfinance+search",
-        "as_of": datetime.utcnow().isoformat(),
+        "as_of": datetime.now(UTC).isoformat(),
         "days_ahead": days,
         "earnings_events": [],
         "dividend_events": [],

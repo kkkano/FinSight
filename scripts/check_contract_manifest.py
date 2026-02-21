@@ -91,7 +91,11 @@ def main() -> int:
             print(f"[contract-check] {item}")
         return 1
 
-    serialized = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True)
+    snapshot_payload = {
+        "contracts": manifest,
+        "report_quality_reason_codes": reason_payload,
+    }
+    serialized = json.dumps(snapshot_payload, ensure_ascii=False, indent=2, sort_keys=True)
     print(serialized)
 
     if args.write:

@@ -1,9 +1,29 @@
 {
-  "chat_request": "chat.request.v1",
-  "chat_response": "chat.response.v1",
-  "dashboard_data": "dashboard.data.v2",
-  "graph_state": "graph.state.v1",
-  "report_quality": "report.quality.v1",
-  "sse_event": "chat.sse.v1",
-  "trace": "trace.v1"
+  "contracts": {
+    "chat_request": "chat.request.v1",
+    "chat_response": "chat.response.v1",
+    "dashboard_data": "dashboard.data.v2",
+    "graph_state": "graph.state.v1",
+    "report_quality": "report.quality.v1",
+    "sse_event": "chat.sse.v1",
+    "trace": "trace.v1"
+  },
+  "report_quality_reason_codes": {
+    "codes": [
+      "EVIDENCE_COVERAGE_BELOW_MIN",
+      "EVIDENCE_SOURCES_BELOW_MIN",
+      "GROUNDING_RATE_BELOW_MIN",
+      "GROUNDING_RATE_WARN",
+      "INVALID_CITATION_REFS_REMOVED",
+      "KEY_SECTION_SOURCES_BELOW_MIN",
+      "QUALITY_PROFILE_CRITICAL_MISSING",
+      "QUALITY_PROFILE_IMPORTANT_MISSING",
+      "QUALITY_PROFILE_MINOR_MISSING",
+      "QUALITY_PROFILE_MISSING_LIST",
+      "QUALITY_STATE_ONLY",
+      "VERIFIER_UNSUPPORTED_CLAIMS_BLOCK",
+      "VERIFIER_UNSUPPORTED_CLAIMS_WARN"
+    ],
+    "schema_version": "report.quality.reason-codes.v1"
+  }
 }
