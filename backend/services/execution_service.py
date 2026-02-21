@@ -10,13 +10,17 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 from uuid import uuid4
 
 from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
 
 logger = logging.getLogger("execution_service")
+
+
+def _utc_iso_now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def _normalize_run_id(run_id: str | None) -> str:
@@ -182,7 +186,7 @@ async def run_graph_pipeline(
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
     run_id_value = _normalize_run_id(run_id)
-    request_started_at = datetime.utcnow().isoformat()
+    request_started_at = _utc_iso_now()
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -260,7 +264,7 @@ async def run_graph_pipeline(
                     "type": "thinking",
                     "stage": "langgraph_start",
                     "message": "LangGraph",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -391,7 +395,7 @@ async def run_graph_pipeline(
                     "stage": "rendering",
                     "status": "start",
                     "message": "Rendering markdown stream",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
             for idx in range(0, len(markdown), markdown_chunk_size):
@@ -413,7 +417,7 @@ async def run_graph_pipeline(
                     "stage": "rendering",
                     "status": "done",
                     "message": "Rendering stream completed",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -449,7 +453,7 @@ async def run_graph_pipeline(
                         "llm_total_calls": llm_total_calls,
                         "tool_total_calls": tool_total_calls,
                         "request_started_at": request_started_at,
-                        "request_finished_at": datetime.utcnow().isoformat(),
+                        "request_finished_at": _utc_iso_now(),
                     },
                 }
             )
@@ -520,7 +524,7 @@ async def resume_graph_pipeline(
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
     run_id_value = _normalize_run_id(run_id)
-    request_started_at = datetime.utcnow().isoformat()
+    request_started_at = _utc_iso_now()
 
     def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
         outgoing = deps.redact_sensitive_payload(dict(payload))
@@ -575,7 +579,7 @@ async def resume_graph_pipeline(
                     "type": "thinking",
                     "stage": "resume_start",
                     "message": "Resuming execution",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -653,7 +657,7 @@ async def resume_graph_pipeline(
                     "stage": "rendering",
                     "status": "start",
                     "message": "Rendering markdown stream",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
             for idx in range(0, len(markdown), markdown_chunk_size):
@@ -675,7 +679,7 @@ async def resume_graph_pipeline(
                     "stage": "rendering",
                     "status": "done",
                     "message": "Rendering stream completed",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -695,7 +699,7 @@ async def resume_graph_pipeline(
                     "publishable": not quality_blocked,
                     "metrics": {
                         "request_started_at": request_started_at,
-                        "request_finished_at": datetime.utcnow().isoformat(),
+                        "request_finished_at": _utc_iso_now(),
                     },
                 }
             )

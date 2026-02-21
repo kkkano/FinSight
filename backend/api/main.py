@@ -34,7 +34,7 @@ from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
-from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
+from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
@@ -553,11 +553,20 @@ async def lifespan(app: FastAPI):
             logger.debug("[LangFuse] flush/shutdown error on shutdown (ignored)")
         try:
             for sched in _schedulers:
-                sched.shutdown(wait=False)
+                sched.shutdown(wait=True)
             if _schedulers:
                 logger.info("[Scheduler] all schedulers stopped.")
+            _schedulers.clear()
         except Exception as e:
             logger.info(f"[Scheduler] shutdown error: {e}")
+        try:
+            from backend.graph.checkpointer import areset_checkpointer_caches
+
+            await areset_checkpointer_caches()
+            reset_graph_runner()
+            logger.info("[GraphRunner] checkpointer/runner caches cleared on shutdown")
+        except Exception as e:
+            logger.info(f"[GraphRunner] shutdown cleanup error: {e}")
 
 app = FastAPI(
     title="FinSight API",

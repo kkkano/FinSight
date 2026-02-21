@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import importlib
 import json
 
@@ -14,19 +14,18 @@ def _load_app():
 
 def test_execute_dashboard_research_tab_can_force_confirmation_with_policy():
     app = _load_app()
-    client = TestClient(app)
-
-    resp = client.post(
-        "/api/execute",
-        json={
-            "query": "生成 AAPL 投资报告",
-            "tickers": ["AAPL"],
-            "output_mode": "investment_report",
-            "confirmation_mode": "required",
-            "source": "dashboard_research_tab",
-            "session_id": "public:anonymous:dashboard-test",
-        },
-    )
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/execute",
+            json={
+                "query": "生成 AAPL 投资报告",
+                "tickers": ["AAPL"],
+                "output_mode": "investment_report",
+                "confirmation_mode": "required",
+                "source": "dashboard_research_tab",
+                "session_id": "public:anonymous:dashboard-test",
+            },
+        )
     assert resp.status_code == 200
 
     events = []
@@ -42,19 +41,18 @@ def test_execute_dashboard_research_tab_can_force_confirmation_with_policy():
 
 def test_execute_dashboard_research_tab_can_skip_confirmation_with_policy():
     app = _load_app()
-    client = TestClient(app)
-
-    resp = client.post(
-        "/api/execute",
-        json={
-            "query": "生成 AAPL 投资报告",
-            "tickers": ["AAPL"],
-            "output_mode": "investment_report",
-            "confirmation_mode": "skip",
-            "source": "dashboard_research_tab",
-            "session_id": "public:anonymous:dashboard-test",
-        },
-    )
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/execute",
+            json={
+                "query": "生成 AAPL 投资报告",
+                "tickers": ["AAPL"],
+                "output_mode": "investment_report",
+                "confirmation_mode": "skip",
+                "source": "dashboard_research_tab",
+                "session_id": "public:anonymous:dashboard-test",
+            },
+        )
     assert resp.status_code == 200
 
     events = []

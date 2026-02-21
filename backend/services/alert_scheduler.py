@@ -19,7 +19,7 @@ import time
 import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.agents.risk_agent import RiskAgent, RiskLevel
 from backend.services.subscription_service import SubscriptionService
@@ -179,7 +179,7 @@ class NewsAlertScheduler:
     def run_once(self) -> List[Dict]:
         sent: List[Dict] = []
         subs = self.subscription_service.get_subscriptions()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         lookback = now - timedelta(hours=24)
         checked = 0
 
@@ -470,7 +470,7 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
     Fetch recent news for ticker. Uses yfinance news; filters to last 48h and attaches related tickers if provided.
     """
     articles: List[Dict] = []
-    cutoff = datetime.utcnow() - timedelta(hours=48)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=48)
     ticker_up = ticker.upper()
 
     def _add_article(title: str, url: str, source: str, published_at: datetime, related: List[str] | None = None):
@@ -515,7 +515,7 @@ def fetch_news_articles(ticker: str) -> List[Dict]:
             try:
                 import requests  # type: ignore
 
-                to_date = datetime.utcnow().date()
+                to_date = datetime.now(timezone.utc).date()
                 from_date = to_date - timedelta(days=2)
                 url = "https://finnhub.io/api/v1/company-news"
                 params = {
@@ -746,15 +746,16 @@ def _get_logger() -> logging.Logger:
     if logger.handlers:
         return logger
     logger.setLevel(logging.INFO)
+    logger.propagate = False
     log_path = LOG_DIR / "alerts.log"
     handler = RotatingFileHandler(log_path, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    # also console friendly
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
+    if str(os.getenv("ALERT_LOG_STDOUT_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}:
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
     return logger
 
 logger = _get_logger()

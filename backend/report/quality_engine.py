@@ -15,6 +15,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from backend.contracts import REPORT_QUALITY_REASON_CODES
 from backend.metrics import (
     increment_report_quality_reason,
     increment_report_quality_state,
@@ -334,11 +335,15 @@ def should_publish_report(report: Any) -> bool:
 
 
 def record_quality_metrics(quality: dict[str, Any], *, source: str) -> None:
+    known_codes = set(REPORT_QUALITY_REASON_CODES)
     state = normalize_quality_state(quality.get("state"))
     increment_report_quality_state(state=state, source=source)
     for reason in normalize_quality_reasons(quality.get("reasons")):
+        code = str(reason.get("code") or "UNKNOWN")
+        if code not in known_codes:
+            code = "UNKNOWN"
         increment_report_quality_reason(
-            code=str(reason.get("code") or "UNKNOWN"),
+            code=code,
             severity=str(reason.get("severity") or "warn"),
             source=source,
         )

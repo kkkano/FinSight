@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.contracts import contract_manifest
+from backend.contracts import contract_manifest, report_quality_reason_codes_manifest
 
 
 _REQUIRED_KEYS = {
@@ -32,6 +32,7 @@ _REQUIRED_KEYS = {
     "report_quality",
 }
 _SCHEMA_VERSION_PATTERN = re.compile(r"^[a-z0-9_.-]+\.v\d+$")
+_REASON_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 def _validate_manifest(payload: dict[str, str]) -> list[str]:
@@ -50,6 +51,32 @@ def _validate_manifest(payload: dict[str, str]) -> list[str]:
     return errors
 
 
+def _validate_reason_codes(payload: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    schema_version = str(payload.get("schema_version") or "").strip()
+    if not schema_version:
+        errors.append("reason-codes: empty schema version")
+    elif not _SCHEMA_VERSION_PATTERN.fullmatch(schema_version):
+        errors.append(f"reason-codes: invalid schema version format `{schema_version}`")
+
+    raw_codes = payload.get("codes")
+    if not isinstance(raw_codes, list) or not raw_codes:
+        errors.append("reason-codes: codes must be a non-empty list")
+        return errors
+
+    seen: set[str] = set()
+    for code in raw_codes:
+        text = str(code or "").strip()
+        if not _REASON_CODE_PATTERN.fullmatch(text):
+            errors.append(f"reason-codes: invalid code `{text}`")
+            continue
+        if text in seen:
+            errors.append(f"reason-codes: duplicate code `{text}`")
+            continue
+        seen.add(text)
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", type=str, default="")
@@ -57,6 +84,8 @@ def main() -> int:
 
     manifest = contract_manifest()
     errors = _validate_manifest(manifest)
+    reason_payload = report_quality_reason_codes_manifest()
+    errors.extend(_validate_reason_codes(reason_payload))
     if errors:
         for item in errors:
             print(f"[contract-check] {item}")
