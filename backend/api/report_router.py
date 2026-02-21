@@ -36,6 +36,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         tag: Optional[str] = None,
         source_type: Optional[str] = None,
         favorite_only: bool = False,
+        include_blocked: bool = False,
         limit: int = 50,
     ):
         try:
@@ -53,12 +54,13 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             tag=tag,
             source_type=source_type,
             favorite_only=bool(favorite_only),
+            include_blocked=bool(include_blocked),
             limit=limit,
         )
         return {"success": True, "session_id": normalized_session, "items": rows, "count": len(rows)}
 
     @router.get("/api/reports/replay/{report_id}")
-    async def get_report_replay(report_id: str, session_id: str):
+    async def get_report_replay(report_id: str, session_id: str, include_blocked: bool = False):
         report_id = _validate_report_id(report_id)
         try:
             normalized_session = deps.resolve_thread_id(session_id)
@@ -66,7 +68,11 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         store = deps.get_report_index_store()
-        replay = store.get_report_replay(session_id=normalized_session, report_id=report_id)
+        replay = store.get_report_replay(
+            session_id=normalized_session,
+            report_id=report_id,
+            include_blocked=bool(include_blocked),
+        )
         if not replay:
             raise HTTPException(status_code=404, detail="report not found")
         return {"success": True, "session_id": normalized_session, **replay}
@@ -138,6 +144,7 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
         session_id: str,
         id1: str,
         id2: str,
+        include_blocked: bool = False,
     ):
         """Compare two reports and return structured differences."""
         id1 = _validate_report_id(id1)
@@ -148,8 +155,16 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
         store = deps.get_report_index_store()
-        report_a = store.get_report_replay(session_id=normalized_session, report_id=id1)
-        report_b = store.get_report_replay(session_id=normalized_session, report_id=id2)
+        report_a = store.get_report_replay(
+            session_id=normalized_session,
+            report_id=id1,
+            include_blocked=bool(include_blocked),
+        )
+        report_b = store.get_report_replay(
+            session_id=normalized_session,
+            report_id=id2,
+            include_blocked=bool(include_blocked),
+        )
         if not report_a:
             raise HTTPException(status_code=404, detail=f"report {id1} not found")
         if not report_b:

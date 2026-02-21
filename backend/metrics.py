@@ -32,6 +32,21 @@ try:
         "Tool orchestrator failures",
         ["data_type", "source"],
     )
+    REPORT_QUALITY_STATE = Counter(
+        "finsight_report_quality_state_total",
+        "Report quality state totals",
+        ["state", "source"],
+    )
+    REPORT_QUALITY_REASON = Counter(
+        "finsight_report_quality_reason_total",
+        "Report quality reason totals",
+        ["code", "severity", "source"],
+    )
+    REPORT_QUALITY_GROUNDING = Histogram(
+        "finsight_report_quality_grounding_rate",
+        "Grounding rate observed in report quality evaluation",
+        ["source"],
+    )
 except Exception:  # pragma: no cover - optional dependency
     METRICS_ENABLED = False
 
@@ -49,6 +64,9 @@ except Exception:  # pragma: no cover - optional dependency
     ORCH_CACHE_HIT = _Noop()
     ORCH_FALLBACK = _Noop()
     ORCH_FAILURE = _Noop()
+    REPORT_QUALITY_STATE = _Noop()
+    REPORT_QUALITY_REASON = _Noop()
+    REPORT_QUALITY_GROUNDING = _Noop()
     CONTENT_TYPE_LATEST = "text/plain"
 
     def generate_latest():  # type: ignore[override]
@@ -71,6 +89,20 @@ def increment_fallback(data_type: str) -> None:
 
 def increment_failure(data_type: str, source: str) -> None:
     ORCH_FAILURE.labels(data_type=data_type, source=source).inc()
+
+
+def increment_report_quality_state(*, state: str, source: str) -> None:
+    REPORT_QUALITY_STATE.labels(state=state, source=source).inc()
+
+
+def increment_report_quality_reason(*, code: str, severity: str, source: str) -> None:
+    REPORT_QUALITY_REASON.labels(code=code, severity=severity, source=source).inc()
+
+
+def observe_report_quality_grounding_rate(*, grounding_rate: float, source: str) -> None:
+    if grounding_rate < 0:
+        return
+    REPORT_QUALITY_GROUNDING.labels(source=source).observe(grounding_rate)
 
 
 def metrics_payload() -> Tuple[bytes, str]:

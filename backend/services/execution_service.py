@@ -14,6 +14,8 @@ from datetime import datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 from uuid import uuid4
 
+from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
+
 logger = logging.getLogger("execution_service")
 
 
@@ -73,6 +75,16 @@ def _annotate_report_source(
     return report
 
 
+def _apply_quality_gate(
+    *,
+    report: dict[str, Any] | None,
+    source: str,
+) -> tuple[dict[str, Any], bool]:
+    quality, blocked = apply_quality_to_report(report)
+    record_quality_metrics(quality, source=source)
+    return quality, blocked
+
+
 def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
@@ -125,6 +137,7 @@ async def run_graph_pipeline(
     ui_context: dict[str, Any] | None = None,
     output_mode: str | None = None,
     strict_selection: str | None = None,
+    confirmation_mode: str | None = None,
     original_query: str | None = None,
     source: str | None = None,
     trace_raw_enabled: bool = False,
@@ -265,6 +278,7 @@ async def run_graph_pipeline(
                         ui_context=ui_context or {},
                         output_mode=output_mode,
                         strict_selection=strict_selection,
+                        confirmation_mode=confirmation_mode,
                     ),
                     timeout=timeout_seconds,
                 )
@@ -329,11 +343,25 @@ async def run_graph_pipeline(
                     exc,
                     exc_info=True,
                 )
-
-            # 4. Persist report index (async / fire-and-forget)
-            deps.schedule_report_index(
-                session_id=thread_id, report=report, state=state,
+            report_quality, quality_blocked = _apply_quality_gate(
+                report=report,
+                source="execute_run",
             )
+
+            if quality_blocked:
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": "Report blocked by quality gate",
+                        "quality": report_quality,
+                        "publishable": False,
+                    }
+                )
+            elif isinstance(report, dict):
+                # 4. Persist report index (async / fire-and-forget)
+                deps.schedule_report_index(
+                    session_id=thread_id, report=report, state=state,
+                )
 
             # 5. Update conversational session context
             deps.update_session_context(
@@ -408,6 +436,9 @@ async def run_graph_pipeline(
                     "source": source,
                     "response": markdown,
                     "report": report,
+                    "quality": report_quality,
+                    "quality_blocked": quality_blocked,
+                    "publishable": not quality_blocked,
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -582,11 +613,25 @@ async def resume_graph_pipeline(
                 report = _annotate_report_source(report, source)
             except Exception as exc:
                 logger.warning("[resume_pipeline] report build failed: %s", exc)
-
-            # Persist report index
-            deps.schedule_report_index(
-                session_id=thread_id, report=report, state=final_state,
+            report_quality, quality_blocked = _apply_quality_gate(
+                report=report,
+                source="execute_resume",
             )
+
+            if quality_blocked:
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": "Report blocked by quality gate",
+                        "quality": report_quality,
+                        "publishable": False,
+                    }
+                )
+            elif isinstance(report, dict):
+                # Persist report index
+                deps.schedule_report_index(
+                    session_id=thread_id, report=report, state=final_state,
+                )
 
             # Persist lightweight long-term memory snapshot (best-effort)
             try:
@@ -645,6 +690,9 @@ async def resume_graph_pipeline(
                     "source": source,
                     "response": markdown,
                     "report": report,
+                    "quality": report_quality,
+                    "quality_blocked": quality_blocked,
+                    "publishable": not quality_blocked,
                     "metrics": {
                         "request_started_at": request_started_at,
                         "request_finished_at": datetime.utcnow().isoformat(),

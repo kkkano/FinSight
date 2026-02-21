@@ -50,6 +50,9 @@ def test_build_report_payload_adds_quality_gap_for_deep_report_when_requirements
     assert quality.get("qualified") is False
     assert isinstance(quality.get("missing_requirements"), list)
     assert quality.get("missing_requirements")
+    report_quality = report.get("report_quality") or {}
+    assert report_quality.get("state") in {"warn", "block"}
+    assert isinstance(report_quality.get("reasons"), list)
 
 
 def test_build_report_payload_no_quality_gap_when_deep_report_requirements_are_met():

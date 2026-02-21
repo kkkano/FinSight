@@ -8,7 +8,13 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 from backend.report.ir import ReportIR, ReportSection, ReportContent, Citation, ContentType, Sentiment
-from backend.report.evidence_policy import EvidencePolicy
+from backend.report.evidence_policy import (
+    EvidencePolicy,
+    extract_report_quality,
+    merge_quality_states,
+    normalize_quality_state,
+)
+from backend.report.quality_engine import merge_report_quality_payload
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +30,43 @@ class ReportValidator:
         校验字典数据并转换为 ReportIR 对象或字典。
         如果字段缺失，尝试填充默认值；如果结构严重错误，返回最小可用结构。
         """
+        incoming_quality = extract_report_quality(data if isinstance(data, dict) else {})
         report = ReportValidator._build_report(data)
         EvidencePolicy.apply(report)
-        return report.to_dict() if as_dict else report
+        ReportValidator._merge_report_quality(report, incoming_quality)
+
+        if not as_dict:
+            return report
+
+        report_dict = report.to_dict()
+        if isinstance(report_dict, dict):
+            meta = report_dict.get("meta")
+            if isinstance(meta, dict):
+                quality = meta.get("report_quality")
+                if isinstance(quality, dict):
+                    report_dict["report_quality"] = quality
+        return report_dict
+
+    @staticmethod
+    def _merge_report_quality(report: ReportIR, incoming_quality: Dict[str, Any]) -> None:
+        if not isinstance(report.meta, dict):
+            report.meta = {}
+
+        policy_quality = report.meta.get("report_quality")
+        if not isinstance(policy_quality, dict):
+            policy_quality = {"state": "pass", "reasons": []}
+
+        merged_payload = merge_report_quality_payload(
+            existing_quality=policy_quality,
+            reason_groups=[
+                incoming_quality.get("reasons") if isinstance(incoming_quality, dict) else [],
+            ],
+        )
+        merged_payload["state"] = merge_quality_states(
+            merged_payload.get("state"),
+            normalize_quality_state((incoming_quality or {}).get("state")),
+        )
+        report.meta["report_quality"] = merged_payload
 
     @staticmethod
     def _build_report(data: Dict[str, Any]) -> ReportIR:

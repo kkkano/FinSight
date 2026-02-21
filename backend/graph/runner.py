@@ -28,6 +28,7 @@ from backend.graph.nodes import (
 )
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
+from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.graph.state import GraphState
 from backend.graph.trace import with_node_trace
 from backend.services.langfuse_tracer import langfuse_observe
@@ -124,6 +125,7 @@ class GraphRunner:
         ui_context: Optional[dict] = None,
         output_mode: Optional[str] = None,
         strict_selection: Optional[bool] = None,
+        confirmation_mode: Optional[str] = None,
     ) -> dict:
         state: dict = {
             "thread_id": thread_id,
@@ -134,6 +136,16 @@ class GraphRunner:
             state["output_mode"] = output_mode
         if strict_selection is not None:
             state["strict_selection"] = bool(strict_selection)
+        # Always reset confirmation controls for a new run so checkpointed
+        # thread state cannot leak stale values across requests.
+        normalized_mode = parse_confirmation_mode(confirmation_mode) or "auto"
+        state["confirmation_mode"] = normalized_mode
+        if normalized_mode == "required":
+            state["require_confirmation"] = True
+        elif normalized_mode == "skip":
+            state["require_confirmation"] = False
+        else:
+            state["require_confirmation"] = None
 
         config = {"configurable": {"thread_id": thread_id}}
         return await self._graph.ainvoke(state, config=config)
@@ -231,6 +243,7 @@ async def run_graph_traced(
     ui_context: dict | None = None,
     output_mode: str | None = None,
     strict_selection: bool | None = None,
+    confirmation_mode: str | None = None,
 ) -> dict:
     """
     带 Langfuse Trace 的图执行入口。
@@ -246,6 +259,7 @@ async def run_graph_traced(
         ui_context=ui_context,
         output_mode=output_mode,
         strict_selection=strict_selection,
+        confirmation_mode=confirmation_mode,
     )
 
 

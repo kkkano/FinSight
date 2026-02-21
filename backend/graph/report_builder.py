@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
+from backend.report.quality_engine import evaluate_runtime_report_quality
 from backend.report.validator import ReportValidator
 
 
@@ -1996,6 +1997,21 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         meta["report_hints"] = report_hints
         meta["grounding"] = grounding_stats
         meta["verifier"] = verifier_result
+        existing_quality = (
+            validated.get("report_quality")
+            if isinstance(validated.get("report_quality"), dict)
+            else (meta.get("report_quality") if isinstance(meta.get("report_quality"), dict) else {})
+        )
+        merged_quality = evaluate_runtime_report_quality(
+            existing_quality=existing_quality,
+            quality_hints=quality_hints if isinstance(quality_hints, dict) else {},
+            grounding_stats=grounding_stats if isinstance(grounding_stats, dict) else {},
+            verifier_claims=verifier_claims if isinstance(verifier_claims, list) else [],
+        )
+        validated["report_quality"] = merged_quality
+        meta["report_quality"] = merged_quality
+        report_hints["quality_state"] = merged_quality.get("state", "pass")
+        report_hints["quality_reasons"] = merged_quality.get("reasons", [])
         validated["meta"] = meta
         return _harden_report_payload(validated)
     return None

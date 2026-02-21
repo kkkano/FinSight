@@ -12,6 +12,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
 from backend.api.schemas import ChatRequest, ChartDataResponse
+from backend.graph.confirmation_policy import parse_confirmation_mode
+from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
 
 
 @dataclass(frozen=True)
@@ -49,9 +51,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
             output_mode = None
             strict_selection = None
+            confirmation_mode = None
             if getattr(request, "options", None):
                 output_mode = request.options.output_mode
                 strict_selection = request.options.strict_selection
+                confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
 
             resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
@@ -63,6 +67,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 ui_context=ui_context,
                 output_mode=output_mode,
                 strict_selection=strict_selection,
+                confirmation_mode=confirmation_mode,
             )
             markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
 
@@ -75,7 +80,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 _logger.warning("[chat/supervisor] report build failed: %s", _report_exc, exc_info=True)
                 report = None
 
-            deps.schedule_report_index(session_id=thread_id, report=report, state=state)
+            report_quality, quality_blocked = apply_quality_to_report(report)
+            record_quality_metrics(report_quality, source="chat_sync")
+
+            if isinstance(report, dict) and not quality_blocked:
+                deps.schedule_report_index(session_id=thread_id, report=report, state=state)
 
             deps.update_session_context(
                 thread_id=thread_id,
@@ -91,6 +100,9 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 "contracts": deps.contract_info(),
                 "response": markdown,
                 "report": report,
+                "quality": report_quality,
+                "quality_blocked": quality_blocked,
+                "publishable": not quality_blocked,
                 "intent": "chat",
                 "classification": {"method": "langgraph", "confidence": 1.0},
                 "session_id": thread_id,
@@ -123,9 +135,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
         output_mode = None
         strict_selection = None
+        confirmation_mode = None
         if getattr(request, "options", None):
             output_mode = request.options.output_mode
             strict_selection = request.options.strict_selection
+            confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
 
         resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
@@ -146,6 +160,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             ui_context=ui_context,
             output_mode=output_mode,
             strict_selection=strict_selection,
+            confirmation_mode=confirmation_mode,
             original_query=request.query,
             source="chat",
             trace_raw_enabled=trace_raw_enabled,
@@ -199,4 +214,3 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             return {"success": False, "error": str(exc)}
 
     return router
-

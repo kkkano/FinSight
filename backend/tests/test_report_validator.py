@@ -169,5 +169,11 @@ def test_report_validator_evidence_policy_flags_low_coverage():
     }
     result = ReportValidator.validate_and_fix(data, as_dict=True)
     policy = result["meta"]["evidence_policy"]
-    assert policy["status"] == "warning"
-    assert any("证据覆盖率" in risk for risk in result["risks"])
+    assert policy["status"] == "block"
+    report_quality = result.get("report_quality")
+    assert isinstance(report_quality, dict)
+    assert report_quality.get("state") == "block"
+    reasons = report_quality.get("reasons") or []
+    assert any(reason.get("code") == "EVIDENCE_COVERAGE_BELOW_MIN" for reason in reasons)
+    assert any("证据覆盖率或引用来源不足" in risk for risk in result["risks"])
+

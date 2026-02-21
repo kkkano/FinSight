@@ -4,6 +4,7 @@ from __future__ import annotations
 from langchain_core.messages import HumanMessage
 
 from backend.contracts import GRAPH_STATE_SCHEMA_VERSION, TRACE_SCHEMA_VERSION
+from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.graph.store import load_memory_context
 from backend.graph.state import GraphState
 
@@ -31,18 +32,9 @@ def build_initial_state(state: GraphState) -> dict:
     if memory_context:
         updates["memory_context"] = memory_context
 
-    # Dashboard research tab is a one-click flow with no interrupt UI.
-    # Force-skip confirmation gate for investment_report executions
-    # triggered from dashboard to avoid "clicked but no response" UX.
-    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
-    source = str(ui_context.get("source") or "").strip().lower()
-    output_mode = str(state.get("output_mode") or "").strip().lower()
-    if (
-        output_mode == "investment_report"
-        and source.startswith("dashboard")
-        and state.get("require_confirmation") is not True
-    ):
-        updates["require_confirmation"] = False
+    confirmation_mode = parse_confirmation_mode(state.get("confirmation_mode"))
+    if confirmation_mode is not None:
+        updates["confirmation_mode"] = confirmation_mode
 
     if query:
         updates["messages"] = [HumanMessage(content=query)]

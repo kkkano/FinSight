@@ -19,6 +19,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline, resume_graph_pipeline
 
 logger = logging.getLogger("execution_router")
@@ -35,6 +36,10 @@ class ExecuteRequest(BaseModel):
     tickers: list[str] | None = Field(None, description="Explicit ticker list")
     output_mode: str | None = Field(
         None, description="chat / brief / investment_report",
+    )
+    confirmation_mode: Literal["auto", "required", "skip"] | None = Field(
+        None,
+        description="Confirmation strategy override: auto/required/skip",
     )
     analysis_depth: Literal["quick", "report", "deep_research"] | None = Field(
         None,
@@ -136,6 +141,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             run_id=request.run_id,
             ui_context=ui_context,
             output_mode=request.output_mode,
+            confirmation_mode=parse_confirmation_mode(request.confirmation_mode),
             source=request.source or "execute",
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
         )
