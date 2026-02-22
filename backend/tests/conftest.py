@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 from pathlib import Path
 
 import pytest
+
+# Keep test runtime deterministic and avoid async sqlite destructor noise in
+# short-lived TestClient lifecycles unless a test explicitly overrides backend.
+os.environ.setdefault("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
+os.environ.setdefault("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
 
 
 @pytest.fixture(autouse=True)
@@ -61,4 +67,3 @@ def _reset_api_memory_test_fixtures():
         ),
         encoding="utf-8",
     )
-
