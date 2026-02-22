@@ -345,3 +345,200 @@ def test_build_report_payload_marks_verifier_gap_when_unsupported_claims_exist()
     meta = report.get("meta") or {}
     verifier_meta = meta.get("verifier") or {}
     assert verifier_meta.get("checked") is True
+
+
+def test_build_report_payload_uses_unresolved_verifier_claims_for_quality_gate():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["GOOG"]},
+        "policy": {"allowed_agents": []},
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：GOOG\n\n",
+            "evidence_pool": [
+                {
+                    "title": "GOOG fundamentals",
+                    "url": "https://example.com/goog-fundamentals",
+                    "snippet": "Revenue growth 11%, PE 28x, cloud margin improving.",
+                    "source": "example",
+                    "published_date": "2026-02-18T00:00:00Z",
+                    "confidence": 0.8,
+                }
+            ],
+            "step_results": {},
+            "errors": [],
+            "render_vars": {
+                "investment_summary": "基于当前估值与增长，维持中性偏多。",
+                "conclusion": "结论偏中性，等待更多证据。",
+            },
+            "verifier_result": {
+                "enabled": True,
+                "checked": True,
+                "unsupported_claims": [
+                    {"claim": "Gemini 2.0 will launch in 2026Q2", "reason": "missing evidence"}
+                ],
+                "unresolved_unsupported_claims": [],
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(
+        state=state,
+        query="请做 GOOG 深度投资报告",
+        thread_id="t-verifier-unresolved-empty",
+    )
+    assert isinstance(report, dict)
+
+    tags = report.get("tags") or []
+    assert "verifier_gap" not in tags
+
+    hints = report.get("report_hints") or {}
+    verifier_hint = hints.get("verifier") or {}
+    assert verifier_hint.get("unsupported_count") == 1
+    assert verifier_hint.get("unresolved_unsupported_count") == 0
+
+    quality = report.get("report_quality") or {}
+    reasons = quality.get("reasons") or []
+    reason_codes = {str(item.get("code")) for item in reasons if isinstance(item, dict)}
+    assert "VERIFIER_UNSUPPORTED_CLAIMS_BLOCK" not in reason_codes
+    assert "VERIFIER_UNSUPPORTED_CLAIMS_WARN" not in reason_codes
+
+
+def test_build_report_payload_excludes_not_run_agents_from_sections_and_quality_coverage():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["price_agent", "news_agent", "fundamental_agent"]},
+        "plan_ir": {
+            "steps": [
+                {"id": "s_price", "kind": "agent", "name": "price_agent"},
+            ]
+        },
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n",
+            "evidence_pool": [
+                {
+                    "title": "AAPL valuation note",
+                    "url": "https://example.com/aapl/valuation",
+                    "snippet": "估值与增长指标更新。",
+                    "source": "example",
+                    "published_date": "2026-02-18T00:00:00Z",
+                    "confidence": 0.8,
+                },
+                {
+                    "title": "AAPL revenue outlook",
+                    "url": "https://example.com/aapl/revenue",
+                    "snippet": "收入预期与利润率趋势。",
+                    "source": "example",
+                    "published_date": "2026-02-18T00:00:00Z",
+                    "confidence": 0.8,
+                },
+            ],
+            "step_results": {
+                "s_price": {
+                    "output": {
+                        "summary": "价格与估值结论稳定。",
+                        "confidence": 0.86,
+                        "evidence": [
+                            {"url": "https://example.com/aapl/valuation/"},
+                            {"url": "https://example.com/aapl/revenue?utm_source=test"},
+                        ],
+                    }
+                }
+            },
+            "errors": [],
+            "render_vars": {"investment_summary": "测试摘要"},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(
+        state=state,
+        query="请做 AAPL 投资分析",
+        thread_id="t-not-run-coverage",
+    )
+    assert isinstance(report, dict)
+
+    sections = report.get("sections") or []
+    agent_names = [str(section.get("agent_name") or "") for section in sections]
+    assert "news_agent" not in agent_names
+    assert "fundamental_agent" not in agent_names
+
+    quality = report.get("report_quality") or {}
+    assert quality.get("state") == "pass"
+    metrics = quality.get("metrics") or {}
+    assert metrics.get("total_blocks") == 1
+    assert metrics.get("covered_blocks") == 1
+
+
+def test_build_report_payload_uses_internal_citations_when_agent_evidence_has_no_url():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["risk_agent"]},
+        "plan_ir": {"steps": [{"id": "s_risk", "kind": "agent", "name": "risk_agent"}]},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n",
+            "evidence_pool": [],
+            "step_results": {
+                "s_risk": {
+                    "output": {
+                        "summary": "风险评分上升，需关注因子暴露和压力场景。",
+                        "confidence": 0.72,
+                        "as_of": "2026-02-20T12:00:00Z",
+                        "evidence": [
+                            {
+                                "title": "Risk score snapshot",
+                                "text": "Risk score: 67 (high). Primary driver: macro stress.",
+                                "source": "risk_rule_engine",
+                                "timestamp": "2026-02-20T12:00:00Z",
+                            },
+                            {
+                                "title": "Factor beta exposure",
+                                "text": "Market beta 1.31, growth factor beta 0.94.",
+                                "source": "factor_model",
+                                "timestamp": "2026-02-20T12:00:00Z",
+                            },
+                        ],
+                    }
+                }
+            },
+            "errors": [],
+            "render_vars": {"investment_summary": "测试摘要"},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(
+        state=state,
+        query="请做 AAPL 风险分析简报",
+        thread_id="t-risk-internal-citations",
+    )
+    assert isinstance(report, dict)
+
+    sections = report.get("sections") or []
+    risk_section = next((section for section in sections if section.get("agent_name") == "risk_agent"), None)
+    assert isinstance(risk_section, dict)
+    contents = risk_section.get("contents") or []
+    refs = contents[0].get("citation_refs") if contents and isinstance(contents[0], dict) else []
+    assert isinstance(refs, list)
+    assert len(refs) >= 2
+
+    citations = report.get("citations") or []
+    citation_url_by_id = {
+        str(item.get("source_id")): str(item.get("url") or "")
+        for item in citations
+        if isinstance(item, dict) and item.get("source_id")
+    }
+    assert all(ref in citation_url_by_id for ref in refs)
+    assert any(citation_url_by_id[ref].startswith("internal://") for ref in refs)
+
+    quality = report.get("report_quality") or {}
+    codes = {
+        str(item.get("code"))
+        for item in (quality.get("reasons") or [])
+        if isinstance(item, dict)
+    }
+    assert "EVIDENCE_COVERAGE_BELOW_MIN" not in codes
+    assert "KEY_SECTION_SOURCES_BELOW_MIN" not in codes

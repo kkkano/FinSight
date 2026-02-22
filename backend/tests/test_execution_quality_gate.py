@@ -103,6 +103,8 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
     assert blocked_events, "SSE stream should emit quality_blocked"
     assert blocked_events[0].get("publishable") is False
     assert "EVIDENCE_COVERAGE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
+    assert blocked_events[0].get("blocked_report_available") is True
+    assert blocked_events[0].get("allow_continue_when_blocked") is True
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "pipeline should still emit done"
@@ -111,6 +113,8 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
     assert done.get("publishable") is False
     assert done.get("response") == ""
     assert done.get("report") is None
+    assert isinstance(done.get("blocked_report"), dict)
+    assert done.get("allow_continue_when_blocked") is True
     assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))
 
 
@@ -193,6 +197,8 @@ def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch
     assert blocked_events, "SSE stream should emit quality_blocked"
     assert blocked_events[0].get("publishable") is False
     assert "GROUNDING_RATE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
+    assert blocked_events[0].get("blocked_report_available") is True
+    assert blocked_events[0].get("allow_continue_when_blocked") is True
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "resume pipeline should still emit done"
@@ -201,4 +207,6 @@ def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch
     assert done.get("publishable") is False
     assert done.get("response") == ""
     assert done.get("report") is None
+    assert isinstance(done.get("blocked_report"), dict)
+    assert done.get("allow_continue_when_blocked") is True
     assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))

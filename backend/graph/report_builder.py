@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from backend.report.quality_engine import evaluate_runtime_report_quality
 from backend.report.validator import ReportValidator
@@ -523,6 +523,27 @@ def _extend_synthesis_report_if_short(
 class _CitationBuild:
     citations: list[dict[str, Any]]
     id_by_url: dict[str, str]
+    id_by_internal_key: dict[str, str]
+
+
+_TRACKING_QUERY_KEYS = {
+    "fbclid",
+    "gclid",
+    "igshid",
+    "mc_cid",
+    "mc_eid",
+    "ref",
+    "ref_src",
+    "source",
+    "sourceid",
+    "utm_campaign",
+    "utm_content",
+    "utm_id",
+    "utm_medium",
+    "utm_name",
+    "utm_source",
+    "utm_term",
+}
 
 
 _FILING_SECTION_PATTERNS: list[re.Pattern[str]] = [
@@ -584,6 +605,40 @@ def _safe_confidence(value: Any, default: float = 0.7) -> float:
         return default
 
 
+def _canonicalize_url_for_citation_match(raw_url: str) -> str:
+    url = _safe_str(raw_url).strip()
+    if not url:
+        return ""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return url
+    if not parsed.scheme or not parsed.netloc:
+        return url
+
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path or "/"
+    if path != "/":
+        path = path.rstrip("/")
+        if not path:
+            path = "/"
+
+    filtered_query: list[tuple[str, str]] = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        clean_key = _safe_str(key).strip()
+        if not clean_key:
+            continue
+        lower_key = clean_key.lower()
+        if lower_key.startswith("utm_") or lower_key in _TRACKING_QUERY_KEYS:
+            continue
+        filtered_query.append((clean_key, _safe_str(value)))
+    filtered_query.sort(key=lambda item: (item[0].lower(), item[1]))
+    query = urlencode(filtered_query, doseq=True)
+
+    return urlunparse((scheme, netloc, path, "", query, ""))
+
+
 def _is_suspicious_citation_item(item: dict[str, Any]) -> bool:
     if not isinstance(item, dict):
         return True
@@ -634,8 +689,13 @@ def _is_suspicious_citation_item(item: dict[str, Any]) -> bool:
 def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBuild:
     citations: list[dict[str, Any]] = []
     id_by_url: dict[str, str] = {}
+    id_by_internal_key: dict[str, str] = {}
     if not isinstance(evidence_pool, list):
-        return _CitationBuild(citations=citations, id_by_url=id_by_url)
+        return _CitationBuild(
+            citations=citations,
+            id_by_url=id_by_url,
+            id_by_internal_key=id_by_internal_key,
+        )
 
     for item in evidence_pool:
         if not isinstance(item, dict):
@@ -646,10 +706,13 @@ def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBui
         if not isinstance(url, str) or not url.strip():
             continue
         url = url.strip()
-        if url in id_by_url:
+        canonical_url = _canonicalize_url_for_citation_match(url)
+        if url in id_by_url or (canonical_url and canonical_url in id_by_url):
             continue
         source_id = str(len(citations) + 1)
         id_by_url[url] = source_id
+        if canonical_url:
+            id_by_url[canonical_url] = source_id
         citations.append(
             {
                 "source_id": source_id,
@@ -665,7 +728,48 @@ def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBui
         if len(citations) >= 24:
             break
 
-    return _CitationBuild(citations=citations, id_by_url=id_by_url)
+    return _CitationBuild(
+        citations=citations,
+        id_by_url=id_by_url,
+        id_by_internal_key=id_by_internal_key,
+    )
+
+
+def _normalize_internal_citation_text(value: Any, *, limit: int = 200) -> str:
+    text = re.sub(r"\s+", " ", _safe_str(value)).strip().lower()
+    return text[:limit]
+
+
+def _build_internal_citation_key(
+    *,
+    agent_name: str,
+    source: str,
+    title: str,
+    snippet: str,
+    timestamp: str,
+) -> str:
+    agent_key = _normalize_internal_citation_text(agent_name, limit=64)
+    source_key = _normalize_internal_citation_text(source, limit=64)
+    title_key = _normalize_internal_citation_text(title, limit=120)
+    snippet_key = _normalize_internal_citation_text(snippet, limit=160)
+    timestamp_key = _normalize_internal_citation_text(timestamp, limit=64)
+    if not any((source_key, title_key, snippet_key, timestamp_key)):
+        return ""
+    return "|".join([agent_key, source_key, title_key, snippet_key, timestamp_key])
+
+
+def _build_internal_citation_url(*, agent_name: str, source: str, title: str) -> str:
+    seed = "-".join(
+        [
+            _normalize_internal_citation_text(agent_name, limit=32),
+            _normalize_internal_citation_text(source, limit=32),
+            _normalize_internal_citation_text(title, limit=48),
+        ]
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", seed).strip("-")
+    if not slug:
+        slug = f"agent-{uuid.uuid4().hex[:8]}"
+    return f"internal://{slug}"
 
 
 def _agent_status_from_steps(
@@ -1647,6 +1751,17 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     verifier_result = artifacts.get("verifier_result") if isinstance(artifacts.get("verifier_result"), dict) else {}
     verifier_claims_raw = verifier_result.get("unsupported_claims") if isinstance(verifier_result, dict) else []
     verifier_claims = verifier_claims_raw if isinstance(verifier_claims_raw, list) else []
+    verifier_unresolved_raw = (
+        verifier_result.get("unresolved_unsupported_claims")
+        if isinstance(verifier_result, dict)
+        else []
+    )
+    verifier_unresolved_claims = verifier_unresolved_raw if isinstance(verifier_unresolved_raw, list) else []
+    verifier_claims_for_gate = (
+        verifier_unresolved_claims
+        if isinstance(verifier_unresolved_raw, list)
+        else verifier_claims
+    )
 
     plan_ir = state.get("plan_ir") if isinstance(state.get("plan_ir"), dict) else {}
     plan_steps = plan_ir.get("steps") if isinstance(plan_ir.get("steps"), list) else []
@@ -1699,8 +1814,52 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if step.get("kind") == "agent" and isinstance(step.get("name"), str) and isinstance(step.get("id"), str):
             steps_by_agent[step["name"].strip()] = step["id"].strip()
 
+    def _ensure_internal_citation(
+        *,
+        agent_name: str,
+        source: str,
+        title: str,
+        snippet: str,
+        timestamp: str,
+        confidence: Any,
+    ) -> str | None:
+        key = _build_internal_citation_key(
+            agent_name=agent_name,
+            source=source,
+            title=title,
+            snippet=snippet,
+            timestamp=timestamp,
+        )
+        if not key:
+            return None
+
+        existing = citation_build.id_by_internal_key.get(key)
+        if existing:
+            return existing
+
+        source_id = str(len(citations) + 1)
+        citation_build.id_by_internal_key[key] = source_id
+        citations.append(
+            {
+                "source_id": source_id,
+                "title": _safe_str(title or source or f"{agent_name} evidence")[:180] or f"{agent_name} evidence",
+                "url": _build_internal_citation_url(
+                    agent_name=agent_name,
+                    source=source,
+                    title=title,
+                ),
+                "snippet": _safe_str(snippet)[:400],
+                "published_date": _safe_str(timestamp),
+                "confidence": _safe_confidence(confidence if confidence is not None else 0.55),
+                "freshness_hours": _freshness_hours(timestamp),
+                "section_ref": None,
+                "source_type": "internal_agent_evidence",
+            }
+        )
+        return source_id
+
     def _get_agent_citation_refs(agent_name: str) -> list[str]:
-        """Match agent evidence URLs against citation id_by_url."""
+        """Resolve section citation refs from agent evidence (URL + internal fallback)."""
         sid = steps_by_agent.get(agent_name)
         if not sid:
             return []
@@ -1712,13 +1871,43 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if not isinstance(evidence, list):
             return []
         refs: list[str] = []
-        for ev in evidence:
+        for index, ev in enumerate(evidence):
             if not isinstance(ev, dict):
                 continue
             url = ev.get("url")
-            if not isinstance(url, str) or not url.strip():
-                continue
-            source_id = citation_build.id_by_url.get(url.strip())
+            source_id = None
+            if isinstance(url, str) and url.strip():
+                raw_url = url.strip()
+                normalized_url = _canonicalize_url_for_citation_match(raw_url)
+                candidate_keys: list[str] = [raw_url]
+                if normalized_url and normalized_url not in candidate_keys:
+                    candidate_keys.append(normalized_url)
+                if raw_url.endswith("/") and raw_url.rstrip("/") not in candidate_keys:
+                    candidate_keys.append(raw_url.rstrip("/"))
+                for key in candidate_keys:
+                    source_id = citation_build.id_by_url.get(key)
+                    if source_id:
+                        break
+
+            if not source_id:
+                source_text = _safe_str(ev.get("source") or agent_name).strip() or agent_name
+                title_text = _safe_str(ev.get("title") or f"{agent_name} evidence {index + 1}").strip()
+                snippet_text = _safe_str(
+                    ev.get("text")
+                    or ev.get("snippet")
+                    or ev.get("summary")
+                    or "",
+                ).strip()
+                timestamp_text = _safe_str(ev.get("timestamp") or output.get("as_of") or "").strip()
+                confidence_value = ev.get("confidence", output.get("confidence"))
+                source_id = _ensure_internal_citation(
+                    agent_name=agent_name,
+                    source=source_text,
+                    title=title_text,
+                    snippet=snippet_text,
+                    timestamp=timestamp_text,
+                    confidence=confidence_value,
+                )
             if source_id and source_id not in refs:
                 refs.append(source_id)
         return refs
@@ -1726,10 +1915,16 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     sections: list[dict[str, Any]] = []
     section_order = 1
     for item in agent_summaries:
+        status = _safe_str(item.get("status") or "").strip().lower()
+        if status != "success":
+            continue
         title = _safe_str(item.get("title") or "")
         if not title:
             continue
         agent_name = item.get("agent_name") or ""
+        summary_text = _safe_str(item.get("summary") or "").strip()
+        if not summary_text:
+            continue
         refs = _get_agent_citation_refs(agent_name)
         sections.append(
             {
@@ -1741,7 +1936,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
                 "contents": [
                     {
                         "type": "text",
-                        "content": _safe_str(item.get("summary") or ""),
+                        "content": summary_text,
                         "citation_refs": refs,
                         "metadata": {},
                     }
@@ -1752,16 +1947,20 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
 
     if filing_section_citations:
         lines = []
+        section_ref_ids: list[str] = []
         for item in filing_section_citations[:24]:
             section = _safe_str(item.get("section") or "").strip()
             source_ids = item.get("source_ids") if isinstance(item.get("source_ids"), list) else []
-            source_ids = [f"[{_safe_str(x).strip()}]" for x in source_ids if _safe_str(x).strip()]
+            normalized_source_ids = [_safe_str(x).strip() for x in source_ids if _safe_str(x).strip()]
+            section_ref_ids.extend(normalized_source_ids)
+            display_source_ids = [f"[{source_id}]" for source_id in normalized_source_ids]
             if not section:
                 continue
-            if source_ids:
-                lines.append(f"- {section}: {', '.join(source_ids)}")
+            if display_source_ids:
+                lines.append(f"- {section}: {', '.join(display_source_ids)}")
             else:
                 lines.append(f"- {section}")
+        section_ref_ids = sorted(set(section_ref_ids))
         sections.append(
             {
                 "title": "Section-level Citations",
@@ -1769,7 +1968,14 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
                 "agent_name": "filing_citation_mapper",
                 "confidence": 0.9,
                 "data_sources": ["evidence_pool"],
-                "contents": [{"type": "text", "content": "\n".join(lines) if lines else "- N/A"}],
+                "contents": [
+                    {
+                        "type": "text",
+                        "content": "\n".join(lines) if lines else "- N/A",
+                        "citation_refs": section_ref_ids,
+                        "metadata": {"exclude_from_quality_coverage": True},
+                    }
+                ],
             }
         )
         section_order += 1
@@ -1795,7 +2001,9 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
             "enabled": bool(verifier_result.get("enabled")),
             "checked": bool(verifier_result.get("checked")),
             "unsupported_count": len(verifier_claims),
+            "unresolved_unsupported_count": len(verifier_claims_for_gate),
             "unsupported_claims": verifier_claims[:6],
+            "unresolved_unsupported_claims": verifier_claims_for_gate[:6],
         }
 
     # Confidence: average of successful agents, else 0.5.
@@ -1913,8 +2121,8 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         elif grounding_rate < 0.75:
             confidence_score = min(confidence_score, 0.7)
 
-    if verifier_claims:
-        verifier_risk = f"二次事实核查发现 {len(verifier_claims)} 条断言缺少直接证据，请重点复核引用与摘录。"
+    if verifier_claims_for_gate:
+        verifier_risk = f"二次事实核查发现 {len(verifier_claims_for_gate)} 条断言缺少直接证据，请重点复核引用与摘录。"
         if verifier_risk not in risks:
             risks.insert(0, verifier_risk)
         confidence_score = min(confidence_score, 0.58)
@@ -2006,7 +2214,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
             existing_quality=existing_quality,
             quality_hints=quality_hints if isinstance(quality_hints, dict) else {},
             grounding_stats=grounding_stats if isinstance(grounding_stats, dict) else {},
-            verifier_claims=verifier_claims if isinstance(verifier_claims, list) else [],
+            verifier_claims=verifier_claims_for_gate if isinstance(verifier_claims_for_gate, list) else [],
         )
         validated["report_quality"] = merged_quality
         meta["report_quality"] = merged_quality

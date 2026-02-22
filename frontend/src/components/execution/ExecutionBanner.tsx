@@ -1,24 +1,24 @@
 /**
- * ExecutionBanner — global top bar showing active/recent execution progress.
+ * ExecutionBanner - global top bar showing active/recent execution progress.
  *
  * Subscribes to executionStore and shows:
- *   - Running: agent pipeline + progress + cancel
- *   - Recently completed: success/error summary, auto-hides after 3s
+ * - Running: agent pipeline + progress + cancel
+ * - Recently completed: success/error summary, auto-hides after 3s
  */
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Loader2,
+  PauseCircle,
   StopCircle,
   XCircle,
 } from 'lucide-react';
 
 import { useExecutionStore } from '../../store/executionStore';
 import type { AgentRunInfo, ExecutionRun } from '../../types/execution';
-
-// --- Constants ---
 
 const AGENT_DISPLAY_ORDER = [
   'price_agent',
@@ -35,10 +35,8 @@ const AGENT_SHORT_NAMES: Record<string, string> = {
   fundamental_agent: '基本面',
   technical_agent: '技术面',
   macro_agent: '宏观',
-  deep_search_agent: '搜索',
+  deep_search_agent: '深搜',
 };
-
-// --- Sub-components ---
 
 function MiniAgentDot({ status }: { status: AgentRunInfo['status'] }) {
   switch (status) {
@@ -61,7 +59,7 @@ function AgentPipeline({ agents }: { agents: Record<string, AgentRunInfo> }) {
     .map((name) => agents[name]);
 
   const extra = Object.values(agents).filter(
-    (a) => !AGENT_DISPLAY_ORDER.includes(a.name),
+    (agent) => !AGENT_DISPLAY_ORDER.includes(agent.name),
   );
   const all = [...ordered, ...extra];
 
@@ -85,8 +83,6 @@ function AgentPipeline({ agents }: { agents: Record<string, AgentRunInfo> }) {
   );
 }
 
-// --- Main Component ---
-
 export const ExecutionBanner: React.FC = () => {
   const activeRuns = useExecutionStore((s) => s.activeRuns);
   const recentRuns = useExecutionStore((s) => s.recentRuns);
@@ -96,11 +92,10 @@ export const ExecutionBanner: React.FC = () => {
   const [expanded, setExpanded] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track recently completed runs — show for 3s after all active runs finish
   const prevActiveCountRef = useRef(activeRuns.length);
   useEffect(() => {
     if (prevActiveCountRef.current > 0 && activeRuns.length === 0 && recentRuns.length > 0) {
-      const latest = recentRuns[recentRuns.length - 1];
+      const latest = recentRuns[0];
       setRecentlyCompleted(latest);
 
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
@@ -117,7 +112,6 @@ export const ExecutionBanner: React.FC = () => {
     };
   }, []);
 
-  // Determine which run to display
   const displayRun = activeRuns.length > 0
     ? activeRuns[activeRuns.length - 1]
     : recentlyCompleted;
@@ -126,7 +120,9 @@ export const ExecutionBanner: React.FC = () => {
 
   const isRunning = displayRun.status === 'running';
   const isDone = displayRun.status === 'done';
+  const isQualityBlocked = isDone && displayRun.qualityBlocked === true;
   const isError = displayRun.status === 'error';
+  const isInterrupted = displayRun.status === 'interrupted';
 
   const tickerText = displayRun.tickers.length > 0
     ? displayRun.tickers.join(', ')
@@ -137,34 +133,38 @@ export const ExecutionBanner: React.FC = () => {
       className={`shrink-0 border-b transition-colors ${
         isRunning
           ? 'border-blue-800/30 bg-blue-950/20'
-          : isDone
-            ? 'border-emerald-800/30 bg-emerald-950/20'
-            : isError
-              ? 'border-red-800/30 bg-red-950/20'
-              : 'border-fin-border bg-fin-bg/50'
+          : isQualityBlocked
+            ? 'border-amber-800/30 bg-amber-950/20'
+            : isDone
+              ? 'border-emerald-800/30 bg-emerald-950/20'
+              : isError
+                ? 'border-red-800/30 bg-red-950/20'
+                : isInterrupted
+                  ? 'border-amber-800/30 bg-amber-950/20'
+                  : 'border-fin-border bg-fin-bg/50'
       }`}
     >
       <div className="flex items-center gap-3 px-4 py-2">
-        {/* Status icon */}
         {isRunning ? (
           <Loader2 size={14} className="animate-spin text-blue-400 shrink-0" />
+        ) : isQualityBlocked ? (
+          <AlertTriangle size={14} className="text-amber-300 shrink-0" />
         ) : isDone ? (
           <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
         ) : isError ? (
           <XCircle size={14} className="text-red-400 shrink-0" />
+        ) : isInterrupted ? (
+          <PauseCircle size={14} className="text-amber-400 shrink-0" />
         ) : (
           <StopCircle size={14} className="text-fin-muted shrink-0" />
         )}
 
-        {/* Ticker / query */}
         <span className="text-xs text-fin-text font-medium truncate max-w-32">
           {tickerText}
         </span>
 
-        {/* Agent pipeline */}
         <AgentPipeline agents={displayRun.agentStatuses} />
 
-        {/* Progress (running) */}
         {isRunning && (
           <div className="flex items-center gap-2 ml-auto shrink-0">
             <div className="w-24 h-1.5 rounded-full bg-fin-border overflow-hidden">
@@ -177,21 +177,18 @@ export const ExecutionBanner: React.FC = () => {
           </div>
         )}
 
-        {/* Current step */}
         {isRunning && displayRun.currentStep && (
           <span className="text-2xs text-fin-muted truncate max-w-40 hidden md:inline">
             {displayRun.currentStep}
           </span>
         )}
 
-        {/* Terminal status text */}
         {!isRunning && (
           <span className="text-2xs text-fin-muted ml-auto shrink-0">
-            {isDone ? '执行完成' : isError ? '执行失败' : '已取消'}
+            {isQualityBlocked ? '质量拦截' : isDone ? '执行完成' : isError ? '执行失败' : isInterrupted ? '等待确认' : '已取消'}
           </span>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
@@ -202,12 +199,12 @@ export const ExecutionBanner: React.FC = () => {
             {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
 
-          {isRunning && (
+          {(isRunning || isInterrupted) && (
             <button
               type="button"
               onClick={() => cancelExecution(displayRun.runId)}
               className="p-1 rounded hover:bg-red-900/30 text-fin-muted hover:text-red-400 transition-colors"
-              title="取消执行"
+              title={isInterrupted ? '取消等待' : '取消执行'}
             >
               <XCircle size={12} />
             </button>
@@ -215,7 +212,6 @@ export const ExecutionBanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Expanded detail */}
       {expanded && displayRun.streamedContent && (
         <div className="px-4 pb-2">
           <div className="text-xs text-fin-text whitespace-pre-wrap break-words max-h-32 overflow-y-auto border border-fin-border rounded-lg p-2 bg-fin-bg/50">

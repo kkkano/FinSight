@@ -11,33 +11,66 @@ interface DimensionRadarProps {
   reportData?: LatestReportData | null;
 }
 
+type DimensionStatus = 'ok' | 'not_run' | 'error';
+
 interface Dimension {
   name: string;
   value: number;
+  status: DimensionStatus;
+}
+
+type AgentStatusKind = 'success' | 'fallback' | 'error' | 'not_run' | 'unknown';
+
+interface AgentSignal {
+  status: AgentStatusKind;
+  confidence: number | null;
 }
 
 const clampPercent = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
 
-const readAgentConfidence = (
+const normalizeAgentStatus = (value: unknown): AgentStatusKind => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'success') return 'success';
+  if (raw === 'fallback') return 'fallback';
+  if (raw === 'error') return 'error';
+  if (raw === 'not_run' || raw === 'skipped') return 'not_run';
+  return 'unknown';
+};
+
+const readAgentSignal = (
   reportData: LatestReportData | null | undefined,
   candidates: string[],
-): number | null => {
+): AgentSignal => {
   const report = reportData?.report as Record<string, unknown> | undefined;
   const agentStatus = report?.agent_status as Record<string, any> | undefined;
-  if (!agentStatus || typeof agentStatus !== 'object') return null;
+  if (!agentStatus || typeof agentStatus !== 'object') {
+    return { status: 'not_run', confidence: null };
+  }
 
   for (const key of candidates) {
     const node = agentStatus[key];
     if (!node || typeof node !== 'object') continue;
     const confidenceRaw = node.confidence ?? node.score;
     const confidence = Number(confidenceRaw);
-    if (!Number.isFinite(confidence)) continue;
-
-    if (confidence <= 1) return clampPercent(confidence * 100);
-    return clampPercent(confidence);
+    return {
+      status: normalizeAgentStatus(node.status),
+      confidence: Number.isFinite(confidence)
+        ? (confidence <= 1 ? clampPercent(confidence * 100) : clampPercent(confidence))
+        : null,
+    };
   }
 
-  return null;
+  return { status: 'not_run', confidence: null };
+};
+
+const toDimensionFromAgent = (name: string, signal: AgentSignal): Dimension => {
+  if (signal.confidence != null) {
+    return { name, value: signal.confidence, status: 'ok' };
+  }
+  if (signal.status === 'error') {
+    return { name, value: 0, status: 'error' };
+  }
+  return { name, value: 0, status: 'not_run' };
 };
 
 function computeDimensions(
@@ -46,7 +79,13 @@ function computeDimensions(
   news: NewsItem[] | undefined,
   reportData: LatestReportData | null | undefined,
 ): Dimension[] {
-  let fundamentals = 0;
+  const fundamentalSignal = readAgentSignal(reportData, ['fundamental_agent']);
+  const technicalSignal = readAgentSignal(reportData, ['technical_agent']);
+  const newsSignal = readAgentSignal(reportData, ['news_agent']);
+  const deepSignal = readAgentSignal(reportData, ['deep_search_agent', 'deep_research_agent']);
+  const macroSignal = readAgentSignal(reportData, ['macro_agent']);
+
+  let fundamentals = toDimensionFromAgent('基本面', fundamentalSignal);
   if (valuation) {
     const fields = [
       valuation.trailing_pe,
@@ -57,10 +96,14 @@ function computeDimensions(
       valuation.market_cap,
     ];
     const filled = fields.filter((field) => field != null).length;
-    fundamentals = clampPercent((filled / fields.length) * 100);
+    fundamentals = {
+      name: '基本面',
+      value: clampPercent((filled / fields.length) * 100),
+      status: 'ok',
+    };
   }
 
-  let technical = 0;
+  let technical = toDimensionFromAgent('技术面', technicalSignal);
   if (technicals) {
     const fields = [
       technicals.rsi,
@@ -72,32 +115,58 @@ function computeDimensions(
       technicals.cci,
     ];
     const filled = fields.filter((field) => field != null).length;
-    technical = clampPercent((filled / fields.length) * 100);
+    technical = {
+      name: '技术面',
+      value: clampPercent((filled / fields.length) * 100),
+      status: 'ok',
+    };
   }
 
+  let newsDimension = toDimensionFromAgent('新闻情绪', newsSignal);
   const newsList = news ?? [];
-  const newsCountScore = Math.min(100, newsList.length * 10);
-  const relevanceList = newsList
-    .map((item) => item.asset_relevance)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
-  const relevanceAvg = relevanceList.length
-    ? relevanceList.reduce((sum, value) => sum + value, 0) / relevanceList.length
-    : null;
-  const newsSentiment = relevanceAvg == null
-    ? newsCountScore
-    : clampPercent(newsCountScore * (0.6 + 0.4 * relevanceAvg));
-
-  const deepResearch = readAgentConfidence(reportData, ['deep_search_agent', 'deep_research_agent']) ?? 0;
-  const macro = readAgentConfidence(reportData, ['macro_agent']) ?? 0;
+  if (newsList.length > 0) {
+    const newsCountScore = Math.min(100, newsList.length * 10);
+    const relevanceList = newsList
+      .map((item) => item.asset_relevance)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const relevanceAvg = relevanceList.length
+      ? relevanceList.reduce((sum, value) => sum + value, 0) / relevanceList.length
+      : null;
+    const score = relevanceAvg == null
+      ? newsCountScore
+      : clampPercent(newsCountScore * (0.6 + 0.4 * relevanceAvg));
+    newsDimension = { name: '新闻情绪', value: score, status: 'ok' };
+  }
 
   return [
-    { name: '基本面', value: fundamentals },
-    { name: '技术面', value: technical },
-    { name: '新闻情绪', value: newsSentiment },
-    { name: '深度研究', value: deepResearch },
-    { name: '宏观环境', value: macro },
+    fundamentals,
+    technical,
+    newsDimension,
+    toDimensionFromAgent('深度研究', deepSignal),
+    toDimensionFromAgent('宏观环境', macroSignal),
   ];
 }
+
+const statusText = (item: Dimension): string => {
+  if (item.status === 'not_run') return '未执行';
+  if (item.status === 'error') return '失败';
+  return `${item.value}%`;
+};
+
+const statusTextClass = (item: Dimension): string => {
+  if (item.status === 'not_run') return 'text-fin-muted';
+  if (item.status === 'error') return 'text-fin-danger';
+  return 'text-fin-text-secondary';
+};
+
+const progressClass = (item: Dimension): string => {
+  if (item.status === 'not_run') return 'bg-fin-border';
+  if (item.status === 'error') return 'bg-fin-danger';
+  if (item.value >= 70) return 'bg-fin-success';
+  if (item.value >= 40) return 'bg-fin-warning';
+  if (item.value > 0) return 'bg-fin-danger';
+  return 'bg-fin-border';
+};
 
 export function DimensionRadar({ valuation, technicals, news, reportData }: DimensionRadarProps) {
   const dimensions = useMemo(
@@ -109,7 +178,7 @@ export function DimensionRadar({ valuation, technicals, news, reportData }: Dime
     <div className="flex flex-col p-4 bg-fin-card rounded-xl border border-fin-border">
       <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-3">
         分析维度覆盖
-        <CardInfoTip content="五维评估：技术面 / 基本面 / 新闻舆情 / 宏观 / 深度研究" />
+        <CardInfoTip content="未执行与失败会单独标注，不再与 0% 混淆。" />
       </div>
 
       <div className="space-y-2.5">
@@ -118,19 +187,13 @@ export function DimensionRadar({ valuation, technicals, news, reportData }: Dime
             <span className="text-2xs text-fin-muted w-16 shrink-0 text-right">{item.name}</span>
             <div className="flex-1 h-2 bg-fin-border rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  item.value >= 70
-                    ? 'bg-fin-success'
-                    : item.value >= 40
-                      ? 'bg-fin-warning'
-                      : item.value > 0
-                        ? 'bg-fin-danger'
-                        : 'bg-fin-border'
-                }`}
+                className={`h-full rounded-full transition-all duration-500 ${progressClass(item)}`}
                 style={{ width: `${item.value}%` }}
               />
             </div>
-            <span className="text-2xs text-fin-text-secondary tabular-nums w-8">{item.value}%</span>
+            <span className={`text-2xs tabular-nums w-12 text-right ${statusTextClass(item)}`}>
+              {statusText(item)}
+            </span>
           </div>
         ))}
       </div>

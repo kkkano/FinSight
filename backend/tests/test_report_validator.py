@@ -177,3 +177,146 @@ def test_report_validator_evidence_policy_flags_low_coverage():
     assert any(reason.get("code") == "EVIDENCE_COVERAGE_BELOW_MIN" for reason in reasons)
     assert any("证据覆盖率或引用来源不足" in risk for risk in result["risks"])
 
+
+def test_report_validator_evidence_policy_excludes_appendix_from_coverage_denominator():
+    data = {
+        "ticker": "AAPL",
+        "summary": "Summary",
+        "citations": [
+            {
+                "source_id": "src_1",
+                "title": "Example",
+                "url": "https://example.com/1",
+                "snippet": "Snippet",
+                "published_date": "2026-01-20T00:00:00",
+            },
+            {
+                "source_id": "src_2",
+                "title": "Example2",
+                "url": "https://example.com/2",
+                "snippet": "Snippet2",
+                "published_date": "2026-01-21T00:00:00",
+            },
+        ],
+        "sections": [
+            {
+                "title": "Summary",
+                "order": 1,
+                "contents": [
+                    {"type": "text", "content": "Main block", "citation_refs": ["src_1", "src_2"]},
+                ],
+            },
+            {
+                "title": "Section-level Citations",
+                "order": 2,
+                "contents": [
+                    {
+                        "type": "text",
+                        "content": "- Item 7: [src_1], [src_2]",
+                        "citation_refs": ["src_1", "src_2"],
+                        "metadata": {"exclude_from_quality_coverage": True},
+                    }
+                ],
+            },
+        ],
+    }
+
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+    report_quality = result.get("report_quality") or {}
+    metrics = report_quality.get("metrics") or {}
+
+    assert report_quality.get("state") == "pass"
+    assert metrics.get("total_blocks") == 1
+    assert metrics.get("covered_blocks") == 1
+
+
+def test_report_validator_evidence_policy_adds_structured_key_section_issue_details():
+    data = {
+        "ticker": "AAPL",
+        "summary": "Summary",
+        "citations": [
+            {
+                "source_id": "src_1",
+                "title": "Example",
+                "url": "https://example.com/key",
+                "snippet": "Snippet",
+                "published_date": "2026-01-20T00:00:00",
+            }
+        ],
+        "sections": [
+            {
+                "title": "Executive Summary",
+                "order": 1,
+                "contents": [
+                    {"type": "text", "content": "Key section block", "citation_refs": ["src_1"]},
+                ],
+            }
+        ],
+    }
+
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+    report_quality = result.get("report_quality") or {}
+    details = report_quality.get("details") or {}
+    thresholds = report_quality.get("thresholds") or {}
+    threshold = thresholds.get("min_key_section_sources") or 1
+
+    issue_details = details.get("key_section_issue_details") or []
+    assert isinstance(issue_details, list)
+    assert issue_details
+    assert issue_details[0].get("section") == "Executive Summary"
+    assert issue_details[0].get("actual") == 1
+    assert issue_details[0].get("threshold") == threshold
+
+
+def test_report_validator_internal_only_key_section_shortfall_is_warn():
+    data = {
+        "ticker": "AAPL",
+        "summary": "Summary",
+        "citations": [
+            {
+                "source_id": "int_1",
+                "title": "Risk engine snapshot",
+                "url": "internal://risk-signal",
+                "snippet": "Risk score moved to high zone.",
+                "published_date": "2026-01-20T00:00:00",
+            },
+            {
+                "source_id": "src_2",
+                "title": "Macro source",
+                "url": "https://example.com/macro",
+                "snippet": "Macro regime remains tight.",
+                "published_date": "2026-01-20T00:00:00",
+            },
+        ],
+        "sections": [
+            {
+                "title": "Risk Outlook",
+                "order": 1,
+                "contents": [
+                    {"type": "text", "content": "Key risk section", "citation_refs": ["int_1"]},
+                ],
+            },
+            {
+                "title": "Market Context",
+                "order": 2,
+                "contents": [
+                    {"type": "text", "content": "Supplementary context", "citation_refs": ["src_2"]},
+                ],
+            },
+        ],
+    }
+
+    result = ReportValidator.validate_and_fix(data, as_dict=True)
+    report_quality = result.get("report_quality") or {}
+    assert report_quality.get("state") == "warn"
+
+    reasons = [item for item in (report_quality.get("reasons") or []) if isinstance(item, dict)]
+    severity_by_code = {str(item.get("code")): str(item.get("severity")) for item in reasons}
+    assert severity_by_code.get("KEY_SECTION_INTERNAL_SOURCES_BELOW_MIN") == "warn"
+    assert "KEY_SECTION_SOURCES_BELOW_MIN" not in severity_by_code
+
+    details = report_quality.get("details") or {}
+    issue_details = details.get("key_section_issue_details") or []
+    assert issue_details
+    assert issue_details[0].get("section") == "Risk Outlook"
+    assert issue_details[0].get("internal_only") is True

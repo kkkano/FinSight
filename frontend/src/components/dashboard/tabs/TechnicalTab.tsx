@@ -34,6 +34,7 @@ export function TechnicalTab() {
   };
 
   const technicals = dashboardData?.technicals;
+  const technicalsFallbackReason = dashboardData?.technicals_fallback_reason;
   const marketChart = dashboardData?.charts?.market_chart;
   const indicatorSeries = dashboardData?.indicator_series;
   const technicalInsight = insightsData?.technical ?? null;
@@ -51,6 +52,16 @@ export function TechnicalTab() {
       />
 
       {/* K-line chart with support/resistance — full width */}
+      {!technicals && technicalsFallbackReason && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <div className="text-xs font-semibold text-amber-200">技术面数据暂不可用</div>
+          <div className="mt-1 text-2xs text-amber-100/90">原因：{technicalsFallbackReason}</div>
+          <div className="mt-1 text-2xs text-amber-100/80">
+            建议：稍后重试，或切换流动性更高的标的以验证是否为数据源瞬时抖动。
+          </div>
+        </div>
+      )}
+
       <SupportResistanceChart technicals={technicals} marketChart={marketChart} />
 
       {/* Row 2: Summary full width */}

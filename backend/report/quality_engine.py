@@ -219,7 +219,7 @@ def build_runtime_quality_reasons(
                 severity="block",
                 metric="verifier_unsupported_claims",
                 actual=unsupported_count,
-                threshold=threshold_cfg.verifier_block_count - 1,
+                threshold=threshold_cfg.verifier_block_count,
                 message="fact verifier found too many unsupported claims",
             )
         )
@@ -230,7 +230,7 @@ def build_runtime_quality_reasons(
                 severity="warn",
                 metric="verifier_unsupported_claims",
                 actual=unsupported_count,
-                threshold=threshold_cfg.verifier_warn_count - 1,
+                threshold=threshold_cfg.verifier_warn_count,
                 message="fact verifier found unsupported claims",
             )
         )

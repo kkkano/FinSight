@@ -679,6 +679,83 @@ class TestInsightsOrchestrator:
         assert "news" in overview.sub_scores
         assert "peers" in overview.sub_scores
 
+    @pytest.mark.asyncio
+    async def test_generate_refreshes_cached_no_news_marker_when_news_cache_ready(self):
+        """If cached insight says 'no news' but news cache has items, force regeneration."""
+        cache = DashboardCache()
+        cache.set(
+            "AAPL",
+            "insights",
+            {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "insights": {
+                    "news": {
+                        "agent_name": "news_digest",
+                        "tab": "news",
+                        "score": 5.0,
+                        "score_label": "中性",
+                        "summary": "暂无近期新闻数据",
+                        "key_points": ["暂无近期新闻数据"],
+                        "risks": [],
+                        "confidence": 0.4,
+                        "as_of": datetime.now(timezone.utc).isoformat(),
+                        "model_generated": False,
+                    }
+                },
+            },
+            ttl=cache.TTL_INSIGHTS,
+        )
+        cache.set(
+            "AAPL",
+            "news",
+            {"market": [{"title": "Positive catalyst"}], "impact": []},
+            ttl=cache.TTL_NEWS,
+        )
+
+        orchestrator = InsightsOrchestrator(cache=cache)
+        fresh_response = DashboardInsightsResponse(
+            symbol="AAPL",
+            insights={},
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            cached=False,
+            cache_age_seconds=0,
+        )
+
+        with patch.object(orchestrator, "_generate_fresh", new=AsyncMock(return_value=fresh_response)) as mock_generate:
+            response = await orchestrator.generate("AAPL")
+
+        assert response is fresh_response
+        mock_generate.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_hydrate_missing_data_fetches_news_and_technicals(self):
+        cache = DashboardCache()
+        orchestrator = InsightsOrchestrator(cache=cache)
+        input_data = {
+            "snapshot": {},
+            "valuation": {},
+            "financials": {},
+            "technicals": {},
+            "news": {},
+            "peers": {},
+        }
+
+        with patch.object(
+            orchestrator,
+            "_fetch_technicals",
+            return_value={"rsi": 50.0, "trend": "neutral"},
+        ), patch.object(
+            orchestrator,
+            "_fetch_news",
+            return_value={"market": [{"title": "Macro easing"}], "impact": []},
+        ):
+            hydrated = await orchestrator._hydrate_missing_data("AAPL", input_data)
+
+        assert hydrated["technicals"].get("rsi") == 50.0
+        assert len(hydrated["news"].get("market", [])) == 1
+        assert cache.get("AAPL", "technicals") is not None
+        assert cache.get("AAPL", "news") is not None
+
 
 # ---------------------------------------------------------------------------
 # Singleton

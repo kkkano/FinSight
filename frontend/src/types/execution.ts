@@ -4,7 +4,7 @@
  * Frontend uses camelCase naming. The store layer handles
  * mapping to snake_case when constructing API requests.
  */
-import type { ReportIR } from './index';
+import type { ReportIR, ReportQualityReason } from './index';
 
 // --- Agent run status within a single execution ---
 
@@ -125,6 +125,26 @@ export interface ExecutionRun {
   currentStep: string | null;
   timeline: TimelineEvent[];
   report: ReportIR | null;
+  /** True when report is blocked by hard quality gate. */
+  qualityBlocked?: boolean;
+  /** False when report is not publishable/reusable (e.g. quality blocked). */
+  publishable?: boolean;
+  /** Aggregated quality state from backend quality engine. */
+  qualityState?: 'pass' | 'warn' | 'block';
+  /** Structured quality reasons (machine-readable). */
+  qualityReasons?: ReportQualityReason[];
+  /** Stable reason codes for blocked runs. */
+  blockedReasonCodes?: string[];
+  /** Quality metrics payload from backend report quality engine. */
+  qualityMetrics?: Record<string, unknown>;
+  /** Quality threshold payload from backend report quality engine. */
+  qualityThresholds?: Record<string, unknown>;
+  /** Detailed diagnostics payload from backend report quality engine. */
+  qualityDetails?: Record<string, unknown>;
+  /** Whether blocked run can continue in chat with a non-publishable draft. */
+  allowContinueWhenBlocked?: boolean;
+  /** Whether backend returned a blocked report preview payload. */
+  blockedReportAvailable?: boolean;
   streamedContent: string;
   fallbackReasons: string[];
   error: string | null;
@@ -141,6 +161,12 @@ export interface ExecutionRun {
     options?: string[];
     plan_summary?: string;
     required_agents?: string[];
+    gate_reason_code?: string;
+    gate_reason?: string;
+    option_effects?: Record<string, string>;
+    option_intents?: Record<string, string>;
+    output_mode?: string;
+    confirmation_mode?: string;
   } | null;
 }
 

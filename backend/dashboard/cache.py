@@ -163,8 +163,13 @@ class DashboardCache:
                 "valuation": self.TTL_VALUATION,
                 "financials": self.TTL_FINANCIALS,
                 "technicals": self.TTL_TECHNICALS,
+                "indicator_series": self.TTL_TECHNICALS,
                 "macro_snapshot": self.TTL_MACRO,
                 "peers": self.TTL_PEERS,
+                "earnings_history": self.TTL_EARNINGS,
+                "analyst_targets": self.TTL_ANALYST,
+                "recommendations": self.TTL_ANALYST,
+                "insights": self.TTL_INSIGHTS,
             }
             ttl = ttl_map.get(data_type, self.TTL_CHARTS)
 

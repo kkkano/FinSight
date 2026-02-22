@@ -137,6 +137,21 @@ class ReportIndexStore:
             return
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
+    def _ensure_report_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type)")
+        if self._column_exists(conn, "report_index", "quality_state"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state)")
+        if self._column_exists(conn, "report_index", "publishable"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable)")
+
+    def _ensure_citation_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_session ON citation_index(session_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_url ON citation_index(url)")
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript(
@@ -163,13 +178,6 @@ class ReportIndexStore:
                     updated_at TEXT NOT NULL
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id);
-                CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker);
-                CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at);
-                CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type);
-                CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state);
-                CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable);
-
                 CREATE TABLE IF NOT EXISTS citation_index (
                     row_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     report_id TEXT NOT NULL,
@@ -184,15 +192,13 @@ class ReportIndexStore:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(report_id) REFERENCES report_index(report_id) ON DELETE CASCADE
                 );
-
-                CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id);
-                CREATE INDEX IF NOT EXISTS idx_citation_index_session ON citation_index(session_id);
-                CREATE INDEX IF NOT EXISTS idx_citation_index_url ON citation_index(url);
                 """
             )
             self._ensure_column(conn, "report_index", "quality_state", "TEXT NOT NULL DEFAULT 'pass'")
             self._ensure_column(conn, "report_index", "publishable", "INTEGER NOT NULL DEFAULT 1")
             self._ensure_column(conn, "report_index", "quality_reasons_json", "TEXT")
+            self._ensure_report_indexes(conn)
+            self._ensure_citation_indexes(conn)
 
     def upsert_report(
         self,

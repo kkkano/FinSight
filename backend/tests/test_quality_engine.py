@@ -50,6 +50,14 @@ def test_runtime_quality_thresholds_can_be_overridden(monkeypatch):
     assert "VERIFIER_UNSUPPORTED_CLAIMS_WARN" in codes
     assert "VERIFIER_UNSUPPORTED_CLAIMS_BLOCK" not in codes
 
+    warn_reason = next(
+        (item for item in reasons if item.get("code") == "VERIFIER_UNSUPPORTED_CLAIMS_WARN"),
+        None,
+    )
+    assert isinstance(warn_reason, dict)
+    assert warn_reason.get("threshold") == 2
+    assert warn_reason.get("actual") == 3
+
 
 def test_evaluate_runtime_quality_merges_with_existing_quality():
     merged = evaluate_runtime_report_quality(
@@ -80,3 +88,18 @@ def test_evaluate_runtime_quality_merges_with_existing_quality():
     assert "EXISTING_WARN" in codes
     assert "QUALITY_PROFILE_CRITICAL_MISSING" in codes
     assert "GROUNDING_RATE_BELOW_MIN" in codes
+
+
+def test_runtime_quality_verifier_block_threshold_uses_configured_value():
+    reasons = build_runtime_quality_reasons(
+        quality_hints={},
+        grounding_stats={},
+        verifier_claims=[{"claim": "a"}, {"claim": "b"}, {"claim": "c"}],
+    )
+    block_reason = next(
+        (item for item in reasons if item.get("code") == "VERIFIER_UNSUPPORTED_CLAIMS_BLOCK"),
+        None,
+    )
+    assert isinstance(block_reason, dict)
+    assert block_reason.get("threshold") == 3
+    assert block_reason.get("actual") == 3

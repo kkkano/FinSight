@@ -1,16 +1,13 @@
 /**
- * StreamingResultPanel — displays real-time execution progress and results.
+ * StreamingResultPanel - displays real-time execution progress and results.
  *
  * States:
- *   null/empty → placeholder
- *   running    → agent status bar + progress + streaming text + cancel
- *   done       → ReportView (if report) or final text + bridge buttons
- *   error      → error message + fallback reasons
- *   cancelled  → cancelled notice
- *
- * Bridge buttons (manual, one-click, no auto-write):
- *   brief           → "发送摘要到聊天" (secondary)
- *   investment_report → "继续追问" (primary, switches to chat with context)
+ * - null/empty: placeholder
+ * - running: agent status bar + progress + streaming text + cancel
+ * - interrupted: confirmation card + resume/cancel actions
+ * - done: ReportView (if report) or final text + bridge buttons
+ * - error: error message + fallback reasons
+ * - cancelled: cancelled notice
  */
 import React from 'react';
 import {
@@ -18,6 +15,7 @@ import {
   CheckCircle2,
   Loader2,
   MessageSquare,
+  PauseCircle,
   Send,
   StopCircle,
   XCircle,
@@ -27,9 +25,8 @@ import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 import { ReportView } from '../report/ReportView';
 import { AgentTimeline } from './AgentTimeline';
-import type { AgentRunInfo } from '../../types/execution';
-
-// --- Constants ---
+import { InterruptCard } from './InterruptCard';
+import type { AgentRunInfo, ExecutionRun } from '../../types/execution';
 
 const AGENT_DISPLAY_ORDER = [
   'price_agent',
@@ -40,7 +37,87 @@ const AGENT_DISPLAY_ORDER = [
   'deep_search_agent',
 ];
 
-// --- Sub-components ---
+type KeySectionIssueView = {
+  section: string;
+  actual?: unknown;
+  threshold?: unknown;
+  issue?: string;
+};
+
+function formatQualityValue(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (Math.abs(value) <= 1) return value.toFixed(4);
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+  if (typeof value === 'string') {
+    const text = value.trim();
+    return text || 'N/A';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  return 'N/A';
+}
+
+function parseLegacyKeySectionIssue(raw: string): KeySectionIssueView {
+  const text = raw.trim();
+  const match = text.match(/^(.*)\s+refs<\s*([0-9]+)\s*$/i);
+  if (match) {
+    return {
+      section: match[1].trim() || 'Unknown section',
+      threshold: Number(match[2]),
+      issue: text,
+    };
+  }
+  return { section: text || 'Unknown section', issue: text };
+}
+
+function extractStructuredKeySectionIssues(
+  details: Record<string, unknown>,
+  field: string,
+): KeySectionIssueView[] {
+  const issueViews: KeySectionIssueView[] = [];
+  const structured = details[field];
+  if (!Array.isArray(structured)) return issueViews;
+  for (const item of structured) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const section = typeof row.section === 'string' ? row.section.trim() : '';
+    if (!section) continue;
+    issueViews.push({
+      section,
+      actual: row.actual,
+      threshold: row.threshold,
+      issue: typeof row.issue === 'string' ? row.issue : undefined,
+    });
+  }
+  return issueViews;
+}
+
+function extractKeySectionIssues(run: ExecutionRun): {
+  blockIssues: KeySectionIssueView[];
+  warnIssues: KeySectionIssueView[];
+} {
+  const details = run.qualityDetails && typeof run.qualityDetails === 'object'
+    ? run.qualityDetails
+    : {};
+  const detailRecord = details as Record<string, unknown>;
+
+  const blockIssues = extractStructuredKeySectionIssues(detailRecord, 'key_section_block_issue_details');
+  const warnIssues = extractStructuredKeySectionIssues(detailRecord, 'key_section_warn_issue_details');
+  if (blockIssues.length > 0 || warnIssues.length > 0) {
+    return { blockIssues, warnIssues };
+  }
+
+  const legacy = detailRecord.key_section_issues;
+  if (!Array.isArray(legacy)) {
+    return { blockIssues: [], warnIssues: [] };
+  }
+  const legacyIssues = legacy
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => parseLegacyKeySectionIssue(item));
+  return { blockIssues: legacyIssues, warnIssues: [] };
+}
 
 function AgentStatusIcon({ status }: { status: AgentRunInfo['status'] }) {
   switch (status) {
@@ -52,7 +129,7 @@ function AgentStatusIcon({ status }: { status: AgentRunInfo['status'] }) {
       return <XCircle size={12} className="text-red-400" />;
     case 'skipped':
       return <span className="w-3 h-3 rounded-full bg-gray-500 inline-block" />;
-    default: // pending
+    default:
       return <span className="w-3 h-3 rounded-full border border-fin-border inline-block" />;
   }
 }
@@ -67,10 +144,8 @@ function AgentStatusBar({
   const ordered = AGENT_DISPLAY_ORDER
     .filter((name) => agents[name])
     .map((name) => agents[name]);
-
-  // Include any dynamically-appended agents not in fixed order
   const extra = Object.values(agents).filter(
-    (a) => !AGENT_DISPLAY_ORDER.includes(a.name),
+    (agent) => !AGENT_DISPLAY_ORDER.includes(agent.name),
   );
   const all = [...ordered, ...extra];
 
@@ -96,17 +171,12 @@ function AgentStatusBar({
   );
 }
 
-// --- Props ---
-
 interface StreamingResultPanelProps {
   runId: string | null;
   className?: string;
   compact?: boolean;
-  /** Callback to navigate to chat view (for "继续追问" bridge). */
   onNavigateToChat?: () => void;
 }
-
-// --- Component ---
 
 export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
   runId,
@@ -124,10 +194,10 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
   });
 
   const cancelExecution = useExecutionStore((s) => s.cancelExecution);
+  const resumeExecution = useExecutionStore((s) => s.resumeExecution);
   const markBridged = useExecutionStore((s) => s.markBridged);
   const addMessage = useStore((s) => s.addMessage);
 
-  // --- Bridge: 发送摘要到聊天 (brief mode) ---
   const handleSendSummaryToChat = () => {
     if (!run || run.bridgedToChat || run.status !== 'done') return;
 
@@ -147,7 +217,6 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
     markBridged(run.runId);
   };
 
-  // --- Bridge: 继续追问 (report mode) ---
   const handleContinueInChat = () => {
     if (!run || run.bridgedToChat || run.status !== 'done') return;
 
@@ -170,24 +239,41 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
     onNavigateToChat?.();
   };
 
-  // --- Empty state ---
+  const handleContinueBlockedInChat = () => {
+    if (!run || run.bridgedToChat || run.status !== 'done') return;
+
+    const ticker = run.tickers[0] || '';
+    const reportTitle = run.report?.title || `${ticker} 分析草稿`;
+    const reportSummary = run.report?.summary || run.streamedContent?.slice(0, 500) || '';
+
+    addMessage({
+      id: `bridge-${run.runId}`,
+      role: 'assistant',
+      content: `**${reportTitle}（草稿，未发布）**\n\n${reportSummary}\n\n---\n*该结果未通过质量门禁，仅用于继续讨论，不可直接发布或复用。*`,
+      timestamp: Date.now(),
+      relatedTicker: ticker || undefined,
+      report: run.report ?? undefined,
+      via: 'main',
+      data_origin: 'execution_bridge',
+    });
+
+    markBridged(run.runId);
+    onNavigateToChat?.();
+  };
+
   if (!runId || !run) {
     return (
-      <div
-        className={`flex items-center justify-center text-fin-muted text-sm p-8 ${className}`}
-      >
+      <div className={`flex items-center justify-center text-fin-muted text-sm p-8 ${className}`}>
         暂无执行结果
       </div>
     );
   }
 
-  // --- Running ---
   if (run.status === 'running') {
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
         <AgentStatusBar agents={run.agentStatuses} compact={compact} />
 
-        {/* Progress */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-fin-muted truncate">
@@ -209,7 +295,6 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
           </div>
         )}
 
-        {/* Streaming text */}
         {run.streamedContent && (
           <div
             className={`text-sm text-fin-text whitespace-pre-wrap break-words overflow-y-auto ${
@@ -222,7 +307,6 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
 
         <AgentTimeline timeline={run.timeline} compact={compact} />
 
-        {/* Cancel */}
         <button
           type="button"
           onClick={() => cancelExecution(run.runId)}
@@ -235,66 +319,26 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
     );
   }
 
-  // --- Done ---
-  if (run.status === 'done') {
-    const isReport = run.outputMode === 'investment_report';
-    const isBridged = run.bridgedToChat === true;
-    const isDashboardRun = run.source?.startsWith('dashboard');
-    const inlineReport = !isDashboardRun ? run.report : null;
-
+  if (run.status === 'interrupted') {
+    const interruptData = run.interruptData;
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
-        {/* Result content */}
-        {inlineReport ? (
-          <ReportView report={inlineReport} />
-        ) : (
-          <>
-            <div className="flex items-center gap-2 text-xs text-emerald-400">
-              <CheckCircle2 size={14} />
-              {isDashboardRun ? '执行完成，结果已同步到仪表盘' : '执行完成'}
-            </div>
-            {run.streamedContent && (
-              <div className="text-sm text-fin-text whitespace-pre-wrap break-words overflow-y-auto max-h-96 border border-fin-border rounded-lg p-3 bg-fin-bg/50">
-                {run.streamedContent}
-              </div>
-            )}
-          </>
-        )}
+        <div className="flex items-center gap-2 text-xs text-amber-300">
+          <PauseCircle size={14} />
+          等待确认后继续执行
+        </div>
 
-        {/* Bridge buttons */}
-        {!isDashboardRun && (
-          <div className="flex items-center gap-2 pt-2 border-t border-fin-border/50">
-          {isReport ? (
-            /* 投资报告 → 主按钮：继续追问 */
-            <button
-              type="button"
-              onClick={handleContinueInChat}
-              disabled={isBridged}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                isBridged
-                  ? 'bg-fin-bg text-fin-muted cursor-not-allowed'
-                  : 'bg-fin-primary text-white hover:bg-fin-primary/90'
-              }`}
-            >
-              <MessageSquare size={12} />
-              {isBridged ? '已发送到聊天' : '继续追问'}
-            </button>
-          ) : (
-            /* Brief 分析 → 次级按钮：发送摘要到聊天 */
-            <button
-              type="button"
-              onClick={handleSendSummaryToChat}
-              disabled={isBridged}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                isBridged
-                  ? 'border-fin-border text-fin-muted cursor-not-allowed'
-                  : 'border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary/50'
-              }`}
-            >
-              <Send size={12} />
-              {isBridged ? '已发送到聊天' : '发送摘要到聊天'}
-            </button>
-          )}
+        {interruptData?.thread_id ? (
+          <InterruptCard
+            data={interruptData}
+            onResume={(_threadId, resumeValue) => {
+              void resumeExecution(run.runId, resumeValue);
+            }}
+            onCancel={() => cancelExecution(run.runId)}
+          />
+        ) : (
+          <div className="text-xs text-amber-200 bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2">
+            当前执行已中断，但缺少恢复上下文。请重新发起一次执行。
           </div>
         )}
 
@@ -303,7 +347,149 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
     );
   }
 
-  // --- Error ---
+  if (run.status === 'done') {
+    const isReport = run.outputMode === 'investment_report';
+    const isBridged = run.bridgedToChat === true;
+    const isDashboardRun = run.source?.startsWith('dashboard');
+    const isQualityBlocked = run.qualityBlocked === true;
+    const inlineReport = (!isDashboardRun && !isQualityBlocked) ? run.report : null;
+    const qualityReasons = run.qualityReasons ?? [];
+    const blockedReasons = qualityReasons.filter((item) => item.severity === 'block');
+    const warningReasons = qualityReasons.filter((item) => item.severity !== 'block');
+    const blockedReasonCodes = run.blockedReasonCodes ?? [];
+    const { blockIssues: keySectionBlockIssues, warnIssues: keySectionWarnIssues } = extractKeySectionIssues(run);
+
+    return (
+      <div className={`flex flex-col gap-3 ${className}`}>
+        {inlineReport ? (
+          <ReportView report={inlineReport} />
+        ) : (
+          <>
+            <div className={`flex items-center gap-2 text-xs ${isQualityBlocked ? 'text-amber-300' : 'text-emerald-400'}`}>
+              {isQualityBlocked ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+              {isQualityBlocked
+                ? '执行完成，但报告被质量门禁拦截（未发布）'
+                : (isDashboardRun ? '执行完成，结果已同步到仪表盘' : '执行完成')}
+            </div>
+
+            {isQualityBlocked && (
+              <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100 space-y-1">
+                {blockedReasons.length > 0 ? (
+                  blockedReasons.map((item) => (
+                    <div key={`${item.code}:${item.metric}`} className="space-y-0.5">
+                      <div>[{item.code}] {item.message}</div>
+                      {(item.actual !== undefined || item.threshold !== undefined) && (
+                        <div className="text-2xs text-amber-200">
+                          actual: {formatQualityValue(item.actual)} / threshold: {formatQualityValue(item.threshold)}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : blockedReasonCodes.length > 0 ? (
+                  <div>原因代码: {blockedReasonCodes.join(', ')}</div>
+                ) : (
+                  <div>未提供详细原因，请在质量详情中查看门禁规则。</div>
+                )}
+
+                {keySectionBlockIssues.length > 0 && (
+                  <div className="mt-2 border-t border-amber-900/40 pt-2 space-y-1">
+                    <div className="text-amber-200">失败章节（硬门禁）：</div>
+                    {keySectionBlockIssues.map((issue, index) => (
+                      <div key={`${issue.section}:${index}`} className="text-2xs">
+                        {issue.section} | actual: {formatQualityValue(issue.actual)} / threshold: {formatQualityValue(issue.threshold)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(warningReasons.length > 0 || keySectionWarnIssues.length > 0) && (
+                  <div className="mt-2 border-t border-amber-900/40 pt-2 space-y-1">
+                    <div className="text-amber-200">告警项（不拦截）：</div>
+                    {warningReasons.map((item) => (
+                      <div key={`warn:${item.code}:${item.metric}`} className="space-y-0.5">
+                        <div>[{item.code}] {item.message}</div>
+                        {(item.actual !== undefined || item.threshold !== undefined) && (
+                          <div className="text-2xs text-amber-200">
+                            actual: {formatQualityValue(item.actual)} / threshold: {formatQualityValue(item.threshold)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {keySectionWarnIssues.map((issue, index) => (
+                      <div key={`warn-section:${issue.section}:${index}`} className="text-2xs">
+                        {issue.section} | actual: {formatQualityValue(issue.actual)} / threshold: {formatQualityValue(issue.threshold)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {run.streamedContent && (
+              <div className="text-sm text-fin-text whitespace-pre-wrap break-words overflow-y-auto max-h-96 border border-fin-border rounded-lg p-3 bg-fin-bg/50">
+                {run.streamedContent}
+              </div>
+            )}
+          </>
+        )}
+
+        {!isDashboardRun && !isQualityBlocked && (
+          <div className="flex items-center gap-2 pt-2 border-t border-fin-border/50">
+            {isReport ? (
+              <button
+                type="button"
+                onClick={handleContinueInChat}
+                disabled={isBridged}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  isBridged
+                    ? 'bg-fin-bg text-fin-muted cursor-not-allowed'
+                    : 'bg-fin-primary text-white hover:bg-fin-primary/90'
+                }`}
+              >
+                <MessageSquare size={12} />
+                {isBridged ? '已发送到聊天' : '继续追问'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendSummaryToChat}
+                disabled={isBridged}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                  isBridged
+                    ? 'border-fin-border text-fin-muted cursor-not-allowed'
+                    : 'border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary/50'
+                }`}
+              >
+                <Send size={12} />
+                {isBridged ? '已发送到聊天' : '发送摘要到聊天'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {isQualityBlocked && run.allowContinueWhenBlocked && (
+          <div className="flex items-center gap-2 pt-2 border-t border-fin-border/50">
+            <button
+              type="button"
+              onClick={handleContinueBlockedInChat}
+              disabled={isBridged}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                isBridged
+                  ? 'bg-fin-bg text-fin-muted cursor-not-allowed'
+                  : 'bg-fin-primary text-white hover:bg-fin-primary/90'
+              }`}
+            >
+              <MessageSquare size={12} />
+              {isBridged ? '已发送到聊天' : '继续生成（不发布）'}
+            </button>
+          </div>
+        )}
+
+        <AgentTimeline timeline={run.timeline} compact={compact} />
+      </div>
+    );
+  }
+
   if (run.status === 'error') {
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
@@ -328,11 +514,8 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
     );
   }
 
-  // --- Cancelled ---
   return (
-    <div
-      className={`flex items-center gap-2 text-xs text-fin-muted ${className}`}
-    >
+    <div className={`flex items-center gap-2 text-xs text-fin-muted ${className}`}>
       <XCircle size={14} />
       执行已取消
     </div>

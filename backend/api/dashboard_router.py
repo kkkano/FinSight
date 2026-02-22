@@ -436,6 +436,26 @@ async def get_dashboard(
                 calc_window=calc_window,
             )
 
+        # Keep v2/G2 payloads in shared dashboard cache so /api/dashboard/insights
+        # consumes the same source of truth and avoids cross-endpoint drift.
+        if v2_valuation is not None:
+            dashboard_cache.set(symbol, "valuation", v2_valuation, ttl=dashboard_cache.TTL_VALUATION)
+        if v2_financials is not None:
+            dashboard_cache.set(symbol, "financials", v2_financials, ttl=dashboard_cache.TTL_FINANCIALS)
+        if v2_technicals is not None:
+            dashboard_cache.set(symbol, "technicals", v2_technicals, ttl=dashboard_cache.TTL_TECHNICALS)
+        if v2_peers is not None:
+            dashboard_cache.set(symbol, "peers", v2_peers, ttl=dashboard_cache.TTL_PEERS)
+
+        if g2_earnings_history is not None:
+            dashboard_cache.set(symbol, "earnings_history", g2_earnings_history, ttl=dashboard_cache.TTL_EARNINGS)
+        if g2_analyst_targets is not None:
+            dashboard_cache.set(symbol, "analyst_targets", g2_analyst_targets, ttl=dashboard_cache.TTL_ANALYST)
+        if g2_recommendations is not None:
+            dashboard_cache.set(symbol, "recommendations", g2_recommendations, ttl=dashboard_cache.TTL_ANALYST)
+        if g2_indicator_series is not None:
+            dashboard_cache.set(symbol, "indicator_series", g2_indicator_series, ttl=dashboard_cache.TTL_TECHNICALS)
+
     news_started = time.perf_counter()
     news = dashboard_cache.get(symbol, "news")
     news_source_type = "cache"

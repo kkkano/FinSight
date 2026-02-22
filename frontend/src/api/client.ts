@@ -168,7 +168,19 @@ export interface SSECallbacks {
   onError?: (error: string) => void;
   onThinking?: (step: any) => void;
   onRawEvent?: (event: RawSSEEvent) => void;
-  onInterrupt?: (data: { thread_id: string; prompt?: string; options?: string[]; plan_summary?: string; required_agents?: string[] }) => void;
+  onInterrupt?: (data: {
+    thread_id: string;
+    prompt?: string;
+    options?: string[];
+    plan_summary?: string;
+    required_agents?: string[];
+    gate_reason_code?: string;
+    gate_reason?: string;
+    option_effects?: Record<string, string>;
+    option_intents?: Record<string, string>;
+    output_mode?: string;
+    confirmation_mode?: string;
+  }) => void;
 }
 
 const api = axios.create({
@@ -331,6 +343,12 @@ export async function parseSSEStream(
               options: data.data?.options || data.options,
               plan_summary: data.data?.plan_summary || data.plan_summary,
               required_agents: data.data?.required_agents || data.required_agents,
+              gate_reason_code: data.data?.gate_reason_code || data.gate_reason_code,
+              gate_reason: data.data?.gate_reason || data.gate_reason,
+              option_effects: data.data?.option_effects || data.option_effects,
+              option_intents: data.data?.option_intents || data.option_intents,
+              output_mode: data.data?.output_mode || data.output_mode,
+              confirmation_mode: data.data?.confirmation_mode || data.confirmation_mode,
             });
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)

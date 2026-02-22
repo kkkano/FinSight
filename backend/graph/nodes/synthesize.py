@@ -391,6 +391,46 @@ def _apply_verifier_redactions(text: str, claims: list[dict[str, str]]) -> str:
     return cleaned
 
 
+def _contains_claim_after_redaction(text: str, claim: str) -> bool:
+    cleaned_text = str(text or "").strip()
+    cleaned_claim = str(claim or "").strip()
+    if not cleaned_text or not cleaned_claim:
+        return False
+
+    if cleaned_claim in cleaned_text:
+        return True
+
+    normalized_text = _normalize_for_match(cleaned_text)
+    normalized_claim = _normalize_for_match(cleaned_claim)
+    if not normalized_text or not normalized_claim:
+        return False
+    return normalized_claim in normalized_text
+
+
+def _compute_unresolved_unsupported_claims(
+    text: str,
+    claims: list[dict[str, str]] | None,
+) -> list[dict[str, str]]:
+    if not claims:
+        return []
+
+    unresolved: list[dict[str, str]] = []
+    for item in claims:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim") or "").strip()
+        if not claim:
+            continue
+        if _contains_claim_after_redaction(text, claim):
+            unresolved.append(
+                {
+                    "claim": claim[:240],
+                    "reason": str(item.get("reason") or "").strip()[:240],
+                }
+            )
+    return unresolved
+
+
 async def _run_deep_report_verifier(
     *,
     state: GraphState,
@@ -1839,6 +1879,13 @@ async def _generate_narrative_draft(
         )
         if isinstance(unsupported_claims, list) and unsupported_claims:
             draft = _apply_verifier_redactions(draft, unsupported_claims)
+        unresolved_claims = (
+            _compute_unresolved_unsupported_claims(draft, unsupported_claims)
+            if isinstance(unsupported_claims, list)
+            else []
+        )
+        if isinstance(verifier_result, dict):
+            verifier_result["unresolved_unsupported_claims"] = unresolved_claims
 
         if len(draft) < 500:
             logger.warning("[Synthesize/narrative] LLM output too short (%d chars), discarding", len(draft))
@@ -1920,6 +1967,11 @@ async def synthesize(state: GraphState) -> dict:
             if isinstance(verifier_result, dict)
             else []
         )
+        unresolved_verifier_claims = (
+            verifier_result.get("unresolved_unsupported_claims")
+            if isinstance(verifier_result, dict)
+            else []
+        )
         synth_runtime: dict[str, Any] = {
             **build_runtime(mode="narrative", fallback=not bool(draft_markdown)),
             "keys": sorted(render_vars.keys()),
@@ -1929,6 +1981,9 @@ async def synthesize(state: GraphState) -> dict:
             synth_runtime["verifier_checked"] = bool(verifier_result.get("checked"))
             synth_runtime["verifier_unsupported_count"] = (
                 len(verifier_claims) if isinstance(verifier_claims, list) else 0
+            )
+            synth_runtime["verifier_unresolved_unsupported_count"] = (
+                len(unresolved_verifier_claims) if isinstance(unresolved_verifier_claims, list) else 0
             )
 
         trace.update({"synthesize_runtime": synth_runtime})
@@ -2231,6 +2286,27 @@ summary, highlights, analysis.
                 value = render_vars.get(key)
                 if isinstance(value, str) and value.strip():
                     render_vars[key] = _apply_verifier_redactions(value, verifier_claims)
+        verifier_text_after_redaction = "\n".join(
+            [
+                str(render_vars.get("summary") or ""),
+                str(render_vars.get("highlights") or ""),
+                str(render_vars.get("analysis") or ""),
+                str(render_vars.get("investment_summary") or ""),
+                str(render_vars.get("investment_thesis") or ""),
+                str(render_vars.get("valuation") or ""),
+                str(render_vars.get("conclusion") or ""),
+                str(render_vars.get("impact_analysis") or ""),
+                str(render_vars.get("next_watch") or ""),
+                str(render_vars.get("risks") or ""),
+            ]
+        )
+        unresolved_verifier_claims = (
+            _compute_unresolved_unsupported_claims(verifier_text_after_redaction, verifier_claims)
+            if isinstance(verifier_claims, list)
+            else []
+        )
+        if isinstance(verifier_result, dict):
+            verifier_result["unresolved_unsupported_claims"] = unresolved_verifier_claims
 
         synth_runtime: dict[str, Any] = {
             **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
@@ -2241,6 +2317,9 @@ summary, highlights, analysis.
             synth_runtime["verifier_checked"] = bool(verifier_result.get("checked"))
             synth_runtime["verifier_unsupported_count"] = (
                 len(verifier_claims) if isinstance(verifier_claims, list) else 0
+            )
+            synth_runtime["verifier_unresolved_unsupported_count"] = (
+                len(unresolved_verifier_claims) if isinstance(unresolved_verifier_claims, list) else 0
             )
 
         trace.update({"synthesize_runtime": synth_runtime})

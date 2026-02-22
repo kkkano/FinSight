@@ -351,6 +351,7 @@ async def run_graph_pipeline(
                 report=report,
                 source="execute_run",
             )
+            blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
             response_markdown = "" if quality_blocked else markdown
             persisted_report = None if quality_blocked else report
 
@@ -367,6 +368,8 @@ async def run_graph_pipeline(
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": False,
+                        "blocked_report_available": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": bool(blocked_report_preview),
                     }
                 )
             elif isinstance(report, dict):
@@ -449,9 +452,12 @@ async def run_graph_pipeline(
                     "source": source,
                     "response": response_markdown,
                     "report": persisted_report,
+                    "blocked_report": blocked_report_preview,
                     "quality": report_quality,
                     "quality_blocked": quality_blocked,
                     "publishable": not quality_blocked,
+                    "blocked_report_available": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": bool(blocked_report_preview),
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -630,6 +636,7 @@ async def resume_graph_pipeline(
                 report=report,
                 source="execute_resume",
             )
+            blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
             response_markdown = "" if quality_blocked else markdown
             persisted_report = None if quality_blocked else report
 
@@ -646,6 +653,8 @@ async def resume_graph_pipeline(
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": False,
+                        "blocked_report_available": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": bool(blocked_report_preview),
                     }
                 )
             elif isinstance(report, dict):
@@ -712,9 +721,12 @@ async def resume_graph_pipeline(
                     "source": source,
                     "response": response_markdown,
                     "report": persisted_report,
+                    "blocked_report": blocked_report_preview,
                     "quality": report_quality,
                     "quality_blocked": quality_blocked,
                     "publishable": not quality_blocked,
+                    "blocked_report_available": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": bool(blocked_report_preview),
                     "metrics": {
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),

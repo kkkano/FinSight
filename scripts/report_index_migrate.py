@@ -40,6 +40,9 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
             is_favorite INTEGER NOT NULL DEFAULT 0,
             trace_digest_json TEXT,
             report_json TEXT NOT NULL,
+            quality_state TEXT NOT NULL DEFAULT 'pass',
+            publishable INTEGER NOT NULL DEFAULT 1,
+            quality_reasons_json TEXT,
             source_type TEXT NOT NULL DEFAULT 'ai_generated',
             filing_type TEXT,
             publisher TEXT,
@@ -61,6 +64,9 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
         "is_favorite": "INTEGER NOT NULL DEFAULT 0",
         "trace_digest_json": "TEXT",
         "report_json": "TEXT NOT NULL",
+        "quality_state": "TEXT NOT NULL DEFAULT 'pass'",
+        "publishable": "INTEGER NOT NULL DEFAULT 1",
+        "quality_reasons_json": "TEXT",
         "source_type": "TEXT NOT NULL DEFAULT 'ai_generated'",
         "filing_type": "TEXT",
         "publisher": "TEXT",
@@ -80,6 +86,8 @@ def _ensure_report_index(conn: sqlite3.Connection) -> dict[str, Any]:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable)")
 
     return {"table": "report_index", "added_columns": added}
 

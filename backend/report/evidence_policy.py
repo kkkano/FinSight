@@ -42,6 +42,15 @@ class QualityReason(TypedDict):
     message: str
 
 
+class KeySectionIssueDetail(TypedDict):
+    section: str
+    actual: int
+    threshold: int
+    internal_refs: int
+    external_refs: int
+    internal_only: bool
+
+
 @dataclass
 class EvidencePolicyResult:
     coverage: float
@@ -50,6 +59,7 @@ class EvidencePolicyResult:
     unique_sources: int
     invalid_refs: list[str]
     key_section_issues: list[str]
+    key_section_issue_details: list[KeySectionIssueDetail]
     meets_coverage: bool
     meets_min_sources: bool
     state: QualityState
@@ -78,6 +88,10 @@ def _env_int(name: str, default: int) -> int:
         return int(str(raw).strip())
     except Exception:
         return default
+
+
+def _is_internal_citation_url(url: Any) -> bool:
+    return str(url or "").strip().lower().startswith("internal://")
 
 
 def normalize_quality_state(value: Any) -> QualityState:
@@ -182,6 +196,9 @@ class EvidencePolicy:
     def _iter_contents(sections: Iterable[ReportSection]) -> Iterable[ReportContent]:
         for section in EvidencePolicy._iter_sections(sections):
             for content in section.contents:
+                metadata = content.metadata if isinstance(content.metadata, dict) else {}
+                if metadata.get("exclude_from_quality_coverage") is True:
+                    continue
                 yield content
 
     @staticmethod
@@ -200,9 +217,14 @@ class EvidencePolicy:
             report.meta = {}
 
         valid_ids: set[str] = set()
+        internal_ids: set[str] = set()
         for citation in report.citations or []:
-            if citation.source_id:
-                valid_ids.add(citation.source_id)
+            source_id = str(getattr(citation, "source_id", "") or "").strip()
+            if not source_id:
+                continue
+            valid_ids.add(source_id)
+            if _is_internal_citation_url(getattr(citation, "url", "")):
+                internal_ids.add(source_id)
 
         total_blocks = 0
         covered_blocks = 0
@@ -225,7 +247,12 @@ class EvidencePolicy:
         coverage = covered_blocks / total_blocks if total_blocks > 0 else 0.0
 
         key_section_issues: list[str] = []
+        key_section_issue_details: list[KeySectionIssueDetail] = []
         key_section_ref_counts: list[int] = []
+        key_section_hard_issue_details: list[KeySectionIssueDetail] = []
+        key_section_soft_issue_details: list[KeySectionIssueDetail] = []
+        key_section_hard_ref_counts: list[int] = []
+        key_section_soft_ref_counts: list[int] = []
         for section in EvidencePolicy._iter_sections(report.sections):
             if not EvidencePolicy._is_key_section(section.title):
                 continue
@@ -234,9 +261,28 @@ class EvidencePolicy:
                 section_refs.update(content.citation_refs or [])
             key_section_ref_counts.append(len(section_refs))
             if len(section_refs) < min_key_section_sources:
+                section_title = section.title or "untitled_section"
+                internal_ref_count = sum(1 for ref in section_refs if ref in internal_ids)
+                external_ref_count = max(0, len(section_refs) - internal_ref_count)
+                internal_only = len(section_refs) > 0 and external_ref_count == 0
+                issue_detail: KeySectionIssueDetail = {
+                    "section": section_title,
+                    "actual": len(section_refs),
+                    "threshold": min_key_section_sources,
+                    "internal_refs": internal_ref_count,
+                    "external_refs": external_ref_count,
+                    "internal_only": internal_only,
+                }
                 key_section_issues.append(
-                    f"{section.title} refs<{min_key_section_sources}",
+                    f"{section_title} refs<{min_key_section_sources}",
                 )
+                key_section_issue_details.append(issue_detail)
+                if internal_only:
+                    key_section_soft_issue_details.append(issue_detail)
+                    key_section_soft_ref_counts.append(len(section_refs))
+                else:
+                    key_section_hard_issue_details.append(issue_detail)
+                    key_section_hard_ref_counts.append(len(section_refs))
 
         unique_sources = len(used_refs)
         meets_coverage = coverage >= min_coverage
@@ -265,15 +311,26 @@ class EvidencePolicy:
                     "message": "unique evidence source count is below minimum threshold",
                 }
             )
-        if key_section_issues:
+        if key_section_hard_issue_details:
             reasons.append(
                 {
                     "code": "KEY_SECTION_SOURCES_BELOW_MIN",
                     "severity": "block",
                     "metric": "key_section_unique_sources",
-                    "actual": min(key_section_ref_counts) if key_section_ref_counts else 0,
+                    "actual": min(key_section_hard_ref_counts) if key_section_hard_ref_counts else 0,
                     "threshold": min_key_section_sources,
                     "message": "key sections do not meet minimum source requirement",
+                }
+            )
+        if key_section_soft_issue_details:
+            reasons.append(
+                {
+                    "code": "KEY_SECTION_INTERNAL_SOURCES_BELOW_MIN",
+                    "severity": "warn",
+                    "metric": "key_section_internal_only_sources",
+                    "actual": min(key_section_soft_ref_counts) if key_section_soft_ref_counts else 0,
+                    "threshold": min_key_section_sources,
+                    "message": "key sections only use internal citations and do not meet external source minimum",
                 }
             )
         if invalid_refs:
@@ -302,6 +359,10 @@ class EvidencePolicy:
                 "unique_sources": unique_sources,
                 "invalid_refs_count": len(set(invalid_refs)),
                 "key_section_issues_count": len(key_section_issues),
+                "key_section_worst_sources": min(key_section_ref_counts) if key_section_ref_counts else 0,
+                "key_section_block_issues_count": len(key_section_hard_issue_details),
+                "key_section_warn_issues_count": len(key_section_soft_issue_details),
+                "key_section_internal_only_worst_sources": min(key_section_soft_ref_counts) if key_section_soft_ref_counts else 0,
             },
             "thresholds": {
                 "min_coverage": min_coverage,
@@ -311,6 +372,9 @@ class EvidencePolicy:
             "details": {
                 "invalid_refs": sorted(set(invalid_refs)),
                 "key_section_issues": key_section_issues,
+                "key_section_issue_details": key_section_issue_details,
+                "key_section_block_issue_details": key_section_hard_issue_details,
+                "key_section_warn_issue_details": key_section_soft_issue_details,
                 "meets_coverage": meets_coverage,
                 "meets_min_sources": meets_min_sources,
             },
@@ -331,6 +395,9 @@ class EvidencePolicy:
             "min_key_section_sources": min_key_section_sources,
             "invalid_refs": sorted(set(invalid_refs)),
             "key_section_issues": key_section_issues,
+            "key_section_issue_details": key_section_issue_details,
+            "key_section_block_issue_details": key_section_hard_issue_details,
+            "key_section_warn_issue_details": key_section_soft_issue_details,
             "meets_coverage": meets_coverage,
             "meets_min_sources": meets_min_sources,
             "quality_state": state,
@@ -349,6 +416,7 @@ class EvidencePolicy:
             unique_sources=unique_sources,
             invalid_refs=sorted(set(invalid_refs)),
             key_section_issues=key_section_issues,
+            key_section_issue_details=key_section_issue_details,
             meets_coverage=meets_coverage,
             meets_min_sources=meets_min_sources,
             state=state,
