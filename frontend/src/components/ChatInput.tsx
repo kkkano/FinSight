@@ -10,15 +10,6 @@ import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useToast } from './ui';
 
-const KNOWN_TICKERS = new Set([
-  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA', 'AMD', 'INTC', 'NFLX',
-  'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 'XPEV', 'LI',
-  'SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'GLD', 'TLT', 'ARKK',
-  '^GSPC', '^DJI', '^IXIC', '^VIX', '000300.SS', '000001.SS', '399001.SZ',
-  'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
-  'GC=F', 'CL=F', 'SI=F',
-]);
-
 const TICKER_STOPWORDS = new Set([
   'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
   'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
@@ -27,6 +18,24 @@ const TICKER_STOPWORDS = new Set([
 ]);
 
 const MAX_AUTO_CHART_TICKERS = 3;
+const TICKER_PATTERN = /^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/;
+
+const mergeTickerCandidates = (...sources: Array<string[] | undefined>): string[] => {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    for (const raw of source ?? []) {
+      const ticker = String(raw || '').trim().toUpperCase();
+      if (!ticker || seen.has(ticker)) continue;
+      if (TICKER_STOPWORDS.has(ticker)) continue;
+      if (!TICKER_PATTERN.test(ticker)) continue;
+      seen.add(ticker);
+      merged.push(ticker);
+      if (merged.length >= MAX_AUTO_CHART_TICKERS) return merged;
+    }
+  }
+  return merged;
+};
 
 const extractTickers = (text: string): string[] => {
   if (!text || !text.trim()) return [];
@@ -61,12 +70,13 @@ const extractTickers = (text: string): string[] => {
     addTicker(match[1]);
   }
 
-  // Plain words are accepted only when they are known symbols.
-  const alphaTokens = text.match(/\b[A-Za-z]{1,6}\b/g) ?? [];
+  // Plain words: only accept user-explicit uppercase tokens (e.g. AAPL, TSLA).
+  const alphaTokens = Array.from(text.matchAll(/\b([A-Za-z]{2,6})\b/g)).map((match) => match[1]);
   for (const token of alphaTokens) {
+    if (token !== token.toUpperCase()) continue;
     const upper = token.toUpperCase();
     if (TICKER_STOPWORDS.has(upper)) continue;
-    if (KNOWN_TICKERS.has(upper)) addTicker(upper);
+    addTicker(upper);
   }
 
   return tickers.slice(0, MAX_AUTO_CHART_TICKERS);
@@ -222,14 +232,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const shouldGenerateChart = async (
     query: string,
     currentTicker?: string | null,
-  ): Promise<{ ticker: string | null; chartType: string | null }> => {
+  ): Promise<{ tickers: string[]; chartType: string | null }> => {
     try {
       const response = await apiClient.detectChartType(query, currentTicker || undefined);
+      const apiCandidates = Array.isArray(response?.ticker_candidates)
+        ? response.ticker_candidates.map((value: unknown) => String(value))
+        : [];
+      const resolvedTicker = typeof response?.resolved_ticker === 'string' && response.resolved_ticker.trim()
+        ? [response.resolved_ticker]
+        : [];
+      const localCandidates = extractTickers(query);
+      const contextual = currentTicker ? [currentTicker] : [];
+      const merged = mergeTickerCandidates(apiCandidates, resolvedTicker, localCandidates, contextual);
 
       if (response.success && response.should_generate) {
-        const ticker = extractTicker(query) ?? currentTicker ?? null;
         return {
-          ticker,
+          tickers: merged,
           chartType: response.chart_type || 'line',
         };
       }
@@ -239,10 +257,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
     const lowerQuery = query.toLowerCase();
     const hasChartKeyword = chartKeywords.some((keyword) => lowerQuery.includes(keyword));
-    if (!hasChartKeyword) return { ticker: null, chartType: null };
+    if (!hasChartKeyword) return { tickers: [], chartType: null };
 
-    const ticker = extractTicker(query) ?? currentTicker ?? null;
-    return { ticker, chartType: 'line' };
+    const localCandidates = extractTickers(query);
+    const contextual = currentTicker ? [currentTicker] : [];
+    return { tickers: mergeTickerCandidates(localCandidates, contextual), chartType: 'line' };
   };
 
   const handleSend = async () => {
@@ -375,12 +394,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
           const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
           const existingTickers = new Set(Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1]));
-          const tickers = extractTickers(userMsgContent);
+          const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
           const forceMulti = tickers.length > 1;
 
           if (chartInfo.chartType || forceMulti) {
-            const targetTickers = (tickers.length ? tickers : chartInfo.ticker ? [chartInfo.ticker] : [])
-              .slice(0, MAX_AUTO_CHART_TICKERS);
+            const targetTickers = tickers.slice(0, MAX_AUTO_CHART_TICKERS);
             const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
             if (missingTickers.length > 0) {
               const chartType = forceMulti ? 'line' : chartInfo.chartType || 'line';

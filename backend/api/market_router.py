@@ -38,6 +38,34 @@ def _validate_ticker_or_400(raw_ticker: str) -> str:
         raise HTTPException(status_code=400, detail=f"ticker 格式非法: {raw_ticker}")
     return ticker
 
+
+def _extract_ticker_candidates(query: str, provided_ticker: str | None = None) -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: str) -> None:
+        ticker = _normalize_ticker(raw)
+        if not ticker or ticker in seen:
+            return
+        if not _TICKER_PATTERN.fullmatch(ticker):
+            return
+        seen.add(ticker)
+        candidates.append(ticker)
+
+    if provided_ticker:
+        _add(provided_ticker)
+
+    try:
+        from backend.config.ticker_mapping import extract_tickers as extract_tickers_from_query
+
+        metadata = extract_tickers_from_query(query or "")
+        for ticker in metadata.get("tickers") or []:
+            _add(str(ticker))
+    except Exception:
+        pass
+
+    return candidates
+
 def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Market"])
 
@@ -46,6 +74,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
         query = str(payload.get("query") or "").strip()
         ticker = payload.get("ticker")
         ticker_value = str(ticker).strip() if ticker is not None else None
+        ticker_candidates = _extract_ticker_candidates(query, ticker_value)
+        resolved_ticker = ticker_candidates[0] if ticker_candidates else None
 
         if not query:
             return {
@@ -55,6 +85,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "data_dimension": None,
                 "confidence": 0.0,
                 "reason": "empty_query",
+                "ticker_candidates": ticker_candidates,
+                "resolved_ticker": resolved_ticker,
             }
 
         if deps.detect_chart_type is None:
@@ -65,6 +97,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "data_dimension": None,
                 "confidence": 0.0,
                 "reason": "chart_detector_unavailable",
+                "ticker_candidates": ticker_candidates,
+                "resolved_ticker": resolved_ticker,
             }
 
         try:
@@ -90,6 +124,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "data_dimension": data_dimension,
                 "confidence": confidence,
                 "reason": reason,
+                "ticker_candidates": ticker_candidates,
+                "resolved_ticker": resolved_ticker,
             }
         except Exception as exc:
             deps.logger.warning("[ChartDetect] failed: %s", exc)
@@ -100,6 +136,8 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "data_dimension": None,
                 "confidence": 0.0,
                 "reason": str(exc),
+                "ticker_candidates": ticker_candidates,
+                "resolved_ticker": resolved_ticker,
             }
 
     @router.get("/api/stock/price/{ticker}")

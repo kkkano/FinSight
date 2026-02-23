@@ -14,6 +14,7 @@ def _build_client(
     get_financial_statements=None,
     get_financial_statements_summary=None,
     get_stock_historical_data=None,
+    detect_chart_type=None,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(
@@ -26,7 +27,7 @@ def _build_client(
                 get_financial_statements_summary=get_financial_statements_summary or (lambda _ticker: {}),
                 get_stock_historical_data=get_stock_historical_data
                 or (lambda _ticker, period="1y", interval="1d": {"kline_data": [], "period": period, "interval": interval}),
-                detect_chart_type=None,
+                detect_chart_type=detect_chart_type,
                 logger=logging.getLogger("test_market_router"),
             )
         )
@@ -83,3 +84,18 @@ def test_kline_endpoint_normalizes_special_symbol():
     payload = response.json()
     assert payload["ticker"] == "GC=F"
     assert called == ["GC=F"]
+
+
+def test_chart_detect_returns_dynamic_ticker_candidates():
+    client = _build_client()
+    response = client.post(
+        "/api/chart/detect",
+        json={"query": "compare google and TSLA trend", "ticker": "aapl"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert isinstance(payload.get("ticker_candidates"), list)
+    assert "AAPL" in payload["ticker_candidates"]
+    assert "TSLA" in payload["ticker_candidates"]
+    assert payload.get("resolved_ticker") == payload["ticker_candidates"][0]
