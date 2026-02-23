@@ -59,7 +59,7 @@ if not logging.getLogger().handlers:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-# 灏濊瘯瀵煎叆鏍稿績宸ュ叿
+# 尝试导入核心工具
 try:
     from backend.tools import (
         get_stock_price,
@@ -83,7 +83,7 @@ except ImportError as e:
         )
         logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
-        logger.info(f"❌ Error importing tools: {e2}")
+        logger.info(f"[Init] Error importing tools: {e2}")
 
 # Import chart detector.
 try:
@@ -93,7 +93,7 @@ except ImportError as e:
     logger.info(f"[Init] Error importing chart detector: {e}")
     ChartTypeDetector = None
 
-# 瀵煎叆 MemoryService
+# 导入 MemoryService
 try:
     from backend.services.memory import MemoryService, UserProfile
     memory_service = MemoryService()
@@ -570,12 +570,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FinSight API",
-    description="FinSight 鍚庣鏈嶅姟",
+    description="FinSight 后端服务",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS 閰嶇疆
+# CORS 配置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_allow_origins(),

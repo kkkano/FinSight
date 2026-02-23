@@ -232,28 +232,25 @@ def _parse_time_to_unix(time_value: Any) -> Optional[int]:
 
 def fetch_market_chart(symbol: str, period: str = "1y", interval: str = "1d") -> list[dict[str, Any]]:
     try:
-        from backend.tools.price import get_stock_historical_data
-
-        result = get_stock_historical_data(symbol, period=period, interval=interval)
-        if not isinstance(result, dict) or result.get("error"):
+        hist = _load_ohlcv_frame(symbol, period=period, interval=interval)
+        if hist is None or hist.empty:
             return []
-
-        rows = result.get("kline_data") or []
+        required_columns = {"Open", "High", "Low", "Close"}
+        if not required_columns.issubset(set(hist.columns)):
+            return []
         output: list[dict[str, Any]] = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            ts = _parse_time_to_unix(row.get("time"))
+        for ts_index, row in hist.iterrows():
+            ts = _parse_time_to_unix(ts_index)
             if ts is None:
                 continue
             output.append(
                 {
                     "time": ts,
-                    "open": safe_float(row.get("open")),
-                    "high": safe_float(row.get("high")),
-                    "low": safe_float(row.get("low")),
-                    "close": safe_float(row.get("close")),
-                    "volume": safe_float(row.get("volume")) or 0,
+                    "open": safe_float(row.get("Open")),
+                    "high": safe_float(row.get("High")),
+                    "low": safe_float(row.get("Low")),
+                    "close": safe_float(row.get("Close")),
+                    "volume": safe_float(row.get("Volume")) or 0,
                 }
             )
         return output

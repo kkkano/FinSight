@@ -371,7 +371,7 @@ class MacroAgent(BaseFinancialAgent):
                 value = item.get("value")
                 if value is None:
                     continue
-                name = item.get("name") or "瀹忚鎸囨爣"
+                name = item.get("name") or "宏观指标"
                 source = item.get("source") or "unknown"
                 conflict = bool(item.get("conflict"))
                 evidence.append(
@@ -391,7 +391,7 @@ class MacroAgent(BaseFinancialAgent):
             if sentiment:
                 evidence.append(
                     EvidenceItem(
-                        text=f"甯傚満鎯呯华鐩戞祴: {sentiment[:240]}",
+                        text=f"市场情绪监测: {sentiment[:240]}",
                         source="CNN Fear & Greed",
                         confidence=0.65,
                     )
