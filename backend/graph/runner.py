@@ -94,7 +94,20 @@ def _build_graph(*, checkpointer: Any) -> Any:
 
     graph.add_edge("policy_gate", "planner")
     graph.add_edge("planner", "confirmation_gate")
-    graph.add_edge("confirmation_gate", "execute_plan")
+
+    def _route_after_confirmation(state: GraphState) -> str:
+        intent = str(state.get("confirmation_intent") or "confirm_execute").strip().lower()
+        if intent == "cancel_execution":
+            return END
+        if intent == "adjust_parameters":
+            return "planner"
+        return "execute_plan"
+
+    graph.add_conditional_edges(
+        "confirmation_gate",
+        _route_after_confirmation,
+        {"planner": "planner", "execute_plan": "execute_plan", END: END},
+    )
     graph.add_edge("execute_plan", "synthesize")
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)

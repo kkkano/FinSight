@@ -140,6 +140,8 @@ class GraphState(MessagesState):
     confirmation_mode: NotRequired[ConfirmationMode]
     confirmation_options: NotRequired[list[str]]
     user_confirmation: NotRequired[Any]
+    confirmation_intent: NotRequired[str]
+    confirmation_instruction: NotRequired[str | None]
 
 
 __all__ = [
