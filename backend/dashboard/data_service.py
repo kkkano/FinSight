@@ -836,6 +836,25 @@ def _load_ohlcv_frame(symbol: str, period: str = "1y", interval: str = "1d") -> 
     except Exception as exc:
         logger.info("[DataService] yfinance OHLCV failed for %s: %s", symbol, exc)
 
+    # Fast fallback: Stooq is usually quicker than the full multi-source pipeline
+    # and helps avoid technical tab timeouts when yfinance is rate-limited.
+    try:
+        from backend.tools.price import _fetch_with_stooq_history
+
+        payload = _fetch_with_stooq_history(symbol, period=period, interval=interval)
+        if isinstance(payload, dict):
+            rows = payload.get("kline_data") or []
+            frame = _build_ohlcv_frame_from_rows(rows)
+            if frame is not None and not frame.empty:
+                logger.info(
+                    "[DataService] OHLCV fallback hit for %s via Stooq (%s rows)",
+                    symbol,
+                    len(frame),
+                )
+                return frame
+    except Exception as exc:
+        logger.info("[DataService] Stooq OHLCV fallback failed for %s: %s", symbol, exc)
+
     try:
         from backend.tools.price import get_stock_historical_data
 

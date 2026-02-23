@@ -10,26 +10,66 @@ import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useToast } from './ui';
 
-const extractTickers = (text: string): string[] => {
-  const tickerPattern = /\b([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,4})?)\b/g;
-  const matches = text.match(tickerPattern);
-  if (!matches) return [];
+const KNOWN_TICKERS = new Set([
+  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA', 'AMD', 'INTC', 'NFLX',
+  'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 'XPEV', 'LI',
+  'SPY', 'QQQ', 'DIA', 'IWM', 'VTI', 'GLD', 'TLT', 'ARKK',
+  '^GSPC', '^DJI', '^IXIC', '^VIX', '000300.SS', '000001.SS', '399001.SZ',
+  'BTC-USD', 'ETH-USD', 'SOL-USD', 'XRP-USD', 'DOGE-USD',
+  'GC=F', 'CL=F', 'SI=F',
+]);
 
-  const stopwords = new Set([
-    'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
-    'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
-  ]);
+const TICKER_STOPWORDS = new Set([
+  'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
+  'PE', 'EPS', 'MACD', 'RSI', 'KDJ', 'GDP', 'CPI', 'PPI', 'FOMC',
+  'WITH', 'VIEW', 'FROM', 'FOR', 'OVER', 'NEWS', 'WHAT', 'WHEN', 'WHERE',
+  'WHY', 'THIS', 'THAT', 'THE', 'AND', 'ARE', 'WAS', 'WERE',
+]);
+
+const MAX_AUTO_CHART_TICKERS = 3;
+
+const extractTickers = (text: string): string[] => {
+  if (!text || !text.trim()) return [];
 
   const seen = new Set<string>();
   const tickers: string[] = [];
-  for (const match of matches) {
-    const upper = match.toUpperCase();
-    if (!stopwords.has(upper) && !seen.has(upper)) {
-      seen.add(upper);
-      tickers.push(upper);
-    }
+  const addTicker = (raw: string) => {
+    const symbol = String(raw || '').trim().toUpperCase();
+    if (!symbol || seen.has(symbol)) return;
+    if (symbol.length > 20 || /\s/.test(symbol)) return;
+    seen.add(symbol);
+    tickers.push(symbol);
+  };
+
+  // Structured symbols: index/crypto/futures/China market suffix.
+  for (const match of text.matchAll(/\^([A-Za-z]{1,8})\b/g)) {
+    addTicker(`^${match[1]}`);
   }
-  return tickers;
+  for (const match of text.matchAll(/\b(\d{5,6}\.(?:SS|SZ|BJ|HK))\b/gi)) {
+    addTicker(match[1]);
+  }
+  for (const match of text.matchAll(/\b([A-Za-z]{1,8}-[A-Za-z]{2,5})\b/g)) {
+    addTicker(match[1]);
+  }
+  for (const match of text.matchAll(/\b([A-Za-z]{1,4}=F)\b/g)) {
+    addTicker(match[1]);
+  }
+  for (const match of text.matchAll(/\$([A-Za-z]{1,6})\b/g)) {
+    addTicker(match[1]);
+  }
+  for (const match of text.matchAll(/\b([A-Za-z]{1,6}[.-][A-Za-z]{1,4})\b/g)) {
+    addTicker(match[1]);
+  }
+
+  // Plain words are accepted only when they are known symbols.
+  const alphaTokens = text.match(/\b[A-Za-z]{1,6}\b/g) ?? [];
+  for (const token of alphaTokens) {
+    const upper = token.toUpperCase();
+    if (TICKER_STOPWORDS.has(upper)) continue;
+    if (KNOWN_TICKERS.has(upper)) addTicker(upper);
+  }
+
+  return tickers.slice(0, MAX_AUTO_CHART_TICKERS);
 };
 
 const extractTicker = (text: string): string | null => {
@@ -333,13 +373,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
           const evidencePool = meta?.evidence_pool ?? meta?.data?.evidence_pool;
           const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
-          const markerRegex = /\[CHART:([A-Z0-9.-]+):([a-z]+)\]/g;
+          const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
           const existingTickers = new Set(Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1]));
           const tickers = extractTickers(userMsgContent);
           const forceMulti = tickers.length > 1;
 
           if (chartInfo.chartType || forceMulti) {
-            const targetTickers = tickers.length ? tickers : chartInfo.ticker ? [chartInfo.ticker] : [];
+            const targetTickers = (tickers.length ? tickers : chartInfo.ticker ? [chartInfo.ticker] : [])
+              .slice(0, MAX_AUTO_CHART_TICKERS);
             const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
             if (missingTickers.length > 0) {
               const chartType = forceMulti ? 'line' : chartInfo.chartType || 'line';

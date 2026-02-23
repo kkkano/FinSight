@@ -9,6 +9,9 @@ interface DimensionRadarProps {
   technicals?: TechnicalData | null;
   news?: NewsItem[];
   reportData?: LatestReportData | null;
+  valuationFallbackReason?: string | null;
+  financialsFallbackReason?: string | null;
+  technicalsFallbackReason?: string | null;
 }
 
 type DimensionStatus = 'ok' | 'not_run' | 'error';
@@ -78,6 +81,9 @@ function computeDimensions(
   technicals: TechnicalData | null | undefined,
   news: NewsItem[] | undefined,
   reportData: LatestReportData | null | undefined,
+  valuationFallbackReason: string | null | undefined,
+  financialsFallbackReason: string | null | undefined,
+  technicalsFallbackReason: string | null | undefined,
 ): Dimension[] {
   const fundamentalSignal = readAgentSignal(reportData, ['fundamental_agent']);
   const technicalSignal = readAgentSignal(reportData, ['technical_agent']);
@@ -101,6 +107,12 @@ function computeDimensions(
       value: clampPercent((filled / fields.length) * 100),
       status: 'ok',
     };
+  } else if ((valuationFallbackReason && valuationFallbackReason.trim()) || (financialsFallbackReason && financialsFallbackReason.trim())) {
+    fundamentals = {
+      ...fundamentals,
+      value: 0,
+      status: 'error',
+    };
   }
 
   let technical = toDimensionFromAgent('技术面', technicalSignal);
@@ -119,6 +131,12 @@ function computeDimensions(
       name: '技术面',
       value: clampPercent((filled / fields.length) * 100),
       status: 'ok',
+    };
+  } else if (technicalsFallbackReason && technicalsFallbackReason.trim()) {
+    technical = {
+      ...technical,
+      value: 0,
+      status: 'error',
     };
   }
 
@@ -168,10 +186,27 @@ const progressClass = (item: Dimension): string => {
   return 'bg-fin-border';
 };
 
-export function DimensionRadar({ valuation, technicals, news, reportData }: DimensionRadarProps) {
+export function DimensionRadar({
+  valuation,
+  technicals,
+  news,
+  reportData,
+  valuationFallbackReason,
+  financialsFallbackReason,
+  technicalsFallbackReason,
+}: DimensionRadarProps) {
   const dimensions = useMemo(
-    () => computeDimensions(valuation, technicals, news, reportData),
-    [valuation, technicals, news, reportData],
+    () =>
+      computeDimensions(
+        valuation,
+        technicals,
+        news,
+        reportData,
+        valuationFallbackReason,
+        financialsFallbackReason,
+        technicalsFallbackReason,
+      ),
+    [valuation, technicals, news, reportData, valuationFallbackReason, financialsFallbackReason, technicalsFallbackReason],
   );
 
   return (

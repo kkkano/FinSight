@@ -114,8 +114,10 @@ export function NewsTab() {
   const newsInsight = useMemo(() => {
     if (!rawNewsInsight) return null;
     if (totalNewsCount === 0) return rawNewsInsight;
+    const emptyNewsPattern =
+      /(?:\u6682\u65e0.*\u65b0\u95fb|\u65e0.*\u65b0\u95fb|no\s+recent\s+news|news\s+unavailable|no\s+news\s+data|news\s+data\s+unavailable)/i;
     const keyPoints = Array.isArray(rawNewsInsight.key_points)
-      ? rawNewsInsight.key_points.filter((point) => !String(point).includes('暂无近期新闻数据'))
+      ? rawNewsInsight.key_points.filter((point) => !emptyNewsPattern.test(String(point ?? '').trim()))
       : [];
     if (keyPoints.length === (rawNewsInsight.key_points?.length ?? 0)) {
       return rawNewsInsight;
