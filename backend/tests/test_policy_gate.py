@@ -435,3 +435,35 @@ def test_policy_gate_dashboard_investment_report_forces_core_six_agents():
     ]
     assert selection.get("forced_by_dashboard") is True
     assert selection.get("required") == allowed_agents
+
+
+def test_policy_gate_ensure_all_agents_forces_full_report_agent_set():
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "output_mode": "investment_report",
+            "ui_context": {"ensure_all_agents": True},
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    selection = policy.get("agent_selection") or {}
+
+    assert allowed_agents == [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+        "deep_search_agent",
+    ]
+    assert selection.get("force_all_agents") is True
+    assert selection.get("required") == allowed_agents
+    assert policy.get("force_all_agents") is True

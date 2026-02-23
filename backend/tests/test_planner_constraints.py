@@ -123,3 +123,45 @@ def test_planner_stub_deep_research_forces_deep_search_without_keywords(monkeypa
     plan = (planner_stub(state).get("plan_ir") or {})
     names = [s.get("name") for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
     assert "deep_search_agent" in names
+
+
+def test_planner_stub_force_all_agents_skips_report_caps(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "1")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "1")
+
+    full_agents = [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+        "deep_search_agent",
+    ]
+    state = {
+        "query": "Generate investment report for AAPL",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "policy": {
+            "budget": {"max_rounds": 10, "max_tools": 12},
+            "allowed_tools": ["search", "get_stock_price"],
+            "allowed_agents": full_agents,
+            "force_all_agents": True,
+            "agent_selection": {
+                "selected": full_agents,
+                "required": full_agents,
+                "force_all_agents": True,
+            },
+        },
+    }
+
+    plan = (planner_stub(state).get("plan_ir") or {})
+    names = [s.get("name") for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
+    assert names == full_agents

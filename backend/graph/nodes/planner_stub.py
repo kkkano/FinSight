@@ -441,10 +441,25 @@ def planner_stub(state: GraphState) -> dict:
 
         all_agents = sorted(allowed_agents)
         policy_agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+        force_all_agents = bool(policy.get("force_all_agents")) if isinstance(policy, dict) else False
+        if isinstance(policy_agent_selection, dict):
+            force_all_agents = force_all_agents or bool(policy_agent_selection.get("force_all_agents"))
         dashboard_forced = bool(policy_agent_selection.get("forced_by_dashboard")) if isinstance(policy_agent_selection, dict) else False
         selected_agents: list[str] = []
 
-        if dashboard_forced:
+        if force_all_agents:
+            ordered = [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "risk_agent",
+                "deep_search_agent",
+            ]
+            selected_agents = [name for name in ordered if name in allowed_agents]
+            max_agents = len(selected_agents)
+        elif dashboard_forced:
             ordered = [
                 "price_agent",
                 "news_agent",
@@ -483,7 +498,7 @@ def planner_stub(state: GraphState) -> dict:
             selected_agents = [name for name in selected_agents if name != "deep_search_agent"]
         elif analysis_depth == "deep_research":
             if "deep_search_agent" in all_agents and "deep_search_agent" not in selected_agents:
-                if max_agents > 0 and len(selected_agents) >= max_agents:
+                if not force_all_agents and max_agents > 0 and len(selected_agents) >= max_agents:
                     if max_agents == 1:
                         selected_agents = ["deep_search_agent"]
                     else:

@@ -356,10 +356,14 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     output_mode = state.get("output_mode") or "brief"
     safe_budget = PlanBudget.model_validate(budget or {"max_rounds": 3, "max_tools": 4}).model_dump()
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
+    agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+    force_all_agents = bool(policy.get("force_all_agents")) if isinstance(policy, dict) else False
+    if isinstance(agent_selection, dict):
+        force_all_agents = force_all_agents or bool(agent_selection.get("force_all_agents"))
     selected_agent_order: list[str] = []
     report_agent_cap: int | None = None
     dashboard_forced_report = _is_dashboard_forced_report(policy, state)
-    if output_mode == "investment_report" and allowed_agents and not dashboard_forced_report:
+    if output_mode == "investment_report" and allowed_agents and not dashboard_forced_report and not force_all_agents:
         try:
             report_max_agents = int(_env_str("LANGGRAPH_REPORT_MAX_AGENTS", "4"))
         except Exception:
@@ -380,8 +384,9 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         selected_agent_order = [str(name) for name in (selection.get("selected") or []) if isinstance(name, str) and name]
         if selected_agent_order:
             allowed_agents = set(selected_agent_order)
-    agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
     required_agents = set(agent_selection.get("required") or []) if isinstance(agent_selection, dict) else set()
+    if force_all_agents and output_mode == "investment_report":
+        required_agents.update(allowed_agents)
 
     subject = state.get("subject") or {"subject_type": "unknown"}
     query = (state.get("query") or "").strip()
@@ -653,9 +658,9 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         agent_order = [name for name in selected_agent_order if name in allowed_agents]
     else:
         agent_order = [name for name in default_agent_order if name in allowed_agents]
-    if isinstance(report_agent_cap, int) and report_agent_cap > 0:
+    if isinstance(report_agent_cap, int) and report_agent_cap > 0 and not force_all_agents:
         agent_order = agent_order[:report_agent_cap]
-    if output_mode == "investment_report" and has_deep_hint and "deep_search_agent" in allowed_agents:
+    if output_mode == "investment_report" and has_deep_hint and "deep_search_agent" in allowed_agents and not force_all_agents:
         if "deep_search_agent" not in agent_order:
             if isinstance(report_agent_cap, int) and report_agent_cap > 0 and len(agent_order) >= report_agent_cap:
                 if report_agent_cap == 1:

@@ -45,6 +45,10 @@ class ExecuteRequest(BaseModel):
         None,
         description="Explicit analysis depth semantics (quick/report/deep_research)",
     )
+    ensure_all_agents: bool | None = Field(
+        None,
+        description="Force report orchestration to keep all report agents enabled",
+    )
     agents: list[str] | None = Field(
         None, description="Override: only run these agents",
     )
@@ -123,6 +127,10 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             ui_context["analysis_depth"] = request.analysis_depth
         if request.agent_preferences:
             ui_context["agent_preferences"] = request.agent_preferences
+        if request.ensure_all_agents is not None:
+            ui_context["ensure_all_agents"] = bool(request.ensure_all_agents)
+        if (request.output_mode or "").strip().lower() == "investment_report":
+            ui_context.setdefault("ensure_all_agents", True)
 
         exec_deps = ExecutionDeps(
             get_graph_runner=deps.get_graph_runner,
