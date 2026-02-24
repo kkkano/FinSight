@@ -37,6 +37,10 @@ export interface DecisionNote {
   reason?: string;
   impact?: string;
   nextStep?: string;
+  /** Machine-readable decision code for filtering/debugging (e.g. "guardrail_a_block"). */
+  code?: string;
+  /** Additional structured details beyond the summary reason. */
+  details?: Record<string, unknown>;
   timestamp: string;
 }
 

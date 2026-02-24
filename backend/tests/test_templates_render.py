@@ -110,7 +110,15 @@ def test_render_company_compare_uses_compare_template():
             "selection_types": [],
             "selection_payload": [],
         },
-        "artifacts": {"render_vars": {"comparison_conclusion": "- x", "comparison_metrics": "- y"}},
+        "plan_ir": {
+            "steps": [{"id": "s1", "kind": "tool", "name": "get_performance_comparison"}],
+        },
+        "artifacts": {
+            "render_vars": {"comparison_conclusion": "- x", "comparison_metrics": "- y"},
+            "step_results": {
+                "s1": {"output": "Ticker Current YTD 1Y\nAAPL +12% +15% +20%\nMSFT +8% +10% +18%"},
+            },
+        },
     }
     md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "## 对比快评" in md
@@ -134,6 +142,73 @@ def test_render_company_fetch_uses_company_news_template():
     md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "### 公司快讯" in md
     assert "### 最新新闻" in md
+
+def test_render_two_tickers_qa_does_not_use_compare_template():
+    """Regression: 2 tickers + operation=qa should use company_brief, NOT compare template.
+
+    This is the pseudo-comparison bug that was fixed by gating compare template
+    selection on operation.name instead of ticker count.
+    """
+    state = {
+        "query": "那苹果和特斯拉呢",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.4, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "TSLA"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "artifacts": {},
+    }
+    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    # Should NOT use compare template
+    assert "## 对比快评" not in md
+    # Should use the regular company brief template
+    assert "## 快速摘要" in md or "AAPL" in md
+
+
+def test_render_two_tickers_price_does_not_use_compare_template():
+    """Regression: 2 tickers + operation=price (guardrail A) should NOT use compare template."""
+    state = {
+        "query": "AAPL 和 TSLA 股价",
+        "output_mode": "brief",
+        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "TSLA"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "artifacts": {},
+    }
+    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    assert "## 对比快评" not in md
+
+
+def test_render_compare_no_evidence_degrades_to_company_brief():
+    """Gap-1 fix: operation=compare but no tool evidence → falls back to company_brief."""
+    state = {
+        "query": "对比 AAPL 和 MSFT",
+        "output_mode": "brief",
+        "operation": {"name": "compare", "confidence": 0.9, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "MSFT"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "artifacts": {},
+    }
+    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    # No evidence → should NOT use compare template
+    assert "## 对比快评" not in md
+    # Should use the regular company brief template
+    assert "## 快速摘要" in md or "AAPL" in md
+
 
 def test_render_filing_report_includes_section_level_citations():
     state = {

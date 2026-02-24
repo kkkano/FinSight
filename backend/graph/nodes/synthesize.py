@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
+from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.executor import summarize_selection
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
@@ -1329,7 +1330,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             except Exception:
                 return None
 
-        if operation == "compare" or len(tickers) > 1:
+        if should_render_compare(state):
             metrics = _get_tool_output("get_performance_comparison")
             metrics_text = str(metrics).strip() if metrics is not None else ""
             metrics_missing = metrics is None or not metrics_text
@@ -1955,6 +1956,24 @@ async def synthesize(state: GraphState) -> dict:
         if error:
             payload["error"] = str(error)[:300]
         await emit_event(payload)
+
+    # ── Emit decision_note when compare intent has no evidence ──
+    # should_render_compare() now requires BOTH operation=compare AND valid
+    # tool evidence.  When evidence is absent, the downstream _stub_render_vars
+    # / LLM path will naturally degrade to multi-asset QA.  We emit a note
+    # here so the frontend can surface the reason once, before mode branching.
+    if is_compare_operation(state) and not should_render_compare(state):
+        await emit_event(
+            {
+                "type": "decision_note",
+                "scope": "synthesize",
+                "title": "Compare evidence missing — degraded to QA",
+                "reason": "operation=compare but get_performance_comparison returned no valid data",
+                "code": "compare_evidence_missing",
+                "impact": "Using standard multi-asset QA template instead of comparison template",
+                "timestamp": utc_now_iso(),
+            }
+        )
 
     # ── narrative mode: LLM writes full markdown report; render_vars kept for cards ──
     if mode == "narrative":

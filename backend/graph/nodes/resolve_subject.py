@@ -192,6 +192,20 @@ async def resolve_subject(state: GraphState) -> dict:
     except Exception:
         pass
 
+    # ------------------------------------------------------------------
+    # Extract comparison hint from all paths where extract_tickers ran
+    # ------------------------------------------------------------------
+    is_comparison = False
+    # Re-check: extract_tickers may have been called in Path A or B above.
+    # We do a single lightweight re-call here (the function is pure & fast).
+    if query:
+        try:
+            from backend.config.ticker_mapping import extract_tickers as _et
+            _meta = _et(query)
+            is_comparison = bool(_meta.get("is_comparison")) if isinstance(_meta, dict) else False
+        except Exception:
+            pass
+
     return {
         "subject": {
             "subject_type": subject_type,
@@ -200,5 +214,6 @@ async def resolve_subject(state: GraphState) -> dict:
             "selection_types": selection_types,
             "selection_payload": selection_payload,
             "binding_tier": binding_tier,
+            "is_comparison": is_comparison,
         }
     }

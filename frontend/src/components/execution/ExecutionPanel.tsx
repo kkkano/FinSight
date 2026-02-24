@@ -86,8 +86,16 @@ function renderDecisionNotes(run: ExecutionRun) {
       <div className="max-h-52 overflow-y-auto divide-y divide-fin-border/40">
         {notes.slice(-8).reverse().map((note) => (
           <div key={note.id} className="px-3 py-2 text-2xs">
-            <div className="text-fin-text font-medium">{note.title}</div>
+            <div className="text-fin-text font-medium">
+              {note.title}
+              {note.code && <span className="ml-1.5 text-fin-muted font-mono text-3xs">[{note.code}]</span>}
+            </div>
             {note.reason && <div className="mt-1 text-fin-muted">原因：{note.reason}</div>}
+            {note.details && Object.keys(note.details).length > 0 && (
+              <div className="mt-1 text-fin-muted font-mono text-3xs whitespace-pre-wrap">
+                详情：{JSON.stringify(note.details, null, 2)}
+              </div>
+            )}
             {note.impact && <div className="mt-1 text-fin-muted">影响：{note.impact}</div>}
             {note.nextStep && <div className="mt-1 text-fin-muted">下一步：{note.nextStep}</div>}
           </div>

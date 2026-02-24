@@ -480,6 +480,10 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       nextStep: typeof result.next_step === 'string'
         ? result.next_step
         : (typeof result.nextStep === 'string' ? result.nextStep : undefined),
+      code: typeof result.code === 'string' ? result.code : undefined,
+      details: (result.details != null && typeof result.details === 'object' && !Array.isArray(result.details))
+        ? result.details as Record<string, unknown>
+        : undefined,
       timestamp: typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString(),
     };
     patch.decisionNotes = pushDecisionNote(run.decisionNotes, note);

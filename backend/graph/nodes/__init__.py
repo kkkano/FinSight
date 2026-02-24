@@ -12,8 +12,14 @@ from backend.graph.nodes.planner import planner
 from backend.graph.nodes.planner_stub import planner_stub
 from backend.graph.nodes.query_intent import is_casual_chat, is_greeting
 from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.reset_turn_state import reset_turn_state
 from backend.graph.nodes.resolve_subject import resolve_subject
 from backend.graph.nodes.synthesize import synthesize
+from backend.graph.nodes.compare_gate import (
+    has_compare_evidence,
+    is_compare_operation,
+    should_render_compare,
+)
 from backend.graph.nodes.confirmation_gate import confirmation_gate
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
@@ -34,7 +40,11 @@ __all__ = [
     "execute_plan_stub",
     "synthesize",
     "render_stub",
+    "reset_turn_state",
     "confirmation_gate",
     "is_greeting",
     "is_casual_chat",
+    "is_compare_operation",
+    "has_compare_evidence",
+    "should_render_compare",
 ]

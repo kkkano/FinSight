@@ -8,6 +8,7 @@ from string import Template
 
 from langchain_core.messages import AIMessage
 
+from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
 
 
@@ -231,7 +232,11 @@ def render_stub(state: GraphState) -> dict:
         if operation == "fetch" and (not isinstance(tickers, list) or len(tickers) <= 1):
             template_key = "company_news_report" if output_mode == "investment_report" else "company_news_brief"
         # Multi-ticker compare -> dedicated template.
-        elif isinstance(tickers, list) and len(tickers) > 1:
+        # Requires BOTH operation=compare AND valid tool evidence (see compare_gate).
+        # When evidence is missing, should_render_compare returns False and we
+        # fall through to the normal company template.  The decision_note is
+        # emitted upstream in synthesize.
+        elif should_render_compare(state):
             template_key = "company_compare_report" if output_mode == "investment_report" else "company_compare_brief"
         else:
             template_key = "company_report" if output_mode == "investment_report" else "company_brief"
