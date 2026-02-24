@@ -50,7 +50,8 @@ flowchart LR
 ```mermaid
 flowchart TD
   START --> build_initial_state
-  build_initial_state --> trim_history
+  build_initial_state --> reset_turn_state
+  reset_turn_state --> trim_history
   trim_history --> summarize_history
   summarize_history --> normalize_ui_context
   normalize_ui_context --> decide_output_mode

@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-02-24 Pseudo-Comparison Bug Fix + Turn State Reset + Compare Evidence Gate
+
+### P0: Graph Pipeline Fixes
+- **reset_turn_state** 新节点：清除 12 个 per-turn 临时字段 + 5 个 trace runtime sub-keys，防止 early-stop turn 的残留数据泄漏到下一 turn
+  - 位置：`build_initial_state → reset_turn_state → trim_history`
+  - 清除字段：subject, operation, clarify, policy, plan_ir, artifacts, chat_responded, 5 个 confirmation 字段
+  - trace 处理：保留 spans（events/timings/failures），清除 operation_decision/planner_runtime/synthesize_runtime/executor/rag
+- **parse_operation 完全重写**：4 级优先链（compare keywords → guardrail-A → multi-ticker default → qa fallback）
+  - Guardrail A：单任务关键词（price/news/technical/etc.）阻止多标的查询默认走 compare
+  - 写入 `trace["operation_decision"]` 包含 7 个可审计字段
+- **Subject/PlanSubject 扩展**：新增 `is_comparison`、`operation_hint` 字段（`extra="forbid"` schema 同步）
+- 节点数：15 → 16
+
+### P1: Compare Rendering Consistency
+- **compare_gate 模块**：3 个谓词函数 `is_compare_operation`、`has_compare_evidence`、`should_render_compare`
+  - `should_render_compare` 要求 **BOTH** operation=compare **AND** 有效 tool evidence（Gap-1 修复）
+  - 无 evidence 时降级到普通 multi-asset QA 模板
+- **synthesize.py**：将 `len(tickers) > 1` 替换为 `should_render_compare(state)`；无 evidence 时发射 `decision_note(code="compare_evidence_missing")`
+- **render_stub.py**：同步替换为 `should_render_compare(state)`
+
+### P1-04: Frontend DecisionNote
+- `DecisionNote` 接口新增 `code?: string`、`details?: Record<string, unknown>`
+- `executionStore` reducer 增加 `code`/`details` 解析
+- `ExecutionPanel` 渲染 code badge + details JSON 展示
+
+### Test Coverage
+- `test_compare_gate.py`：24 tests（is_compare_operation 6 + has_compare_evidence 11 + should_render_compare 7）
+- `test_graph_node_order.py`：6 tests（graph invariant）
+- `test_p0_unit.py`：41 tests（parse_operation + reset_turn_state）
+- `test_templates_render.py`：+3 regression tests（pseudo-comparison fix + evidence degradation）
+- Full suite：**964 passed, 15 skipped, 0 failed**
+
+---
+
 ## 10. 变更记录（按日追踪）
 
 | 日期 | 类型 | 内容 | 影响范围 |
