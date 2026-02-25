@@ -42,6 +42,8 @@ class MorningBriefRouterDeps:
     get_portfolio_positions: Callable[[str], list[dict[str, Any]]]
     get_stock_price: Callable[[str], Any]
     get_company_news: Callable[[str, int], Any]
+    # P1: Graph Pipeline support (optional, fallback to direct fetch when None)
+    get_graph_runner: Optional[Callable[[], Any]] = None
 
 
 def _classify_change(pct: float | None) -> str:
@@ -228,6 +230,27 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
         if cached is not None:
             return {"success": True, "brief": cached}
 
+        # ── P1: 优先使用 Graph Pipeline（cache miss 时） ──
+        if deps.get_graph_runner is not None:
+            try:
+                runner = await deps.get_graph_runner()
+                tickers_str = " ".join(all_tickers)
+                result = await runner.ainvoke(
+                    thread_id=normalized_session,
+                    query=f"生成晨报 {tickers_str}",
+                    output_mode="brief",
+                    ui_context={"tickers_override": all_tickers},
+                )
+                graph_artifacts = result.get("artifacts") or {} if isinstance(result, dict) else {}
+                brief_data = graph_artifacts.get("brief_data") if isinstance(graph_artifacts, dict) else None
+                if isinstance(brief_data, dict) and brief_data.get("highlights"):
+                    dashboard_cache.set("__morning_brief__", cache_k, brief_data, ttl=_BRIEF_CACHE_TTL)
+                    return {"success": True, "brief": brief_data}
+                logger.warning("[MorningBrief] Graph Pipeline returned no brief_data, falling back to direct fetch")
+            except Exception as exc:
+                logger.warning("[MorningBrief] Graph Pipeline failed (%s), falling back to direct fetch", exc)
+
+        # ── Fallback: 直接数据获取（原始实现） ──
         # 并发获取所有 ticker 的快照和新闻
         async def _fetch_ticker_data(ticker: str) -> dict[str, Any]:
             """获取单个 ticker 的快照 + 新闻"""

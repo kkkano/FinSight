@@ -57,6 +57,11 @@ _FETCH_KEYWORDS: tuple[str, ...] = (
     "获取", "列出", "有哪些", "新闻", "最新", "发生了什么", "發生了什麼",
     "news", "latest news",
 )
+_MORNING_BRIEF_KEYWORDS: tuple[str, ...] = (
+    "晨报", "早报", "晨间", "早间", "每日简报", "今日概览",
+    "morning brief", "daily brief", "morning report", "daily summary",
+    "今日行情", "盘前", "开盘前",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +165,16 @@ def parse_operation(state: GraphState) -> dict:
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "fetch"
+
+    # ------------------------------------------------------------------
+    # 2.5. Morning brief keywords (between fetch and multi-ticker default)
+    # ------------------------------------------------------------------
+    elif (hits := _match_any(_MORNING_BRIEF_KEYWORDS, lowered)):
+        op = "morning_brief"
+        confidence = 0.85
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "morning_brief"
 
     # ------------------------------------------------------------------
     # 3. Multi-ticker default compare (no guardrail-A hit)

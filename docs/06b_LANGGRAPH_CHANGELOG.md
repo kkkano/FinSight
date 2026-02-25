@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-02-26 P0-P2 Quality Orchestration & Productization
+
+### P0: ThinkingBubble 三层展示
+- **trace.py** 新增 `NODE_USER_MESSAGES` 映射（16 节点 → 用户友好中文消息）+ `AGENT_DISPLAY_NAMES`（7 Agent 中文名）
+- **trace_emitter.py** 在 SSE 事件中注入 `userMessage` 字段，前端直接消费
+- **前端三层架构**：
+  - `ThinkingBubble.tsx`（NEW）：打字机效果展示当前阶段思考过程
+  - `AgentSummaryCards.tsx`（NEW）：Agent 研究完成后的摘要卡片
+  - `ExecutionPanel.tsx`：增强用户模式，三层联动展示
+- **数据链路**：`trace.py → trace_emitter → SSE → executionStore.buildTimelineEvent → userMessageMapper(fallback) → ThinkingBubble`
+
+### P1: 晨报 Graph Pipeline 接入（ADR-P1-001/002）
+- **parse_operation.py**：新增 `_MORNING_BRIEF_KEYWORDS`（13 关键词，confidence=0.85）
+- **planner_stub.py**：新增 morning_brief 计划模板（per-ticker `get_stock_price` + `get_company_news` 并行，max 6 tickers）
+- **policy_gate.py**：新增 morning_brief 工具白名单 `[get_stock_price, get_company_news, get_current_datetime]`
+- **synthesize.py**：新增 `_synthesize_morning_brief_data()` 确定性合成（零 LLM 调用），生成 highlights / market_mood / action_items / draft_markdown
+- **render_stub.py**：morning_brief 操作直通 draft_markdown，跳过 narrative 最小字数检查
+- **morning_brief_router.py**：新增 Graph Pipeline 调用路径（cache miss → Graph → fallback to direct fetch）
+- **main.py**：注入 `get_graph_runner` 到 MorningBriefRouterDeps
+
+### P2: 调仓 LLM 增强（HC-2 独立路径）
+- **rebalance_llm_enhancer.py**（NEW）：`AgentBackedEnhancer` 类
+  - `_gather_agent_data()`：并行获取 news + company info
+  - `_llm_enhance()`：LLM 优先级精调 + 增强理由 + EvidenceSnapshot
+  - 安全回退：任何阶段失败均返回原始 candidates
+- **rebalance_router.py**：新增 `POST /api/rebalance/suggestions/generate-stream` SSE 流式端点
+  - 6 阶段进度事件：init → fetching_prices → fetching_sectors → diagnosing → generating → done
+- **main.py**：注入 `AgentBackedEnhancer` 到 RebalanceEngine
+
+### 文件影响
+- 新增文件：4（ThinkingBubble.tsx, AgentSummaryCards.tsx, userMessageMapper.ts, rebalance_llm_enhancer.py）
+- 修改文件：12（trace.py, trace_emitter.py, parse_operation.py, planner_stub.py, policy_gate.py, synthesize.py, render_stub.py, morning_brief_router.py, rebalance_router.py, main.py, execution.ts, executionStore.ts, ExecutionPanel.tsx）
+
+---
+
 ## 2026-02-24 Pseudo-Comparison Bug Fix + Turn State Reset + Compare Evidence Gate
 
 ### P0: Graph Pipeline Fixes

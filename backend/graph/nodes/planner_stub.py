@@ -93,6 +93,51 @@ def planner_stub(state: GraphState) -> dict:
         )
         step_id += 1
 
+    # Morning brief: per-ticker price + news in parallel.
+    if operation == "morning_brief":
+        brief_tickers = [t for t in (tickers if isinstance(tickers, list) else []) if isinstance(t, str) and t.strip()]
+        if not brief_tickers and isinstance(primary_ticker, str) and primary_ticker.strip():
+            brief_tickers = [primary_ticker]
+        for ticker in brief_tickers[:6]:
+            if "get_stock_price" in allowed_tools:
+                steps.append(
+                    {
+                        "id": f"s{step_id}",
+                        "kind": "tool",
+                        "name": "get_stock_price",
+                        "inputs": {"ticker": ticker},
+                        "parallel_group": "brief_data",
+                        "why": f"晨报：获取 {ticker} 最新价格",
+                        "optional": False,
+                    }
+                )
+                step_id += 1
+            if "get_company_news" in allowed_tools:
+                steps.append(
+                    {
+                        "id": f"s{step_id}",
+                        "kind": "tool",
+                        "name": "get_company_news",
+                        "inputs": {"ticker": ticker},
+                        "parallel_group": "brief_data",
+                        "why": f"晨报：获取 {ticker} 最新新闻",
+                        "optional": False,
+                    }
+                )
+                step_id += 1
+        if "get_current_datetime" in allowed_tools:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "tool",
+                    "name": "get_current_datetime",
+                    "inputs": {},
+                    "why": "晨报：获取当前日期时间用于报告标题",
+                    "optional": True,
+                }
+            )
+            step_id += 1
+
     # Rule-based minimal plan (Phase 3 scaffolding).
     if operation == "fetch" and primary_ticker and "get_company_news" in allowed_tools:
         steps.append(

@@ -78,6 +78,18 @@
   - CN/HK valuation + financials + kline now have dedicated free source routing.
   - Peer defaults are now split by market to avoid US-basket fallback on CN/HK symbols.
 
+## 2026-02-26 P0-P2 Quality Orchestration & Productization
+
+- 新增/更新文档：
+  - `docs/feature_logs/2026-02-26_p0_p2_quality_orchestration_productization.md`：完整 Todolist + 架构图 + ADR
+  - `docs/06b_LANGGRAPH_CHANGELOG.md`：追加 P0/P1/P2 变更条目
+  - `docs/01_ARCHITECTURE.md`：新增 ThinkingBubble / 晨报 Pipeline / 调仓增强架构节
+  - `README.md`：Key Features 表新增 ThinkingBubble、晨报 Pipeline、调仓 LLM 增强
+- 变更概要：
+  - P0：ThinkingBubble 三层展示（trace → SSE → 前端打字机效果）
+  - P1：晨报接入 Graph Pipeline（确定性合成，零 LLM 成本）
+  - P2：调仓引擎 Agent-backed LLM 增强 + SSE 流式端点
+
 ## 2026-02-24 Pseudo-Comparison Bug Fix + Turn State Reset
 
 - 更新文档：

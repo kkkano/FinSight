@@ -7,6 +7,8 @@ import type { ExecutionRun } from '../../types/execution';
 import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
 import { PipelineStageBar } from './PipelineStageBar';
+import { ThinkingBubble } from './ThinkingBubble';
+import { AgentSummaryCards } from './AgentSummaryCards';
 
 /** Max characters for details JSON before truncation. */
 const DETAILS_MAX_CHARS = 500;
@@ -192,6 +194,21 @@ export function ExecutionPanel({
         compact={!isExpert}
       />
 
+      {/* ===== 用户模式：ThinkingBubble + AgentSummaryCards ===== */}
+      {!isExpert && (
+        <>
+          <ThinkingBubble
+            timeline={run.timeline}
+            isRunning={run.status === 'running'}
+          />
+          <AgentSummaryCards
+            agentStatuses={run.agentStatuses}
+            selectedAgents={run.selectedAgents}
+          />
+        </>
+      )}
+
+      {/* ===== 通用状态栏（两种模式共用） ===== */}
       <div className="rounded-lg border border-fin-border bg-fin-bg/20 px-3 py-2 text-xs text-fin-text/90">
         <div>{run.currentStep || '等待执行事件...'}</div>
         {run.status === 'running' && typeof run.etaSeconds === 'number' && run.etaSeconds > 0 && (

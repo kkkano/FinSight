@@ -96,9 +96,16 @@ def render_stub(state: GraphState) -> dict:
     and skip template rendering.  Template rendering is only a **fallback**
     for stub / empty drafts.
     """
+    # ── Early-return: morning_brief pass-through (no template needed) ──
+    _brief_op = (state.get("operation") or {}).get("name") if isinstance(state.get("operation"), dict) else None
+    artifacts = state.get("artifacts") or {}
+    if _brief_op == "morning_brief":
+        brief_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
+        if isinstance(brief_draft, str) and brief_draft.strip():
+            return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
+
     # ── Early-return: honour existing narrative draft ──────────────
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
-    artifacts = state.get("artifacts") or {}
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:

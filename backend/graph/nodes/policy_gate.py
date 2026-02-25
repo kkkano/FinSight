@@ -73,6 +73,8 @@ def _infer_market_from_subject(subject: dict | None) -> str | None:
 
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
+    if op_name == "morning_brief":
+        return ["get_stock_price", "get_company_news", "get_current_datetime"]
     if subject_type in ("news_item", "news_set"):
         return [
             "get_company_news",

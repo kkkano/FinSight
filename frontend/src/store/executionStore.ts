@@ -131,6 +131,9 @@ function buildTimelineEvent(
     eventType,
     stage,
     message: typeof step?.message === 'string' ? step.message : undefined,
+    userMessage: typeof step?.userMessage === 'string'
+      ? step.userMessage
+      : (typeof raw.userMessage === 'string' ? raw.userMessage : undefined),
     runId: runIdFromEvent || runId,
     sessionId: typeof step?.sessionId === 'string' ? step.sessionId : undefined,
     stepId: typeof raw.step_id === 'string' ? raw.step_id : undefined,

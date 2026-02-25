@@ -64,6 +64,8 @@ export interface TimelineEvent {
   eventType: string;
   stage: string;
   message?: string;
+  /** 面向用户的中文友好消息（来自后端 NODE_USER_MESSAGES 或前端回退映射） */
+  userMessage?: string;
   runId?: string;
   sessionId?: string;
   stepId?: string;

@@ -700,6 +700,7 @@ morning_brief_router = create_morning_brief_router(
         get_portfolio_positions=get_portfolio_positions,
         get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
         get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
+        get_graph_runner=lambda: aget_graph_runner(),
     )
 )
 
@@ -718,8 +719,24 @@ execution_router = create_execution_router(
 
 # --- Phase 3: Portfolio & Rebalance routers ---
 from backend.services.rebalance_engine import RebalanceEngine as _RebalanceEngine
+from backend.services.rebalance_llm_enhancer import AgentBackedEnhancer as _AgentBackedEnhancer
 
-_rebalance_engine = _RebalanceEngine()
+_rebalance_llm_enhancer = _AgentBackedEnhancer(
+    get_company_news=globals().get("get_company_news"),
+    get_company_info=globals().get("get_company_info"),
+    create_llm_fn=None,  # Lazy init: set after LLM config is ready
+)
+try:
+    from backend.llm_config import create_llm as _create_llm_for_rebalance
+    _rebalance_llm_enhancer = _AgentBackedEnhancer(
+        get_company_news=globals().get("get_company_news"),
+        get_company_info=globals().get("get_company_info"),
+        create_llm_fn=_create_llm_for_rebalance,
+    )
+except Exception:
+    pass  # LLM unavailable, enhancer will be no-op
+
+_rebalance_engine = _RebalanceEngine(llm_enhancer=_rebalance_llm_enhancer)
 
 rebalance_router = create_rebalance_router(
     RebalanceRouterDeps(

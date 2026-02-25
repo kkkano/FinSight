@@ -58,8 +58,11 @@
 | **Smart Charts** | Dual-mode LLM-driven charts: `<chart>` (inline data) + `<chart_ref>` (real data reference) |
 | **Conflict Detection** | Automatic cross-agent conflict analysis across 8 comparable dimension pairs |
 | **Proactive Alerts** | 3 alert schedulers (Price, News, Risk) with email notification via SMTP |
-| **Workbench** | Autonomous task execution, portfolio rebalancing, report timeline, and quick analysis bar |
+| **Workbench** | Autonomous task execution, portfolio rebalancing with LLM enhancement, SSE streaming progress, report timeline, and quick analysis bar |
 | **"Ask About This"** | Context-aware follow-up on any news, insight, or risk item via MiniChat integration |
+| **ThinkingBubble** | Three-layer execution display: thinking bubble (typewriter effect) → agent summary cards → detailed timeline |
+| **Morning Brief Pipeline** | One-click portfolio morning brief via LangGraph Pipeline with deterministic synthesis (zero LLM cost) |
+| **Rebalance LLM Enhancement** | Agent-backed LLM priority refinement for rebalance suggestions with evidence snapshots |
 | **Hallucination Defense** | Multi-layer scrubbing: regex pattern matching + evidence cross-validation on LLM outputs |
 
 ---
@@ -837,6 +840,8 @@ FinSight is designed for production reliability with multiple fallback layers:
 | **Reranker** | `bge-reranker-v2-m3` | Skip reranking, use RRF scores directly | Silent passthrough |
 | **Price Data** | yfinance | 10 fallback sources (FMP → Finnhub → ...) | 11-level cascade |
 | **AI Insights** | LLM Insight Scorers | Deterministic rule-based scoring | `model_generated=false` flag |
+| **Morning Brief** | LangGraph Pipeline | Direct data fetch (router fallback) | Transparent to caller |
+| **Rebalance Enhancement** | Agent-backed LLM | Original deterministic candidates | Safety fallback on any failure |
 | **Dashboard Data** | Live API fetch | In-memory cache (stale-while-revalidate) | TTL-based freshness |
 | **Checkpoints** | PostgreSQL | SQLite local file | Auto-detect on startup |
 | **RAG Store** | PostgreSQL + pgvector | In-memory store | Auto-fallback |

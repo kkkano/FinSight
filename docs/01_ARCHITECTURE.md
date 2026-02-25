@@ -1,7 +1,7 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-02-18  
-> 适用分支：`feat/phase-e-rag-upgrade`  
+> 更新时间：2026-02-26
+> 适用分支：`feat/p0-p2-quality-orchestration-productization`
 > 主链实现：`backend/graph/runner.py`
 
 ## 1. 系统总览
@@ -211,3 +211,82 @@ flowchart LR
   - 事件状态：`no_email | loading | error | no_events | ready`
   - 订阅状态：`no_email | loading | error | no_subscriptions | ready`
 - 当前 Alerts 数据刷新模式仍为轮询（`60s`），后续可按需要演进到推送模型。
+
+---
+
+## 9. P0-P2 增量链路（2026-02-26）
+
+### 9.1 ThinkingBubble 三层展示
+
+将程序员视角的 trace 事件转换为用户友好的三层展示：
+
+```mermaid
+flowchart LR
+    subgraph Backend
+        T[trace.py<br/>NODE_USER_MESSAGES] --> E[trace_emitter<br/>inject userMessage]
+        E --> S[SSE event stream]
+    end
+
+    subgraph Frontend
+        S --> STORE[executionStore<br/>buildTimelineEvent]
+        STORE --> M[userMessageMapper<br/>fallback]
+        M --> L1["Layer 1: ThinkingBubble<br/>打字机效果"]
+        STORE --> L2["Layer 2: AgentSummaryCards<br/>Agent 摘要卡片"]
+        STORE --> L3["Layer 3: ExecutionPanel<br/>详细时间线"]
+    end
+
+    style L1 fill:#4caf50,color:#fff
+    style L2 fill:#2196f3,color:#fff
+    style L3 fill:#9e9e9e,color:#fff
+```
+
+- `ThinkingBubble.tsx`：以打字机动画展示当前阶段的用户友好消息
+- `AgentSummaryCards.tsx`：Agent 完成研究后展示摘要卡片
+- `ExecutionPanel.tsx`：详细时间线，支持展开查看完整 trace
+
+### 9.2 晨报 Graph Pipeline 接入
+
+晨报操作通过 LangGraph Pipeline 执行，使用确定性合成（零 LLM 成本）：
+
+```mermaid
+flowchart TD
+    ROUTER["morning_brief_router"] --> CACHE{"Cache 30min?"}
+    CACHE -->|Hit| RET[Return]
+    CACHE -->|Miss| GP["GraphRunner.ainvoke()"]
+    GP --> PARSE["parse_operation → morning_brief"]
+    PARSE --> POLICY["policy_gate → whitelist"]
+    POLICY --> PLAN["planner_stub → per-ticker parallel"]
+    PLAN --> EXEC["execute_plan"]
+    EXEC --> SYNTH["synthesize → deterministic"]
+    SYNTH --> RENDER["render_stub → pass-through"]
+    GP -->|Failed| FALLBACK["Direct fetch fallback"]
+```
+
+- 关键词匹配：13 个中英文关键词，confidence=0.85
+- 工具白名单：`get_stock_price`, `get_company_news`, `get_current_datetime`
+- 合成模式：纯确定性（`_synthesize_morning_brief_data`），不调用 LLM
+
+### 9.3 调仓 LLM 增强（HC-2 独立路径）
+
+调仓引擎保持独立于 Graph Pipeline（HC-2 约束），新增 Agent-backed LLM 增强：
+
+```mermaid
+flowchart LR
+    ENGINE[RebalanceEngine] --> DIAG[diagnose]
+    DIAG --> SOLVE[constraint_solver]
+    SOLVE --> ENH{"LLM enhance?"}
+    ENH -->|Yes| AGENT[AgentBackedEnhancer<br/>news + info + LLM]
+    ENH -->|No| OUT[suggestion]
+    AGENT --> OUT
+
+    subgraph SSE["generate-stream endpoint"]
+        P1[init] --> P2[fetching_prices]
+        P2 --> P3[diagnosing]
+        P3 --> P4[generating]
+        P4 --> P5[result]
+    end
+```
+
+- `AgentBackedEnhancer`：并行获取新闻+公司信息，LLM 精调优先级和理由
+- SSE 流式端点：`POST /api/rebalance/suggestions/generate-stream`（6 阶段进度事件）
+- 安全回退：LLM 失败时返回原始 candidates，不丢失数据
