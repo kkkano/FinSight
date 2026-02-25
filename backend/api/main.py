@@ -28,6 +28,7 @@ from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.alerts_router import create_alerts_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
+from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.user_router import UserRouterDeps, create_user_router
@@ -693,6 +694,15 @@ task_router = create_task_router(
 )
 tools_router = create_tools_router()
 
+morning_brief_router = create_morning_brief_router(
+    MorningBriefRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_portfolio_positions=get_portfolio_positions,
+        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
+        get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
+    )
+)
+
 execution_router = create_execution_router(
     ExecutionRouterDeps(
         get_graph_runner=lambda: aget_graph_runner(),
@@ -734,6 +744,7 @@ app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)
 app.include_router(rebalance_router)
+app.include_router(morning_brief_router)
 # 启动入口
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)

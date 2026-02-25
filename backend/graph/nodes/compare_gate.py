@@ -17,7 +17,7 @@ Decision logic:
 """
 from __future__ import annotations
 
-from typing import Any
+import re
 
 from backend.graph.state import GraphState
 
@@ -43,8 +43,20 @@ def has_compare_evidence(state: GraphState) -> bool:
       - Output is not an empty string.
       - Output does not start with a failure prefix.
       - Output is not marked as skipped.
+      - The step's ``status_reason`` is not a skip/error sentinel.
+      - Output is not a "unable to fetch" total-failure message.
+      - The table contains at least one non-N/A metric value.
     """
-    output = _get_comparison_tool_output(state)
+    result_item = _get_comparison_tool_result(state)
+    if result_item is None:
+        return False
+
+    # Check status_reason — reject skipped / escalation_not_needed
+    status_reason = result_item.get("status_reason", "done")
+    if status_reason in _REJECT_STATUS_REASONS:
+        return False
+
+    output = result_item.get("output")
     if output is None:
         return False
 
@@ -52,11 +64,25 @@ def has_compare_evidence(state: GraphState) -> bool:
     if not text:
         return False
 
+    text_lower = text.lower()
+
     # The executor wraps failures as "get_performance_comparison failed: ..."
-    if text.lower().startswith("get_performance_comparison failed"):
+    if text_lower.startswith("get_performance_comparison failed"):
+        return False
+
+    # The tool returns this when no ticker data could be fetched at all
+    if "unable to fetch" in text_lower:
+        return False
+
+    # Reject all-N/A tables: if every metric cell is N/A, there's no real data
+    if _is_all_na_table(text):
         return False
 
     return True
+
+
+# Status reasons that indicate the step didn't produce real evidence.
+_REJECT_STATUS_REASONS = frozenset({"skipped", "escalation_not_needed"})
 
 
 def should_render_compare(state: GraphState) -> bool:
@@ -79,12 +105,47 @@ def should_render_compare(state: GraphState) -> bool:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _get_comparison_tool_output(state: GraphState) -> Any:
-    """
-    Extract the ``get_performance_comparison`` tool output from step_results.
 
-    Mirrors the lookup logic in ``synthesize._get_tool_output`` but operates
-    directly on state so it can be used before synthesize builds its closures.
+def _is_all_na_table(text: str) -> bool:
+    """
+    Return True when the comparison table has data rows but every metric
+    cell (Current Price, YTD %, 1-Year %) is N/A.
+
+    Heuristic: skip header/separator lines, then for each data row check
+    whether it contains at least one numeric value (digit or +/- sign
+    followed by digit).  If no data row has a real number, it's all-N/A.
+    """
+    lines = text.strip().splitlines()
+    data_rows = 0
+    rows_with_real_data = 0
+    for line in lines:
+        stripped = line.strip()
+        # Skip empty, header-like, or separator lines
+        if not stripped or stripped.startswith("---") or stripped.startswith("==="):
+            continue
+        if stripped.lower().startswith("performance comparison"):
+            continue
+        if stripped.lower().startswith("ticker"):
+            continue
+        if stripped.startswith("Note:") or stripped.startswith("注"):
+            continue
+        # This is a data row
+        data_rows += 1
+        # Check if it contains at least one real numeric value
+        # (not just N/A or labels)
+        if re.search(r"[+-]?\d+\.?\d*%?", stripped):
+            rows_with_real_data += 1
+
+    # If there are data rows but none have real numbers → all N/A
+    return data_rows > 0 and rows_with_real_data == 0
+
+
+def _get_comparison_tool_result(state: GraphState) -> dict | None:
+    """
+    Extract the full ``get_performance_comparison`` step result dict
+    from step_results, including ``output`` and ``status_reason``.
+
+    Returns None if the tool step cannot be found.
     """
     artifacts = state.get("artifacts")
     if not isinstance(artifacts, dict):
@@ -119,7 +180,7 @@ def _get_comparison_tool_output(state: GraphState) -> Any:
 
         step = step_index.get(step_id) or {}
         if step.get("kind") == "tool" and step.get("name") == "get_performance_comparison":
-            return output
+            return item
 
     return None
 

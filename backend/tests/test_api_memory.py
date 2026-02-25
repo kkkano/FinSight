@@ -1,6 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-from uuid import uuid4
 from backend.api.main import app
 
 
@@ -62,7 +61,7 @@ def test_watchlist_endpoints(client):
 
 
 def test_agent_preferences_endpoints(client):
-    user_id = f"test_api_user_agent_prefs_{uuid4().hex}"
+    user_id = "test_api_user_agent_prefs"
 
     # Get defaults
     response = client.get(f"/api/agents/preferences?user_id={user_id}")

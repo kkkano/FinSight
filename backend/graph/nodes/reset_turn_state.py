@@ -24,6 +24,7 @@ Preserved fields (set by build_initial_state or runner input):
 from __future__ import annotations
 
 from backend.graph.state import GraphState
+from backend.graph.trace import MAX_TRACE_SPANS
 
 # Runtime sub-keys written by individual nodes each turn.
 # These are cleared so that an early-stop turn does not carry
@@ -46,6 +47,11 @@ def reset_turn_state(state: GraphState) -> dict:
         k: v for k, v in existing_trace.items()
         if k not in _TRACE_RUNTIME_SUBKEYS
     }
+
+    # Cap accumulated spans to prevent unbounded growth across turns.
+    spans = cleaned_trace.get("spans")
+    if isinstance(spans, list) and len(spans) > MAX_TRACE_SPANS:
+        cleaned_trace["spans"] = spans[-MAX_TRACE_SPANS:]
 
     return {
         # --- Turn-level decision fields ---

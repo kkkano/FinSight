@@ -357,3 +357,63 @@ class TestResetTurnState:
         """When no prior trace exists, reset returns empty trace dict."""
         result = reset_turn_state({})
         assert result["trace"] == {}
+
+    def test_trace_spans_capped_at_max(self):
+        """Spans exceeding MAX_TRACE_SPANS should be truncated (keep newest)."""
+        from backend.graph.trace import MAX_TRACE_SPANS
+
+        oversized_spans = [{"node": f"n{i}", "ts": f"t{i}"} for i in range(MAX_TRACE_SPANS + 50)]
+        state = {"trace": {"spans": oversized_spans}}
+        result = reset_turn_state(state)
+        spans = result["trace"]["spans"]
+        assert len(spans) == MAX_TRACE_SPANS
+        # Should keep the newest (tail) spans
+        assert spans[0]["node"] == "n50"
+        assert spans[-1]["node"] == f"n{MAX_TRACE_SPANS + 49}"
+
+    def test_trace_spans_under_limit_untouched(self):
+        """Spans under the limit should pass through unchanged."""
+        from backend.graph.trace import MAX_TRACE_SPANS
+
+        small_spans = [{"node": f"n{i}"} for i in range(10)]
+        state = {"trace": {"spans": small_spans}}
+        result = reset_turn_state(state)
+        assert len(result["trace"]["spans"]) == 10
+
+
+# =========================================================================
+# with_node_trace: spans cap
+# =========================================================================
+
+class TestWithNodeTraceSpansCap:
+    """Verify with_node_trace caps spans at MAX_TRACE_SPANS."""
+
+    @pytest.mark.asyncio
+    async def test_spans_capped_after_append(self):
+        """When existing spans are at the limit, new span should trigger truncation."""
+        from unittest.mock import AsyncMock, patch
+        from backend.graph.trace import with_node_trace, MAX_TRACE_SPANS
+
+        oversized_spans = [{"node": f"old{i}", "ts": f"t{i}"} for i in range(MAX_TRACE_SPANS)]
+        state = {"trace": {"spans": oversized_spans}}
+
+        def dummy_node(s):
+            return {}
+
+        with patch("backend.graph.trace.emit_event", new_callable=AsyncMock), \
+             patch("backend.graph.trace.langfuse_span") as mock_lf:
+            # Make langfuse_span a no-op async context manager
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=None)
+            mock_ctx.__aexit__ = AsyncMock(return_value=False)
+            mock_lf.return_value = mock_ctx
+
+            wrapped = with_node_trace("test_node", dummy_node)
+            result = await wrapped(state)
+
+        spans = result["trace"]["spans"]
+        assert len(spans) == MAX_TRACE_SPANS
+        # The newest span (just appended) should be last
+        assert spans[-1]["node"] == "test_node"
+        # Oldest span should have been dropped
+        assert spans[0]["node"] == "old1"

@@ -35,6 +35,7 @@ from backend.dashboard.scorers import (
 from backend.dashboard.schemas import DashboardInsightsResponse, InsightCard
 
 logger = logging.getLogger(__name__)
+_DASHBOARD_FAILURE_MARKER = "__dashboard_failure__"
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +282,9 @@ class InsightsOrchestrator:
         result: dict[str, Any] = {}
         for data_type in ("snapshot", "valuation", "financials", "technicals", "news", "peers"):
             cached = self._cache.get(symbol, data_type)
-            if cached is not None:
+            if _is_failure_marker(cached):
+                result[data_type] = {}
+            elif cached is not None:
                 result[data_type] = cached
             else:
                 result[data_type] = {}
@@ -424,7 +427,13 @@ def _deserialize_insights(raw: dict[str, Any]) -> dict[str, InsightCard]:
 
 
 def _is_empty_mapping(value: Any) -> bool:
+    if _is_failure_marker(value):
+        return True
     return not isinstance(value, dict) or len(value) == 0
+
+
+def _is_failure_marker(value: Any) -> bool:
+    return isinstance(value, dict) and value.get(_DASHBOARD_FAILURE_MARKER) is True
 
 
 def _count_news_items(news_payload: Any) -> int:

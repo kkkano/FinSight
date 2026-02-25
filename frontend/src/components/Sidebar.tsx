@@ -23,7 +23,7 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
-const DEFAULT_DASHBOARD_SYMBOL = 'AAPL';
+const DEFAULT_DASHBOARD_SYMBOL = '';
 
 const RISK_LABELS: Record<string, string> = {
   conservative: '保守型',

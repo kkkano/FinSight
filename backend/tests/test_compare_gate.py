@@ -48,7 +48,7 @@ class TestIsCompareOperation:
 # has_compare_evidence
 # =========================================================================
 
-def _make_state_with_evidence(tool_output, *, step_name="get_performance_comparison"):
+def _make_state_with_evidence(tool_output, *, step_name="get_performance_comparison", status_reason="done"):
     """Build a minimal state with step_results containing a tool output."""
     return {
         "plan_ir": {
@@ -56,7 +56,7 @@ def _make_state_with_evidence(tool_output, *, step_name="get_performance_compari
         },
         "artifacts": {
             "step_results": {
-                "s1": {"output": tool_output},
+                "s1": {"output": tool_output, "status_reason": status_reason},
             },
         },
     }
@@ -129,6 +129,49 @@ class TestHasCompareEvidence:
     def test_true_with_numeric_output(self):
         """Non-string truthy output should be considered valid evidence."""
         state = _make_state_with_evidence({"AAPL": 150.0, "MSFT": 380.0})
+        assert has_compare_evidence(state) is True
+
+    def test_false_when_unable_to_fetch(self):
+        """Tool returns total-failure message → no evidence."""
+        state = _make_state_with_evidence(
+            "Unable to fetch performance data for any ticker."
+        )
+        assert has_compare_evidence(state) is False
+
+    def test_false_when_status_reason_skipped(self):
+        """Step was skipped by executor → no evidence."""
+        table = "Ticker  Current  YTD  1Y\nAAPL  +12%  +15%  +20%"
+        state = _make_state_with_evidence(table, status_reason="skipped")
+        assert has_compare_evidence(state) is False
+
+    def test_false_when_status_reason_escalation_not_needed(self):
+        """Step was short-circuited by escalation gate → no evidence."""
+        table = "Ticker  Current  YTD  1Y\nAAPL  +12%  +15%  +20%"
+        state = _make_state_with_evidence(table, status_reason="escalation_not_needed")
+        assert has_compare_evidence(state) is False
+
+    def test_false_when_all_na_table(self):
+        """Table exists but every metric is N/A → no usable evidence."""
+        all_na = (
+            "Performance Comparison:\n\n"
+            "Ticker                    Current Price   YTD %        1-Year %\n"
+            "-------------------------------------------------------------------\n"
+            "Apple                     N/A             N/A          N/A\n"
+            "Tesla                     N/A             N/A          N/A\n"
+        )
+        state = _make_state_with_evidence(all_na)
+        assert has_compare_evidence(state) is False
+
+    def test_true_when_partial_na_table(self):
+        """Table with some N/A but at least one real value → valid evidence."""
+        partial_na = (
+            "Performance Comparison:\n\n"
+            "Ticker                    Current Price   YTD %        1-Year %\n"
+            "-------------------------------------------------------------------\n"
+            "Apple                     189.84          +12.34%      N/A\n"
+            "Tesla                     N/A             N/A          N/A\n"
+        )
+        state = _make_state_with_evidence(partial_na)
         assert has_compare_evidence(state) is True
 
 

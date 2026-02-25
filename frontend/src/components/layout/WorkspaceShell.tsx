@@ -85,7 +85,8 @@ export function WorkspaceShell({
     };
     checkDryRun();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || 'AAPL';
+  // No AAPL fallback — empty string means "no symbol selected"
+  const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || '';
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);

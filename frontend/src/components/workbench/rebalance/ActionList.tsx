@@ -1,22 +1,25 @@
 /**
- * ActionList — Table of rebalance actions with expandable detail rows.
+ * ActionList -- 调仓操作列表，支持逐条接受/拒绝。
  *
- * Columns: ticker / action badge / current -> target weight / delta / priority / reason
- * Action colours: buy=green, sell=red, reduce=orange, increase=cyan, hold=gray
- * Expanding a row reveals the full reason text and evidence links.
+ * 列: 展开箭头 / ticker / 操作 badge / 当前 -> 目标权重 / 变动 / 优先级 / 决策按钮
+ * 操作颜色: buy=green, sell=red, reduce=orange, increase=cyan, hold=gray
+ * 展开行显示完整理由和引用来源。
  */
 import { useState, useCallback } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
 
 import { Badge } from '../../ui/Badge.tsx';
 import { EvidenceLinks } from './EvidenceLinks.tsx';
 import type { RebalanceAction, ActionType } from '../../../types/dashboard.ts';
+import type { ActionDecision, ActionDecisionMap } from '../../../hooks/useRebalanceWorkflow.ts';
 
 interface ActionListProps {
   actions: RebalanceAction[];
+  decisions?: ActionDecisionMap;
+  onSetDecision?: (ticker: string, decision: ActionDecision) => void;
 }
 
-/* ---- Action type visual config ---- */
+/* ---- 操作类型视觉配置 ---- */
 
 interface ActionStyle {
   label: string;
@@ -41,7 +44,7 @@ function formatDelta(value: number): string {
   return value >= 0 ? `+${pct}%` : `${pct}%`;
 }
 
-export function ActionList({ actions }: ActionListProps) {
+export function ActionList({ actions, decisions, onSetDecision }: ActionListProps) {
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
 
   const toggleExpand = useCallback((ticker: string) => {
@@ -56,8 +59,9 @@ export function ActionList({ actions }: ActionListProps) {
     );
   }
 
-  // Sort by priority (ascending = highest priority first)
+  // 按优先级升序排列（优先级数字越小越靠前）
   const sorted = [...actions].sort((a, b) => a.priority - b.priority);
+  const hasWorkflow = Boolean(decisions && onSetDecision);
 
   return (
     <div className="overflow-x-auto">
@@ -72,12 +76,16 @@ export function ActionList({ actions }: ActionListProps) {
             <th className="text-right py-2 px-2 font-medium">目标</th>
             <th className="text-right py-2 px-2 font-medium">变动</th>
             <th className="text-center py-2 px-2 font-medium">优先级</th>
+            {hasWorkflow && (
+              <th className="text-center py-2 px-2 font-medium">决策</th>
+            )}
           </tr>
         </thead>
         <tbody>
           {sorted.map((action) => {
             const style = ACTION_STYLES[action.action];
             const isExpanded = expandedTicker === action.ticker;
+            const decision = decisions?.[action.ticker] ?? 'pending';
 
             return (
               <ActionRow
@@ -86,6 +94,9 @@ export function ActionList({ actions }: ActionListProps) {
                 style={style}
                 isExpanded={isExpanded}
                 onToggle={toggleExpand}
+                decision={decision}
+                hasWorkflow={hasWorkflow}
+                onSetDecision={onSetDecision}
               />
             );
           })}
@@ -95,24 +106,38 @@ export function ActionList({ actions }: ActionListProps) {
   );
 }
 
-/* ---- Individual action row (extracted for clarity) ---- */
+/* ---- 操作行组件 ---- */
 
 interface ActionRowProps {
   action: RebalanceAction;
   style: ActionStyle;
   isExpanded: boolean;
   onToggle: (ticker: string) => void;
+  decision: ActionDecision;
+  hasWorkflow: boolean;
+  onSetDecision?: (ticker: string, decision: ActionDecision) => void;
 }
 
-function ActionRow({ action, style, isExpanded, onToggle }: ActionRowProps) {
+function ActionRow({
+  action,
+  style,
+  isExpanded,
+  onToggle,
+  decision,
+  hasWorkflow,
+  onSetDecision,
+}: ActionRowProps) {
   const deltaClass = action.delta_weight >= 0
     ? 'text-emerald-500'
     : 'text-red-400';
 
+  const rowOpacity = decision === 'rejected' ? 'opacity-40' : '';
+  const colSpanCount = hasWorkflow ? 9 : 8;
+
   return (
     <>
       <tr
-        className="border-b border-fin-border/50 hover:bg-fin-hover/50 cursor-pointer transition-colors"
+        className={`border-b border-fin-border/50 hover:bg-fin-hover/50 cursor-pointer transition-all ${rowOpacity}`}
         tabIndex={0}
         role="button"
         aria-expanded={isExpanded}
@@ -152,12 +177,21 @@ function ActionRow({ action, style, isExpanded, onToggle }: ActionRowProps) {
             {action.priority}
           </span>
         </td>
+        {hasWorkflow && (
+          <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+            <DecisionButtons
+              ticker={action.ticker}
+              decision={decision}
+              onSetDecision={onSetDecision}
+            />
+          </td>
+        )}
       </tr>
 
-      {/* Expanded detail row */}
+      {/* 展开详情行 */}
       {isExpanded && (
         <tr className="bg-fin-bg-secondary/50">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={colSpanCount} className="px-4 py-3">
             <div className="space-y-2">
               <div>
                 <span className="text-2xs text-fin-muted font-medium">调仓理由</span>
@@ -176,5 +210,68 @@ function ActionRow({ action, style, isExpanded, onToggle }: ActionRowProps) {
         </tr>
       )}
     </>
+  );
+}
+
+/* ---- 逐条决策按钮组 ---- */
+
+interface DecisionButtonsProps {
+  ticker: string;
+  decision: ActionDecision;
+  onSetDecision?: (ticker: string, decision: ActionDecision) => void;
+}
+
+function DecisionButtons({ ticker, decision, onSetDecision }: DecisionButtonsProps) {
+  if (!onSetDecision) return null;
+
+  const handleAccept = () => {
+    onSetDecision(ticker, decision === 'accepted' ? 'pending' : 'accepted');
+  };
+
+  const handleReject = () => {
+    onSetDecision(ticker, decision === 'rejected' ? 'pending' : 'rejected');
+  };
+
+  const handleReset = () => {
+    onSetDecision(ticker, 'pending');
+  };
+
+  return (
+    <div className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={handleAccept}
+        title="接受"
+        className={`p-1 rounded transition-colors ${
+          decision === 'accepted'
+            ? 'bg-emerald-500/20 text-emerald-500'
+            : 'text-fin-muted hover:text-emerald-500 hover:bg-emerald-500/10'
+        }`}
+      >
+        <Check size={12} />
+      </button>
+      <button
+        type="button"
+        onClick={handleReject}
+        title="拒绝"
+        className={`p-1 rounded transition-colors ${
+          decision === 'rejected'
+            ? 'bg-red-500/20 text-red-400'
+            : 'text-fin-muted hover:text-red-400 hover:bg-red-500/10'
+        }`}
+      >
+        <X size={12} />
+      </button>
+      {decision !== 'pending' && (
+        <button
+          type="button"
+          onClick={handleReset}
+          title="重置"
+          className="p-1 rounded text-fin-muted hover:text-fin-text hover:bg-fin-hover transition-colors"
+        >
+          <RotateCcw size={10} />
+        </button>
+      )}
+    </div>
   );
 }

@@ -98,6 +98,9 @@ async def resolve_subject(state: GraphState) -> dict:
     # Binding tier tracking (for trace / debugging)
     binding_tier: str = "none"
 
+    # Shared extract_tickers result — reused for is_comparison at the end.
+    _ticker_meta: dict | None = None
+
     # ------------------------------------------------------------------
     # Path A: Selections present → type comes from selection
     # ------------------------------------------------------------------
@@ -130,6 +133,7 @@ async def resolve_subject(state: GraphState) -> dict:
                 from backend.config.ticker_mapping import extract_tickers
 
                 meta = extract_tickers(query)
+                _ticker_meta = meta
                 found = meta.get("tickers") if isinstance(meta, dict) else []
                 found = [str(t).strip().upper() for t in (found or []) if str(t).strip()]
                 if found:
@@ -149,6 +153,7 @@ async def resolve_subject(state: GraphState) -> dict:
             from backend.config.ticker_mapping import extract_tickers
 
             meta = extract_tickers(query)
+            _ticker_meta = meta
             found = meta.get("tickers") if isinstance(meta, dict) else []
             found = [str(t).strip().upper() for t in (found or []) if str(t).strip()]
             if found:
@@ -193,18 +198,11 @@ async def resolve_subject(state: GraphState) -> dict:
         pass
 
     # ------------------------------------------------------------------
-    # Extract comparison hint from all paths where extract_tickers ran
+    # Extract comparison hint — reuse _ticker_meta from Path A / B.
     # ------------------------------------------------------------------
     is_comparison = False
-    # Re-check: extract_tickers may have been called in Path A or B above.
-    # We do a single lightweight re-call here (the function is pure & fast).
-    if query:
-        try:
-            from backend.config.ticker_mapping import extract_tickers as _et
-            _meta = _et(query)
-            is_comparison = bool(_meta.get("is_comparison")) if isinstance(_meta, dict) else False
-        except Exception:
-            pass
+    if _ticker_meta is not None:
+        is_comparison = bool(_ticker_meta.get("is_comparison")) if isinstance(_ticker_meta, dict) else False
 
     return {
         "subject": {

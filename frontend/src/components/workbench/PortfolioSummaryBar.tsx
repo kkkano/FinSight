@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { BarChart3, Briefcase, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart3, Briefcase, Crown, TrendingUp } from 'lucide-react';
 
 import { useStore } from '../../store/useStore';
 import { usePortfolioSummary } from '../../hooks/usePortfolioSummary';
 import { Skeleton } from '../ui';
+import { formatCurrency } from '../../utils/format';
 
 interface SummaryMetric {
   label: string;
@@ -11,15 +12,6 @@ interface SummaryMetric {
   icon: React.ReactNode;
   color?: string;
 }
-
-const formatCurrency = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || Number.isNaN(value)) return '--';
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
-  return `$${value.toFixed(2)}`;
-};
 
 export function PortfolioSummaryBar() {
   const sessionId = useStore((s) => s.sessionId);
@@ -41,10 +33,10 @@ export function PortfolioSummaryBar() {
           : 'text-fin-danger';
 
     return [
-      { label: 'Positions', value: String(holdingCount), icon: <Briefcase size={14} /> },
-      { label: 'Total Value', value: formatCurrency(totalValue), icon: <BarChart3 size={14} /> },
-      { label: 'Today P&L', value: formatCurrency(totalDayChange), icon: <TrendingUp size={14} />, color: dayChangeColor },
-      { label: 'Largest Holding', value: largestHolding?.ticker ?? '--', icon: <TrendingDown size={14} /> },
+      { label: '持仓数', value: String(holdingCount), icon: <Briefcase size={14} /> },
+      { label: '总市值', value: formatCurrency(totalValue), icon: <BarChart3 size={14} /> },
+      { label: '今日盈亏', value: formatCurrency(totalDayChange), icon: <TrendingUp size={14} />, color: dayChangeColor },
+      { label: '最大持仓', value: largestHolding?.ticker ?? '--', icon: <Crown size={14} /> },
     ];
   }, [data]);
 

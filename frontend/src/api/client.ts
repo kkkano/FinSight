@@ -112,6 +112,35 @@ export interface AlertFeedEvent {
   metadata?: Record<string, unknown>;
 }
 
+/** 晨报高亮条目 */
+export interface MorningBriefHighlight {
+  ticker: string;
+  price: number | null;
+  price_change: number | null;
+  price_change_pct: number | null;
+  trend: 'strong_up' | 'up' | 'neutral' | 'down' | 'strong_down';
+  key_event: string;
+}
+
+/** 晨报数据 */
+export interface MorningBriefData {
+  date: string;
+  summary: string;
+  highlights: MorningBriefHighlight[];
+  market_mood: string;
+  market_mood_cn: string;
+  action_items: string[];
+  generated_at?: string;
+  ticker_count?: number;
+  priced_count?: number;
+}
+
+/** 晨报 API 响应 */
+export interface MorningBriefResponse {
+  success: boolean;
+  brief: MorningBriefData;
+}
+
 export interface ToolCapability {
   name: string;
   group: string;
@@ -518,10 +547,14 @@ export const apiClient = {
     reportId2: string;
     includeBlocked?: boolean;
   }): Promise<{
-    confidence_score: { a: number | null; b: number | null; delta: number | null };
-    sentiment: { a: string | null; b: string | null; changed: boolean };
-    risks: { added: string[]; removed: string[]; unchanged_count: number };
-    summary: { a: string | null; b: string | null };
+    report_a: { report_id: string; title?: string | null; generated_at?: string | null };
+    report_b: { report_id: string; title?: string | null; generated_at?: string | null };
+    diff: {
+      confidence_score: { a: number | null; b: number | null; delta: number | null };
+      sentiment: { a: string | null; b: string | null; changed: boolean };
+      risks: { added: string[]; removed: string[]; unchanged_count: number };
+      summary: { a: string | null; b: string | null };
+    };
   }> {
     const response = await api.get('/api/reports/compare', {
       params: {
@@ -531,9 +564,17 @@ export const apiClient = {
         include_blocked: params.includeBlocked,
       },
     });
-    // Backend wraps diff data in { success, report_a, report_b, diff: {...} }
     const raw = response.data;
-    return raw.diff ?? raw;
+    return {
+      report_a: raw.report_a ?? { report_id: params.reportId1 },
+      report_b: raw.report_b ?? { report_id: params.reportId2 },
+      diff: raw.diff ?? {
+        confidence_score: { a: null, b: null, delta: null },
+        sentiment: { a: null, b: null, changed: false },
+        risks: { added: [], removed: [], unchanged_count: 0 },
+        summary: { a: null, b: null },
+      },
+    };
   },
 
   // User profile / watchlist
@@ -796,6 +837,15 @@ export const apiClient = {
     }
 
     return response;
+  },
+
+  // --- Morning Brief (一键晨报) ---
+  async generateMorningBrief(params: {
+    session_id: string;
+    tickers: string[];
+  }): Promise<MorningBriefResponse> {
+    const response = await api.post<MorningBriefResponse>('/api/morning-brief/generate', params);
+    return response.data;
   },
 
   // --- Dashboard Insights ---

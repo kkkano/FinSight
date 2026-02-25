@@ -11,6 +11,11 @@ from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
 from backend.services.langfuse_tracer import langfuse_span
 
+# Maximum number of trace spans retained in state.
+# Older spans are dropped (FIFO) when the limit is exceeded.
+# A typical turn produces ~6-8 spans, so 200 covers ~25-30 turns.
+MAX_TRACE_SPANS = 200
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -346,6 +351,10 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
         if data:
             span["data"] = data
         spans.append(span)
+
+        # Cap spans to prevent unbounded growth in long sessions.
+        if len(spans) > MAX_TRACE_SPANS:
+            spans = spans[-MAX_TRACE_SPANS:]
 
         # SSE 实时推送：节点完成
         await emit_event(

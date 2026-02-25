@@ -9,7 +9,7 @@ import os
 import time
 from datetime import datetime, timezone
 from functools import partial
-from typing import Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from fastapi import APIRouter, Query
 
@@ -62,6 +62,11 @@ dashboard_router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 _DASHBOARD_FETCH_TIMEOUT_SECONDS = 15.0
 _DASHBOARD_NEWS_FETCH_TIMEOUT_SECONDS = float(os.getenv("FINSIGHT_DASHBOARD_NEWS_TIMEOUT", "45"))
+_DASHBOARD_FAILURE_TTL_SECONDS = max(5, int(os.getenv("FINSIGHT_DASHBOARD_FAILURE_TTL", "30")))
+_DASHBOARD_FAILURE_MARKER = "__dashboard_failure__"
+_DASHBOARD_FAILURE_REASON_KEY = "reason"
+_singleflight_tasks: dict[str, asyncio.Task[Any]] = {}
+_singleflight_lock: asyncio.Lock | None = None
 
 
 async def _run_blocking(
@@ -81,8 +86,56 @@ async def _run_blocking(
     return None
 
 
+def _get_singleflight_lock() -> asyncio.Lock:
+    global _singleflight_lock
+    if _singleflight_lock is None:
+        _singleflight_lock = asyncio.Lock()
+    return _singleflight_lock
+
+
+async def _singleflight_call(
+    key: str,
+    coro_factory: Callable[[], Awaitable[Any]],
+) -> Any:
+    lock = _get_singleflight_lock()
+    async with lock:
+        task = _singleflight_tasks.get(key)
+        if task is None or task.done():
+            task = asyncio.create_task(coro_factory())
+            _singleflight_tasks[key] = task
+
+    try:
+        return await task
+    finally:
+        async with lock:
+            current = _singleflight_tasks.get(key)
+            if current is task and task.done():
+                _singleflight_tasks.pop(key, None)
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _make_failure_marker(reason: str) -> dict[str, object]:
+    return {
+        _DASHBOARD_FAILURE_MARKER: True,
+        _DASHBOARD_FAILURE_REASON_KEY: reason,
+        "as_of": _utc_now_iso(),
+    }
+
+
+def _is_failure_marker(payload: object) -> bool:
+    return isinstance(payload, dict) and payload.get(_DASHBOARD_FAILURE_MARKER) is True
+
+
+def _failure_reason_from_marker(payload: object) -> str | None:
+    if not _is_failure_marker(payload):
+        return None
+    reason = payload.get(_DASHBOARD_FAILURE_REASON_KEY) if isinstance(payload, dict) else None
+    if isinstance(reason, str) and reason.strip():
+        return reason.strip()
+    return "upstream_unavailable"
 
 
 def _as_iso(value: object) -> str:
@@ -294,12 +347,14 @@ async def get_dashboard(
 
         results = await asyncio.gather(*chart_tasks.values())
         charts = {}
+        has_any_failure = False
         for key, value in zip(chart_tasks.keys(), results):
             fallback_reason = None
             if value is None:
                 fallback_reason = f"{key}_unavailable"
                 fallback_reasons.append(fallback_reason)
                 charts[key] = []
+                has_any_failure = True
             else:
                 charts[key] = value
 
@@ -315,7 +370,15 @@ async def get_dashboard(
                 calc_window=calc_window,
             )
 
-        dashboard_cache.set(symbol, "charts", charts, ttl=dashboard_cache.TTL_CHARTS)
+        # Only cache if we got valid data; never cache empty/failed results
+        if has_any_failure and not charts.get("market_chart"):
+            # All critical data failed — use very short TTL so next request retries
+            dashboard_cache.set(symbol, "charts", charts, ttl=15)
+        elif has_any_failure:
+            # Some non-critical charts failed — short TTL
+            dashboard_cache.set(symbol, "charts", charts, ttl=30)
+        else:
+            dashboard_cache.set(symbol, "charts", charts, ttl=dashboard_cache.TTL_CHARTS)
     else:
         state.debug["cache"]["charts"] = True
         for key, payload in charts.items():
@@ -352,19 +415,57 @@ async def get_dashboard(
             "technicals": time.perf_counter(),
             "peers": time.perf_counter(),
         }
-        v2_tasks = {
-            "valuation": _run_blocking("fetch_valuation", fetch_valuation, sym, timeout=6.0),
-            "financials": _run_blocking("fetch_financials", fetch_financial_statements, sym, timeout=10.0),
-            "technicals": _run_blocking("fetch_technicals", fetch_technical_indicators, sym, timeout=8.0),
-            "peers": _run_blocking("fetch_peers", fetch_peer_comparison, sym, timeout=18.0),
+        v2_fetch_config: dict[str, dict[str, object]] = {
+            "valuation": {
+                "fetch_name": "fetch_valuation",
+                "fn": fetch_valuation,
+                "timeout": 6.0,
+                "ttl": dashboard_cache.TTL_VALUATION,
+            },
+            "financials": {
+                "fetch_name": "fetch_financials",
+                "fn": fetch_financial_statements,
+                "timeout": 10.0,
+                "ttl": dashboard_cache.TTL_FINANCIALS,
+            },
+            "technicals": {
+                "fetch_name": "fetch_technicals",
+                "fn": fetch_technical_indicators,
+                "timeout": 8.0,
+                "ttl": dashboard_cache.TTL_TECHNICALS,
+            },
+            "peers": {
+                "fetch_name": "fetch_peers",
+                "fn": fetch_peer_comparison,
+                "timeout": 18.0,
+                "ttl": dashboard_cache.TTL_PEERS,
+            },
         }
-
-        # Phase G2: Additional data fetches (parallel with v2)
-        g2_tasks = {
-            "earnings_history": _run_blocking("fetch_earnings", fetch_earnings_history, sym, timeout=8.0),
-            "analyst_targets": _run_blocking("fetch_analyst_targets", fetch_analyst_targets, sym, timeout=6.0),
-            "recommendations": _run_blocking("fetch_recommendations", fetch_recommendations, sym, timeout=6.0),
-            "indicator_series": _run_blocking("fetch_indicator_series", fetch_indicator_series, sym, timeout=8.0),
+        g2_fetch_config: dict[str, dict[str, object]] = {
+            "earnings_history": {
+                "fetch_name": "fetch_earnings",
+                "fn": fetch_earnings_history,
+                "timeout": 8.0,
+                "ttl": dashboard_cache.TTL_EARNINGS,
+            },
+            "analyst_targets": {
+                "fetch_name": "fetch_analyst_targets",
+                "fn": fetch_analyst_targets,
+                "timeout": 6.0,
+                "ttl": dashboard_cache.TTL_ANALYST,
+            },
+            "recommendations": {
+                "fetch_name": "fetch_recommendations",
+                "fn": fetch_recommendations,
+                "timeout": 6.0,
+                "ttl": dashboard_cache.TTL_ANALYST,
+            },
+            "indicator_series": {
+                "fetch_name": "fetch_indicator_series",
+                "fn": fetch_indicator_series,
+                "timeout": 8.0,
+                "ttl": dashboard_cache.TTL_TECHNICALS,
+            },
         }
         v2_meta_info: dict[str, tuple[str, str, str]] = {
             "valuation": ("yfinance", "fundamental", "TTM"),
@@ -372,89 +473,199 @@ async def get_dashboard(
             "technicals": ("yfinance", "technical", "1y/1d"),
             "peers": ("peer_service", "peer_group", ""),
         }
-        v2_results = await asyncio.gather(*v2_tasks.values(), return_exceptions=True)
-        v2_map = dict(zip(v2_tasks.keys(), v2_results))
+        v2_payload_map: dict[str, object] = {}
+        v2_reason_map: dict[str, str | None] = {}
+        v2_source_map: dict[str, str] = {}
+        v2_tasks: dict[str, asyncio.Task[Any]] = {}
 
-        # Phase G2: gather in parallel
-        g2_results = await asyncio.gather(*g2_tasks.values(), return_exceptions=True)
-        g2_map = dict(zip(g2_tasks.keys(), g2_results))
-
-        # Process G2 results (best-effort, no fallback reasons needed)
-        for key, result in g2_map.items():
-            if isinstance(result, BaseException) or result is None:
+        for key, cfg in v2_fetch_config.items():
+            cached = dashboard_cache.get(symbol, key)
+            if cached is not None:
+                if _is_failure_marker(cached):
+                    fallback_reason = _failure_reason_from_marker(cached) or f"{key}_unavailable"
+                    v2_payload_map[key] = {}
+                    v2_reason_map[key] = fallback_reason
+                    v2_source_map[key] = "failure_cache"
+                    fallback_reasons.append(fallback_reason)
+                else:
+                    v2_payload_map[key] = cached
+                    v2_reason_map[key] = None
+                    v2_source_map[key] = "cache"
+                    state.debug["cache"][key] = True
                 continue
-            if key == "earnings_history":
-                g2_earnings_history = result
-            elif key == "analyst_targets":
-                g2_analyst_targets = result
-            elif key == "recommendations":
-                g2_recommendations = result
-            elif key == "indicator_series":
-                g2_indicator_series = result
 
-        for key, result in v2_map.items():
-            fallback_reason = None
-            payload = result if not isinstance(result, BaseException) else {}
-            if isinstance(result, BaseException):
-                fallback_reason = f"{key}_error: {result}"
-                fallback_reasons.append(fallback_reason)
-            elif result is None:
-                fallback_reason = f"{key}_unavailable"
-                fallback_reasons.append(fallback_reason)
-                payload = {}
+            fetch_name = str(cfg["fetch_name"])
+            fetch_fn = cfg["fn"]
+            timeout = float(cfg["timeout"])
+            singleflight_key = f"{sym.upper()}:{key}"
+            v2_tasks[key] = asyncio.create_task(
+                _singleflight_call(
+                    singleflight_key,
+                    lambda fetch_name=fetch_name, fetch_fn=fetch_fn, timeout=timeout: _run_blocking(
+                        fetch_name,
+                        fetch_fn,
+                        sym,
+                        timeout=timeout,
+                    ),
+                )
+            )
+
+        if v2_tasks:
+            task_results = await asyncio.gather(*v2_tasks.values(), return_exceptions=True)
+            for key, result in zip(v2_tasks.keys(), task_results):
+                cfg = v2_fetch_config[key]
+                if isinstance(result, BaseException):
+                    fallback_reason = f"{key}_error: {result}"
+                    v2_payload_map[key] = {}
+                    v2_reason_map[key] = fallback_reason
+                    v2_source_map[key] = "error"
+                    fallback_reasons.append(fallback_reason)
+                    dashboard_cache.set(
+                        symbol,
+                        key,
+                        _make_failure_marker(fallback_reason),
+                        ttl=_DASHBOARD_FAILURE_TTL_SECONDS,
+                    )
+                    continue
+
+                if result is None:
+                    fallback_reason = f"{key}_unavailable"
+                    v2_payload_map[key] = {}
+                    v2_reason_map[key] = fallback_reason
+                    v2_source_map[key] = "miss"
+                    fallback_reasons.append(fallback_reason)
+                    dashboard_cache.set(
+                        symbol,
+                        key,
+                        _make_failure_marker(fallback_reason),
+                        ttl=_DASHBOARD_FAILURE_TTL_SECONDS,
+                    )
+                    continue
+
+                v2_payload_map[key] = result
+                v2_reason_map[key] = None
+                v2_source_map[key] = "live"
+                dashboard_cache.set(
+                    symbol,
+                    key,
+                    result,
+                    ttl=int(cfg["ttl"]),
+                )
+
+        for key in v2_fetch_config:
+            payload = v2_payload_map.get(key, {})
+            fallback_reason = v2_reason_map.get(key)
+            source_kind = v2_source_map.get(key, "miss")
 
             if key == "valuation":
                 if fallback_reason:
                     v2_valuation_fallback = fallback_reason
                 else:
-                    v2_valuation = result
+                    v2_valuation = payload if isinstance(payload, dict) else None
             elif key == "financials":
                 if fallback_reason:
                     v2_financials_fallback = fallback_reason
                 else:
-                    v2_financials = result
+                    v2_financials = payload if isinstance(payload, dict) else None
             elif key == "technicals":
                 if fallback_reason:
                     v2_technicals_fallback = fallback_reason
                 else:
-                    v2_technicals = result
+                    v2_technicals = payload if isinstance(payload, dict) else None
             elif key == "peers":
                 if fallback_reason:
                     v2_peers_fallback = fallback_reason
                 else:
-                    v2_peers = result
+                    v2_peers = payload if isinstance(payload, dict) else None
 
-            provider, source_type, calc_window = v2_meta_info[key]
+            provider, live_source_type, calc_window = v2_meta_info[key]
+            source_type = live_source_type
+            if source_kind == "cache":
+                source_type = "cache"
+            elif source_kind == "failure_cache":
+                source_type = "failure_cache"
+
             _set_meta(
                 key,
                 provider=provider,
                 source_type=source_type,
-                payload=payload,
+                payload=payload if isinstance(payload, (dict, list)) else {},
                 started_at=v2_started_map.get(key, charts_started),
                 fallback_reason=fallback_reason,
                 currency="USD",
                 calc_window=calc_window,
             )
 
-        # Keep v2/G2 payloads in shared dashboard cache so /api/dashboard/insights
-        # consumes the same source of truth and avoids cross-endpoint drift.
-        if v2_valuation is not None:
-            dashboard_cache.set(symbol, "valuation", v2_valuation, ttl=dashboard_cache.TTL_VALUATION)
-        if v2_financials is not None:
-            dashboard_cache.set(symbol, "financials", v2_financials, ttl=dashboard_cache.TTL_FINANCIALS)
-        if v2_technicals is not None:
-            dashboard_cache.set(symbol, "technicals", v2_technicals, ttl=dashboard_cache.TTL_TECHNICALS)
-        if v2_peers is not None:
-            dashboard_cache.set(symbol, "peers", v2_peers, ttl=dashboard_cache.TTL_PEERS)
+        g2_payload_map: dict[str, object] = {}
+        g2_tasks: dict[str, asyncio.Task[Any]] = {}
+        for key, cfg in g2_fetch_config.items():
+            cached = dashboard_cache.get(symbol, key)
+            if cached is not None:
+                if _is_failure_marker(cached):
+                    fallback_reason = _failure_reason_from_marker(cached) or f"{key}_unavailable"
+                    fallback_reasons.append(fallback_reason)
+                    g2_payload_map[key] = None
+                else:
+                    g2_payload_map[key] = cached
+                    state.debug["cache"][key] = True
+                continue
 
-        if g2_earnings_history is not None:
-            dashboard_cache.set(symbol, "earnings_history", g2_earnings_history, ttl=dashboard_cache.TTL_EARNINGS)
-        if g2_analyst_targets is not None:
-            dashboard_cache.set(symbol, "analyst_targets", g2_analyst_targets, ttl=dashboard_cache.TTL_ANALYST)
-        if g2_recommendations is not None:
-            dashboard_cache.set(symbol, "recommendations", g2_recommendations, ttl=dashboard_cache.TTL_ANALYST)
-        if g2_indicator_series is not None:
-            dashboard_cache.set(symbol, "indicator_series", g2_indicator_series, ttl=dashboard_cache.TTL_TECHNICALS)
+            fetch_name = str(cfg["fetch_name"])
+            fetch_fn = cfg["fn"]
+            timeout = float(cfg["timeout"])
+            singleflight_key = f"{sym.upper()}:{key}"
+            g2_tasks[key] = asyncio.create_task(
+                _singleflight_call(
+                    singleflight_key,
+                    lambda fetch_name=fetch_name, fetch_fn=fetch_fn, timeout=timeout: _run_blocking(
+                        fetch_name,
+                        fetch_fn,
+                        sym,
+                        timeout=timeout,
+                    ),
+                )
+            )
+
+        if g2_tasks:
+            g2_results = await asyncio.gather(*g2_tasks.values(), return_exceptions=True)
+            for key, result in zip(g2_tasks.keys(), g2_results):
+                cfg = g2_fetch_config[key]
+                if isinstance(result, BaseException):
+                    fallback_reason = f"{key}_error: {result}"
+                    fallback_reasons.append(fallback_reason)
+                    g2_payload_map[key] = None
+                    dashboard_cache.set(
+                        symbol,
+                        key,
+                        _make_failure_marker(fallback_reason),
+                        ttl=_DASHBOARD_FAILURE_TTL_SECONDS,
+                    )
+                    continue
+
+                if result is None:
+                    fallback_reason = f"{key}_unavailable"
+                    fallback_reasons.append(fallback_reason)
+                    g2_payload_map[key] = None
+                    dashboard_cache.set(
+                        symbol,
+                        key,
+                        _make_failure_marker(fallback_reason),
+                        ttl=_DASHBOARD_FAILURE_TTL_SECONDS,
+                    )
+                    continue
+
+                g2_payload_map[key] = result
+                dashboard_cache.set(
+                    symbol,
+                    key,
+                    result,
+                    ttl=int(cfg["ttl"]),
+                )
+
+        g2_earnings_history = g2_payload_map.get("earnings_history")
+        g2_analyst_targets = g2_payload_map.get("analyst_targets")
+        g2_recommendations = g2_payload_map.get("recommendations")
+        g2_indicator_series = g2_payload_map.get("indicator_series")
 
     news_started = time.perf_counter()
     news = dashboard_cache.get(symbol, "news")
@@ -498,7 +709,8 @@ async def get_dashboard(
     )
 
     macro_started = time.perf_counter()
-    macro_snapshot = dashboard_cache.get(symbol, "macro_snapshot")
+    # macro_snapshot is global (not symbol-specific) — use fixed key to avoid N redundant copies
+    macro_snapshot = dashboard_cache.get("__GLOBAL__", "macro_snapshot")
     macro_source_type = "cache"
     macro_fallback_reason: Optional[str] = None
     if macro_snapshot is None:
@@ -508,7 +720,7 @@ async def get_dashboard(
             macro_snapshot = {}
             macro_fallback_reason = "macro_snapshot_unavailable"
             fallback_reasons.append(macro_fallback_reason)
-        dashboard_cache.set(symbol, "macro_snapshot", macro_snapshot, ttl=dashboard_cache.TTL_MACRO)
+        dashboard_cache.set("__GLOBAL__", "macro_snapshot", macro_snapshot, ttl=dashboard_cache.TTL_MACRO)
     else:
         state.debug["cache"]["macro_snapshot"] = True
 

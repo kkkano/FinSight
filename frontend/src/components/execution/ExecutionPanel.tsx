@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, PauseCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, PauseCircle, XCircle } from 'lucide-react';
 
 import { useExecutionStore } from '../../store/executionStore';
 import type { ExecutionRun } from '../../types/execution';
@@ -8,12 +8,43 @@ import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
 import { PipelineStageBar } from './PipelineStageBar';
 
+/** Max characters for details JSON before truncation. */
+const DETAILS_MAX_CHARS = 500;
+
+/** Collapsible JSON details — truncates large objects with an expand toggle. */
+function CollapsibleDetails({ details }: { details: Record<string, unknown> }) {
+  const full = JSON.stringify(details, null, 2);
+  const needsTruncation = full.length > DETAILS_MAX_CHARS;
+  const [expanded, setExpanded] = useState(false);
+
+  const display = needsTruncation && !expanded
+    ? full.slice(0, DETAILS_MAX_CHARS) + ' …'
+    : full;
+
+  return (
+    <div className="mt-1 text-fin-muted font-mono text-3xs whitespace-pre-wrap">
+      详情：{display}
+      {needsTruncation && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="ml-1 text-blue-400 hover:text-blue-300 underline cursor-pointer"
+        >
+          {expanded ? '收起' : `展开 (${full.length} 字符)`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 type ExecutionPanelMode = 'user' | 'expert';
 
 type ExecutionPanelProps = {
   runId?: string | null;
   mode?: ExecutionPanelMode;
   compact?: boolean;
+  collapsible?: boolean;
+  onCollapse?: () => void;
   className?: string;
 };
 
@@ -92,9 +123,7 @@ function renderDecisionNotes(run: ExecutionRun) {
             </div>
             {note.reason && <div className="mt-1 text-fin-muted">原因：{note.reason}</div>}
             {note.details && Object.keys(note.details).length > 0 && (
-              <div className="mt-1 text-fin-muted font-mono text-3xs whitespace-pre-wrap">
-                详情：{JSON.stringify(note.details, null, 2)}
-              </div>
+              <CollapsibleDetails details={note.details} />
             )}
             {note.impact && <div className="mt-1 text-fin-muted">影响：{note.impact}</div>}
             {note.nextStep && <div className="mt-1 text-fin-muted">下一步：{note.nextStep}</div>}
@@ -109,6 +138,8 @@ export function ExecutionPanel({
   runId,
   mode = 'user',
   compact = false,
+  collapsible = false,
+  onCollapse,
   className = '',
 }: ExecutionPanelProps) {
   const run = useExecutionStore((state) => {
@@ -124,12 +155,9 @@ export function ExecutionPanel({
 
   const statusInfo = useMemo(() => (run ? resolveStatus(run) : null), [run]);
 
+  // 无执行记录时不渲染任何内容
   if (!run || !statusInfo) {
-    return (
-      <div className={`rounded-xl border border-fin-border bg-fin-card px-4 py-4 text-xs text-fin-muted ${className}`}>
-        暂无可展示的执行追踪
-      </div>
-    );
+    return null;
   }
 
   const isExpert = mode === 'expert';
@@ -141,8 +169,20 @@ export function ExecutionPanel({
           {statusInfo.icon}
           {statusInfo.text}
         </div>
-        <div className="text-2xs text-fin-muted truncate">
-          {run.tickers.join(', ') || run.query}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="text-2xs text-fin-muted truncate">
+            {run.tickers.join(', ') || run.query}
+          </div>
+          {collapsible && onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="p-1 rounded hover:bg-fin-hover transition-colors text-fin-muted hover:text-fin-text shrink-0"
+              title="收起面板"
+            >
+              <ChevronDown size={14} />
+            </button>
+          )}
         </div>
       </div>
 

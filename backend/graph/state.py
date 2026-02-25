@@ -35,7 +35,6 @@ class Subject(TypedDict):
     selection_payload: list[dict]
     binding_tier: str
     is_comparison: NotRequired[bool]
-    operation_hint: NotRequired[str]
 
 
 class Operation(TypedDict):

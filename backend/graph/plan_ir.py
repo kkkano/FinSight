@@ -45,7 +45,6 @@ class PlanSubject(BaseModel):
     selection_payload: list[dict] = Field(default_factory=list)
     binding_tier: str = Field(default="none")
     is_comparison: Optional[bool] = None
-    operation_hint: Optional[str] = None
 
     model_config = {"extra": "forbid"}
 
