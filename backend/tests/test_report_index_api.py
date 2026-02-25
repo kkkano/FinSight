@@ -69,6 +69,47 @@ def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
     assert fav_data.get("is_favorite") is True
 
 
+def test_report_index_replay_quality_matches_index_quality_state(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "report_index.sqlite"
+    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
+
+    main = _load_main_module()
+    store = main.get_report_index_store()
+    client = TestClient(main.app)
+
+    session_id = "tenant_quality:user_quality:thread_quality"
+    report = {
+        "report_id": "rpt-quality-sync-1",
+        "ticker": "MSFT",
+        "title": "质量同步检查",
+        "summary": "quality sync",
+        "generated_at": "2026-02-10T00:00:00Z",
+        "citations": [],
+    }
+    store.upsert_report(session_id=session_id, report=report, trace_digest={"span_count": 1})
+
+    list_resp = client.get(
+        "/api/reports/index",
+        params={"session_id": session_id, "limit": 10},
+    )
+    assert list_resp.status_code == 200
+    list_data = list_resp.json()
+    assert list_data.get("count") == 1
+    quality_state = str(list_data["items"][0].get("quality_state") or "").strip().lower()
+    assert quality_state in {"pass", "warn", "block"}
+
+    replay_resp = client.get(
+        "/api/reports/replay/rpt-quality-sync-1",
+        params={"session_id": session_id, "include_blocked": True},
+    )
+    assert replay_resp.status_code == 200
+    replay_data = replay_resp.json()
+    quality = replay_data.get("report", {}).get("report_quality") or {}
+    meta_quality = (replay_data.get("report", {}).get("meta") or {}).get("report_quality") or {}
+    assert str(quality.get("state") or "").strip().lower() == quality_state
+    assert str(meta_quality.get("state") or "").strip().lower() == quality_state
+
+
 def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "report_index.sqlite"
     monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))

@@ -223,9 +223,9 @@ class ReportIndexStore:
 
         tags = report.get("tags")
         tags_json = json.dumps(tags, ensure_ascii=False) if isinstance(tags, list) else None
+        quality_state, publishable, quality_reasons_json = _derive_quality_fields(report)
         report_json = json.dumps(report, ensure_ascii=False)
         trace_digest_json = json.dumps(trace_digest or {}, ensure_ascii=False)
-        quality_state, publishable, quality_reasons_json = _derive_quality_fields(report)
         if quality_state == "block" and not include_blocked:
             return {
                 "report_id": report_id,
