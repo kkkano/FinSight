@@ -115,6 +115,20 @@
 <tr>
 <td width="50%">
 
+**Thinking Process - User View** - Collapsible Reasoning Sections (Logic / Planning / Execution)
+
+<img src="images/2b674275d75b4838f1e77de5d5980dfc.png" width="100%"/>
+</td>
+<td width="50%">
+
+**Execution Timeline + Agent Summary Cards** - Per-Agent Step Tracking, 11-Agent Completion Grid
+
+<img src="images/78247136de4dd9db0d96c6ca5f574e3f.png" width="100%"/>
+</td>
+</tr>
+<tr>
+<td width="50%">
+
 **Chat + "Ask About This"** - Conversational AI with Portfolio Panel
 
 <img src="images/chat-report.png" width="100%"/>

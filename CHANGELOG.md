@@ -5,6 +5,28 @@
 
 ---
 
+## [Unreleased] - 2026-02-27
+
+### 新增
+
+- **README 截图扩充**：Platform Preview 新增两张截图
+  - ThinkingBubble 用户视图 — 折叠式推理节点（逻辑查图 / 规划策略 / 执行分析）
+  - 执行时间线 + 分析师摘要卡片 — 逐 Agent 步骤追踪、11 智能体完成网格
+  - 同步更新 `readme.md`（英文）与 `readme_cn.md`（中文）
+- **`frontend/docs/DELETION_LOG.md`**：P3-2 死代码清理完整记录
+  - 删除 12 个文件、1 个目录（`src/components/cards/`），合计 -2002 行
+  - Tier 1：3 个直接孤立文件（alertFeed.ts、DashboardWidgets.tsx、NewsFilterPills.tsx）
+  - Tier 2：9 个级联孤立文件（SnapshotCard、MarketChartCard 等 v1 遗留卡片）
+  - TypeScript 编译零错误验证通过
+
+### 修复
+
+- **`ReportView.tsx`**：`sections` 变量包裹 `useMemo`，消除 `catalystItems` / `metricItems` 不必要的重复计算
+- **`ErrorBoundary.tsx`**：eslint 禁用注释移至行尾，消除多余空行
+- **`taskStateMachine.ts`**：移除未使用的 `ListTodo` 图标导入
+
+---
+
 ## [1.0.0] - 2026-02-08
 
 从 v0.8.0 LangGraph 管线基础上完成生产就绪化，覆盖 LLM 容错、UI 打磨、安全加固与文档体系建设。
