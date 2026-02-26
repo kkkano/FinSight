@@ -500,6 +500,8 @@ export const EvidencePool: React.FC<EvidencePoolProps> = ({
           const isActive = activeCitation === cit.source_id;
           const confidencePercent = typeof cit.confidence === 'number' ? Math.round(cit.confidence * 100) : null;
           const freshnessHours = typeof cit.freshness_hours === 'number' ? Math.round(cit.freshness_hours) : null;
+          // 只有 http/https 才是真实可跳转的 URL（过滤 internal:// 等占位地址）
+          const externalUrl = cit.url && /^https?:\/\//i.test(cit.url) ? cit.url : null;
           const confidenceTone =
             confidencePercent === null
               ? ''
@@ -512,26 +514,54 @@ export const EvidencePool: React.FC<EvidencePoolProps> = ({
             <div
               key={cit.source_id}
               id={citationId}
-              className={`rounded-lg border ${isActive ? 'border-blue-200 bg-blue-50/40 dark:bg-blue-900/20' : 'border-transparent'}`}
-            >
-              <button
-                type="button"
-                onClick={() => {
+              className={`rounded-lg border cursor-pointer ${isActive ? 'border-blue-200 bg-blue-50/40 dark:bg-blue-900/20' : 'border-transparent'}`}
+              onClick={() => {
+                onSelect(cit.source_id);
+                onJump(cit.source_id);
+              }}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
                   onSelect(cit.source_id);
                   onJump(cit.source_id);
-                }}
-                className="w-full text-left flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-xs"
-              >
-                <ExternalLink size={12} className="mt-0.5 text-slate-400 flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-blue-600 dark:text-blue-400">
-                    {cit.title}
-                  </div>
+                }
+              }}
+            >
+              <div className="w-full text-left flex items-start gap-2 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-xs">
+                {externalUrl ? (
+                  <ExternalLink size={12} className="mt-0.5 text-blue-400 flex-shrink-0" />
+                ) : (
+                  <span className="mt-0.5 flex-shrink-0 px-1 py-0 rounded text-2xs bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400 leading-4">
+                    内部
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  {externalUrl ? (
+                    <a
+                      href={externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {cit.title}
+                    </a>
+                  ) : (
+                    <div className="font-medium text-slate-600 dark:text-slate-300">
+                      {cit.title}
+                    </div>
+                  )}
                   <div className="text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                     {cit.snippet}
                   </div>
                   {cit.published_date && (
                     <div className="text-slate-400 text-2xs mt-1">{cit.published_date}</div>
+                  )}
+                  {externalUrl && (
+                    <div className="text-slate-400 text-2xs mt-0.5 truncate" title={externalUrl}>
+                      {externalUrl}
+                    </div>
                   )}
                   {(confidencePercent !== null || freshnessHours !== null) && (
                     <div className="mt-1 flex flex-wrap gap-1.5 text-2xs">
@@ -548,7 +578,7 @@ export const EvidencePool: React.FC<EvidencePoolProps> = ({
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
             </div>
           );
         })}

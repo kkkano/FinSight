@@ -281,6 +281,9 @@ class FundamentalAgent(BaseFinancialAgent):
             financials = raw_data.get("financials") or {}
             source = "yfinance"
             data_sources.append(source)
+            # 构造 Yahoo Finance 财务页面 URL，供证据池可点击跳转
+            _ticker = str(raw_data.get("ticker") or "").strip().upper()
+            _yf_financials_url = f"https://finance.yahoo.com/quote/{_ticker}/financials/" if _ticker else None
             fallback_used = bool(
                 isinstance(financials, dict)
                 and financials.get("error")
@@ -304,6 +307,7 @@ class FundamentalAgent(BaseFinancialAgent):
                     EvidenceItem(
                         text=f"{definition['label']}: {self._format_value(latest_value)}",
                         source=source,
+                        url=_yf_financials_url,  # Yahoo Finance 财务页面，供证据池点击跳转
                         timestamp=str(metric.get("latest_period") or ""),
                         meta={
                             "metric_key": key,
@@ -328,6 +332,7 @@ class FundamentalAgent(BaseFinancialAgent):
                     EvidenceItem(
                         text=f"EPS revision signal: {revision_signal}",
                         source="yfinance_earnings",
+                        url=_yf_financials_url,  # Yahoo Finance 财务页面，供证据池点击跳转
                         timestamp=str(earnings_payload.get("as_of") or eps_revisions_payload.get("as_of") or ""),
                         meta={
                             "metric_key": "eps_revision_signal",
