@@ -24,7 +24,7 @@ import hashlib
 import json
 import os
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -144,7 +144,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
             {
                 "event": "chain_start",
                 "name": name,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             }
         )
 
@@ -156,7 +156,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
             {
                 "event": "chain_end",
                 "duration_ms": duration,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             }
         )
 
@@ -177,7 +177,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
                 "event": "tool_start",
                 "name": tool_name,
                 "input_preview": preview,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "run_id": key,
             }
         )
@@ -196,7 +196,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
                 "name": tool_name,
                 "duration_ms": duration,
                 "output_preview": preview,
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "run_id": key,
             }
         )
@@ -209,7 +209,7 @@ class FinancialAnalysisCallback(BaseCallbackHandler):
                 "event": "tool_error",
                 "name": tool_name,
                 "error": str(error),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 "run_id": key,
             }
         )

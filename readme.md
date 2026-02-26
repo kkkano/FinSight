@@ -27,7 +27,7 @@
 - [Key Features](#-key-features)
 - [Platform Preview](#-platform-preview)
 - [System Architecture](#%EF%B8%8F-system-architecture)
-- [LangGraph Pipeline](#-langgraph-pipeline-15-nodes)
+- [LangGraph Pipeline](#-langgraph-pipeline-16-nodes)
 - [Agent Ecosystem](#-agent-ecosystem)
 - [Dashboard](#-dashboard---6-analytical-tabs)
 - [RAG Engine](#-rag-engine---hybrid-search-pipeline)
@@ -51,15 +51,18 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | 15-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
+| **LangGraph Pipeline** | 16-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
 | **Smart Charts** | Dual-mode LLM-driven charts: `<chart>` (inline data) + `<chart_ref>` (real data reference) |
 | **Conflict Detection** | Automatic cross-agent conflict analysis across 8 comparable dimension pairs |
 | **Proactive Alerts** | 3 alert schedulers (Price, News, Risk) with email notification via SMTP |
-| **Workbench** | Autonomous task execution, portfolio rebalancing, report timeline, and quick analysis bar |
+| **Workbench** | Autonomous task execution, portfolio rebalancing with LLM enhancement, SSE streaming progress, report timeline, and quick analysis bar |
 | **"Ask About This"** | Context-aware follow-up on any news, insight, or risk item via MiniChat integration |
+| **ThinkingBubble** | Three-layer execution display: thinking bubble (typewriter effect) → agent summary cards → detailed timeline |
+| **Morning Brief Pipeline** | One-click portfolio morning brief via LangGraph Pipeline with deterministic synthesis (zero LLM cost) |
+| **Rebalance LLM Enhancement** | Agent-backed LLM priority refinement for rebalance suggestions with evidence snapshots |
 | **Hallucination Defense** | Multi-layer scrubbing: regex pattern matching + evidence cross-validation on LLM outputs |
 
 ---
@@ -166,7 +169,7 @@ graph TB
 
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph Pipeline<br/>15-node Stateful Graph]
+        GRAPH[LangGraph Pipeline<br/>16-node Stateful Graph]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
         TOOLS[Tool Layer<br/>17 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
@@ -200,41 +203,42 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (15 Nodes)
+## 🔄 LangGraph Pipeline (16 Nodes)
 
-The core of FinSight is a **15-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
-Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 15-node pipeline.
+The core of FinSight is a **16-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
+Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 16-node pipeline.
 
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
-    INIT --> CTX["② normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
-    CTX --> MODE{"③ chat_respond<br/><i>Output mode?</i>"}
+    INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
+    RESET --> CTX["③ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
+    CTX --> MODE{"④ chat_respond<br/><i>Output mode?</i>"}
 
     MODE -->|"chat / qa"| CHAT_END["Direct LLM Response"]
     CHAT_END --> RENDER
-    MODE -->|"needs analysis"| SUBJ["④ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
+    MODE -->|"needs analysis"| SUBJ["⑤ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
 
-    SUBJ --> CLARIFY{"⑤ clarify_gate<br/><i>Ambiguous?</i>"}
+    SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>Ambiguous?</i>"}
     CLARIFY -->|"Ambiguous"| ASK["Ask User for Clarification"]
     ASK --> RENDER
-    CLARIFY -->|"Clear"| PARSE["⑥ parse_operation<br/><i>Classify: price/technical/news/report</i>"]
+    CLARIFY -->|"Clear"| PARSE["⑦ parse_operation<br/><i>4-level priority: compare → guardrail → multi-ticker → qa</i>"]
 
-    PARSE --> POLICY["⑦ policy_gate<br/><i>Capability scoring + budget</i>"]
-    POLICY --> PLAN["⑧ planner_node<br/><i>LLM Planner or Stub Fallback</i>"]
+    PARSE --> POLICY["⑧ policy_gate<br/><i>Capability scoring + budget</i>"]
+    POLICY --> PLAN["⑨ planner_node<br/><i>LLM Planner or Stub Fallback</i>"]
 
-    PLAN --> CONFIRM{"⑨ confirmation_gate<br/><i>HITL approval?</i>"}
+    PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>HITL approval?</i>"}
     CONFIRM -->|"Rejected"| RENDER
-    CONFIRM -->|"Approved"| EXEC["⑩ execute_plan<br/><i>Parallel agent groups</i>"]
+    CONFIRM -->|"Approved"| EXEC["⑪ execute_plan<br/><i>Parallel agent groups</i>"]
 
-    EXEC --> SYNTH["⑪ synthesize<br/><i>Merge outputs + Conflict check</i>"]
-    SYNTH --> SCRUB["⑫ Hallucination Scrub<br/><i>Regex + Evidence validation</i>"]
-    SCRUB --> BUILD["⑬ report_builder<br/><i>Build ReportIR structure</i>"]
-    BUILD --> RENDER["⑭ render_response<br/><i>Format for frontend</i>"]
-    RENDER --> SAVE["⑮ save_memory<br/><i>Persist to memory store</i>"]
+    EXEC --> SYNTH["⑫ synthesize<br/><i>Merge outputs + compare_gate + Conflict check</i>"]
+    SYNTH --> SCRUB["⑬ Hallucination Scrub<br/><i>Regex + Evidence validation</i>"]
+    SCRUB --> BUILD["⑭ report_builder<br/><i>Build ReportIR structure</i>"]
+    BUILD --> RENDER["⑮ render_response<br/><i>Format for frontend</i>"]
+    RENDER --> SAVE["⑯ save_memory<br/><i>Persist to memory store</i>"]
     SAVE --> END((End))
 
-    subgraph "Execution Engine (⑩)"
+    subgraph "Execution Engine (⑪)"
         direction LR
         EG1["Group 1<br/>price · news"] --> EG2["Group 2<br/>fundamental · technical"]
         EG2 --> EG3["Group 3<br/>macro · risk · deep_search"]
@@ -242,6 +246,7 @@ flowchart TD
 
     EXEC -.-> EG1
 
+    style RESET fill:#a855f7,color:#fff
     style SYNTH fill:#ff9800,color:#000
     style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
@@ -835,6 +840,8 @@ FinSight is designed for production reliability with multiple fallback layers:
 | **Reranker** | `bge-reranker-v2-m3` | Skip reranking, use RRF scores directly | Silent passthrough |
 | **Price Data** | yfinance | 10 fallback sources (FMP → Finnhub → ...) | 11-level cascade |
 | **AI Insights** | LLM Insight Scorers | Deterministic rule-based scoring | `model_generated=false` flag |
+| **Morning Brief** | LangGraph Pipeline | Direct data fetch (router fallback) | Transparent to caller |
+| **Rebalance Enhancement** | Agent-backed LLM | Original deterministic candidates | Safety fallback on any failure |
 | **Dashboard Data** | Live API fetch | In-memory cache (stale-while-revalidate) | TTL-based freshness |
 | **Checkpoints** | PostgreSQL | SQLite local file | Auto-detect on startup |
 | **RAG Store** | PostgreSQL + pgvector | In-memory store | Auto-fallback |
@@ -980,14 +987,16 @@ FinSight/
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
 │   │   └── tools_router.py     # GET /api/tools (manifest)
 │   ├── graph/                  # LangGraph pipeline
-│   │   ├── builder.py          # Graph construction (15 nodes, edges)
+│   │   ├── builder.py          # Graph construction (16 nodes, edges)
 │   │   ├── state.py            # GraphState definition
 │   │   ├── report_builder.py   # ReportIR structure builder
 │   │   └── nodes/              # Individual node implementations
 │   │       ├── build_initial_state.py
+│   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
 │   │       ├── chat_respond.py
 │   │       ├── resolve_subject.py
-│   │       ├── parse_operation.py
+│   │       ├── parse_operation.py   # 4-level priority chain (compare → guardrail → multi-ticker → qa)
+│   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
 │   │       ├── policy_gate.py
 │   │       ├── planner.py
 │   │       ├── execute_plan_stub.py

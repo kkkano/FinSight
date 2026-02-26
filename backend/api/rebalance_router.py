@@ -7,12 +7,15 @@ HC-2: all suggestions are non-executable (suggestion_only mode).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from backend.api.rebalance_schemas import (
     GenerateRebalanceRequest,
@@ -216,6 +219,148 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
             "suggestion_id": suggestion_id,
             "status": request.status,
         }
+
+    @router.post("/api/rebalance/suggestions/generate-stream")
+    async def generate_suggestion_stream(request: GenerateRebalanceRequest):
+        """SSE streaming rebalance suggestion generation (P2).
+
+        Streams progress events during diagnosis/generation/solving steps,
+        then emits the final suggestion. HC-2 enforced.
+        """
+        if not request.session_id:
+            raise HTTPException(status_code=422, detail="session_id is required")
+
+        async def _event_stream():
+            started_at = time.perf_counter()
+
+            def _sse(event_type: str, data: dict) -> str:
+                payload = json.dumps(data, ensure_ascii=False)
+                return f"event: {event_type}\ndata: {payload}\n\n"
+
+            yield _sse("progress", {"stage": "init", "message": "正在初始化调仓分析..."})
+
+            # Build portfolio
+            portfolio = request.portfolio
+            if not portfolio:
+                portfolio = get_positions(request.session_id)
+
+            if not portfolio:
+                yield _sse("error", {"message": "未找到持仓数据，请先添加持仓。"})
+                return
+
+            tickers = sorted(
+                {
+                    str(item.get("ticker", "")).strip().upper()
+                    for item in portfolio
+                    if str(item.get("ticker", "")).strip()
+                }
+            )
+
+            yield _sse("progress", {
+                "stage": "fetching_prices",
+                "message": f"正在获取 {len(tickers)} 只标的实时价格...",
+                "ticker_count": len(tickers),
+            })
+
+            # Fetch prices
+            async def _fetch_live_price(ticker: str) -> tuple[str, float | None]:
+                if deps.get_stock_price is None:
+                    return ticker, None
+                try:
+                    raw_payload = await asyncio.to_thread(deps.get_stock_price, ticker)
+                    parsed = parse_quote_payload(raw_payload) or {}
+                    price = safe_float(parsed.get("price"))
+                    return ticker, price if price and price > 0 else None
+                except Exception:
+                    return ticker, None
+
+            price_pairs = await asyncio.gather(*[_fetch_live_price(t) for t in tickers])
+            live_prices = {t: p for t, p in price_pairs if p is not None}
+
+            yield _sse("progress", {
+                "stage": "fetching_sectors",
+                "message": "正在获取行业分类信息...",
+                "priced_count": len(live_prices),
+            })
+
+            # Fetch sectors
+            sector_map: dict[str, str] = {}
+            for item in portfolio:
+                ticker = str(item.get("ticker", "")).strip().upper()
+                direct_sector = str(item.get("sector", "")).strip()
+                if ticker and direct_sector:
+                    sector_map[ticker] = direct_sector
+
+            missing_sector_tickers = [t for t in tickers if t not in sector_map]
+            if missing_sector_tickers and deps.get_company_info:
+                async def _fetch_sector(ticker: str) -> tuple[str, str | None]:
+                    try:
+                        info = await asyncio.to_thread(deps.get_company_info, ticker)
+                        return ticker, _extract_sector(info)
+                    except Exception:
+                        return ticker, None
+
+                sector_pairs = await asyncio.gather(*[_fetch_sector(t) for t in missing_sector_tickers])
+                for t, s in sector_pairs:
+                    if s:
+                        sector_map[t] = s
+
+            yield _sse("progress", {"stage": "diagnosing", "message": "正在诊断持仓风险..."})
+
+            # Build context
+            missing_prices = [t for t in tickers if t not in live_prices]
+            missing_sectors = [t for t in tickers if t not in sector_map]
+            fallback_reasons: list[str] = []
+            if missing_prices:
+                fallback_reasons.append(f"missing_live_prices:{','.join(missing_prices)}")
+            if missing_sectors:
+                fallback_reasons.append(f"missing_sector_map:{','.join(missing_sectors)}")
+
+            ctx = RebalanceContext(
+                session_id=request.session_id,
+                portfolio=portfolio,
+                risk_tier=request.risk_tier,
+                constraints=request.constraints,
+                live_prices=live_prices,
+                sector_map=sector_map,
+                diagnostics_only=len(fallback_reasons) > 0,
+                fallback_reasons=fallback_reasons,
+                use_llm_enhancement=bool(request.use_llm_enhancement),
+            )
+
+            yield _sse("progress", {"stage": "generating", "message": "正在生成调仓建议..."})
+
+            try:
+                suggestion = await deps.rebalance_engine.generate(ctx)
+            except Exception as exc:
+                logger.exception("Rebalance engine failed: %s", exc)
+                yield _sse("error", {"message": "调仓建议生成失败，请稍后重试。"})
+                return
+
+            # Persist
+            try:
+                save_suggestion(
+                    suggestion_id=suggestion.suggestion_id,
+                    session_id=request.session_id,
+                    data=suggestion.model_dump(),
+                )
+            except Exception as exc:
+                logger.warning("Failed to save suggestion: %s", exc)
+
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            yield _sse("progress", {
+                "stage": "done",
+                "message": "调仓建议生成完成",
+                "duration_ms": elapsed_ms,
+            })
+
+            yield _sse("result", suggestion.model_dump())
+
+        return StreamingResponse(
+            _event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return router
 

@@ -762,3 +762,58 @@ backend/agents/
     <item>function smoke: `AAPL` / `600519.SS` valuation+financials+technicals+peers all non-empty.</item>
   </verification>
 </phase_j_p3_update>
+
+<!-- 2026-02-21 P0-P2 quality/orchestration productization sync -->
+<quality_orchestration_productization_update date="2026-02-21">
+  <summary>Completed report quality state machine, hard publish/index gate, unified confirmation policy, and shared quality observability pipeline.</summary>
+  <directory_tree>
+    <![CDATA[
+backend/
+  report/
+    quality_engine.py                        # unified quality evaluation/merge/blocking/metrics
+    evidence_policy.py                       # quality thresholds with env override support
+    validator.py                             # quality merge now delegated to quality_engine
+  graph/
+    confirmation_policy.py                   # unified confirmation mode parse + gating decision
+    runner.py                                # reset confirmation controls per new run to avoid checkpoint leakage
+    report_builder.py                        # runtime quality reasons now delegated to quality_engine
+    nodes/
+      build_initial_state.py                 # unified confirmation mode parse entry
+      confirmation_gate.py                   # unified gate policy, no dashboard source special-case
+  services/
+    execution_service.py                     # run/resume hard quality gate + quality_blocked event
+    report_index.py                          # quality normalization before persistence; block not indexed by default
+  api/
+    execution_router.py                      # confirmation_mode normalization before pipeline dispatch
+    report_router.py                         # compare endpoint supports include_blocked
+    chat_router.py                           # shared quality annotation and metrics emission
+  metrics.py                                 # quality state/reason/grounding Prometheus metrics
+  tests/
+    test_quality_engine.py                   # quality engine unit tests
+    test_execution_quality_gate.py           # hard gate tests for run/resume
+    test_confirmation_gate_policy.py         # confirmation policy consistency tests
+
+frontend/
+  src/api/client.ts                          # includeBlocked support in compareReports
+  src/components/workbench/ReportCompare.tsx # compare view can include blocked reports
+  src/pages/Workbench.tsx                    # render structured block/warn reason metadata
+  src/types/index.ts                         # quality typing tightened (any -> unknown)
+
+scripts/
+  check_contract_manifest.py                 # contract manifest validation/snapshot script
+  contract_manifest.snapshot.json            # contract snapshot output
+    ]]>
+  </directory_tree>
+  <boundaries>
+    <item>Quality state semantics are fixed and replayable: pass|warn|block.</item>
+    <item>Block is a hard gate: blocked reports are not publishable and not indexed by default.</item>
+    <item>Execution pipeline emits explicit quality_blocked event for both run and resume paths.</item>
+    <item>Confirmation decision is derived from output_mode + confirmation_mode + require_confirmation only.</item>
+    <item>Runner resets confirmation controls on new invocations to prevent stale checkpoint state leakage.</item>
+  </boundaries>
+  <verification>
+    <item>Targeted tests: 35 passed.</item>
+    <item>Full backend tests: 870 passed, 8 skipped.</item>
+    <item>Frontend build: pass.</item>
+  </verification>
+</quality_orchestration_productization_update>

@@ -18,6 +18,7 @@ export interface ChatContext {
 export interface ChatOptions {
   output_mode?: 'chat' | 'brief' | 'investment_report';
   strict_selection?: boolean;
+  confirmation_mode?: 'auto' | 'required' | 'skip';
   locale?: string;
   trace_raw_override?: 'on' | 'off' | 'inherit';
 }
@@ -35,6 +36,16 @@ export interface ReportIndexItem {
   is_favorite?: boolean;
   tags?: string[];
   source_type?: string;
+  quality_state?: 'pass' | 'warn' | 'block';
+  publishable?: boolean;
+  quality_reasons?: Array<{
+    code: string;
+    severity: 'warn' | 'block';
+    metric: string;
+    actual?: unknown;
+    threshold?: unknown;
+    message: string;
+  }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -73,6 +84,7 @@ export interface ExecuteRequest {
   query: string;
   tickers?: string[];
   output_mode?: string;
+  confirmation_mode?: 'auto' | 'required' | 'skip';
   analysis_depth?: 'quick' | 'report' | 'deep_research';
   agents?: string[];
   budget?: number;
@@ -98,6 +110,35 @@ export interface AlertFeedEvent {
   message: string;
   triggered_at: string;
   metadata?: Record<string, unknown>;
+}
+
+/** 晨报高亮条目 */
+export interface MorningBriefHighlight {
+  ticker: string;
+  price: number | null;
+  price_change: number | null;
+  price_change_pct: number | null;
+  trend: 'strong_up' | 'up' | 'neutral' | 'down' | 'strong_down';
+  key_event: string;
+}
+
+/** 晨报数据 */
+export interface MorningBriefData {
+  date: string;
+  summary: string;
+  highlights: MorningBriefHighlight[];
+  market_mood: string;
+  market_mood_cn: string;
+  action_items: string[];
+  generated_at?: string;
+  ticker_count?: number;
+  priced_count?: number;
+}
+
+/** 晨报 API 响应 */
+export interface MorningBriefResponse {
+  success: boolean;
+  brief: MorningBriefData;
 }
 
 export interface ToolCapability {
@@ -156,7 +197,19 @@ export interface SSECallbacks {
   onError?: (error: string) => void;
   onThinking?: (step: any) => void;
   onRawEvent?: (event: RawSSEEvent) => void;
-  onInterrupt?: (data: { thread_id: string; prompt?: string; options?: string[]; plan_summary?: string; required_agents?: string[] }) => void;
+  onInterrupt?: (data: {
+    thread_id: string;
+    prompt?: string;
+    options?: string[];
+    plan_summary?: string;
+    required_agents?: string[];
+    gate_reason_code?: string;
+    gate_reason?: string;
+    option_effects?: Record<string, string>;
+    option_intents?: Record<string, string>;
+    output_mode?: string;
+    confirmation_mode?: string;
+  }) => void;
 }
 
 const api = axios.create({
@@ -281,7 +334,7 @@ export async function parseSSEStream(
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
           } else if (
-            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system'].includes(data.type)
+            ['llm_start', 'llm_end', 'llm_call', 'tool_call', 'tool_start', 'tool_end', 'cache_hit', 'cache_miss', 'cache_set', 'data_source', 'api_call', 'agent_step', 'step_start', 'step_done', 'step_error', 'plan_ready', 'pipeline_stage', 'decision_note', 'system', 'quality_blocked'].includes(data.type)
           ) {
             const stage = data.stage || data.type;
             const message =
@@ -319,6 +372,12 @@ export async function parseSSEStream(
               options: data.data?.options || data.options,
               plan_summary: data.data?.plan_summary || data.plan_summary,
               required_agents: data.data?.required_agents || data.required_agents,
+              gate_reason_code: data.data?.gate_reason_code || data.gate_reason_code,
+              gate_reason: data.data?.gate_reason || data.gate_reason,
+              option_effects: data.data?.option_effects || data.option_effects,
+              option_intents: data.data?.option_intents || data.option_intents,
+              output_mode: data.data?.output_mode || data.output_mode,
+              confirmation_mode: data.data?.confirmation_mode || data.confirmation_mode,
             });
           } else if (
             ['supervisor_start', 'agent_start', 'agent_done', 'agent_error', 'forum_start', 'forum_done'].includes(data.type)
@@ -438,6 +497,7 @@ export const apiClient = {
     tag?: string;
     sourceType?: string;
     favoriteOnly?: boolean;
+    includeBlocked?: boolean;
     limit?: number;
   }): Promise<{ success: boolean; session_id: string; items: ReportIndexItem[]; count: number }> {
     const response = await api.get('/api/reports/index', {
@@ -450,6 +510,7 @@ export const apiClient = {
         tag: params.tag,
         source_type: params.sourceType,
         favorite_only: params.favoriteOnly,
+        include_blocked: params.includeBlocked,
         limit: params.limit,
       },
     });
@@ -459,9 +520,10 @@ export const apiClient = {
   async getReportReplay(params: {
     sessionId: string;
     reportId: string;
+    includeBlocked?: boolean;
   }): Promise<{ success: boolean; session_id: string; report: any; citations: any[]; trace_digest: Record<string, any> }> {
     const response = await api.get(`/api/reports/replay/${encodeURIComponent(params.reportId)}`, {
-      params: { session_id: params.sessionId },
+      params: { session_id: params.sessionId, include_blocked: params.includeBlocked },
     });
     return response.data;
   },
@@ -483,22 +545,36 @@ export const apiClient = {
     sessionId: string;
     reportId1: string;
     reportId2: string;
+    includeBlocked?: boolean;
   }): Promise<{
-    confidence_score: { a: number | null; b: number | null; delta: number | null };
-    sentiment: { a: string | null; b: string | null; changed: boolean };
-    risks: { added: string[]; removed: string[]; unchanged_count: number };
-    summary: { a: string | null; b: string | null };
+    report_a: { report_id: string; title?: string | null; generated_at?: string | null };
+    report_b: { report_id: string; title?: string | null; generated_at?: string | null };
+    diff: {
+      confidence_score: { a: number | null; b: number | null; delta: number | null };
+      sentiment: { a: string | null; b: string | null; changed: boolean };
+      risks: { added: string[]; removed: string[]; unchanged_count: number };
+      summary: { a: string | null; b: string | null };
+    };
   }> {
     const response = await api.get('/api/reports/compare', {
       params: {
         session_id: params.sessionId,
         id1: params.reportId1,
         id2: params.reportId2,
+        include_blocked: params.includeBlocked,
       },
     });
-    // Backend wraps diff data in { success, report_a, report_b, diff: {...} }
     const raw = response.data;
-    return raw.diff ?? raw;
+    return {
+      report_a: raw.report_a ?? { report_id: params.reportId1 },
+      report_b: raw.report_b ?? { report_id: params.reportId2 },
+      diff: raw.diff ?? {
+        confidence_score: { a: null, b: null, delta: null },
+        sentiment: { a: null, b: null, changed: false },
+        risks: { added: [], removed: [], unchanged_count: 0 },
+        summary: { a: null, b: null },
+      },
+    };
   },
 
   // User profile / watchlist
@@ -761,6 +837,15 @@ export const apiClient = {
     }
 
     return response;
+  },
+
+  // --- Morning Brief (一键晨报) ---
+  async generateMorningBrief(params: {
+    session_id: string;
+    tickers: string[];
+  }): Promise<MorningBriefResponse> {
+    const response = await api.post<MorningBriefResponse>('/api/morning-brief/generate', params);
+    return response.data;
   },
 
   // --- Dashboard Insights ---

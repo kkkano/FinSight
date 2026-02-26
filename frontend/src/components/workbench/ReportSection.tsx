@@ -18,7 +18,6 @@ import { ReportCompare } from './ReportCompare';
 type SortMode = 'date' | 'confidence';
 
 interface ReportSectionProps {
-  symbol: string;
   reports: ReportIndexItem[];
   loading: boolean;
   selectedReportId?: string | null;

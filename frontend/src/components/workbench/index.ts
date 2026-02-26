@@ -10,3 +10,5 @@ export { QuickAnalysisBar } from './QuickAnalysisBar';
 export { AnalysisConfigPanel } from './AnalysisConfigPanel';
 
 export { RebalanceEntryCard } from './RebalanceEntryCard';
+
+export { PortfolioPerformance } from './PortfolioPerformance';

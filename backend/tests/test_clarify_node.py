@@ -18,6 +18,7 @@ def test_clarify_node_interrupts_when_subject_unknown():
 
     assert nodes == [
         "build_initial_state",
+        "reset_turn_state",
         "trim_history",
         "summarize_history",
         "normalize_ui_context",

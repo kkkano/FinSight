@@ -8,6 +8,7 @@ from string import Template
 
 from langchain_core.messages import AIMessage
 
+from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
 
 
@@ -95,9 +96,16 @@ def render_stub(state: GraphState) -> dict:
     and skip template rendering.  Template rendering is only a **fallback**
     for stub / empty drafts.
     """
+    # ── Early-return: morning_brief pass-through (no template needed) ──
+    _brief_op = (state.get("operation") or {}).get("name") if isinstance(state.get("operation"), dict) else None
+    artifacts = state.get("artifacts") or {}
+    if _brief_op == "morning_brief":
+        brief_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
+        if isinstance(brief_draft, str) and brief_draft.strip():
+            return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
+
     # ── Early-return: honour existing narrative draft ──────────────
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
-    artifacts = state.get("artifacts") or {}
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
@@ -231,7 +239,11 @@ def render_stub(state: GraphState) -> dict:
         if operation == "fetch" and (not isinstance(tickers, list) or len(tickers) <= 1):
             template_key = "company_news_report" if output_mode == "investment_report" else "company_news_brief"
         # Multi-ticker compare -> dedicated template.
-        elif isinstance(tickers, list) and len(tickers) > 1:
+        # Requires BOTH operation=compare AND valid tool evidence (see compare_gate).
+        # When evidence is missing, should_render_compare returns False and we
+        # fall through to the normal company template.  The decision_note is
+        # emitted upstream in synthesize.
+        elif should_render_compare(state):
             template_key = "company_compare_report" if output_mode == "investment_report" else "company_compare_brief"
         else:
             template_key = "company_report" if output_mode == "investment_report" else "company_brief"

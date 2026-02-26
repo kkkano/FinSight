@@ -18,7 +18,7 @@
 
 **FinSight AI** 是一个生产级多智能体金融研究系统，基于 **LangGraph** 构建。它将对话式 AI 分析、6 标签页专业仪表盘、自主任务执行（工作台）和邮件主动预警统一在一个平台中。
 
-> 7 个研究智能体（自主多工具）· 1 个 Synthesize 节点（冲突检测 + 幻觉防护）· 5 个仪表盘评分器（按标签页生成 AI 卡片）| 混合 RAG（bge-m3）| 实时 ECharts 图表 | LLM 驱动智能图表 | 8 组智能体交叉冲突检测 | 邮件订阅预警
+> 7 个研究智能体（自主多工具）· 1 个 Synthesize 节点（冲突检测 + 幻觉防护 + compare_gate 证据校验）· 5 个仪表盘评分器（按标签页生成 AI 卡片）| 混合 RAG（bge-m3）| 实时 ECharts 图表 | LLM 驱动智能图表 | 8 组智能体交叉冲突检测 | 邮件订阅预警
 
 ---
 
@@ -27,7 +27,7 @@
 - [核心特性](#-核心特性)
 - [平台预览](#-平台预览)
 - [系统架构](#%EF%B8%8F-系统架构)
-- [LangGraph 管线](#-langgraph-管线15-节点)
+- [LangGraph 管线](#-langgraph-管线16-节点)
 - [智能体生态](#-智能体生态)
 - [仪表盘](#-仪表盘--6-个分析标签页)
 - [RAG 引擎](#-rag-引擎--混合检索管线)
@@ -51,15 +51,18 @@
 | 类别 | 亮点 |
 |------|------|
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
-| **LangGraph 管线** | 15 节点有状态图，处理聊天、快速分析和深度投研报告，自适应路由 |
+| **LangGraph 管线** | 16 节点有状态图，处理聊天、快速分析和深度投研报告，自适应路由 |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
 | **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |
 | **智能图表** | 双模式 LLM 图表：`<chart>`（内联数据）+ `<chart_ref>`（真实数据引用） |
 | **冲突检测** | 自动跨智能体冲突分析，涵盖 8 组可比较维度 |
 | **主动预警** | 3 个预警调度器（价格、新闻、风险），通过 SMTP 邮件通知 |
-| **工作台** | 自主任务执行、投资组合再平衡、研报时间线、快速分析入口 |
+| **工作台** | 自主任务执行、投资组合再平衡（LLM 增强 + SSE 流式进度）、研报时间线、快速分析入口 |
 | **"问这条"** | 上下文感知的后续提问——可对任意新闻、洞察或风险条目直接追问 |
+| **思考气泡** | 三层执行展示：思考气泡（打字机效果）→ Agent 摘要卡片 → 详细时间线 |
+| **一键晨报管线** | 持仓晨报接入 LangGraph Pipeline，确定性合成（零 LLM 成本），带 30 分钟缓存 |
+| **调仓 LLM 增强** | Agent 数据 + LLM 优先级精调，为调仓建议提供增强理由与证据快照 |
 | **幻觉防御** | 多层洗涤：正则模式匹配 + 证据交叉验证 LLM 输出 |
 
 ---
@@ -166,7 +169,7 @@ graph TB
 
     subgraph "后端 (FastAPI)"
         ROUTER[API 路由<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph 管线<br/>15 节点有状态图]
+        GRAPH[LangGraph 管线<br/>16 节点有状态图]
         AGENTS[智能体层<br/>7 研究智能体 + 5 洞察评分器]
         TOOLS[工具层<br/>17 个注册工具]
         SYNTH[合成节点<br/>冲突检测 · 幻觉洗涤]
@@ -200,41 +203,42 @@ graph TB
 
 ---
 
-## 🔄 LangGraph 管线（15 节点）
+## 🔄 LangGraph 管线（16 节点）
 
-FinSight 的核心是一个 **15 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
-仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 15 节点 LangGraph 主链路。
+FinSight 的核心是一个 **16 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
+仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 16 节点 LangGraph 主链路。
 
 ```mermaid
 flowchart TD
     START((开始)) --> INIT["① build_initial_state<br/><i>解析输入，加载记忆</i>"]
-    INIT --> CTX["② normalize_ui_context<br/><i>合并 UI 提示，检测 ticker</i>"]
-    CTX --> MODE{"③ chat_respond<br/><i>输出模式？</i>"}
+    INIT --> RESET["② reset_turn_state<br/><i>清除临时字段 + trace 运行时</i>"]
+    RESET --> CTX["③ normalize_ui_context<br/><i>合并 UI 提示，检测 ticker</i>"]
+    CTX --> MODE{"④ chat_respond<br/><i>输出模式？</i>"}
 
     MODE -->|"闲聊 / 问答"| CHAT_END["直接 LLM 回复"]
     CHAT_END --> RENDER
-    MODE -->|"需要分析"| SUBJ["④ resolve_subject<br/><i>Ticker 解析 + 去重</i>"]
+    MODE -->|"需要分析"| SUBJ["⑤ resolve_subject<br/><i>Ticker 解析 + 去重</i>"]
 
-    SUBJ --> CLARIFY{"⑤ clarify_gate<br/><i>有歧义？</i>"}
+    SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>有歧义？</i>"}
     CLARIFY -->|"有歧义"| ASK["请求用户澄清"]
     ASK --> RENDER
-    CLARIFY -->|"明确"| PARSE["⑥ parse_operation<br/><i>分类：价格/技术/新闻/报告</i>"]
+    CLARIFY -->|"明确"| PARSE["⑦ parse_operation<br/><i>4 级优先链：对比 → 护栏 → 多标的 → qa</i>"]
 
-    PARSE --> POLICY["⑦ policy_gate<br/><i>能力评分 + 预算</i>"]
-    POLICY --> PLAN["⑧ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
+    PARSE --> POLICY["⑧ policy_gate<br/><i>能力评分 + 预算</i>"]
+    POLICY --> PLAN["⑨ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
 
-    PLAN --> CONFIRM{"⑨ confirmation_gate<br/><i>人工审批？</i>"}
+    PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>人工审批？</i>"}
     CONFIRM -->|"拒绝"| RENDER
-    CONFIRM -->|"批准"| EXEC["⑩ execute_plan<br/><i>并行智能体组</i>"]
+    CONFIRM -->|"批准"| EXEC["⑪ execute_plan<br/><i>并行智能体组</i>"]
 
-    EXEC --> SYNTH["⑪ synthesize<br/><i>合并输出 + 冲突检查</i>"]
-    SYNTH --> SCRUB["⑫ 幻觉洗涤<br/><i>正则 + 证据验证</i>"]
-    SCRUB --> BUILD["⑬ report_builder<br/><i>构建 ReportIR 结构</i>"]
-    BUILD --> RENDER["⑭ render_response<br/><i>格式化输出</i>"]
-    RENDER --> SAVE["⑮ save_memory<br/><i>持久化记忆</i>"]
+    EXEC --> SYNTH["⑫ synthesize<br/><i>合并输出 + compare_gate + 冲突检查</i>"]
+    SYNTH --> SCRUB["⑬ 幻觉洗涤<br/><i>正则 + 证据验证</i>"]
+    SCRUB --> BUILD["⑭ report_builder<br/><i>构建 ReportIR 结构</i>"]
+    BUILD --> RENDER["⑮ render_response<br/><i>格式化输出</i>"]
+    RENDER --> SAVE["⑯ save_memory<br/><i>持久化记忆</i>"]
     SAVE --> END((结束))
 
-    subgraph "执行引擎 (⑩)"
+    subgraph "执行引擎 (⑪)"
         direction LR
         EG1["组 1<br/>price · news"] --> EG2["组 2<br/>fundamental · technical"]
         EG2 --> EG3["组 3<br/>macro · risk · deep_search"]
@@ -242,6 +246,7 @@ flowchart TD
 
     EXEC -.-> EG1
 
+    style RESET fill:#a855f7,color:#fff
     style SYNTH fill:#ff9800,color:#000
     style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
@@ -980,14 +985,16 @@ FinSight/
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
 │   │   └── tools_router.py     # GET /api/tools（工具清单）
 │   ├── graph/                  # LangGraph 管线
-│   │   ├── builder.py          # 图构建（15 节点 + 边）
+│   │   ├── builder.py          # 图构建（16 节点 + 边）
 │   │   ├── state.py            # GraphState 定义
 │   │   ├── report_builder.py   # ReportIR 结构构建
 │   │   └── nodes/              # 各节点实现
 │   │       ├── build_initial_state.py
+│   │       ├── reset_turn_state.py  # Per-turn 临时字段 + trace 运行时清除
 │   │       ├── chat_respond.py
 │   │       ├── resolve_subject.py
-│   │       ├── parse_operation.py
+│   │       ├── parse_operation.py   # 4 级优先链（对比 → 护栏 → 多标的 → qa）
+│   │       ├── compare_gate.py      # 对比证据门控（3 个谓词函数）
 │   │       ├── policy_gate.py
 │   │       ├── planner.py
 │   │       ├── execute_plan_stub.py

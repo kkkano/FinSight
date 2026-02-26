@@ -347,19 +347,25 @@ class TraceEmitter:
 
     # ==================== Agent 追踪 ====================
 
-    def emit_agent_start(self, agent_name: str, query: str = None, ticker: str = None):
-        """发射 Agent 开始事件"""
+    def emit_agent_start(self, agent_name: str, query: str = None,
+                         ticker: str = None, user_message: str = None):
+        """发射 Agent 开始事件（userMessage 传递用户友好消息给前端）"""
         self._emit(TraceEvent(
             event_type="agent_start",
             category=TraceCategory.AGENT,
             message=f"▶ {agent_name} 启动",
             agent=agent_name,
-            metadata={"query": query, "ticker": ticker}
+            metadata={
+                "query": query,
+                "ticker": ticker,
+                "userMessage": user_message or f"{agent_name} 正在分析中...",
+            }
         ))
 
     def emit_agent_done(self, agent_name: str, success: bool = True,
-                        duration_ms: int = None, summary: str = None):
-        """发射 Agent 完成事件"""
+                        duration_ms: int = None, summary: str = None,
+                        user_message: str = None):
+        """发射 Agent 完成事件（userMessage 传递用户友好消息给前端）"""
         self._emit(TraceEvent(
             event_type="agent_done",
             category=TraceCategory.AGENT,
@@ -367,17 +373,28 @@ class TraceEmitter:
             level=TraceLevel.INFO if success else TraceLevel.ERROR,
             duration_ms=duration_ms,
             agent=agent_name,
-            metadata={"success": success, "summary": summary}
+            metadata={
+                "success": success,
+                "summary": summary,
+                "userMessage": user_message or (
+                    f"{agent_name} 分析完成" if success else f"{agent_name} 分析失败"
+                ),
+            }
         ))
 
-    def emit_agent_step(self, agent_name: str, step: str, details: Dict[str, Any] = None):
-        """发射 Agent 步骤事件"""
+    def emit_agent_step(self, agent_name: str, step: str,
+                        details: Dict[str, Any] = None,
+                        user_message: str = None):
+        """发射 Agent 步骤事件（userMessage 传递用户友好消息给前端）"""
+        metadata = {"step": step, **(details or {})}
+        if user_message:
+            metadata["userMessage"] = user_message
         self._emit(TraceEvent(
             event_type="agent_step",
             category=TraceCategory.AGENT,
             message=f"◈ {agent_name}: {step}",
             agent=agent_name,
-            metadata={"step": step, **(details or {})}
+            metadata=metadata
         ))
 
     # ==================== Supervisor 追踪 ====================

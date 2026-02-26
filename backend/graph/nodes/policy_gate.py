@@ -35,6 +35,16 @@ def _is_dashboard_source(ui_context: dict | None) -> bool:
     return bool(source) and source.startswith("dashboard")
 
 
+def _is_truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
 def _infer_market_from_ticker(ticker: str) -> str | None:
     symbol = str(ticker or "").strip().upper()
     if not symbol:
@@ -63,6 +73,8 @@ def _infer_market_from_subject(subject: dict | None) -> str | None:
 
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
+    if op_name == "morning_brief":
+        return ["get_stock_price", "get_company_news", "get_current_datetime"]
     if subject_type in ("news_item", "news_set"):
         return [
             "get_company_news",
@@ -197,8 +209,16 @@ def policy_gate(state: GraphState) -> dict:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
     elif output_mode == "investment_report":
+        force_all_agents = _is_truthy(ui_context.get("ensure_all_agents")) if isinstance(ui_context, dict) else False
         dashboard_forced = _is_dashboard_source(ui_context)
-        if dashboard_forced:
+        if force_all_agents:
+            allowed_agents = list(REPORT_AGENT_CANDIDATES)
+            agent_selection = {
+                "selected": list(allowed_agents),
+                "required": list(allowed_agents),
+                "force_all_agents": True,
+            }
+        elif dashboard_forced:
             allowed_agents = [name for name in _DASHBOARD_CORE_AGENTS if name in REPORT_AGENT_CANDIDATES]
             agent_selection = {
                 "selected": allowed_agents,
@@ -285,6 +305,7 @@ def policy_gate(state: GraphState) -> dict:
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
+        "force_all_agents": bool(agent_selection.get("force_all_agents")),
         "analysis_depth": analysis_depth,
         "agent_selection": agent_selection,
         "agent_schemas": {

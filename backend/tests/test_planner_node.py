@@ -468,6 +468,72 @@ def test_planner_dashboard_forced_agents_skip_second_pass_recapping(monkeypatch)
     ]
 
 
+def test_planner_force_all_agents_skips_report_recapping(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "2")
+    monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "1")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "investment_report",
+                  "steps": [],
+                  "budget": {"max_rounds": 10, "max_tools": 12},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.planner import planner
+
+    full_agents = [
+        "price_agent",
+        "news_agent",
+        "fundamental_agent",
+        "technical_agent",
+        "macro_agent",
+        "risk_agent",
+        "deep_search_agent",
+    ]
+    state = {
+        "query": "Generate investment report for AAPL",
+        "output_mode": "investment_report",
+        "operation": {"name": "generate_report", "confidence": 0.95, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 10, "max_tools": 12},
+            "allowed_tools": ["search"],
+            "allowed_agents": full_agents,
+            "force_all_agents": True,
+            "agent_selection": {
+                "selected": full_agents,
+                "required": full_agents,
+                "force_all_agents": True,
+            },
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    plan = out.get("plan_ir") or {}
+    agent_steps = [s for s in (plan.get("steps") or []) if s.get("kind") == "agent"]
+    names = [s.get("name") for s in agent_steps]
+
+    assert names == full_agents
+
+
 def test_planner_investment_report_budget_prioritizes_selected_agents_over_tools(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
     monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "4")

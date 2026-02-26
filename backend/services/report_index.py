@@ -8,6 +8,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.report.quality_engine import apply_quality_to_report
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -94,6 +96,14 @@ def _derive_analysis_depth(
     return "report"
 
 
+def _derive_quality_fields(report: dict[str, Any]) -> tuple[str, int, str]:
+    quality, blocked = apply_quality_to_report(report)
+    state = str(quality.get("state") or "pass").strip().lower() or "pass"
+    publishable = 0 if blocked else 1
+    reasons_json = json.dumps(quality.get("reasons") or [], ensure_ascii=False)
+    return state, publishable, reasons_json
+
+
 class ReportIndexStore:
     def __init__(self) -> None:
         path = os.getenv("REPORT_INDEX_SQLITE_PATH", "backend/data/report_index.sqlite")
@@ -111,6 +121,37 @@ class ReportIndexStore:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _column_exists(self, conn: sqlite3.Connection, table: str, column: str) -> bool:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        for row in rows:
+            try:
+                if str(row["name"]).strip().lower() == column.lower():
+                    return True
+            except Exception:
+                if len(row) > 1 and str(row[1]).strip().lower() == column.lower():
+                    return True
+        return False
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        if self._column_exists(conn, table, column):
+            return
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    def _ensure_report_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type)")
+        if self._column_exists(conn, "report_index", "quality_state"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_quality_state ON report_index(quality_state)")
+        if self._column_exists(conn, "report_index", "publishable"):
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_report_index_publishable ON report_index(publishable)")
+
+    def _ensure_citation_indexes(self, conn: sqlite3.Connection) -> None:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_session ON citation_index(session_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_citation_index_url ON citation_index(url)")
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript(
@@ -127,17 +168,15 @@ class ReportIndexStore:
                     is_favorite INTEGER NOT NULL DEFAULT 0,
                     trace_digest_json TEXT,
                     report_json TEXT NOT NULL,
+                    quality_state TEXT NOT NULL DEFAULT 'pass',
+                    publishable INTEGER NOT NULL DEFAULT 1,
+                    quality_reasons_json TEXT,
                     source_type TEXT NOT NULL DEFAULT 'ai_generated',
                     filing_type TEXT,
                     publisher TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
-
-                CREATE INDEX IF NOT EXISTS idx_report_index_session ON report_index(session_id);
-                CREATE INDEX IF NOT EXISTS idx_report_index_ticker ON report_index(ticker);
-                CREATE INDEX IF NOT EXISTS idx_report_index_generated_at ON report_index(generated_at);
-                CREATE INDEX IF NOT EXISTS idx_report_index_source_type ON report_index(source_type);
 
                 CREATE TABLE IF NOT EXISTS citation_index (
                     row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,14 +192,22 @@ class ReportIndexStore:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(report_id) REFERENCES report_index(report_id) ON DELETE CASCADE
                 );
-
-                CREATE INDEX IF NOT EXISTS idx_citation_index_report ON citation_index(report_id);
-                CREATE INDEX IF NOT EXISTS idx_citation_index_session ON citation_index(session_id);
-                CREATE INDEX IF NOT EXISTS idx_citation_index_url ON citation_index(url);
                 """
             )
+            self._ensure_column(conn, "report_index", "quality_state", "TEXT NOT NULL DEFAULT 'pass'")
+            self._ensure_column(conn, "report_index", "publishable", "INTEGER NOT NULL DEFAULT 1")
+            self._ensure_column(conn, "report_index", "quality_reasons_json", "TEXT")
+            self._ensure_report_indexes(conn)
+            self._ensure_citation_indexes(conn)
 
-    def upsert_report(self, *, session_id: str, report: dict[str, Any], trace_digest: dict[str, Any] | None = None) -> dict[str, Any]:
+    def upsert_report(
+        self,
+        *,
+        session_id: str,
+        report: dict[str, Any],
+        trace_digest: dict[str, Any] | None = None,
+        include_blocked: bool = False,
+    ) -> dict[str, Any]:
         report_id = str(report.get("report_id") or "").strip()
         if not report_id:
             raise ValueError("report.report_id is required")
@@ -176,8 +223,17 @@ class ReportIndexStore:
 
         tags = report.get("tags")
         tags_json = json.dumps(tags, ensure_ascii=False) if isinstance(tags, list) else None
+        quality_state, publishable, quality_reasons_json = _derive_quality_fields(report)
         report_json = json.dumps(report, ensure_ascii=False)
         trace_digest_json = json.dumps(trace_digest or {}, ensure_ascii=False)
+        if quality_state == "block" and not include_blocked:
+            return {
+                "report_id": report_id,
+                "session_id": session_id,
+                "quality_state": quality_state,
+                "publishable": False,
+                "skipped": "quality_blocked",
+            }
         generated_at = str(report.get("generated_at") or "").strip() or _now_iso()
         meta = report.get("meta") if isinstance(report.get("meta"), dict) else {}
         source_type = str(report.get("source_type") or meta.get("source_type") or "ai_generated").strip() or "ai_generated"
@@ -192,9 +248,10 @@ class ReportIndexStore:
                     INSERT INTO report_index(
                         report_id, session_id, ticker, title, summary, tags_json,
                         generated_at, confidence_score, trace_digest_json, report_json,
+                        quality_state, publishable, quality_reasons_json,
                         source_type, filing_type, publisher,
                         created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(report_id) DO UPDATE SET
                         session_id=excluded.session_id,
                         ticker=excluded.ticker,
@@ -205,6 +262,9 @@ class ReportIndexStore:
                         confidence_score=excluded.confidence_score,
                         trace_digest_json=excluded.trace_digest_json,
                         report_json=excluded.report_json,
+                        quality_state=excluded.quality_state,
+                        publishable=excluded.publishable,
+                        quality_reasons_json=excluded.quality_reasons_json,
                         source_type=excluded.source_type,
                         filing_type=excluded.filing_type,
                         publisher=excluded.publisher,
@@ -221,6 +281,9 @@ class ReportIndexStore:
                         confidence_value,
                         trace_digest_json,
                         report_json,
+                        quality_state,
+                        publishable,
+                        quality_reasons_json,
                         source_type,
                         filing_type,
                         publisher,
@@ -273,11 +336,13 @@ class ReportIndexStore:
         tag: str | None = None,
         favorite_only: bool = False,
         source_type: str | None = None,
+        include_blocked: bool = False,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT report_id, session_id, ticker, title, summary, generated_at,
                    confidence_score, is_favorite, tags_json, source_type, report_json,
+                   quality_state, publishable, quality_reasons_json,
                    filing_type, publisher, created_at, updated_at
             FROM report_index
             WHERE session_id = ?
@@ -304,6 +369,8 @@ class ReportIndexStore:
         if source_type:
             sql += " AND source_type = ?"
             args.append(source_type.strip())
+        if not include_blocked:
+            sql += " AND publishable = 1"
         sql += " ORDER BY generated_at DESC LIMIT ?"
         args.append(max(1, min(500, int(limit))))
 
@@ -325,6 +392,13 @@ class ReportIndexStore:
                     source_trigger=source_trigger,
                     report_meta=report_meta,
                 )
+                quality_reasons: list[dict[str, Any]] = []
+                try:
+                    parsed_reasons = json.loads(row["quality_reasons_json"] or "[]")
+                    if isinstance(parsed_reasons, list):
+                        quality_reasons = [item for item in parsed_reasons if isinstance(item, dict)]
+                except Exception:
+                    quality_reasons = []
                 result.append(
                     {
                         "report_id": row["report_id"],
@@ -337,6 +411,9 @@ class ReportIndexStore:
                         "is_favorite": bool(row["is_favorite"]),
                         "tags": tags,
                         "source_type": row["source_type"],
+                        "quality_state": row["quality_state"] or "pass",
+                        "publishable": bool(row["publishable"]),
+                        "quality_reasons": quality_reasons,
                         "source_trigger": source_trigger,
                         "analysis_depth": analysis_depth,
                         "filing_type": row["filing_type"],
@@ -347,15 +424,27 @@ class ReportIndexStore:
                 )
             return result
 
-    def get_report_replay(self, *, session_id: str, report_id: str) -> dict[str, Any] | None:
+    def get_report_replay(
+        self,
+        *,
+        session_id: str,
+        report_id: str,
+        include_blocked: bool = False,
+    ) -> dict[str, Any] | None:
         with self._connect() as conn:
+            where_clause = "WHERE session_id = ? AND report_id = ?"
+            if not include_blocked:
+                where_clause += " AND publishable = 1"
             row = conn.execute(
                 """
                 SELECT report_json, trace_digest_json
                 FROM report_index
-                WHERE session_id = ? AND report_id = ?
-                """,
-                (session_id, report_id),
+                """
+                + where_clause,
+                (
+                    session_id,
+                    report_id,
+                ),
             ).fetchone()
             if not row:
                 return None

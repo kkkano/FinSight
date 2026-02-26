@@ -102,7 +102,7 @@ export function NewsTab() {
     sourceType: 'dashboard',
     fallbackToAnySource: false,
   });
-  const newsInsight = insightsData?.news ?? null;
+  const rawNewsInsight = insightsData?.news ?? null;
 
   // --- Agent execution for "分析影响" ---
   const { execute: executeAnalysis, isRunning: isAnalyzing } = useExecuteAgent();
@@ -110,6 +110,23 @@ export function NewsTab() {
   // --- Raw data arrays ---
   const marketNews = useMemo(() => dashboardData?.news?.market ?? [], [dashboardData]);
   const impactNews = useMemo(() => dashboardData?.news?.impact ?? [], [dashboardData]);
+  const totalNewsCount = marketNews.length + impactNews.length;
+  const newsInsight = useMemo(() => {
+    if (!rawNewsInsight) return null;
+    if (totalNewsCount === 0) return rawNewsInsight;
+    const emptyNewsPattern =
+      /(?:\u6682\u65e0.*\u65b0\u95fb|\u65e0.*\u65b0\u95fb|no\s+recent\s+news|news\s+unavailable|no\s+news\s+data|news\s+data\s+unavailable)/i;
+    const keyPoints = Array.isArray(rawNewsInsight.key_points)
+      ? rawNewsInsight.key_points.filter((point) => !emptyNewsPattern.test(String(point ?? '').trim()))
+      : [];
+    if (keyPoints.length === (rawNewsInsight.key_points?.length ?? 0)) {
+      return rawNewsInsight;
+    }
+    return {
+      ...rawNewsInsight,
+      key_points: keyPoints.length > 0 ? keyPoints : ['新闻数据已更新，请刷新洞察获取最新摘要'],
+    };
+  }, [rawNewsInsight, totalNewsCount]);
 
   // --- Sub-tab counts (before time/tag filtering) ---
   const allCombined = useMemo(

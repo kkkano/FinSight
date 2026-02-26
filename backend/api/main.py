@@ -28,13 +28,14 @@ from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.alerts_router import create_alerts_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
+from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
 from backend.conversation.context import ContextManager
-from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready
+from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
@@ -59,7 +60,7 @@ if not logging.getLogger().handlers:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-# 灏濊瘯瀵煎叆鏍稿績宸ュ叿
+# 尝试导入核心工具
 try:
     from backend.tools import (
         get_stock_price,
@@ -83,7 +84,7 @@ except ImportError as e:
         )
         logger.info("[Init] Core tools imported from root successfully.")
     except ImportError as e2:
-        logger.info(f"❌ Error importing tools: {e2}")
+        logger.info(f"[Init] Error importing tools: {e2}")
 
 # Import chart detector.
 try:
@@ -93,7 +94,7 @@ except ImportError as e:
     logger.info(f"[Init] Error importing chart detector: {e}")
     ChartTypeDetector = None
 
-# 瀵煎叆 MemoryService
+# 导入 MemoryService
 try:
     from backend.services.memory import MemoryService, UserProfile
     memory_service = MemoryService()
@@ -553,20 +554,29 @@ async def lifespan(app: FastAPI):
             logger.debug("[LangFuse] flush/shutdown error on shutdown (ignored)")
         try:
             for sched in _schedulers:
-                sched.shutdown(wait=False)
+                sched.shutdown(wait=True)
             if _schedulers:
                 logger.info("[Scheduler] all schedulers stopped.")
+            _schedulers.clear()
         except Exception as e:
             logger.info(f"[Scheduler] shutdown error: {e}")
+        try:
+            from backend.graph.checkpointer import areset_checkpointer_caches
+
+            await areset_checkpointer_caches()
+            reset_graph_runner()
+            logger.info("[GraphRunner] checkpointer/runner caches cleared on shutdown")
+        except Exception as e:
+            logger.info(f"[GraphRunner] shutdown cleanup error: {e}")
 
 app = FastAPI(
     title="FinSight API",
-    description="FinSight 鍚庣鏈嶅姟",
+    description="FinSight 后端服务",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS 閰嶇疆
+# CORS 配置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_allow_origins(),
@@ -684,6 +694,16 @@ task_router = create_task_router(
 )
 tools_router = create_tools_router()
 
+morning_brief_router = create_morning_brief_router(
+    MorningBriefRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_portfolio_positions=get_portfolio_positions,
+        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
+        get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
+        get_graph_runner=lambda: aget_graph_runner(),
+    )
+)
+
 execution_router = create_execution_router(
     ExecutionRouterDeps(
         get_graph_runner=lambda: aget_graph_runner(),
@@ -699,8 +719,24 @@ execution_router = create_execution_router(
 
 # --- Phase 3: Portfolio & Rebalance routers ---
 from backend.services.rebalance_engine import RebalanceEngine as _RebalanceEngine
+from backend.services.rebalance_llm_enhancer import AgentBackedEnhancer as _AgentBackedEnhancer
 
-_rebalance_engine = _RebalanceEngine()
+_rebalance_llm_enhancer = _AgentBackedEnhancer(
+    get_company_news=globals().get("get_company_news"),
+    get_company_info=globals().get("get_company_info"),
+    create_llm_fn=None,  # Lazy init: set after LLM config is ready
+)
+try:
+    from backend.llm_config import create_llm as _create_llm_for_rebalance
+    _rebalance_llm_enhancer = _AgentBackedEnhancer(
+        get_company_news=globals().get("get_company_news"),
+        get_company_info=globals().get("get_company_info"),
+        create_llm_fn=_create_llm_for_rebalance,
+    )
+except Exception:
+    pass  # LLM unavailable, enhancer will be no-op
+
+_rebalance_engine = _RebalanceEngine(llm_enhancer=_rebalance_llm_enhancer)
 
 rebalance_router = create_rebalance_router(
     RebalanceRouterDeps(
@@ -725,6 +761,7 @@ app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)
 app.include_router(rebalance_router)
+app.include_router(morning_brief_router)
 # 启动入口
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)

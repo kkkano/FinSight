@@ -411,6 +411,7 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     verifier = artifacts.get("verifier_result") or {}
     assert verifier.get("checked") is True
     assert len(verifier.get("unsupported_claims") or []) == 1
+    assert len(verifier.get("unresolved_unsupported_claims") or []) == 0
 
 
 def test_synthesize_narrative_persists_verifier_result(monkeypatch):
@@ -447,3 +448,18 @@ def test_synthesize_narrative_persists_verifier_result(monkeypatch):
     verifier = artifacts.get("verifier_result") or {}
     assert verifier.get("checked") is True
     assert len(verifier.get("unsupported_claims") or []) == 1
+
+
+def test_compute_unresolved_unsupported_claims_returns_residual_claims():
+    from backend.graph.nodes.synthesize import _compute_unresolved_unsupported_claims
+
+    claims = [
+        {"claim": "Claim A", "reason": "missing evidence"},
+        {"claim": "Claim B", "reason": "missing evidence"},
+    ]
+    unresolved = _compute_unresolved_unsupported_claims(
+        "This text still contains Claim B only.",
+        claims,
+    )
+    assert len(unresolved) == 1
+    assert unresolved[0]["claim"] == "Claim B"

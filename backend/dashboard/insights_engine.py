@@ -35,6 +35,7 @@ from backend.dashboard.scorers import (
 from backend.dashboard.schemas import DashboardInsightsResponse, InsightCard
 
 logger = logging.getLogger(__name__)
+_DASHBOARD_FAILURE_MARKER = "__dashboard_failure__"
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +124,12 @@ class InsightsOrchestrator:
                 cache_generated_at = cached_data.get("generated_at", "")
                 cache_age = _compute_cache_age(cache_generated_at)
                 insights_dict = _deserialize_insights(cached_data.get("insights", {}))
+                if self._cached_insights_need_refresh(sym_upper, insights_dict):
+                    logger.info(
+                        "[Insights] cached news fallback stale for %s; regenerate from refreshed dashboard data",
+                        sym_upper,
+                    )
+                    return await self._generate_fresh(sym_upper)
 
                 response = DashboardInsightsResponse(
                     symbol=sym_upper,
@@ -150,6 +157,7 @@ class InsightsOrchestrator:
         async with semaphore:
             # Gather pre-fetched dashboard data from cache.
             data = self._collect_dashboard_data(symbol)
+            data = await self._hydrate_missing_data(symbol, data)
 
             # Phase 1: run the 4 dimension scorers in parallel.
             tech_task = self._technical.digest(symbol, data.get("technicals", {}))
@@ -274,11 +282,105 @@ class InsightsOrchestrator:
         result: dict[str, Any] = {}
         for data_type in ("snapshot", "valuation", "financials", "technicals", "news", "peers"):
             cached = self._cache.get(symbol, data_type)
-            if cached is not None:
+            if _is_failure_marker(cached):
+                result[data_type] = {}
+            elif cached is not None:
                 result[data_type] = cached
             else:
                 result[data_type] = {}
         return result
+
+    async def _hydrate_missing_data(self, symbol: str, data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Best-effort hydration when insights are requested before dashboard cache is warm.
+
+        This prevents mismatch such as:
+          - News tab list has data (from /api/dashboard)
+          - AI news card still shows "暂无近期新闻数据" (from stale /api/dashboard/insights)
+        """
+        hydrated = dict(data)
+        tasks: list[tuple[str, asyncio.Task[Any]]] = []
+
+        if _is_empty_mapping(hydrated.get("technicals")):
+            tasks.append(
+                (
+                    "technicals",
+                    asyncio.create_task(
+                        self._run_fetch_with_timeout(
+                            "fetch_technical_indicators",
+                            self._fetch_technicals,
+                            symbol,
+                            timeout=6.0,
+                        )
+                    ),
+                )
+            )
+
+        if _count_news_items(hydrated.get("news")) == 0:
+            tasks.append(
+                (
+                    "news",
+                    asyncio.create_task(
+                        self._run_fetch_with_timeout(
+                            "fetch_news",
+                            self._fetch_news,
+                            symbol,
+                            timeout=8.0,
+                        )
+                    ),
+                )
+            )
+
+        if not tasks:
+            return hydrated
+
+        for key, task in tasks:
+            try:
+                value = await task
+            except Exception:
+                value = None
+            if key == "technicals" and isinstance(value, dict) and value:
+                hydrated["technicals"] = value
+                self._cache.set(symbol, "technicals", value, ttl=self._cache.TTL_TECHNICALS)
+            if key == "news" and isinstance(value, dict):
+                hydrated["news"] = value
+                self._cache.set(symbol, "news", value, ttl=self._cache.TTL_NEWS)
+        return hydrated
+
+    async def _run_fetch_with_timeout(
+        self,
+        label: str,
+        fn,
+        symbol: str,
+        *,
+        timeout: float,
+    ) -> Any:
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(fn, symbol), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("[Insights] %s timeout for %s", label, symbol)
+        except Exception as exc:
+            logger.warning("[Insights] %s failed for %s: %s", label, symbol, exc)
+        return None
+
+    def _fetch_technicals(self, symbol: str) -> dict[str, Any] | None:
+        from backend.dashboard.data_service import fetch_technical_indicators
+
+        return fetch_technical_indicators(symbol)
+
+    def _fetch_news(self, symbol: str) -> dict[str, Any] | None:
+        from backend.dashboard.data_service import fetch_news
+
+        return fetch_news(symbol, limit=20)
+
+    def _cached_insights_need_refresh(self, symbol: str, insights: dict[str, InsightCard]) -> bool:
+        news_card = insights.get("news")
+        if news_card is None:
+            return False
+        if not _news_card_shows_empty_marker(news_card):
+            return False
+        cached_news = self._cache.get(symbol, "news")
+        return _count_news_items(cached_news) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +426,34 @@ def _deserialize_insights(raw: dict[str, Any]) -> dict[str, InsightCard]:
     return result
 
 
+def _is_empty_mapping(value: Any) -> bool:
+    if _is_failure_marker(value):
+        return True
+    return not isinstance(value, dict) or len(value) == 0
+
+
+def _is_failure_marker(value: Any) -> bool:
+    return isinstance(value, dict) and value.get(_DASHBOARD_FAILURE_MARKER) is True
+
+
+def _count_news_items(news_payload: Any) -> int:
+    if not isinstance(news_payload, dict):
+        return 0
+    market = news_payload.get("market")
+    impact = news_payload.get("impact")
+    market_count = len(market) if isinstance(market, list) else 0
+    impact_count = len(impact) if isinstance(impact, list) else 0
+    return market_count + impact_count
+
+
+def _news_card_shows_empty_marker(card: InsightCard) -> bool:
+    points = card.key_points if isinstance(card.key_points, list) else []
+    for point in points:
+        if "暂无近期新闻数据" in str(point):
+            return True
+    return "暂无近期新闻数据" in str(card.summary or "")
+
+
 __all__ = [
     # Preferred names
     "DashboardScorer",
@@ -350,4 +480,3 @@ __all__ = [
     "_compute_cache_age",
     "_deserialize_insights",
 ]
-

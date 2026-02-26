@@ -21,7 +21,7 @@ import type {
   StartExecutionParams,
   TimelineEvent,
 } from '../types/execution';
-import type { ReportIR } from '../types/index';
+import type { ReportIR, ReportQualityReason } from '../types/index';
 import { useStore } from './useStore';
 
 const MAX_RECENT_RUNS = 20;
@@ -70,7 +70,14 @@ interface ExecutionState {
     options?: string[];
     plan_summary?: string;
     required_agents?: string[];
+    gate_reason_code?: string;
+    gate_reason?: string;
+    option_effects?: Record<string, string>;
+    option_intents?: Record<string, string>;
+    output_mode?: string;
+    confirmation_mode?: string;
   }) => void;
+  resumeExecution: (runId: string, resumeValue: string) => Promise<void>;
   cancelExecution: (runId: string) => void;
   getActiveRunForTicker: (ticker: string) => ExecutionRun | undefined;
   markBridged: (runId: string) => void;
@@ -124,6 +131,9 @@ function buildTimelineEvent(
     eventType,
     stage,
     message: typeof step?.message === 'string' ? step.message : undefined,
+    userMessage: typeof step?.userMessage === 'string'
+      ? step.userMessage
+      : (typeof raw.userMessage === 'string' ? raw.userMessage : undefined),
     runId: runIdFromEvent || runId,
     sessionId: typeof step?.sessionId === 'string' ? step.sessionId : undefined,
     stepId: typeof raw.step_id === 'string' ? raw.step_id : undefined,
@@ -195,6 +205,113 @@ function asPlanSteps(value: unknown): PlanStepSummary[] {
     });
   }
   return steps;
+}
+
+function normalizeQualityState(value: unknown): 'pass' | 'warn' | 'block' {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'warn') return 'warn';
+  if (raw === 'block') return 'block';
+  return 'pass';
+}
+
+function normalizeQualityReasons(value: unknown): ReportQualityReason[] {
+  if (!Array.isArray(value)) return [];
+  const items: ReportQualityReason[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const code = typeof row.code === 'string' ? row.code.trim() : '';
+    const metric = typeof row.metric === 'string' ? row.metric.trim() : '';
+    const message = typeof row.message === 'string' ? row.message.trim() : '';
+    if (!code || !metric || !message) continue;
+    items.push({
+      code,
+      severity: row.severity === 'block' ? 'block' : 'warn',
+      metric,
+      actual: row.actual,
+      threshold: row.threshold,
+      message,
+    });
+  }
+  return items;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    output.push(value);
+  }
+  return output;
+}
+
+function extractRunQualityPatch(payload: unknown): Partial<ExecutionRun> {
+  if (!payload || typeof payload !== 'object') return {};
+
+  const record = payload as Record<string, unknown>;
+  const quality = record.quality && typeof record.quality === 'object'
+    ? (record.quality as Record<string, unknown>)
+    : null;
+  const metrics = quality?.metrics && typeof quality.metrics === 'object'
+    ? (quality.metrics as Record<string, unknown>)
+    : (record.quality_metrics && typeof record.quality_metrics === 'object'
+      ? (record.quality_metrics as Record<string, unknown>)
+      : {});
+  const thresholds = quality?.thresholds && typeof quality.thresholds === 'object'
+    ? (quality.thresholds as Record<string, unknown>)
+    : (record.quality_thresholds && typeof record.quality_thresholds === 'object'
+      ? (record.quality_thresholds as Record<string, unknown>)
+      : {});
+  const details = quality?.details && typeof quality.details === 'object'
+    ? (quality.details as Record<string, unknown>)
+    : (record.quality_details && typeof record.quality_details === 'object'
+      ? (record.quality_details as Record<string, unknown>)
+      : {});
+
+  const reasons = normalizeQualityReasons(
+    quality?.reasons ?? record.quality_reasons,
+  );
+  const inferredState = reasons.some((item) => item.severity === 'block')
+    ? 'block'
+    : (reasons.length > 0 ? 'warn' : 'pass');
+  const state = normalizeQualityState(
+    quality?.state ?? record.quality_state ?? inferredState,
+  );
+
+  const blockedCodes = uniqueStrings([
+    ...asStringArray(record.blocked_reason_codes),
+    ...reasons
+      .filter((item) => item.severity === 'block')
+      .map((item) => item.code),
+  ]);
+  const explicitBlocked = record.quality_blocked === true;
+  const qualityBlocked = explicitBlocked || state === 'block';
+  const blockedReportAvailable = record.blocked_report_available === true
+    || record.blockedReportAvailable === true
+    || (record.blocked_report != null && typeof record.blocked_report === 'object');
+  const allowContinueWhenBlocked = record.allow_continue_when_blocked === true
+    || record.allowContinueWhenBlocked === true
+    || (qualityBlocked && blockedReportAvailable);
+
+  const patch: Partial<ExecutionRun> = {
+    qualityState: state,
+    qualityReasons: reasons,
+    blockedReasonCodes: blockedCodes,
+    qualityBlocked,
+    qualityMetrics: metrics,
+    qualityThresholds: thresholds,
+    qualityDetails: details,
+    blockedReportAvailable,
+    allowContinueWhenBlocked,
+    publishable: typeof record.publishable === 'boolean'
+      ? record.publishable
+      : !qualityBlocked,
+  };
+
+  return patch;
 }
 
 function computeEstimatedEtaSeconds(run: ExecutionRun): number | null {
@@ -283,7 +400,17 @@ function createExecutionRunState(params: {
     currentStep: '准备执行...',
     timeline: [],
     report: null,
-    streamedContent: '',
+      qualityBlocked: false,
+      publishable: true,
+      qualityState: 'pass',
+      qualityReasons: [],
+      blockedReasonCodes: [],
+      qualityMetrics: {},
+      qualityThresholds: {},
+      qualityDetails: {},
+      allowContinueWhenBlocked: false,
+      blockedReportAvailable: false,
+      streamedContent: '',
     fallbackReasons: [],
     error: null,
     startedAt: now,
@@ -356,11 +483,25 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       nextStep: typeof result.next_step === 'string'
         ? result.next_step
         : (typeof result.nextStep === 'string' ? result.nextStep : undefined),
+      code: typeof result.code === 'string' ? result.code : undefined,
+      details: (result.details != null && typeof result.details === 'object' && !Array.isArray(result.details))
+        ? result.details as Record<string, unknown>
+        : undefined,
       timestamp: typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString(),
     };
     patch.decisionNotes = pushDecisionNote(run.decisionNotes, note);
     patch.currentStep = message || note.title;
     return mergePatchAndEstimateEta(run, patch);
+  }
+
+  if (eventType === 'quality_blocked' || stage === 'quality_blocked') {
+    const qualityPatch = extractRunQualityPatch(result);
+    patch.currentStep = message || 'Report blocked by quality gate';
+    patch.progress = Math.max(run.progress, 98);
+    return mergePatchAndEstimateEta(run, {
+      ...patch,
+      ...qualityPatch,
+    });
   }
 
   if (eventType === 'supervisor_start' || stage === 'supervisor_start') {
@@ -494,6 +635,16 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       currentStep: '准备执行...',
       timeline: [],
       report: null,
+    qualityBlocked: false,
+    publishable: true,
+    qualityState: 'pass',
+    qualityReasons: [],
+    blockedReasonCodes: [],
+    qualityMetrics: {},
+    qualityThresholds: {},
+    qualityDetails: {},
+    allowContinueWhenBlocked: false,
+    blockedReportAvailable: false,
       streamedContent: '',
       fallbackReasons: [],
       error: null,
@@ -519,6 +670,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
+      confirmation_mode: params.confirmationMode,
       analysis_depth: params.analysisDepth,
       agents: params.agents,
       budget: params.budget ?? requestPrefs.maxRounds,
@@ -631,14 +783,21 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           };
         }
 
+        const qualityPatch = extractRunQualityPatch(meta);
+        const blockedReport = meta && typeof meta === 'object' && meta.blocked_report && typeof meta.blocked_report === 'object'
+          ? (meta.blocked_report as ReportIR)
+          : null;
+        const finalReport = (report as ReportIR) ?? blockedReport ?? null;
+
         completeRun({
           status: 'done',
           progress: 100,
           currentStep: null,
-          report: (report as ReportIR) ?? null,
+          report: finalReport,
           timeline,
           pipelineStages,
           pipelineCurrentStage: 'done',
+          ...qualityPatch,
         });
       },
 
@@ -725,6 +884,17 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             status: 'running',
             error: null,
             completedAt: null,
+            report: null,
+            qualityBlocked: false,
+            publishable: true,
+            qualityState: 'pass',
+            qualityReasons: [],
+            blockedReasonCodes: [],
+            qualityMetrics: {},
+            qualityThresholds: {},
+            qualityDetails: {},
+            allowContinueWhenBlocked: false,
+            blockedReportAvailable: false,
             abortController: null,
             interruptData: null,
           };
@@ -741,6 +911,17 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           status: 'running',
           error: null,
           completedAt: null,
+          report: null,
+          qualityBlocked: false,
+          publishable: true,
+          qualityState: 'pass',
+          qualityReasons: [],
+          blockedReasonCodes: [],
+          qualityMetrics: {},
+          qualityThresholds: {},
+          qualityDetails: {},
+          allowContinueWhenBlocked: false,
+          blockedReportAvailable: false,
           abortController: null,
           interruptData: null,
         };
@@ -774,7 +955,23 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const activeRuns = [...state.activeRuns];
       const current = activeRuns[index];
       const run: ExecutionRun = current.status === 'interrupted'
-        ? { ...current, status: 'running' as const, interruptData: null, error: null }
+        ? {
+            ...current,
+            status: 'running' as const,
+            interruptData: null,
+            error: null,
+            report: null,
+            qualityBlocked: false,
+            publishable: true,
+            qualityState: 'pass',
+            qualityReasons: [],
+            blockedReasonCodes: [],
+            qualityMetrics: {},
+            qualityThresholds: {},
+            qualityDetails: {},
+            allowContinueWhenBlocked: false,
+            blockedReportAvailable: false,
+          }
         : current;
 
       const runIdFromEvent = typeof step?.runId === 'string'
@@ -797,7 +994,23 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const activeRuns = [...state.activeRuns];
       const current = activeRuns[index];
       const run: ExecutionRun = current.status === 'interrupted'
-        ? { ...current, status: 'running' as const, interruptData: null, error: null }
+        ? {
+            ...current,
+            status: 'running' as const,
+            interruptData: null,
+            error: null,
+            report: null,
+            qualityBlocked: false,
+            publishable: true,
+            qualityState: 'pass',
+            qualityReasons: [],
+            blockedReasonCodes: [],
+            qualityMetrics: {},
+            qualityThresholds: {},
+            qualityDetails: {},
+            allowContinueWhenBlocked: false,
+            blockedReportAvailable: false,
+          }
         : current;
 
       const pipelineStages = { ...(run.pipelineStages ?? createInitialPipelineStages()) };
@@ -828,6 +1041,15 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       const activeRuns = [...state.activeRuns];
       const run = activeRuns[index];
       const doneAt = new Date().toISOString();
+      const qualityPatch = status === 'done' ? extractRunQualityPatch(meta) : {};
+      const blockedReport = status === 'done'
+        && meta
+        && typeof meta === 'object'
+        && meta.blocked_report
+        && typeof meta.blocked_report === 'object'
+        ? (meta.blocked_report as ReportIR)
+        : null;
+      const finalReport = (report as ReportIR | null) ?? blockedReport ?? run.report;
 
       let timeline = run.timeline;
       let pipelineStages = run.pipelineStages ?? createInitialPipelineStages();
@@ -892,8 +1114,9 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
       const completed: ExecutionRun = {
         ...run,
+        ...qualityPatch,
         status,
-        report: report ?? run.report,
+        report: finalReport,
         error: status === 'done' ? null : nextError,
         progress: nextProgress,
         currentStep: null,
@@ -941,6 +1164,104 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     });
   },
 
+  resumeExecution: async (runId, resumeValue) => {
+    const run = get().activeRuns.find((item) => item.runId === runId);
+    const threadId = run?.interruptData?.thread_id;
+    if (!run || run.status !== 'interrupted' || !threadId) return;
+
+    const abortController = new AbortController();
+    const resumedAt = new Date().toISOString();
+    set((state) => ({
+      activeRuns: state.activeRuns.map((item) => {
+        if (item.runId !== runId) return item;
+        return {
+          ...item,
+          status: 'running' as const,
+          currentStep: 'Resuming execution...',
+          error: null,
+          interruptData: null,
+          abortController,
+          completedAt: null,
+          timeline: pushTimeline(item, {
+            id: `${runId}:${Date.now()}:resume`,
+            timestamp: resumedAt,
+            eventType: 'resume',
+            stage: 'resume',
+            message: 'resume execution',
+            runId,
+          }),
+        };
+      }),
+    }));
+
+    const callbacks: SSECallbacks = {
+      onThinking: (step) => {
+        get().ingestExternalThinking(runId, step);
+      },
+      onToken: (token = '') => {
+        get().ingestExternalToken(runId, token);
+      },
+      onDone: (report, _thinking, meta) => {
+        const streamRunId = typeof meta?.run_id === 'string' ? meta.run_id : undefined;
+        if (streamRunId && streamRunId !== runId) return;
+        get().completeExternalExecution({
+          runId,
+          status: 'done',
+          report: (report as ReportIR) ?? null,
+          meta: (meta && typeof meta === 'object') ? meta : undefined,
+        });
+      },
+      onError: (error) => {
+        get().completeExternalExecution({
+          runId,
+          status: 'error',
+          error: error ?? 'Resume failed',
+        });
+      },
+      onInterrupt: (data) => {
+        get().interruptExternalExecution(runId, data);
+      },
+      onRawEvent: (event) => {
+        useStore.getState().addRawEvent(event);
+      },
+    };
+
+    const traceRawEnabled = useStore.getState().traceRawEnabled;
+    try {
+      await apiClient.resumeExecution(
+        {
+          thread_id: threadId,
+          resume_value: resumeValue,
+          session_id: useStore.getState().sessionId,
+          source: run.source || 'execute_resume',
+          run_id: runId,
+        },
+        callbacks,
+        {
+          signal: abortController.signal,
+          traceRawEnabled,
+        },
+      );
+
+      const latest = get().activeRuns.find((item) => item.runId === runId);
+      if (latest && latest.status === 'running') {
+        get().completeExternalExecution({
+          runId,
+          status: 'error',
+          error: 'Resume stream ended unexpectedly (missing done event)',
+        });
+      }
+    } catch (err: unknown) {
+      if (abortController.signal.aborted) return;
+      const message = err instanceof Error ? err.message : 'Resume failed';
+      get().completeExternalExecution({
+        runId,
+        status: 'error',
+        error: message,
+      });
+    }
+  },
+
   cancelExecution: (runId) => {
     const run = get().activeRuns.find((item) => item.runId === runId);
     if (!run) return;
@@ -978,3 +1299,4 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }));
   },
 }));
+

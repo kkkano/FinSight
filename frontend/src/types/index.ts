@@ -108,6 +108,26 @@ export interface CoreViewpoint {
   status: string;
 }
 
+export interface ReportQualityReason {
+  code: string;
+  severity: 'warn' | 'block';
+  metric: string;
+  actual?: unknown;
+  threshold?: unknown;
+  message: string;
+}
+
+export interface ReportQuality {
+  schema_version?: string;
+  state: 'pass' | 'warn' | 'block';
+  reasons: ReportQualityReason[];
+  metrics?: Record<string, unknown>;
+  thresholds?: Record<string, unknown>;
+  details?: Record<string, unknown>;
+  inputs?: Record<string, unknown>;
+  evaluated_at?: string;
+}
+
 export interface ReportIR {
   report_id: string;
   ticker: string;
@@ -126,6 +146,7 @@ export interface ReportIR {
   risks?: string[];
   recommendation?: string;
   tags?: string[];
+  report_quality?: ReportQuality;
   report_hints?: {
     is_compare?: boolean;
     has_conflict?: boolean;
@@ -255,6 +276,7 @@ export type RawEventType =
   | 'plan_ready'
   // Pipeline stage events
   | 'pipeline_stage'
+  | 'quality_blocked'
   // Structured decision summaries
   | 'decision_note'
   // Supervisor 执行

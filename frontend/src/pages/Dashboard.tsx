@@ -33,7 +33,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const lastErrorRef = useRef<string | null>(null);
 
   const [currentSymbol, setCurrentSymbol] = useState<string>(
-    () => initialSymbol || activeAsset?.symbol || 'AAPL',
+    () => initialSymbol || activeAsset?.symbol || '',
   );
 
   useEffect(() => {
@@ -84,6 +84,26 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const snapshot = dashboardData?.snapshot ?? {};
   const charts = dashboardData?.charts ?? {};
   const valuation = dashboardData?.valuation ?? null;
+
+  // No symbol selected — show onboarding prompt instead of loading empty data
+  if (!currentSymbol) {
+    return (
+      <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">
+        <aside className="w-[220px] shrink-0 border-r border-fin-border bg-fin-card flex flex-col max-lg:w-full max-lg:h-[220px] max-lg:border-r-0 max-lg:border-b">
+          <Watchlist activeSymbol="" onSymbolSelect={handleSymbolChange} />
+        </aside>
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col items-center justify-center bg-fin-bg">
+          <div className="text-center max-w-md px-6">
+            <div className="text-4xl mb-4">📊</div>
+            <h2 className="text-lg font-semibold text-fin-text mb-2">选择一只股票开始分析</h2>
+            <p className="text-sm text-fin-muted mb-6">
+              在左侧自选列表中点击一只股票，或在上方搜索栏输入代码（如 AAPL、TSLA、GOOGL）
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden max-lg:flex-col">

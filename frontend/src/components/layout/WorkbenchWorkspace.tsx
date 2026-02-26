@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
+import { ChevronUp, Loader2 } from 'lucide-react';
 
 import { AgentLogPanel } from '../agent-log';
 import { ExecutionPanel } from '../execution/ExecutionPanel';
@@ -37,6 +39,24 @@ export function WorkbenchWorkspace({
       ?? state.recentRuns[0]?.runId
       ?? null
   ));
+  const latestRunStatus = useExecutionStore((state) => {
+    const run = state.activeRuns[state.activeRuns.length - 1]
+      ?? state.recentRuns[0]
+      ?? null;
+    return run?.status ?? null;
+  });
+
+  const [collapsed, setCollapsed] = useState(false);
+
+  // 执行中自动展开面板
+  useEffect(() => {
+    if (latestRunStatus === 'running' || latestRunStatus === 'interrupted') {
+      setCollapsed(false);
+    }
+  }, [latestRunStatus]);
+
+  const hasRun = latestRunId !== null;
+  const isDevTrace = traceViewMode === 'dev';
 
   return (
     <div className="h-full flex-1 min-w-0 flex min-h-0 overflow-hidden relative max-lg:flex-col">
@@ -48,16 +68,34 @@ export function WorkbenchWorkspace({
             onNavigateToChat={onNavigateToChat}
           />
         </div>
-        <div className="shrink-0 px-5 pb-5 max-lg:px-3 max-lg:pb-3">
-          {traceViewMode === 'dev' ? (
-            <AgentLogPanel />
-          ) : (
-            <ExecutionPanel
-              runId={latestRunId}
-              mode={traceViewMode === 'expert' ? 'expert' : 'user'}
-            />
-          )}
-        </div>
+
+        {/* 执行追踪面板：无任务时隐藏，折叠时显示迷你状态栏 */}
+        {hasRun && (
+          <div className="shrink-0 px-5 pb-5 max-lg:px-3 max-lg:pb-3">
+            {collapsed ? (
+              <button
+                type="button"
+                onClick={() => setCollapsed(false)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-fin-border bg-fin-card text-xs text-fin-muted hover:bg-fin-hover transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  {latestRunStatus === 'running' && <Loader2 size={12} className="animate-spin text-blue-300" />}
+                  执行追踪（已折叠）
+                </span>
+                <ChevronUp size={14} />
+              </button>
+            ) : isDevTrace ? (
+              <AgentLogPanel />
+            ) : (
+              <ExecutionPanel
+                runId={latestRunId}
+                mode={traceViewMode === 'expert' ? 'expert' : 'user'}
+                collapsible
+                onCollapse={() => setCollapsed(true)}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <ContextPanelShell

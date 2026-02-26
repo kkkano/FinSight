@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { formatCurrency } from '../../utils/format';
 import type { PortfolioSummaryPosition } from '../../api/client';
 
 // --- Props ---
@@ -15,14 +16,6 @@ import type { PortfolioSummaryPosition } from '../../api/client';
 interface PortfolioPieChartProps {
   positions: PortfolioSummaryPosition[];
   totalValue: number;
-}
-
-// --- Helpers ---
-
-function formatCurrency(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
 }
 
 // --- Component ---

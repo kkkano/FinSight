@@ -1,34 +1,34 @@
 """
 FinSight API Pydantic Schemas
-Pydantic V2 models for request validation and response documentation.
 """
-from pydantic import BaseModel, Field, field_validator
-from typing import Any, Optional, Literal
+
 from datetime import datetime
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, Field, field_validator
 
 from backend.contracts import CHAT_REQUEST_SCHEMA_VERSION, CHAT_RESPONSE_SCHEMA_VERSION
 
 
-# ============== Request Models ==============
+# ==================== Request Models ====================
+
 
 class ChatMessage(BaseModel):
-    """对话消息"""
-    role: str = Field(..., description="消息角色: user/assistant")
-    content: str = Field(..., description="消息内容")
+    role: str = Field(..., description="message role")
+    content: str = Field(..., description="message content")
 
 
 class SelectionContext(BaseModel):
-    """选中对象的上下文（用于 MiniChat 引用特定新闻/报告）"""
     type: Literal["news", "filing", "doc", "report", "risk", "insight"] = Field(
         ...,
-        description="对象类型: news/filing/doc/risk/insight（兼容旧值 report，会自动归一为 doc）",
+        description="selection type",
     )
-    id: str = Field(..., description="对象ID（hash）")
-    title: str = Field(..., description="标题")
-    url: Optional[str] = Field(None, description="链接")
-    source: Optional[str] = Field(None, description="来源")
-    ts: Optional[str] = Field(None, description="时间戳")
-    snippet: Optional[str] = Field(None, description="摘要/前100字")
+    id: str = Field(..., description="selection id")
+    title: str = Field(..., description="selection title")
+    url: Optional[str] = Field(None, description="selection url")
+    source: Optional[str] = Field(None, description="selection source")
+    ts: Optional[str] = Field(None, description="selection timestamp")
+    snippet: Optional[str] = Field(None, description="selection snippet")
 
     @field_validator("type", mode="before")
     @classmethod
@@ -36,48 +36,48 @@ class SelectionContext(BaseModel):
         if not isinstance(v, str):
             return v
         lowered = v.strip().lower()
-        # Legacy compatibility: `report` used to mean "input document". Normalize to `doc`.
         if lowered == "report":
             return "doc"
         return lowered
 
+
 class ChatContext(BaseModel):
-    """临时上下文（仅本次请求生效，不入库）"""
-    active_symbol: Optional[str] = Field(None, description="当前关注的股票代码")
-    view: Optional[str] = Field(None, description="当前视图: chat/dashboard")
-    selection: Optional[SelectionContext] = Field(None, description="当前选中的 news/filing/doc 引用")
-    selections: Optional[list[SelectionContext]] = Field(None, description="当前多选的 news/filing/doc 引用列表")
+    active_symbol: Optional[str] = Field(None, description="active symbol")
+    view: Optional[str] = Field(None, description="ui view")
+    selection: Optional[SelectionContext] = Field(None, description="single selection")
+    selections: Optional[list[SelectionContext]] = Field(None, description="multi selection")
 
 
 class ChatOptions(BaseModel):
-    """前端可控参数（不写入长期记忆，仅本次请求生效）"""
-
     output_mode: Optional[Literal["chat", "brief", "investment_report"]] = Field(
         None,
-        description="输出模式：chat/brief/investment_report（研报必须显式选择或强词触发）",
+        description="output mode",
     )
     strict_selection: Optional[bool] = Field(
         None,
-        description="是否强制围绕 selection（默认 False，更自由）",
+        description="strict selection mode",
     )
-    locale: Optional[str] = Field(None, description="语言/区域，例如 zh-CN")
+    confirmation_mode: Optional[Literal["auto", "required", "skip"]] = Field(
+        None,
+        description="confirmation strategy",
+    )
+    locale: Optional[str] = Field(None, description="locale")
     trace_raw_override: Optional[Literal["on", "off", "inherit"]] = Field(
         None,
-        description="Raw Trace 可见性覆盖：on/off/inherit（inherit=沿用服务端默认）",
+        description="raw trace visibility override",
     )
 
 
 class ChatRequest(BaseModel):
-    """聊天请求"""
     schema_version: str = Field(
         default=CHAT_REQUEST_SCHEMA_VERSION,
-        description="请求契约版本（默认 chat.request.v1）",
+        description="request schema version",
     )
-    query: str = Field(..., min_length=1, description="用户查询内容")
-    session_id: Optional[str] = Field(None, description="会话ID")
-    history: Optional[list[ChatMessage]] = Field(None, description="对话历史(后端按 CHAT_HISTORY_MAX_MESSAGES 截断)")
-    context: Optional[ChatContext] = Field(None, description="临时上下文（不入库，仅当次请求生效）")
-    options: Optional[ChatOptions] = Field(None, description="输出/路由选项（仅本次请求生效）")
+    query: str = Field(..., min_length=1, description="user query")
+    session_id: Optional[str] = Field(None, description="session id")
+    history: Optional[list[ChatMessage]] = Field(None, description="conversation history")
+    context: Optional[ChatContext] = Field(None, description="ephemeral context")
+    options: Optional[ChatOptions] = Field(None, description="request options")
 
     model_config = {"extra": "ignore"}
 
@@ -90,19 +90,16 @@ class ChatRequest(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    """分析请求"""
-    query: str = Field(..., description="分析查询")
-    user_id: str = Field("default_user", description="用户ID")
+    query: str = Field(..., description="analysis query")
+    user_id: str = Field("default_user", description="user id")
 
 
 class SubscriptionRequest(BaseModel):
-    """订阅请求"""
-    email: str = Field(..., min_length=3, description="用户邮箱")
-    ticker: str = Field(..., min_length=1, description="股票代码")
-    alert_types: Optional[list[str]] = Field(None, description="提醒类型")
-    price_threshold: Optional[float] = Field(None, description="价格阈值(%)")
-
-    risk_threshold: Optional[str] = Field("high", description="Risk alert threshold: low/medium/high/critical")
+    email: str = Field(..., min_length=3, description="email")
+    ticker: str = Field(..., min_length=1, description="ticker")
+    alert_types: Optional[list[str]] = Field(None, description="alert types")
+    price_threshold: Optional[float] = Field(None, description="price threshold")
+    risk_threshold: Optional[str] = Field("high", description="risk threshold")
 
     @field_validator("alert_types", mode="before")
     @classmethod
@@ -138,188 +135,162 @@ class SubscriptionRequest(BaseModel):
 
 
 class UnsubscribeRequest(BaseModel):
-    """取消订阅请求"""
-    email: str = Field(..., min_length=3, description="用户邮箱")
-    ticker: Optional[str] = Field(None, min_length=1, description="股票代码")
+    email: str = Field(..., min_length=3, description="email")
+    ticker: Optional[str] = Field(None, min_length=1, description="ticker")
+
 
 class ToggleSubscriptionRequest(BaseModel):
-    """启用/禁用订阅请求"""
-    email: str = Field(..., min_length=3, description="用户邮箱")
-    ticker: str = Field(..., min_length=1, description="股票代码")
-    enabled: bool = Field(..., description="True=启用, False=禁用")
-
-
+    email: str = Field(..., min_length=3, description="email")
+    ticker: str = Field(..., min_length=1, description="ticker")
+    enabled: bool = Field(..., description="enable flag")
 
 
 class UserProfileUpdateRequest(BaseModel):
-    """用户画像更新请求"""
-    user_id: str = Field("default_user", description="用户ID")
-    profile: dict[str, Any] = Field(default_factory=dict, description="画像数据")
+    user_id: str = Field("default_user", description="user id")
+    profile: dict[str, Any] = Field(default_factory=dict, description="profile payload")
 
 
 class WatchlistRequest(BaseModel):
-    """关注列表请求"""
-    user_id: str = Field("default_user", description="用户ID")
-    ticker: str = Field(..., description="股票代码")
+    user_id: str = Field("default_user", description="user id")
+    ticker: str = Field(..., description="ticker")
 
 
 class ChartDetectRequest(BaseModel):
-    """图表检测请求"""
-    query: str = Field(..., description="用户查询")
-    ticker: Optional[str] = Field(None, description="股票代码")
+    query: str = Field(..., description="query")
+    ticker: Optional[str] = Field(None, description="ticker")
 
 
 class ChartDataRequest(BaseModel):
-    """图表数据请求"""
-    ticker: str = Field(..., description="股票代码")
-    summary: str = Field(..., description="图表数据摘要")
+    ticker: str = Field(..., description="ticker")
+    summary: str = Field(..., description="chart summary")
 
 
 class ConfigRequest(BaseModel):
-    """配置保存请求"""
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     llm_api_key: Optional[str] = None
     llm_api_base: Optional[str] = None
     llm_endpoints: Optional[list[dict[str, Any]]] = None
-    layout_mode: str = Field("centered", description="布局模式")
+    layout_mode: str = Field("centered", description="layout mode")
 
     model_config = {"extra": "allow"}
 
 
 class ExportPdfRequest(BaseModel):
-    """PDF导出请求"""
-    messages: list[dict[str, Any]] = Field(..., description="对话消息列表")
-    charts: list[dict[str, Any]] = Field(default_factory=list, description="图表列表")
-    title: str = Field("FinSight 对话记录", description="PDF标题")
+    messages: list[dict[str, Any]] = Field(..., description="messages")
+    charts: list[dict[str, Any]] = Field(default_factory=list, description="charts")
+    title: str = Field("FinSight 对话记录", description="pdf title")
 
 
-# ============== Response Models ==============
+# ==================== Response Models ====================
+
 
 class BaseResponse(BaseModel):
-    """基础响应"""
-    success: bool = Field(..., description="是否成功")
+    success: bool = Field(..., description="success flag")
 
 
 class ErrorResponse(BaseResponse):
-    """错误响应"""
     success: bool = False
-    error: str = Field(..., description="错误信息")
+    error: str = Field(..., description="error message")
 
 
 class ClassificationInfo(BaseModel):
-    """意图分类信息"""
-    method: Optional[str] = Field(None, description="分类方法")
-    confidence: Optional[float] = Field(None, description="置信度")
+    method: Optional[str] = Field(None, description="classification method")
+    confidence: Optional[float] = Field(None, description="classification confidence")
 
 
 class ThinkingStep(BaseModel):
-    """思考步骤"""
-    stage: str = Field(..., description="阶段名称")
-    message: str = Field(..., description="阶段描述")
-    timestamp: str = Field(..., description="时间戳")
-    result: Optional[dict[str, Any]] = Field(None, description="阶段结果")
+    stage: str = Field(..., description="stage name")
+    message: str = Field(..., description="stage message")
+    timestamp: str = Field(..., description="timestamp")
+    result: Optional[dict[str, Any]] = Field(None, description="stage result")
 
 
 class ChatResponse(BaseResponse):
-    """聊天响应"""
-    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="响应契约版本")
-    response: str = Field(..., description="AI回复内容")
-    intent: Optional[str] = Field(None, description="识别的意图")
-    current_focus: Optional[str] = Field(None, description="当前关注股票")
-    response_time_ms: int = Field(0, description="响应时间(ms)")
-    session_id: str = Field(..., description="会话ID")
-    thinking: list[dict[str, Any]] = Field(default_factory=list, description="思考过程")
-    report: Optional[dict[str, Any]] = Field(None, description="报告数据")
-    data: Optional[dict[str, Any]] = Field(None, description="附加数据")
-    metadata: Optional[dict[str, Any]] = Field(None, description="元数据")
-    method: Optional[str] = Field(None, description="处理方法")
+    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="response schema version")
+    response: str = Field(..., description="assistant response")
+    intent: Optional[str] = Field(None, description="intent")
+    current_focus: Optional[str] = Field(None, description="current focus")
+    response_time_ms: int = Field(0, description="response time ms")
+    session_id: str = Field(..., description="session id")
+    thinking: list[dict[str, Any]] = Field(default_factory=list, description="thinking trace")
+    report: Optional[dict[str, Any]] = Field(None, description="report payload")
+    data: Optional[dict[str, Any]] = Field(None, description="extra data")
+    metadata: Optional[dict[str, Any]] = Field(None, description="metadata")
+    method: Optional[str] = Field(None, description="execution method")
 
 
 class SupervisorResponse(BaseResponse):
-    """Supervisor模式响应"""
-    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="响应契约版本")
-    response: str = Field(..., description="AI回复内容")
-    intent: Optional[str] = Field(None, description="识别的意图")
-    classification: Optional[ClassificationInfo] = Field(None, description="分类信息")
-    session_id: str = Field(..., description="会话ID")
+    schema_version: str = Field(CHAT_RESPONSE_SCHEMA_VERSION, description="response schema version")
+    response: str = Field(..., description="assistant response")
+    intent: Optional[str] = Field(None, description="intent")
+    classification: Optional[ClassificationInfo] = Field(None, description="classification")
+    session_id: str = Field(..., description="session id")
 
 
 class ComponentStatus(BaseModel):
-    """组件状态"""
-    status: str = Field(..., description="状态")
+    status: str = Field(..., description="component status")
     available: Optional[bool] = None
     reason: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应"""
-    status: str = Field(..., description="整体状态")
-    components: dict[str, ComponentStatus] = Field(..., description="组件状态")
-    timestamp: str = Field(..., description="时间戳")
+    status: str = Field(..., description="overall status")
+    components: dict[str, ComponentStatus] = Field(..., description="components")
+    timestamp: str = Field(..., description="timestamp")
 
 
 class RootResponse(BaseModel):
-    """根路径响应"""
-    status: str = Field(..., description="服务状态")
-    message: str = Field(..., description="服务信息")
-    timestamp: str = Field(..., description="时间戳")
+    status: str = Field(..., description="service status")
+    message: str = Field(..., description="service message")
+    timestamp: str = Field(..., description="timestamp")
 
 
 class DiagnosticsResponse(BaseModel):
-    """诊断响应"""
-    status: str = Field(..., description="状态")
-    data: dict[str, Any] = Field(..., description="诊断数据")
-    timestamp: str = Field(..., description="时间戳")
+    status: str = Field(..., description="diagnostics status")
+    data: dict[str, Any] = Field(..., description="diagnostics payload")
+    timestamp: str = Field(..., description="timestamp")
 
 
 class UserProfileResponse(BaseResponse):
-    """用户画像响应"""
-    profile: Optional[dict[str, Any]] = Field(None, description="用户画像")
+    profile: Optional[dict[str, Any]] = Field(None, description="user profile")
 
 
 class SubscriptionResponse(BaseResponse):
-    """订阅响应"""
-    message: str = Field(..., description="操作结果")
-    email: str = Field(..., description="邮箱")
-    ticker: str = Field(..., description="股票代码")
+    message: str = Field(..., description="operation message")
+    email: str = Field(..., description="email")
+    ticker: str = Field(..., description="ticker")
 
 
 class SubscriptionListResponse(BaseResponse):
-    """订阅列表响应"""
-    subscriptions: list[dict[str, Any]] = Field(..., description="订阅列表")
-    count: int = Field(..., description="订阅数量")
+    subscriptions: list[dict[str, Any]] = Field(..., description="subscriptions")
+    count: int = Field(..., description="count")
 
 
 class StockDataResponse(BaseModel):
-    """股票数据响应"""
-    ticker: str = Field(..., description="股票代码")
-    data: Optional[dict[str, Any]] = Field(None, description="数据")
-    cached: bool = Field(False, description="是否来自缓存")
-    error: Optional[str] = Field(None, description="错误信息")
+    ticker: str = Field(..., description="ticker")
+    data: Optional[dict[str, Any]] = Field(None, description="stock data")
+    cached: bool = Field(False, description="cached flag")
+    error: Optional[str] = Field(None, description="error")
 
 
 class KlineResponse(BaseModel):
-    """K线数据响应"""
-    ticker: str = Field(..., description="股票代码")
-    data: dict[str, Any] = Field(..., description="K线数据")
-    cached: bool = Field(False, description="是否来自缓存")
+    ticker: str = Field(..., description="ticker")
+    data: dict[str, Any] = Field(..., description="kline data")
+    cached: bool = Field(False, description="cached flag")
 
 
 class ConfigResponse(BaseResponse):
-    """配置响应"""
-    config: dict[str, Any] = Field(..., description="配置数据")
+    config: dict[str, Any] = Field(..., description="config")
 
 
 class ChartDetectResponse(BaseResponse):
-    """图表检测响应"""
-    should_generate: bool = Field(False, description="是否生成图表")
-    chart_type: str = Field("none", description="图表类型")
-    data_dimension: str = Field("none", description="数据维度")
-    confidence: float = Field(0.0, description="置信度")
-    reason: str = Field("", description="原因")
+    should_generate: bool = Field(False, description="should generate chart")
+    chart_type: str = Field("none", description="chart type")
+    data_dimension: str = Field("none", description="data dimension")
+    confidence: float = Field(0.0, description="confidence")
+    reason: str = Field("", description="reason")
 
 
 class ChartDataResponse(BaseResponse):
-    """图表数据响应"""
-    message: str = Field(..., description="操作结果")
+    message: str = Field(..., description="operation message")

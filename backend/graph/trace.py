@@ -11,6 +11,47 @@ from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
 from backend.services.langfuse_tracer import langfuse_span
 
+# Maximum number of trace spans retained in state.
+# Older spans are dropped (FIFO) when the limit is exceeded.
+# A typical turn produces ~6-8 spans, so 200 covers ~25-30 turns.
+MAX_TRACE_SPANS = 200
+
+
+# ---------------------------------------------------------------------------
+# NODE_USER_MESSAGES: 用户友好的中文消息映射
+# 每个 Graph 节点对应一条面向普通用户的简短中文描述，
+# 通过 SSE userMessage 字段传递给前端 ThinkingBubble 组件。
+# ---------------------------------------------------------------------------
+NODE_USER_MESSAGES: dict[str, str] = {
+    "build_initial_state": "正在准备分析环境...",
+    "reset_turn": "正在重置对话轮次...",
+    "trim_messages": "正在整理对话记录...",
+    "summarize_history": "正在回顾历史对话...",
+    "normalize_ui_context": "正在理解你的操作意图...",
+    "decide_output_mode": "正在判断最佳输出方式...",
+    "chat_respond": "正在思考回复...",
+    "resolve_subject": "正在识别你关注的标的...",
+    "clarify": "需要进一步确认你的意图...",
+    "parse_operation": "正在分析你想做什么...",
+    "policy_gate": "正在制定分析策略...",
+    "planner": "正在规划分析步骤...",
+    "confirmation_gate": "正在确认执行方案...",
+    "execute_plan": "正在执行分析计划...",
+    "synthesize": "正在整合分析结果...",
+    "render": "正在生成最终报告...",
+}
+
+# Agent 中文名称映射（供前端 AgentSummaryCards 使用）
+AGENT_DISPLAY_NAMES: dict[str, str] = {
+    "price_agent": "行情分析师",
+    "news_agent": "新闻分析师",
+    "fundamental_agent": "基本面分析师",
+    "technical_agent": "技术面分析师",
+    "macro_agent": "宏观分析师",
+    "risk_agent": "风险分析师",
+    "deep_search_agent": "深度研究员",
+}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -302,12 +343,14 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
         spans = list(base_trace.get("spans") or [])
 
         # ========== SSE 实时推送：节点启动 ==========
+        user_message = NODE_USER_MESSAGES.get(node_name)
         await emit_event(
             {
                 "schema_version": TRACE_SCHEMA_VERSION,
                 "type": "thinking",
                 "stage": f"langgraph_{node_name}_start",
                 "message": node_name,
+                "userMessage": user_message,
                 "timestamp": _utc_now_iso(),
             }
         )
@@ -347,6 +390,10 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
             span["data"] = data
         spans.append(span)
 
+        # Cap spans to prevent unbounded growth in long sessions.
+        if len(spans) > MAX_TRACE_SPANS:
+            spans = spans[-MAX_TRACE_SPANS:]
+
         # SSE 实时推送：节点完成
         await emit_event(
             {
@@ -354,6 +401,7 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
                 "type": "thinking",
                 "stage": f"langgraph_{node_name}_done",
                 "message": node_name,
+                "userMessage": user_message,
                 "result": {"duration_ms": duration_ms, **(data or {})},
                 "timestamp": _utc_now_iso(),
             }

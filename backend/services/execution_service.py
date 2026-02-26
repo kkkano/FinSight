@@ -10,11 +10,17 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 from uuid import uuid4
 
+from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
+
 logger = logging.getLogger("execution_service")
+
+
+def _utc_iso_now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def _normalize_run_id(run_id: str | None) -> str:
@@ -73,6 +79,16 @@ def _annotate_report_source(
     return report
 
 
+def _apply_quality_gate(
+    *,
+    report: dict[str, Any] | None,
+    source: str,
+) -> tuple[dict[str, Any], bool]:
+    quality, blocked = apply_quality_to_report(report)
+    record_quality_metrics(quality, source=source)
+    return quality, blocked
+
+
 def _execution_timeout_seconds(output_mode: str | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
@@ -125,6 +141,7 @@ async def run_graph_pipeline(
     ui_context: dict[str, Any] | None = None,
     output_mode: str | None = None,
     strict_selection: str | None = None,
+    confirmation_mode: str | None = None,
     original_query: str | None = None,
     source: str | None = None,
     trace_raw_enabled: bool = False,
@@ -169,7 +186,7 @@ async def run_graph_pipeline(
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
     run_id_value = _normalize_run_id(run_id)
-    request_started_at = datetime.utcnow().isoformat()
+    request_started_at = _utc_iso_now()
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -247,7 +264,7 @@ async def run_graph_pipeline(
                     "type": "thinking",
                     "stage": "langgraph_start",
                     "message": "LangGraph",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -265,6 +282,7 @@ async def run_graph_pipeline(
                         ui_context=ui_context or {},
                         output_mode=output_mode,
                         strict_selection=strict_selection,
+                        confirmation_mode=confirmation_mode,
                     ),
                     timeout=timeout_seconds,
                 )
@@ -329,65 +347,91 @@ async def run_graph_pipeline(
                     exc,
                     exc_info=True,
                 )
-
-            # 4. Persist report index (async / fire-and-forget)
-            deps.schedule_report_index(
-                session_id=thread_id, report=report, state=state,
+            report_quality, quality_blocked = _apply_quality_gate(
+                report=report,
+                source="execute_run",
             )
+            blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
+            response_markdown = "" if quality_blocked else markdown
+            persisted_report = None if quality_blocked else report
+
+            if quality_blocked:
+                blocked_reason_codes = [
+                    str(item.get("code") or "").strip()
+                    for item in (report_quality.get("reasons") or [])
+                    if isinstance(item, dict)
+                ]
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": "Report blocked by quality gate",
+                        "quality": report_quality,
+                        "blocked_reason_codes": [code for code in blocked_reason_codes if code],
+                        "publishable": False,
+                        "blocked_report_available": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": bool(blocked_report_preview),
+                    }
+                )
+            elif isinstance(report, dict):
+                # 4. Persist report index (async / fire-and-forget)
+                deps.schedule_report_index(
+                    session_id=thread_id, report=report, state=state,
+                )
 
             # 5. Update conversational session context
             deps.update_session_context(
                 thread_id=thread_id,
                 original_query=original_query or query,
-                response_markdown=markdown,
+                response_markdown=response_markdown,
                 subject=state.get("subject"),
             )
 
             # 5b. Persist lightweight long-term memory snapshot (best-effort)
-            try:
-                from backend.graph.store import persist_memory_snapshot
+            if not quality_blocked:
+                try:
+                    from backend.graph.store import persist_memory_snapshot
 
-                persist_memory_snapshot(
-                    thread_id=thread_id,
-                    state=state,
-                    report=report,
-                )
-            except Exception as exc:
-                logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
-
-            # 6. Stream markdown in chunks
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "start",
-                    "message": "Rendering markdown stream",
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-            )
-            for idx in range(0, len(markdown), markdown_chunk_size):
-                chunk = markdown[idx: idx + markdown_chunk_size]
-                if chunk:
-                    await _queue_event(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "token",
-                            "content": chunk,
-                        }
+                    persist_memory_snapshot(
+                        thread_id=thread_id,
+                        state=state,
+                        report=report,
                     )
-                await asyncio.sleep(0)
+                except Exception as exc:
+                    logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
 
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "done",
-                    "message": "Rendering stream completed",
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-            )
+                # 6. Stream markdown in chunks
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "start",
+                        "message": "Rendering markdown stream",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+                for idx in range(0, len(markdown), markdown_chunk_size):
+                    chunk = markdown[idx: idx + markdown_chunk_size]
+                    if chunk:
+                        await _queue_event(
+                            {
+                                "schema_version": deps.sse_event_schema_version,
+                                "type": "token",
+                                "content": chunk,
+                            }
+                        )
+                    await asyncio.sleep(0)
+
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "done",
+                        "message": "Rendering stream completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
 
             # 7. Final "done" event
             llm_total_calls = stream_metrics.get("llm_start", 0)
@@ -406,8 +450,14 @@ async def run_graph_pipeline(
                     "intent": "chat",
                     "session_id": thread_id,
                     "source": source,
-                    "response": markdown,
-                    "report": report,
+                    "response": response_markdown,
+                    "report": persisted_report,
+                    "blocked_report": blocked_report_preview,
+                    "quality": report_quality,
+                    "quality_blocked": quality_blocked,
+                    "publishable": not quality_blocked,
+                    "blocked_report_available": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": bool(blocked_report_preview),
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -418,7 +468,7 @@ async def run_graph_pipeline(
                         "llm_total_calls": llm_total_calls,
                         "tool_total_calls": tool_total_calls,
                         "request_started_at": request_started_at,
-                        "request_finished_at": datetime.utcnow().isoformat(),
+                        "request_finished_at": _utc_iso_now(),
                     },
                 }
             )
@@ -489,7 +539,7 @@ async def resume_graph_pipeline(
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
     run_id_value = _normalize_run_id(run_id)
-    request_started_at = datetime.utcnow().isoformat()
+    request_started_at = _utc_iso_now()
 
     def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
         outgoing = deps.redact_sensitive_payload(dict(payload))
@@ -544,7 +594,7 @@ async def resume_graph_pipeline(
                     "type": "thinking",
                     "stage": "resume_start",
                     "message": "Resuming execution",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": _utc_iso_now(),
                 }
             )
 
@@ -582,57 +632,83 @@ async def resume_graph_pipeline(
                 report = _annotate_report_source(report, source)
             except Exception as exc:
                 logger.warning("[resume_pipeline] report build failed: %s", exc)
-
-            # Persist report index
-            deps.schedule_report_index(
-                session_id=thread_id, report=report, state=final_state,
+            report_quality, quality_blocked = _apply_quality_gate(
+                report=report,
+                source="execute_resume",
             )
+            blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
+            response_markdown = "" if quality_blocked else markdown
+            persisted_report = None if quality_blocked else report
+
+            if quality_blocked:
+                blocked_reason_codes = [
+                    str(item.get("code") or "").strip()
+                    for item in (report_quality.get("reasons") or [])
+                    if isinstance(item, dict)
+                ]
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": "Report blocked by quality gate",
+                        "quality": report_quality,
+                        "blocked_reason_codes": [code for code in blocked_reason_codes if code],
+                        "publishable": False,
+                        "blocked_report_available": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": bool(blocked_report_preview),
+                    }
+                )
+            elif isinstance(report, dict):
+                # Persist report index
+                deps.schedule_report_index(
+                    session_id=thread_id, report=report, state=final_state,
+                )
 
             # Persist lightweight long-term memory snapshot (best-effort)
-            try:
-                from backend.graph.store import persist_memory_snapshot
+            if not quality_blocked:
+                try:
+                    from backend.graph.store import persist_memory_snapshot
 
-                persist_memory_snapshot(
-                    thread_id=thread_id,
-                    state=final_state,
-                    report=report,
-                )
-            except Exception as exc:
-                logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
-
-            # Stream markdown
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "start",
-                    "message": "Rendering markdown stream",
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-            )
-            for idx in range(0, len(markdown), markdown_chunk_size):
-                chunk = markdown[idx: idx + markdown_chunk_size]
-                if chunk:
-                    await _queue_event(
-                        {
-                            "schema_version": deps.sse_event_schema_version,
-                            "type": "token",
-                            "content": chunk,
-                        }
+                    persist_memory_snapshot(
+                        thread_id=thread_id,
+                        state=final_state,
+                        report=report,
                     )
-                await asyncio.sleep(0)
+                except Exception as exc:
+                    logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
 
-            await _queue_event(
-                {
-                    "schema_version": deps.sse_event_schema_version,
-                    "type": "pipeline_stage",
-                    "stage": "rendering",
-                    "status": "done",
-                    "message": "Rendering stream completed",
-                    "timestamp": datetime.utcnow().isoformat(),
-                }
-            )
+                # Stream markdown
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "start",
+                        "message": "Rendering markdown stream",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+                for idx in range(0, len(markdown), markdown_chunk_size):
+                    chunk = markdown[idx: idx + markdown_chunk_size]
+                    if chunk:
+                        await _queue_event(
+                            {
+                                "schema_version": deps.sse_event_schema_version,
+                                "type": "token",
+                                "content": chunk,
+                            }
+                        )
+                    await asyncio.sleep(0)
+
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "rendering",
+                        "status": "done",
+                        "message": "Rendering stream completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
 
             # Done
             await _queue_event(
@@ -643,11 +719,17 @@ async def resume_graph_pipeline(
                     "intent": "resume",
                     "session_id": thread_id,
                     "source": source,
-                    "response": markdown,
-                    "report": report,
+                    "response": response_markdown,
+                    "report": persisted_report,
+                    "blocked_report": blocked_report_preview,
+                    "quality": report_quality,
+                    "quality_blocked": quality_blocked,
+                    "publishable": not quality_blocked,
+                    "blocked_report_available": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": bool(blocked_report_preview),
                     "metrics": {
                         "request_started_at": request_started_at,
-                        "request_finished_at": datetime.utcnow().isoformat(),
+                        "request_finished_at": _utc_iso_now(),
                     },
                 }
             )

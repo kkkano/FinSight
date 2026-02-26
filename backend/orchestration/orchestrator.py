@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
 
-# 娣诲姞椤圭洰鏍圭洰褰曞埌璺緞
+# 将项目根目录加入 Python 路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
@@ -49,7 +49,7 @@ class DataSource:
 
 @dataclass
 class FetchResult:
-    """鑾峰彇缁撴灉"""
+    """获取结果"""
     success: bool
     data: Any = None
     source: str = ""
@@ -117,7 +117,7 @@ class ToolOrchestrator:
         self.health_skip_seconds = 300
         self.health_latency_threshold_ms = int(os.getenv("PRICE_HEALTH_LATENCY_MS", "5000"))
         
-        # 濡傛灉鎻愪緵浜嗗伐鍏锋ā鍧楋紝绔嬪嵆鍒濆鍖栨暟鎹簮
+        # 如果提供了工具模块，立即初始化数据源
         if tools_module:
             self._init_sources()
     
@@ -280,7 +280,7 @@ class ToolOrchestrator:
                 continue
             sorted_sources.append((fr, src.consecutive_failures, src.priority, src))
         
-        # 濡傛灉鍏ㄩ儴琚烦杩囷紝閫€鍥炲師鍒楄〃
+        # 若全部源都被健康策略跳过，则回退为原始候选源
         if not sorted_sources:
             sorted_sources = [( _fail_rate(s), s.consecutive_failures, s.priority, s) for s in sources]
         
@@ -331,16 +331,16 @@ class ToolOrchestrator:
                     )
                     continue
 
-                # 3. 楠岃瘉鏁版嵁
+                # 3. 验证数据
                 validation = self.validator.validate(data_type, result)
                 
                 if validation.is_valid:
-                    # 4. 鏇存柊缂撳瓨
+                    # 4. 写入缓存
                     cache_key = f"{data_type}:{ticker}"
                     self.cache.set(cache_key, result, data_type=data_type)
                     trace_emitter.emit_cache_set(cache_key)
 
-                    # 鏇存柊缁熻
+                    # 更新统计
                     source.last_success = datetime.now()
                     source.consecutive_failures = 0
                     source.total_successes += 1
@@ -387,7 +387,7 @@ class ToolOrchestrator:
                         },
                     )
                 else:
-                    logger.info(f"[Orchestrator] {source.name} 鏁版嵁楠岃瘉澶辫触: {validation.issues}")
+                    logger.info(f"[Orchestrator] {source.name} 数据验证失败: {validation.issues}")
                     last_error = f"Validation failed: {validation.issues}"
                     source.consecutive_failures += 1
                     source.last_fail = datetime.now()
@@ -399,7 +399,7 @@ class ToolOrchestrator:
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
                         success=False, duration_ms=source_duration_ms,
-                        error=f"楠岃瘉澶辫触: {validation.issues}", fallback=(i > 0), tried_sources=list(tried_sources)
+                        error=f"验证失败: {validation.issues}", fallback=(i > 0), tried_sources=list(tried_sources)
                     )
 
             except Exception as e:
@@ -417,7 +417,7 @@ class ToolOrchestrator:
                     success=False, duration_ms=source_duration_ms,
                     error=str(e), fallback=(i > 0), tried_sources=list(tried_sources)
                 )
-                logger.info(f"[Orchestrator] {source.name} 澶辫触: {e}")
+                logger.info(f"[Orchestrator] {source.name} 失败: {e}")
                 continue
             
             time.sleep(0.3)
@@ -497,7 +497,7 @@ class ToolOrchestrator:
         """
         Direct tool fallback when no data sources are configured.
         """
-        fallback_as_of = datetime.utcnow().isoformat() + "Z"
+        fallback_as_of = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         if not self.tools_module:
             duration = (time.time() - start_time) * 1000
             observe_orch_latency(data_type, duration)
@@ -615,7 +615,7 @@ class ToolOrchestrator:
             )
 
     def get_stats(self) -> Dict[str, Any]:
-        """鑾峰彇缁熻淇℃伅"""
+        """获取统计信息"""
         cache_stats = self.cache.get_stats()
         now_dt = datetime.now()
         
@@ -665,7 +665,7 @@ class ToolOrchestrator:
         }
     
     def reset_stats(self):
-        """閲嶇疆缁熻"""
+        """重置统计"""
         self._stats = {
             'total_requests': 0,
             'cache_hits': 0,

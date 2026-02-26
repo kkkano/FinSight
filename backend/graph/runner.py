@@ -23,11 +23,13 @@ from backend.graph.nodes import (
     policy_gate,
     planner,
     render_stub,
+    reset_turn_state,
     resolve_subject,
     synthesize,
 )
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
+from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.graph.state import GraphState
 from backend.graph.trace import with_node_trace
 from backend.services.langfuse_tracer import langfuse_observe
@@ -44,6 +46,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     """
     graph = StateGraph(GraphState)
     graph.add_node("build_initial_state", with_node_trace("build_initial_state", build_initial_state))
+    graph.add_node("reset_turn_state", with_node_trace("reset_turn_state", reset_turn_state))
     graph.add_node("trim_history", with_node_trace("trim_history", trim_conversation_history))
     graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
@@ -60,7 +63,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("render", with_node_trace("render", render_stub))
 
     graph.add_edge(START, "build_initial_state")
-    graph.add_edge("build_initial_state", "trim_history")
+    graph.add_edge("build_initial_state", "reset_turn_state")
+    graph.add_edge("reset_turn_state", "trim_history")
     graph.add_edge("trim_history", "summarize_history")
     graph.add_edge("summarize_history", "normalize_ui_context")
     graph.add_edge("normalize_ui_context", "decide_output_mode")
@@ -93,7 +97,20 @@ def _build_graph(*, checkpointer: Any) -> Any:
 
     graph.add_edge("policy_gate", "planner")
     graph.add_edge("planner", "confirmation_gate")
-    graph.add_edge("confirmation_gate", "execute_plan")
+
+    def _route_after_confirmation(state: GraphState) -> str:
+        intent = str(state.get("confirmation_intent") or "confirm_execute").strip().lower()
+        if intent == "cancel_execution":
+            return END
+        if intent == "adjust_parameters":
+            return "planner"
+        return "execute_plan"
+
+    graph.add_conditional_edges(
+        "confirmation_gate",
+        _route_after_confirmation,
+        {"planner": "planner", "execute_plan": "execute_plan", END: END},
+    )
     graph.add_edge("execute_plan", "synthesize")
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)
@@ -124,6 +141,7 @@ class GraphRunner:
         ui_context: Optional[dict] = None,
         output_mode: Optional[str] = None,
         strict_selection: Optional[bool] = None,
+        confirmation_mode: Optional[str] = None,
     ) -> dict:
         state: dict = {
             "thread_id": thread_id,
@@ -134,6 +152,16 @@ class GraphRunner:
             state["output_mode"] = output_mode
         if strict_selection is not None:
             state["strict_selection"] = bool(strict_selection)
+        # Always reset confirmation controls for a new run so checkpointed
+        # thread state cannot leak stale values across requests.
+        normalized_mode = parse_confirmation_mode(confirmation_mode) or "auto"
+        state["confirmation_mode"] = normalized_mode
+        if normalized_mode == "required":
+            state["require_confirmation"] = True
+        elif normalized_mode == "skip":
+            state["require_confirmation"] = False
+        else:
+            state["require_confirmation"] = None
 
         config = {"configurable": {"thread_id": thread_id}}
         return await self._graph.ainvoke(state, config=config)
@@ -231,6 +259,7 @@ async def run_graph_traced(
     ui_context: dict | None = None,
     output_mode: str | None = None,
     strict_selection: bool | None = None,
+    confirmation_mode: str | None = None,
 ) -> dict:
     """
     带 Langfuse Trace 的图执行入口。
@@ -246,6 +275,7 @@ async def run_graph_traced(
         ui_context=ui_context,
         output_mode=output_mode,
         strict_selection=strict_selection,
+        confirmation_mode=confirmation_mode,
     )
 
 

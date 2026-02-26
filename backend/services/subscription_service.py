@@ -121,7 +121,7 @@ class SubscriptionService:
     def _prune_recent_events(self, events: List[Dict]) -> List[Dict]:
         if not isinstance(events, list):
             return []
-        cutoff = datetime.utcnow() - timedelta(days=max(1, ALERT_EVENTS_TTL_DAYS))
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max(1, ALERT_EVENTS_TTL_DAYS))
         keep: List[Dict] = []
         for item in events:
             if not isinstance(item, dict):
@@ -386,7 +386,7 @@ class SubscriptionService:
             return False
 
         updated = False
-        now_iso = triggered_at or datetime.utcnow().isoformat()
+        now_iso = triggered_at or datetime.now(timezone.utc).isoformat()
         normalized_ticker = str(ticker or "").strip().upper()
 
         for sub in self.subscriptions[email]:

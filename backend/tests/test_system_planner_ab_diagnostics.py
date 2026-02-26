@@ -3,6 +3,7 @@
 import importlib
 import os
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -13,11 +14,15 @@ def _load_app():
     return main.app
 
 
-def test_planner_ab_diagnostics_endpoint_returns_shape():
+@pytest.fixture()
+def client():
     os.environ["API_AUTH_ENABLED"] = "false"
     app = _load_app()
-    client = TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
+
+def test_planner_ab_diagnostics_endpoint_returns_shape(client):
     response = client.get("/diagnostics/planner-ab")
     assert response.status_code == 200
     payload = response.json()
@@ -31,11 +36,7 @@ def test_planner_ab_diagnostics_endpoint_returns_shape():
     assert "B" in data.get("variants", {})
 
 
-def test_planner_ab_diagnostics_alias_endpoint_returns_shape():
-    os.environ["API_AUTH_ENABLED"] = "false"
-    app = _load_app()
-    client = TestClient(app)
-
+def test_planner_ab_diagnostics_alias_endpoint_returns_shape(client):
     response = client.get("/diagnostics/planner_ab")
     assert response.status_code == 200
     payload = response.json()

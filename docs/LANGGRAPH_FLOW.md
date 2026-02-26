@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> Complete data flow documentation for the 13-node StateGraph pipeline.
+> Complete data flow documentation for the 16-node StateGraph pipeline.
 
 ---
 
@@ -9,7 +9,8 @@
 ```mermaid
 graph TD
     START([START]) --> build_initial_state
-    build_initial_state --> trim_history
+    build_initial_state --> reset_turn_state
+    reset_turn_state --> trim_history
     trim_history --> summarize_history
     summarize_history --> normalize_ui_context
     normalize_ui_context --> decide_output_mode
@@ -27,6 +28,7 @@ graph TD
     render --> END_DONE([END: 返回最终响应])
 
     style START fill:#10b981,color:#fff
+    style reset_turn_state fill:#a855f7,color:#fff
     style trim_history fill:#f59e0b,color:#fff
     style summarize_history fill:#f59e0b,color:#fff
     style END_CLARIFY fill:#ef4444,color:#fff
@@ -49,6 +51,26 @@ graph TD
 | `schema_version` | Write | 当前 State schema 版本 |
 
 **Source**: `backend/graph/nodes/__init__.py` → `build_initial_state`
+
+---
+
+### 1b. reset_turn_state
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `subject` | Write (None) | 清除上一轮残留的 subject |
+| `operation` | Write (None) | 清除上一轮残留的 operation |
+| `clarify` | Write (None) | 清除澄清标记 |
+| `policy` | Write (None) | 清除策略缓存 |
+| `plan_ir` | Write (None) | 清除计划 IR |
+| `artifacts` | Write (None) | 清除制品 |
+| `chat_responded` | Write (None) | 清除聊天回复标记 |
+| `confirmation_*` (5) | Write (None) | 清除所有确认门控字段 |
+| `trace` | Write | 保留 spans (events/timings/failures)，清除运行时 sub-keys (operation_decision/planner_runtime/synthesize_runtime/executor/rag) |
+
+**设计意图**: 确保每个新 turn 从干净状态开始，防止 early-stop turn（如问候语）的残留数据污染后续 turn。
+
+**Source**: `backend/graph/nodes/reset_turn_state.py`
 
 ---
 

@@ -14,6 +14,122 @@ from .search import search
 
 logger = logging.getLogger(__name__)
 
+
+def _quarter_label_to_date(label: Any) -> str | None:
+    text = str(label or "").strip().upper()
+    match = re.match(r"^(20\d{2})Q([1-4])$", text)
+    if not match:
+        return None
+    year = match.group(1)
+    quarter = int(match.group(2))
+    quarter_end = {
+        1: "03-31",
+        2: "06-30",
+        3: "09-30",
+        4: "12-31",
+    }
+    return f"{year}-{quarter_end[quarter]}"
+
+
+def _build_table_payload(columns: List[str], row_series: List[tuple[str, List[Any]]]) -> dict | None:
+    if not columns:
+        return None
+
+    index: List[str] = []
+    data: List[Dict[str, Any]] = []
+    for row_name, values in row_series:
+        normalized_values = list(values or [])
+        if len(normalized_values) < len(columns):
+            normalized_values += [None] * (len(columns) - len(normalized_values))
+        else:
+            normalized_values = normalized_values[: len(columns)]
+
+        if not any(value is not None for value in normalized_values):
+            continue
+
+        row: Dict[str, Any] = {}
+        for i, col in enumerate(columns):
+            value = normalized_values[i]
+            if isinstance(value, (int, float)):
+                row[col] = float(value)
+            else:
+                row[col] = value
+        index.append(row_name)
+        data.append(row)
+
+    if not index:
+        return None
+    return {"columns": columns, "index": index, "data": data}
+
+
+def _convert_sec_companyfacts_payload(payload: Dict[str, Any]) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("error"):
+        return None
+
+    raw_periods = payload.get("periods")
+    if not isinstance(raw_periods, list) or not raw_periods:
+        return None
+
+    columns = [(_quarter_label_to_date(period) or str(period)) for period in raw_periods]
+    columns = [col for col in columns if col]
+    if not columns:
+        return None
+
+    income_table = _build_table_payload(
+        columns,
+        [
+            ("Total Revenue", payload.get("revenue") or []),
+            ("Gross Profit", payload.get("gross_profit") or []),
+            ("Operating Income", payload.get("operating_income") or []),
+            ("Net Income", payload.get("net_income") or []),
+            ("Basic EPS", payload.get("eps") or []),
+        ],
+    )
+    balance_table = _build_table_payload(
+        columns,
+        [
+            ("Total Assets", payload.get("total_assets") or []),
+            ("Total Liabilities", payload.get("total_liabilities") or []),
+        ],
+    )
+    cashflow_table = _build_table_payload(
+        columns,
+        [
+            ("Operating Cash Flow", payload.get("operating_cash_flow") or []),
+            ("Free Cash Flow", payload.get("free_cash_flow") or []),
+        ],
+    )
+
+    if not income_table and not balance_table and not cashflow_table:
+        return None
+
+    return {
+        "ticker": str(payload.get("ticker") or "").upper(),
+        "timestamp": datetime.now().isoformat(),
+        "financials": income_table,
+        "balance_sheet": balance_table,
+        "cashflow": cashflow_table,
+        "error": None,
+        "warnings": ["fallback:sec_companyfacts"],
+        "source": "sec_companyfacts",
+    }
+
+
+def _fetch_financials_from_sec_companyfacts(ticker: str) -> dict | None:
+    try:
+        from .sec import get_sec_company_facts_quarterly
+
+        sec_payload = get_sec_company_facts_quarterly(ticker, limit=8)
+        converted = _convert_sec_companyfacts_payload(sec_payload if isinstance(sec_payload, dict) else {})
+        if converted:
+            logger.info(f"[Financials] SEC companyfacts fallback hit for {ticker}")
+        return converted
+    except Exception as exc:
+        logger.info(f"[Financials] SEC companyfacts fallback failed for {ticker}: {exc}")
+        return None
+
 def get_financial_statements(ticker: str) -> dict:
     """
     获取公司的财务报表数据（财报）
@@ -83,6 +199,9 @@ def get_financial_statements(ticker: str) -> dict:
         )
 
         if not result['financials'] and not result['balance_sheet'] and not result['cashflow']:
+            sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
+            if isinstance(sec_fallback, dict):
+                return sec_fallback
             result['error'] = "无法获取任何财报数据，请检查股票代码是否正确"
         else:
             # 只要拿到任意一张主表，就不把局部失败升级为全局 error
@@ -92,6 +211,12 @@ def get_financial_statements(ticker: str) -> dict:
 
     except Exception as e:
         logger.info(f"[Financials] 获取财报数据失败: {e}")
+        sec_fallback = _fetch_financials_from_sec_companyfacts(ticker)
+        if isinstance(sec_fallback, dict):
+            warnings = sec_fallback.get("warnings")
+            if isinstance(warnings, list):
+                warnings.append(f"yfinance_error:{e.__class__.__name__}")
+            return sec_fallback
         return {
             'ticker': ticker,
             'timestamp': datetime.now().isoformat(),

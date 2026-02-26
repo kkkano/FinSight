@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import importlib
 import os
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION
@@ -10,13 +10,17 @@ from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VER
 
 def _load_app():
     import backend.api.main as main
-    importlib.reload(main)
     return main.app
 
 
-def test_chat_supervisor_uses_langgraph_stub_when_enabled():
+@pytest.fixture(scope="module")
+def client():
     app = _load_app()
-    client = TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def test_chat_supervisor_uses_langgraph_stub_when_enabled(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析影响"})
     assert resp.status_code == 200
@@ -31,9 +35,7 @@ def test_chat_supervisor_uses_langgraph_stub_when_enabled():
     assert "待实现" not in response, "LangGraph path should not return placeholder output"
 
 
-def test_chat_supervisor_stream_uses_langgraph_stub_when_enabled():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_stream_uses_langgraph_stub_when_enabled(client):
 
     resp = client.post("/chat/supervisor/stream", json={"query": "hello"})
     assert resp.status_code == 200
@@ -43,9 +45,7 @@ def test_chat_supervisor_stream_uses_langgraph_stub_when_enabled():
     assert f"\"schema_version\": \"{SSE_EVENT_SCHEMA_VERSION}\"" in body
 
 
-def test_chat_supervisor_stream_respects_trace_raw_override_off():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_stream_respects_trace_raw_override_off(client):
 
     resp = client.post(
         "/chat/supervisor/stream",
@@ -71,9 +71,7 @@ def test_chat_supervisor_stream_respects_trace_raw_override_off():
     assert any(item.get("type") == "done" for item in events)
 
 
-def test_chat_supervisor_output_mode_option_overrides_default():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_output_mode_option_overrides_default(client):
 
     resp = client.post(
         "/chat/supervisor",
@@ -87,9 +85,7 @@ def test_chat_supervisor_output_mode_option_overrides_default():
     assert data.get("graph", {}).get("output_mode") == "investment_report"
 
 
-def test_chat_supervisor_default_output_mode_is_brief_and_trace_present():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_default_output_mode_is_brief_and_trace_present(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析影响"})
     assert resp.status_code == 200
@@ -105,9 +101,7 @@ def test_chat_supervisor_default_output_mode_is_brief_and_trace_present():
     assert any(span.get("node") == "decide_output_mode" for span in spans)
 
 
-def test_chat_supervisor_trace_planner_runtime_contains_variant_field():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_trace_planner_runtime_contains_variant_field(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析苹果影响"})
     assert resp.status_code == 200
@@ -118,9 +112,7 @@ def test_chat_supervisor_trace_planner_runtime_contains_variant_field():
     assert planner_runtime.get("variant") in {"A", "B"}
 
 
-def test_chat_supervisor_stream_done_event_contains_graph_output_mode():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_stream_done_event_contains_graph_output_mode(client):
 
     resp = client.post("/chat/supervisor/stream", json={"query": "分析影响"})
     assert resp.status_code == 200
@@ -148,9 +140,7 @@ def test_chat_supervisor_stream_done_event_contains_graph_output_mode():
     assert trace.get("routing_chain") == ["langgraph"]
 
 
-def test_chat_supervisor_returns_report_in_investment_report_mode():
-    app = _load_app()
-    client = TestClient(app)
+def test_chat_supervisor_returns_report_in_investment_report_mode(client):
 
     resp = client.post(
         "/chat/supervisor",
@@ -179,13 +169,10 @@ def test_chat_supervisor_returns_report_in_investment_report_mode():
     assert report_builder_mod._count_content_chars(synthesis) >= 5
 
 
-def test_chat_supervisor_stream_done_event_contains_report_in_investment_report_mode():
+def test_chat_supervisor_stream_done_event_contains_report_in_investment_report_mode(client):
     """In investment_report mode the confirmation_gate interrupts the graph,
     so the stream produces an 'interrupt' event rather than a 'done' event
     with a full report.  Verify the interrupt event is present."""
-    app = _load_app()
-    client = TestClient(app)
-
     resp = client.post(
         "/chat/supervisor/stream",
         json={
@@ -209,14 +196,11 @@ def test_chat_supervisor_stream_done_event_contains_report_in_investment_report_
     )
 
 
-def test_chat_supervisor_stream_executor_step_inputs_are_structured_json_object():
+def test_chat_supervisor_stream_executor_step_inputs_are_structured_json_object(client):
     """In investment_report mode the confirmation_gate interrupts the graph
     before the executor runs, so no executor_step_start events are emitted.
     Verify the planner thinking event is present instead (proving the graph
     progressed up to the planner node before the gate)."""
-    app = _load_app()
-    client = TestClient(app)
-
     resp = client.post(
         "/chat/supervisor/stream",
         json={
@@ -251,10 +235,7 @@ def test_chat_supervisor_stream_executor_step_inputs_are_structured_json_object(
     assert not any(e.get("type") == "done" for e in events), "unexpected done event before confirmation"
 
 
-def test_chat_supervisor_investment_report_with_news_selection_renders_news_report_card():
-    app = _load_app()
-    client = TestClient(app)
-
+def test_chat_supervisor_investment_report_with_news_selection_renders_news_report_card(client):
     resp = client.post(
         "/chat/supervisor",
         json={
@@ -283,10 +264,7 @@ def test_chat_supervisor_investment_report_with_news_selection_renders_news_repo
     assert "AAPL" in str(report.get("ticker") or "")
 
 
-def test_chat_supervisor_investment_report_with_doc_selection_renders_doc_report_card():
-    app = _load_app()
-    client = TestClient(app)
-
+def test_chat_supervisor_investment_report_with_doc_selection_renders_doc_report_card(client):
     resp = client.post(
         "/chat/supervisor",
         json={

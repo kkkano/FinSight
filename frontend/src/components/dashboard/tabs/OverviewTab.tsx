@@ -152,7 +152,15 @@ export function OverviewTab() {
         </div>
 
         <div className="space-y-4">
-          <DimensionRadar valuation={valuation} technicals={technicals} news={news} reportData={reportData} />
+          <DimensionRadar
+            valuation={valuation}
+            technicals={technicals}
+            news={news}
+            reportData={reportData}
+            valuationFallbackReason={dashboardData?.valuation_fallback_reason}
+            financialsFallbackReason={dashboardData?.financials_fallback_reason}
+            technicalsFallbackReason={dashboardData?.technicals_fallback_reason}
+          />
           <RiskMetricsCard valuation={valuation} reportData={reportData} />
           <AnalystTargetCard
             targets={analystTargets}

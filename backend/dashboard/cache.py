@@ -29,7 +29,7 @@ class DashboardCache:
 
     # ── TTL 配置（秒） ──────────────────────────────────
     TTL_SNAPSHOT = 60    # KPI 快照
-    TTL_CHARTS = 300     # 图表数据
+    TTL_CHARTS = 120     # 图表数据（2 分钟，与 technicals 对齐避免数据窗口错位）
     TTL_NEWS = 300       # 新闻数据（5 分钟，多源回退链较慢）
     TTL_SEGMENT_MIX = 86400    # 分部收入（FMP 数据更新频率低）
     TTL_SECTOR_WEIGHTS = 3600  # 板块权重
@@ -37,7 +37,7 @@ class DashboardCache:
     TTL_HOLDINGS = 3600        # 持仓数据
     TTL_VALUATION = 300        # Valuation metrics (5 min)
     TTL_FINANCIALS = 3600      # Financial statements (1 hour)
-    TTL_TECHNICALS = 60        # Technical indicators (1 min)
+    TTL_TECHNICALS = 120        # Technical indicators (2 min — aligned with charts)
     TTL_MACRO = 300            # Macro snapshot (5 min)
     TTL_EARNINGS = 3600         # Earnings history (1 hour - quarterly data)
     TTL_ANALYST = 1800          # Analyst targets/recommendations (30 min)
@@ -163,8 +163,13 @@ class DashboardCache:
                 "valuation": self.TTL_VALUATION,
                 "financials": self.TTL_FINANCIALS,
                 "technicals": self.TTL_TECHNICALS,
+                "indicator_series": self.TTL_TECHNICALS,
                 "macro_snapshot": self.TTL_MACRO,
                 "peers": self.TTL_PEERS,
+                "earnings_history": self.TTL_EARNINGS,
+                "analyst_targets": self.TTL_ANALYST,
+                "recommendations": self.TTL_ANALYST,
+                "insights": self.TTL_INSIGHTS,
             }
             ttl = ttl_map.get(data_type, self.TTL_CHARTS)
 

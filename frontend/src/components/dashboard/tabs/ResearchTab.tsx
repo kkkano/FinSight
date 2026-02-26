@@ -7,7 +7,7 @@
  * 3) 新鲜度标签：价格时间戳、财报期、新闻窗口。
  * 4) 证据不足条目支持一键展开到引用片段（非“问这条”对话链路）。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useExecutionStore } from '../../../store/executionStore.ts';
@@ -50,6 +50,18 @@ function asString(value: unknown): string {
 function asStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => asString(item)).filter(Boolean);
+}
+
+function formatQualityBlockedHint(reasonCodes: string[], reasonMessages: string[]): string {
+  const uniqueMessages = Array.from(new Set(reasonMessages.map((item) => item.trim()).filter(Boolean)));
+  if (uniqueMessages.length > 0) {
+    return `报告被质量门禁拦截，未发布。原因：${uniqueMessages.slice(0, 3).join('；')}`;
+  }
+  const uniqueCodes = Array.from(new Set(reasonCodes.map((item) => item.trim()).filter(Boolean)));
+  if (uniqueCodes.length > 0) {
+    return `报告被质量门禁拦截，未发布。原因代码：${uniqueCodes.join(', ')}`;
+  }
+  return '报告被质量门禁拦截，未发布。请补充证据后重试。';
 }
 
 function normalizeGroundingRate(value: unknown): number | null {
@@ -292,21 +304,30 @@ export function ResearchTab() {
     setReferenceFocusToken(0);
   }, [ticker]);
 
-  const latestDashboardCompletion = useExecutionStore((s) => {
+  const recentRuns = useExecutionStore((s) => s.recentRuns);
+  const latestDashboardOutcome = useMemo(() => {
     const upperTicker = ticker?.toUpperCase();
     if (!upperTicker) return null;
-    for (const run of s.recentRuns) {
+    for (const run of recentRuns) {
       if (
         run.status === 'done'
         && run.source?.startsWith('dashboard')
         && run.outputMode === 'investment_report'
         && run.tickers?.some((item) => item.toUpperCase() === upperTicker)
       ) {
-        return run.completedAt;
+        return {
+          runId: run.runId,
+          completedAt: run.completedAt,
+          qualityBlocked: run.qualityBlocked === true,
+          blockedReasonCodes: run.blockedReasonCodes ?? [],
+          qualityReasonMessages: (run.qualityReasons ?? [])
+            .map((item) => item.message)
+            .filter(Boolean),
+        };
       }
     }
     return null;
-  });
+  }, [recentRuns, ticker]);
   const lastSyncedCompletionRef = useRef<string | null>(null);
 
   const pollReportAfterComplete = useCallback(async () => {
@@ -331,9 +352,6 @@ export function ResearchTab() {
   }, [refetch]);
 
   const { execute, isRunning, currentStep, error } = useExecuteAgent({
-    onComplete: () => {
-      void pollReportAfterComplete();
-    },
     onError: () => {
       setSyncingReport(false);
       setSyncHint(null);
@@ -341,17 +359,25 @@ export function ResearchTab() {
   });
 
   useEffect(() => {
-    if (
-      latestDashboardCompletion
-      && latestDashboardCompletion !== lastSyncedCompletionRef.current
-      && ticker
-      && !syncingReport
-      && !isRunning
-    ) {
-      lastSyncedCompletionRef.current = latestDashboardCompletion;
-      void pollReportAfterComplete();
+    if (!latestDashboardOutcome || !ticker || syncingReport || isRunning) return;
+
+    const completionKey = `${latestDashboardOutcome.runId}:${latestDashboardOutcome.completedAt ?? ''}`;
+    if (completionKey === lastSyncedCompletionRef.current) return;
+    lastSyncedCompletionRef.current = completionKey;
+
+    if (latestDashboardOutcome.qualityBlocked) {
+      setSyncingReport(false);
+      setSyncHint(
+        formatQualityBlockedHint(
+          latestDashboardOutcome.blockedReasonCodes,
+          latestDashboardOutcome.qualityReasonMessages,
+        ),
+      );
+      return;
     }
-  }, [latestDashboardCompletion, ticker, syncingReport, isRunning, pollReportAfterComplete]);
+
+    void pollReportAfterComplete();
+  }, [latestDashboardOutcome, ticker, syncingReport, isRunning, pollReportAfterComplete]);
 
   const handleDeepAnalysis = () => {
     if (!ticker || isRunning || syncingReport) return;
@@ -427,6 +453,7 @@ export function ResearchTab() {
 
   if (!reportData) {
     const runningState = isRunning || syncingReport;
+    const blockedState = !runningState && Boolean(syncHint?.startsWith('报告被质量门禁拦截'));
 
     return (
       <div className="space-y-4">
@@ -448,15 +475,19 @@ export function ResearchTab() {
         <div
           className="rounded-xl border border-fin-border bg-fin-card px-4 py-4"
           data-testid="research-empty-state"
-          data-state={runningState ? 'running' : 'empty'}
+          data-state={runningState ? 'running' : blockedState ? 'blocked' : 'empty'}
         >
           <div className="text-sm font-medium text-fin-text">
-            {runningState ? '深度分析执行中' : '暂无深度分析数据'}
+            {runningState
+              ? '深度分析执行中'
+              : blockedState
+                ? '报告未发布（质量门禁拦截）'
+                : '暂无深度分析数据'}
           </div>
           <div className="mt-1 text-xs text-fin-muted">
             {runningState
               ? (currentStep || syncHint || '任务执行中，结果会自动回填。')
-              : '尚未生成完整研究报告，请先执行一次深度分析。'}
+              : (syncHint || '尚未生成完整研究报告，请先执行一次深度分析。')}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">

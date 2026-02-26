@@ -69,6 +69,47 @@ def test_report_index_list_replay_and_favorite_flow(tmp_path, monkeypatch):
     assert fav_data.get("is_favorite") is True
 
 
+def test_report_index_replay_quality_matches_index_quality_state(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "report_index.sqlite"
+    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
+
+    main = _load_main_module()
+    store = main.get_report_index_store()
+    client = TestClient(main.app)
+
+    session_id = "tenant_quality:user_quality:thread_quality"
+    report = {
+        "report_id": "rpt-quality-sync-1",
+        "ticker": "MSFT",
+        "title": "质量同步检查",
+        "summary": "quality sync",
+        "generated_at": "2026-02-10T00:00:00Z",
+        "citations": [],
+    }
+    store.upsert_report(session_id=session_id, report=report, trace_digest={"span_count": 1})
+
+    list_resp = client.get(
+        "/api/reports/index",
+        params={"session_id": session_id, "limit": 10},
+    )
+    assert list_resp.status_code == 200
+    list_data = list_resp.json()
+    assert list_data.get("count") == 1
+    quality_state = str(list_data["items"][0].get("quality_state") or "").strip().lower()
+    assert quality_state in {"pass", "warn", "block"}
+
+    replay_resp = client.get(
+        "/api/reports/replay/rpt-quality-sync-1",
+        params={"session_id": session_id, "include_blocked": True},
+    )
+    assert replay_resp.status_code == 200
+    replay_data = replay_resp.json()
+    quality = replay_data.get("report", {}).get("report_quality") or {}
+    meta_quality = (replay_data.get("report", {}).get("meta") or {}).get("report_quality") or {}
+    assert str(quality.get("state") or "").strip().lower() == quality_state
+    assert str(meta_quality.get("state") or "").strip().lower() == quality_state
+
+
 def test_report_index_supports_date_tag_filters_and_normalizes_source_id(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "report_index.sqlite"
     monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
@@ -221,3 +262,151 @@ def test_report_citation_index_filters_by_source_and_query(tmp_path, monkeypatch
     source_data = source_resp.json()
     assert source_data.get("count") == 1
     assert source_data["items"][0].get("source_id") == first_source_id
+
+
+def test_report_index_hides_blocked_by_default_and_supports_include_blocked(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "report_index.sqlite"
+    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
+
+    main = _load_main_module()
+    store = main.get_report_index_store()
+    client = TestClient(main.app)
+
+    session_id = "tenant4:user4:thread4"
+    blocked_report = {
+        "report_id": "rpt-blocked-1",
+        "ticker": "AAPL",
+        "title": "Blocked report",
+        "summary": "blocked",
+        "generated_at": "2026-02-08T11:00:00Z",
+        "citations": [],
+        "report_quality": {
+            "state": "block",
+            "reasons": [
+                {
+                    "code": "EVIDENCE_COVERAGE_BELOW_MIN",
+                    "severity": "block",
+                    "metric": "coverage",
+                    "actual": 0.2,
+                    "threshold": 0.8,
+                    "message": "coverage too low",
+                }
+            ],
+        },
+    }
+
+    skipped = store.upsert_report(session_id=session_id, report=blocked_report, trace_digest={"span_count": 1})
+    assert skipped.get("skipped") == "quality_blocked"
+
+    # Force-insert blocked payload for audit/replay use case.
+    inserted = store.upsert_report(
+        session_id=session_id,
+        report={**blocked_report, "report_id": "rpt-blocked-2"},
+        trace_digest={"span_count": 1},
+        include_blocked=True,
+    )
+    assert inserted.get("report_id") == "rpt-blocked-2"
+
+    default_list = client.get("/api/reports/index", params={"session_id": session_id, "limit": 10})
+    assert default_list.status_code == 200
+    assert default_list.json().get("count") == 0
+
+    include_list = client.get(
+        "/api/reports/index",
+        params={"session_id": session_id, "include_blocked": True, "limit": 10},
+    )
+    assert include_list.status_code == 200
+    include_data = include_list.json()
+    assert include_data.get("count") == 1
+    assert include_data["items"][0].get("quality_state") == "block"
+    assert include_data["items"][0].get("publishable") is False
+
+    replay_default = client.get(
+        "/api/reports/replay/rpt-blocked-2",
+        params={"session_id": session_id},
+    )
+    assert replay_default.status_code == 404
+
+    replay_include = client.get(
+        "/api/reports/replay/rpt-blocked-2",
+        params={"session_id": session_id, "include_blocked": True},
+    )
+    assert replay_include.status_code == 200
+
+
+def test_report_compare_supports_include_blocked(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "report_index.sqlite"
+    monkeypatch.setenv("REPORT_INDEX_SQLITE_PATH", str(sqlite_path))
+
+    main = _load_main_module()
+    store = main.get_report_index_store()
+    client = TestClient(main.app)
+
+    session_id = "tenant4:user4:thread-compare"
+    report_a = {
+        "report_id": "rpt-compare-a",
+        "ticker": "AAPL",
+        "title": "Blocked A",
+        "summary": "blocked",
+        "generated_at": "2026-02-08T11:00:00Z",
+        "citations": [],
+        "confidence_score": 0.41,
+        "report_quality": {
+            "state": "block",
+            "reasons": [
+                {
+                    "code": "EVIDENCE_COVERAGE_BELOW_MIN",
+                    "severity": "block",
+                    "metric": "coverage",
+                    "actual": 0.2,
+                    "threshold": 0.8,
+                    "message": "coverage too low",
+                }
+            ],
+        },
+    }
+    report_b = {
+        "report_id": "rpt-compare-b",
+        "ticker": "AAPL",
+        "title": "Blocked B",
+        "summary": "blocked",
+        "generated_at": "2026-02-09T11:00:00Z",
+        "citations": [],
+        "confidence_score": 0.52,
+        "report_quality": {
+            "state": "block",
+            "reasons": [
+                {
+                    "code": "GROUNDING_RATE_BELOW_MIN",
+                    "severity": "block",
+                    "metric": "grounding_rate",
+                    "actual": 0.45,
+                    "threshold": 0.6,
+                    "message": "grounding too low",
+                }
+            ],
+        },
+    }
+
+    store.upsert_report(session_id=session_id, report=report_a, trace_digest={}, include_blocked=True)
+    store.upsert_report(session_id=session_id, report=report_b, trace_digest={}, include_blocked=True)
+
+    default_resp = client.get(
+        "/api/reports/compare",
+        params={"session_id": session_id, "id1": "rpt-compare-a", "id2": "rpt-compare-b"},
+    )
+    assert default_resp.status_code == 404
+
+    include_resp = client.get(
+        "/api/reports/compare",
+        params={
+            "session_id": session_id,
+            "id1": "rpt-compare-a",
+            "id2": "rpt-compare-b",
+            "include_blocked": True,
+        },
+    )
+    assert include_resp.status_code == 200
+    payload = include_resp.json()
+    assert payload.get("success") is True
+    assert payload.get("diff", {}).get("confidence_score", {}).get("delta") == 0.11

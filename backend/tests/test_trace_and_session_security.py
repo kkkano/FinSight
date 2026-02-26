@@ -88,12 +88,11 @@ def test_redact_sensitive_payload_masks_values():
 
 def test_chat_endpoint_rejects_illegal_session_id():
     main = _load_main_module()
-    client = TestClient(main.app)
-
-    resp = client.post(
-        "/chat/supervisor",
-        json={"query": "分析影响", "session_id": "tenant:user:bad/slash"},
-    )
+    with TestClient(main.app) as client:
+        resp = client.post(
+            "/chat/supervisor",
+            json={"query": "分析影响", "session_id": "tenant:user:bad/slash"},
+        )
 
     assert resp.status_code == 422
     detail = resp.json().get("detail") or ""
