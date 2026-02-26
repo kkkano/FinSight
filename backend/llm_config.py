@@ -253,7 +253,19 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
             raw_api_base = str(raw.get("api_base") or "").strip()
             is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
             api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
-            endpoint_model = str(raw.get("model") or model or "gpt-4o-mini").strip()
+            raw_model = str(raw.get("model") or "").strip()
+            if raw_model:
+                endpoint_model = raw_model
+            elif model:
+                endpoint_model = str(model).strip()
+            else:
+                endpoint_model = "gpt-4o-mini"
+                logger.warning(
+                    "[LLM Config] endpoint '%s' has empty model field, falling back to '%s'. "
+                    "Please set the model name in Settings → Endpoint Pool.",
+                    _safe_endpoint_name(raw.get("name"), f"ep-{idx+1}"),
+                    endpoint_model,
+                )
             if not api_key:
                 continue
             endpoint_provider = _canonical_provider(raw.get("provider") or provider)
@@ -280,13 +292,21 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
     if legacy_key:
         legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
         legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
+        legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
+        if not legacy_model:
+            legacy_model = "gpt-4o-mini"
+            logger.warning(
+                "[LLM Config] legacy endpoint has empty llm_model, falling back to '%s'. "
+                "Please set the model name in Settings.",
+                legacy_model,
+            )
         endpoints.append(
             EndpointConfig(
                 name="legacy-single",
                 provider=_canonical_provider(user_config.get("llm_provider") or provider),
                 api_base=_normalize_api_base(legacy_api_base, raw=legacy_raw_url),
                 api_key=legacy_key,
-                model=str(user_config.get("llm_model") or model or "gpt-4o-mini").strip(),
+                model=legacy_model,
                 weight=1,
                 enabled=True,
                 cooldown_sec=default_cooldown,

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Loader2, SkipForward } from 'lucide-react';
 
 import type { AgentRunInfo } from '../../types/execution';
-import { getAgentDisplayName } from '../../utils/userMessageMapper';
+import { getAgentDisplayName, normalizeAgentName } from '../../utils/userMessageMapper';
 
 type AgentSummaryCardsProps = {
   agentStatuses: Record<string, AgentRunInfo>;
@@ -63,15 +63,24 @@ export function AgentSummaryCards({
   className = '',
 }: AgentSummaryCardsProps) {
   const agents = useMemo(() => {
-    // 优先按 selectedAgents 顺序，否则按 agentStatuses 的 key 排序
+    // 归一化 key 并去重（后端可能同时发送 news_agent 和 NewsAgent）
+    const deduped = new Map<string, { name: string; info: AgentRunInfo }>();
     const order = selectedAgents ?? Object.keys(agentStatuses);
-    return order
-      .filter((name) => agentStatuses[name])
-      .map((name) => ({
-        name,
-        displayName: getAgentDisplayName(name),
-        info: agentStatuses[name],
-      }));
+    for (const name of order) {
+      const info = agentStatuses[name];
+      if (!info) continue;
+      const normalized = normalizeAgentName(name);
+      const existing = deduped.get(normalized);
+      // 保留状态更靠后的（done > running > pending）
+      if (!existing || info.status === 'done' || (info.status === 'error' && existing.info.status === 'running')) {
+        deduped.set(normalized, { name: normalized, info });
+      }
+    }
+    return [...deduped.values()].map(({ name, info }) => ({
+      name,
+      displayName: getAgentDisplayName(name),
+      info,
+    }));
   }, [agentStatuses, selectedAgents]);
 
   if (agents.length === 0) return null;

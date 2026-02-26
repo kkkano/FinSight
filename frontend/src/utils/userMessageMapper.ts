@@ -47,15 +47,48 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
 };
 
 /**
+ * 将各种 agent 名称格式归一化为 snake_case。
+ * "NewsAgent" → "news_agent", "PriceAgent" → "price_agent",
+ * "news" → "news_agent", "fundamental" → "fundamental_agent"
+ */
+export function normalizeAgentName(raw: string): string {
+  let name = raw.trim();
+  if (!name) return name;
+
+  // PascalCase → snake_case: "NewsAgent" → "news_agent"
+  if (/[A-Z]/.test(name) && !name.includes('_')) {
+    name = name
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+      .toLowerCase();
+  } else {
+    name = name.toLowerCase();
+  }
+
+  // Ensure _agent suffix
+  if (!name.endsWith('_agent')) {
+    name = `${name}_agent`;
+  }
+
+  return name;
+}
+
+/**
  * 获取 Agent 的中文显示名称。
+ * 自动归一化名称后查找映射。
  * 未找到时返回原始名称（去除 _agent 后缀并首字母大写）。
  */
 export function getAgentDisplayName(agentName: string): string {
+  const normalized = normalizeAgentName(agentName);
+  if (AGENT_DISPLAY_NAMES[normalized]) {
+    return AGENT_DISPLAY_NAMES[normalized];
+  }
+  // 也试试原始名称
   if (AGENT_DISPLAY_NAMES[agentName]) {
     return AGENT_DISPLAY_NAMES[agentName];
   }
   // 回退：去除 _agent 后缀，首字母大写
-  return agentName
+  return normalized
     .replace(/_agent$/, '')
     .replace(/(^|\s)\S/g, (t) => t.toUpperCase());
 }

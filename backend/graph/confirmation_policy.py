@@ -42,7 +42,10 @@ def should_require_confirmation(
     if mode == "required":
         return True
 
-    return str(output_mode or "").strip().lower() == "investment_report"
+    # investment_report 暂时跳过确认（前端尚未实现确认 UI）
+    # TODO: 前端实现确认对话框后恢复：
+    #   return str(output_mode or "").strip().lower() == "investment_report"
+    return False
 
 
 __all__ = [
