@@ -127,6 +127,10 @@ class TechnicalAgent(BaseFinancialAgent):
                 fallback_used = True
                 fallback_reason = f"primary_kline_unavailable, used_{source}"
 
+            # 构造 Yahoo Finance 历史数据页面 URL，供证据池可点击跳转
+            _ticker = str(raw_data.get("ticker") or "").strip().upper()
+            _yf_history_url = f"https://finance.yahoo.com/quote/{_ticker}/history/" if _ticker else None
+
             indicators = self._compute_indicators(raw_data.get("kline_data", []))
             if indicators:
                 timestamp = indicators.get("last_time")
@@ -140,6 +144,7 @@ class TechnicalAgent(BaseFinancialAgent):
                 evidence.append(EvidenceItem(
                     text=" | ".join(ma_parts) if ma_parts else "均线数据暂无",
                     source=source,
+                    url=_yf_history_url,  # Yahoo Finance 历史数据页面，供证据池点击跳转
                     timestamp=timestamp,
                 ))
                 evidence.append(EvidenceItem(
@@ -148,6 +153,7 @@ class TechnicalAgent(BaseFinancialAgent):
                         f"| 信号线 {indicators['signal']:.4f}"
                     ),
                     source=source,
+                    url=_yf_history_url,  # Yahoo Finance 历史数据页面，供证据池点击跳转
                     timestamp=timestamp,
                 ))
 

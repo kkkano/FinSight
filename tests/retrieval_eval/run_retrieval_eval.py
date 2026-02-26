@@ -5,6 +5,8 @@ Retrieval quality baseline runner (RAG v2).
 
 Outputs:
 - Recall@K
+- Precision@K
+- MRR (Mean Reciprocal Rank)
 - nDCG@K
 - citation coverage
 - latency (mean / p95)
@@ -85,6 +87,29 @@ def compute_recall_at_k(expected_ids: list[str], retrieved_ids: list[str]) -> fl
     retrieved = set(x for x in retrieved_ids if x)
     hit = len(set(expected) & retrieved)
     return hit / len(set(expected))
+
+
+def compute_precision_at_k(gold_ids: list[str], retrieved_ids: list[str], k: int) -> float:
+    """Precision@K: fraction of top-K retrieved docs that are relevant."""
+    gold = set(x for x in gold_ids if x)
+    if not gold:
+        return 1.0
+    top_k = [x for x in retrieved_ids[:max(1, k)] if x]
+    if not top_k:
+        return 0.0
+    hits = sum(1 for doc_id in top_k if doc_id in gold)
+    return hits / len(top_k)
+
+
+def compute_mrr(gold_ids: list[str], retrieved_ids: list[str]) -> float:
+    """MRR (Mean Reciprocal Rank): 1/rank of the first relevant doc."""
+    gold = set(x for x in gold_ids if x)
+    if not gold:
+        return 1.0
+    for i, doc_id in enumerate(retrieved_ids):
+        if doc_id in gold:
+            return 1.0 / (i + 1)
+    return 0.0
 
 
 def _dcg_at_k(retrieved_ids: list[str], relevance_map: dict[str, float], k: int) -> float:
@@ -214,6 +239,8 @@ def _evaluate_case(
     predicted_citation_ids = _select_predicted_citations(hits, citation_top_k=citation_top_k)
 
     recall = compute_recall_at_k(gold_evidence_ids, retrieved_ids)
+    precision = compute_precision_at_k(gold_evidence_ids, retrieved_ids, top_k)
+    mrr = compute_mrr(gold_evidence_ids, retrieved_ids)
     ndcg = compute_ndcg_at_k(retrieved_ids, {str(k): float(v) for k, v in relevance_map.items()}, top_k)
     citation_coverage = compute_citation_coverage(gold_citation_ids, predicted_citation_ids)
 
@@ -226,6 +253,8 @@ def _evaluate_case(
         "retrieved_ids": retrieved_ids,
         "predicted_citation_ids": predicted_citation_ids,
         "recall_at_k": recall,
+        "precision_at_k": precision,
+        "mrr": mrr,
         "ndcg_at_k": ndcg,
         "citation_coverage": citation_coverage,
         "latency_ms": search_ms,
@@ -237,12 +266,16 @@ def _evaluate_case(
 
 def _aggregate(results: list[dict[str, Any]]) -> tuple[dict[str, float], dict[str, dict[str, float]]]:
     recalls = [float(r["recall_at_k"]) for r in results]
+    precisions = [float(r["precision_at_k"]) for r in results]
+    mrrs = [float(r["mrr"]) for r in results]
     ndcgs = [float(r["ndcg_at_k"]) for r in results]
     citation_coverages = [float(r["citation_coverage"]) for r in results]
     latencies = [float(r["latency_ms"]) for r in results]
 
     overall = {
         "recall_at_k": _safe_mean(recalls),
+        "precision_at_k": _safe_mean(precisions),
+        "mrr": _safe_mean(mrrs),
         "ndcg_at_k": _safe_mean(ndcgs),
         "citation_coverage": _safe_mean(citation_coverages),
         "latency_mean_ms": _safe_mean(latencies),
@@ -258,6 +291,8 @@ def _aggregate(results: list[dict[str, Any]]) -> tuple[dict[str, float], dict[st
         bucket_metrics[bucket] = {
             "count": float(len(items)),
             "recall_at_k": _safe_mean([float(x["recall_at_k"]) for x in items]),
+            "precision_at_k": _safe_mean([float(x["precision_at_k"]) for x in items]),
+            "mrr": _safe_mean([float(x["mrr"]) for x in items]),
             "ndcg_at_k": _safe_mean([float(x["ndcg_at_k"]) for x in items]),
             "citation_coverage": _safe_mean([float(x["citation_coverage"]) for x in items]),
             "latency_mean_ms": _safe_mean([float(x["latency_ms"]) for x in items]),
@@ -279,12 +314,18 @@ def _load_baseline(path: Path) -> dict[str, float] | None:
 def _gate(overall: dict[str, float], thresholds: dict[str, float]) -> GateResult:
     failed: list[str] = []
     recall_min = float(thresholds.get("recall_at_k_min", 0.0))
+    precision_min = float(thresholds.get("precision_at_k_min", 0.0))
+    mrr_min = float(thresholds.get("mrr_min", 0.0))
     ndcg_min = float(thresholds.get("ndcg_at_k_min", 0.0))
     cite_min = float(thresholds.get("citation_coverage_min", 0.0))
     latency_max = float(thresholds.get("latency_p95_ms_max", 10_000.0))
 
     if float(overall.get("recall_at_k", 0.0)) < recall_min:
         failed.append("recall_at_k")
+    if float(overall.get("precision_at_k", 0.0)) < precision_min:
+        failed.append("precision_at_k")
+    if float(overall.get("mrr", 0.0)) < mrr_min:
+        failed.append("mrr")
     if float(overall.get("ndcg_at_k", 0.0)) < ndcg_min:
         failed.append("ndcg_at_k")
     if float(overall.get("citation_coverage", 0.0)) < cite_min:
@@ -311,12 +352,16 @@ def _drift_gate(
 
     delta = {
         "recall_at_k": float(overall.get("recall_at_k", 0.0)) - float(baseline_overall.get("recall_at_k", 0.0)),
+        "precision_at_k": float(overall.get("precision_at_k", 0.0)) - float(baseline_overall.get("precision_at_k", 0.0)),
+        "mrr": float(overall.get("mrr", 0.0)) - float(baseline_overall.get("mrr", 0.0)),
         "ndcg_at_k": float(overall.get("ndcg_at_k", 0.0)) - float(baseline_overall.get("ndcg_at_k", 0.0)),
         "citation_coverage": float(overall.get("citation_coverage", 0.0)) - float(baseline_overall.get("citation_coverage", 0.0)),
         "latency_p95_ms": float(overall.get("latency_p95_ms", 0.0)) - float(baseline_overall.get("latency_p95_ms", 0.0)),
     }
 
     recall_delta_min = float(thresholds.get("recall_at_k_delta_min", -1.0))
+    precision_delta_min = float(thresholds.get("precision_at_k_delta_min", -1.0))
+    mrr_delta_min = float(thresholds.get("mrr_delta_min", -1.0))
     ndcg_delta_min = float(thresholds.get("ndcg_at_k_delta_min", -1.0))
     cite_delta_min = float(thresholds.get("citation_coverage_delta_min", -1.0))
     latency_delta_max = float(thresholds.get("latency_p95_ms_delta_max", 10_000.0))
@@ -324,6 +369,10 @@ def _drift_gate(
     failed: list[str] = []
     if delta["recall_at_k"] < recall_delta_min:
         failed.append("recall_at_k_delta")
+    if delta["precision_at_k"] < precision_delta_min:
+        failed.append("precision_at_k_delta")
+    if delta["mrr"] < mrr_delta_min:
+        failed.append("mrr_delta")
     if delta["ndcg_at_k"] < ndcg_delta_min:
         failed.append("ndcg_at_k_delta")
     if delta["citation_coverage"] < cite_delta_min:
@@ -373,11 +422,15 @@ def _to_markdown(
         return "PASS" if ok else f"FAIL ({metric})"
 
     recall_cur = float(overall["recall_at_k"])
+    precision_cur = float(overall["precision_at_k"])
+    mrr_cur = float(overall["mrr"])
     ndcg_cur = float(overall["ndcg_at_k"])
     cite_cur = float(overall["citation_coverage"])
     lat_cur = float(overall["latency_p95_ms"])
 
     recall_ok = recall_cur >= float(gate.thresholds["recall_at_k_min"])
+    precision_ok = precision_cur >= float(gate.thresholds.get("precision_at_k_min", 0.0))
+    mrr_ok = mrr_cur >= float(gate.thresholds.get("mrr_min", 0.0))
     ndcg_ok = ndcg_cur >= float(gate.thresholds["ndcg_at_k_min"])
     cite_ok = cite_cur >= float(gate.thresholds["citation_coverage_min"])
     lat_ok = lat_cur <= float(gate.thresholds["latency_p95_ms_max"])
@@ -385,6 +438,14 @@ def _to_markdown(
     lines.append(
         f"| Recall@K | {_format_pct(recall_cur)} | {_format_pct(float((baseline_overall or {}).get('recall_at_k', 0.0)))} | "
         f"{_format_pct(float(compare['delta'].get('recall_at_k', 0.0)))} | >= {_format_pct(float(gate.thresholds['recall_at_k_min']))} | {_status('recall_at_k', recall_ok)} |"
+    )
+    lines.append(
+        f"| Precision@K | {_format_pct(precision_cur)} | {_format_pct(float((baseline_overall or {}).get('precision_at_k', 0.0)))} | "
+        f"{_format_pct(float(compare['delta'].get('precision_at_k', 0.0)))} | >= {_format_pct(float(gate.thresholds.get('precision_at_k_min', 0.0)))} | {_status('precision_at_k', precision_ok)} |"
+    )
+    lines.append(
+        f"| MRR | {_format_pct(mrr_cur)} | {_format_pct(float((baseline_overall or {}).get('mrr', 0.0)))} | "
+        f"{_format_pct(float(compare['delta'].get('mrr', 0.0)))} | >= {_format_pct(float(gate.thresholds.get('mrr_min', 0.0)))} | {_status('mrr', mrr_ok)} |"
     )
     lines.append(
         f"| nDCG@K | {_format_pct(ndcg_cur)} | {_format_pct(float((baseline_overall or {}).get('ndcg_at_k', 0.0)))} | "
@@ -401,12 +462,13 @@ def _to_markdown(
     lines.append("")
     lines.append("## By Bucket")
     lines.append("")
-    lines.append("| Bucket | Count | Recall@K | nDCG@K | Citation Coverage | Latency P95 (ms) |")
-    lines.append("|---|---:|---:|---:|---:|---:|")
+    lines.append("| Bucket | Count | Recall@K | Precision@K | MRR | nDCG@K | Citation Coverage | Latency P95 (ms) |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
     for bucket in sorted(bucket_metrics.keys()):
         item = bucket_metrics[bucket]
         lines.append(
-            f"| {bucket} | {int(item['count'])} | {_format_pct(float(item['recall_at_k']))} | {_format_pct(float(item['ndcg_at_k']))} | "
+            f"| {bucket} | {int(item['count'])} | {_format_pct(float(item['recall_at_k']))} | {_format_pct(float(item['precision_at_k']))} | "
+            f"{_format_pct(float(item['mrr']))} | {_format_pct(float(item['ndcg_at_k']))} | "
             f"{_format_pct(float(item['citation_coverage']))} | {float(item['latency_p95_ms']):.2f} |"
         )
 
@@ -428,23 +490,33 @@ def _to_markdown(
         lines.append("| Metric Delta | Current Delta | Threshold | Status |")
         lines.append("|---|---:|---:|---|")
         recall_delta = float(drift_gate.delta.get("recall_at_k", 0.0))
+        precision_delta = float(drift_gate.delta.get("precision_at_k", 0.0))
+        mrr_delta = float(drift_gate.delta.get("mrr", 0.0))
         ndcg_delta = float(drift_gate.delta.get("ndcg_at_k", 0.0))
         cite_delta = float(drift_gate.delta.get("citation_coverage", 0.0))
         lat_delta = float(drift_gate.delta.get("latency_p95_ms", 0.0))
         lines.append(
-            f"| Recall@K Δ | {_format_pct(recall_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('recall_at_k_delta_min', -1.0)))} | "
+            f"| Recall@K Delta | {_format_pct(recall_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('recall_at_k_delta_min', -1.0)))} | "
             f"{'PASS' if 'recall_at_k_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
         )
         lines.append(
-            f"| nDCG@K Δ | {_format_pct(ndcg_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('ndcg_at_k_delta_min', -1.0)))} | "
+            f"| Precision@K Delta | {_format_pct(precision_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('precision_at_k_delta_min', -1.0)))} | "
+            f"{'PASS' if 'precision_at_k_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
+        lines.append(
+            f"| MRR Delta | {_format_pct(mrr_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('mrr_delta_min', -1.0)))} | "
+            f"{'PASS' if 'mrr_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
+        )
+        lines.append(
+            f"| nDCG@K Delta | {_format_pct(ndcg_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('ndcg_at_k_delta_min', -1.0)))} | "
             f"{'PASS' if 'ndcg_at_k_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
         )
         lines.append(
-            f"| Citation Coverage Δ | {_format_pct(cite_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('citation_coverage_delta_min', -1.0)))} | "
+            f"| Citation Coverage Delta | {_format_pct(cite_delta)} | >= {_format_pct(float(drift_gate.thresholds.get('citation_coverage_delta_min', -1.0)))} | "
             f"{'PASS' if 'citation_coverage_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
         )
         lines.append(
-            f"| Latency P95 Δ (ms) | {lat_delta:+.2f} | <= {float(drift_gate.thresholds.get('latency_p95_ms_delta_max', 10000.0)):.2f} | "
+            f"| Latency P95 Delta (ms) | {lat_delta:+.2f} | <= {float(drift_gate.thresholds.get('latency_p95_ms_delta_max', 10000.0)):.2f} | "
             f"{'PASS' if 'latency_p95_ms_delta' not in drift_gate.failed_metrics else 'FAIL'} |"
         )
 
@@ -629,6 +701,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.top_k is not None and args.top_k < 1:
+        raise SystemExit("top_k must be >= 1")
     dataset_path = Path(args.dataset).resolve()
     thresholds_path = Path(args.thresholds).resolve()
     baseline_path = Path(args.baseline).resolve()
@@ -680,6 +754,8 @@ def main() -> int:
         print(f"Backend fallback reason: {payload['fallback_reason']}")
     print(f"Cases: {payload['case_count']}")
     print(f"Recall@K: {payload['overall_metrics']['recall_at_k']:.4f}")
+    print(f"Precision@K: {payload['overall_metrics']['precision_at_k']:.4f}")
+    print(f"MRR: {payload['overall_metrics']['mrr']:.4f}")
     print(f"nDCG@K: {payload['overall_metrics']['ndcg_at_k']:.4f}")
     print(f"Citation Coverage: {payload['overall_metrics']['citation_coverage']:.4f}")
     print(f"Latency P95 (ms): {payload['overall_metrics']['latency_p95_ms']:.2f}")

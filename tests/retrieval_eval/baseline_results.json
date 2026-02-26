@@ -6,6 +6,8 @@
   "citation_top_k": 3,
   "overall_metrics": {
     "recall_at_k": 1.0,
+    "precision_at_k": 0.4,
+    "mrr": 1.0,
     "ndcg_at_k": 1.0,
     "citation_coverage": 1.0,
     "latency_mean_ms": 0.06627500002309716,

@@ -421,6 +421,7 @@ class MacroAgent(BaseFinancialAgent):
                     EvidenceItem(
                         text=f"{title or 'Official release'}: {(snippet or title)[:220]}",
                         source=source_label,
+                        url=url if url else None,  # BUG FIX: pass real URL to evidence pool
                         confidence=0.88,
                         meta={
                             "url": url,
