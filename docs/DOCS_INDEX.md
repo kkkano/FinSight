@@ -90,6 +90,18 @@
   - P1：晨报接入 Graph Pipeline（确定性合成，零 LLM 成本）
   - P2：调仓引擎 Agent-backed LLM 增强 + SSE 流式端点
 
+## 2026-02-27 P3-2 死代码清理 + README 截图扩充
+
+- 新增文档：
+  - `frontend/docs/DELETION_LOG.md`：P3-2 死代码清理记录（12 文件 / -2002 行 / TypeScript 零错误验证）
+- 更新文档：
+  - `readme.md` / `readme_cn.md`：Platform Preview 新增 ThinkingBubble 用户视图 + 执行时间线截图
+  - `CHANGELOG.md`：追加 [Unreleased] 条目
+- 前端微修复：
+  - `ReportView.tsx`：sections 变量包裹 useMemo
+  - `ErrorBoundary.tsx`：eslint 注释格式修正
+  - `taskStateMachine.ts`：移除未使用的 ListTodo 导入
+
 ## 2026-02-24 Pseudo-Comparison Bug Fix + Turn State Reset
 
 - 更新文档：

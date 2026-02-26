@@ -58,7 +58,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
     return Number.isNaN(date.getTime()) ? report.generated_at : date.toLocaleDateString();
   }, [report.generated_at]);
 
-  const sections = report.sections ?? [];
+  const sections = useMemo(() => report.sections ?? [], [report.sections]);
   const catalystItems = useMemo(() => extractCatalystItems(sections), [sections]);
   const metricItems = useMemo(() => extractMetrics(sections), [sections]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);

@@ -115,6 +115,20 @@
 <tr>
 <td width="50%">
 
+**思考过程 — 用户视图** — 折叠式推理节点（逻辑查图 / 规划策略 / 执行分析）
+
+<img src="images/2b674275d75b4838f1e77de5d5980dfc.png" width="100%"/>
+</td>
+<td width="50%">
+
+**执行时间线 + 分析师摘要卡片** — 逐 Agent 步骤追踪、11 智能体完成网格
+
+<img src="images/78247136de4dd9db0d96c6ca5f574e3f.png" width="100%"/>
+</td>
+</tr>
+<tr>
+<td width="50%">
+
 **对话 + "问这条"** — 对话式 AI + 持仓面板
 
 <img src="images/chat-report.png" width="100%"/>
