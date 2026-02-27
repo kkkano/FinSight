@@ -1,0 +1,49 @@
+{
+  "version": "v2",
+  "description": "RAG 生成质量 CI 门控阈值（RAGAS 四项核心指标）- 金融场景定制",
+  "metrics": {
+    "faithfulness": {
+      "min": 0.80,
+      "excellent": 0.90,
+      "description": "答案中每个陈述是否有检索文档支撑，防止模型幻觉。金融数据严禁凭空捏造，必须可溯源至原始文档。"
+    },
+    "answer_relevancy": {
+      "min": 0.75,
+      "excellent": 0.88,
+      "description": "答案是否真正回答了问题。允许适量背景解释，但核心问题必须被直接回答。"
+    },
+    "context_precision": {
+      "min": 0.70,
+      "excellent": 0.85,
+      "description": "检索到的文档中，被实际使用的比例。越靠前的文档权重越高（ranking-aware），精确率低意味着检索引入过多噪声。"
+    },
+    "context_recall": {
+      "min": 0.70,
+      "excellent": 0.85,
+      "description": "标准答案所需的信息，有多少能在检索文档中找到依据。召回率低意味着关键财务数据被遗漏。"
+    }
+  },
+  "drift_gates": {
+    "faithfulness_delta_min": -0.05,
+    "answer_relevancy_delta_min": -0.05,
+    "context_precision_delta_min": -0.05,
+    "context_recall_delta_min": -0.05
+  },
+  "doc_type_overrides": {
+    "filing": {
+      "description": "季报/年报：数字精确性要求最高，幻觉零容忍",
+      "faithfulness": { "min": 0.85 },
+      "context_recall": { "min": 0.75 }
+    },
+    "transcript": {
+      "description": "电话会纪要：管理层观点允许解读，忠实度次优先",
+      "faithfulness": { "min": 0.80 },
+      "answer_relevancy": { "min": 0.75 }
+    },
+    "news": {
+      "description": "新闻：时效性强，关注相关性和客观性",
+      "faithfulness": { "min": 0.75 },
+      "answer_relevancy": { "min": 0.80 }
+    }
+  }
+}

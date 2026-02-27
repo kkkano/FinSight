@@ -1,0 +1,32 @@
+{
+  "run_id": "rag-quality-20260227-151650",
+  "generated_at": "2026-02-27T15:16:50.626691+00:00",
+  "dataset_version": "v1",
+  "note": "由 run_rag_quality.py --save-baseline 生成",
+  "overall_metrics": {
+    "faithfulness": 0.8798,
+    "answer_relevancy": 0.8516,
+    "context_precision": 0.8458,
+    "context_recall": 0.873
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 0.8361,
+      "answer_relevancy": 0.8123,
+      "context_precision": 0.8142,
+      "context_recall": 0.8409
+    },
+    "transcript": {
+      "faithfulness": 0.8813,
+      "answer_relevancy": 0.8614,
+      "context_precision": 0.8447,
+      "context_recall": 0.8729
+    },
+    "news": {
+      "faithfulness": 0.9218,
+      "answer_relevancy": 0.8811,
+      "context_precision": 0.8784,
+      "context_recall": 0.9053
+    }
+  }
+}

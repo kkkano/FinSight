@@ -67,6 +67,9 @@ langsmith>=0.1.0
 # LangFuse 链路追踪（可选）
 langfuse>=2.0.0,<4.0.0
 
+# RAG 生成质量评估（RAGAS - tests/rag_quality/ 使用）
+ragas>=0.2.0
+
 # FastAPI & Web Server
 fastapi==0.122.0
 uvicorn[standard]==0.38.0
