@@ -308,7 +308,7 @@ LANGGRAPH_SYNTHESIZE_MODE=llm python tests/rag_quality/run_layer3_e2e.py
 
 ```bash
 # Layer 1 / Layer 2 依赖
-pip install ragas>=0.4.0 openai python-dotenv numpy
+pip install "ragas>=0.4.0" openai python-dotenv numpy
 
 # Layer 3 额外依赖（完整 LangGraph Pipeline）
 pip install -r requirements.txt   # 项目主依赖
@@ -422,6 +422,8 @@ LANGGRAPH_SYNTHESIZE_MODE=llm              # llm | stub（默认 stub）
 |------|------|---------|
 | ~~`context_precision` 全部 N/A~~ | ~~返回格式不符~~ | ✅ 已修复，12/12 全部有效 |
 | ~~Case 07-12 全部 RPM 失败~~ | ~~SiliconFlow RPM 上限~~ | ✅ 已修复，`--delay 35 --intra-case-delay 35` 全量 12/12 通过 |
+| ~~Layer2/3 导入时 UTF-8 包装副作用~~ | ~~模块 import 阶段改写 `sys.stdout/stderr`，`StringIO` 无 `buffer`~~ | ✅ 已修复，封装 `_setup_win32_utf8()` 并仅在 `main()` 调用 |
+| ~~pytest `Unknown config option` 告警~~ | ~~`pytest.ini` 中含 `asyncio_default_fixture_loop_scope`（当前环境不识别）~~ | ✅ 已修复，移除该配置，`pytest tests/rag_quality/test_rag_quality.py -q` 无 warning |
 
 ---
 
