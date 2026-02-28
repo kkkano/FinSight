@@ -44,10 +44,13 @@ from pathlib import Path
 from typing import Any
 
 # ── Windows 控制台 UTF-8 ─────────────────────────────────────────────────────
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+def _setup_win32_utf8() -> None:
+    if sys.platform == "win32":
+        import io
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -590,7 +593,11 @@ def _aggregate_metrics(results: list[CaseResult], doc_type: str | None = None) -
     }
 
 
-def check_gates(overall: dict[str, float | None], thresholds: dict[str, Any]) -> GateResult:
+def check_gates(
+    overall: dict[str, float | None],
+    thresholds: dict[str, Any],
+    metric_null_rates: dict[str, float] | None = None,
+) -> GateResult:
     """
     Layer 2 门控阈值：比 Layer 1 略宽松（检索噪声容忍）。
     faithfulness >= 0.75（Layer 1 是 0.80，因检索上下文可能引入噪声）
@@ -605,6 +612,14 @@ def check_gates(overall: dict[str, float | None], thresholds: dict[str, Any]) ->
     }
     metric_cfg = thresholds["metrics"]
     failures: list[str] = []
+
+    # null-rate 硬门槛：任何指标 100% null → 直接 fail
+    if metric_null_rates:
+        for key in METRIC_KEYS:
+            null_rate = metric_null_rates.get(key, 0.0)
+            if null_rate >= 1.0:
+                failures.append(f"{METRIC_LABELS[key]}({key}): null_rate=100%，该指标完全无效")
+
     for key in METRIC_KEYS:
         min_val = l2_overrides.get(key, metric_cfg[key]["min"])
         actual = overall.get(key)
@@ -736,6 +751,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    _setup_win32_utf8()
     try:
         from dotenv import load_dotenv
         load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -806,7 +822,7 @@ def main() -> None:
 
     # ── 构建报告 ─────────────────────────────────────────────────────────────
     report = build_report(results, dataset, args.doc_type, args.top_k, args.chunk_size)
-    gate_result = check_gates(report.overall_metrics, thresholds)
+    gate_result = check_gates(report.overall_metrics, thresholds, metric_null_rates=report.metric_null_rates)
     _print_summary(report, thresholds, gate_result, layer1_baseline)
 
     # ── 保存报告 ─────────────────────────────────────────────────────────────
