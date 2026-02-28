@@ -193,12 +193,16 @@ class TestGateCheckerLogic:
 class TestDriftCheckerLogic:
     """验证基线漂移检测逻辑（不依赖真实评估结果）。"""
 
-    def test_no_baseline_always_passes(self, drift_checker) -> None:
+    def test_no_baseline_always_passes(self, thresholds: dict[str, Any]) -> None:
         """基线未初始化时，漂移检查应始终通过（不阻断 CI）。"""
+        from tests.rag_quality.run_rag_quality import check_drift
+
         bad = {"faithfulness": 0.1, "answer_relevancy": 0.1,
                "context_precision": 0.1, "context_recall": 0.1}
-        failures = drift_checker(bad)
-        assert failures == [], "基线为空时不应触发漂移告警"
+        # 显式传 baseline_data=None，模拟无基线场景
+        result = check_drift(bad, None, thresholds)
+        assert result.passed, "基线为空时不应触发漂移告警"
+        assert result.failures == []
 
     def test_drift_within_tolerance_passes(
         self,

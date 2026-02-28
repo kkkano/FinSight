@@ -46,11 +46,12 @@ from typing import Any
 
 # ── 项目根路径 ───────────────────────────────────────────────────────────────
 
-# ── Windows 控制台 UTF-8 兼容 ────────────────────────────────────────────────
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+# ── Windows 控制台 UTF-8 兼容（仅 CLI 直接运行时生效，import 时跳过避免破坏 pytest）──
+def _setup_win32_utf8() -> None:
+    if sys.platform == "win32":
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -776,6 +777,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    _setup_win32_utf8()
     # 加载 .env 文件（项目根目录），让 LLM_API_KEY 等变量生效
     try:
         from dotenv import load_dotenv
@@ -883,7 +885,22 @@ def main() -> None:
         strict_null=getattr(args, "strict_null", False),
         by_question_type=report.by_question_type,
     )
-    drift_result = check_drift(report.overall_metrics, baseline_data, thresholds)
+    # 全量运行时，额外按 doc_type 分组检查各自的 override 阈值
+    # （mock 模式跳过：合成分数不应触发 doc_type 严格门控）
+    if args.doc_type is None and report.by_doc_type and not args.mock:
+        for dt, dt_metrics in report.by_doc_type.items():
+            dt_gate = check_gates(dt_metrics, thresholds, dt)
+            if not dt_gate.passed:
+                prefixed = [f"[{dt}] {f}" for f in dt_gate.failures]
+                gate_result = GateResult(
+                    passed=False,
+                    failures=gate_result.failures + prefixed,
+                )
+    # Mock 模式下跳过 drift 检测（合成分数与真实基线必然不同）
+    if args.mock:
+        drift_result = DriftResult(passed=True, baseline_available=False, failures=[], deltas={})
+    else:
+        drift_result = check_drift(report.overall_metrics, baseline_data, thresholds)
 
     # ── 打印摘要 ─────────────────────────────────────────────────────────────
     _print_summary(report, thresholds, gate_result, drift_result)
@@ -902,6 +919,7 @@ def main() -> None:
             "note": "由 run_rag_quality.py --save-baseline 生成",
             "overall_metrics": report.overall_metrics,
             "by_doc_type": report.by_doc_type,
+            "by_question_type": report.by_question_type,
         }
         _save_json(baseline_payload, args.baseline)
         print(f"► 基线已更新: {args.baseline}")
