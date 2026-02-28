@@ -1,0 +1,78 @@
+{
+  "version": "v1",
+  "description": "RAG Quality V2 Gate Thresholds (claim/keypoint level)",
+  "metrics": {
+    "keypoint_coverage": {
+      "min": 0.7,
+      "excellent": 0.85,
+      "description": "答案覆盖标准答案关键点的比例。"
+    },
+    "keypoint_context_recall": {
+      "min": 0.7,
+      "excellent": 0.85,
+      "description": "关键点是否能在检索上下文中找到依据。"
+    },
+    "claim_support_rate": {
+      "min": 0.7,
+      "excellent": 0.88,
+      "description": "答案陈述被证据支持的比例。"
+    },
+    "unsupported_claim_rate": {
+      "max": 0.15,
+      "excellent": 0.08,
+      "description": "无证据支持陈述占比（越低越好）。"
+    },
+    "contradiction_rate": {
+      "max": 0.05,
+      "excellent": 0.02,
+      "description": "与证据矛盾的陈述占比（越低越好）。"
+    },
+    "numeric_consistency_rate": {
+      "min": 0.9,
+      "excellent": 0.96,
+      "description": "数值陈述在证据中一致的比例。"
+    }
+  },
+  "doc_type_overrides": {
+    "filing": {
+      "keypoint_context_recall": { "min": 0.75 },
+      "unsupported_claim_rate": { "max": 0.1 },
+      "contradiction_rate": { "max": 0.03 },
+      "numeric_consistency_rate": { "min": 0.97 }
+    },
+    "transcript": {
+      "keypoint_coverage": { "min": 0.68 },
+      "unsupported_claim_rate": { "max": 0.15 },
+      "contradiction_rate": { "max": 0.05 },
+      "numeric_consistency_rate": { "min": 0.9 }
+    },
+    "news": {
+      "keypoint_coverage": { "min": 0.68 },
+      "unsupported_claim_rate": { "max": 0.19 },
+      "contradiction_rate": { "max": 0.06 },
+      "numeric_consistency_rate": { "min": 0.88 }
+    }
+  },
+  "question_type_overrides": {
+    "factoid": {
+      "keypoint_coverage": { "min": 0.8 },
+      "numeric_consistency_rate": { "min": 0.95 }
+    },
+    "list": {
+      "keypoint_coverage": { "min": 0.6 },
+      "keypoint_context_recall": { "min": 0.75 }
+    },
+    "analysis": {
+      "keypoint_coverage": { "min": 0.62 }
+    }
+  },
+  "drift_gates": {
+    "keypoint_coverage_delta_min": -0.05,
+    "keypoint_context_recall_delta_min": -0.05,
+    "claim_support_rate_delta_min": -0.05,
+    "unsupported_claim_rate_delta_max": 0.03,
+    "contradiction_rate_delta_max": 0.02,
+    "numeric_consistency_rate_delta_min": -0.05
+  }
+}
+

@@ -52,6 +52,8 @@ jobs:
           pip install -r requirements.txt
       - name: Run retrieval eval runner tests
         run: pytest -q tests/retrieval_eval/test_retrieval_eval_runner.py
+      - name: Run rag_qualityV2 fast tests
+        run: pytest -q tests/rag_qualityV2
 
   stage4-retrieval-gate:
     name: Stage 4 - Retrieval Gate
