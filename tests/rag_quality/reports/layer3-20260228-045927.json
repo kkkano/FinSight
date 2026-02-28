@@ -1,0 +1,125 @@
+{
+  "run_id": "layer3-20260228-045927",
+  "layer": "layer3_e2e",
+  "generated_at": "2026-02-28T04:59:27.219694+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": "filing",
+  "output_mode": "brief",
+  "total_cases": 4,
+  "evaluated_cases": 4,
+  "error_cases": 0,
+  "overall_metrics": {
+    "faithfulness": 0.7781,
+    "answer_relevancy": 0.75,
+    "context_precision": 0.7289,
+    "context_recall": 0.7449
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 0.7781,
+      "answer_relevancy": 0.75,
+      "context_precision": 0.7289,
+      "context_recall": 0.7449
+    },
+    "transcript": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    },
+    "news": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "metric_null_rates": {
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.0,
+    "context_precision": 0.0,
+    "context_recall": 0.0
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "question_type": "factoid",
+      "faithfulness": 0.7526,
+      "answer_relevancy": 0.7062,
+      "context_precision": 0.6869,
+      "context_recall": 0.6779,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "question_type": "analysis",
+      "faithfulness": 0.9049,
+      "answer_relevancy": 0.8306,
+      "context_precision": 0.7322,
+      "context_recall": 0.8017,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.7013,
+      "answer_relevancy": 0.7946,
+      "context_precision": 0.765,
+      "context_recall": 0.7481,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.7534,
+      "answer_relevancy": 0.6687,
+      "context_precision": 0.7317,
+      "context_recall": 0.7519,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    }
+  ]
+}

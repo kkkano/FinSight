@@ -1,0 +1,102 @@
+{
+  "run_id": "layer2-20260228-045922",
+  "layer": "layer2_retrieval",
+  "generated_at": "2026-02-28T04:59:22.611215+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": "filing",
+  "retrieval_top_k": 5,
+  "chunk_size": 300,
+  "total_cases": 4,
+  "evaluated_cases": 4,
+  "error_cases": 0,
+  "overall_metrics": {
+    "faithfulness": 0.8331,
+    "answer_relevancy": 0.7929,
+    "context_precision": 0.7999,
+    "context_recall": 0.8218
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 0.8331,
+      "answer_relevancy": 0.7929,
+      "context_precision": 0.7999,
+      "context_recall": 0.8218
+    },
+    "transcript": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    },
+    "news": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "metric_null_rates": {
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.0,
+    "context_precision": 0.0,
+    "context_recall": 0.0
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "question_type": "factoid",
+      "faithfulness": 0.8688,
+      "answer_relevancy": 0.8862,
+      "context_precision": 0.7891,
+      "context_recall": 0.8761,
+      "error": null,
+      "metric_errors": {},
+      "retrieved_chunk_count": 3,
+      "indexed_chunk_count": 3
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "question_type": "analysis",
+      "faithfulness": 0.819,
+      "answer_relevancy": 0.7184,
+      "context_precision": 0.7893,
+      "context_recall": 0.8002,
+      "error": null,
+      "metric_errors": {},
+      "retrieved_chunk_count": 3,
+      "indexed_chunk_count": 3
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.8563,
+      "answer_relevancy": 0.7929,
+      "context_precision": 0.8354,
+      "context_recall": 0.8551,
+      "error": null,
+      "metric_errors": {},
+      "retrieved_chunk_count": 3,
+      "indexed_chunk_count": 3
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.7883,
+      "answer_relevancy": 0.7741,
+      "context_precision": 0.7857,
+      "context_recall": 0.7558,
+      "error": null,
+      "metric_errors": {},
+      "retrieved_chunk_count": 3,
+      "indexed_chunk_count": 3
+    }
+  ]
+}

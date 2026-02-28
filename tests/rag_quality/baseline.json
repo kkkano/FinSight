@@ -1,0 +1,52 @@
+{
+  "run_id": "rag-quality-20260228-055449",
+  "generated_at": "2026-02-28T05:54:49.912408+00:00",
+  "dataset_version": "v1",
+  "note": "首次 12/12 全量通过基线（delay=35s, intra-delay=35s）。faithfulness=1.0 满分，零幻觉。",
+  "overall_metrics": {
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.6935,
+    "context_precision": 0.9444,
+    "context_recall": 0.9514
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7129,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    "transcript": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6294,
+      "context_precision": 0.8333,
+      "context_recall": 0.8541
+    },
+    "news": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7381,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    }
+  },
+  "by_question_type": {
+    "factoid": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7615,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    "list": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6467,
+      "context_precision": 1.0,
+      "context_recall": 1.0
+    },
+    "analysis": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6777,
+      "context_precision": 0.9048,
+      "context_recall": 0.9167
+    }
+  }
+}

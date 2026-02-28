@@ -1,0 +1,157 @@
+{
+  "run_id": "rag-quality-20260227-145828",
+  "generated_at": "2026-02-27T14:58:28.357571+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": null,
+  "total_cases": 12,
+  "evaluated_cases": 0,
+  "error_cases": 12,
+  "overall_metrics": {
+    "faithfulness": null,
+    "answer_relevancy": null,
+    "context_precision": null,
+    "context_recall": null
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    },
+    "transcript": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    },
+    "news": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225800559538031gJObcXiR)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 202602272258029642528709nJkBe5c)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 2026022722580535532013037aqMh0Q)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225807388651411Z9nAHvCQ)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question": "阿里巴巴管理层在最近的财报电话会上对云业务增长有何指引？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225809480948687S36RpQ2e)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question": "腾讯管理层如何看待游戏业务的复苏趋势？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225811802504994MG9wGS98)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question": "美团管理层在电话会上如何描述盈利路径和竞争态势？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225813888253516j4728n2a)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question": "京东管理层如何阐述供应链优势对毛利率的影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 202602272258164355891REabX16J)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question": "美联储降息对A股市场有哪些主要影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 202602272258207345860135aKxcAHV)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question": "中国新能源汽车出口面临哪些主要贸易壁垒？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225822768805810pQ5asEAh)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question": "苹果iPhone 16系列在中国市场的销售情况如何？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 429 - {'error': {'code': '', 'message': '您已达到总请求数限制：5分钟内最多请求30次，包括失败次数，请检查您的请求是否正确 (request id: 20260227225825183175539kxZDIULZ)', 'type': 'new_api_error'}}"
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question": "美国最新半导体出口管制措施对中国AI芯片供应有何影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 503 - {'error': {'code': 'model_not_found', 'message': '分组 level3 下模型 gpt-4o-mini 无可用渠道（distributor） (request id: 20260227225828411830188AUMaQ3v7)', 'type': 'new_api_error'}}"
+    }
+  ]
+}
