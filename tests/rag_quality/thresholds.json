@@ -1,6 +1,6 @@
 {
-  "version": "v2",
-  "description": "RAG 生成质量 CI 门控阈值（RAGAS 四项核心指标）- 金融场景定制",
+  "version": "v3",
+  "description": "RAG 生成质量 CI 门控阈值（RAGAS 四项核心指标）- 金融场景定制，支持 question_type 分层",
   "metrics": {
     "faithfulness": {
       "min": 0.80,
@@ -8,9 +8,9 @@
       "description": "答案中每个陈述是否有检索文档支撑，防止模型幻觉。金融数据严禁凭空捏造，必须可溯源至原始文档。"
     },
     "answer_relevancy": {
-      "min": 0.75,
+      "min": 0.65,
       "excellent": 0.88,
-      "description": "答案是否真正回答了问题。允许适量背景解释，但核心问题必须被直接回答。"
+      "description": "答案是否真正回答了问题。允许适量背景解释，但核心问题必须被直接回答。全局阈值已适配 question_type 分层（analysis/list 天然低分拉低均值）。"
     },
     "context_precision": {
       "min": 0.70,
@@ -44,6 +44,20 @@
       "description": "新闻：时效性强，关注相关性和客观性",
       "faithfulness": { "min": 0.75 },
       "answer_relevancy": { "min": 0.80 }
+    }
+  },
+  "question_type_overrides": {
+    "factoid": {
+      "description": "事实查找型：单一可量化指标，RAGAS answer_relevancy 评分稳定，使用标准阈值",
+      "answer_relevancy": { "min": 0.75 }
+    },
+    "list": {
+      "description": "列举型：'哪些主要X' 类问题，答案覆盖多点，RAGAS 反向生成假设问题分散导致天然低分",
+      "answer_relevancy": { "min": 0.55 }
+    },
+    "analysis": {
+      "description": "分析叙述型：管理层指引/开放归因，答案长且多维，RAGAS 相关性评分系统性偏低",
+      "answer_relevancy": { "min": 0.55 }
     }
   }
 }

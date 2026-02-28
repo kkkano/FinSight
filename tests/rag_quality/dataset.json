@@ -7,6 +7,7 @@
     {
       "id": "filing_maotai_revenue_2024q3",
       "doc_type": "filing",
+      "question_type": "factoid",
       "question": "贵州茅台2024年三季度营业收入是多少？",
       "ground_truth": "贵州茅台2024年三季度营业收入为387.88亿元，同比增长15.6%。其中茅台酒收入327.41亿元，系列酒收入52.24亿元。",
       "mock_contexts": [
@@ -20,6 +21,7 @@
     {
       "id": "filing_catl_gross_margin_2024",
       "doc_type": "filing",
+      "question_type": "analysis",
       "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
       "ground_truth": "宁德时代2024年上半年毛利率为26.4%，同比提升4.2个百分点，主要驱动因素是碳酸锂价格下跌导致原材料成本下降，以及规模效应带来的制造费用摊薄。",
       "mock_contexts": [
@@ -33,6 +35,7 @@
     {
       "id": "filing_byd_ev_sales_2024h1",
       "doc_type": "filing",
+      "question_type": "factoid",
       "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
       "ground_truth": "比亚迪2024年上半年新能源汽车销量为161.3万辆，同比增长28.5%，在中国新能源汽车市场份额约为34.2%，连续多个季度保持全球新能源汽车销量第一。",
       "mock_contexts": [
@@ -46,6 +49,7 @@
     {
       "id": "filing_paic_embedded_value_2024",
       "doc_type": "filing",
+      "question_type": "factoid",
       "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
       "ground_truth": "中国平安2024年中期集团内含价值为14,820亿元，较年初增长4.9%。寿险及健康险新业务价值达到223亿元，同比增长11%，新业务价值率提升至17.8%。",
       "mock_contexts": [
@@ -59,6 +63,7 @@
     {
       "id": "transcript_alibaba_cloud_guidance",
       "doc_type": "transcript",
+      "question_type": "analysis",
       "question": "阿里巴巴管理层在最近的财报电话会上对云业务增长有何指引？",
       "ground_truth": "阿里巴巴管理层表示云业务收入预计在FY2025下半年加速增长，AI相关产品收入连续多个季度实现三位数增长，公有云业务已实现盈利，EBITA利润率持续改善，管理层对云业务长期前景保持信心。",
       "mock_contexts": [
@@ -72,6 +77,7 @@
     {
       "id": "transcript_tencent_gaming_recovery",
       "doc_type": "transcript",
+      "question_type": "analysis",
       "question": "腾讯管理层如何看待游戏业务的复苏趋势？",
       "ground_truth": "腾讯管理层表示游戏业务已全面复苏，国内游戏流水实现两位数增长，海外游戏收入占比提升至35%，《王者荣耀》《和平精英》等旗舰产品表现稳健，新游戏管线储备充足，预计全年游戏收入保持稳健增长。",
       "mock_contexts": [
@@ -85,6 +91,7 @@
     {
       "id": "transcript_meituan_profitability",
       "doc_type": "transcript",
+      "question_type": "analysis",
       "question": "美团管理层在电话会上如何描述盈利路径和竞争态势？",
       "ground_truth": "美团管理层表示核心本地商业板块经营利润率维持在20%以上，新业务亏损持续收窄，优选业务已进入盈亏平衡阶段，闪购业务实现盈利，全年集团层面自由现金流预计为正，外卖市场份额稳定在70%以上。",
       "mock_contexts": [
@@ -98,6 +105,7 @@
     {
       "id": "transcript_jd_supply_chain",
       "doc_type": "transcript",
+      "question_type": "analysis",
       "question": "京东管理层如何阐述供应链优势对毛利率的影响？",
       "ground_truth": "京东管理层表示自营供应链模式带来了稳定的价格竞争力和更高的用户信任，2024年自营商品毛利率提升至15.2%，配送时效全国平均达到6小时，供应链基础设施投入持续转化为用户留存率和复购率的提升。",
       "mock_contexts": [
@@ -111,6 +119,7 @@
     {
       "id": "news_fed_rate_cut_astock",
       "doc_type": "news",
+      "question_type": "list",
       "question": "美联储降息对A股市场有哪些主要影响？",
       "ground_truth": "美联储降息对A股的影响主要体现在三个方面：人民币汇率压力减轻有利于北向资金回流，外资对A股估值重新定价；国内货币政策空间打开，降准降息预期增强；对利率敏感的成长股（科技、新能源）估值弹性更大，受益程度高于价值股。",
       "mock_contexts": [
@@ -124,12 +133,14 @@
     {
       "id": "news_china_ev_export_competition",
       "doc_type": "news",
+      "question_type": "list",
       "question": "中国新能源汽车出口面临哪些主要贸易壁垒？",
       "ground_truth": "中国新能源汽车出口面临的主要贸易壁垒包括：欧盟对中国电动车加征最高35.3%的反补贴税（比亚迪9.9%、吉利18.8%、上汽35.3%）；美国对中国电动车征收100%关税；部分东南亚市场也开始审查中国车企补贴问题。",
       "mock_contexts": [
         "欧盟委员会2024年10月正式宣布对中国进口电动汽车加征反补贴关税，税率依企业不同有所差异：比亚迪9.9%、吉利18.8%、上汽集团35.3%，其他配合调查的企业适用21.3%的加权平均税率，未配合调查的企业适用35.3%的最高税率，在原有10%基础关税之上叠加征收。",
         "美国政府于2024年5月宣布将中国电动汽车关税从25%提高至100%，同时对锂电池、太阳能电池等清洁能源产品也大幅提高关税。这实际上将中国电动车完全挡在美国市场门外。",
-        "尽管面临贸易壁垒，中国新能源汽车2024年前三季度出口量仍达到92.8万辆，同比增长13.2%。车企正通过在欧洲、东南亚建厂等方式规避关税，比亚迪匈牙利工厂预计2025年投产。"
+        "尽管面临贸易壁垒，中国新能源汽车2024年前三季度出口量仍达到92.8万辆，同比增长13.2%。车企正通过在欧洲、东南亚建厂等方式规避关税，比亚迪匈牙利工厂预计2025年投产。",
+        "2024年下半年，泰国、印度尼西亚等东南亚国家相继启动对中国新能源汽车企业的补贴审查程序。泰国工业部就中国车企享受的本国生产补贴展开调查，印尼贸易部亦对进口中国电动车的补贴合规性提出质疑，东南亚市场的贸易壁垒风险正在上升。"
       ],
       "tags": ["trade_barrier", "EV_export", "tariff", "geopolitics"]
     },
@@ -137,6 +148,7 @@
     {
       "id": "news_apple_iphone16_china_sales",
       "doc_type": "news",
+      "question_type": "analysis",
       "question": "苹果iPhone 16系列在中国市场的销售情况如何？",
       "ground_truth": "iPhone 16系列在中国市场开售首周销量约370万部，同比下降约3%，弱于市场预期，主要原因是AI功能（Apple Intelligence）尚未在中国上线，缺乏核心差异化卖点，华为Mate 70系列的竞争也产生明显分流效应。",
       "mock_contexts": [
@@ -150,6 +162,7 @@
     {
       "id": "news_semiconductor_export_controls",
       "doc_type": "news",
+      "question_type": "analysis",
       "question": "美国最新半导体出口管制措施对中国AI芯片供应有何影响？",
       "ground_truth": "美国2024年最新出口管制将A100、H100等高性能GPU列入出口禁令，同时限制算力等效指标在特定阈值以上的芯片出口中国。中国AI企业转向华为昇腾910B等国产替代，但性能差距仍约为30-50%，短期内对大模型训练产生实质性制约。",
       "mock_contexts": [
