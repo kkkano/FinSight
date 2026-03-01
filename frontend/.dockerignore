@@ -1,0 +1,25 @@
+# Frontend .dockerignore
+# Excludes files not needed inside the Docker build context
+
+node_modules/
+dist/
+.cache/
+coverage/
+
+# Env files
+.env
+.env.*
+
+# Editor / OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test artifacts
+playwright-report/
+test-results/

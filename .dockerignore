@@ -1,0 +1,48 @@
+# FinSight Backend — .dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Tests & reports
+tests/rag_quality/reports/
+tests/rag_qualityV2/reports/
+tests/retrieval_eval/reports/
+
+# Data & secrets
+.env
+.env.*
+data/
+logs/
+*.sqlite
+*.db
+
+# Node / Frontend (handled by frontend/Dockerfile)
+frontend/node_modules/
+frontend/dist/
+
+# ML model cache (mounted as volume at runtime)
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.github/

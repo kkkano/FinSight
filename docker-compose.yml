@@ -1,0 +1,105 @@
+# FinSight — Production Docker Compose
+# One-command deploy: docker compose --env-file .env.server up -d --build
+#
+# Services:
+#   postgres  — pgvector 0.8.x (vector similarity search)
+#   backend   — FastAPI / uvicorn (Python 3.11)
+#   frontend  — Nginx serving Vite-built React SPA
+#
+# Ports exposed to host:
+#   80    frontend  (HTTP, SPA + API proxy)
+#   8000  backend   (direct API access, optional)
+#   5432  postgres  (local debug only — consider removing in prod)
+
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL + pgvector ───────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: finsight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-finsight}
+      POSTGRES_USER:     ${POSTGRES_USER:-finsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finsight_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"        # remove in strict-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finsight}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finsight-net
+
+  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finsight-backend
+    restart: unless-stopped
+    env_file:
+      - .env.server          # real secrets on the server (NOT committed)
+    environment:
+      # Override RAG to use Postgres pgvector
+      RAG_V2_BACKEND:               postgres
+      RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
+      RAG_V2_POSTGRES_DSN:          postgresql+asyncpg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+      LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - model_cache:/app/.cache
+    ports:
+      - "8000:8000"          # direct API access
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s      # allow model loading time
+    networks:
+      - finsight-net
+
+  # ── Frontend (Nginx + React SPA) ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # nginx proxies /api/* to backend internally, so value here is empty-string
+        VITE_API_BASE_URL: ""
+    container_name: finsight-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - finsight-net
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: finsight_postgres_data
+  backend_data:
+    name: finsight_backend_data
+  backend_logs:
+    name: finsight_backend_logs
+  model_cache:
+    name: finsight_model_cache   # persists bge-m3 / reranker weights (~2 GB)
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  finsight-net:
+    name: finsight-net
+    driver: bridge
