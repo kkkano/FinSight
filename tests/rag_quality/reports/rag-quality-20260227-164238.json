@@ -1,0 +1,157 @@
+{
+  "run_id": "rag-quality-20260227-164238",
+  "generated_at": "2026-02-27T16:42:38.573278+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": null,
+  "total_cases": 12,
+  "evaluated_cases": 6,
+  "error_cases": 6,
+  "overall_metrics": {
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.7673,
+    "context_precision": null,
+    "context_recall": 0.9306
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7649,
+      "context_precision": null,
+      "context_recall": 1.0
+    },
+    "transcript": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7771,
+      "context_precision": null,
+      "context_recall": 0.7916
+    },
+    "news": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": null,
+      "context_recall": 1.0,
+      "error": null
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.5661,
+      "context_precision": null,
+      "context_recall": 1.0,
+      "error": null
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7732,
+      "context_precision": null,
+      "context_recall": 1.0,
+      "error": null
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7203,
+      "context_precision": null,
+      "context_recall": 1.0,
+      "error": null
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question": "阿里巴巴管理层在最近的财报电话会上对云业务增长有何指引？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7771,
+      "context_precision": null,
+      "context_recall": 0.75,
+      "error": null
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question": "腾讯管理层如何看待游戏业务的复苏趋势？",
+      "faithfulness": 1.0,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": 0.8333,
+      "error": null
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question": "美团管理层在电话会上如何描述盈利路径和竞争态势？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question": "京东管理层如何阐述供应链优势对毛利率的影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question": "美联储降息对A股市场有哪些主要影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question": "中国新能源汽车出口面临哪些主要贸易壁垒？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question": "苹果iPhone 16系列在中国市场的销售情况如何？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question": "美国最新半导体出口管制措施对中国AI芯片供应有何影响？",
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null,
+      "error": "Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction."
+    }
+  ]
+}

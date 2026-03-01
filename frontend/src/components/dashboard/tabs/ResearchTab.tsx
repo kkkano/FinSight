@@ -7,7 +7,7 @@
  * 3) 新鲜度标签：价格时间戳、财报期、新闻窗口。
  * 4) 证据不足条目支持一键展开到引用片段（非“问这条”对话链路）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useExecutionStore } from '../../../store/executionStore.ts';
@@ -305,7 +305,7 @@ export function ResearchTab() {
   }, [ticker]);
 
   const recentRuns = useExecutionStore((s) => s.recentRuns);
-  const latestDashboardOutcome = useMemo(() => {
+  const latestDashboardOutcome = (() => {
     const upperTicker = ticker?.toUpperCase();
     if (!upperTicker) return null;
     for (const run of recentRuns) {
@@ -327,7 +327,7 @@ export function ResearchTab() {
       }
     }
     return null;
-  }, [recentRuns, ticker]);
+  })();
   const lastSyncedCompletionRef = useRef<string | null>(null);
 
   const pollReportAfterComplete = useCallback(async () => {

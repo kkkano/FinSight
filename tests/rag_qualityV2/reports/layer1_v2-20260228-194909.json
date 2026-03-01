@@ -1,0 +1,586 @@
+{
+  "run_id": "layer1_v2-20260228-194909",
+  "generated_at": "2026-02-28T19:49:09.739312+00:00",
+  "layer": "layer1_v2",
+  "dataset_version": "v1",
+  "config": {
+    "doc_type_filter": null,
+    "mock_mode": true,
+    "chat_model": "mock",
+    "embed_model": "mock",
+    "retry": 2
+  },
+  "overall_metrics": {
+    "keypoint_coverage": 0.8866,
+    "keypoint_context_recall": 0.8764,
+    "claim_support_rate": 0.8599,
+    "unsupported_claim_rate": 0.0523,
+    "contradiction_rate": 0.0086,
+    "numeric_consistency_rate": 0.9813
+  },
+  "by_doc_type": {
+    "filing": {
+      "keypoint_coverage": 0.8643,
+      "keypoint_context_recall": 0.8801,
+      "claim_support_rate": 0.8776,
+      "unsupported_claim_rate": 0.0585,
+      "contradiction_rate": 0.0077,
+      "numeric_consistency_rate": 0.9786
+    },
+    "news": {
+      "keypoint_coverage": 0.9077,
+      "keypoint_context_recall": 0.8888,
+      "claim_support_rate": 0.8422,
+      "unsupported_claim_rate": 0.0383,
+      "contradiction_rate": 0.0138,
+      "numeric_consistency_rate": 0.9793
+    },
+    "transcript": {
+      "keypoint_coverage": 0.8876,
+      "keypoint_context_recall": 0.8602,
+      "claim_support_rate": 0.86,
+      "unsupported_claim_rate": 0.06,
+      "contradiction_rate": 0.0042,
+      "numeric_consistency_rate": 0.9859
+    }
+  },
+  "by_question_type": {
+    "analysis": {
+      "keypoint_coverage": 0.8897,
+      "keypoint_context_recall": 0.88,
+      "claim_support_rate": 0.8687,
+      "unsupported_claim_rate": 0.0554,
+      "contradiction_rate": 0.0072,
+      "numeric_consistency_rate": 0.9827
+    },
+    "factoid": {
+      "keypoint_coverage": 0.8652,
+      "keypoint_context_recall": 0.8755,
+      "claim_support_rate": 0.8598,
+      "unsupported_claim_rate": 0.053,
+      "contradiction_rate": 0.0086,
+      "numeric_consistency_rate": 0.9784
+    },
+    "list": {
+      "keypoint_coverage": 0.9075,
+      "keypoint_context_recall": 0.8649,
+      "claim_support_rate": 0.8293,
+      "unsupported_claim_rate": 0.0403,
+      "contradiction_rate": 0.0132,
+      "numeric_consistency_rate": 0.9808
+    }
+  },
+  "metric_null_rates": {
+    "keypoint_coverage": 0.0,
+    "keypoint_context_recall": 0.0,
+    "claim_support_rate": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "contradiction_rate": 0.0,
+    "numeric_consistency_rate": 0.0
+  },
+  "gate_result": {
+    "passed": true,
+    "failures": [],
+    "applied_thresholds": {
+      "overall.keypoint_coverage": {
+        "min": 0.7
+      },
+      "overall.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "overall.claim_support_rate": {
+        "min": 0.7
+      },
+      "overall.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "overall.contradiction_rate": {
+        "max": 0.05
+      },
+      "overall.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:filing.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:filing.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "doc:filing.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:filing.unsupported_claim_rate": {
+        "max": 0.1
+      },
+      "doc:filing.contradiction_rate": {
+        "max": 0.03
+      },
+      "doc:filing.numeric_consistency_rate": {
+        "min": 0.97
+      },
+      "doc:news.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:news.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:news.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:news.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:news.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:news.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:transcript.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:transcript.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:transcript.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:transcript.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:transcript.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:transcript.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:analysis.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:analysis.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:analysis.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:analysis.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:analysis.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:analysis.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:factoid.keypoint_coverage": {
+        "min": 0.8
+      },
+      "qt:factoid.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:factoid.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:factoid.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:factoid.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:factoid.numeric_consistency_rate": {
+        "min": 0.95
+      },
+      "qt:list.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:list.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "qt:list.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:list.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:list.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:list.numeric_consistency_rate": {
+        "min": 0.9
+      }
+    },
+    "null_rate_failures": [],
+    "policy_name": "rag_quality_v2_gate",
+    "policy_version": "v1"
+  },
+  "drift_result": {
+    "enabled": false,
+    "baseline_available": false,
+    "passed": true,
+    "deltas": {},
+    "failures": [],
+    "baseline_run_id": null
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 87,
+      "metrics": {
+        "keypoint_coverage": 0.8465,
+        "keypoint_context_recall": 0.9309,
+        "claim_support_rate": 0.8353,
+        "unsupported_claim_rate": 0.0725,
+        "contradiction_rate": 0.0063,
+        "numeric_consistency_rate": 0.9778
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question_type": "analysis",
+      "answer_len": 77,
+      "metrics": {
+        "keypoint_coverage": 0.8616,
+        "keypoint_context_recall": 0.8941,
+        "claim_support_rate": 0.9307,
+        "unsupported_claim_rate": 0.0752,
+        "contradiction_rate": 0.0052,
+        "numeric_consistency_rate": 0.9792
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 9,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 73,
+      "metrics": {
+        "keypoint_coverage": 0.8956,
+        "keypoint_context_recall": 0.8586,
+        "claim_support_rate": 0.8526,
+        "unsupported_claim_rate": 0.0585,
+        "contradiction_rate": 0.009,
+        "numeric_consistency_rate": 0.9844
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 67,
+      "metrics": {
+        "keypoint_coverage": 0.8534,
+        "keypoint_context_recall": 0.837,
+        "claim_support_rate": 0.8916,
+        "unsupported_claim_rate": 0.0279,
+        "contradiction_rate": 0.0105,
+        "numeric_consistency_rate": 0.973
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 96,
+      "metrics": {
+        "keypoint_coverage": 0.8522,
+        "keypoint_context_recall": 0.8997,
+        "claim_support_rate": 0.8461,
+        "unsupported_claim_rate": 0.0783,
+        "contradiction_rate": 0.0008,
+        "numeric_consistency_rate": 0.9949
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 93,
+      "metrics": {
+        "keypoint_coverage": 0.8505,
+        "keypoint_context_recall": 0.8336,
+        "claim_support_rate": 0.8353,
+        "unsupported_claim_rate": 0.0641,
+        "contradiction_rate": 0.0079,
+        "numeric_consistency_rate": 0.9887
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 73,
+      "metrics": {
+        "keypoint_coverage": 0.9308,
+        "keypoint_context_recall": 0.8429,
+        "claim_support_rate": 0.8121,
+        "unsupported_claim_rate": 0.0262,
+        "contradiction_rate": 0.0073,
+        "numeric_consistency_rate": 0.9782
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 95,
+      "metrics": {
+        "keypoint_coverage": 0.917,
+        "keypoint_context_recall": 0.8645,
+        "claim_support_rate": 0.9467,
+        "unsupported_claim_rate": 0.0713,
+        "contradiction_rate": 0.0006,
+        "numeric_consistency_rate": 0.982
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 9,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 87,
+      "metrics": {
+        "keypoint_coverage": 0.8761,
+        "keypoint_context_recall": 0.8506,
+        "claim_support_rate": 0.8542,
+        "unsupported_claim_rate": 0.0255,
+        "contradiction_rate": 0.0133,
+        "numeric_consistency_rate": 0.9897
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        }
+      }
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 134,
+      "metrics": {
+        "keypoint_coverage": 0.9389,
+        "keypoint_context_recall": 0.8793,
+        "claim_support_rate": 0.8043,
+        "unsupported_claim_rate": 0.055,
+        "contradiction_rate": 0.0131,
+        "numeric_consistency_rate": 0.9718
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 104,
+      "metrics": {
+        "keypoint_coverage": 0.9043,
+        "keypoint_context_recall": 0.8758,
+        "claim_support_rate": 0.8436,
+        "unsupported_claim_rate": 0.0612,
+        "contradiction_rate": 0.0179,
+        "numeric_consistency_rate": 0.9717
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 101,
+      "metrics": {
+        "keypoint_coverage": 0.9117,
+        "keypoint_context_recall": 0.9495,
+        "claim_support_rate": 0.8666,
+        "unsupported_claim_rate": 0.0115,
+        "contradiction_rate": 0.0109,
+        "numeric_consistency_rate": 0.9842
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 3,
+          "total_keypoints": 8,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        }
+      }
+    }
+  ]
+}

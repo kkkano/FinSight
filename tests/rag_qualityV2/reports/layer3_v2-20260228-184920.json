@@ -1,0 +1,445 @@
+{
+  "run_id": "layer3_v2-20260228-184920",
+  "generated_at": "2026-02-28T18:49:20.289499+00:00",
+  "layer": "layer3_v2",
+  "dataset_version": "v1",
+  "config": {
+    "doc_type_filter": null,
+    "mock_mode": false,
+    "chat_model": "grok-4.1-fast",
+    "embed_model": "BAAI/bge-m3",
+    "retry": 2,
+    "output_mode": "brief"
+  },
+  "overall_metrics": {
+    "keypoint_coverage": null,
+    "keypoint_context_recall": null,
+    "claim_support_rate": null,
+    "unsupported_claim_rate": null,
+    "contradiction_rate": null,
+    "numeric_consistency_rate": null
+  },
+  "by_doc_type": {
+    "filing": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    },
+    "news": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    },
+    "transcript": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    }
+  },
+  "by_question_type": {
+    "analysis": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    },
+    "factoid": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    },
+    "list": {
+      "keypoint_coverage": null,
+      "keypoint_context_recall": null,
+      "claim_support_rate": null,
+      "unsupported_claim_rate": null,
+      "contradiction_rate": null,
+      "numeric_consistency_rate": null
+    }
+  },
+  "metric_null_rates": {
+    "keypoint_coverage": 1.0,
+    "keypoint_context_recall": 1.0,
+    "claim_support_rate": 1.0,
+    "unsupported_claim_rate": 1.0,
+    "contradiction_rate": 1.0,
+    "numeric_consistency_rate": 1.0
+  },
+  "gate_result": {
+    "passed": false,
+    "failures": [
+      "keypoint_coverage: null_rate=100%",
+      "keypoint_context_recall: null_rate=100%",
+      "claim_support_rate: null_rate=100%",
+      "unsupported_claim_rate: null_rate=100%",
+      "contradiction_rate: null_rate=100%",
+      "numeric_consistency_rate: null_rate=100%"
+    ],
+    "applied_thresholds": {
+      "overall.keypoint_coverage": {
+        "min": 0.7
+      },
+      "overall.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "overall.claim_support_rate": {
+        "min": 0.7
+      },
+      "overall.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "overall.contradiction_rate": {
+        "max": 0.05
+      },
+      "overall.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:filing.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:filing.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "doc:filing.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:filing.unsupported_claim_rate": {
+        "max": 0.1
+      },
+      "doc:filing.contradiction_rate": {
+        "max": 0.03
+      },
+      "doc:filing.numeric_consistency_rate": {
+        "min": 0.97
+      },
+      "doc:news.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:news.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:news.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:news.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:news.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:news.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:transcript.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:transcript.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:transcript.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:transcript.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:transcript.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:transcript.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:analysis.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:analysis.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:analysis.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:analysis.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:analysis.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:analysis.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:factoid.keypoint_coverage": {
+        "min": 0.8
+      },
+      "qt:factoid.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:factoid.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:factoid.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:factoid.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:factoid.numeric_consistency_rate": {
+        "min": 0.95
+      },
+      "qt:list.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:list.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "qt:list.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:list.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:list.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:list.numeric_consistency_rate": {
+        "min": 0.9
+      }
+    },
+    "null_rate_failures": [
+      "keypoint_coverage: null_rate=100%",
+      "keypoint_context_recall: null_rate=100%",
+      "claim_support_rate: null_rate=100%",
+      "unsupported_claim_rate: null_rate=100%",
+      "contradiction_rate: null_rate=100%",
+      "numeric_consistency_rate: null_rate=100%"
+    ],
+    "policy_name": "rag_quality_v2_gate",
+    "policy_version": "v1"
+  },
+  "drift_result": {
+    "enabled": true,
+    "baseline_available": true,
+    "passed": true,
+    "deltas": {},
+    "failures": [],
+    "baseline_run_id": "uninitialized"
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 0,
+      "metrics": {
+        "keypoint_coverage": null,
+        "keypoint_context_recall": null,
+        "claim_support_rate": null,
+        "unsupported_claim_rate": null,
+        "contradiction_rate": null,
+        "numeric_consistency_rate": null
+      },
+      "metric_errors": {},
+      "error": "No module named 'backend'",
+      "judge_artifacts": {}
+    }
+  ]
+}

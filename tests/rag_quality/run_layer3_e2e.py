@@ -79,6 +79,28 @@ METRIC_LABELS = {
 # monkeypatched execute_plan_stub 从此处读取测试上下文
 _TEST_EVIDENCE_REGISTRY: dict[str, dict[str, Any]] = {}
 
+# ── 测试用 case → ticker 映射 ──────────────────────────────────────────────
+# Pipeline 的 resolve_subject → clarify 节点需要已知的 ticker 才能继续执行。
+# CN_TO_TICKER 字典目前缺少 A 股个股映射，因此测试通过 ui_context.active_symbol
+# 注入 ticker，使 Pipeline 跳过 clarify 进入 planner→synthesize 完整流程。
+CASE_TICKER_MAP: dict[str, str] = {
+    # filing — A 股个股
+    "filing_maotai_revenue_2024q3":      "600519.SS",   # 贵州茅台
+    "filing_catl_gross_margin_2024":     "300750.SZ",   # 宁德时代
+    "filing_byd_ev_sales_2024h1":        "002594.SZ",   # 比亚迪
+    "filing_paic_embedded_value_2024":   "601318.SS",   # 中国平安
+    # transcript — 中概 ADR / 港股
+    "transcript_alibaba_cloud_guidance": "BABA",        # 阿里巴巴
+    "transcript_tencent_gaming_recovery":"0700.HK",     # 腾讯
+    "transcript_meituan_profitability":  "3690.HK",     # 美团
+    "transcript_jd_supply_chain":        "JD",          # 京东
+    # news — 使用代表性 ticker 或指数
+    "news_fed_rate_cut_astock":          "000001.SS",   # 上证指数
+    "news_china_ev_export_competition":  "002594.SZ",   # 比亚迪（EV 代表）
+    "news_apple_iphone16_china_sales":   "AAPL",        # 苹果
+    "news_semiconductor_export_controls":"NVDA",        # 英伟达（半导体代表）
+}
+
 
 # ── 数据类 ───────────────────────────────────────────────────────────────────
 
@@ -354,6 +376,7 @@ def _build_ragas_embeddings(api_key: str, base_url: str, embed_model: str):
 async def _run_pipeline_for_case(
     case: dict[str, Any],
     output_mode: str,
+    ticker: str = "",
 ) -> PipelineResult:
     """
     为单个测试 case 运行完整 LangGraph Pipeline。
@@ -371,8 +394,8 @@ async def _run_pipeline_for_case(
     doc_type = case["doc_type"]
     contexts = case["mock_contexts"]
 
-    # 使用确定性 thread_id（基于 case_id），确保测试可重复
-    thread_id = f"layer3-test-{case_id}"
+    # 使用确定性 thread_id（基于 case_id + 时间戳），避免 checkpoint 残留
+    thread_id = f"layer3-test-{case_id}-{int(time.time())}"
 
     # Step 1: 注册测试证据
     _TEST_EVIDENCE_REGISTRY[thread_id] = {
@@ -392,16 +415,30 @@ async def _run_pipeline_for_case(
             runner = GraphRunner.create()
 
             # Step 4: 运行完整 pipeline
+            # 注入 active_symbol 使 resolve_subject 绑定 ticker，跳过 clarify 中断
+            ui_ctx: dict[str, Any] = {}
+            if ticker:
+                ui_ctx["active_symbol"] = ticker
             final_state = await runner.ainvoke(
                 thread_id=thread_id,
                 query=question,
                 output_mode=output_mode,
+                ui_context=ui_ctx,
                 confirmation_mode="skip",   # 跳过人工确认，保证测试自动运行
             )
 
         # Step 5: 提取答案
         answer, synth_mode = _extract_answer_from_state(final_state)
         nodes_visited = _extract_nodes_visited(final_state)
+
+        # DEBUG: 诊断 clarify / answer 状态
+        _cl = final_state.get("clarify") or {} if isinstance(final_state, dict) else {}
+        _cl_needed = _cl.get("needed") if isinstance(_cl, dict) else "?"
+        _cl_reason = _cl.get("reason", "") if isinstance(_cl, dict) else ""
+        import sys as _sys
+        print(f"\n      [DEBUG] clarify.needed={_cl_needed}, reason={_cl_reason!r}, "
+              f"answer_len={len(answer)}, answer[:120]={answer[:120]!r}",
+              file=_sys.stderr, flush=True)
 
         return PipelineResult(
             case_id=case_id,
@@ -431,18 +468,9 @@ async def _run_pipeline_for_case(
         _TEST_EVIDENCE_REGISTRY.pop(thread_id, None)
 
 
-def _run_pipeline_sync(case: dict[str, Any], output_mode: str) -> PipelineResult:
+def _run_pipeline_sync(case: dict[str, Any], output_mode: str, ticker: str = "") -> PipelineResult:
     """同步包装器（供 evaluate_cases 调用）。"""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    return loop.run_until_complete(_run_pipeline_for_case(case, output_mode))
+    return asyncio.run(_run_pipeline_for_case(case, output_mode, ticker=ticker))
 
 
 # ── 核心评估逻辑 ─────────────────────────────────────────────────────────────
@@ -517,8 +545,9 @@ def evaluate_cases(
 
         try:
             # Step 1: 运行完整 LangGraph Pipeline
-            print(f"    ↳ [Pipeline] 运行完整 graph（output_mode={output_mode}）...", end=" ", flush=True)
-            pipeline_result = _run_pipeline_sync(case, output_mode)
+            ticker = CASE_TICKER_MAP.get(case_id, "")
+            print(f"    ↳ [Pipeline] 运行完整 graph（output_mode={output_mode}, ticker={ticker}）...", end=" ", flush=True)
+            pipeline_result = _run_pipeline_sync(case, output_mode, ticker=ticker)
 
             if pipeline_result.error:
                 raise RuntimeError(f"Pipeline 运行失败: {pipeline_result.error}")

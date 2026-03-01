@@ -1,0 +1,285 @@
+{
+  "run_id": "layer3-20260228-090539",
+  "layer": "layer3_e2e",
+  "generated_at": "2026-02-28T09:05:39.319398+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": null,
+  "output_mode": "brief",
+  "total_cases": 12,
+  "evaluated_cases": 12,
+  "error_cases": 0,
+  "overall_metrics": {
+    "faithfulness": 0.7845,
+    "answer_relevancy": 0.7495,
+    "context_precision": 0.7298,
+    "context_recall": 0.76
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 0.7781,
+      "answer_relevancy": 0.75,
+      "context_precision": 0.7289,
+      "context_recall": 0.7449
+    },
+    "transcript": {
+      "faithfulness": 0.761,
+      "answer_relevancy": 0.7388,
+      "context_precision": 0.7406,
+      "context_recall": 0.7714
+    },
+    "news": {
+      "faithfulness": 0.8145,
+      "answer_relevancy": 0.7598,
+      "context_precision": 0.7198,
+      "context_recall": 0.7638
+    }
+  },
+  "metric_null_rates": {
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.0,
+    "context_precision": 0.0,
+    "context_recall": 0.0
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "question_type": "factoid",
+      "faithfulness": 0.7526,
+      "answer_relevancy": 0.7062,
+      "context_precision": 0.6869,
+      "context_recall": 0.6779,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "question_type": "analysis",
+      "faithfulness": 0.9049,
+      "answer_relevancy": 0.8306,
+      "context_precision": 0.7322,
+      "context_recall": 0.8017,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.7013,
+      "answer_relevancy": 0.7946,
+      "context_precision": 0.765,
+      "context_recall": 0.7481,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "question_type": "factoid",
+      "faithfulness": 0.7534,
+      "answer_relevancy": 0.6687,
+      "context_precision": 0.7317,
+      "context_recall": 0.7519,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question": "阿里巴巴管理层在最近的财报电话会上对云业务增长有何指引？",
+      "question_type": "analysis",
+      "faithfulness": 0.8679,
+      "answer_relevancy": 0.7987,
+      "context_precision": 0.849,
+      "context_recall": 0.9044,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question": "腾讯管理层如何看待游戏业务的复苏趋势？",
+      "question_type": "analysis",
+      "faithfulness": 0.6548,
+      "answer_relevancy": 0.7142,
+      "context_precision": 0.7029,
+      "context_recall": 0.7251,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question": "美团管理层在电话会上如何描述盈利路径和竞争态势？",
+      "question_type": "analysis",
+      "faithfulness": 0.7449,
+      "answer_relevancy": 0.6673,
+      "context_precision": 0.6584,
+      "context_recall": 0.734,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question": "京东管理层如何阐述供应链优势对毛利率的影响？",
+      "question_type": "analysis",
+      "faithfulness": 0.7763,
+      "answer_relevancy": 0.7749,
+      "context_precision": 0.7521,
+      "context_recall": 0.722,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question": "美联储降息对A股市场有哪些主要影响？",
+      "question_type": "list",
+      "faithfulness": 0.7455,
+      "answer_relevancy": 0.6002,
+      "context_precision": 0.5968,
+      "context_recall": 0.6424,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question": "中国新能源汽车出口面临哪些主要贸易壁垒？",
+      "question_type": "list",
+      "faithfulness": 0.7831,
+      "answer_relevancy": 0.7849,
+      "context_precision": 0.6956,
+      "context_recall": 0.7903,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question": "苹果iPhone 16系列在中国市场的销售情况如何？",
+      "question_type": "analysis",
+      "faithfulness": 0.8606,
+      "answer_relevancy": 0.8066,
+      "context_precision": 0.7875,
+      "context_recall": 0.7378,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question": "美国最新半导体出口管制措施对中国AI芯片供应有何影响？",
+      "question_type": "analysis",
+      "faithfulness": 0.869,
+      "answer_relevancy": 0.8475,
+      "context_precision": 0.7991,
+      "context_recall": 0.8847,
+      "error": null,
+      "metric_errors": {},
+      "answer_length": 120,
+      "nodes_visited": [
+        "planner",
+        "execute_plan",
+        "synthesize",
+        "render"
+      ],
+      "synth_mode": "mock"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "run_id": "layer2-20260228-111328",
+  "layer": "layer2_retrieval",
+  "generated_at": "2026-02-28T11:13:28.525984+00:00",
+  "dataset_version": "v1",
+  "retrieval_top_k": 5,
+  "chunk_size": 300,
+  "note": "由 run_layer2_retrieval.py --save-baseline 生成",
+  "overall_metrics": {
+    "faithfulness": 0.9798,
+    "answer_relevancy": 0.7005,
+    "context_precision": 0.9167,
+    "context_recall": 0.9514
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 0.975,
+      "answer_relevancy": 0.6736,
+      "context_precision": 0.9583,
+      "context_recall": 1.0
+    },
+    "transcript": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.6161,
+      "context_precision": 1.0,
+      "context_recall": 0.8541
+    },
+    "news": {
+      "faithfulness": 0.9643,
+      "answer_relevancy": 0.8119,
+      "context_precision": 0.7916,
+      "context_recall": 1.0
+    }
+  }
+}

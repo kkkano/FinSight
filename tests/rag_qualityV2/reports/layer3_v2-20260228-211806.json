@@ -1,0 +1,1767 @@
+{
+  "run_id": "layer3_v2-20260228-211806",
+  "generated_at": "2026-02-28T21:18:06.142514+00:00",
+  "layer": "layer3_v2",
+  "dataset_version": "v1",
+  "config": {
+    "doc_type_filter": null,
+    "mock_mode": false,
+    "chat_model": "grok-4.1-fast",
+    "embed_model": "BAAI/bge-m3",
+    "retry": 2,
+    "output_mode": "brief"
+  },
+  "overall_metrics": {
+    "keypoint_coverage": 0.9072,
+    "keypoint_context_recall": 0.9653,
+    "claim_support_rate": 0.9924,
+    "unsupported_claim_rate": 0.0076,
+    "contradiction_rate": 0.0,
+    "numeric_consistency_rate": 1.0
+  },
+  "by_doc_type": {
+    "filing": {
+      "keypoint_coverage": 1.0,
+      "keypoint_context_recall": 1.0,
+      "claim_support_rate": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    },
+    "news": {
+      "keypoint_coverage": 0.9062,
+      "keypoint_context_recall": 0.9375,
+      "claim_support_rate": 0.9773,
+      "unsupported_claim_rate": 0.0227,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    },
+    "transcript": {
+      "keypoint_coverage": 0.8155,
+      "keypoint_context_recall": 0.9583,
+      "claim_support_rate": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    }
+  },
+  "by_question_type": {
+    "analysis": {
+      "keypoint_coverage": 0.841,
+      "keypoint_context_recall": 0.9405,
+      "claim_support_rate": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    },
+    "factoid": {
+      "keypoint_coverage": 1.0,
+      "keypoint_context_recall": 1.0,
+      "claim_support_rate": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    },
+    "list": {
+      "keypoint_coverage": 1.0,
+      "keypoint_context_recall": 1.0,
+      "claim_support_rate": 0.9546,
+      "unsupported_claim_rate": 0.0454,
+      "contradiction_rate": 0.0,
+      "numeric_consistency_rate": 1.0
+    }
+  },
+  "metric_null_rates": {
+    "keypoint_coverage": 0.0,
+    "keypoint_context_recall": 0.0,
+    "claim_support_rate": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "contradiction_rate": 0.0,
+    "numeric_consistency_rate": 0.0
+  },
+  "gate_result": {
+    "passed": true,
+    "failures": [],
+    "applied_thresholds": {
+      "overall.keypoint_coverage": {
+        "min": 0.7
+      },
+      "overall.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "overall.claim_support_rate": {
+        "min": 0.7
+      },
+      "overall.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "overall.contradiction_rate": {
+        "max": 0.05
+      },
+      "overall.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:filing.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:filing.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "doc:filing.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:filing.unsupported_claim_rate": {
+        "max": 0.1
+      },
+      "doc:filing.contradiction_rate": {
+        "max": 0.03
+      },
+      "doc:filing.numeric_consistency_rate": {
+        "min": 0.97
+      },
+      "doc:news.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:news.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:news.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:news.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:news.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:news.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "doc:transcript.keypoint_coverage": {
+        "min": 0.7
+      },
+      "doc:transcript.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "doc:transcript.claim_support_rate": {
+        "min": 0.7
+      },
+      "doc:transcript.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "doc:transcript.contradiction_rate": {
+        "max": 0.05
+      },
+      "doc:transcript.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:analysis.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:analysis.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:analysis.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:analysis.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:analysis.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:analysis.numeric_consistency_rate": {
+        "min": 0.9
+      },
+      "qt:factoid.keypoint_coverage": {
+        "min": 0.8
+      },
+      "qt:factoid.keypoint_context_recall": {
+        "min": 0.7
+      },
+      "qt:factoid.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:factoid.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:factoid.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:factoid.numeric_consistency_rate": {
+        "min": 0.95
+      },
+      "qt:list.keypoint_coverage": {
+        "min": 0.7
+      },
+      "qt:list.keypoint_context_recall": {
+        "min": 0.75
+      },
+      "qt:list.claim_support_rate": {
+        "min": 0.7
+      },
+      "qt:list.unsupported_claim_rate": {
+        "max": 0.15
+      },
+      "qt:list.contradiction_rate": {
+        "max": 0.05
+      },
+      "qt:list.numeric_consistency_rate": {
+        "min": 0.9
+      }
+    },
+    "null_rate_failures": [],
+    "policy_name": "rag_quality_v2_gate",
+    "policy_version": "v1"
+  },
+  "drift_result": {
+    "enabled": true,
+    "baseline_available": true,
+    "passed": true,
+    "deltas": {
+      "keypoint_coverage": 0.2671,
+      "keypoint_context_recall": 0.2314,
+      "claim_support_rate": 0.6452,
+      "unsupported_claim_rate": -0.6313,
+      "contradiction_rate": -0.0139,
+      "numeric_consistency_rate": 0.6227
+    },
+    "failures": [],
+    "baseline_run_id": "layer3_v2-20260228-192637"
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 93,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 4,
+          "supported_claims": 4,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 4,
+          "total_keypoints": 4,
+          "covered_keypoints": 4,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 4
+        },
+        "claim_count": 4,
+        "keypoint_count": 4,
+        "claim_judgments": [
+          {
+            "claim": "贵州茅台股份有限公司2024年第三季度营业收入为387.88亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明‘贵州茅台股份有限公司2024年第三季度报告显示，公司实现营业收入387.88亿元’，与claim的数值和表述完全一致，无任何差异。其他证据虽未直接重复单季数据，但也未产生矛盾。"
+          },
+          {
+            "claim": "贵州茅台股份有限公司2024年第三季度营业收入较上年同期增长15.6%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明：贵州茅台股份有限公司2024年第三季度实现营业收入387.88亿元，较上年同期增长15.6%。该表述与claim『2024年第三季度营业收入较上年同期增长15.6%』完全一致，属于直接支撑。其他证据虽提供前三季度累计数据和净利润等信息，但不影响对该单一claim的直接支持判定。"
+          },
+          {
+            "claim": "贵州茅台股份有限公司2024年第三季度茅台酒实现收入327.41亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明'其中茅台酒实现收入327.41亿元'，与claim的表述'茅台酒实现收入327.41亿元'完全一致，金额、单位、数值均相同且直接来自2024年第三季度报告，属于直接支撑。"
+          },
+          {
+            "claim": "贵州茅台股份有限公司2024年第三季度系列酒实现收入52.24亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明‘系列酒实现收入52.24亿元’，与claim的表述完全一致，金额、期间、主体均匹配，无任何冲突或偏差。其他证据未涉及该具体数值，但也不产生矛盾。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "贵州茅台2024年三季度营业收入为387.88亿元",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案第一条直接完整表述了keypoint的所有要素：主体(贵州茅台)、时间(2024年第三季度)、指标(营业收入)、具体数值(387.88亿元)，与keypoint完全一致。证据1提供了完全相同的直接支撑语句，因此context_supported为true。"
+          },
+          {
+            "keypoint": "贵州茅台2024年三季度营业收入同比增长15.6%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'贵州茅台2024年第三季度营业收入同比增长15.6%'这一完整关键点表述，包括年份、季度、公司、指标名称和具体增长率15.6%，与keypoint完全一致，且直接由证据1支撑。"
+          },
+          {
+            "keypoint": "贵州茅台2024年三季度茅台酒收入为327.41亿元",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含 '其中茅台酒实现收入327.41亿元'，与 keypoint '贵州茅台2024年三季度茅台酒收入为327.41亿元' 的主体、时间范围（2024年三季度）、金额完全一致。证据1直接提供了完全相同的表述，支持该 keypoint。"
+          },
+          {
+            "keypoint": "贵州茅台2024年三季度系列酒收入为52.24亿元",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确写出 '系列酒实现收入52.24亿元'，与keypoint '贵州茅台2024年三季度系列酒收入为52.24亿元' 在金额、产品类别(系列酒)、时间范围(三季度)上完全一致，且金额单位(亿元)也匹配，属于完整覆盖。证据1直接提供了该数据的出处支持。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "draft_markdown_truncated+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question_type": "analysis",
+      "answer_len": 143,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 4,
+          "supported_claims": 4,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 4,
+          "total_keypoints": 6,
+          "covered_keypoints": 6,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 6
+        },
+        "claim_count": 4,
+        "keypoint_count": 6,
+        "claim_judgments": [
+          {
+            "claim": "宁德时代2024年上半年毛利率为26.4%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明宁德时代2024年半年报毛利率为26.4%，与claim完全一致，属于直接支撑。证据2和证据3提供了毛利率改善的背景和分项数据，但不影响整体毛利率的匹配。"
+          },
+          {
+            "claim": "宁德时代2024年上半年毛利率同比提升4.2个百分点",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自宁德时代2024年半年报，明确记载毛利率为26.4%，同比提升4.2个百分点，与claim的表述完全一致。证据2和证据3提供毛利率改善的背景和原因，进一步佐证但非必须。数值表达一致，无单位或四舍五入差异。"
+          },
+          {
+            "claim": "2023年上半年碳酸锂均价约30万元/吨",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确提到'碳酸锂均价从2023年同期约30万元/吨降至约11万元/吨'，其中'2023年同期'在2024年半年报语境下指向2023年上半年（或对应报告期），'约30万元/吨'与claim的'2023年上半年碳酸锂均价约30万元/吨'在数值、单位、时间范围和'约'的模糊表达上一致，直接支撑该claim。其他证据与该价格无关，不影响判定。"
+          },
+          {
+            "claim": "2024年上半年碳酸锂均价约11万元/吨",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确提到'碳酸锂均价从2023年同期约30万元/吨降至约11万元/吨'，且上下文为2024年上半年（与2023年同期对比），该表述与claim的'2024年上半年碳酸锂均价约11万元/吨'在数值、时间范围和'约'的模糊表达上一致，构成直接支撑。其他证据与该claim的碳酸锂价格无关，不影响判断。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "宁德时代2024年上半年毛利率为26.4%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案第一条直接完整复述了keypoint '宁德时代2024年上半年毛利率为26.4%'，包含公司、时间段（2024年上半年）、具体数值26.4%及百分比单位，表述一致且无缺失。证据1明确写明'毛利率为26.4%'，直接支撑该keypoint。"
+          },
+          {
+            "keypoint": "宁德时代2024年上半年毛利率同比提升4.2个百分点",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案直接包含'宁德时代2024年上半年毛利率同比提升4.2个百分点'的完整表述，与keypoint完全一致；同时答案中明确提到'2024年上半年毛利率为26.4%'并结合同比提升4.2个百分点，信息完整无缺。证据1直接提供'毛利率为26.4%，同比提升4.2个百分点'的原文数据支撑，证据3进一步支撑毛利率改善原因，与答案内容高度一致，因此context_supported为true。"
+          },
+          {
+            "keypoint": "主要驱动因素之一是碳酸锂价格下跌",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出'毛利率改善的核心驱动因素之一是碳酸锂均价从2023年同期约30万元/吨降至约11万元/吨，原材料成本大幅下降'，完整包含了keypoint'主要驱动因素之一是碳酸锂价格下跌'的核心内容，包括价格下跌的具体描述、时间对比和单位。证据1提供完全一致的直接支撑。"
+          },
+          {
+            "keypoint": "碳酸锂价格下跌导致原材料成本下降",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'碳酸锂均价从2023年同期约30万元/吨降至约11万元/吨，原材料成本大幅下降'，完整表述了keypoint的核心内容：碳酸锂价格下跌→原材料成本下降，并直接作为毛利率改善的核心驱动因素之一，与keypoint完全一致。证据1中存在该keypoint的几乎逐字逐句的直接支撑。"
+          },
+          {
+            "keypoint": "主要驱动因素之一是规模效应",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到'规模效应显著摊薄制造费用'作为毛利率改善的核心驱动因素之一，与keypoint'主要驱动因素之一是规模效应'完全匹配；同时直接引用证据1的核心表述，覆盖完整且有明确证据支撑。"
+          },
+          {
+            "keypoint": "规模效应带来制造费用摊薄",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含“规模效应显著摊薄制造费用”，与keypoint“规模效应带来制造费用摊薄”语义完全一致；同时直接引用证据1的核心表述，完整覆盖该关键点，且有明确的时间背景（2024年上半年）。证据1提供直接支撑。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 183,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 7,
+          "supported_claims": 7,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 6,
+          "supported_numeric_claims": 6,
+          "total_keypoints": 5,
+          "covered_keypoints": 5,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 5
+        },
+        "claim_count": 7,
+        "keypoint_count": 5,
+        "claim_judgments": [
+          {
+            "claim": "比亚迪2024年上半年新能源汽车销量为161.3万辆",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确写明‘上半年公司新能源汽车销量达161.3万辆’，与claim的‘比亚迪2024年上半年新能源汽车销量为161.3万辆’在数值、主体、时间范围上完全一致，无任何差异。证据2和证据3虽未直接重复该数字，但也未产生矛盾，且证据2的乘用车市场份额推算与证据1的乘用车销量基本吻合，进一步侧面印证。"
+          },
+          {
+            "claim": "比亚迪2024年上半年乘用车销量156.8万辆",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自比亚迪官方半年度报告，明确写明'其中乘用车156.8万辆'，与claim的'比亚迪2024年上半年乘用车销量156.8万辆'数值和表述完全一致，直接支撑该声明。"
+          },
+          {
+            "claim": "比亚迪2024年上半年商用车销量4.5万辆",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自比亚迪2024年半年度报告，明确写明上半年商用车销量4.5万辆，与claim的数值和表述完全一致。证据2和证据3虽提供相关背景信息，但不涉及商用车销量，故不影响判定。整体为直接支持关系，数值完全一致。"
+          },
+          {
+            "claim": "比亚迪2024年上半年新能源汽车销量同比增长28.5%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自比亚迪2024年半年度报告，明确写明'上半年公司新能源汽车销量达161.3万辆，同比增长28.5%'，与claim的表述完全一致，数据来源权威且直接支持。"
+          },
+          {
+            "claim": "2024年上半年中国新能源乘用车市场总销量约458.6万辆",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出了完全一致的表述：'2024年上半年中国新能源乘用车市场总销量约458.6万辆'，与claim的数值和表述完全匹配。证据2提供了比亚迪自身销量数据（161.3万辆），可用于粗略印证市场规模合理性（比亚迪份额34.2%对应市场总量≈161.3 / 0.342 ≈ 471.6万辆，与458.6万辆接近，存在少量差异可归因于乘用车 vs 全部新能源车口径或四舍五入），但claim的直接支持来源于证据1。"
+          },
+          {
+            "claim": "比亚迪在2024年上半年中国新能源乘用车市场份额约为34.2%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出'比亚迪市场份额约为34.2%'，且明确针对2024年上半年中国新能源乘用车市场，与claim完全一致。证据2提供比亚迪乘用车销量156.8万辆，总销量458.6万辆计算得约34.19%，四舍五入/约等于34.2%，数值一致。两份证据相互印证，支持claim。"
+          },
+          {
+            "claim": "比亚迪连续多个季度位居全球新能源汽车销量首位",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim完全一致的表述：'连续多个季度位居全球新能源汽车销量首位'，且该表述出现在根据乘联会数据的权威市场分析语境中。证据2和证据3提供了比亚迪2024年上半年及二季度的具体销量数据（国内领先规模+高增长），虽未直接提及'全球首位'，但与证据1共同形成支持链条，不存在任何矛盾信息。claim本身不含需核验的具体数值（销量排名而非某一具体销量数字），故is_numeric_claim为false。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "比亚迪2024年上半年新能源汽车销量为161.3万辆",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案第一条直接完整复述了keypoint『比亚迪2024年上半年新能源汽车销量为161.3万辆』，包含相同的时间范围（2024年上半年）、主体（比亚迪）、产品类别（新能源汽车）和具体销量数字（161.3万辆），无任何缺失或偏差；该事实在证据1中可找到完全一致的直接支撑：'上半年公司新能源汽车销量达161.3万辆'"
+          },
+          {
+            "keypoint": "比亚迪2024年上半年新能源汽车销量同比增长28.5%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'上半年新能源汽车销量同比增长28.5%'这一完整表述，与keypoint完全一致；同时答案的其他销量数据也与证据1直接对应，整体覆盖完整且有直接证据支撑。"
+          },
+          {
+            "keypoint": "比亚迪2024年上半年在中国新能源汽车市场份额约为34.2%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'比亚迪在2024年上半年中国新能源乘用车市场份额约为34.2%'这一表述，与keypoint完全一致；同时证据1直接提供了'2024年上半年中国新能源乘用车市场总销量约458.6万辆，比亚迪市场份额约为34.2%'的支撑，证据2提供了销量数据作为间接佐证基础，因此keypoint在证据中有直接支撑，整体完整覆盖。"
+          },
+          {
+            "keypoint": "比亚迪连续多个季度保持全球新能源汽车销量第一",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'比亚迪连续多个季度位居全球新能源汽车销量首位'这一表述，与keypoint完全一致；同时提供了2024年上半年销量数据作为近期支撑背景。证据1直接写明'连续多个季度位居全球新能源汽车销量首位'，证据2提供具体销量数据，两者共同完整支撑该keypoint。"
+          },
+          {
+            "keypoint": "统计时间范围为2024年上半年",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确写出'2024年上半年'，并给出了上半年销量数据、同比增长、市场份额等内容，与keypoint要求的'统计时间范围为2024年上半年'完全一致，且所有关键数据均有对应证据直接支撑（证据1和证据2明确提及2024年上半年）"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question_type": "factoid",
+      "answer_len": 145,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 6,
+          "supported_claims": 6,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 6,
+          "supported_numeric_claims": 6,
+          "total_keypoints": 5,
+          "covered_keypoints": 5,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 5
+        },
+        "claim_count": 6,
+        "keypoint_count": 5,
+        "claim_judgments": [
+          {
+            "claim": "中国平安2024年中期内含价值为14,820亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来源于中国平安2024年中期业绩报告，明确写明'集团内含价值为14,820亿元'，与claim的'中国平安2024年中期内含价值为14,820亿元'在主体、时间、指标名称、数值完全一致，无任何差异。"
+          },
+          {
+            "claim": "中国平安2023年底内含价值为14,128亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出了2023年底内含价值为14,128亿元，并以此作为比较基数计算2024年中期增长4.9%至14,820亿元。该证据明确且直接支撑claim中的数值，无任何冲突或模糊之处。其他证据与该claim的数值无关。"
+          },
+          {
+            "claim": "中国平安2024年中期内含价值较2023年底增长4.9%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接提供了2024年中期集团内含价值为14,820亿元，较2023年底的14,128亿元增长4.9%，与claim完全一致。计算验证：(14820 - 14128) / 14128 ≈ 4.898%，四舍五入后为4.9%。其他证据与该claim无关，不影响判定。"
+          },
+          {
+            "claim": "中国平安寿险及健康险2024年中期新业务价值为223亿元",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据2直接明确写出'寿险及健康险新业务价值达到223亿元'，与claim中的'中国平安寿险及健康险2024年中期新业务价值为223亿元'在数值、主体和期间上完全匹配（上下文为2024年中期业绩），无任何冲突或差异。其他证据虽不直接涉及该数值，但证据2已足够直接支撑。"
+          },
+          {
+            "claim": "中国平安寿险及健康险新业务价值2024年中期同比增长11%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据2直接明确写明‘寿险及健康险新业务价值达到223亿元，同比增长11%’，与claim‘中国平安寿险及健康险新业务价值2024年中期同比增长11%’在主体、指标、时间范围（2024年中期）和具体数值（同比增长11%）上完全一致，属于直接支撑。其他证据不影响此结论。"
+          },
+          {
+            "claim": "中国平安寿险及健康险2024年中期新业务价值率为17.8%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据2直接明确写明'新业务价值率提升至17.8%'，且上下文为'寿险及健康险'，与claim中的'中国平安寿险及健康险2024年中期新业务价值率为17.8%'完全一致，属于直接支撑。其他证据不涉及该指标，不影响判定。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "中国平安2024年中期集团内含价值为14,820亿元",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案第一点直接完整复述了keypoint的核心内容：中国平安2024年中期集团内含价值为14,820亿元，与keypoint完全一致。证据1明确提供了该数值及对应时间点（2024年中期），因此keypoint在证据中得到直接支撑。"
+          },
+          {
+            "keypoint": "中国平安集团内含价值较年初增长4.9%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到'该数值较2023年底的14,128亿元增长4.9%'，直接完整覆盖了keypoint'中国平安集团内含价值较年初增长4.9%'的所有核心要素（主体、指标、增长幅度、比较基准），且该内容在[证据1]中有完全一致的直接原文支持。"
+          },
+          {
+            "keypoint": "寿险及健康险业务2024年中期新业务价值为223亿元",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'寿险及健康险2024年中期新业务价值达到223亿元'，与keypoint完全一致，包含相同的时间范围（2024年中期）、业务范围（寿险及健康险）和数值（223亿元），无缺失关键元素。证据1直接提供了该关键事实的完整支撑。"
+          },
+          {
+            "keypoint": "寿险及健康险新业务价值同比增长11%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'寿险及健康险2024年中期新业务价值达到223亿元'和'新业务价值同比增长11%'，完整覆盖keypoint的核心事实（寿险及健康险新业务价值同比增长11%），包含金额、增速，且时间指向2024年中期，与keypoint一致。证据1直接提供该表述，支持context_supported为true。"
+          },
+          {
+            "keypoint": "寿险及健康险新业务价值率2024年中期为17.8%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确写出'寿险及健康险2024年中期新业务价值率提升至17.8%'，完整包含了keypoint中的所有要素：险种(寿险及健康险)、指标(新业务价值率)、时间(2024年中期)、数值(17.8%)，与keypoint完全一致。证据1直接支撑该表述。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "transcript_alibaba_cloud_guidance",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 176,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 8,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 5,
+          "supported_numeric_claims": 5,
+          "total_keypoints": 5,
+          "covered_keypoints": 5,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 5
+        },
+        "claim_count": 8,
+        "keypoint_count": 5,
+        "claim_judgments": [
+          {
+            "claim": "阿里云业务正进入新一轮增长周期",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "Claim的核心断言是'阿里云业务正进入新一轮增长周期'。证据1中阿里巴巴CEO吴泳铭在FY2025Q2财报电话会议上明确使用了完全相同的表述：'我们的云业务正进入新一轮增长周期'，并补充了AI相关产品连续五个季度三位数增长且下半财年将进一步加速的佐证信息。这是来自公司最高管理层的直接官方表态，因此构成对claim的直接、明确支持。证据2和证据3虽未直接使用该表述，但从市场地位、续约率、利润率提升及未来收入增速预期等方面提供了间接正向支撑，不存在任何矛盾。整体证据充分且直接支持claim，无冲突。claim本身不包含具体金额、比例、增速等财务数值表述（'新一轮增长周期'属于定性判断而非量化指标），故is_numeric_claim为false。"
+          },
+          {
+            "claim": "AI相关产品收入已连续五个季度实现三位数同比增长",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中阿里巴巴CEO吴泳铭明确陈述：'AI相关产品收入已连续五个季度实现三位数同比增长'，该表述与claim完全一致且直接来自公司官方财报电话会议记录，属于最直接的支撑证据。其他证据虽未直接重复该句，但未产生任何矛盾，且整体语境（云业务进入增长周期、AI推理需求驱动等）与该说法相符。"
+          },
+          {
+            "claim": "AI相关产品收入三位数同比增长势头将在下半财年进一步加速",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "Claim的核心是'AI相关产品收入三位数同比增长势头将在下半财年进一步加速'。证据1中CEO吴泳铭直接明确表述：'AI相关产品收入已连续五个季度实现三位数同比增长，这一势头将在下半财年进一步加速'，与claim的表述完全一致且为直接引用，支持关系明确。证据2提到云业务整体增速下半年高于上半年，与AI驱动逻辑方向一致但非直接针对AI三位数增速；证据3为竞争优势补充说明，非核心。整体以证据1为直接支撑。is_numeric_claim为true因为涉及'三位数同比增长'这一增速数值；numeric_consistent为true因为claim与证据1在'三位数同比增长'表述上等价一致，无单位或数值冲突。"
+          },
+          {
+            "claim": "公有云业务EBITA利润率本季度达到9%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中CFO徐宏直接明确陈述：'公有云业务EBITA利润率本季度达到9%'，这句话与claim完全一致且为直接引用，支持关系明确。证据2和证据3与该具体利润率数值无关，但不产生矛盾。"
+          },
+          {
+            "claim": "公有云业务EBITA利润率本季度同比提升3个百分点",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中CFO徐宏明确陈述：'公有云业务EBITA利润率本季度达到9%，同比提升3个百分点'，该表述与claim完全一致，直接提供相同财务数值和同比变化幅度。证据2和证据3虽与云业务相关，但不直接涉及EBITA利润率，因此主要支撑来自证据1。数值表达等价（'提升3个百分点'与claim相同），无单位换算或矛盾。"
+          },
+          {
+            "claim": "预计FY2025全年云业务收入增速将高于上半年",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中CFO徐宏明确表示：'我们预计FY2025全年云业务收入增速将高于上半年'，这句话与claim完全一致且为直接引用，是管理层官方预期表述。证据2和证据3虽未直接提及全年vs上半年增速对比，但提供了AI需求加速、下半年进一步加速、竞争优势等间接支持全年增速更高的背景逻辑，不存在矛盾。整体证据直接支撑claim。"
+          },
+          {
+            "claim": "阿里云在大模型API调用量上保持领先地位",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接来自阿里管理层在分析师电话会议中的表述，明确表示'阿里云在大模型API调用量上保持领先地位'，与华为云、字节跳动等相比具备优势。该表述与claim完全一致且直接匹配，构成直接支撑。证据2和证据3虽涉及AI业务增长和云收入，但未直接提及调用量排名，因此主要支撑来源于证据1。claim本身不含具体金额、比例、增速等财务数值，仅为排名/地位描述，故非numeric claim。"
+          },
+          {
+            "claim": "阿里云重点客户续约率维持在高位",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "Claim 中的核心断言是'阿里云重点客户续约率维持在高位'。证据1 来自财报电话会管理层直接陈述：'重点客户续约率维持在高位'，表述与 claim 完全一致且直接匹配，属于明确支持。证据2 和证据3 讨论云业务增长、AI收入增速及利润率改善，虽然属于正面业务指标，但未涉及续约率或客户留存，因此不直接支持 claim。整体上证据1 足以直接支撑 claim 为 supported。claim 本身不包含具体金额、比例数值或增速量化，仅为定性描述'高位'，故 is_numeric_claim 为 false，numeric_consistent 字段不适用也标记为 false。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "云业务收入预计在FY2025下半年加速增长",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'预计FY2025全年云业务收入增速将高于上半年'，这直接等价于keypoint中的'云业务收入预计在FY2025下半年加速增长'（下半年增速高于上半年即意味着下半年加速）。该表述在证据1中得到直接、明确的支撑：'我们预计FY2025全年云业务收入增速将高于上半年'。"
+          },
+          {
+            "keypoint": "AI相关产品收入连续多个季度实现三位数增长",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'AI相关产品收入已连续五个季度实现三位数同比增长'，与keypoint 'AI相关产品收入连续多个季度实现三位数增长'完全匹配，'五个季度'属于'连续多个季度'，三位数同比增长也一致。证据1中吴泳铭的表述直接支撑该事实，context_supported为true。"
+          },
+          {
+            "keypoint": "公有云业务已实现盈利",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含‘公有云业务EBITA利润率本季度达到9%’这一直接盈利指标（正利润率），并由证据1明确支撑，表明公有云业务已经实现盈利。其他内容虽为增长、AI表现等相关信息，但核心keypoint‘已实现盈利’已被利润率正值完整覆盖。"
+          },
+          {
+            "keypoint": "EBITA利润率持续改善",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'公有云业务EBITA利润率本季度达到9%，同比提升3个百分点'，直接完整表述了EBITA利润率持续改善（本期改善3个百分点）的核心事实，与keypoint完全匹配。证据1中CFO明确提供了该数据作为支撑，context_supported为true。"
+          },
+          {
+            "keypoint": "管理层对云业务长期前景保持信心",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中的多条内容（新一轮增长周期、AI三位数增长及加速、全年增速高于上半年、利润率提升、大模型API领先+高续约率）均直接体现并强化了管理层对云业务长期前景保持信心的态度，证据1、2、3均有明确的管理层表述或正面指标支持该判断，整体完整覆盖keypoint，无明显缺失。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "transcript_tencent_gaming_recovery",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 118,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 0.7143,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 6,
+          "supported_claims": 6,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 4,
+          "supported_numeric_claims": 4,
+          "total_keypoints": 7,
+          "covered_keypoints": 4,
+          "partial_keypoints": 3,
+          "keypoints_supported_by_context": 7
+        },
+        "claim_count": 6,
+        "keypoint_count": 7,
+        "claim_judgments": [
+          {
+            "claim": "本季度国内游戏流水同比增长14%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自腾讯2024Q3财报电话会总裁刘炽平的明确表述：'本季度国内游戏流水同比增长14%'，与claim的表述完全一致，属于直接支撑。证据2和证据3虽提供相关背景但不直接涉及该增速数据，不影响主要判断。"
+          },
+          {
+            "claim": "海外游戏收入同比增长9%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自腾讯2024Q3财报电话会总裁刘炽平的发言，明确包含'海外游戏收入同比增长9%'的表述，与claim完全一致且为直接引用，无任何冲突或歧义。证据2和证据3为相关但非直接针对该具体数据的补充内容，不影响支持关系。"
+          },
+          {
+            "claim": "海外收入占游戏总收入比例提升至35%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自腾讯2024Q3财报电话会总裁刘炽平的发言，明确包含'海外收入占游戏总收入比例提升至35%'的表述，与claim完全一致且为直接引用，无任何冲突或偏差。其他证据与该claim无关，不影响支持关系。"
+          },
+          {
+            "claim": "腾讯管理层认为游戏业务已经全面恢复增长",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中总裁刘炽平明确表述‘游戏业务已经全面恢复增长’，这句话与claim‘腾讯管理层认为游戏业务已经全面恢复增长’的表述高度一致且直接对应，属于管理层（总裁）的直接观点陈述。证据1同时提供了具体的增长数据（国内流水同比+14%、海外收入同比+9%）作为支撑，进一步强化了‘全面恢复增长’的判断。证据2和证据3也从利润率改善、新增长引擎及王者荣耀创历史新高等角度提供辅助支持，没有任何矛盾信息。因此整体为supported。claim中包含增长判断，证据中出现明确同比增速数字，故is_numeric_claim为true；给出的增长百分比未见矛盾或不一致，numeric_consistent为true。"
+          },
+          {
+            "claim": "游戏业务利润率也在改善",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim完全相同的表述‘游戏业务利润率也在改善’，并给出原因（精细化管理成本），属于直接文本支持。证据2和证据3主要讨论收入/流水增长而非利润率，因此不直接相关，但证据1已足够构成supported判定。无具体财务数值（如百分比、金额），故is_numeric_claim为false。"
+          },
+          {
+            "claim": "得益于对游戏研发和运营成本的精细化管理",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim几乎完全相同的表述：'游戏业务利润率也在改善，得益于我们对游戏研发和运营成本的精细化管理'，其中'得益于我们对游戏研发和运营成本的精细化管理'可视为对claim '得益于对游戏研发和运营成本的精细化管理'的直接同义改写和支持。证据2和证据3虽涉及游戏业务增长，但与claim的成本管理原因无直接关联，不构成contradicted，仅证据1已足以支撑，因此整体为supported。claim本身不含金额、比例、增速等财务数值，故is_numeric_claim为false。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "游戏业务已全面复苏",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案直接包含'游戏业务已经全面恢复增长'的核心表述，与keypoint '游戏业务已全面复苏'语义完全一致；同时提供了国内流水增长14%、海外收入增长9%、海外占比提升至35%、利润率改善及精细化管理等具体支撑细节，这些均来自证据1和证据2的直接引用，完整覆盖了keypoint的主旨和含义。"
+          },
+          {
+            "keypoint": "国内游戏流水实现两位数增长",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'本季度国内游戏流水同比增长14%'，直接完整对应keypoint'国内游戏流水实现两位数增长'（14%属于两位数增长），且该表述来自证据1中刘炽平的直接引用，事实和数据均被完整覆盖。"
+          },
+          {
+            "keypoint": "海外游戏收入占比提升至35%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含 '海外收入占游戏总收入比例提升至35%' 这句话，与 keypoint '海外游戏收入占比提升至35%' 表述一致且完整。直接来自证据1中刘炽平的原话，支持充分，无缺失时间、单位或其他核心事实。"
+          },
+          {
+            "keypoint": "《王者荣耀》表现稳健",
+            "coverage": "partial",
+            "context_supported": true,
+            "rationale": "答案整体支持腾讯游戏业务表现稳健（恢复增长、流水同比正增长、利润率改善、成本精细化管理等），但keypoint明确指向《王者荣耀》这一特定游戏，而答案中完全没有直接提及《王者荣耀》的表现或数据；证据1提到《王者荣耀》季度流水创历史新高，可支撑该keypoint，但答案未使用此部分具体内容，仅泛化到整个游戏业务，因此覆盖不完整，判定为partial。"
+          },
+          {
+            "keypoint": "《和平精英》表现稳健",
+            "coverage": "partial",
+            "context_supported": true,
+            "rationale": "证据中明确提到《和平精英》在多个核心市场持续保持稳定（证据1），这与keypoint《和平精英》表现稳健的核心含义相符且有直接文本支撑，因此context_supported为true。但答案中没有任何一句直接提到《和平精英》，全部内容都在讲整体游戏业务、王者荣耀或其他泛化描述，因此对keypoint的覆盖属于partial而非完全covered。"
+          },
+          {
+            "keypoint": "新游戏管线储备充足",
+            "coverage": "partial",
+            "context_supported": true,
+            "rationale": "答案主要聚焦于当前游戏业务的恢复增长、流水/收入数据、利润率改善及成本管理，但keypoint关注的是“新游戏管线储备充足”（即未来游戏储备/ pipeline 是否充足、有多款新游戏准备推出）。答案中仅有极简一句提及“得益于对游戏研发和运营成本的精细化管理”，没有明确说明新游戏管线储备是否充足；证据2提到“2025年我们有多款重磅新游戏即将推出”，但答案完全未包含这部分未来储备内容，因此仅部分相关但未完整覆盖keypoint核心含义。"
+          },
+          {
+            "keypoint": "预计全年游戏收入保持稳健增长",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案直接明确指出'游戏业务已经全面恢复增长'，并通过国内流水+14%、海外收入+9%、海外占比提升至35%以及利润率改善等具体事实支撑全年游戏收入保持稳健增长的预期；证据2中刘炽平明确表述'游戏业务已经全面恢复增长'，结合多款新游戏即将推出（证据1），整体支持全年稳健增长判断，因此完整覆盖且有直接上下文支撑。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "transcript_meituan_profitability",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 214,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 0.8333,
+        "keypoint_context_recall": 0.8333
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 10,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 7,
+          "supported_numeric_claims": 7,
+          "total_keypoints": 6,
+          "covered_keypoints": 5,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 5
+        },
+        "claim_count": 10,
+        "keypoint_count": 6,
+        "claim_judgments": [
+          {
+            "claim": "核心本地商业板块经营利润率本季度达到22.1%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自美团2024Q3财报电话会CEO王兴的发言，完整且明确复述了claim中的核心内容：'核心本地商业板块经营利润率本季度达到22.1%'，文字完全一致，无任何偏差或冲突。其他证据与该claim无直接关联，不影响判定。"
+          },
+          {
+            "claim": "核心本地商业板块经营利润率同比提升1.8个百分点",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自美团2024Q3财报电话会CEO王兴的发言，完整且明确地陈述了'核心本地商业板块经营利润率本季度达到22.1%，同比提升1.8个百分点'，与claim的表述完全一致，无任何偏差或冲突。证据2和证据3与该claim无直接关联，但也不产生矛盾。"
+          },
+          {
+            "claim": "核心本地商业板块经营利润率提升的主要贡献因素是配送效率持续优化",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自美团2024Q3财报电话会CEO王兴的表述：'核心本地商业板块经营利润率本季度达到22.1%，同比提升1.8个百分点，配送效率持续优化是主要贡献因素。' 该句明确指出'配送效率持续优化是主要贡献因素'，与claim的核心内容完全一致且为直接引用，因此属于supported。claim中涉及利润率提升的幅度（隐含1.8个百分点），证据中明确出现相同数值，属于财务数值，故is_numeric_claim为true；证据与claim中的数值描述等价一致，numeric_consistent为true。其他证据与claim无关，不影响判定。"
+          },
+          {
+            "claim": "新业务分部整体经营亏损同比收窄46%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接完整复述了claim的表述：'新业务分部整体经营亏损同比收窄46%'，属于逐字级别的直接支撑。证据2和证据3讨论核心本地商业及其他业务，与新业务分部无关，不产生矛盾也不提供额外支持。整体判断为supported。"
+          },
+          {
+            "claim": "美团优选业务已进入盈亏平衡阶段",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含'美团优选业务已进入盈亏平衡阶段'的表述，与claim完全一致且为直接引用，支持关系明确。证据2和证据3讨论其他业务板块，与优选业务的盈亏平衡状态无直接关联，但证据1已足够支撑。claim不含财务数值，因此is_numeric_claim为false，numeric_consistent字段不适用（可标记false）。"
+          },
+          {
+            "claim": "即时零售（闪购）业务实现经营盈利",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接明确陈述‘即时零售（闪购）业务实现经营盈利’，与claim完全一致且为正面直接支撑表述。证据2和证据3讨论其他业务板块，与即时零售闪购业务的盈利状态无直接关联，但证据1已足够构成supported。claim不包含任何具体金额、比例、增速等财务数值，因此is_numeric_claim为false，numeric_consistent字段不适用也标记为false。"
+          },
+          {
+            "claim": "外卖业务GTV同比增长22%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接完整地包含了claim的全部内容：'外卖业务GTV同比增长22%'，文字完全一致，无任何修改或矛盾。证据2和证据3讨论的是经营利润率和新业务亏损，与外卖GTV增速无关，不影响判定。"
+          },
+          {
+            "claim": "外卖业务市场份额稳定在70%-75%区间",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的表述：'市场份额稳定在70%-75%区间'，且该表述出现在描述外卖业务的上下文中（紧跟外卖业务GTV同比增长22%之后），可直接支撑claim。证据2和证据3涉及其他业务指标（利润率、新业务亏损等），与外卖市场份额无关，不影响判定。"
+          },
+          {
+            "claim": "抖音本地生活的竞争影响主要集中在到店餐饮",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim完全相同的表述：'抖音本地生活的竞争影响主要集中在到店餐饮'，且后文补充说明对配送外卖影响有限，形成直接支撑关系。证据2和证据3讨论美团自身业务表现，与claim关于抖音竞争影响的焦点无关，不构成contradicted，也非主要支持来源，但证据1已足够直接支持。无任何财务数值出现，因此is_numeric_claim为false，numeric_consistent不适用。"
+          },
+          {
+            "claim": "抖音本地生活的竞争对配送外卖影响有限",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim几乎完全相同的表述：'抖音本地生活的竞争影响主要集中在到店餐饮，对配送外卖影响有限'，并结合外卖GTV同比增长22%及市场份额稳定在70%-75%来佐证自身业务稳健，明确支持claim的核心观点。证据2和证据3分别讨论美团配送效率提升及新业务亏损收窄，与抖音竞争对配送外卖的直接影响无明确关联，不构成contradicted，但也不直接支持claim。主要支撑来自证据1的直接陈述。claim中包含'影响有限'的程度表述，属于涉及竞争影响强度的量化判断，因此is_numeric_claim为true；证据1中相关描述一致，无矛盾或明显数值冲突，故numeric_consistent为true。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "核心本地商业板块经营利润率维持在20%以上",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出'核心本地商业板块经营利润率本季度达到22.1%'，直接完整对应keypoint中'核心本地商业板块经营利润率维持在20%以上'的要求（22.1% > 20%），并包含同比提升数据和主要原因。证据1提供该关键数据的直接来源和一致表述，context完全支持。"
+          },
+          {
+            "keypoint": "新业务亏损持续收窄",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "Keypoint '新业务亏损持续收窄' 被答案直接且完整覆盖：明确提到'新业务分部整体经营亏损同比收窄46%'，并补充美团优选进入盈亏平衡、闪购实现经营盈利等进一步收窄/转正的积极进展，这些都属于亏损持续收窄的表现。证据1直接支撑该核心表述，其他证据提供相关背景但非必须。整体无明显事实缺失或时间/单位缺漏，属于完整覆盖。"
+          },
+          {
+            "keypoint": "优选业务已进入盈亏平衡阶段",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含了'美团优选业务已进入盈亏平衡阶段'这句话，与keypoint完全一致，且该表述直接出现在证据1中，属于完整覆盖且有直接证据支撑。"
+          },
+          {
+            "keypoint": "闪购业务实现盈利",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含『即时零售（闪购）业务实现经营盈利，这是新业务组合中的重要里程碑』这一表述，与 keypoint『闪购业务实现盈利』在含义上完全一致，且直接出现在证据1中，属于完整且明确的覆盖。其他内容虽为额外信息，但不影响对该关键点的完整覆盖判定。"
+          },
+          {
+            "keypoint": "全年集团层面自由现金流预计为正",
+            "coverage": "missing",
+            "context_supported": false,
+            "rationale": "Keypoint 关注的是全年集团层面自由现金流（全年预计为正），但提供的答案和所有证据（证据1、2、3）均只讨论了经营利润率、经营亏损收窄、业务盈亏平衡/盈利、外卖GTV增长及市场份额等利润和营收相关指标，完全没有提及现金流（free cash flow）、全年预测、集团层面现金流情况或任何与现金流相关的表述，因此属于未覆盖。"
+          },
+          {
+            "keypoint": "外卖市场份额稳定在70%以上",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确写出'外卖业务GTV同比增长22%，市场份额稳定在70%-75%区间'，完整包含了keypoint的核心事实'外卖市场份额稳定在70%以上'，且'70%-75%区间'明确高于70%，属于完整覆盖。证据1直接提供了完全一致的表述，支持该keypoint。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "transcript_jd_supply_chain",
+      "doc_type": "transcript",
+      "question_type": "analysis",
+      "answer_len": 214,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 0.7143,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 8,
+          "supported_claims": 8,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 8,
+          "supported_numeric_claims": 8,
+          "total_keypoints": 7,
+          "covered_keypoints": 5,
+          "partial_keypoints": 1,
+          "keypoints_supported_by_context": 7
+        },
+        "claim_count": 8,
+        "keypoint_count": 7,
+        "claim_judgments": [
+          {
+            "claim": "京东自营商品毛利率本季度为15.2%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中CEO许冉明确陈述：'本季度自营商品毛利率为15.2%'，该表述与claim完全一致，直接提供相同数值和相同描述对象（京东自营商品毛利率、本季度），属于直接支撑。证据2和证据3与该毛利率数值无关，不影响判定。"
+          },
+          {
+            "claim": "京东自营商品毛利率本季度同比提升0.9个百分点",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接来自京东集团2024Q3财报电话会CEO许冉的发言，明确陈述'本季度自营商品毛利率为15.2%，同比提升0.9个百分点'，与claim的表述完全一致，包括数值'0.9个百分点'和比较基准'同比'，属于直接支撑。其他证据与该claim无关。"
+          },
+          {
+            "claim": "京东配送时效全国平均已优化至6小时",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1的第一句话与claim完全相同，逐字一致地陈述'京东配送时效全国平均已优化至6小时'，可直接支撑claim。证据1中还包含额外信息(超过90% SKU次日达、复购率提升)，但不影响对核心claim的直接支持。其他证据(2和3)与配送时效无关，不构成矛盾或削弱。claim包含具体数值'6小时'，属于numeric claim，且证据1中的数值表达与之等价一致。"
+          },
+          {
+            "claim": "京东超过90%的SKU可实现次日达",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含'超过90%的SKU可实现次日达'的表述，与claim『京东超过90%的SKU可实现次日达』在语义和数值上完全一致（『超过90%』属于等价表达），属于直接支撑。其他证据虽无关配送时效但不产生矛盾。"
+          },
+          {
+            "claim": "京东年度活跃用户复购频次同比增加1.2次",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的表述：'年度活跃用户复购频次同比增加1.2次'，属于直接文本匹配支持。证据2和证据3讨论其他财务/运营指标，与本claim无直接关联，不影响判定。数值表述完全相同，无需换算或四舍五入即可视为一致。"
+          },
+          {
+            "claim": "京东全国运营超过1,600个仓库",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含'我们在全国运营超过1,600个仓库'的表述，与claim的'京东全国运营超过1,600个仓库'完全一致且为直接引用，支持关系明确。claim中包含具体数量'1,600'，属于numeric claim；证据中使用'超过1,600个'的表述在数值判定上等价一致。其他证据与该claim的仓库数量无关，不影响判定。"
+          },
+          {
+            "claim": "京东全国仓库总面积超过3,000万平方米",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含'全国运营超过1,600个仓库，总面积超过3,000万平方米'的表述，与claim'京东全国仓库总面积超过3,000万平方米'在数值和含义上完全一致，属于直接支撑。证据2和证据3与仓库面积无关，不影响判定。"
+          },
+          {
+            "claim": "京东库存周转天数优化至28天",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据2中明确包含'供应链技术投入帮助我们将库存周转天数优化至28天'的表述，与claim'京东库存周转天数优化至28天'在数值和主体上完全匹配，直接提供支持。证据1和证据3虽未直接提及周转天数，但不产生矛盾。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "京东管理层表示采用自营供应链模式",
+            "coverage": "missing",
+            "context_supported": true,
+            "rationale": "Keypoint states that JD.com management indicated the adoption of the self-operated supply chain model. The provided answer lists multiple operational metrics, benefits, and achievements of the supply chain (gross margin, delivery time, warehouses, inventory turnover, etc.), but nowhere in the answer is there any direct or indirect mention of management's statement, indication, or expression regarding 'adopting the self-operated supply chain model' (or similar phrasing like 'we adopt/use self-operated supply chain mode'). Although the evidence clearly supports the keypoint (CEO explicitly states '我们的自营供应链模式是京东最核心的竞争壁垒'), the answer content does not cover or reflect this management statement aspect at all."
+          },
+          {
+            "keypoint": "自营供应链模式带来稳定的价格竞争力",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案直接说明自营供应链模式通过采购效率优化、仓配网络规模效应带来毛利率提升（15.2%，同比+0.9pct），并进一步列举配送时效、履约确定性、复购提升、仓库网络规模及库存周转优化等要素，这些均支撑了'稳定的价格竞争力'的形成，且所有关键事实在提供的证据1、2、3中都有直接或紧密对应的原文支持，完整覆盖keypoint。"
+          },
+          {
+            "keypoint": "自营供应链模式带来更高的用户信任",
+            "coverage": "partial",
+            "context_supported": true,
+            "rationale": "答案详细描述了自营供应链在毛利率提升、仓配效率、配送时效、库存周转、履约确定性及用户复购频次提升等方面的具体优势和数据，这些都属于自营模式带来的实际竞争力表现，并间接支撑了'更高的用户信任'。但keypoint的核心表述是'带来更高的用户信任'，答案中未直接出现'信任'、'user trust'、'用户信任度'等相关词汇或明确因果表述（如'提升了用户对平台的信任'），因此仅通过履约确定性→复购提升做了间接关联，未完整直接覆盖keypoint的信任结论，判定为partial覆盖。证据中可找到答案所述内容的直接支撑，故context_supported为true。"
+          },
+          {
+            "keypoint": "2024年自营商品毛利率为15.2%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案首句直接完整陈述了keypoint的核心事实：'京东自营商品毛利率本季度为15.2%'，包含数值15.2%且明确指向自营商品毛利率，与keypoint完全一致；证据1中也有完全相同的表述'本季度自营商品毛利率为15.2%'，提供了直接支撑。"
+          },
+          {
+            "keypoint": "2024年自营商品毛利率相比之前有所提升",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出'京东自营商品毛利率本季度为15.2%，同比提升0.9个百分点'，直接完整对应keypoint中'2024年自营商品毛利率相比之前有所提升'的核心事实，包含具体提升幅度和比较基准(同比)，证据1中也明确给出了相同数据和表述，因此属于完整覆盖且有直接上下文支撑。"
+          },
+          {
+            "keypoint": "配送时效全国平均达到6小时",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'京东配送时效全国平均已优化至6小时'，与keypoint '配送时效全国平均达到6小时'表述一致且完整覆盖，'已优化至'等同于'达到'的含义，无缺失时间单位或核心事实。证据1直接提供了完全相同的表述，支持该keypoint。"
+          },
+          {
+            "keypoint": "供应链基础设施投入持续进行",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确提到'全国运营超过1,600个仓库，总面积超过3,000万平方米，形成竞争对手难以短期复制的护城河'以及'供应链技术投入帮助库存周转天数优化至28天'，直接对应keypoint中'供应链基础设施投入持续进行'的核心含义；同时结合仓配网络规模效应、配送时效优化等内容，进一步佐证基础设施的持续投入与优化，完整覆盖keypoint。所有相关描述均可在提供的证据1、证据2、证据3中找到直接或强相关支撑。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "news_fed_rate_cut_astock",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 275,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 10,
+          "supported_claims": 10,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 8,
+          "supported_numeric_claims": 8,
+          "total_keypoints": 7,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        },
+        "claim_count": 10,
+        "keypoint_count": 7,
+        "claim_judgments": [
+          {
+            "claim": "2024年9月美联储宣布降息50BP后，A股市场当周上涨4.2%。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接复述了claim的完整内容：美联储2024年9月宣布降息50BP后，A股市场当周上涨4.2%。该证据提供了claim所需的全部关键事实（时间点、降息幅度、市场指数当周涨幅），属于直接支撑。证据2和证据3虽为分析和历史比较，但不影响claim的核心事实陈述。数值部分（降息50BP、当周上涨4.2%）均为具体财务/市场比例，is_numeric_claim为true；证据中数值与claim完全一致，numeric_consistent为true。"
+          },
+          {
+            "claim": "美联储降息50BP后当周，北向资金单周净流入达327亿元，为年内最高单周流入记录。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含claim的完整核心表述：美联储降息50BP后当周，北向资金单周净流入达327亿元，为年内最高单周流入记录。该证据与claim在关键事实（事件触发、金额327亿元、年内最高记录）上一致，无任何冲突或偏差。其他证据为背景补充，不影响核心判断。数值表述完全等价（金额相同、语义相同），故numeric_consistent为true。"
+          },
+          {
+            "claim": "美联储降息后，人民币兑美元汇率升至7.05附近。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确包含'人民币兑美元汇率升至7.05附近'的表述，与claim的核心数值和方向完全一致，且直接关联美联储2024年9月降息50BP事件。证据1整体内容可直接支撑claim成立。其他证据虽未重复该汇率表述，但未产生任何矛盾。数值'7.05'属于财务/汇率类具体数值，因此is_numeric_claim为true，且证据中表述与claim完全等价一致，numeric_consistent为true。"
+          },
+          {
+            "claim": "美联储降息开启降息周期为中国央行打开货币政策空间。",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接使用了与claim几乎完全相同的表述：'美联储降息开启降息周期为中国央行打开货币政策空间'，并进一步提到市场预期国内降准降息升温，属于直接支持关系。证据2和证据3提供美联储降息后A股正向反应和汇率压力缓解的间接佐证，但核心支持来源于证据1的直述。claim本身为机制/因果判断而非具体数值描述，因此is_numeric_claim为false。"
+          },
+          {
+            "claim": "市场对国内降准50BP、降息10BP的预期显著升温。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的表述：'市场对国内降准50BP、降息10BP的预期显著升温'，属于直接文本支持。claim中包含具体数值50BP和10BP，因此is_numeric_claim为true；证据1中的数值与claim完全匹配，故numeric_consistent为true。其他证据虽提供背景但不直接涉及该预期表述，不影响整体supported判定。"
+          },
+          {
+            "claim": "美联储降息后，成长股受益于折现率下行。",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim几乎完全一致的表述：'成长股受益于折现率下行'，并将其作为美联储降息的逻辑结果之一。证据2和证据3虽未直接提及'折现率下行'，但提供了美联储降息后科技/成长相关板块显著跑赢的间接历史与近期市场表现证据，与claim的因果逻辑相符。整体上证据1已构成直接支持，因此判定为supported。claim本身不包含任何金额、比例、增速等需核验一致性的具体财务数值，故is_numeric_claim为false。"
+          },
+          {
+            "claim": "科技、新能源板块涨幅领先。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "Claim states that technology and new energy sectors led in gains. 证据1 explicitly states '科技、新能源板块涨幅领先' and supports it with computer index rising 8.7% in the week, directly affirming the leadership in performance. 证据2 provides historical context showing tech sector significantly outperforming (18.9% vs financial's 6.4%), reinforcing the plausibility of tech leadership in a rate-cut environment, though not current. 证据3 shows overall market rise but lacks sector breakdown. Overall, 证据1 provides direct textual and numerical support for the claim. The presence of concrete percentage gains (e.g. 8.7%) makes this a numeric claim; the figures are consistent within and across evidence as supporting examples rather than conflicting values."
+          },
+          {
+            "claim": "计算机指数单周上涨8.7%。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1中明确写明‘计算机指数单周上涨8.7%’，与claim的表述完全一致，直接提供相同数值和相同指标，支持关系成立。证据2和证据3虽然提及其他市场表现，但不影响对该具体claim的直接支撑。"
+          },
+          {
+            "claim": "历史数据显示，在美联储前三次降息周期开启后的三个月内，A股平均上涨12.3%。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接完整复述了claim的核心数值表述（美联储前三次降息周期开启后三个月内A股平均上涨12.3%），属于逐字级别的直接支撑。证据1的其他内容（板块差异、本次降息超预期）属于额外信息，并不削弱或冲突该历史数据陈述。证据2和证据3讨论本次降息后的市场反应及预期，与历史三次周期的统计数据无直接冲突或重复，因此整体以证据1为准判定为supported。数值一致性不适用（仅单源直接引用，无需跨证据比较或换算）。"
+          },
+          {
+            "claim": "历史数据显示，在美联储前三次降息周期开启后的三个月内，科技板块平均涨幅达18.9%。",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的表述：'在美联储前三次降息周期开启后的三个月内，科技板块平均涨幅达18.9%'，该句来自同一段落的历史数据描述，与claim的数值、时间范围、对象（科技板块）完全匹配。证据2和证据3讨论近期降息后的不同表现（单周、2024年9月具体事件），不涉及'前三次降息周期'的历史统计，因此不产生矛盾。整体上证据1提供了claim所需的直接支持，数值一致，无冲突或削弱表述。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "美联储降息会减轻人民币汇率贬值压力",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到'美联储降息后，人民币兑美元汇率升至7.05附近，汇率压力明显缓解'，直接表述美联储降息导致人民币汇率贬值压力减轻/缓解，已完整覆盖keypoint的核心事实。该内容也在证据1中得到直接支撑。其他内容虽为扩展影响，但不影响对关键点的完整覆盖判定。"
+          },
+          {
+            "keypoint": "人民币汇率压力减轻有利于北向资金回流",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到美联储降息后人民币兑美元汇率升至7.05附近，汇率压力明显缓解，同时直接指出北向资金单周净流入达327亿元（年内最高），这两点共同完整支撑了‘人民币汇率压力减轻有利于北向资金回流’这一因果keypoint。证据1中也同时出现了汇率缓解与北向资金大额流入的事实描述，提供了直接上下文支撑。"
+          },
+          {
+            "keypoint": "美联储降息通常导致外资对A股估值进行重新定价",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出美联储降息后A股出现上涨（当周4.2%、历史三个月平均12.3%）、北向资金大幅流入（327亿元年内最高）、成长股/科技板块显著受益于折现率下行（计算机指数涨8.7%、科技历史涨幅18.9%），这些内容共同支撑并体现了'外资对A股估值进行重新定价'的过程和结果（外资流入+估值敏感板块领涨+整体市场上涨），完整覆盖了keypoint的核心含义。所有关键事实均可在提供的三条证据中找到直接或高度相关的支撑。"
+          },
+          {
+            "keypoint": "美联储降息为国内货币政策打开更大操作空间",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'美联储降息开启降息周期为中国央行打开货币政策空间，市场对国内降准50BP、降息10BP的预期显著升温'这一表述，与keypoint'美联储降息为国内货币政策打开更大操作空间'语义完全一致且更具体；证据1直接提供几乎一字不差的支撑语句，证据整体也支持该观点的背景与市场反应，因此keypoint在提供的证据中有直接明确支撑。"
+          },
+          {
+            "keypoint": "美联储降息增强市场对国内降准降息的预期",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'美联储降息开启降息周期为中国央行打开货币政策空间，市场对国内降准50BP、降息10BP的预期显著升温'这一表述，与keypoint'美联储降息增强市场对国内降准降息的预期'语义完全一致且更具体，属于完整覆盖。证据1中直接出现几乎一模一样的关键句子，提供明确支撑；证据3也从市场反应侧面佐证美联储降息的影响传导。整体事实、因果逻辑和预期增强均被完整表述，无明显缺失或部分情况。"
+          },
+          {
+            "keypoint": "对利率敏感的成长股（如科技、新能源）在美联储降息环境中估值弹性更大",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到成长股受益于折现率下行，科技、新能源板块涨幅领先，并举例计算机指数上涨8.7%，直接对应keypoint中‘对利率敏感的成长股（如科技、新能源）在美联储降息环境中估值弹性更大’的核心事实；同时结合历史数据科技板块涨幅显著高于其他板块，进一步强化了估值弹性的表述。证据1、2、3均有直接或间接支撑，尤其是证据1和证据2明确提及成长股/科技板块受益和超额涨幅，因此整体完整覆盖且有明确证据支持。"
+          },
+          {
+            "keypoint": "美联储降息环境下成长股的受益程度通常高于价值股",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出成长股受益于折现率下行，科技、新能源板块涨幅领先，并举例计算机指数上涨8.7%；同时提供历史数据支撑：在美联储降息周期开启后三个月内，科技板块平均涨幅18.9%，明显高于其他板块（如金融6.4%），完整支持keypoint中‘成长股的受益程度通常高于价值股’的比较含义。所有关键内容均可在证据1和证据2中找到直接对应支撑。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "news_china_ev_export_competition",
+      "doc_type": "news",
+      "question_type": "list",
+      "answer_len": 274,
+      "metrics": {
+        "claim_support_rate": 0.9091,
+        "unsupported_claim_rate": 0.0909,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 11,
+          "supported_claims": 10,
+          "unsupported_claims": 1,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 8,
+          "supported_numeric_claims": 8,
+          "total_keypoints": 7,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        },
+        "claim_count": 11,
+        "keypoint_count": 7,
+        "claim_judgments": [
+          {
+            "claim": "欧盟委员会2024年10月正式宣布对中国进口电动汽车加征反补贴关税",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接完整复述了claim的核心内容：欧盟委员会在2024年10月正式宣布对中国进口电动汽车加征反补贴关税。证据1还进一步提供了具体税率细节，但claim本身仅涉及宣布加征关税的事实，不包含税率数值。claim中提到的'2024年10月'属于日期而非财务/数量数值，因此is_numeric_claim为true仅因claim隐含关税比例/加征行为（属于数值性质），而证据1中的税率数据与claim表述一致（在原有基础上叠加），故numeric_consistent为true。其他证据与claim无直接相关性，不影响判定。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税税率依企业不同为比亚迪9.9%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确记载欧盟对中国电动汽车的反补贴关税税率依企业不同，其中直接列出'比亚迪9.9%'，与claim中'比亚迪9.9%'的表述完全一致。其他证据与该具体税率无关，不产生矛盾或削弱支持关系。税率数值属于典型的numeric claim，且证据中数值直接匹配，无需换算或四舍五入即一致。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税税率依企业不同为吉利18.8%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "Claim明确指出欧盟对中国电动汽车的反补贴关税税率中'吉利18.8%'，证据1直接列明：吉利18.8%，与claim的数值和主体完全一致，且为正式宣布的税率。该证据可直接支撑claim的核心内容。其他证据与该具体税率claim无关，不构成矛盾或削弱。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税税率依企业不同为上汽集团35.3%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确写明欧盟对中国电动汽车的反补贴关税税率依企业不同，上汽集团为35.3%，与claim所述内容完全一致。其他证据不涉及欧盟反补贴关税税率细节，与claim无直接冲突或矛盾。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税税率依企业不同为其他配合调查企业21.3%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接明确列出欧盟对中国电动汽车反补贴关税的税率结构，其中明确写明‘其他配合调查的企业适用21.3%的加权平均税率’，与claim中‘其他配合调查企业21.3%’的表述完全一致。其他证据与该具体税率无关，不产生矛盾或削弱支持关系。税率数值属于典型的numeric claim，且claim与证据1的21.3%数值完全一致（无单位换算或四舍五入问题）。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税税率依企业不同为未配合调查企业35.3%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确陈述：未配合调查的企业适用35.3%的最高税率，与claim中'未配合调查企业35.3%'完全一致。其他证据与该具体税率claim无关，不产生矛盾或削弱支持关系。税率数值直接匹配，无需换算或四舍五入即一致。"
+          },
+          {
+            "claim": "欧盟对中国电动汽车的反补贴关税是在原有10%基础关税之上叠加征收",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确写明欧盟对中国进口电动汽车的反补贴关税『在原有10%基础关税之上叠加征收』，并列出了具体加征税率（比亚迪9.9%、吉利18.8%等），直接支撑claim的表述。其他证据与该claim无直接关联，不影响判定。claim中涉及具体关税比例（10% + 额外反补贴税率），属于数值型主张，证据中的税率描述在逻辑和数值含义上完全一致。"
+          },
+          {
+            "claim": "美国政府于2024年5月宣布将中国电动汽车关税从25%提高至100%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接完整复述了claim的核心内容：美国政府于2024年5月宣布将中国电动汽车关税从25%提高至100%。该证据与claim在时间（2024年5月）、主体（美国政府）、对象（中国电动汽车）、动作（关税提高）和具体数值（25%→100%）上完全一致，无任何偏差。其他证据讨论欧盟、出口数据及东南亚情况，与美国关税决策无直接关联，不影响对claim的支持判定。claim包含具体百分比变化，属于numeric claim，两处数值（25%和100%）在证据1中完全等价一致。"
+          },
+          {
+            "claim": "泰国工业部就中国车企享受的本国生产补贴展开调查",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接包含与claim完全相同的表述：'泰国工业部就中国车企享受的本国生产补贴展开调查'，该句明确出现在证据1中，因此证据可直接支撑claim。claim中无任何金额、比例、数量等财务数值，仅涉及事件描述，故is_numeric_claim为false。"
+          },
+          {
+            "claim": "印尼贸易部对进口中国电动车的补贴合规性提出质疑",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1明确包含与claim完全一致的表述：'印尼贸易部亦对进口中国电动车的补贴合规性提出质疑'，直接提供了claim所述事实的支撑。其他证据涉及欧盟、美国关税及出口数据，与印尼贸易部的具体质疑无关，不影响对证据1的判断。claim中无任何金额、比例、数量等数值型断言，因此is_numeric_claim为false。"
+          },
+          {
+            "claim": "2024年下半年，泰国、印度尼西亚等东南亚国家相继启动对中国新能源汽车企业的补贴审查程序",
+            "label": "unsupported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "The claim describes specific subsidy review programs launched by Thailand, Indonesia, and other Southeast Asian countries against Chinese NEV firms in H2 2024. Evidence 1 restates the claim but provides no independent sourcing or details. Other evidence covers EU/US tariffs and general export data, with no mention of such reviews in Southeast Asia. External verification finds no confirmation of these investigations; instead, Southeast Asian policies generally incentivize Chinese EV local production rather than scrutinize their home subsidies."
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "欧盟对中国电动车加征反补贴税",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案完整包含了keypoint的核心事实：欧盟对中国电动车加征反补贴税。具体包括欧盟委员会2024年10月正式宣布、针对不同企业的具体税率（比亚迪9.9%、吉利18.8%、上汽35.3%等）、在原有10%关税基础上叠加征收，这些细节与[证据1]完全匹配且无遗漏或偏差。额外内容（如美国关税、东南亚审查）属于扩展信息，不影响对keypoint本身的覆盖判定。keypoint在证据中获得直接、完整支撑。"
+          },
+          {
+            "keypoint": "欧盟反补贴税最高税率为35.3%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确写出'上汽集团35.3%'、'未配合调查企业35.3%'，并直接表述为最高税率35.3%，与keypoint“欧盟反补贴税最高税率为35.3%”完全一致。证据1中也明确出现上汽集团35.3%及未配合调查企业35.3%的最高税率描述，直接支撑该keypoint。"
+          },
+          {
+            "keypoint": "比亚迪的反补贴税率为9.9%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'比亚迪9.9%'的反补贴税率，与keypoint完全一致；同时直接引用证据1中的具体表述，包括税率数值、企业名称及叠加原有10%关税的细节，信息完整无缺失。keypoint事实可在证据1中找到直接支撑。"
+          },
+          {
+            "keypoint": "吉利的反补贴税率为18.8%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'吉利18.8%'的反补贴税率，与keypoint完全一致。证据1直接提供相同表述（吉利18.8%），时间（2024年10月欧盟委员会正式宣布）和税率细节均有完整支撑，属于完整覆盖。"
+          },
+          {
+            "keypoint": "上汽的反补贴税率为35.3%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确写出‘上汽集团35.3%’，与keypoint‘上汽的反补贴税率为35.3%’完全一致，包括税率数值和针对上汽的表述。证据1中也直接出现‘上汽集团35.3%’，为该keypoint提供明确的直接支撑。无缺失或部分事实的情况。"
+          },
+          {
+            "keypoint": "美国对中国电动车征收100%关税",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'美国政府于2024年5月宣布将中国电动汽车关税从25%提高至100%'这一完整表述，与keypoint'美国对中国电动车征收100%关税'的事实、主体、对象、税率完全一致。证据[1]提供直接支撑，包括时间(2024年5月)、原税率(25%)到新税率(100%)的明确变化。无缺失关键细节。"
+          },
+          {
+            "keypoint": "部分东南亚市场开始审查中国车企补贴问题",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'泰国工业部就中国车企享受的本国生产补贴展开调查'和'印尼贸易部对进口中国电动车的补贴合规性提出质疑'，并进一步概括为'2024年下半年，泰国、印度尼西亚等东南亚国家相继启动对中国新能源汽车企业的补贴审查程序'，直接对应keypoint的核心事实'部分东南亚市场开始审查中国车企补贴问题'。此外还补充了'东南亚市场的贸易壁垒风险正在上升'作为合理延伸。证据1提供了该keypoint的直接文本支撑，答案内容与证据1高度一致且完整覆盖，无明显事实缺失、时间或主体遗漏，因此判定为covered且context_supported。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "draft_markdown_truncated+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "news_apple_iphone16_china_sales",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 199,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 1.0,
+        "keypoint_context_recall": 1.0
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 6,
+          "supported_claims": 6,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 5,
+          "supported_numeric_claims": 5,
+          "total_keypoints": 7,
+          "covered_keypoints": 7,
+          "partial_keypoints": 0,
+          "keypoints_supported_by_context": 7
+        },
+        "claim_count": 6,
+        "keypoint_count": 7,
+        "claim_judgments": [
+          {
+            "claim": "苹果iPhone 16系列在中国市场发售首周（2024年9月20-26日）销量约370万部",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出了与claim完全一致的表述：苹果iPhone 16系列在中国市场发售首周（2024年9月20-26日）销量约370万部。数据来源明确标注为Counterpoint，文字表述与claim的数字、时间范围、产品范围完全匹配，无任何偏差或冲突。其他证据为背景解释，不影响对该具体销量的支持判定。"
+          },
+          {
+            "claim": "iPhone 16系列首周销量较iPhone 15系列首周同比下降约3%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出了核心数据：iPhone 16系列在中国市场发售首周销量约370万部，较iPhone 15系列首周同比下降约3%。这句话与claim『iPhone 16系列首周销量较iPhone 15系列首周同比下降约3%』的表述完全匹配（下降幅度均为『约3%』，属于同义且数值一致的表达）。证据2和证据3提供了背景原因和未来展望，但不影响对claim的直接支持判定。整体证据足以支撑claim，且数值表达一致。"
+          },
+          {
+            "claim": "iPhone 16系列在中国市场发售首周销量低于分析师预期的400万部",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接给出了Counterpoint数据：iPhone 16系列在中国市场首周销量约370万部，低于分析师预期的400万部。该数据明确支撑claim中的核心数值比较（首周销量 < 400万部），且370万与400万的对比关系一致，无矛盾。证据2和3提供背景原因和展望，但不影响claim的数值事实判定。"
+          },
+          {
+            "claim": "Apple Intelligence功能因监管问题尚未在中国大陆上线",
+            "label": "supported",
+            "is_numeric_claim": false,
+            "numeric_consistent": false,
+            "rationale": "证据1直接明确陈述'Apple Intelligence功能因监管问题尚未在中国大陆上线'，作为核心原因解释iPhone 16在华销售压力，与claim内容完全一致且为直接支撑表述。证据2和证据3虽未直接重复该句，但也侧面相符（仍在寻求合作伙伴、尚未落地），不存在任何矛盾。整体证据支持claim。无任何财务数值/比例/增速等数字型断言，仅涉及状态描述和年份，因此is_numeric_claim为false。"
+          },
+          {
+            "claim": "华为Mate 70系列与iPhone 16系列同期上市形成直接竞争",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确包含'华为Mate 70系列同期上市形成直接竞争'的表述，与claim的核心内容完全一致，直接提供支持。证据2和证据3虽未直接提及Mate 70，但未与之冲突，也未削弱证据1的支撑力度。claim中无任何金额、比例、数量等财务/统计数值，因此is_numeric_claim为false（年份/上市同期不属于此类数值）。"
+          },
+          {
+            "claim": "依据当前证据无法确认iPhone 16系列在中国市场的后续整体销售表现",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "Claim 表示依据当前证据无法确认 iPhone 16系列在中国市场的后续整体销售表现（即中长期/全年/后续走势无法确定）。证据1仅提供首周销量数据及同比小幅下降，属于初期表现；证据2解释初期承压原因（AI功能未上线+华为竞争），但未给出后续销量预测或数据；证据3提到潜在的2025年上半年AI落地可能提振下半段销量，但属于市场猜测和条件性展望（‘有望’），并非已确认的事实或确定趋势。整体上三条证据均未提供能确认后续整体销售表现的具体数据、趋势或结论，因此证据不足以否定‘无法确认’，反而与‘无法确认’的表述一致，故为 supported。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "iPhone 16系列在中国市场开售首周销量约370万部",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案第一条直接完整复述了keypoint的核心内容：iPhone 16系列在中国市场开售首周销量约370万部，包括时间范围（2024年9月20-26日），单位明确，数字一致，属于完整覆盖。keypoint在证据1中可找到几乎逐字的直接支撑。"
+          },
+          {
+            "keypoint": "iPhone 16系列开售首周销量同比下降约3%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含 'iPhone 16系列首周销量同比下降约3%' 的完整核心事实，且直接对应证据1中的表述（较iPhone 15系列首周同比下降约3%），包含具体销量数字、时间段和比较基准，覆盖完整且无缺失关键要素。keypoint 在证据1中有直接、明确的文字支撑。"
+          },
+          {
+            "keypoint": "开售首周指iPhone 16系列在中国正式开售后的第一周",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'开售首周'的具体定义和时间范围（2024年9月20-26日），并直接提供了该时间段内的销量数据（约370万部），完全匹配keypoint对'开售首周'的界定。证据1中也明确使用了相同的时间范围和销量数据作为直接支撑，因此keypoint被完整覆盖且有明确证据支持。"
+          },
+          {
+            "keypoint": "销量约370万部弱于市场预期",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'销量约370万部'，并直接说明该销量'低于分析师预期的400万部'，完整对应keypoint中'销量约370万部弱于市场预期'的核心事实（数字+弱于预期），无缺失关键元素。keypoint所述内容可在证据1中找到直接明确支撑。"
+          },
+          {
+            "keypoint": "Apple Intelligence（AI功能）尚未在中国上线",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'Apple Intelligence功能因监管问题尚未在中国大陆上线'这一表述，与keypoint 'Apple Intelligence（AI功能）尚未在中国上线'事实完全一致，无缺失核心内容；证据2中直接出现'Apple Intelligence功能因监管问题尚未在中国大陆上线'的相同表述，为keypoint提供了明确的直接文本支撑。"
+          },
+          {
+            "keypoint": "AI功能未上线导致缺乏核心差异化卖点",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到'Apple Intelligence功能因监管问题尚未在中国大陆上线'，并结合首周销量数据下降、低于预期以及华为Mate 70竞争，直接对应keypoint中'AI功能未上线导致缺乏核心差异化卖点'的核心逻辑，完整覆盖了关键事实和因果关系。证据1也直接支撑该keypoint的表述。"
+          },
+          {
+            "keypoint": "华为Mate 70系列对中国市场形成明显竞争分流",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确提到'华为Mate 70系列同期上市形成直接竞争'，结合证据1中'华为Mate 70系列同期上市形成直接竞争，在高端安卓市场产生明显分流'的表述，答案已完整传达keypoint的核心含义：华为Mate 70系列对中国市场（特别是对iPhone 16销量）形成了明显竞争分流效果。证据直接支撑该keypoint，无明显事实缺失或弱化。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    },
+    {
+      "case_id": "news_semiconductor_export_controls",
+      "doc_type": "news",
+      "question_type": "analysis",
+      "answer_len": 217,
+      "metrics": {
+        "claim_support_rate": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "numeric_consistency_rate": 1.0,
+        "keypoint_coverage": 0.625,
+        "keypoint_context_recall": 0.75
+      },
+      "metric_errors": {},
+      "error": null,
+      "judge_artifacts": {
+        "counters": {
+          "total_claims": 7,
+          "supported_claims": 7,
+          "unsupported_claims": 0,
+          "contradicted_claims": 0,
+          "total_numeric_claims": 7,
+          "supported_numeric_claims": 7,
+          "total_keypoints": 8,
+          "covered_keypoints": 5,
+          "partial_keypoints": 1,
+          "keypoints_supported_by_context": 6
+        },
+        "claim_count": 7,
+        "keypoint_count": 8,
+        "claim_judgments": [
+          {
+            "claim": "美国商务部2024年10月宣布扩大芯片出口管制范围",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接复述并详细说明了claim的核心内容：美国商务部在2024年10月宣布扩大芯片出口管制范围，具体措施包括将A800、H800等芯片纳入管制、收紧算力性能阈值等。该证据与claim在主体、时间、事件性质上完全一致，构成直接支撑。证据2和证据3属于后续影响分析，不涉及claim本身事实的证伪或冲突。claim中不包含金额、比例、数量等财务/统计数值，仅涉及年份和事件描述，因此is_numeric_claim为false，numeric_consistent字段不适用（置为false）。"
+          },
+          {
+            "claim": "美国商务部2024年10月将英伟达A800、H800等针对中国市场的降规版芯片纳入管制",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接陈述了美国商务部2024年10月宣布将英伟达A800、H800等针对中国市场的降规版芯片纳入管制，与claim的核心内容（时间、主体、对象、行动）完全一致。证据2和证据3虽为后续影响分析，但未与claim冲突，也间接印证管制已发生。claim中无任何金额、比例、数量等数值型财务/性能指标，因此is_numeric_claim为false，numeric_consistent字段不适用（置为false）。"
+          },
+          {
+            "claim": "美国商务部2024年10月收紧算力性能阈值",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1明确提到'美国商务部2024年10月...同时收紧算力性能阈值'，直接包含claim的核心动作（美国商务部 + 2024年10月 + 收紧算力性能阈值），时间、主体、行为三者均吻合，且表述一致。其他证据虽未重复该具体点，但证据1已提供直接支撑，无矛盾信息。claim中无金额、比例、数量等财务/性能数值，因此is_numeric_claim为false。"
+          },
+          {
+            "claim": "美国商务部2024年10月大幅压缩灰色地带",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接陈述美国商务部2024年10月通过扩大管制范围（包括A800/H800等降规版芯片）、收紧算力性能阈值，明确使用了‘大幅压缩灰色地带’的表述，与claim的核心表述完全一致。其他证据为影响分析而非对claim本身的直接支持或反驳。claim中不含金额、比例、数量等财务/数值型指标，仅涉及年份和定性描述，因此is_numeric_claim为false。"
+          },
+          {
+            "claim": "美国芯片出口管制禁令覆盖超过140个国家和地区的实体清单企业",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的核心表述：'禁令覆盖超过140个国家和地区的实体清单企业'，该句明确支持claim中的关键数值'超过140个国家和地区'及'实体清单企业'的覆盖范围描述。证据1来自美国商务部2024年10月宣布的管制措施上下文，与claim主题匹配。证据2和证据3虽讨论管制影响与应对，但不涉及覆盖范围，因此不产生矛盾，仅证据1已足以直接支撑。数值'超过140'属于数量型表述，故is_numeric_claim为true，且无其他证据提供冲突数值，numeric_consistent为true。"
+          },
+          {
+            "claim": "受美国出口管制影响，中国AI企业大规模转向华为昇腾910B芯片作为训练替代方案",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接复述了claim的核心内容：'受出口管制影响，中国AI企业大规模转向华为昇腾910B芯片作为训练替代方案'，并补充了具体企业（百度、字节跳动）和采购规模（超过万片），属于直接支撑。证据中提到的训练效率50-70%属于额外量化细节，不影响整体支持关系。证据2和证据3提供背景和间接相关信息（成本增加、管制升级、自主化加速），但不矛盾claim，也不直接否定'大规模转向'的事实。claim包含比例/数量表述（大规模、训练替代方案），因此is_numeric_claim为true；证据1的'超过万片'与claim的'大规模'在数量级上语义一致，numeric_consistent为true。"
+          },
+          {
+            "claim": "昇腾910B的大模型训练效率约为H100的50-70%",
+            "label": "supported",
+            "is_numeric_claim": true,
+            "numeric_consistent": true,
+            "rationale": "证据1直接包含与claim完全一致的表述：'昇腾910B的大模型训练效率约为H100的50-70%'，该句明确支持claim的核心数值比例。其他证据虽相关但不直接涉及该具体效率对比，不构成矛盾或削弱。数值表述为范围形式且带有'约'字，属于典型近似表达，证据与claim在语义和数值上完全一致。"
+          }
+        ],
+        "keypoint_judgments": [
+          {
+            "keypoint": "美国在2024年实施了最新的半导体出口管制措施",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'美国商务部2024年10月宣布扩大芯片出口管制范围'等内容，直接完整覆盖了keypoint中'美国在2024年实施了最新的半导体出口管制措施'的核心事实，时间、主体、措施类型均有体现，且证据1提供了该keypoint的直接支撑。"
+          },
+          {
+            "keypoint": "A100 GPU 被列入对中国的出口禁令",
+            "coverage": "missing",
+            "context_supported": false,
+            "rationale": "keypoint 明确指 'A100 GPU 被列入对中国的出口禁令'，但答案和所有证据中均未提及 A100 被列入出口管制或禁令。答案提到的是 A800、H800 等降规版芯片被纳入管制，以及算力阈值收紧，但 A100 本身未被列为管制对象。证据1~3 同样只涉及 A800/H800 等型号，没有任何关于 A100 的直接或间接描述，因此属于完全未覆盖。context_supported 为 false，因为证据中找不到支撑 A100 被禁的任何内容。"
+          },
+          {
+            "keypoint": "H100 GPU 被列入对中国的出口禁令",
+            "coverage": "missing",
+            "context_supported": false,
+            "rationale": "keypoint 明确指出 'H100 GPU 被列入对中国的出口禁令'，但答案和所有证据中均未提及 H100 被直接列入禁令或受到出口管制。答案仅讨论 A800、H800 等降规版芯片被新增管制，以及性能阈值收紧，但 H100 本身（未降规的标准高端版本）未被列为管制对象。证据中也无任何直接或间接表述支持 H100 被禁，因此属于完全未覆盖。"
+          },
+          {
+            "keypoint": "管制措施限制算力等效指标达到特定阈值以上的芯片向中国出口",
+            "coverage": "partial",
+            "context_supported": true,
+            "rationale": "答案提到了收紧算力性能阈值（算力等效指标），并大幅压缩灰色地带，这对应了keypoint中'限制算力等效指标达到特定阈值以上'的核心意图；同时明确列出针对中国市场的降规版芯片（如A800、H800）被纳入管制，也支持对中国出口的限制。但keypoint要求'达到特定阈值以上的芯片向中国出口'被限制，而答案未明确写出'特定阈值'的数值或范围（如之前的性能参数阈值被调整为更低），仅用'收紧'和'压缩灰色地带'概括，缺少阈值具体描述或'以上'的明确指向，因此属于部分覆盖而非完整覆盖。证据1直接支撑了收紧算力性能阈值和针对中国出口限制的事实，context_supported为true。"
+          },
+          {
+            "keypoint": "中国AI企业主要转向使用华为昇腾910B作为国产替代芯片",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案中明确包含'受出口管制影响，中国AI企业大规模转向华为昇腾910B芯片作为训练替代方案'这句话，与keypoint'中国AI企业主要转向使用华为昇腾910B作为国产替代芯片'含义一致且完整覆盖；证据1直接提供了几乎相同的表述作为支撑，因此context_supported为true；无明显事实缺失、时间或关键限定词遗漏，属于covered。"
+          },
+          {
+            "keypoint": "昇腾910B与A100/H100在性能上存在差距",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'昇腾910B的大模型训练效率约为H100的50-70%'这一表述，直接表明昇腾910B与H100在性能（大模型训练效率）上存在差距（约30-50%的性能差距），完整覆盖keypoint的核心事实。该内容也在证据1中得到直接支撑。"
+          },
+          {
+            "keypoint": "性能差距幅度约为30-50%",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确包含'出口管制将导致中国AI大模型训练成本增加30-50%'，与keypoint '性能差距幅度约为30-50%'在数值范围和幅度描述上完全一致。虽然keypoint使用'性能差距幅度'而答案表述为'训练成本增加'，但结合证据2中'训练成本增加30-50%'与证据1中昇腾910B训练效率约为H100的50-70%（即性能差距30-50%）的直接对应关系，该幅度表述被证据整体支持且答案完整传达了keypoint的核心量化内容，因此判定为covered。"
+          },
+          {
+            "keypoint": "该措施在短期内对中国大模型训练形成实质性制约",
+            "coverage": "covered",
+            "context_supported": true,
+            "rationale": "答案明确指出美国2024年10月扩大芯片出口管制、针对中国市场的A800/H800被纳入管制、算力阈值收紧，这些直接导致中国大模型训练受到实质制约；同时列出转向昇腾910B、训练效率仅H100的50-70%、训练成本增加30-50%且周期延长，这些量化后果进一步证实了'短期内形成实质性制约'。所有关键事实均在证据1、2、3中得到直接支撑，覆盖完整。"
+          }
+        ],
+        "pipeline": {
+          "nodes": [],
+          "synth_mode": "render_vars_brief+grounded_fallback"
+        }
+      }
+    }
+  ]
+}

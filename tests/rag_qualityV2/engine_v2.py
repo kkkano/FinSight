@@ -398,7 +398,7 @@ def compute_metrics_from_counters(counters: dict[str, int]) -> dict[str, float |
     total_numeric_claims = counters.get("total_numeric_claims", 0)
     total_keypoints = counters.get("total_keypoints", 0)
 
-    def _rate(num: int, den: int) -> float | None:
+    def _rate(num: int | float, den: int) -> float | None:
         if den <= 0:
             return None
         return round(num / den, 4)
@@ -409,7 +409,7 @@ def compute_metrics_from_counters(counters: dict[str, int]) -> dict[str, float |
         "contradiction_rate": _rate(counters.get("contradicted_claims", 0), total_claims),
         "numeric_consistency_rate": _rate(counters.get("supported_numeric_claims", 0), total_numeric_claims),
         "keypoint_coverage": _rate(
-            counters.get("covered_keypoints", 0) + int(0.5 * counters.get("partial_keypoints", 0)),
+            counters.get("covered_keypoints", 0) + 0.5 * counters.get("partial_keypoints", 0),
             total_keypoints,
         ),
         "keypoint_context_recall": _rate(counters.get("keypoints_supported_by_context", 0), total_keypoints),

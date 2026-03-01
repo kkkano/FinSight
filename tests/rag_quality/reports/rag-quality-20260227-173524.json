@@ -1,0 +1,90 @@
+{
+  "run_id": "rag-quality-20260227-173524",
+  "generated_at": "2026-02-27T17:35:24.648759+00:00",
+  "dataset_version": "v1",
+  "doc_type_filter": "filing",
+  "total_cases": 4,
+  "evaluated_cases": 4,
+  "error_cases": 0,
+  "overall_metrics": {
+    "faithfulness": 1.0,
+    "answer_relevancy": 0.7576,
+    "context_precision": 0.8333,
+    "context_recall": 1.0
+  },
+  "by_doc_type": {
+    "filing": {
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7576,
+      "context_precision": 0.8333,
+      "context_recall": 1.0
+    },
+    "transcript": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    },
+    "news": {
+      "faithfulness": null,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": null
+    }
+  },
+  "metric_null_rates": {
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.25,
+    "context_precision": 0.25,
+    "context_recall": 0.0
+  },
+  "case_results": [
+    {
+      "case_id": "filing_maotai_revenue_2024q3",
+      "doc_type": "filing",
+      "question": "贵州茅台2024年三季度营业收入是多少？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.9998,
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "error": null,
+      "metric_errors": {}
+    },
+    {
+      "case_id": "filing_catl_gross_margin_2024",
+      "doc_type": "filing",
+      "question": "宁德时代2024年上半年毛利率是多少？主要驱动因素是什么？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.566,
+      "context_precision": 1.0,
+      "context_recall": 1.0,
+      "error": null,
+      "metric_errors": {}
+    },
+    {
+      "case_id": "filing_byd_ev_sales_2024h1",
+      "doc_type": "filing",
+      "question": "比亚迪2024年上半年新能源汽车销量及市场份额如何？",
+      "faithfulness": 1.0,
+      "answer_relevancy": null,
+      "context_precision": null,
+      "context_recall": 1.0,
+      "error": null,
+      "metric_errors": {
+        "answer_relevancy": "InstructorRetryException: <failed_attempts>\n\n<generation number=\"1\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n<generation number=\"2\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n<generation number=\"3\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n</failed_attempts>\n\n<last_exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</last_exception>",
+        "context_precision": "InstructorRetryException: <failed_attempts>\n\n<generation number=\"1\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n<generation number=\"2\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n<generation number=\"3\">\n<exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</exception>\n<completion>\n    None\n</completion>\n</generation>\n\n</failed_attempts>\n\n<last_exception>\n    Error code: 403 - RPM limit exceeded. Please complete identity verification to lift the restriction.\n</last_exception>"
+      }
+    },
+    {
+      "case_id": "filing_paic_embedded_value_2024",
+      "doc_type": "filing",
+      "question": "中国平安2024年中期内含价值是多少？新业务价值增速如何？",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.7071,
+      "context_precision": 0.5,
+      "context_recall": 1.0,
+      "error": null,
+      "metric_errors": {}
+    }
+  ]
+}

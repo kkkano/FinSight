@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import type { TimelineEvent } from '../../types/execution';
@@ -40,30 +40,7 @@ export function ThinkingBubble({ timeline, isRunning, className = '' }: Thinking
   const pendingRef = useRef<TimelineEvent[]>([]);
   const processedIdsRef = useRef<Set<string>>(new Set());
 
-  // 从 timeline 提取带 userMessage 的事件，节流处理
-  useEffect(() => {
-    const now = Date.now();
-    const newEvents = timeline.filter(
-      (evt) => !processedIdsRef.current.has(evt.id),
-    );
-
-    if (newEvents.length === 0) return;
-
-    pendingRef.current.push(...newEvents);
-    for (const evt of newEvents) {
-      processedIdsRef.current.add(evt.id);
-    }
-
-    const elapsed = now - lastUpdateRef.current;
-    if (elapsed < THROTTLE_MS) {
-      const timer = setTimeout(() => flushPending(), THROTTLE_MS - elapsed);
-      return () => clearTimeout(timer);
-    }
-
-    flushPending();
-  }, [timeline]);
-
-  function flushPending() {
+  const flushPending = useCallback(() => {
     const pending = pendingRef.current;
     if (pending.length === 0) return;
     pendingRef.current = [];
@@ -102,7 +79,30 @@ export function ThinkingBubble({ timeline, isRunning, className = '' }: Thinking
       // 保留最多 MAX_VISIBLE_BUBBLES 个气泡
       return next.slice(-MAX_VISIBLE_BUBBLES);
     });
-  }
+  }, []);
+
+  // 从 timeline 提取带 userMessage 的事件，节流处理
+  useEffect(() => {
+    const now = Date.now();
+    const newEvents = timeline.filter(
+      (evt) => !processedIdsRef.current.has(evt.id),
+    );
+
+    if (newEvents.length === 0) return;
+
+    pendingRef.current.push(...newEvents);
+    for (const evt of newEvents) {
+      processedIdsRef.current.add(evt.id);
+    }
+
+    const elapsed = now - lastUpdateRef.current;
+    if (elapsed < THROTTLE_MS) {
+      const timer = setTimeout(() => flushPending(), THROTTLE_MS - elapsed);
+      return () => clearTimeout(timer);
+    }
+
+    flushPending();
+  }, [flushPending, timeline]);
 
   // 当执行完成时，淡出所有气泡
   useEffect(() => {
