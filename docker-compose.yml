@@ -46,6 +46,14 @@ services:
     env_file:
       - .env.server          # real secrets on the server (NOT committed)
     environment:
+      # User config is stored in the data volume so it persists across container restarts.
+      # Settings UI changes (LLM keys, etc.) are saved to /app/data/user_config.json.
+      FINSIGHT_CONFIG_DIR:          /app/data
+      # Default LLM endpoint (OpenAI-compatible). Override in .env.server to use your own.
+      # On first boot, these are written to user_config.json so the Settings UI is pre-filled.
+      OPENAI_COMPATIBLE_API_KEY:    ${OPENAI_COMPATIBLE_API_KEY:-xinniankuaile}
+      OPENAI_COMPATIBLE_API_BASE:   ${OPENAI_COMPATIBLE_API_BASE:-https://grok.jiuuij.de5.net/v1/chat/completions}
+      OPENAI_COMPATIBLE_MODEL:      ${OPENAI_COMPATIBLE_MODEL:-grok-4.1-fast}
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"

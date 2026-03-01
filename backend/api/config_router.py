@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from backend.api.schemas import ConfigResponse
+from backend.llm_config import USER_CONFIG_PATH
 
 _SENSITIVE_FRAGMENTS = ("api_key", "apikey", "token", "secret", "password")
 
@@ -118,7 +119,7 @@ def create_config_router(deps: ConfigRouterDeps) -> APIRouter:
     @router.get("/api/config", response_model=ConfigResponse)
     async def get_config():
         try:
-            config_file = f"{deps.project_root}/user_config.json"
+            config_file = USER_CONFIG_PATH
 
             try:
                 with open(config_file, "r", encoding="utf-8") as file_obj:
@@ -144,7 +145,7 @@ def create_config_router(deps: ConfigRouterDeps) -> APIRouter:
     @router.post("/api/config")
     async def save_config(request: dict):
         try:
-            config_file = f"{deps.project_root}/user_config.json"
+            config_file = USER_CONFIG_PATH
 
             # Load existing config to merge (preserve keys not in whitelist)
             existing: dict = {}

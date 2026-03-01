@@ -27,6 +27,10 @@ tests/retrieval_eval/reports/
 .env.*
 data/
 logs/
+# User config — contains real API keys; must NEVER be baked into the image.
+# In Docker, config lives in /app/data/ (backend_data volume) via FINSIGHT_CONFIG_DIR.
+user_config.json
+user_config_*.json
 *.sqlite
 *.db
 

@@ -106,3 +106,8 @@ NUL
 # oh-my-claudecode local config
 .omc/
 docs/DEPLOYMENT.md
+
+# Deploy scripts (contain server IP / sensitive paths, local-only)
+deploy.bat
+deploy*.bat
+deploy*.sh

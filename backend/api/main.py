@@ -474,9 +474,57 @@ class SimpleRateLimiter:
 
 _rate_limiter = SimpleRateLimiter.from_env()
 
+def _init_default_user_config() -> None:
+    """Write default LLM config on first boot if user_config.json does not exist.
+
+    This gives new deployments a working out-of-the-box experience:
+    users see a pre-filled (but overridable) endpoint in the Settings UI.
+    The file is stored in FINSIGHT_CONFIG_DIR (/app/data in Docker) so it
+    persists across container restarts via the named volume.
+    """
+    import json as _json
+    from backend.llm_config import USER_CONFIG_PATH
+
+    if os.path.exists(USER_CONFIG_PATH):
+        return
+
+    _DEFAULT_API_BASE = "https://grok.jiuuij.de5.net/v1/chat/completions"
+    _DEFAULT_API_KEY  = "xinniankuaile"
+    _DEFAULT_MODEL    = "grok-4.1-fast"
+
+    default_cfg = {
+        "llm_provider": "openai_compatible",
+        "llm_model":    _DEFAULT_MODEL,
+        "llm_api_base": _DEFAULT_API_BASE,
+        "llm_api_key":  _DEFAULT_API_KEY,
+        "llm_endpoints": [
+            {
+                "name":        "primary",
+                "provider":    "openai_compatible",
+                "api_base":    _DEFAULT_API_BASE,
+                "api_key":     _DEFAULT_API_KEY,
+                "model":       _DEFAULT_MODEL,
+                "weight":      1,
+                "enabled":     True,
+                "cooldown_sec": 30,
+            }
+        ],
+    }
+    try:
+        os.makedirs(os.path.dirname(USER_CONFIG_PATH), exist_ok=True)
+        with open(USER_CONFIG_PATH, "w", encoding="utf-8") as _f:
+            _json.dump(default_cfg, _f, indent=2, ensure_ascii=False)
+        logger.info("[Config] wrote default user config to %s", USER_CONFIG_PATH)
+    except Exception as _exc:
+        logger.warning("[Config] failed to write default user config: %s", _exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan handler to start/stop price_change scheduler."""
+    # Ensure a working default LLM config exists on first boot.
+    _init_default_user_config()
+
     from backend.services.alert_scheduler import run_price_change_cycle
     from backend.services.scheduler_runner import start_price_change_scheduler
 

@@ -413,7 +413,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 type="text"
                 value={config.llm_model || ''}
                 onChange={(e) => handleChange('llm_model', e.target.value)}
-                placeholder="如 gpt-4-turbo"
+                placeholder="如 grok-4.1-fast"
                 className="py-2 rounded"
               />
               {/* API Endpoint — 使用共享 Input 组件 */}
@@ -538,7 +538,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         data-testid={`settings-endpoint-model-${index}`}
                         value={endpoint.model || ''}
                         onChange={(e) => updateEndpoint(index, { model: e.target.value })}
-                        placeholder="gemini-2.5-flash"
+                        placeholder="grok-4.1-fast"
                         className="py-2 rounded"
                       />
 

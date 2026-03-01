@@ -20,7 +20,10 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-USER_CONFIG_PATH = os.path.join(PROJECT_ROOT, "user_config.json")
+# In Docker, FINSIGHT_CONFIG_DIR=/app/data (mounted as named volume → persists across restarts).
+# Locally, falls back to PROJECT_ROOT for backward compatibility.
+_USER_CONFIG_DIR = os.getenv("FINSIGHT_CONFIG_DIR") or PROJECT_ROOT
+USER_CONFIG_PATH = os.path.join(_USER_CONFIG_DIR, "user_config.json")
 
 PROVIDER_ALIASES = {
     "gemini_proxy": "openai_compatible",
@@ -343,7 +346,9 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
     canonical = _canonical_provider(provider)
     if canonical == "openai_compatible":
-        _try_add("openai-compatible-primary", "openai_compatible", "OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_API_BASE", "gpt-4o-mini")
+        # Read OPENAI_COMPATIBLE_MODEL env var; fall back to grok-4.1-fast.
+        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or "grok-4.1-fast"
+        _try_add("openai-compatible-primary", "openai_compatible", "OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_API_BASE", _oc_model)
         _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
     elif canonical == "openai":
