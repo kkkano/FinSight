@@ -358,15 +358,24 @@ class _PostgresHybridStore:
 
     @staticmethod
     def _check_vector_dimension(conn: Any) -> int | None:
-        """Query existing embedding column dimension, return None if table doesn't exist."""
+        """Query existing embedding column dimension, return None if table doesn't exist.
+
+        Uses pg_class JOIN instead of ``::regclass`` cast to avoid poisoning the
+        current transaction when the table does not exist yet (which would cause
+        all subsequent statements in the same transaction to fail with
+        ``InFailedSqlTransaction``).
+        """
         try:
             row = conn.execute(
                 text(
                     """
-                    SELECT atttypmod
-                    FROM pg_attribute
-                    WHERE attrelid = 'rag_documents_v2'::regclass
-                      AND attname = 'embedding'
+                    SELECT a.atttypmod
+                    FROM pg_attribute a
+                    JOIN pg_class c ON a.attrelid = c.oid
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    WHERE c.relname = 'rag_documents_v2'
+                      AND n.nspname = 'public'
+                      AND a.attname = 'embedding'
                     """
                 )
             ).fetchone()
