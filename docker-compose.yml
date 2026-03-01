@@ -75,8 +75,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # nginx proxies /api/* to backend internally, so value here is empty-string
-        VITE_API_BASE_URL: ""
+        # Set to server's public IP so all API calls go through nginx proxy on port 80
+        # Empty string would trigger fallback to http://127.0.0.1:8000 in runtime.ts
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://175.178.159.112}
     container_name: finsight-frontend
     restart: unless-stopped
     ports:
