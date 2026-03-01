@@ -4,8 +4,18 @@ import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
 type PortfolioPositions = Record<string, number>;
+export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
+export interface AuthIdentity {
+  userId: string;
+  email: string | null;
+}
 
 const DEFAULT_USER_ID = 'default_user';
+const SESSION_PART_PATTERN = /[^A-Za-z0-9._-]/g;
+const normalizeSessionPart = (value: string, fallback: string): string => {
+  const normalized = String(value || '').trim().replace(SESSION_PART_PATTERN, '-').slice(0, 64);
+  return normalized || fallback;
+};
 
 const getInitialLayout = (): LayoutMode => {
   if (typeof window === 'undefined') return 'centered';
@@ -26,12 +36,26 @@ const getInitialSubscriptionEmail = (): string => {
   return window.localStorage.getItem('finsight-subscription-email') || '';
 };
 
-const buildSessionId = (): string => {
+const getInitialEntryMode = (): EntryMode => {
+  if (typeof window === 'undefined') return 'pending';
+  const raw = window.localStorage.getItem('finsight-entry-mode');
+  return raw === 'pending' || raw === 'anonymous' || raw === 'authenticated'
+    ? (raw as EntryMode)
+    : 'pending';
+};
+
+export const buildAnonymousSessionId = (): string => {
   const randomPart =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   return `public:anonymous:${randomPart}`;
+};
+
+export const buildUserSessionId = (userId: string, thread: string = 'default'): string => {
+  const normalizedUser = normalizeSessionPart(userId, 'user');
+  const normalizedThread = normalizeSessionPart(thread, 'default');
+  return `public:${normalizedUser}:${normalizedThread}`;
 };
 
 export const deriveUserIdFromSessionId = (sessionId: string | null | undefined): string => {
@@ -55,13 +79,13 @@ const getInitialSessionId = (): string | null => {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem('finsight-session-id');
   if (!raw) {
-    const generated = buildSessionId();
+    const generated = buildAnonymousSessionId();
     window.localStorage.setItem('finsight-session-id', generated);
     return generated;
   }
   const trimmed = raw.trim();
   if (!trimmed) {
-    const generated = buildSessionId();
+    const generated = buildAnonymousSessionId();
     window.localStorage.setItem('finsight-session-id', generated);
     return generated;
   }
@@ -121,7 +145,8 @@ const applyThemeClass = (theme: Theme) => {
 const initialTheme = getInitialTheme();
 const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
-const initialSessionId = getInitialSessionId() || buildSessionId();
+const initialEntryMode = getInitialEntryMode();
+const initialSessionId = getInitialSessionId() || buildAnonymousSessionId();
 const initialPortfolioPositions = getInitialPortfolioPositions();
 const initialTraceRawEnabled = getInitialTraceRawEnabled();
 const initialTraceViewMode = getInitialTraceViewMode();
@@ -155,8 +180,12 @@ interface AppState {
   draft: string;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
+  entryMode: EntryMode;
+  setEntryMode: (mode: EntryMode) => void;
   sessionId: string;
   setSessionId: (sessionId: string) => void;
+  authIdentity: AuthIdentity | null;
+  setAuthIdentity: (identity: AuthIdentity | null) => void;
   portfolioPositions: PortfolioPositions;
   setPortfolioPosition: (ticker: string, shares: number) => void;
   removePortfolioPosition: (ticker: string) => void;
@@ -200,38 +229,53 @@ const WELCOME_MESSAGE: Message = {
   timestamp: Date.now(),
 };
 
-const MESSAGES_STORAGE_KEY = 'finsight-messages';
+const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
 const MAX_PERSISTED_MESSAGES = 100;
 
-const getInitialMessages = (): Message[] => {
-  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
+const messageStorageKey = (sessionId: string): string =>
+  `${MESSAGES_STORAGE_PREFIX}${String(sessionId || '').trim()}`;
+
+const normalizePersistedMessages = (raw: string | null): Message[] => {
+  if (!raw) return [];
   try {
-    const raw = window.localStorage.getItem(MESSAGES_STORAGE_KEY);
-    if (!raw) return [WELCOME_MESSAGE];
     const parsed = JSON.parse(raw) as Message[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return [WELCOME_MESSAGE];
-    // Strip loading states from restored messages
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
     return parsed.map((m) => ({ ...m, isLoading: false }));
   } catch {
-    return [WELCOME_MESSAGE];
+    return [];
   }
 };
 
-const persistMessages = (messages: Message[]) => {
+const loadMessagesForSession = (sessionId: string): Message[] => {
+  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
+  const sid = String(sessionId || '').trim();
+  if (!sid) return [WELCOME_MESSAGE];
+
+  const scoped = normalizePersistedMessages(window.localStorage.getItem(messageStorageKey(sid)));
+  if (scoped.length > 0) return scoped;
+  return [WELCOME_MESSAGE];
+};
+
+const getInitialMessages = (sessionId: string): Message[] => {
+  return loadMessagesForSession(sessionId);
+};
+
+const persistMessages = (messages: Message[], sessionId: string) => {
   if (typeof window === 'undefined') return;
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
   try {
-    // Only persist user/assistant text messages, skip transient state
     const toSave = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(-MAX_PERSISTED_MESSAGES);
-    window.localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(toSave));
+    window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
   } catch {
     // localStorage full or unavailable — silently ignore
   }
 };
 
 export const useStore = create<AppState>((set) => ({
-  messages: getInitialMessages(),
+  messages: getInitialMessages(initialSessionId),
   isChatLoading: false,
   statusMessage: null,
   statusSince: null,
@@ -243,7 +287,9 @@ export const useStore = create<AppState>((set) => ({
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
+  entryMode: initialEntryMode,
   sessionId: initialSessionId,
+  authIdentity: null,
   portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
@@ -279,7 +325,7 @@ export const useStore = create<AppState>((set) => ({
   addMessage: (message) =>
     set((state) => {
       const next = [...state.messages, message];
-      persistMessages(next);
+      persistMessages(next, state.sessionId);
       return { messages: next };
     }),
 
@@ -287,7 +333,7 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const next = state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
       // Only persist when message finishes loading (avoid thrashing during streaming)
-      if (patch.isLoading === false) persistMessages(next);
+      if (patch.isLoading === false) persistMessages(next, state.sessionId);
       return { messages: next };
     }),
 
@@ -303,7 +349,7 @@ export const useStore = create<AppState>((set) => ({
   removeMessage: (id) =>
     set((state) => {
       const next = state.messages.filter((m) => m.id !== id);
-      persistMessages(next);
+      persistMessages(next, state.sessionId);
       return { messages: next };
     }),
 
@@ -350,13 +396,28 @@ export const useStore = create<AppState>((set) => ({
       return { subscriptionEmail: email };
     }),
 
-  setSessionId: (sessionId) =>
+  setEntryMode: (mode) =>
     set(() => {
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem('finsight-session-id', sessionId);
+        window.localStorage.setItem('finsight-entry-mode', mode);
       }
-      return { sessionId };
+      return { entryMode: mode };
     }),
+
+  setSessionId: (sessionId) =>
+    set(() => {
+      const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', normalized);
+      }
+      return {
+        sessionId: normalized,
+        messages: loadMessagesForSession(normalized),
+      };
+    }),
+
+  setAuthIdentity: (identity) =>
+    set(() => ({ authIdentity: identity })),
 
   setPortfolioPosition: (ticker, shares) =>
     set((state) => {
@@ -469,10 +530,6 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
-
-
-
-
 
 
 

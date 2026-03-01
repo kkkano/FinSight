@@ -13,6 +13,7 @@ export interface ChatContext {
   view?: string;
   selection?: SelectionItem;
   selections?: SelectionItem[];
+  user_email?: string;
 }
 
 export interface ChatOptions {
@@ -139,6 +140,57 @@ export interface MorningBriefData {
 export interface MorningBriefResponse {
   success: boolean;
   brief: MorningBriefData;
+}
+
+export interface ScreenerRunRequest {
+  market?: 'US' | 'CN' | 'HK';
+  filters?: Record<string, unknown>;
+  limit?: number;
+  page?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+export interface ScreenerRunResponse {
+  success: boolean;
+  market: string;
+  items: Array<Record<string, unknown>>;
+  count: number;
+  source?: string;
+  error?: string;
+  warning?: string;
+  capability_note?: string;
+}
+
+export interface CNMarketListResponse {
+  success: boolean;
+  items: Array<Record<string, unknown>>;
+  count: number;
+  source?: string;
+  market?: string;
+}
+
+export interface BacktestRunRequest {
+  ticker: string;
+  strategy?: 'ma_cross' | 'macd' | 'rsi_mean_reversion';
+  params?: Record<string, unknown>;
+  start_date?: string;
+  end_date?: string;
+  initial_cash?: number;
+  fee_bps?: number;
+  slippage_bps?: number;
+  t_plus_one?: boolean;
+  market?: 'US' | 'CN' | 'HK';
+}
+
+export interface BacktestRunResponse {
+  success: boolean;
+  ticker?: string;
+  strategy?: string;
+  metrics?: Record<string, unknown>;
+  trades?: Array<Record<string, unknown>>;
+  equity_curve?: Array<Record<string, unknown>>;
+  error?: string;
 }
 
 export interface ToolCapability {
@@ -626,6 +678,9 @@ export const apiClient = {
     ticker: string;
     alert_types?: string[];
     price_threshold?: number | null;
+    alert_mode?: 'price_change_pct' | 'price_target';
+    price_target?: number | null;
+    direction?: 'above' | 'below';
   }): Promise<any> {
     const response = await api.post('/api/subscribe', payload);
     return response.data;
@@ -672,6 +727,66 @@ export const apiClient = {
     const response = await api.get<ToolCapabilitiesResponse>('/api/tools/capabilities', {
       params,
     });
+    return response.data;
+  },
+
+  // --- Screener ---
+  async runScreener(payload: ScreenerRunRequest): Promise<ScreenerRunResponse> {
+    const response = await api.post<ScreenerRunResponse>('/api/screener/run', payload);
+    return response.data;
+  },
+
+  async getScreenerFiltersMeta(): Promise<{
+    success: boolean;
+    markets: string[];
+    sort_by: string[];
+    sort_order: string[];
+    filter_keys: string[];
+    source?: string;
+  }> {
+    const response = await api.get('/api/screener/filters/meta');
+    return response.data;
+  },
+
+  // --- CN Market ---
+  async getCNFundFlow(limit: number = 20): Promise<CNMarketListResponse> {
+    const response = await api.get<CNMarketListResponse>('/api/cn/market/fund-flow', { params: { limit } });
+    return response.data;
+  },
+
+  async getCNNorthbound(limit: number = 20): Promise<CNMarketListResponse> {
+    const response = await api.get<CNMarketListResponse>('/api/cn/market/northbound', { params: { limit } });
+    return response.data;
+  },
+
+  async getCNLimitBoard(limit: number = 20): Promise<CNMarketListResponse> {
+    const response = await api.get<CNMarketListResponse>('/api/cn/market/limit-board', { params: { limit } });
+    return response.data;
+  },
+
+  async getCNLhb(limit: number = 20): Promise<CNMarketListResponse> {
+    const response = await api.get<CNMarketListResponse>('/api/cn/market/lhb', { params: { limit } });
+    return response.data;
+  },
+
+  async getCNConcept(params?: { keyword?: string; limit?: number }): Promise<CNMarketListResponse> {
+    const response = await api.get<CNMarketListResponse>('/api/cn/market/concept', {
+      params: { keyword: params?.keyword || '', limit: params?.limit || 20 },
+    });
+    return response.data;
+  },
+
+  // --- Backtest ---
+  async runBacktest(payload: BacktestRunRequest): Promise<BacktestRunResponse> {
+    const response = await api.post<BacktestRunResponse>('/api/backtest/run', payload);
+    return response.data;
+  },
+
+  async listBacktestStrategies(): Promise<{
+    success: boolean;
+    strategies: Array<Record<string, unknown>>;
+  }> {
+    const response = await api.get('/api/backtest/strategies');
     return response.data;
   },
 

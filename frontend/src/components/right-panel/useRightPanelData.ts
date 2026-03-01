@@ -14,6 +14,8 @@ import type {
 import { parsePricePayload } from './utils';
 
 const ALERT_LAST_SEEN_KEY = 'fs_alert_last_seen_v1';
+const buildAlertLastSeenKey = (email: string): string =>
+  `${ALERT_LAST_SEEN_KEY}:${email.trim().toLowerCase() || 'anonymous'}`;
 
 const normalizeAlert = (raw: any): AlertSubscription => {
   const ticker = String(raw?.ticker || '--').toUpperCase();
@@ -68,16 +70,22 @@ export function useRightPanelData() {
   const trimmedSubscriptionEmail = subscriptionEmail.trim();
   const emailConfigured = Boolean(trimmedSubscriptionEmail);
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
+  const alertLastSeenKey = useMemo(
+    () => buildAlertLastSeenKey(trimmedSubscriptionEmail),
+    [trimmedSubscriptionEmail],
+  );
 
   const recomputeUnreadCount = useCallback((events: AlertEvent[]) => {
-    const lastSeen = parseIso(localStorage.getItem(ALERT_LAST_SEEN_KEY));
+    const scopedLastSeen = localStorage.getItem(alertLastSeenKey);
+    const legacyLastSeen = localStorage.getItem(ALERT_LAST_SEEN_KEY);
+    const lastSeen = parseIso(scopedLastSeen || legacyLastSeen);
     if (!lastSeen) {
       setUnreadAlertCount(events.length);
       return;
     }
     const unread = events.filter((event) => parseIso(event.triggeredAt) > lastSeen).length;
     setUnreadAlertCount(unread);
-  }, []);
+  }, [alertLastSeenKey]);
 
   const loadWatchlist = useCallback(async () => {
     try {
@@ -152,9 +160,9 @@ export function useRightPanelData() {
   }, [loadWatchlist, loadAlerts]);
 
   const markAlertsRead = useCallback(() => {
-    localStorage.setItem(ALERT_LAST_SEEN_KEY, new Date().toISOString());
+    localStorage.setItem(alertLastSeenKey, new Date().toISOString());
     setUnreadAlertCount(0);
-  }, []);
+  }, [alertLastSeenKey]);
 
   useEffect(() => {
     setLoading(true);

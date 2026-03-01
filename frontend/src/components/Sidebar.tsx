@@ -1,7 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { MessageSquare, LayoutDashboard, FileText, Bell, Settings, Plus, User, X } from 'lucide-react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  BarChart2,
+  Bell,
+  FileText,
+  LayoutDashboard,
+  LogOut,
+  MessageSquare,
+  Plus,
+  Settings,
+  User,
+  X,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
-import { deriveUserIdFromSessionId, useStore } from '../store/useStore';
+import { getSupabaseClient } from '../api/supabaseClient';
+import { buildAnonymousSessionId, deriveUserIdFromSessionId, useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { parseQuotePayload } from '../utils/quote';
 import { useToast } from './ui';
@@ -28,6 +41,7 @@ const RISK_LABELS: Record<string, string> = {
   balanced: '稳健型',
   aggressive: '进取型',
 };
+const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
 const Sidebar: React.FC<SidebarProps> = ({
   onSettingsClick,
@@ -40,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileClose,
 }) => {
   const [activeTab, setActiveTab] = useState(
-    currentView === 'dashboard' ? 'dashboard' : currentView === 'workbench' ? 'workbench' : 'chat'
+    currentView === 'dashboard' ? 'dashboard' : currentView === 'workbench' ? 'workbench' : 'chat',
   );
   const [userName, setUserName] = useState('用户');
   const [riskPreference, setRiskPreference] = useState('balanced');
@@ -48,21 +62,35 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [alertCount, setAlertCount] = useState(0);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newTicker, setNewTicker] = useState('');
-  const { toast } = useToast();
-  const { subscriptionEmail, portfolioPositions, currentTicker, sessionId } = useStore();
-  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
+  const [authLoading, setAuthLoading] = useState(false);
 
-  // Unified watchlist from dashboardStore (API-first)
-  const { watchlist, initWatchlist, addWatchItemApi, removeWatchItemApi, activeAsset: lastDashboardAsset } = useDashboardStore();
+  const { toast } = useToast();
+  const {
+    subscriptionEmail,
+    portfolioPositions,
+    currentTicker,
+    sessionId,
+    authIdentity,
+    setAuthIdentity,
+    setEntryMode,
+    setSessionId,
+    setSubscriptionEmail,
+  } = useStore();
+  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
+  const navigate = useNavigate();
+
+  const {
+    watchlist,
+    initWatchlist,
+    addWatchItemApi,
+    removeWatchItemApi,
+    activeAsset: lastDashboardAsset,
+  } = useDashboardStore();
 
   useEffect(() => {
-    if (currentView === 'dashboard') {
-      setActiveTab('dashboard');
-    } else if (currentView === 'workbench') {
-      setActiveTab('workbench');
-    } else if (currentView === 'chat') {
-      setActiveTab('chat');
-    }
+    if (currentView === 'dashboard') setActiveTab('dashboard');
+    else if (currentView === 'workbench') setActiveTab('workbench');
+    else if (currentView === 'chat') setActiveTab('chat');
   }, [currentView]);
 
   const handleAddTicker = async () => {
@@ -73,12 +101,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       setNewTicker('');
       setShowAddInput(false);
     } catch (error) {
-      console.error('Failed to add ticker:', error);
-      const message = error instanceof Error ? error.message : '添加失败，请稍后重试';
       toast({
         type: 'error',
-        title: '添加自选失败',
-        message,
+        title: '添加失败',
+        message: error instanceof Error ? error.message : '添加关注失败，请稍后重试',
       });
     }
   };
@@ -87,17 +113,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     try {
       await removeWatchItemApi(ticker);
     } catch (error) {
-      console.error('Failed to remove ticker:', error);
-      const message = error instanceof Error ? error.message : '移除失败，请稍后重试';
       toast({
         type: 'error',
-        title: '移除自选失败',
-        message,
+        title: '移除失败',
+        message: error instanceof Error ? error.message : '移除关注失败，请稍后重试',
       });
     }
   };
 
-  // Load user profile info only (name, risk preference) — watchlist handled by store
   const loadUserProfileInfo = useCallback(async () => {
     try {
       const response = await apiClient.getUserProfile(userId);
@@ -106,11 +129,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       setUserName(profile.name || '用户');
       setRiskPreference(profile.risk_preference || 'balanced');
     } catch {
-      // Profile load failed — keep defaults
+      // 保持默认展示
     }
   }, [userId]);
 
-  // Fetch price quotes for watchlist symbols
   const loadWatchlistQuotes = useCallback(async () => {
     if (watchlist.length === 0) {
       setQuotes({});
@@ -129,10 +151,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           const pct = quote.changePct;
           const isUp = pct === undefined ? true : pct >= 0;
           const change = pct === undefined ? undefined : `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
-
           results[item.symbol] = { price, change, isUp };
         } catch {
-          // Price fetch failed — leave empty
+          // 保持空报价
         }
       }),
     );
@@ -154,14 +175,43 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [subscriptionEmail]);
 
-  // Initialize watchlist + profile on mount
+  const handleLogout = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    setAuthLoading(true);
+    try {
+      const { error } = await client.auth.signOut();
+      if (error) throw error;
+      setAuthIdentity(null);
+      setEntryMode('anonymous');
+      setSessionId(buildAnonymousSessionId());
+      setSubscriptionEmail('');
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(WELCOME_GATE_KEY);
+      }
+      toast({
+        type: 'success',
+        title: '已退出登录',
+        message: '已切换到匿名会话',
+      });
+      navigate('/welcome', { replace: true });
+    } catch (error) {
+      toast({
+        type: 'error',
+        title: '退出失败',
+        message: error instanceof Error ? error.message : '退出登录失败',
+      });
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [navigate, setAuthIdentity, setEntryMode, setSessionId, setSubscriptionEmail, toast]);
+
   useEffect(() => {
     initWatchlist();
     loadUserProfileInfo();
     loadAlertCount();
   }, [initWatchlist, loadUserProfileInfo, loadAlertCount]);
 
-  // Refresh quotes when watchlist changes and every 60s
   useEffect(() => {
     loadWatchlistQuotes();
     const timer = setInterval(loadWatchlistQuotes, 60_000);
@@ -170,13 +220,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Mobile backdrop overlay */}
       {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={onMobileClose}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={onMobileClose} aria-hidden="true" />
       )}
       <aside
         data-testid="sidebar"
@@ -184,184 +229,226 @@ const Sidebar: React.FC<SidebarProps> = ({
         aria-label="主导航栏"
         className={[
           'w-[260px] h-full bg-fin-card border-r border-fin-border flex flex-col p-5 shrink-0 z-40 relative',
-          // Mobile: fixed drawer, slide in/out
           'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:h-full max-lg:border-r max-lg:border-b-0',
           'max-lg:transition-transform max-lg:duration-300',
           isMobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
         ].join(' ')}
       >
-      <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
-        <span>📈</span> FinSight Pro
-      </div>
+        <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
+          <span>FS</span> FinSight Pro
+        </div>
 
-      <div className="bg-fin-bg-secondary p-4 rounded-xl mb-5">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-fin-bg-secondary rounded-full flex items-center justify-center overflow-hidden">
-            <User size={24} className="text-fin-muted" />
-          </div>
-          <div>
-            <div className="font-semibold text-fin-text text-sm">{userName}</div>
-            <span className="text-2xs bg-fin-primary/15 text-fin-primary px-2 py-0.5 rounded-full font-bold">
-              {RISK_LABELS[riskPreference] || '稳健型'}
-            </span>
+        <div className="bg-fin-bg-secondary p-4 rounded-xl mb-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-fin-bg-secondary rounded-full flex items-center justify-center overflow-hidden">
+              <User size={24} className="text-fin-muted" />
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-fin-text text-sm truncate">{authIdentity?.email || userName}</div>
+              <span className="text-2xs bg-fin-primary/15 text-fin-primary px-2 py-0.5 rounded-full font-bold">
+                {RISK_LABELS[riskPreference] || '稳健型'}
+              </span>
+              <div className="mt-2">
+                {authIdentity?.userId ? (
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={authLoading}
+                    className="inline-flex items-center gap-1.5 text-2xs px-2 py-1 rounded-md border border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary disabled:opacity-60"
+                  >
+                    <LogOut size={12} />
+                    退出登录
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/welcome')}
+                    disabled={authLoading}
+                    title="前往欢迎页登录"
+                    className="inline-flex items-center gap-1.5 text-2xs px-2 py-1 rounded-md border border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary disabled:opacity-60"
+                  >
+                    <User size={12} />
+                    前往欢迎页
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <nav className="flex flex-col gap-1 flex-1">
-        <NavItem
-          icon={<MessageSquare size={18} />}
-          label="智能对话"
-          active={activeTab === 'chat'}
-          testId="sidebar-nav-chat"
-          onClick={() => {
-            setActiveTab('chat');
-            onChatClick?.();
-          }}
-        />
+        <nav className="flex flex-col gap-1 flex-1">
+          <NavItem
+            icon={<MessageSquare size={18} />}
+            label="智能对话"
+            active={activeTab === 'chat'}
+            testId="sidebar-nav-chat"
+            onClick={() => {
+              setActiveTab('chat');
+              onChatClick?.();
+            }}
+          />
 
-        <NavItem
-          icon={<LayoutDashboard size={18} />}
-          label="仪表盘"
-          active={activeTab === 'dashboard'}
-          testId="sidebar-nav-dashboard"
-          onClick={() => {
-            setActiveTab('dashboard');
-            if (!onDashboardClick) return;
+          <NavItem
+            icon={<LayoutDashboard size={18} />}
+            label="仪表盘"
+            active={activeTab === 'dashboard'}
+            testId="sidebar-nav-dashboard"
+            onClick={() => {
+              if (!onDashboardClick) return;
+              const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
+              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || '')
+                .toString()
+                .trim();
+              if (!fallbackSymbol) {
+                toast({
+                  type: 'info',
+                  title: '还没有可用标的',
+                  message: '请先在“我的关注”里添加股票，例如 AAPL',
+                });
+                if (currentView !== 'dashboard') {
+                  setShowAddInput(true);
+                }
+                return;
+              }
+              setActiveTab('dashboard');
+              onDashboardClick(fallbackSymbol);
+            }}
+          />
 
-            const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
-            // Prioritize: last viewed dashboard symbol (localStorage-persisted) > currentTicker > first portfolio position
-            const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || '').toString().trim();
+          <NavItem
+            icon={<FileText size={18} />}
+            label="工作台"
+            testId="sidebar-nav-workbench"
+            active={activeTab === 'workbench' || activeTab === 'reports'}
+            onClick={() => {
+              setActiveTab('workbench');
+              onWorkbenchClick?.();
+            }}
+          />
 
-            // Always delegate to parent — openDashboard handles empty by navigating to /dashboard picker
-            onDashboardClick(fallbackSymbol);
-          }}
-        />
+          <NavItem
+            icon={<BarChart2 size={18} />}
+            label="功能面板"
+            testId="sidebar-nav-cn-market"
+            active={activeTab === 'cn-market'}
+            onClick={() => {
+              setActiveTab('cn-market');
+              navigate('/phase-labs');
+            }}
+          />
 
-        <NavItem
-          icon={<FileText size={18} />}
-          label="工作台"
-          testId="sidebar-nav-workbench"
-          active={activeTab === 'workbench' || activeTab === 'reports'}
-          onClick={() => {
-            setActiveTab('workbench');
-            onWorkbenchClick?.();
-          }}
-        />
+          <NavItem
+            icon={<Bell size={18} />}
+            label="订阅管理"
+            active={activeTab === 'alerts'}
+            badge={alertCount > 0 ? String(alertCount) : undefined}
+            onClick={() => {
+              setActiveTab('alerts');
+              onSubscribeClick?.();
+            }}
+          />
 
-        <NavItem
-          icon={<Bell size={18} />}
-          label="订阅管理"
-          active={activeTab === 'alerts'}
-          badge={alertCount > 0 ? String(alertCount) : undefined}
-          onClick={() => {
-            setActiveTab('alerts');
-            onSubscribeClick?.();
-          }}
-        />
+          <NavItem
+            icon={<Settings size={18} />}
+            label="偏好设置"
+            testId="sidebar-nav-settings"
+            active={activeTab === 'settings'}
+            onClick={() => {
+              setActiveTab('settings');
+              onSettingsClick?.();
+            }}
+          />
+        </nav>
 
-        <NavItem
-          icon={<Settings size={18} />}
-          label="偏好设置"
-          testId="sidebar-nav-settings"
-          active={activeTab === 'settings'}
-          onClick={() => {
-            setActiveTab('settings');
-            onSettingsClick?.();
-          }}
-        />
-      </nav>
-
-      {/* Dashboard 页面有独立的 Watchlist 组件，此处隐藏避免重复 */}
-      {currentView !== 'dashboard' && (
-        <div className="mt-auto border-t border-fin-border pt-5">
-          <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
-            <span>我的关注 ({watchlist.length})</span>
-            <button
-              type="button"
-              aria-label="添加关注股票"
-              onClick={() => setShowAddInput((prev) => !prev)}
-              className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          {showAddInput && (
-            <div className="flex gap-2 mb-3">
-              <input
-                type="text"
-                value={newTicker}
-                onChange={(event) => setNewTicker(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && handleAddTicker()}
-                placeholder="输入股票代码"
-                className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
-                autoFocus
-              />
+        {currentView !== 'dashboard' && (
+          <div className="mt-auto border-t border-fin-border pt-5">
+            <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
+              <span>我的关注 ({watchlist.length})</span>
               <button
                 type="button"
-                onClick={handleAddTicker}
-                className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
+                aria-label="添加关注股票"
+                onClick={() => setShowAddInput((prev) => !prev)}
+                className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
               >
-                添加
+                <Plus size={16} />
               </button>
             </div>
-          )}
 
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {watchlist.length > 0 ? (
-              watchlist.map((item) => {
-                const quote = quotes[item.symbol];
-                const isUp = quote?.isUp !== false;
-                const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
-                return (
-                  <div
-                    key={item.symbol}
-                    className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
-                    onClick={() => onDashboardClick?.(item.symbol)}
-                  >
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
-                      <span className="text-2xs text-fin-muted truncate">{item.name}</span>
-                      {shares > 0 && (
-                        <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
-                          持仓 {shares}
-                        </span>
-                      )}
-                    </div>
+            {showAddInput && (
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newTicker}
+                  onChange={(event) => setNewTicker(event.target.value)}
+                  onKeyDown={(event) => event.key === 'Enter' && handleAddTicker()}
+                  placeholder="输入股票代码"
+                  className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleAddTicker}
+                  className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
+                >
+                  添加
+                </button>
+              </div>
+            )}
 
-                    <div className="flex items-center gap-2">
-                      <div className="text-right">
-                        <div className={`font-medium text-sm ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                          {quote?.price || '--'}
-                        </div>
-                        <div className={`text-2xs ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                          {quote?.change || '--'}
-                        </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {watchlist.length > 0 ? (
+                watchlist.map((item) => {
+                  const quote = quotes[item.symbol];
+                  const isUp = quote?.isUp !== false;
+                  const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
+                  return (
+                    <div
+                      key={item.symbol}
+                      className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
+                      onClick={() => onDashboardClick?.(item.symbol)}
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
+                        <span className="text-2xs text-fin-muted truncate">{item.name}</span>
+                        {shares > 0 && (
+                          <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
+                            持仓 {shares}
+                          </span>
+                        )}
                       </div>
 
-                      <button
-                        type="button"
-                        aria-label={`移除 ${item.symbol}`}
-                        className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleRemoveTicker(item.symbol);
-                        }}
-                      >
-                        <X size={14} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <div className={`font-medium text-sm ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                            {quote?.price || '--'}
+                          </div>
+                          <div className={`text-2xs ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
+                            {quote?.change || '--'}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          aria-label={`移除 ${item.symbol}`}
+                          className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleRemoveTicker(item.symbol);
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
-            )}
+                  );
+                })
+              ) : (
+                <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </aside>
+        )}
+      </aside>
     </>
   );
 };
@@ -390,9 +477,7 @@ const NavItem: React.FC<{
   >
     {icon}
     <span>{label}</span>
-    {badge && (
-      <span className="ml-auto bg-fin-danger text-white text-2xs px-1.5 py-0.5 rounded-full">{badge}</span>
-    )}
+    {badge && <span className="ml-auto bg-fin-danger text-white text-2xs px-1.5 py-0.5 rounded-full">{badge}</span>}
   </button>
 );
 

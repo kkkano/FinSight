@@ -10,7 +10,7 @@
  *
  * Four states: loading → loaded → stale → error
  */
-import { MessageCircleQuestion } from 'lucide-react';
+import { MessageCircleQuestion, RefreshCw } from 'lucide-react';
 
 import type { InsightCard, SelectionItem } from '../../../../types/dashboard';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
@@ -103,6 +103,8 @@ interface AiInsightCardProps {
   compact?: boolean;
   /** Callback when user wants to ask about this insight */
   onAskAbout?: (selection: SelectionItem) => void;
+  /** Callback to force-refresh the AI insights */
+  onRefresh?: () => void;
   actionSuggestion?: {
     action: string;
     rationale?: string | null;
@@ -122,6 +124,7 @@ export function AiInsightCard({
   stale = false,
   compact = false,
   onAskAbout,
+  onRefresh,
   actionSuggestion = null,
 }: AiInsightCardProps) {
   // Loading state
@@ -231,6 +234,17 @@ export function AiInsightCard({
             className="shrink-0"
             content={diagnosticTipContent}
           />
+        )}
+        {onRefresh && (
+          <button
+            type="button"
+            title="刷新 AI 分析"
+            aria-label="刷新 AI 分析"
+            className="p-1.5 rounded-lg text-fin-muted hover:bg-fin-primary/10 hover:text-fin-primary transition-all shrink-0"
+            onClick={onRefresh}
+          >
+            <RefreshCw size={13} />
+          </button>
         )}
       </div>
 
