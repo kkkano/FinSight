@@ -13,6 +13,57 @@ import { apiClient, type ReportIndexItem } from '../api/client';
 import type { ReportIR } from '../types/index';
 import { asString } from '../utils/reportParsing';
 
+const REPORT_LIST_CACHE_PREFIX = 'finsight-workbench-report-list';
+const REPORT_DETAIL_CACHE_PREFIX = 'finsight-workbench-report-detail';
+const REPORT_LIST_CACHE_TTL_MS = 3 * 60 * 1000;
+const REPORT_DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type CacheEnvelope<T> = {
+  cachedAt: number;
+  payload: T;
+};
+
+function buildReportListCacheKey(sessionId: string, symbol: string): string {
+  const normalizedSession = String(sessionId || '').trim() || 'anonymous';
+  const normalizedSymbol = String(symbol || '').trim().toUpperCase() || '__ALL__';
+  return `${REPORT_LIST_CACHE_PREFIX}:${normalizedSession}:${normalizedSymbol}`;
+}
+
+function buildReportDetailCacheKey(sessionId: string, reportId: string): string {
+  const normalizedSession = String(sessionId || '').trim() || 'anonymous';
+  const normalizedReportId = String(reportId || '').trim() || '__NONE__';
+  return `${REPORT_DETAIL_CACHE_PREFIX}:${normalizedSession}:${normalizedReportId}`;
+}
+
+function loadCachePayload<T>(key: string, ttlMs: number): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEnvelope<T>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const cachedAt = Number((parsed as { cachedAt?: number }).cachedAt || 0);
+    if (!Number.isFinite(cachedAt) || cachedAt <= 0) return null;
+    if (Date.now() - cachedAt > ttlMs) return null;
+    return (parsed as { payload?: T }).payload ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachePayload<T>(key: string, payload: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const envelope: CacheEnvelope<T> = {
+      cachedAt: Date.now(),
+      payload,
+    };
+    window.localStorage.setItem(key, JSON.stringify(envelope));
+  } catch {
+    // ignore localStorage errors
+  }
+}
+
 export interface UseWorkbenchReportReturn {
   latestReports: ReportIndexItem[];
   loadingReports: boolean;
@@ -38,6 +89,16 @@ export function useWorkbenchReport(
   // Effect 1: 加载最近报告列表
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = buildReportListCacheKey(sessionId, symbol);
+    const cached = loadCachePayload<ReportIndexItem[]>(cacheKey, REPORT_LIST_CACHE_TTL_MS);
+
+    if (cached) {
+      setLatestReports(Array.isArray(cached) ? cached : []);
+      setLoadingReports(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const run = async () => {
       setLoadingReports(true);
@@ -48,7 +109,9 @@ export function useWorkbenchReport(
           limit: 12,
         });
         if (!cancelled) {
-          setLatestReports(Array.isArray(payload.items) ? payload.items : []);
+          const items = Array.isArray(payload.items) ? payload.items : [];
+          setLatestReports(items);
+          saveCachePayload(cacheKey, items);
         }
       } catch {
         if (!cancelled) {
@@ -110,6 +173,17 @@ export function useWorkbenchReport(
       };
     }
 
+    const detailCacheKey = buildReportDetailCacheKey(sessionId, selectedReportId);
+    const cachedReport = loadCachePayload<ReportIR>(detailCacheKey, REPORT_DETAIL_CACHE_TTL_MS);
+    if (cachedReport) {
+      setSelectedReport(cachedReport);
+      setSelectedReportError(null);
+      setLoadingSelectedReport(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const run = async () => {
       setLoadingSelectedReport(true);
       setSelectedReportError(null);
@@ -122,7 +196,9 @@ export function useWorkbenchReport(
         if (cancelled || requestSeq !== replayRequestSeqRef.current) return;
 
         if (payload?.success && payload.report) {
-          setSelectedReport(payload.report as ReportIR);
+          const report = payload.report as ReportIR;
+          setSelectedReport(report);
+          saveCachePayload(detailCacheKey, report);
         } else {
           setSelectedReport(null);
           setSelectedReportError('报告加载失败，请稍后重试。');

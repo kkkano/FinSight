@@ -67,6 +67,15 @@ body::before {
   z-index: -1;
 }
 
+@keyframes finsight-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -297,4 +306,3 @@ input[type=number]::-webkit-outer-spin-button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-

@@ -57,6 +57,8 @@ def reset_turn_state(state: GraphState) -> dict:
         # --- Turn-level decision fields ---
         "subject": None,
         "operation": None,
+        "alert_params": None,
+        "alert_valid": None,
         "clarify": None,
         "policy": None,
         "plan_ir": None,

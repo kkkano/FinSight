@@ -26,6 +26,8 @@ ALERT_EVENTS_PER_SUB = int(os.getenv("ALERT_EVENTS_PER_SUB", "30"))
 ALERT_EVENTS_TTL_DAYS = int(os.getenv("ALERT_EVENTS_TTL_DAYS", "7"))
 EMAIL_REGEX = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 RISK_THRESHOLD_ALLOWED = {"low", "medium", "high", "critical"}
+ALERT_MODE_ALLOWED = {"price_change_pct", "price_target"}
+DIRECTION_ALLOWED = {"above", "below"}
 
 
 class SubscriptionService:
@@ -57,6 +59,20 @@ class SubscriptionService:
             return "high"
         return normalized
 
+    def _normalize_alert_mode(self, value: Optional[str]) -> str:
+        normalized = str(value or "price_change_pct").strip().lower()
+        if normalized not in ALERT_MODE_ALLOWED:
+            return "price_change_pct"
+        return normalized
+
+    def _normalize_direction(self, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = str(value).strip().lower()
+        if normalized not in DIRECTION_ALLOWED:
+            return None
+        return normalized
+
     def _backfill_subscription_defaults(self) -> None:
         changed = False
         if not isinstance(self.subscriptions, dict):
@@ -72,6 +88,20 @@ class SubscriptionService:
                 normalized_threshold = self._normalize_risk_threshold(sub.get("risk_threshold"))
                 if sub.get("risk_threshold") != normalized_threshold:
                     sub["risk_threshold"] = normalized_threshold
+                    changed = True
+                normalized_mode = self._normalize_alert_mode(sub.get("alert_mode"))
+                if sub.get("alert_mode") != normalized_mode:
+                    sub["alert_mode"] = normalized_mode
+                    changed = True
+                if "price_target" not in sub:
+                    sub["price_target"] = None
+                    changed = True
+                normalized_direction = self._normalize_direction(sub.get("direction"))
+                if sub.get("direction") != normalized_direction:
+                    sub["direction"] = normalized_direction
+                    changed = True
+                if "price_target_fired" not in sub:
+                    sub["price_target_fired"] = False
                     changed = True
                 if "last_risk_at" not in sub:
                     sub["last_risk_at"] = None
@@ -141,6 +171,9 @@ class SubscriptionService:
         ticker: str,
         alert_types: List[str] = None,
         price_threshold: Optional[float] = None,
+        alert_mode: Optional[str] = "price_change_pct",
+        price_target: Optional[float] = None,
+        direction: Optional[str] = None,
         risk_threshold: Optional[str] = "high",
     ) -> bool:
         """
@@ -158,6 +191,8 @@ class SubscriptionService:
         if alert_types is None:
             alert_types = ["price_change", "news"]
         normalized_risk_threshold = self._normalize_risk_threshold(risk_threshold)
+        normalized_alert_mode = self._normalize_alert_mode(alert_mode)
+        normalized_direction = self._normalize_direction(direction)
 
         if not self.is_valid_email(email):
             logger.info(f"❌ Invalid email address: {email}")
@@ -172,7 +207,11 @@ class SubscriptionService:
                 # 更新现有订阅
                 sub['alert_types'] = alert_types
                 sub['price_threshold'] = price_threshold
+                sub['alert_mode'] = normalized_alert_mode
+                sub['price_target'] = price_target
+                sub['direction'] = normalized_direction
                 sub['risk_threshold'] = normalized_risk_threshold
+                sub['price_target_fired'] = False
                 sub['updated_at'] = datetime.now().isoformat()
                 if "recent_events" not in sub or not isinstance(sub.get("recent_events"), list):
                     sub["recent_events"] = []
@@ -190,6 +229,9 @@ class SubscriptionService:
             "ticker": ticker,
             "alert_types": alert_types,
             "price_threshold": price_threshold,
+            "alert_mode": normalized_alert_mode,
+            "price_target": price_target,
+            "direction": normalized_direction,
             "risk_threshold": normalized_risk_threshold,
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
@@ -201,6 +243,7 @@ class SubscriptionService:
             "last_alert_error_at": None,
             "alert_failures": 0,
             "disabled": False,
+            "price_target_fired": False,
             "recent_events": [],
         }
         
@@ -338,6 +381,19 @@ class SubscriptionService:
                     sub['last_risk_at'] = datetime.now().isoformat()
                     self._save_subscriptions()
                     break
+
+    def set_price_target_fired(self, email: str, ticker: str) -> bool:
+        """Mark one-shot target alert as fired."""
+        if email not in self.subscriptions:
+            return False
+        ticker_norm = str(ticker or "").strip().upper()
+        for sub in self.subscriptions[email]:
+            if str(sub.get("ticker") or "").strip().upper() == ticker_norm:
+                sub["price_target_fired"] = True
+                sub["updated_at"] = datetime.now().isoformat()
+                self._save_subscriptions()
+                return True
+        return False
 
     def toggle_subscription(self, email: str, ticker: str, enabled: bool) -> bool:
         """

@@ -215,6 +215,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     draft,
     setDraft,
     currentTicker,
+    subscriptionEmail,
     sessionId,
     setSessionId,
     // Agent Logs
@@ -494,6 +495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }
           if (activeSelections.length === 1) ctx.selection = activeSelections[0];
           if (activeSelections.length > 1) ctx.selections = activeSelections;
+          if (subscriptionEmail) ctx.user_email = subscriptionEmail;
           return Object.keys(ctx).length > 0 ? ctx : undefined;
         })(),
         effectiveOutputMode === 'investment_report'

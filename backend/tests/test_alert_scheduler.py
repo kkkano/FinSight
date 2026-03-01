@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-P1 alert skeleton: price_change scheduler dry-run tests.
+Alert scheduler tests:
+- pct threshold mode
+- cooldown guard
+- price_target one-shot mode
 """
 
 from typing import List
@@ -106,3 +109,55 @@ def test_price_change_scheduler_skips_when_below_threshold(subscription_service_
 
     subs_list = service.get_subscriptions("user@example.com")
     assert subs_list[0].get("last_alert_at") is None
+
+
+def test_price_change_scheduler_respects_cooldown(subscription_service_tmp, monkeypatch):
+    service = subscription_service_tmp
+    email = FakeEmailService()
+    monkeypatch.setenv("PRICE_ALERT_COOLDOWN_MINUTES", "120")
+
+    service.subscribe(
+        email="user@example.com",
+        ticker="AAPL",
+        alert_types=["price_change"],
+        price_threshold=2.0,
+        alert_mode="price_change_pct",
+    )
+
+    def fake_price_fetcher(_ticker: str):
+        return PriceSnapshot(ticker=_ticker, price=110.0, change_percent=3.5)
+
+    scheduler = PriceChangeScheduler(service, email, fake_price_fetcher)
+    first = scheduler.run_once()
+    second = scheduler.run_once()
+
+    assert len(first) == 1
+    assert second == []
+    assert len(email.sent) == 1
+
+
+def test_price_target_scheduler_triggers_once(subscription_service_tmp):
+    service = subscription_service_tmp
+    email = FakeEmailService()
+
+    service.subscribe(
+        email="user@example.com",
+        ticker="AAPL",
+        alert_types=["price_change"],
+        alert_mode="price_target",
+        price_target=100.0,
+        direction="above",
+    )
+
+    def fake_price_fetcher(_ticker: str):
+        return PriceSnapshot(ticker=_ticker, price=101.0, change_percent=0.2)
+
+    scheduler = PriceChangeScheduler(service, email, fake_price_fetcher)
+    first = scheduler.run_once()
+    second = scheduler.run_once()
+
+    assert len(first) == 1
+    assert second == []
+    assert len(email.sent) == 1
+    stored = service.get_subscriptions("user@example.com")[0]
+    assert stored.get("price_target_fired") is True

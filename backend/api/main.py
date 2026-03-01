@@ -27,6 +27,9 @@ from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_r
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.alerts_router import create_alerts_router
+from backend.api.screener_router import screener_router
+from backend.api.cn_market_router import cn_market_router
+from backend.api.backtest_router import backtest_router
 from backend.api.system_router import SystemRouterDeps, create_system_router
 from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morning_brief_router
 from backend.api.task_router import TaskRouterDeps, create_task_router
@@ -314,8 +317,12 @@ def _update_session_context(
     original_query: str,
     response_markdown: str,
     subject: Optional[Dict[str, Any]] = None,
+    skip_context: bool = False,
 ) -> None:
     if not thread_id:
+        return
+    # 指令型操作（如 alert_set）不应污染对话上下文
+    if skip_context:
         return
     try:
         tickers = []
@@ -350,6 +357,8 @@ def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
         selections.extend([s.model_dump() for s in (request.context.selections or []) if s])
     if selections:
         ui_context["selections"] = selections
+    if request.context.user_email:
+        ui_context["user_email"] = request.context.user_email
     return ui_context
 
 
@@ -801,6 +810,9 @@ app.include_router(chat_router)
 app.include_router(market_router)
 app.include_router(subscription_router)
 app.include_router(alerts_router)
+app.include_router(screener_router)
+app.include_router(cn_market_router)
+app.include_router(backtest_router)
 app.include_router(config_router)
 app.include_router(report_router)
 app.include_router(task_router)

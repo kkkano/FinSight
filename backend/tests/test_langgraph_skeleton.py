@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import asyncio
 
 
@@ -134,6 +134,6 @@ def test_decide_output_mode_ui_override_and_safe_default():
     )
     assert result.get("output_mode") == "investment_report"
 
-    # Generic "分析" should NOT imply investment_report
+    # Generic analysis should NOT imply investment_report
     result2 = _run(runner.ainvoke(thread_id="t-mode2", query="分析一下", ui_context={}))
     assert result2.get("output_mode") == "brief"

@@ -27,6 +27,47 @@
 
 ---
 
+## [1.1.0] - 2026-03-02
+
+在 v1.0.0 核心平台基础上，新增 Phase 1-4 实验性功能套件，覆盖对话式提醒、智能选股、A 股市场数据与策略回测。
+
+### 新增
+
+- **Phase 1 — 对话式价格提醒闭环**
+  - LangGraph 自动提取提醒参数（ticker / direction / threshold）via `alert_extractor` 节点
+  - `alert_action` 落库写入 `subscriptions.json`，支持与现有订阅类型（news/risk）合并
+  - 调度器支持两种触发模式：`price_change_pct`（冷却窗口，`PRICE_ALERT_COOLDOWN_MINUTES` 可配）、`price_target`（一次性触发后设 `price_target_fired` 标志）
+  - 前端 `SubscribeModal` 新增 `%涨跌` / `到价` 两种模式，移除 `either` 模糊选项
+  - 聊天上下文自动注入 `user_email`，无邮箱时返回引导提示而非静默失败
+
+- **Phase 2 — 智能选股 MVP**
+  - `screen_stocks` 工具支持多条件自然语言选股，响应含 `capability_note` 覆盖边界提示
+  - 新增 `GET /api/screener/screen` 路由
+  - 前端 `/phase-labs` 入口，含 `ScreenerResultPanel` 结果面板
+
+- **Phase 3 — A 股市场扩展**
+  - `cn_market_flow`：北向/南向资金净流入，含近 5 日历史趋势
+  - `cn_market_board`：板块与概念板块实时涨跌排行
+  - `concept_map`：关键词 → 概念板块映射表（用于意图识别辅助）
+  - 新增 `GET /api/cn-market/flow`、`/board`、`/concept-map` 三条路由
+  - 前端 `CNMarketPanel` 集成至 `/phase-labs`
+
+- **Phase 4 — 策略回测**
+  - 内置三种策略：SMA 双均线、MACD 信号线交叉、RSI 均值回归
+  - A 股 T+1 结算强制执行（买入当日不可卖出）
+  - 参数化佣金率与滑点对最终净值有可验证影响
+  - 通过 `t_plus_one` bar 偏移防止前视偏差（look-ahead bias）
+  - 新增 `POST /api/backtest/run` 路由
+  - 前端 `BacktestPanel` 集成至 `/phase-labs`
+
+### 技术
+
+- `parse_operation` 意图优先级更新：`backtest` 前移，避免被 `technical` 意图截胡
+- 新增 58 个测试（Phase 1: 26 个，Phase 2-4 + 回归: 32 个），全部通过
+- `RAG_ENABLE_RERANKER` 改为显式开关（默认关闭），稳定 CI 测试环境
+
+---
+
 ## [1.0.0] - 2026-02-08
 
 从 v0.8.0 LangGraph 管线基础上完成生产就绪化，覆盖 LLM 容错、UI 打磨、安全加固与文档体系建设。
@@ -140,5 +181,6 @@
 
 ---
 
+[1.1.0]: https://github.com/<org>/FinSight/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/<org>/FinSight/compare/v0.8.0...v1.0.0
 [0.8.0]: https://github.com/<org>/FinSight/releases/tag/v0.8.0

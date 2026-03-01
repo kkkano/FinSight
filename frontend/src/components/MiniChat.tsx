@@ -23,6 +23,7 @@ export const MiniChat: React.FC = () => {
     addMessage,
     updateMessage,
     currentTicker,
+    subscriptionEmail,
     sessionId,
     setSessionId,
     addRawEvent,
@@ -129,6 +130,7 @@ export const MiniChat: React.FC = () => {
 
       if (activeSelections.length === 1) context.selection = activeSelections[0];
       if (activeSelections.length > 1) context.selections = activeSelections;
+      if (subscriptionEmail) context.user_email = subscriptionEmail;
 
       // 如果有任何上下文，才传递
       const contextToSend = Object.keys(context).length > 0 ? context : undefined;

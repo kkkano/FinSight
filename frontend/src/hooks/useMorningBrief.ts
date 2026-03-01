@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiClient, type MorningBriefData } from '../api/client';
 
@@ -16,6 +16,47 @@ interface UseMorningBriefResult {
   generatedAt: string | null;
 }
 
+const MORNING_BRIEF_STORAGE_PREFIX = 'finsight-morning-brief:';
+
+const buildStorageKey = (sessionId: string): string =>
+  `${MORNING_BRIEF_STORAGE_PREFIX}${sessionId}`;
+
+type PersistedMorningBrief = {
+  brief: MorningBriefData;
+  generatedAt: string | null;
+};
+
+const loadPersistedBrief = (sessionId: string): PersistedMorningBrief | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(buildStorageKey(sessionId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedMorningBrief>;
+    if (!parsed || typeof parsed !== 'object' || !parsed.brief) return null;
+    return {
+      brief: parsed.brief as MorningBriefData,
+      generatedAt: typeof parsed.generatedAt === 'string' ? parsed.generatedAt : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const savePersistedBrief = (sessionId: string, brief: MorningBriefData, generatedAt: string | null): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      buildStorageKey(sessionId),
+      JSON.stringify({
+        brief,
+        generatedAt,
+      }),
+    );
+  } catch {
+    // ignore localStorage quota errors
+  }
+};
+
 /**
  * 一键晨报 hook — 管理 API 调用、缓存状态和错误处理。
  *
@@ -30,6 +71,27 @@ export function useMorningBrief(sessionId: string | null | undefined): UseMornin
 
   // 防止并发请求
   const inflightRef = useRef(false);
+
+  // session 切换时恢复缓存晨报
+  useEffect(() => {
+    const sid = String(sessionId || '').trim();
+    if (!sid) {
+      setBrief(null);
+      setGeneratedAt(null);
+      setError(null);
+      return;
+    }
+    const cached = loadPersistedBrief(sid);
+    if (!cached) {
+      setBrief(null);
+      setGeneratedAt(null);
+      setError(null);
+      return;
+    }
+    setBrief(cached.brief);
+    setGeneratedAt(cached.generatedAt || cached.brief.generated_at || null);
+    setError(null);
+  }, [sessionId]);
 
   const generate = useCallback(async (tickers?: string[]) => {
     if (!sessionId) {
@@ -52,15 +114,16 @@ export function useMorningBrief(sessionId: string | null | undefined): UseMornin
       });
 
       if (response.success && response.brief) {
+        const nextGeneratedAt = response.brief.generated_at ?? new Date().toISOString();
         setBrief(response.brief);
-        setGeneratedAt(response.brief.generated_at ?? new Date().toISOString());
+        setGeneratedAt(nextGeneratedAt);
+        savePersistedBrief(sessionId, response.brief, nextGeneratedAt);
       } else {
         setError('晨报生成失败，请稍后重试');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '网络异常，请检查连接后重试';
       setError(message);
-      setBrief(null);
     } finally {
       setLoading(false);
       inflightRef.current = false;

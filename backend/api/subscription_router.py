@@ -30,6 +30,9 @@ def create_subscription_router() -> APIRouter:
                 ticker=request.ticker,
                 alert_types=request.alert_types,
                 price_threshold=request.price_threshold,
+                alert_mode=request.alert_mode,
+                price_target=request.price_target,
+                direction=request.direction,
                 risk_threshold=request.risk_threshold,
             )
 

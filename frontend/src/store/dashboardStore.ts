@@ -46,6 +46,8 @@ interface DashboardStore {
   insightsStale: boolean;
   insightsCachedAt: string | null;
   deepAnalysisIncludeDeepSearch: boolean;
+  /** Callback injected by Dashboard.tsx to force-refresh insights */
+  insightsRefetch: (() => void) | null;
 
   // Actions
   setActiveAsset: (asset: ActiveAsset) => void;
@@ -76,6 +78,7 @@ interface DashboardStore {
   setInsightsCachedAt: (cachedAt: string | null) => void;
   clearInsights: () => void;
   setDeepAnalysisIncludeDeepSearch: (enabled: boolean) => void;
+  setInsightsRefetch: (fn: (() => void) | null) => void;
 
   // Watchlist API methods (API-first, replace localStorage persistence)
   initWatchlist: () => Promise<void>;
@@ -159,6 +162,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   insightsError: null,
   insightsStale: false,
   insightsCachedAt: null,
+  insightsRefetch: null,
   deepAnalysisIncludeDeepSearch: loadFromStorage(
     STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH,
     false,
@@ -328,6 +332,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
     saveToStorage(STORAGE_KEYS.DEEP_ANALYSIS_INCLUDE_DEEPSEARCH, enabled);
     set({ deepAnalysisIncludeDeepSearch: enabled });
   },
+  setInsightsRefetch: (fn) => set({ insightsRefetch: fn }),
 
   // --- Watchlist API 方法 (API-first, 替代 localStorage 持久化) ---
 

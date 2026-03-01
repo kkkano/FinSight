@@ -46,6 +46,7 @@ class ChatContext(BaseModel):
     view: Optional[str] = Field(None, description="ui view")
     selection: Optional[SelectionContext] = Field(None, description="single selection")
     selections: Optional[list[SelectionContext]] = Field(None, description="multi selection")
+    user_email: Optional[str] = Field(None, description="user email for alert actions")
 
 
 class ChatOptions(BaseModel):
@@ -99,6 +100,15 @@ class SubscriptionRequest(BaseModel):
     ticker: str = Field(..., min_length=1, description="ticker")
     alert_types: Optional[list[str]] = Field(None, description="alert types")
     price_threshold: Optional[float] = Field(None, description="price threshold")
+    alert_mode: Optional[Literal["price_change_pct", "price_target"]] = Field(
+        "price_change_pct",
+        description="alert trigger mode",
+    )
+    price_target: Optional[float] = Field(None, description="target absolute price")
+    direction: Optional[Literal["above", "below"]] = Field(
+        None,
+        description="target direction",
+    )
     risk_threshold: Optional[str] = Field("high", description="risk threshold")
 
     @field_validator("alert_types", mode="before")
@@ -122,6 +132,13 @@ class SubscriptionRequest(BaseModel):
             raise ValueError("price_threshold must be positive")
         return v
 
+    @field_validator("price_target")
+    @classmethod
+    def validate_price_target(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("price_target must be positive")
+        return v
+
     @field_validator("risk_threshold")
     @classmethod
     def validate_risk_threshold(cls, v):
@@ -132,6 +149,36 @@ class SubscriptionRequest(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"unsupported risk_threshold: {v}")
         return normalized
+
+
+class ScreenerRunRequest(BaseModel):
+    market: Literal["US", "CN", "HK"] = Field("US", description="market scope")
+    filters: dict[str, Any] = Field(default_factory=dict, description="screener filters")
+    limit: int = Field(20, ge=1, le=200, description="rows per page")
+    page: int = Field(1, ge=1, le=100, description="page index from 1")
+    sort_by: str = Field("marketCap", description="sort key")
+    sort_order: Literal["asc", "desc"] = Field("desc", description="sort order")
+
+
+class CNMarketQueryRequest(BaseModel):
+    limit: int = Field(20, ge=1, le=200, description="max rows")
+    keyword: Optional[str] = Field(None, description="optional keyword filter")
+
+
+class BacktestRequest(BaseModel):
+    ticker: str = Field(..., min_length=1, description="ticker")
+    strategy: Literal["ma_cross", "macd", "rsi_mean_reversion"] = Field(
+        "ma_cross",
+        description="strategy id",
+    )
+    params: dict[str, Any] = Field(default_factory=dict, description="strategy params")
+    start_date: Optional[str] = Field(None, description="YYYY-MM-DD")
+    end_date: Optional[str] = Field(None, description="YYYY-MM-DD")
+    initial_cash: float = Field(100000.0, gt=0, description="initial cash")
+    fee_bps: Optional[float] = Field(None, ge=0, description="fee basis points")
+    slippage_bps: Optional[float] = Field(None, ge=0, description="slippage basis points")
+    t_plus_one: bool = Field(True, description="enable T+1 sell restriction")
+    market: Optional[Literal["US", "CN", "HK"]] = Field(None, description="market hint")
 
 
 class UnsubscribeRequest(BaseModel):

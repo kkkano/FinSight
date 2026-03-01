@@ -43,6 +43,56 @@ _TECHNICAL_KEYWORDS: tuple[str, ...] = (
     "技术面", "技術面", "技术分析", "技術分析", "technical analysis",
     "macd", "rsi", "kdj", "均线", "ma", "k线", "k線", "支撑", "阻力",
 )
+_ALERT_KEYWORDS: tuple[str, ...] = (
+    # CN
+    "提醒",
+    "提醒我",
+    "预警",
+    "设置提醒",
+    "价格提醒",
+    "涨到",
+    "跌到",
+    "到达",
+    "触及",
+    "达到",
+    # EN (fixed phrases only, no regex tokens here)
+    "alert",
+    "notify",
+    "remind me",
+    "price alert",
+    "when it reaches",
+    "when reaches",
+    "target price",
+)
+_SCREEN_KEYWORDS: tuple[str, ...] = (
+    "screen",
+    "screener",
+    "stock screener",
+    "stock screen",
+    "筛选",
+    "选股",
+    "条件选股",
+)
+_CN_MARKET_KEYWORDS: tuple[str, ...] = (
+    "资金流向",
+    "北向",
+    "northbound",
+    "fund flow",
+    "limit-up",
+    "limit up",
+    "龙虎榜",
+    "概念股",
+    "concept board",
+)
+_BACKTEST_KEYWORDS: tuple[str, ...] = (
+    "backtest",
+    "strategy backtest",
+    "回测",
+    "策略回测",
+    "ma cross",
+    "macd strategy",
+    "rsi mean reversion",
+)
 _PRICE_KEYWORDS: tuple[str, ...] = (
     "股价", "股價", "现价", "現價", "报价", "報價", "行情",
     "price", "quote", "多少钱", "多少錢", "现在多少钱",
@@ -128,6 +178,34 @@ def parse_operation(state: GraphState) -> dict:
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "analyze_impact"
+
+    elif (hits := _match_any(_BACKTEST_KEYWORDS, lowered)):
+        op = "backtest"
+        confidence = 0.86
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "backtest"
+
+    elif (hits := _match_any(_ALERT_KEYWORDS, lowered)):
+        op = "alert_set"
+        confidence = 0.88
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "alert_set"
+
+    elif (hits := _match_any(_SCREEN_KEYWORDS, lowered)):
+        op = "screen"
+        confidence = 0.86
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "screen"
+
+    elif (hits := _match_any(_CN_MARKET_KEYWORDS, lowered)):
+        op = "cn_market"
+        confidence = 0.84
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "cn_market"
 
     elif (hits := _match_any(_TECHNICAL_KEYWORDS, lowered)):
         op = "technical"

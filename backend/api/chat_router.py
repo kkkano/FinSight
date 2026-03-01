@@ -91,6 +91,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 original_query=request.query,
                 response_markdown=markdown,
                 subject=state.get("subject"),
+                skip_context=bool(state.get("skip_session_context")),
             )
 
             _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)

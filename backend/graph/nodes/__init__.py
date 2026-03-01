@@ -7,6 +7,8 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.execute_plan_stub import execute_plan_stub
 from backend.graph.nodes.normalize_ui_context import normalize_ui_context
 from backend.graph.nodes.parse_operation import parse_operation
+from backend.graph.nodes.alert_extractor import alert_extractor
+from backend.graph.nodes.alert_action import alert_action
 from backend.graph.nodes.policy_gate import policy_gate
 from backend.graph.nodes.planner import planner
 from backend.graph.nodes.planner_stub import planner_stub
@@ -34,6 +36,8 @@ __all__ = [
     "resolve_subject",
     "clarify",
     "parse_operation",
+    "alert_extractor",
+    "alert_action",
     "policy_gate",
     "planner",
     "planner_stub",

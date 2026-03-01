@@ -415,6 +415,28 @@ def _fetch_with_stooq_price(ticker: str):
         return None
 
 
+def _to_yahoo_cn_symbol(ticker: str) -> str:
+    """将裸 A股代码转换为 Yahoo Finance 格式（加交易所后缀）。
+
+    规则：
+      600xxx / 601xxx / 603xxx / 605xxx / 688xxx → 上交所 .SS
+      000xxx / 001xxx / 002xxx / 003xxx / 300xxx / 301xxx → 深交所 .SZ
+      8xxxxx（6 位，北交所） → .BJ
+    已含后缀的代码原样返回。
+    """
+    t = ticker.strip().upper()
+    if '.' in t:
+        return t  # 已有后缀，直接返回
+    if len(t) == 6 and t.isdigit():
+        if t[:3] in ('600', '601', '603', '605', '688'):
+            return f"{t}.SS"
+        if t[:3] in ('000', '001', '002', '003', '300', '301'):
+            return f"{t}.SZ"
+        if t.startswith('8'):
+            return f"{t}.BJ"
+    return t
+
+
 def get_stock_price(ticker: str) -> str:
     """
     使用多数据源策略获取股票价格，以提高稳定性。
@@ -426,8 +448,21 @@ def get_stock_price(ticker: str) -> str:
     # 判断资产类型
     is_index = ticker.startswith('^')
     is_crypto = any(crypto in upper for crypto in ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'SOL', 'DOGE', 'ADA']) and '-' in upper
-    is_china = upper.endswith('.SS') or upper.endswith('.SZ') or upper.startswith('000') or upper.startswith('600') or upper.startswith('300')
+    is_china = (
+        upper.endswith('.SS') or upper.endswith('.SZ') or upper.endswith('.BJ')
+        or (len(upper) == 6 and upper.isdigit() and upper[:3] in (
+            '600', '601', '603', '605', '688',  # 上交所
+            '000', '001', '002', '003', '300', '301',  # 深交所
+        ))
+        or (len(upper) == 6 and upper.isdigit() and upper.startswith('8'))  # 北交所
+    )
     is_commodity = '=' in upper  # GC=F, CL=F, SI=F
+
+    # A股代码标准化：裸数字代码 → Yahoo Finance 格式（如 600036 → 600036.SS）
+    if is_china:
+        ticker = _to_yahoo_cn_symbol(ticker)
+        upper = ticker.upper()
+        logger.info(f"  [CN] Normalized ticker to Yahoo format: {ticker}")
 
     # 根据资产类型选择数据源
     if is_crypto:
