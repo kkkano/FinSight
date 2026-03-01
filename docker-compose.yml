@@ -88,6 +88,9 @@ services:
         # Set to server's public IP so all API calls go through nginx proxy on port 80
         # Empty string would trigger fallback to http://127.0.0.1:8000 in runtime.ts
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://175.178.159.112}
+        # Optional Supabase auth (Magic Link)
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
     container_name: finsight-frontend
     restart: unless-stopped
     ports:
