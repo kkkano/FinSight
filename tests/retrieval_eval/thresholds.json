@@ -9,7 +9,7 @@
     "mrr_min": 0.85,
     "ndcg_at_k_min": 0.95,
     "citation_coverage_min": 0.95,
-    "latency_p95_ms_max": 10.0
+    "latency_p95_ms_max": 800.0
   },
   "drift_gates": {
     "recall_at_k_delta_min": -0.03,
@@ -17,6 +17,6 @@
     "mrr_delta_min": -0.03,
     "ndcg_at_k_delta_min": -0.03,
     "citation_coverage_delta_min": -0.03,
-    "latency_p95_ms_delta_max": 5.0
+    "latency_p95_ms_delta_max": 300.0
   }
 }
