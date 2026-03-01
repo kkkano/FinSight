@@ -35,6 +35,7 @@
 - ["Ask About This" Feature](#-ask-about-this-问这条)
 - [Conflict Detection](#%EF%B8%8F-conflict-detection)
 - [Email Alerts & Subscriptions](#-email-alerts--subscriptions)
+- [Phase Labs (Phase 1–4)](#-phase-labs-phase-14)
 - [Data & Storage Architecture](#-data--storage-architecture)
 - [Cache System](#-cache-system)
 - [Memory & User Profiles](#-memory--user-profiles)
@@ -64,6 +65,10 @@
 | **Morning Brief Pipeline** | One-click portfolio morning brief via LangGraph Pipeline with deterministic synthesis (zero LLM cost) |
 | **Rebalance LLM Enhancement** | Agent-backed LLM priority refinement for rebalance suggestions with evidence snapshots |
 | **Hallucination Defense** | Multi-layer scrubbing: regex pattern matching + evidence cross-validation on LLM outputs |
+| **Conversational Price Alerts** | Chat-driven alert setup — say "alert me when AAPL drops below $180" → auto-extracted, persisted, and triggered by scheduler (Phase 1) |
+| **Stock Screener** | Natural-language stock screening with multi-condition filters; `capability_note` boundary hints for CN/HK coverage (Phase 2) |
+| **A-Share Market Data** | Northbound/Southbound capital flow, sector heat maps, concept board rankings for CN & HK markets (Phase 3) |
+| **Strategy Backtesting** | SMA crossover, MACD, RSI strategies with T+1 settlement, cost/slippage modeling, and look-ahead bias prevention (Phase 4) |
 
 ---
 
@@ -569,6 +574,20 @@ RAG results and real-time evidence are injected as XML-tagged blocks:
   3. Unverifiable data must be marked with date qualifier
 </evidence_priority_rules>
 ```
+
+### Quality Benchmarks — RAG Quality V2
+
+A **3-layer eval pyramid** (`tests/rag_qualityV2/`) measuring retrieval and generation quality across 12 Chinese financial cases (filings, transcripts, news) with 6 diagnostic metrics:
+
+| Layer | Scope | KC | KCR | CSR | UCR ↓ | CR ↓ | NCR | Gate |
+|-------|-------|----|-----|-----|-------|------|-----|------|
+| **L1** Mock Context | LLM generation baseline | 0.8796 | 0.9479 | 0.9431 | 0.057 | **0.0** | 0.9896 | ✅ PASS |
+| **L2** Real Retrieval | Retrieval + generation | 0.8960 | 0.9623 | **1.0000** | **0.000** | **0.0** | 0.9861 | ✅ PASS |
+| **L3** E2E Pipeline | Full LangGraph flow | **0.9072** | **0.9653** | 0.9924 | 0.008 | **0.0** | **1.0000** | ✅ PASS |
+
+> **CR = 0.0 across all layers** — zero contradicted claims.  **NCR = 1.0 at E2E** — numeric consistency is perfect end-to-end.
+
+Metrics: KC (Keypoint Coverage) · KCR (Keypoint Context Recall) · CSR (Claim Support Rate) · UCR (Unsupported Claim Rate) · CR (Contradiction Rate) · NCR (Numeric Consistency Rate)
 
 ---
 
@@ -1091,9 +1110,61 @@ FinSight/
 
 ---
 
+## 🧪 Phase Labs (Phase 1–4)
+
+An experimental feature suite accessible at `/phase-labs`, built on top of the core platform:
+
+| Phase | Feature | Description |
+|-------|---------|-------------|
+| **Phase 1** | Conversational Price Alerts | Say "alert me when TSLA hits $300" in chat → LangGraph extracts ticker/direction/threshold → scheduler fires email when triggered. Supports `price_change_pct` (cooldown window) and `price_target` (one-shot). |
+| **Phase 2** | Stock Screener MVP | Multi-condition natural-language screener (PE < 20, revenue growth > 15%, etc.). Returns ranked results with a `capability_note` on CN/HK coverage limits. |
+| **Phase 3** | A-Share Market Data | Real-time Northbound/Southbound capital flow (`cn_market_flow`), sector & concept board heat maps (`cn_market_board`), concept keyword map (`concept_map`). Covers both A-Share and HK markets. |
+| **Phase 4** | Strategy Backtesting | SMA crossover, MACD signal, RSI mean-reversion strategies. Enforces A-Share T+1 settlement (no same-day round-trip), parameterized commission/slippage, and look-ahead bias prevention via `t_plus_one` bar offset. |
+
+### 🔬 RAG Quality V2 — 3-Layer Evaluation
+
+A custom eval framework replacing RAGAS with 6 claim/keypoint-level metrics tailored for Chinese financial narratives. Full report: [`tests/rag_qualityV2/REPORT.md`](./tests/rag_qualityV2/REPORT.md)
+
+**Layer overview:**
+
+| Layer | What it tests | Input | Key insight |
+|-------|--------------|-------|-------------|
+| **L1** Mock Context | LLM generation baseline — given perfect evidence, can the model answer correctly? | Mock contexts → direct prompt | Establishes the generation ceiling independent of retrieval |
+| **L2** Real Retrieval | Retrieval + generation pipeline — does bge-m3 hybrid search surface the right chunks? | Real embedding + Top-K → synthesize_agent | Isolates retrieval quality from routing/orchestration noise |
+| **L3** E2E Pipeline | Full LangGraph end-to-end — exactly what a real user gets | Complete LangGraph flow | Strongest signal; validates production readiness |
+
+**All 3 layers PASSED** across 12 Chinese financial cases (filings, transcripts, news):
+
+| Layer | KC | KCR | CSR | UCR ↓ | CR ↓ | NCR | Gate |
+|-------|----|-----|-----|-------|------|-----|------|
+| L1 Mock | 0.8796 | 0.9479 | 0.9431 | 0.057 | **0.0** | 0.9896 | ✅ PASS |
+| L2 Retrieval | 0.8960 | 0.9623 | **1.0000** | **0.000** | **0.0** | 0.9861 | ✅ PASS |
+| L3 E2E | **0.9072** | **0.9653** | 0.9924 | 0.008 | **0.0** | **1.0000** | ✅ PASS |
+
+**Layer 3 per-case results (12/12 PASS):**
+
+| # | Case | Type | KC | KCR | CSR | UCR ↓ | NCR | Result |
+|---|------|------|----|-----|-----|-------|-----|--------|
+| 01 | Moutai 2024Q3 Revenue | filing/factoid | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 02 | CATL Gross Margin 2024 | filing/analysis | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 03 | BYD EV Sales 2024H1 | filing/factoid | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 04 | PICC Embedded Value | filing/factoid | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 05 | Alibaba Cloud Guidance | transcript/analysis | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 06 | Tencent Gaming Recovery | transcript/analysis | 0.714 | 1.0 | 1.0 | 0.0 | 1.0 | ⚠️ KC |
+| 07 | Meituan Profitability | transcript/analysis | 0.833 | 0.833 | 1.0 | 0.0 | 1.0 | ⚠️ KC |
+| 08 | JD Supply Chain | transcript/analysis | 0.714 | 1.0 | 1.0 | 0.0 | 1.0 | ⚠️ KC |
+| 09 | Fed Rate Cut → A-Share | news/list | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 10 | China EV Export Controls | news/list | 1.0 | 1.0 | 0.909 | 0.091 | 1.0 | ⚠️ UCR |
+| 11 | iPhone 16 China Sales | news/analysis | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
+| 12 | Semiconductor Export Ban | news/analysis | 0.625 | 0.75 | 1.0 | 0.0 | 1.0 | ⚠️ KC |
+
+> **CR = 0.0 across all layers** — zero contradicted claims. **NCR = 1.0 at E2E** — numeric consistency perfect end-to-end. ⚠️ KC gaps on transcript/analysis are generation-side (evidence exists, `brief` mode omits product-level detail).
+
+---
+
 ## 📄 License
 
-This project is for educational and research purposes.
+This project is licensed under the [MIT License](./LICENSE).
 
 ---
 

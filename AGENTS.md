@@ -817,3 +817,29 @@ scripts/
     <item>Frontend build: pass.</item>
   </verification>
 </quality_orchestration_productization_update>
+
+<!-- 2026-03-01 Phase 1-4 architecture delta -->
+
+## Phase 1-4 增量模块（执行记录）
+
+### Graph 节点
+- `backend/graph/nodes/alert_extractor.py`: 对话提醒参数提取（ticker/模式/阈值/澄清）。
+- `backend/graph/nodes/alert_action.py`: 提醒落库动作节点（合并 alert_types、方向推断、确认文案）。
+
+### 新增 API 路由
+- `backend/api/screener_router.py`: 选股筛选接口。
+- `backend/api/cn_market_router.py`: A 股市场扩展接口。
+- `backend/api/backtest_router.py`: 策略回测接口。
+
+### 新增工具与服务
+- `backend/tools/screener.py`: FMP screener 封装，含 CN/HK 能力边界提示。
+- `backend/tools/cn_market_flow.py`: 资金流向/北向。
+- `backend/tools/cn_market_board.py`: 涨跌停/龙虎榜。
+- `backend/tools/concept_map.py`: 概念板块。
+- `backend/services/backtest_strategies.py`: 策略信号生成。
+- `backend/services/backtest_engine.py`: 回测执行引擎（费用/滑点/T+1）。
+
+### 关键依赖关系
+- `parse_operation -> alert_extractor -> alert_action -> END`
+- `parse_operation(screen|cn_market|backtest) -> policy_gate -> planner_stub -> execute_plan_stub`
+- `Phase 4 CN/HK 回测行情依赖 Phase 3 的 fetch_cn_hk_kline`
