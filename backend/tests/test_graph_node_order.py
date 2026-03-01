@@ -169,7 +169,7 @@ class TestGraphNodeOrderInvariant:
             assert "policy_gate" in nodes[idx_parse + 1:], "policy_gate must come after parse_operation"
 
     def test_expected_node_count(self):
-        """Graph must have exactly 16 registered nodes (no accidental additions)."""
+        """Graph must have exactly 18 registered nodes (including alert flow)."""
         from backend.graph.runner import _build_graph
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -183,6 +183,7 @@ class TestGraphNodeOrderInvariant:
             "chat_respond", "resolve_subject", "clarify",
             "parse_operation", "policy_gate", "planner",
             "confirmation_gate", "execute_plan", "synthesize", "render",
+            "alert_extractor", "alert_action",
         }
         assert node_names == expected_nodes, (
             f"Node set mismatch!\n"

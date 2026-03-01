@@ -1,4 +1,4 @@
-"""
+﻿"""
 Minimal alert scheduling skeleton for price_change rule.
 
 This keeps the logic small and testable:
@@ -41,11 +41,10 @@ class PriceSnapshot:
 
 class PriceChangeScheduler:
     """
-    Execute price_change alerts once.
-    Provide dependencies so tests can inject fakes:
-    - subscription_service: manages subscriptions storage.
-    - email_service: sends email alerts.
-    - price_fetcher: callable(ticker) -> PriceSnapshot|None.
+    Execute price alerts once.
+    Supports:
+    - price_change_pct: abs(change_percent) threshold with cooldown.
+    - price_target: one-shot absolute price target trigger.
     """
 
     def __init__(
@@ -58,11 +57,23 @@ class PriceChangeScheduler:
         self.email_service = email_service
         self.price_fetcher = price_fetcher
 
+    @staticmethod
+    def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    def _is_cooling_down(self, sub: dict) -> bool:
+        cooldown_minutes = max(1, int(os.getenv("PRICE_ALERT_COOLDOWN_MINUTES", "60")))
+        last_alert_at = self._parse_dt(sub.get("last_alert_at"))
+        if last_alert_at is None:
+            return False
+        return (datetime.now(last_alert_at.tzinfo) - last_alert_at) < timedelta(minutes=cooldown_minutes)
+
     def run_once(self) -> List[Dict]:
-        """
-        Iterate subscriptions and send alerts when price_change rule is satisfied.
-        Returns a list of alert payloads for observability/testing.
-        """
         sent: List[Dict] = []
         subscriptions = self.subscription_service.get_subscriptions()
         checked = 0
@@ -75,22 +86,55 @@ class PriceChangeScheduler:
                 continue
             checked += 1
 
-            threshold = sub.get("price_threshold")
-            if threshold is None:
-                continue
-
+            alert_mode = str(sub.get("alert_mode") or "price_change_pct").strip().lower()
             snapshot = self.price_fetcher(sub["ticker"])
-            if snapshot is None or snapshot.change_percent is None:
+            if snapshot is None:
                 continue
 
-            if abs(snapshot.change_percent) < threshold:
-                continue
+            threshold_payload: Optional[float] = None
+            price_target_payload: Optional[float] = None
+            direction_payload: Optional[str] = None
 
-            # Build message and send email.
-            message = (
-                f"{sub['ticker']} price moved {snapshot.change_percent:+.2f}% "
-                f"(threshold {threshold:.2f}%)."
-            )
+            if alert_mode == "price_target":
+                if bool(sub.get("price_target_fired")):
+                    continue
+                price_target = sub.get("price_target")
+                if price_target is None or snapshot.price is None:
+                    continue
+                try:
+                    price_target_payload = float(price_target)
+                except Exception:
+                    continue
+                direction_payload = str(sub.get("direction") or "").strip().lower()
+                if direction_payload == "below":
+                    triggered = snapshot.price <= price_target_payload
+                else:
+                    direction_payload = "above"
+                    triggered = snapshot.price >= price_target_payload
+                if not triggered:
+                    continue
+                message = (
+                    f"{sub['ticker']} reached target price {price_target_payload:.2f} "
+                    f"({direction_payload}), current={snapshot.price:.2f}."
+                )
+            else:
+                threshold = sub.get("price_threshold")
+                if threshold is None:
+                    continue
+                try:
+                    threshold_payload = float(threshold)
+                except Exception:
+                    continue
+                if self._is_cooling_down(sub):
+                    continue
+                if snapshot.change_percent is None:
+                    continue
+                if abs(snapshot.change_percent) < threshold_payload:
+                    continue
+                message = (
+                    f"{sub['ticker']} price moved {snapshot.change_percent:+.2f}% "
+                    f"(threshold {threshold_payload:.2f}%)."
+                )
 
             if not self.subscription_service.is_valid_email(sub.get("email", "")):
                 self.subscription_service.record_alert_attempt(
@@ -105,18 +149,16 @@ class PriceChangeScheduler:
             result = self.email_service.send_stock_alert(
                 to_email=sub["email"],
                 ticker=sub["ticker"],
-                alert_type="price_change",
+                alert_type="price_target" if alert_mode == "price_target" else "price_change",
                 message=message,
                 current_price=snapshot.price,
                 change_percent=snapshot.change_percent,
             )
-            # Handle tuple return (success, error_type, error_msg)
             if isinstance(result, tuple):
                 success, error_type, error_msg = result
             else:
-                success, error_type, error_msg = result, 'unknown', None
+                success, error_type, error_msg = result, "unknown", None
 
-            # Only update last_alert_at if email was actually sent
             if not success:
                 logger.warning("Email send failed for %s -> %s: %s (%s)", sub["ticker"], sub["email"], error_msg, error_type)
                 self.subscription_service.record_alert_attempt(
@@ -124,19 +166,34 @@ class PriceChangeScheduler:
                     sub["ticker"],
                     success=False,
                     error=error_msg or "send_failed",
-                    is_transient_error=(error_type == 'transient')
+                    is_transient_error=(error_type == "transient"),
                 )
                 continue
+
             self.subscription_service.record_alert_attempt(sub["email"], sub["ticker"], success=True)
+            if alert_mode == "price_target":
+                self.subscription_service.set_price_target_fired(sub["email"], sub["ticker"])
+
+            severity = "medium"
+            if alert_mode != "price_target" and threshold_payload is not None and snapshot.change_percent is not None:
+                severity = "high" if abs(snapshot.change_percent) >= threshold_payload * 2 else "medium"
+
             self.subscription_service.record_alert_event(
                 sub["email"],
                 sub["ticker"],
-                "price_change",
-                severity="high" if abs(snapshot.change_percent) >= float(threshold) * 2 else "medium",
-                title=f"{sub['ticker']} 价格异动 {snapshot.change_percent:+.2f}%",
+                "price_target" if alert_mode == "price_target" else "price_change",
+                severity=severity,
+                title=(
+                    f"{sub['ticker']} 到价触发 {snapshot.price:.2f}"
+                    if alert_mode == "price_target"
+                    else f"{sub['ticker']} 价格异动 {snapshot.change_percent:+.2f}%"
+                ),
                 message=message,
                 metadata={
-                    "threshold": threshold,
+                    "alert_mode": alert_mode,
+                    "threshold": threshold_payload,
+                    "price_target": price_target_payload,
+                    "direction": direction_payload,
                     "change_percent": snapshot.change_percent,
                     "current_price": snapshot.price,
                 },
@@ -146,12 +203,13 @@ class PriceChangeScheduler:
                 {
                     "email": sub["email"],
                     "ticker": sub["ticker"],
+                    "alert_mode": alert_mode,
                     "change_percent": snapshot.change_percent,
-                    "threshold": threshold,
+                    "threshold": threshold_payload,
+                    "price_target": price_target_payload,
                     "message": message,
                 }
             )
-
 
         logger.info(
             "price_change run completed: checked=%s, sent=%s",
@@ -198,7 +256,7 @@ class NewsAlertScheduler:
             if not articles:
                 continue
 
-            # 相关性：优先 related_tickers 命中，其次标题包含 TICKER
+            # 鐩稿叧鎬э細浼樺厛 related_tickers 鍛戒腑锛屽叾娆℃爣棰樺寘鍚?TICKER
             related: List[Dict] = []
             for art in articles:
                 pub_dt = art.get("published_at")
@@ -220,7 +278,7 @@ class NewsAlertScheduler:
             if not related:
                 continue
 
-            # 取最新几条组成邮件
+            # Keep only the latest three related articles for one digest email.
             related = sorted(related, key=lambda x: x["published_at"], reverse=True)[:3]
             lines = []
             for art in related:
@@ -259,7 +317,7 @@ class NewsAlertScheduler:
                 sub["ticker"],
                 "news",
                 severity="high" if len(related) >= 2 else "medium",
-                title=f"{sub['ticker']} 相关新闻触发 ({len(related)} 条)",
+                title=f"{sub['ticker']} 鐩稿叧鏂伴椈瑙﹀彂 ({len(related)} 鏉?",
                 message=message,
                 metadata={
                     "article_count": len(related),
@@ -362,8 +420,8 @@ class RiskAlertScheduler:
                 continue
 
             message = (
-                f"{assessment.ticker} 风险评分 {assessment.risk_score:.1f}/100，"
-                f"等级 {assessment.risk_level.value}。{assessment.summary}"
+                f"{assessment.ticker} risk score {assessment.risk_score:.1f}/100, "
+                f"level {assessment.risk_level.value}. {assessment.summary}"
             )
 
             if not self.subscription_service.is_valid_email(sub.get("email", "")):
@@ -414,7 +472,7 @@ class RiskAlertScheduler:
                 sub["ticker"],
                 "risk",
                 severity=assessment.risk_level.value,
-                title=f"{assessment.ticker} 风险等级 {assessment.risk_level.value}",
+                title=f"{assessment.ticker} 椋庨櫓绛夌骇 {assessment.risk_level.value}",
                 message=message,
                 metadata={
                     "risk_score": assessment.risk_score,
@@ -444,8 +502,7 @@ class RiskAlertScheduler:
 def fetch_price_snapshot(ticker: str) -> Optional[PriceSnapshot]:
     """
     Lightweight price fetcher with multi-source free fallbacks (no API key required):
-    优先免封锁的 stooq，再尝试 yfinance/Yahoo。
-    """
+    浼樺厛鍏嶅皝閿佺殑 stooq锛屽啀灏濊瘯 yfinance/Yahoo銆?    """
     snap = _get_cached_snapshot(ticker)
     if snap:
         return snap
@@ -759,3 +816,4 @@ def _get_logger() -> logging.Logger:
     return logger
 
 logger = _get_logger()
+

@@ -12,6 +12,8 @@ from langgraph.types import Command
 
 from backend.graph.checkpointer import aget_graph_checkpointer, get_graph_checkpointer_info
 from backend.graph.nodes import (
+    alert_action,
+    alert_extractor,
     build_initial_state,
     chat_respond,
     confirmation_gate,
@@ -55,6 +57,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
     graph.add_node("clarify", with_node_trace("clarify", clarify))
     graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
+    graph.add_node("alert_extractor", with_node_trace("alert_extractor", alert_extractor))
+    graph.add_node("alert_action", with_node_trace("alert_action", alert_action))
     graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
     graph.add_node("planner", with_node_trace("planner", planner))
     graph.add_node("confirmation_gate", with_node_trace("confirmation_gate", confirmation_gate))
@@ -115,7 +119,29 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)
 
-    graph.add_edge("parse_operation", "policy_gate")
+    def _route_after_parse_operation(state: GraphState) -> str:
+        op = (state.get("operation") or {}).get("name", "qa")
+        if op == "alert_set":
+            return "alert_extractor"
+        return "policy_gate"
+
+    graph.add_conditional_edges(
+        "parse_operation",
+        _route_after_parse_operation,
+        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate"},
+    )
+
+    def _route_after_alert_extractor(state: GraphState) -> str:
+        if bool(state.get("alert_valid")):
+            return "alert_action"
+        return END
+
+    graph.add_conditional_edges(
+        "alert_extractor",
+        _route_after_alert_extractor,
+        {"alert_action": "alert_action", END: END},
+    )
+    graph.add_edge("alert_action", END)
 
     return graph.compile(checkpointer=checkpointer)
 
@@ -148,6 +174,8 @@ class GraphRunner:
             "query": query,
             "ui_context": ui_context or {},
         }
+        if ui_context and ui_context.get("user_email"):
+            state["user_email"] = ui_context.get("user_email")
         if output_mode:
             state["output_mode"] = output_mode
         if strict_selection is not None:

@@ -123,8 +123,12 @@ class GraphState(MessagesState):
     query: str
 
     ui_context: NotRequired[dict]
+    user_email: NotRequired[str]
     subject: NotRequired[Subject]
     operation: NotRequired[Operation]
+    alert_params: NotRequired[dict[str, Any]]
+    alert_valid: NotRequired[bool]
+    skip_session_context: NotRequired[bool]
     output_mode: NotRequired[OutputMode]
     strict_selection: NotRequired[bool]
     clarify: NotRequired[Clarify]

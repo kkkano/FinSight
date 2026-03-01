@@ -138,6 +138,75 @@ def planner_stub(state: GraphState) -> dict:
             )
             step_id += 1
 
+    if operation == "screen":
+        screen_inputs = {
+            "market": str((state.get("ui_context") or {}).get("market") or "US").upper(),
+            "filters": {},
+            "limit": 20,
+            "page": 1,
+            "sort_by": "marketCap",
+            "sort_order": "desc",
+        }
+        if "screen_stocks" in allowed_tools:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "tool",
+                    "name": "screen_stocks",
+                    "inputs": screen_inputs,
+                    "why": "筛选类请求直接调用 screener 工具生成候选池。",
+                    "optional": False,
+                }
+            )
+            step_id += 1
+
+    if operation == "cn_market":
+        _append_tool_step(
+            "get_cn_market_fund_flow",
+            {"limit": 20},
+            why="A股市场请求先给出资金流向快照。",
+            optional=False,
+        )
+        _append_tool_step(
+            "get_cn_market_northbound",
+            {"limit": 20},
+            why="补充北向资金维度。",
+            optional=True,
+        )
+        _append_tool_step(
+            "get_cn_limit_board",
+            {"limit": 20},
+            why="补充涨跌停板块异动。",
+            optional=True,
+        )
+        _append_tool_step(
+            "get_cn_lhb",
+            {"limit": 20},
+            why="补充龙虎榜交易信息。",
+            optional=True,
+        )
+        _append_tool_step(
+            "get_cn_concept_map",
+            {"keyword": "", "limit": 20},
+            why="补充概念板块信息。",
+            optional=True,
+        )
+
+    if operation == "backtest":
+        ticker_for_backtest = primary_ticker or ((tickers or [None])[0] if isinstance(tickers, list) else None) or ""
+        _append_tool_step(
+            "run_strategy_backtest",
+            {
+                "ticker": ticker_for_backtest,
+                "strategy": "ma_cross",
+                "params": {},
+                "initial_cash": 100000.0,
+                "t_plus_one": True,
+            },
+            why="回测类请求调用策略回测工具并返回指标与交易明细。",
+            optional=False,
+        )
+
     # Rule-based minimal plan (Phase 3 scaffolding).
     if operation == "fetch" and primary_ticker and "get_company_news" in allowed_tools:
         steps.append(
