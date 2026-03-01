@@ -164,6 +164,7 @@ def confirmation_gate(state: GraphState) -> dict[str, Any]:
         return {
             "confirmation_intent": _INTENT_CONFIRM,
             "confirmation_instruction": None,
+            "confirmation_mode": confirmation_mode,
         }
 
     plan_ir = state.get("plan_ir") or {}
