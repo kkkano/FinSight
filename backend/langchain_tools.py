@@ -96,6 +96,28 @@ except Exception:  # pragma: no cover - optional tools fallback
         _get_sec_material_events = None
         _get_sec_risk_factors = None
 
+try:  # pragma: no cover - phase 2/3 tools
+    from backend.tools import (  # type: ignore
+        screen_stocks as _screen_stocks,
+        fetch_fund_flow as _fetch_fund_flow,
+        fetch_northbound as _fetch_northbound,
+        fetch_limit_board as _fetch_limit_board,
+        fetch_lhb as _fetch_lhb,
+        fetch_concept_map as _fetch_concept_map,
+    )
+except Exception:  # pragma: no cover
+    _screen_stocks = None
+    _fetch_fund_flow = None
+    _fetch_northbound = None
+    _fetch_limit_board = None
+    _fetch_lhb = None
+    _fetch_concept_map = None
+
+try:  # pragma: no cover - phase 4 service
+    from backend.services.backtest_engine import BacktestEngine as _BacktestEngine
+except Exception:  # pragma: no cover
+    _BacktestEngine = None
+
 
 # ============================================
 # Pydantic input models (LangChain-friendly)
@@ -227,6 +249,39 @@ class EmptyInput(BaseModel):
     """No-argument tool input placeholder."""
 
     pass
+
+
+class ScreenerInput(BaseModel):
+    """Stock screener inputs."""
+
+    market: str = Field(default="US", description="US/CN/HK")
+    filters: dict[str, Any] = Field(default_factory=dict, description="screener filter dict")
+    limit: int = Field(default=20, ge=1, le=200, description="rows per page")
+    page: int = Field(default=1, ge=1, le=100, description="page number")
+    sort_by: str = Field(default="marketCap", description="sort field")
+    sort_order: str = Field(default="desc", description="asc or desc")
+
+
+class CNMarketInput(BaseModel):
+    """CN market list query inputs."""
+
+    limit: int = Field(default=20, ge=1, le=200, description="max rows")
+    keyword: str = Field(default="", description="optional keyword for concept filtering")
+
+
+class BacktestInput(BaseModel):
+    """Strategy backtest inputs."""
+
+    ticker: str = Field(description="ticker, e.g. AAPL or 600519.SS")
+    strategy: str = Field(default="ma_cross", description="ma_cross/macd/rsi_mean_reversion")
+    params: dict[str, Any] = Field(default_factory=dict, description="strategy params")
+    start_date: Optional[str] = Field(default=None, description="YYYY-MM-DD")
+    end_date: Optional[str] = Field(default=None, description="YYYY-MM-DD")
+    initial_cash: float = Field(default=100000.0, gt=0, description="initial cash")
+    fee_bps: Optional[float] = Field(default=None, ge=0, description="fee bps")
+    slippage_bps: Optional[float] = Field(default=None, ge=0, description="slippage bps")
+    t_plus_one: bool = Field(default=True, description="apply T+1")
+    market: Optional[str] = Field(default=None, description="US/CN/HK hint")
 
 
 # ============================================
@@ -648,6 +703,134 @@ def get_sec_risk_factors(ticker: str) -> str:
         return f"get_sec_risk_factors failed: {exc}"
 
 
+@tool("screen_stocks", args_schema=ScreenerInput, return_direct=False)
+def screen_stocks(
+    market: str = "US",
+    filters: dict[str, Any] | None = None,
+    limit: int = 20,
+    page: int = 1,
+    sort_by: str = "marketCap",
+    sort_order: str = "desc",
+) -> str:
+    """Run a stock screener and return candidate symbols."""
+
+    if not callable(_screen_stocks):
+        return "screen_stocks unavailable: backend.tools function not found"
+    try:
+        payload = _screen_stocks(
+            market=market,
+            filters=filters or {},
+            limit=limit,
+            page=page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"screen_stocks failed: {exc}"
+
+
+@tool("get_cn_market_fund_flow", args_schema=CNMarketInput, return_direct=False)
+def get_cn_market_fund_flow(limit: int = 20, keyword: str = "") -> str:
+    """Fetch CN market fund-flow ranking."""
+
+    if not callable(_fetch_fund_flow):
+        return "get_cn_market_fund_flow unavailable: backend.tools function not found"
+    try:
+        payload = _fetch_fund_flow(limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"get_cn_market_fund_flow failed: {exc}"
+
+
+@tool("get_cn_market_northbound", args_schema=CNMarketInput, return_direct=False)
+def get_cn_market_northbound(limit: int = 20, keyword: str = "") -> str:
+    """Fetch CN northbound flow ranking."""
+
+    if not callable(_fetch_northbound):
+        return "get_cn_market_northbound unavailable: backend.tools function not found"
+    try:
+        payload = _fetch_northbound(limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"get_cn_market_northbound failed: {exc}"
+
+
+@tool("get_cn_limit_board", args_schema=CNMarketInput, return_direct=False)
+def get_cn_limit_board(limit: int = 20, keyword: str = "") -> str:
+    """Fetch CN limit board ranking."""
+
+    if not callable(_fetch_limit_board):
+        return "get_cn_limit_board unavailable: backend.tools function not found"
+    try:
+        payload = _fetch_limit_board(limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"get_cn_limit_board failed: {exc}"
+
+
+@tool("get_cn_lhb", args_schema=CNMarketInput, return_direct=False)
+def get_cn_lhb(limit: int = 20, keyword: str = "") -> str:
+    """Fetch CN LongHuBang style list."""
+
+    if not callable(_fetch_lhb):
+        return "get_cn_lhb unavailable: backend.tools function not found"
+    try:
+        payload = _fetch_lhb(limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"get_cn_lhb failed: {exc}"
+
+
+@tool("get_cn_concept_map", args_schema=CNMarketInput, return_direct=False)
+def get_cn_concept_map(limit: int = 20, keyword: str = "") -> str:
+    """Fetch CN concept-board map list."""
+
+    if not callable(_fetch_concept_map):
+        return "get_cn_concept_map unavailable: backend.tools function not found"
+    try:
+        payload = _fetch_concept_map(limit=limit, keyword=keyword)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"get_cn_concept_map failed: {exc}"
+
+
+@tool("run_strategy_backtest", args_schema=BacktestInput, return_direct=False)
+def run_strategy_backtest(
+    ticker: str,
+    strategy: str = "ma_cross",
+    params: dict[str, Any] | None = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    initial_cash: float = 100000.0,
+    fee_bps: Optional[float] = None,
+    slippage_bps: Optional[float] = None,
+    t_plus_one: bool = True,
+    market: Optional[str] = None,
+) -> str:
+    """Run a strategy backtest and return metrics, trades, and equity curve."""
+
+    if _BacktestEngine is None:
+        return "run_strategy_backtest unavailable: backtest engine not found"
+    try:
+        engine = _BacktestEngine()
+        payload = engine.run(
+            ticker=ticker,
+            strategy=strategy,
+            params=params or {},
+            start_date=start_date,
+            end_date=end_date,
+            initial_cash=initial_cash,
+            fee_bps=fee_bps,
+            slippage_bps=slippage_bps,
+            t_plus_one=t_plus_one,
+            market=market,
+        )
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover
+        return f"run_strategy_backtest failed: {exc}"
+
+
 # ============================================
 # Registry helpers
 # ============================================
@@ -661,6 +844,13 @@ FINANCIAL_TOOLS = [
     get_sec_material_events,
     get_sec_company_facts_quarterly,
     get_sec_risk_factors,
+    screen_stocks,
+    get_cn_market_fund_flow,
+    get_cn_market_northbound,
+    get_cn_limit_board,
+    get_cn_lhb,
+    get_cn_concept_map,
+    run_strategy_backtest,
     get_company_info,
     get_company_news,
     get_event_calendar,
@@ -717,6 +907,13 @@ __all__ = [
     "get_sec_material_events",
     "get_sec_company_facts_quarterly",
     "get_sec_risk_factors",
+    "screen_stocks",
+    "get_cn_market_fund_flow",
+    "get_cn_market_northbound",
+    "get_cn_limit_board",
+    "get_cn_lhb",
+    "get_cn_concept_map",
+    "run_strategy_backtest",
     "get_company_news",
     "get_event_calendar",
     "get_authoritative_media_news",

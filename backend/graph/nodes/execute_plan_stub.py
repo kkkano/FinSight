@@ -613,19 +613,30 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     collection=collection,
                     top_k=retrieval_k,
                 )
-                # Cross-Encoder reranking
+                # Cross-Encoder reranking (opt-in; disabled by default to keep
+                # local/test environments stable and lightweight).
                 reranker_used = False
                 try:
-                    from backend.rag.reranker import get_reranker_service
-                    reranker = get_reranker_service()
-                    if reranker.is_enabled and rag_hits:
-                        rag_hits = await asyncio.to_thread(
-                            reranker.rerank,
-                            query_text,
-                            rag_hits,
-                            top_n=rerank_top_n,
-                        )
-                        reranker_used = True
+                    rerank_enabled = str(os.getenv("RAG_ENABLE_RERANKER", "false")).strip().lower() in {
+                        "1",
+                        "true",
+                        "yes",
+                        "on",
+                    }
+                    if rerank_enabled:
+                        from backend.rag.reranker import get_reranker_service
+
+                        reranker = get_reranker_service()
+                        if reranker.is_enabled and rag_hits:
+                            rag_hits = await asyncio.to_thread(
+                                reranker.rerank,
+                                query_text,
+                                rag_hits,
+                                top_n=rerank_top_n,
+                            )
+                            reranker_used = True
+                    else:
+                        rag_hits = rag_hits[:rerank_top_n]
                 except Exception as rerank_exc:
                     logger.debug("Reranker unavailable, using RRF order: %s", rerank_exc)
                     rag_hits = rag_hits[:rerank_top_n]

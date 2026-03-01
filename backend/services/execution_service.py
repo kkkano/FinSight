@@ -384,6 +384,7 @@ async def run_graph_pipeline(
                 original_query=original_query or query,
                 response_markdown=response_markdown,
                 subject=state.get("subject"),
+                skip_context=bool(state.get("skip_session_context")),
             )
 
             # 5b. Persist lightweight long-term memory snapshot (best-effort)
