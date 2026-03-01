@@ -13,6 +13,11 @@ WORKDIR /app
 
 # Install Python dependencies first (layer cache)
 COPY requirements.txt .
+
+# Pre-install CPU-only torch to avoid downloading CUDA packages (~3 GB saved on CPU-only servers)
+# BGE_M3_DEVICE=cpu so we never need CUDA at runtime
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy full project

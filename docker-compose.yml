@@ -49,7 +49,7 @@ services:
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
-      RAG_V2_POSTGRES_DSN:          postgresql+asyncpg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+      RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
     volumes:
       - backend_data:/app/data
@@ -81,6 +81,13 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    healthcheck:
+      # Use 127.0.0.1 — alpine wget resolves 'localhost' to ::1 (IPv6) but nginx
+      # only listens on IPv4; connecting directly to 127.0.0.1 bypasses the issue
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     depends_on:
       backend:
         condition: service_healthy
