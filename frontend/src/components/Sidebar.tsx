@@ -23,8 +23,6 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
-const DEFAULT_DASHBOARD_SYMBOL = '';
-
 const RISK_LABELS: Record<string, string> = {
   conservative: '保守型',
   balanced: '稳健型',
@@ -55,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
 
   // Unified watchlist from dashboardStore (API-first)
-  const { watchlist, initWatchlist, addWatchItemApi, removeWatchItemApi } = useDashboardStore();
+  const { watchlist, initWatchlist, addWatchItemApi, removeWatchItemApi, activeAsset: lastDashboardAsset } = useDashboardStore();
 
   useEffect(() => {
     if (currentView === 'dashboard') {
@@ -232,14 +230,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             if (!onDashboardClick) return;
 
             const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
-            const fallbackSymbol = (currentTicker || firstPositionSymbol || DEFAULT_DASHBOARD_SYMBOL).toString().trim();
+            // Prioritize: last viewed dashboard symbol (localStorage-persisted) > currentTicker > first portfolio position
+            const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || '').toString().trim();
 
-            if (fallbackSymbol) {
-              onDashboardClick(fallbackSymbol);
-              return;
-            }
-
-            setShowAddInput(true);
+            // Always delegate to parent — openDashboard handles empty by navigating to /dashboard picker
+            onDashboardClick(fallbackSymbol);
           }}
         />
 

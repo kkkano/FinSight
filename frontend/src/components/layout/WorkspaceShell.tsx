@@ -163,7 +163,11 @@ export function WorkspaceShell({
 
   const openDashboard = (symbol: string) => {
     const normalized = symbol.trim();
-    if (!normalized) return;
+    if (!normalized) {
+      // No symbol known — navigate to /dashboard to show the stock picker UI
+      navigate('/dashboard');
+      return;
+    }
     navigateToDashboard(normalized);
   };
 

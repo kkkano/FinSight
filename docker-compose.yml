@@ -54,6 +54,8 @@ services:
       OPENAI_COMPATIBLE_API_KEY:    ${OPENAI_COMPATIBLE_API_KEY:-xinniankuaile}
       OPENAI_COMPATIBLE_API_BASE:   ${OPENAI_COMPATIBLE_API_BASE:-https://grok.jiuuij.de5.net/v1/chat/completions}
       OPENAI_COMPATIBLE_MODEL:      ${OPENAI_COMPATIBLE_MODEL:-grok-4.1-fast}
+      # HuggingFace mirror (bypasses GFW, used by BGE-M3 / reranker model downloads)
+      HF_ENDPOINT:                  https://hf-mirror.com
       # Override RAG to use Postgres pgvector
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
