@@ -1,6 +1,5 @@
-<p align="center">
-  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI 仪表盘" width="100%"/>
-</p>
+
+
 
 <h1 align="center">FinSight AI</h1>
 
@@ -75,8 +74,9 @@
 ## 📸 平台预览
 
 <p align="center">
-  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI 仪表盘" width="100%"/>
+  <img src="images/cb70fece-c319-4964-91fc-d7be91211b91.png" alt="FinSight AI Dashboard" width="100%"/>
 </p>
+
 
 <p align="center">
   <img src="images/4dc0e95c-2963-4422-ba3e-d86a3788b4b1.png" alt="FinSight AI 仪表盘" width="100%"/>
@@ -88,7 +88,7 @@
 
 **总览标签** — AI 评分环、恐贪指数、智能体覆盖、风险指标
 
-<img src="images/2cae8333a4ce78d259c9734254e2f38d.png" width="100%"/>
+
 </td>
 <td width="50%">
 
@@ -159,12 +159,6 @@
 **工作台** — 任务执行、组合再平衡、研报时间线
 
 <img src="images/workbench.png" width="100%"/>
-</td>
-<td width="50%">
-
-**邮件预警** — 自动价格变动通知
-
-<img src="images/ae7cbf42-a393-4ea8-bc75-ccf2d239e2c8.png" width="100%"/>
 </td>
 </tr>
 </table>
@@ -521,27 +515,17 @@ graph TB
 ### 财务标签
 > 8 季度财务表、ECharts 盈利组合图（营收柱 + 利润率线）、EPS 惊喜图、分析师目标价仪表、资产负债表摘要。
 
-![财务](images/12e7daa8071f4983b85e578bbca7a0e1.png)
-
 ### 技术标签
 > 真实 ECharts K 线蜡烛图（支撑/阻力标注线）、RSI(14) 时序图、MACD(12,26,9) 含柱状图、布林带位置、均线信号。
-
-![技术](images/7dd48dd6d1d3b1aa6e7b3d33e1dcc492.png)
 
 ### 新闻标签
 > 三子视图（个股 / 市场 7x24 / 重大事件）、7 组主题筛选 Chip、时间范围选择器、情绪统计条、带标签和影响徽章的富新闻卡片。
 
-![新闻](images/48f1bedaef4381457d3ad98e5ae80201.png)
-
 ### 同行标签
 > 同行评分网格、PE/PB 水平柱状图、营收增长发散柱状图、10+ 指标详细对比表。
 
-![同行](images/060fdf7b3d8f93ebda65cb3daaaacf21.png)
-
 ### 研究标签
 > 多智能体深度分析：按智能体分区（价格、新闻、技术、基本面、宏观、深度搜索）、冲突矩阵、引用追踪、置信度评分。
-
-![研究](images/3e47bb167c44c8f9cdcb23b20f905ada.png)
 
 ---
 
@@ -908,6 +892,8 @@ FinSight 为生产可靠性设计了多层回退机制：
 | **精排器** | `bge-reranker-v2-m3` | 跳过精排，直接用 RRF 分数 | 静默穿透 |
 | **价格数据** | yfinance | 10 个回退源（FMP → Finnhub → ...） | 11 级级联 |
 | **AI 洞察** | LLM 洞察评分器 | 确定性规则评分 | `model_generated=false` 标志 |
+| **晨报管线** | LangGraph Pipeline | 直接数据获取（路由回退） | 对调用方透明 |
+| **调仓 LLM 增强** | Agent + LLM 驱动 | 原始确定性调仓候选 | 任意失败时安全回退 |
 | **仪表盘数据** | 实时 API 获取 | 内存缓存（stale-while-revalidate） | 基于 TTL 的新鲜度 |
 | **检查点** | PostgreSQL | SQLite 本地文件 | 启动时自动检测 |
 | **RAG 存储** | PostgreSQL + pgvector | 内存存储 | 自动回退 |

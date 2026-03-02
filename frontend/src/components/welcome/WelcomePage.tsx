@@ -491,13 +491,6 @@ export function WelcomePage() {
                 <CircleAlert size={14} className="mt-1 shrink-0 text-[var(--bb-orange)]" />
                 <span>邮箱验证码登录支持跨设备持久化会话；匿名体验更快，但清理缓存后数据可能丢失。</span>
               </div>
-
-              {!supabaseReady && (
-                <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-[var(--bb-text-dim)] flex items-start gap-2">
-                  <Shield size={14} className="mt-0.5 shrink-0 text-yellow-500" />
-                  <span>当前未配置 Supabase，暂时只能匿名体验。</span>
-                </div>
-              )}
             </div>
           )}
 

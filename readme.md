@@ -74,8 +74,9 @@
 ## 📸 Platform Preview
 
 <p align="center">
-  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI Dashboard" width="100%"/>
+  <img src="images/cb70fece-c319-4964-91fc-d7be91211b91.png" alt="FinSight AI Dashboard" width="100%"/>
 </p>
+
 
 <p align="center">
   <img src="images/4dc0e95c-2963-4422-ba3e-d86a3788b4b1.png" alt="FinSight AI Dashboard" width="100%"/>
@@ -87,7 +88,7 @@
 
 **Overview Tab** - AI Score Ring, Fear & Greed Gauge, Agent Coverage, Risk Metrics
 
-<img src="images/2cae8333a4ce78d259c9734254e2f38d.png" width="100%"/>
+
 </td>
 <td width="50%">
 
@@ -158,12 +159,6 @@
 **Workbench** - Task Execution, Portfolio Rebalancing, Report Timeline
 
 <img src="images/workbench.png" width="100%"/>
-</td>
-<td width="50%">
-
-**Email Alert** - Automated Price Change Notification via SMTP
-
-<img src="images/ae7cbf42-a393-4ea8-bc75-ccf2d239e2c8.png" width="100%"/>
 </td>
 </tr>
 </table>
@@ -520,27 +515,17 @@ Score = Base(5) + RSI_normal(+1) + Trend_up(+2) + MACD_aligned(+1) + MA_bullish(
 ### Financial Tab
 > 8-quarter financial data table, Profitability ECharts combo chart (revenue bars + margin lines), EPS Surprise chart, Analyst Target Price gauge, Balance Sheet summary.
 
-![Financial](images/12e7daa8071f4983b85e578bbca7a0e1.png)
-
 ### Technical Tab
 > Real ECharts candlestick K-line with support/resistance markLines, RSI(14) time-series chart, MACD(12,26,9) with histogram, Bollinger Bands position, moving average signals.
-
-![Technical](images/7dd48dd6d1d3b1aa6e7b3d33e1dcc492.png)
 
 ### News Tab
 > Three sub-views (Stock-specific / Market 7x24 / Breaking Events), 7 topic filter chips, time range selector, sentiment stats bar, rich NewsCards with tags and impact badges.
 
-![News](images/48f1bedaef4381457d3ad98e5ae80201.png)
-
 ### Peers Tab
 > Peer score grid, PE/PB horizontal bar chart, revenue growth divergent bar chart, detailed comparison table with 10+ metrics.
 
-![Peers](images/060fdf7b3d8f93ebda65cb3daaaacf21.png)
-
 ### Research Tab
 > Multi-agent deep analysis with per-agent sections (price, news, technical, fundamental, macro, deep_search), conflict matrix, citation tracking, confidence scoring.
-
-![Research](images/3e47bb167c44c8f9cdcb23b20f905ada.png)
 
 ---
 
