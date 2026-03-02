@@ -7,14 +7,30 @@ from typing import Any
 from backend.graph.state import GraphState
 
 _PRICE_TARGET_RE = re.compile(
-    r"(?:涨到|跌到|到达|到|达到|至|price\s+of|target\s+price|reaches?)\s*"
-    r"(?P<price>\d+(?:\.\d+)?)\s*(?:元|块|美元|usd|\$)?",
+    r"(?:"
+    # Chinese patterns
+    r"涨到|跌到|到达|到|达到|至|"
+    # English patterns - price target
+    r"price\s+(?:of|at|to)|target\s+price|reaches?|hits?|"
+    # English patterns - directional
+    r"(?:drops?|falls?|goes?|dips?)\s+(?:below|under|to)\s*|"
+    r"(?:rises?|climbs?|goes?)\s+(?:above|over|to)\s*|"
+    r"(?:above|below|over|under|at)\s*"
+    r")\s*"
+    r"(?P<price>\d+(?:\.\d+)?)\s*(?:元|块|美元|dollars?|usd|\$)?",
     re.IGNORECASE,
 )
 
 _PCT_THRESHOLD_RE = re.compile(
-    r"(?:涨|跌|上涨|下跌|变动|超过|exceed|move|moves?)\s*"
-    r"(?P<pct>\d+(?:\.\d+)?)\s*(?:%|percent|个点)",
+    r"(?:"
+    # Chinese patterns
+    r"涨|跌|上涨|下跌|变动|超过|涨跌超过|"
+    # English patterns
+    r"(?:rises?|drops?|falls?|moves?|changes?|fluctuates?)\s*(?:by\s*)?|"
+    r"(?:up|down)\s*(?:by\s*)?|"
+    r"(?:more\s+than|exceeds?|over)\s*"
+    r")\s*"
+    r"(?P<pct>\d+(?:\.\d+)?)\s*(?:%|percent|个点|pct)",
     re.IGNORECASE,
 )
 
@@ -80,8 +96,8 @@ def alert_extractor(state: GraphState) -> dict[str, Any]:
         draft = (
             "我可以帮你设置提醒，但还缺少必要信息。\n"
             f"- 问题：{reason}\n"
-            "- 示例1：`AAPL 涨到 220 美元提醒我`\n"
-            "- 示例2：`平安银行 涨跌超过 3% 提醒我`"
+            "- 示例1：`AAPL 涨到 220 美元提醒我` / `Alert me when AAPL hits 220`\n"
+            "- 示例2：`平安银行 涨跌超过 3% 提醒我` / `Notify me if TSLA moves 5%`"
         )
         return {
             "alert_valid": False,
@@ -93,6 +109,8 @@ def alert_extractor(state: GraphState) -> dict[str, Any]:
                 "suggestions": [
                     "输入 ticker + 到价，例如 AAPL 涨到 220 美元提醒我",
                     "输入 ticker + 涨跌幅，例如 NVDA 涨跌超过 4% 提醒我",
+                    "English: Alert me when AAPL drops below 180",
+                    "English: Notify me if TSLA rises 10 percent",
                 ],
             },
             "artifacts": {"draft_markdown": draft},
