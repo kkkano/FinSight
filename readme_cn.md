@@ -74,6 +74,14 @@
 
 ## 📸 平台预览
 
+<p align="center">
+  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI 仪表盘" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="images/4dc0e95c-2963-4422-ba3e-d86a3788b4b1.png" alt="FinSight AI 仪表盘" width="100%"/>
+</p>
+
 <table>
 <tr>
 <td width="50%">

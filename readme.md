@@ -74,7 +74,7 @@
 ## 📸 Platform Preview
 
 <p align="center">
-  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png.png" alt="FinSight AI Dashboard" width="100%"/>
+  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI Dashboard" width="100%"/>
 </p>
 
 <p align="center">
