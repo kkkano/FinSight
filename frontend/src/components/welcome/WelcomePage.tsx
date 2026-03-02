@@ -38,7 +38,7 @@ const CAPABILITIES = [
 
 const METRIC_CARDS = [
   { label: '智能体数', value: '7', change: '并行执行' },
-  { label: '管线节点', value: '16', change: 'LangGraph' },
+  { label: '管线节点', value: '18', change: 'LangGraph' },
   { label: '仪表盘', value: '6', change: '标签页' },
 ];
 
@@ -349,7 +349,7 @@ export function WelcomePage() {
           </h1>
 
           <p className="max-w-[700px] text-base leading-8 text-[var(--bb-text-dim)]">
-            7 个研究智能体并行执行 · LangGraph 16 节点管线 · 6 个专业仪表盘标签页
+            7 个研究智能体并行执行 · LangGraph 18 节点管线 · 6 个专业仪表盘标签页
             <br />
             混合 RAG 检索 · 跨智能体冲突检测 · 实时邮件预警
           </p>

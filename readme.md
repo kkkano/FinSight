@@ -1,6 +1,5 @@
-<p align="center">
-  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png" alt="FinSight AI Dashboard" width="100%"/>
-</p>
+
+
 
 <h1 align="center">FinSight AI</h1>
 
@@ -27,7 +26,7 @@
 - [Key Features](#-key-features)
 - [Platform Preview](#-platform-preview)
 - [System Architecture](#%EF%B8%8F-system-architecture)
-- [LangGraph Pipeline](#-langgraph-pipeline-16-nodes)
+- [LangGraph Pipeline](#-langgraph-pipeline-18-nodes)
 - [Agent Ecosystem](#-agent-ecosystem)
 - [Dashboard](#-dashboard---6-analytical-tabs)
 - [RAG Engine](#-rag-engine---hybrid-search-pipeline)
@@ -52,7 +51,7 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | 16-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
+| **LangGraph Pipeline** | 18-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
@@ -73,6 +72,14 @@
 ---
 
 ## 📸 Platform Preview
+
+<p align="center">
+  <img src="images/2cae8333a4ce78d259c9734254e2f38d.png.png" alt="FinSight AI Dashboard" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="images/4dc0e95c-2963-4422-ba3e-d86a3788b4b1.png" alt="FinSight AI Dashboard" width="100%"/>
+</p>
 
 <table>
 <tr>
@@ -188,9 +195,9 @@ graph TB
 
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph Pipeline<br/>16-node Stateful Graph]
+        GRAPH[LangGraph Pipeline<br/>18-node Stateful Graph]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
-        TOOLS[Tool Layer<br/>17 Registered Tools]
+        TOOLS[Tool Layer<br/>32 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
     end
 

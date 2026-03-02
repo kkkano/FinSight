@@ -61,7 +61,11 @@ flowchart TD
   resolve_subject --> clarify
   clarify -->|需澄清| END
   clarify -->|继续| parse_operation
-  parse_operation --> policy_gate
+  parse_operation -->|alert_set| alert_extractor
+  parse_operation -->|其他| policy_gate
+  alert_extractor -->|valid| alert_action
+  alert_extractor -->|invalid| END
+  alert_action --> END
   policy_gate --> planner
   planner --> confirmation_gate
   confirmation_gate --> execute_plan
