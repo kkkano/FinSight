@@ -229,10 +229,10 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (16 Nodes)
+## 🔄 LangGraph Pipeline (18 Nodes)
 
-The core of FinSight is a **16-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
-Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 16-node pipeline.
+The core of FinSight is an **18-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
+Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 18-node pipeline.
 
 ```mermaid
 flowchart TD
@@ -248,9 +248,13 @@ flowchart TD
     SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>Ambiguous?</i>"}
     CLARIFY -->|"Ambiguous"| ASK["Ask User for Clarification"]
     ASK --> RENDER
-    CLARIFY -->|"Clear"| PARSE["⑦ parse_operation<br/><i>4-level priority: compare → guardrail → multi-ticker → qa</i>"]
+    CLARIFY -->|"Clear"| PARSE["⑦ parse_operation<br/><i>14-level intent classifier</i>"]
 
-    PARSE --> POLICY["⑧ policy_gate<br/><i>Capability scoring + budget</i>"]
+    PARSE -->|"alert_set"| ALERT_EX["⑦a alert_extractor<br/><i>Extract alert params</i>"]
+    ALERT_EX -->|"valid"| ALERT_ACT["⑦b alert_action<br/><i>Save & schedule</i>"]
+    ALERT_EX -->|"invalid"| RENDER
+    ALERT_ACT --> RENDER
+    PARSE -->|"other ops"| POLICY["⑧ policy_gate<br/><i>Capability scoring + budget</i>"]
     POLICY --> PLAN["⑨ planner_node<br/><i>LLM Planner or Stub Fallback</i>"]
 
     PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>HITL approval?</i>"}
@@ -277,6 +281,29 @@ flowchart TD
     style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
 ```
+
+### Intent Classification (`parse_operation`)
+
+The `parse_operation` node implements a **rule-first intent classifier** with 14 operation types, prioritized from highest to lowest:
+
+| Priority | Operation | Confidence | Trigger Keywords |
+|:---:|---------|:---:|--------------|
+| 1 | `compare` | 0.85 | vs, versus, compare, 对比, 比较, 哪个更好 |
+| 2 | `analyze_impact` | 0.75 | 影响, 冲击, 利好, 利空, impact |
+| 3 | `backtest` | 0.86 | 回测, 策略回测, ma cross, macd strategy (Phase 4) |
+| 4 | `alert_set` | 0.88 | 提醒, 预警, alert, notify, remind me (Phase 1) |
+| 5 | `screen` | 0.86 | 筛选, 选股, screener, stock screen (Phase 2) |
+| 6 | `cn_market` | 0.84 | 资金流向, 北向, 龙虎榜, 概念股 (Phase 3) |
+| 7 | `technical` | 0.85 | 技术面, macd, rsi, k线, 支撑阻力 |
+| 8 | `price` | 0.80 | 股价, 现价, price, quote |
+| 9 | `summarize` | 0.75 | 总结, 摘要, tl;dr |
+| 10 | `extract_metrics` | 0.70 | 提取指标, eps, 营收, guidance |
+| 11 | `fetch` | 0.65 | 获取, 新闻, latest news |
+| 12 | `morning_brief` | 0.85 | 晨报, 早报, morning brief |
+| 13 | (multi-ticker default) | 0.70 | Auto-triggered when `len(tickers) >= 2` without guardrail hit |
+| 14 | `qa` | 0.40–0.55 | Fallback for general questions |
+
+**Guardrail-A Mechanism**: When a single-task keyword is detected (e.g., `price`), the classifier prevents multi-ticker queries from being forced into `compare` mode.
 
 ### GraphState Fields
 

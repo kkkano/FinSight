@@ -74,6 +74,29 @@ flowchart TD
   render --> END
 ```
 
+### 2.1 意图分类（parse_operation）
+
+`parse_operation` 节点实现规则优先的意图分类，包含 14 种操作类型：
+
+| 优先级 | 操作 | 置信度 | 说明 |
+|:---:|------|:---:|------|
+| 1 | `compare` | 0.85 | vs/对比/比较 |
+| 2 | `analyze_impact` | 0.75 | 影响/冲击/利好利空 |
+| 3 | `backtest` | 0.86 | 回测/策略回测 (Phase 4) |
+| 4 | `alert_set` | 0.88 | 提醒/预警 (Phase 1) |
+| 5 | `screen` | 0.86 | 筛选/选股 (Phase 2) |
+| 6 | `cn_market` | 0.84 | 资金流向/北向/龙虎榜 (Phase 3) |
+| 7 | `technical` | 0.85 | 技术面/macd/rsi |
+| 8 | `price` | 0.80 | 股价/现价/报价 |
+| 9 | `summarize` | 0.75 | 总结/摘要 |
+| 10 | `extract_metrics` | 0.70 | 提取指标/eps |
+| 11 | `fetch` | 0.65 | 获取/新闻 |
+| 12 | `morning_brief` | 0.85 | 晨报/早报 |
+| 13 | 多标的默认 | 0.70 | `len(tickers)>=2` 自动 compare |
+| 14 | `qa` | 0.40-0.55 | 兜底问答 |
+
+**Guardrail-A**：单任务关键词（如 price）阻止多标的强制 compare。
+
 ## 3. 规划与执行策略
 
 ### 3.1 Policy Gate（入口约束）

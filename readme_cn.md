@@ -222,10 +222,10 @@ graph TB
 
 ---
 
-## 🔄 LangGraph 管线（16 节点）
+## 🔄 LangGraph 管线（18 节点）
 
-FinSight 的核心是一个 **16 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
-仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 16 节点 LangGraph 主链路。
+FinSight 的核心是一个 **18 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
+仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 18 节点 LangGraph 主链路。
 
 ```mermaid
 flowchart TD
@@ -241,9 +241,13 @@ flowchart TD
     SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>有歧义？</i>"}
     CLARIFY -->|"有歧义"| ASK["请求用户澄清"]
     ASK --> RENDER
-    CLARIFY -->|"明确"| PARSE["⑦ parse_operation<br/><i>4 级优先链：对比 → 护栏 → 多标的 → qa</i>"]
+    CLARIFY -->|"明确"| PARSE["⑦ parse_operation<br/><i>14 级意图分类器</i>"]
 
-    PARSE --> POLICY["⑧ policy_gate<br/><i>能力评分 + 预算</i>"]
+    PARSE -->|"alert_set"| ALERT_EX["⑦a alert_extractor<br/><i>提取提醒参数</i>"]
+    ALERT_EX -->|"有效"| ALERT_ACT["⑦b alert_action<br/><i>保存并调度</i>"]
+    ALERT_EX -->|"无效"| RENDER
+    ALERT_ACT --> RENDER
+    PARSE -->|"其他操作"| POLICY["⑧ policy_gate<br/><i>能力评分 + 预算</i>"]
     POLICY --> PLAN["⑨ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
 
     PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>人工审批？</i>"}
@@ -270,6 +274,29 @@ flowchart TD
     style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
 ```
+
+### 意图分类（`parse_operation`）
+
+`parse_operation` 节点实现了一个**规则优先的意图分类器**，包含 14 种操作类型，按优先级从高到低排列：
+
+| 优先级 | 操作类型 | 置信度 | 触发关键词 |
+|:---:|---------|:---:|--------------|
+| 1 | `compare` | 0.85 | vs, versus, 对比, 比较, 哪个更好 |
+| 2 | `analyze_impact` | 0.75 | 影响, 冲击, 利好, 利空 |
+| 3 | `backtest` | 0.86 | 回测, 策略回测, ma cross, macd strategy (Phase 4) |
+| 4 | `alert_set` | 0.88 | 提醒, 预警, alert, notify, remind me (Phase 1) |
+| 5 | `screen` | 0.86 | 筛选, 选股, screener (Phase 2) |
+| 6 | `cn_market` | 0.84 | 资金流向, 北向, 龙虎榜, 概念股 (Phase 3) |
+| 7 | `technical` | 0.85 | 技术面, macd, rsi, k线, 支撑阻力 |
+| 8 | `price` | 0.80 | 股价, 现价, 报价, price, quote |
+| 9 | `summarize` | 0.75 | 总结, 摘要, tl;dr |
+| 10 | `extract_metrics` | 0.70 | 提取指标, eps, 营收, guidance |
+| 11 | `fetch` | 0.65 | 获取, 新闻, latest news |
+| 12 | `morning_brief` | 0.85 | 晨报, 早报, morning brief |
+| 13 | (多标的默认) | 0.70 | 当 `len(tickers) >= 2` 且无护栏命中时自动触发 compare |
+| 14 | `qa` | 0.40–0.55 | 兜底问答 |
+
+**Guardrail-A 机制**：当检测到明确的单任务关键词（如 `price`）时，即使有多个股票代码也不会强制进入 `compare` 模式。
 
 ### GraphState 字段
 
