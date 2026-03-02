@@ -604,7 +604,7 @@ A **3-layer eval pyramid** (`tests/rag_qualityV2/`) measuring retrieval and gene
 | **L2** Real Retrieval | Retrieval + generation | 0.8960 | 0.9623 | **1.0000** | **0.000** | **0.0** | 0.9861 | ✅ PASS |
 | **L3** E2E Pipeline | Full LangGraph flow | **0.9072** | **0.9653** | 0.9924 | 0.008 | **0.0** | **1.0000** | ✅ PASS |
 
-> **CR = 0.0 across all layers** — zero contradicted claims.  **NCR = 1.0 at E2E** — numeric consistency is perfect end-to-end.
+> **CR = 0.0 across all layers** — zero contradicted claims.  **NCR = 1.0 at E2E** — numeric consistency is perfect end-to-end. *\*Based on 12 test cases; production results may vary.*
 
 Metrics: KC (Keypoint Coverage) · KCR (Keypoint Context Recall) · CSR (Claim Support Rate) · UCR (Unsupported Claim Rate) · CR (Contradiction Rate) · NCR (Numeric Consistency Rate)
 
@@ -963,13 +963,56 @@ FinSight implements a multi-layer defense against LLM hallucinations, particular
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### 🐳 Docker One-Click Deployment (Recommended)
+
+```bash
+# 1. Clone repository
+git clone https://github.com/kkkano/FinSight.git
+cd FinSight
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys (see "API Keys" section below)
+
+# 3. Start all services
+docker compose up -d
+# Frontend: http://localhost (port 80)
+# Backend:  http://localhost:8000
+# PostgreSQL: localhost:5432
+```
+
+> 💡 Docker deployment includes PostgreSQL with pgvector for production-grade RAG.
+
+### 🔑 API Keys (Required vs Optional)
+
+| API Key | Required? | Purpose | If Not Configured |
+|---------|-----------|---------|-------------------|
+| `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | ✅ **Required** | LLM for analysis & planning | App won't function |
+| `FMP_API_KEY` | ⭐ Recommended | Financial data (earnings, ratios) | Falls back to yfinance |
+| `FINNHUB_API_KEY` | Optional | Real-time quotes, news | Falls back to other sources |
+| `TAVILY_API_KEY` | Optional | Web search | Falls back to DuckDuckGo |
+| `FRED_API_KEY` | Optional | Macro economic data | Limited macro features |
+| `ALPHA_VANTAGE_API_KEY` | Optional | Additional price data | Uses other price sources |
+
+> **Minimum Setup**: Only `OPENAI_API_KEY` (or equivalent LLM key) is required. All other APIs have automatic fallbacks.
+
+### 💾 Database Initialization
+
+SQLite tables (`checkpoint`, `report`, `portfolio`, `subscriptions`) are **auto-created on first startup** — no manual migration needed.
+
+For PostgreSQL (optional), tables are created via SQLAlchemy models automatically.
+
+---
+
+### Manual Setup (Alternative)
+
+#### Prerequisites
 
 - Python 3.11+
 - Node.js 18+ with pnpm
 - At least one LLM API key (OpenAI / Gemini / DeepSeek)
 
-### Backend Setup
+#### Backend Setup
 
 ```bash
 # 1. Create virtual environment
@@ -1177,7 +1220,7 @@ A custom eval framework replacing RAGAS with 6 claim/keypoint-level metrics tail
 | 11 | iPhone 16 China Sales | news/analysis | 1.0 | 1.0 | 1.0 | 0.0 | 1.0 | ✅ Perfect |
 | 12 | Semiconductor Export Ban | news/analysis | 0.625 | 0.75 | 1.0 | 0.0 | 1.0 | ⚠️ KC |
 
-> **CR = 0.0 across all layers** — zero contradicted claims. **NCR = 1.0 at E2E** — numeric consistency perfect end-to-end. ⚠️ KC gaps on transcript/analysis are generation-side (evidence exists, `brief` mode omits product-level detail).
+> **CR = 0.0 across all layers** — zero contradicted claims. **NCR = 1.0 at E2E** — numeric consistency perfect end-to-end. ⚠️ KC gaps on transcript/analysis are generation-side (evidence exists, `brief` mode omits product-level detail). *\*Based on 12 test cases; production results may vary.*
 
 ---
 
