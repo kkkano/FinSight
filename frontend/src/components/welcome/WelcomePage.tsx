@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { CircleAlert, Mail, Moon, Shield, Sun } from 'lucide-react';
+import { CircleAlert, Mail, Moon, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSupabaseClient, isSupabaseAuthConfigured } from '../../api/supabaseClient';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
