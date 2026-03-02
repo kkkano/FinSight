@@ -39,82 +39,13 @@ def _yfinance_screen_stocks(
     """Fallback screener using yfinance when FMP is unavailable."""
     market_norm = str(market or "US").strip().upper()
 
-    try:
-        # Use yfinance Screener for predefined screens
-        screener_key = _YF_SCREENER_MAP.get(market_norm, "most_actives")
-        screener = yf.Screener()
-        screener.set_predefined_body(screener_key)
-
-        response = screener.response
-        if not response or "quotes" not in response:
-            # Fallback to a list of popular tickers
-            return _yfinance_popular_stocks(market_norm, limit, sort_by, sort_order)
-
-        quotes = response.get("quotes", [])
-        items: list[dict[str, Any]] = []
-
-        for quote in quotes[:limit]:
-            if not isinstance(quote, dict):
-                continue
-            symbol = str(quote.get("symbol") or "").strip().upper()
-            if not symbol:
-                continue
-
-            # Apply basic filters if provided
-            if filters:
-                price = _clean_float(quote.get("regularMarketPrice"))
-                market_cap = _clean_float(quote.get("marketCap"))
-
-                if filters.get("priceMoreThan") and price and price < float(filters["priceMoreThan"]):
-                    continue
-                if filters.get("priceLowerThan") and price and price > float(filters["priceLowerThan"]):
-                    continue
-                if filters.get("marketCapMoreThan") and market_cap and market_cap < float(filters["marketCapMoreThan"]):
-                    continue
-                if filters.get("marketCapLowerThan") and market_cap and market_cap > float(filters["marketCapLowerThan"]):
-                    continue
-
-            items.append({
-                "symbol": symbol,
-                "name": str(quote.get("shortName") or quote.get("longName") or "").strip() or symbol,
-                "sector": quote.get("sector"),
-                "industry": quote.get("industry"),
-                "country": None,
-                "exchange": quote.get("exchange"),
-                "price": _clean_float(quote.get("regularMarketPrice")),
-                "market_cap": _clean_float(quote.get("marketCap")),
-                "volume": _clean_float(quote.get("regularMarketVolume")),
-                "beta": None,
-                "dividend": _clean_float(quote.get("trailingAnnualDividendRate")),
-                "change_percent": _clean_float(quote.get("regularMarketChangePercent")),
-            })
-
-        # Sort items
-        sort_key_map = {
-            "marketCap": "market_cap",
-            "price": "price",
-            "volume": "volume",
-            "changesPercentage": "change_percent",
-        }
-        py_sort_key = sort_key_map.get(sort_by, "market_cap")
-        reverse = sort_order == "desc"
-        items.sort(key=lambda x: x.get(py_sort_key) or 0, reverse=reverse)
-
-        return {
-            "success": True,
-            "market": market_norm,
-            "items": items[:limit],
-            "count": len(items[:limit]),
-            "source": "yfinance_screener",
-            "capability_note": "Using Yahoo Finance screener as fallback (FMP unavailable)",
-        }
-    except Exception as exc:
-        logger.warning("yfinance screener failed: %s", exc)
-        return _yfinance_popular_stocks(market_norm, limit, sort_by, sort_order)
+    # Directly use popular stocks approach - more reliable than Screener API
+    return _yfinance_popular_stocks(market_norm, filters, limit, sort_by, sort_order)
 
 
 def _yfinance_popular_stocks(
     market: str,
+    filters: dict[str, Any] | None,
     limit: int,
     sort_by: str,
     sort_order: str,
@@ -129,29 +60,46 @@ def _yfinance_popular_stocks(
     ]
 
     try:
-        tickers = yf.Tickers(" ".join(popular_tickers[:limit * 2]))
         items: list[dict[str, Any]] = []
 
-        for symbol in popular_tickers[:limit * 2]:
+        # Fetch in smaller batches to avoid timeout
+        batch_size = min(limit + 5, 15)
+        for symbol in popular_tickers[:batch_size]:
             try:
-                ticker = tickers.tickers.get(symbol)
-                if not ticker:
-                    continue
+                ticker = yf.Ticker(symbol)
                 info = ticker.fast_info
+
+                price = _clean_float(getattr(info, "last_price", None))
+                market_cap = _clean_float(getattr(info, "market_cap", None))
+
+                # Apply filters
+                if filters:
+                    if filters.get("priceMoreThan") and price and price < float(filters["priceMoreThan"]):
+                        continue
+                    if filters.get("priceLowerThan") and price and price > float(filters["priceLowerThan"]):
+                        continue
+                    if filters.get("marketCapMoreThan") and market_cap and market_cap < float(filters["marketCapMoreThan"]):
+                        continue
+                    if filters.get("marketCapLowerThan") and market_cap and market_cap > float(filters["marketCapLowerThan"]):
+                        continue
+
                 items.append({
                     "symbol": symbol,
-                    "name": symbol,  # fast_info doesn't have name
+                    "name": symbol,
                     "sector": None,
                     "industry": None,
                     "country": "US",
                     "exchange": None,
-                    "price": _clean_float(getattr(info, "last_price", None)),
-                    "market_cap": _clean_float(getattr(info, "market_cap", None)),
+                    "price": price,
+                    "market_cap": market_cap,
                     "volume": _clean_float(getattr(info, "last_volume", None)),
                     "beta": None,
                     "dividend": None,
                     "change_percent": None,
                 })
+
+                if len(items) >= limit:
+                    break
             except Exception:
                 continue
 
@@ -167,7 +115,7 @@ def _yfinance_popular_stocks(
             "items": items[:limit],
             "count": len(items[:limit]),
             "source": "yfinance_popular",
-            "capability_note": "Using popular US stocks fallback",
+            "capability_note": "Using popular US stocks (FMP unavailable)",
         }
     except Exception as exc:
         logger.warning("yfinance popular stocks failed: %s", exc)
