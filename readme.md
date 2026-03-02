@@ -13,6 +13,10 @@
   <a href="./docs/DOCS_INDEX.md">Docs Index</a>
 </p>
 
+<p align="center">
+  🌐 <strong>Live Demo:</strong> <a href="https://finsight-ai.chat">https://finsight-ai.chat</a>
+</p>
+
 ---
 
 **FinSight AI** is a production-grade, multi-agent financial research system built on **LangGraph**. It unifies conversational AI analysis, a professional dashboard with 6 analytical tabs, autonomous task execution (Workbench), and proactive email alerts into one coherent platform.

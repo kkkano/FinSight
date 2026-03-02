@@ -60,7 +60,7 @@ services:
       RAG_V2_BACKEND:               postgres
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
       RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
-      LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+      LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs

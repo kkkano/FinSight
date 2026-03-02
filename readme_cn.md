@@ -13,6 +13,10 @@
   <a href="./docs/DOCS_INDEX.md">文档索引</a>
 </p>
 
+<p align="center">
+  🌐 <strong>在线演示:</strong> <a href="https://finsight-ai.chat">https://finsight-ai.chat</a>
+</p>
+
 ---
 
 **FinSight AI** 是一个生产级多智能体金融研究系统，基于 **LangGraph** 构建。它将对话式 AI 分析、6 标签页专业仪表盘、自主任务执行（工作台）和邮件主动预警统一在一个平台中。
