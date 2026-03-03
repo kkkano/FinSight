@@ -94,7 +94,7 @@ services:
     container_name: finsight-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "5173:80"
     healthcheck:
       # Use 127.0.0.1 — alpine wget resolves 'localhost' to ::1 (IPv6) but nginx
       # only listens on IPv4; connecting directly to 127.0.0.1 bypasses the issue

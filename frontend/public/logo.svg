@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF8C00"/>
+      <stop offset="100%" stop-color="#FF6D00"/>
+    </linearGradient>
+    <linearGradient id="g1b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2979FF"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="#0D1117"/>
+  <!-- Candlestick bars forming "F" shape -->
+  <!-- Vertical stem of F - tall green candle -->
+  <rect x="120" y="80" width="48" height="352" rx="6" fill="url(#g1)"/>
+  <line x1="144" y1="60" x2="144" y2="80" stroke="#FF8C00" stroke-width="4"/>
+  <line x1="144" y1="432" x2="144" y2="452" stroke="#FF8C00" stroke-width="4"/>
+  <!-- Top bar of F - 3 small candles -->
+  <rect x="192" y="80" width="36" height="80" rx="5" fill="#FF8C00"/>
+  <line x1="210" y1="65" x2="210" y2="80" stroke="#FF8C00" stroke-width="3"/>
+  <line x1="210" y1="160" x2="210" y2="175" stroke="#FF8C00" stroke-width="3"/>
+  <rect x="248" y="72" width="36" height="96" rx="5" fill="#FF8C00" opacity="0.85"/>
+  <line x1="266" y1="55" x2="266" y2="72" stroke="#FF8C00" stroke-width="3" opacity="0.85"/>
+  <line x1="266" y1="168" x2="266" y2="183" stroke="#FF8C00" stroke-width="3" opacity="0.85"/>
+  <rect x="304" y="85" width="36" height="72" rx="5" fill="#FF8C00" opacity="0.7"/>
+  <line x1="322" y1="68" x2="322" y2="85" stroke="#FF8C00" stroke-width="3" opacity="0.7"/>
+  <line x1="322" y1="157" x2="322" y2="172" stroke="#FF8C00" stroke-width="3" opacity="0.7"/>
+  <rect x="360" y="90" width="36" height="60" rx="5" fill="#FF8C00" opacity="0.5"/>
+  <line x1="378" y1="75" x2="378" y2="90" stroke="#FF8C00" stroke-width="3" opacity="0.5"/>
+  <!-- Middle bar of F - 2 candles -->
+  <rect x="192" y="230" width="36" height="72" rx="5" fill="url(#g1b)"/>
+  <line x1="210" y1="215" x2="210" y2="230" stroke="#2979FF" stroke-width="3"/>
+  <line x1="210" y1="302" x2="210" y2="317" stroke="#2979FF" stroke-width="3"/>
+  <rect x="248" y="238" width="36" height="60" rx="5" fill="url(#g1b)" opacity="0.8"/>
+  <line x1="266" y1="223" x2="266" y2="238" stroke="#2979FF" stroke-width="3" opacity="0.8"/>
+  <line x1="266" y1="298" x2="266" y2="310" stroke="#2979FF" stroke-width="3" opacity="0.8"/>
+  <rect x="304" y="245" width="36" height="48" rx="5" fill="url(#g1b)" opacity="0.55"/>
+  <!-- Label -->
+  <text x="256" y="496" text-anchor="middle" font-family="monospace" font-size="18" fill="#FF8C00" opacity="0.4">FINSIGHT</text>
+</svg>

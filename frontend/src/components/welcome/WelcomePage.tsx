@@ -332,9 +332,7 @@ export function WelcomePage() {
       <section className="relative z-20 mx-auto grid min-h-[calc(100vh-68px)] w-full max-w-[1180px] grid-cols-[minmax(0,680px)_380px] items-center justify-center gap-8 px-6 py-6 max-[960px]:grid-cols-1 max-[960px]:px-5 max-[960px]:py-8 max-[480px]:gap-5 max-[480px]:px-4 max-[480px]:py-5 max-[480px]:min-h-0">
         <div className="flex flex-col gap-8 max-[480px]:gap-5">
           <div className="flex items-center gap-3 max-[480px]:gap-2">
-            <div className="h-12 w-12 max-[480px]:h-9 max-[480px]:w-9 rounded-[10px] bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] text-black font-bold text-xl max-[480px]:text-base flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.3)]">
-              F
-            </div>
+            <img src="/logo.svg" alt="FinSight AI" className="h-12 w-12 max-[480px]:h-9 max-[480px]:w-9 rounded-[10px] shadow-[0_0_30px_rgba(255,140,0,0.3)]" />
             <div className="text-[32px] max-[480px]:text-[24px] leading-none font-bold text-[var(--bb-text)]">
               Fin<span className="text-[var(--bb-orange)]">Sight</span> AI
             </div>

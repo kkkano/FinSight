@@ -235,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         ].join(' ')}
       >
         <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
-          <span>FS</span> FinSight Pro
+          <img src="/logo.svg" alt="FinSight AI" className="h-8 w-8 rounded-md" /> FinSight AI
         </div>
 
         <div className="bg-fin-bg-secondary p-4 rounded-xl mb-5">
