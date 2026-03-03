@@ -309,65 +309,65 @@ export function WelcomePage() {
       };
 
   return (
-    <main className="relative min-h-screen overflow-hidden font-mono" style={paletteVars as React.CSSProperties}>
-      <div className="absolute inset-0 bg-[var(--bb-bg)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,140,0,0.14),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(41,121,255,0.10),transparent_30%)]" />
+    <main className="relative h-screen overflow-y-auto font-mono" style={paletteVars as React.CSSProperties}>
+      <div className="fixed inset-0 bg-[var(--bb-bg)]" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,140,0,0.14),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(41,121,255,0.10),transparent_30%)]" />
 
-      <div className="relative z-20 h-9 border-b border-[var(--bb-border)] bg-[var(--bb-surface)] px-4 text-[11px] text-[var(--bb-text-dim)] flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <span className="tracking-wide">FINSIGHT TERMINAL</span>
-          <span>
+      <div className="relative z-20 h-9 border-b border-[var(--bb-border)] bg-[var(--bb-surface)] px-4 text-[11px] text-[var(--bb-text-dim)] flex items-center justify-between max-[480px]:px-2 max-[480px]:gap-2">
+        <div className="flex items-center gap-6 max-[480px]:gap-2 min-w-0">
+          <span className="tracking-wide shrink-0">FINSIGHT</span>
+          <span className="max-[480px]:hidden">
             SESSION: <span className="text-[var(--bb-text)]">{sessionText}</span>
           </span>
-          <span>
+          <span className="max-[640px]:hidden">
             MARKET: <span className="text-[var(--bb-green)]">OPEN</span>
           </span>
         </div>
-        <div>
+        <div className="shrink-0">
           <span className="font-semibold text-[var(--bb-orange)]">{clock}</span>
-          <span className="ml-2">UTC+8</span>
+          <span className="ml-2 max-[480px]:hidden">UTC+8</span>
         </div>
       </div>
 
-      <section className="relative z-20 mx-auto grid min-h-[calc(100vh-68px)] w-full max-w-[1180px] grid-cols-[minmax(0,680px)_380px] items-center justify-center gap-8 px-6 py-6 max-[960px]:grid-cols-1 max-[960px]:px-5 max-[960px]:py-8">
-        <div className="flex flex-col gap-8">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-[10px] bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] text-black font-bold text-xl flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.3)]">
+      <section className="relative z-20 mx-auto grid min-h-[calc(100vh-68px)] w-full max-w-[1180px] grid-cols-[minmax(0,680px)_380px] items-center justify-center gap-8 px-6 py-6 max-[960px]:grid-cols-1 max-[960px]:px-5 max-[960px]:py-8 max-[480px]:gap-5 max-[480px]:px-4 max-[480px]:py-5 max-[480px]:min-h-0">
+        <div className="flex flex-col gap-8 max-[480px]:gap-5">
+          <div className="flex items-center gap-3 max-[480px]:gap-2">
+            <div className="h-12 w-12 max-[480px]:h-9 max-[480px]:w-9 rounded-[10px] bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] text-black font-bold text-xl max-[480px]:text-base flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.3)]">
               F
             </div>
-            <div className="text-[32px] leading-none font-bold text-[var(--bb-text)]">
+            <div className="text-[32px] max-[480px]:text-[24px] leading-none font-bold text-[var(--bb-text)]">
               Fin<span className="text-[var(--bb-orange)]">Sight</span> AI
             </div>
-            <span className="ml-1 rounded border border-[var(--bb-orange)] px-2 py-0.5 text-[10px] tracking-wide text-[var(--bb-orange)]">
+            <span className="ml-1 rounded border border-[var(--bb-orange)] px-2 py-0.5 text-[10px] tracking-wide text-[var(--bb-orange)] max-[480px]:hidden">
               PRO TERMINAL
             </span>
           </div>
 
-          <h1 className="max-w-[720px] text-[42px] leading-[1.2] font-bold text-[var(--bb-text)] max-[960px]:text-[32px]">
+          <h1 className="max-w-[720px] text-[42px] leading-[1.2] font-bold text-[var(--bb-text)] max-[960px]:text-[32px] max-[480px]:text-[24px]">
             面向实盘研究的
             <span className="block text-[var(--bb-orange)]">AI 投研工作台</span>
           </h1>
 
-          <p className="max-w-[700px] text-base leading-8 text-[var(--bb-text-dim)]">
+          <p className="max-w-[700px] text-base leading-8 text-[var(--bb-text-dim)] max-[480px]:text-sm max-[480px]:leading-7">
             7 个研究智能体并行执行 · LangGraph 18 节点管线 · 6 个专业仪表盘标签页
             <br />
             混合 RAG 检索 · 跨智能体冲突检测 · 实时邮件预警
           </p>
 
-          <div className="grid grid-cols-3 gap-3 max-[960px]:grid-cols-2">
+          <div className="grid grid-cols-3 gap-3 max-[960px]:grid-cols-2 max-[480px]:grid-cols-3 max-[480px]:gap-2">
             {METRIC_CARDS.map((item) => (
               <div
                 key={item.label}
-                className="rounded-lg border border-[var(--bb-border)] bg-[var(--bb-surface)] p-4 transition-colors hover:border-[var(--bb-orange)]"
+                className="rounded-lg border border-[var(--bb-border)] bg-[var(--bb-surface)] p-4 max-[480px]:p-3 transition-colors hover:border-[var(--bb-orange)]"
               >
                 <div className="mb-2 text-[10px] uppercase tracking-widest text-[var(--bb-text-dim)]">{item.label}</div>
-                <div className="text-[32px] leading-none font-semibold text-[var(--bb-text)]">{item.value}</div>
+                <div className="text-[32px] max-[480px]:text-[24px] leading-none font-semibold text-[var(--bb-text)]">{item.value}</div>
                 <div className="mt-2 text-[11px] text-[var(--bb-green)]">{item.change}</div>
               </div>
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-[480px]:hidden">
             {CAPABILITIES.map((item) => (
               <span
                 key={item}
@@ -379,7 +379,7 @@ export function WelcomePage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--bb-border)] bg-[var(--bb-surface)] p-8 shadow-xl relative overflow-hidden h-fit">
+        <div className="rounded-2xl border border-[var(--bb-border)] bg-[var(--bb-surface)] p-8 max-[480px]:p-5 shadow-xl relative overflow-hidden h-fit">
           <div className="absolute left-0 right-0 top-0 h-[3px] bg-[linear-gradient(90deg,var(--bb-orange),var(--bb-blue),var(--bb-green))]" />
 
           <div className="flex items-start justify-between gap-3">
