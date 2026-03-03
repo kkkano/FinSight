@@ -34,7 +34,7 @@ const formatClock = (): string =>
   });
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
-  const { activeAsset, dashboardData, isLoading, error, setActiveAsset } = useDashboardStore();
+  const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
   const { theme, setTheme, entryMode, authIdentity } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
@@ -42,7 +42,7 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
 
   const [clock, setClock] = useState<string>(formatClock());
   const [currentSymbol, setCurrentSymbol] = useState<string>(
-    () => initialSymbol || activeAsset?.symbol || '',
+    () => initialSymbol || activeAsset?.symbol || watchlist[0]?.symbol || '',
   );
 
   useEffect(() => {

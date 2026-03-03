@@ -296,14 +296,15 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               if (!onDashboardClick) return;
               const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
-              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || '')
+              const firstWatchlistSymbol = watchlist[0]?.symbol;
+              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || firstWatchlistSymbol || '')
                 .toString()
                 .trim();
               if (!fallbackSymbol) {
                 toast({
                   type: 'info',
                   title: '还没有可用标的',
-                  message: '请先在“我的关注”里添加股票，例如 AAPL',
+                  message: '请先在"我的关注"里添加股票，例如 AAPL',
                 });
                 if (currentView !== 'dashboard') {
                   setShowAddInput(true);
