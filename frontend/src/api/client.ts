@@ -269,7 +269,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json; charset=utf-8',
   },
-  timeout: 120000, // 120秒超时，防止 LLM 生成长文时前端断开
+  timeout: 800000, // 120秒超时，防止 LLM 生成长文时前端断开
 });
 
 // 响应拦截器：处理后端返回的非 200 错误
