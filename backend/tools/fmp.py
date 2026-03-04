@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 FMP_BASE_URL = "https://financialmodelingprep.com/api"
 
 # 请求超时（秒）
-REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT = 5
 
 
 def _fmp_request(endpoint: str, params: Optional[dict] = None) -> Optional[Any]:

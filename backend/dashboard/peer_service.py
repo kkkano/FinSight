@@ -60,7 +60,7 @@ def _finnhub_request(path: str, params: Optional[dict[str, Any]] = None) -> Any 
         query = dict(params or {})
         query["token"] = token
         url = f"{_FINNHUB_BASE_URL}/{path.lstrip('/')}"
-        resp = _http_get(url, params=query, timeout=12)
+        resp = _http_get(url, params=query, timeout=8)
         if getattr(resp, "status_code", 0) != 200:
             return None
         payload = resp.json()
@@ -303,7 +303,7 @@ def fetch_peer_comparison(
         with ThreadPoolExecutor(max_workers=3) as pool:
             futures = {pool.submit(_fetch_single_peer_metrics, s): s for s in all_symbols}
             try:
-                for future in as_completed(futures, timeout=12):
+                for future in as_completed(futures, timeout=8):
                     sym = futures[future]
                     try:
                         result = future.result()

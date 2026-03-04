@@ -170,19 +170,48 @@ export const renderTraceSteps = (steps: any[], depth = 0, showPayload = true): R
 };
 
 // ========== 专家视图候选字段 ==========
+// Covers all fields actually emitted by backend trace events:
+// plan_ready, decision_note, agent_start, agent_done, agent_error, pipeline_stage, thinking
 const EXPERT_CANDIDATE_KEYS = [
+  // Agent identity & status
   'agent',
   'agent_name',
-  'tools',
-  'tool',
+  'status',
+  'confidence',
+  'fallback_reason',
+  // Planner events
+  'selected_agents',
+  'skipped_agents',
+  'reasoning_brief',
+  'plan_steps',
+  'plan_steps_count',
+  'has_parallel',
+  // Decision note events
+  'scope',
+  'title',
+  'reason',
+  'impact',
+  // Agent execution details
+  'query',
+  'ticker',
+  'attempt',
   'data_sources',
   'sources',
-  'confidence',
+  'summary_length',
+  'evidence_count',
+  // Error details
+  'error',
+  'error_type',
+  'retryable',
+  'max_attempts',
+  // Pipeline stage
+  'stage',
+  'message',
+  // Legacy / tools
+  'tools',
+  'tool',
   'status_reason',
   'selection_summary',
-  'input_state',
-  'input_sources',
-  'fallback_reason',
 ];
 
 // ========== 专家视图快照提取 ==========

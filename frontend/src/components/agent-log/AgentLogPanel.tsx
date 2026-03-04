@@ -32,9 +32,13 @@ const AGENT_LABELS: Record<string, string> = {
   fundamental_agent: 'Fundamental',
   technical_agent: 'Technical',
   macro_agent: 'Macro',
+  risk_agent: 'Risk',
   deep_search_agent: 'DeepSearch',
   system: 'System',
 };
+
+// Known agent names — anything not in this set gets mapped to 'system'
+const KNOWN_AGENTS = new Set(Object.keys(AGENT_LABELS));
 
 const canonicalAgentName = (value: unknown): string | null => {
   const raw = String(value || '').trim().toLowerCase();
@@ -46,17 +50,20 @@ const canonicalAgentName = (value: unknown): string | null => {
   if (raw === 'fundamentalagent' || raw === 'fundamental') return 'fundamental_agent';
   if (raw === 'technicalagent' || raw === 'technical') return 'technical_agent';
   if (raw === 'macroagent' || raw === 'macro') return 'macro_agent';
+  if (raw === 'riskagent' || raw === 'risk') return 'risk_agent';
   if (raw.includes('deep_search_agent')) return 'deep_search_agent';
   if (raw.includes('fundamental_agent')) return 'fundamental_agent';
   if (raw.includes('technical_agent')) return 'technical_agent';
   if (raw.includes('price_agent')) return 'price_agent';
   if (raw.includes('news_agent')) return 'news_agent';
   if (raw.includes('macro_agent')) return 'macro_agent';
+  if (raw.includes('risk_agent')) return 'risk_agent';
   if (raw.includes('supervisor')) return 'supervisor';
   if (raw.includes('planner')) return 'planner';
   if (raw.includes('forum')) return 'forum';
   if (raw.includes('system')) return 'system';
-  return raw;
+  // Unknown values → null (mapped to 'system' by getEventAgent)
+  return null;
 };
 
 const getEventAgent = (event: RawSSEEvent): string => {
@@ -67,11 +74,13 @@ const getEventAgent = (event: RawSSEEvent): string => {
     canonicalAgentName(data.name) ||
     canonicalAgentName(data.source) ||
     canonicalAgentName(data.stage);
-  if (inferred) return inferred;
+  if (inferred && KNOWN_AGENTS.has(inferred)) return inferred;
 
   if (event.eventType.startsWith('forum_')) return 'forum';
   if (event.eventType.startsWith('supervisor_')) return 'supervisor';
   if (event.eventType.startsWith('agent_')) return canonicalAgentName(data.agent) || 'system';
+  // LangGraph internal events → system
+  if (event.eventType.startsWith('langgraph_')) return 'system';
   if (event.eventType === 'system') return 'system';
   return 'system';
 };
@@ -85,6 +94,7 @@ const AGENT_ORDER = [
   'fundamental_agent',
   'technical_agent',
   'macro_agent',
+  'risk_agent',
   'deep_search_agent',
   'system',
 ];
