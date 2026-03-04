@@ -9,7 +9,7 @@ from .http import _http_get
 logger = logging.getLogger(__name__)
 
 _JINA_BASE = os.getenv("JINA_READER_BASE_URL", "https://r.jina.ai/")
-_JINA_TIMEOUT = int(os.getenv("JINA_READER_TIMEOUT", "15"))
+_JINA_TIMEOUT = int(os.getenv("JINA_READER_TIMEOUT", "30"))
 _JINA_MAX_CHARS = int(os.getenv("JINA_READER_MAX_CHARS", "12000"))
 _JINA_MIN_CHARS = int(os.getenv("JINA_READER_MIN_CHARS", "50"))
 

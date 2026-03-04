@@ -982,7 +982,7 @@ queries 要求：
         }
         try:
             session = self._get_session()
-            response = session.get(url, headers=headers, timeout=15, allow_redirects=True)
+            response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
             if response.url and not is_safe_url(response.url):
                 logger.info(f"[DeepSearch] Blocked unsafe redirect: {response.url}")
                 return None

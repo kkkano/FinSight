@@ -206,9 +206,12 @@ def _search_with_duckduckgo(query: str) -> str:
     if not DDGS_AVAILABLE or DDGS is None:
         raise Exception("DuckDuckGo 不可用")
     
+    # DDGS (primp/curl_cffi) 不一定读取 HTTP_PROXY 环境变量，显式传入
+    _proxy = os.getenv("HTTPS_PROXY") or os.getenv("YFINANCE_PROXY") or None
+    
     for attempt in range(3):  # 增加重试次数
         try:
-            ddgs = DDGS()
+            ddgs = DDGS(proxy=_proxy) if _proxy else DDGS()
             
             try:
                 results = list(ddgs.text(query, max_results=10, safesearch='moderate'))
