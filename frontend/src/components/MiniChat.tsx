@@ -190,9 +190,10 @@ export const MiniChat: React.FC = () => {
           ? {
             output_mode: 'investment_report',
             strict_selection: false,
+            confirmation_mode: 'skip' as const,
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
           }
-          : { output_mode: 'brief', trace_raw_override: traceRawEnabled ? 'on' : 'off' },
+          : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         sessionId || undefined,
         traceRawEnabled,
       );

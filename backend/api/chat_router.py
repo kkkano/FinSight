@@ -57,6 +57,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 strict_selection = request.options.strict_selection
                 confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
 
+            # Chat entry point should never trigger confirmation interrupt —
+            # the Chat UI has no InterruptCard to accept/reject.
+            if confirmation_mode is None:
+                confirmation_mode = "skip"
+
             resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
             from backend.graph.runner import run_graph_traced
@@ -141,6 +146,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             output_mode = request.options.output_mode
             strict_selection = request.options.strict_selection
             confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
+
+        # Chat entry point should never trigger confirmation interrupt —
+        # the Chat UI has no InterruptCard to accept/reject.
+        if confirmation_mode is None:
+            confirmation_mode = "skip"
 
         resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
