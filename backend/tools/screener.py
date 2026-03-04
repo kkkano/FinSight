@@ -171,9 +171,8 @@ def screen_stocks(
         capability_note = "CN/HK coverage is limited in FMP screener; empty or partial results are expected for some symbols."
 
     if not FMP_API_KEY:
-        # No FMP key configured, use yfinance directly
-        logger.info("FMP_API_KEY not configured, using yfinance screener")
-        return _yfinance_screen_stocks(market_norm, filters, limit_norm, sort_key, sort_dir)
+        logger.warning("FMP_API_KEY is not configured; screener unavailable")
+        return {"success": False, "error": "FMP_API_KEY is not configured", "count": 0, "results": []}
 
     limit_norm = _clean_int(limit, default=20, minimum=1, maximum=200)
     page_norm = _clean_int(page, default=1, minimum=1, maximum=100)

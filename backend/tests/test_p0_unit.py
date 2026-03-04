@@ -323,9 +323,9 @@ class TestResetTurnState:
         assert isinstance(result, dict)
 
     def test_exactly_13_keys_returned(self):
-        """Exactly 13 keys should be reset (7 decision + 5 confirmation + 1 trace)."""
+        """Exactly 15 keys should be reset (9 decision + 5 confirmation + 1 trace)."""
         result = reset_turn_state({})
-        assert len(result) == 13, f"Expected 13 keys, got {len(result)}: {list(result.keys())}"
+        assert len(result) == 15, f"Expected 15 keys, got {len(result)}: {list(result.keys())}"
 
     def test_trace_runtime_subkeys_cleared(self):
         """Per-turn trace runtime sub-keys must be removed."""
