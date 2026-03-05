@@ -96,26 +96,30 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
         )
     )
 
-    assert not indexed, "blocked reports must not enter report index by default"
+    # soft-block: report exists so it IS indexed with quality metadata
+    assert indexed, "soft-blocked reports should be indexed (report content preserved)"
     assert updated_context, "chat context should still be updated for conversation continuity"
 
     blocked_events = [event for event in events if isinstance(event, dict) and event.get("type") == "quality_blocked"]
     assert blocked_events, "SSE stream should emit quality_blocked"
-    assert blocked_events[0].get("publishable") is False
+    # soft-blocked: publishable=True because content is preserved
+    assert blocked_events[0].get("publishable") is True
     assert "EVIDENCE_COVERAGE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
     assert blocked_events[0].get("blocked_report_available") is True
     assert blocked_events[0].get("allow_continue_when_blocked") is True
+    assert blocked_events[0].get("soft_blocked") is True
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "pipeline should still emit done"
     done = done_events[0]
-    assert done.get("quality_blocked") is True
-    assert done.get("publishable") is False
-    assert done.get("response") == ""
-    assert done.get("report") is None
+    # soft-block: quality_blocked=False at done level, content preserved
+    assert done.get("quality_blocked") is False, "soft-blocked should not flag quality_blocked in done"
+    assert done.get("publishable") is True
+    assert done.get("soft_blocked") is True
+    assert done.get("response") != "", "soft-blocked should preserve markdown response"
+    assert isinstance(done.get("report"), dict), "soft-blocked should preserve report"
     assert isinstance(done.get("blocked_report"), dict)
     assert done.get("allow_continue_when_blocked") is True
-    assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))
 
 
 def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
@@ -192,21 +196,25 @@ def test_resume_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch
         )
     )
 
-    assert not indexed, "blocked reports must not enter report index by default"
+    # soft-block: report exists so it IS indexed
+    assert indexed, "soft-blocked reports should be indexed (report content preserved)"
     blocked_events = [event for event in events if isinstance(event, dict) and event.get("type") == "quality_blocked"]
     assert blocked_events, "SSE stream should emit quality_blocked"
-    assert blocked_events[0].get("publishable") is False
+    # soft-blocked: publishable=True because content is preserved
+    assert blocked_events[0].get("publishable") is True
     assert "GROUNDING_RATE_BELOW_MIN" in (blocked_events[0].get("blocked_reason_codes") or [])
     assert blocked_events[0].get("blocked_report_available") is True
     assert blocked_events[0].get("allow_continue_when_blocked") is True
+    assert blocked_events[0].get("soft_blocked") is True
 
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "resume pipeline should still emit done"
     done = done_events[0]
-    assert done.get("quality_blocked") is True
-    assert done.get("publishable") is False
-    assert done.get("response") == ""
-    assert done.get("report") is None
+    # soft-block: quality_blocked=False at done level, content preserved
+    assert done.get("quality_blocked") is False, "soft-blocked should not flag quality_blocked in done"
+    assert done.get("publishable") is True
+    assert done.get("soft_blocked") is True
+    assert done.get("response") != "", "soft-blocked should preserve markdown response"
+    assert isinstance(done.get("report"), dict), "soft-blocked should preserve report"
     assert isinstance(done.get("blocked_report"), dict)
     assert done.get("allow_continue_when_blocked") is True
-    assert not any(event.get("type") == "token" for event in events if isinstance(event, dict))

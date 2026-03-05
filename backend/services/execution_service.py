@@ -352,8 +352,10 @@ async def run_graph_pipeline(
                 source="execute_run",
             )
             blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
-            response_markdown = "" if quality_blocked else markdown
-            persisted_report = None if quality_blocked else report
+            # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
+            soft_blocked = quality_blocked and blocked_report_preview is not None
+            response_markdown = markdown if soft_blocked else ("" if quality_blocked else markdown)
+            persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
             if quality_blocked:
                 blocked_reason_codes = [
@@ -364,15 +366,16 @@ async def run_graph_pipeline(
                 await _queue_event(
                     {
                         "type": "quality_blocked",
-                        "message": "Report blocked by quality gate",
+                        "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
-                        "publishable": False,
+                        "publishable": soft_blocked,
                         "blocked_report_available": bool(blocked_report_preview),
-                        "allow_continue_when_blocked": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": True,
+                        "soft_blocked": soft_blocked,
                     }
                 )
-            elif isinstance(report, dict):
+            if isinstance(report, dict):
                 # 4. Persist report index (async / fire-and-forget)
                 deps.schedule_report_index(
                     session_id=thread_id, report=report, state=state,
@@ -388,7 +391,7 @@ async def run_graph_pipeline(
             )
 
             # 5b. Persist lightweight long-term memory snapshot (best-effort)
-            if not quality_blocked:
+            if not quality_blocked or soft_blocked:
                 try:
                     from backend.graph.store import persist_memory_snapshot
 
@@ -400,6 +403,7 @@ async def run_graph_pipeline(
                 except Exception as exc:
                     logger.warning("[execution_service] persist memory snapshot failed: %s", exc)
 
+            if not quality_blocked or soft_blocked:
                 # 6. Stream markdown in chunks
                 await _queue_event(
                     {
@@ -455,10 +459,11 @@ async def run_graph_pipeline(
                     "report": persisted_report,
                     "blocked_report": blocked_report_preview,
                     "quality": report_quality,
-                    "quality_blocked": quality_blocked,
-                    "publishable": not quality_blocked,
+                    "quality_blocked": quality_blocked and not soft_blocked,
+                    "publishable": not quality_blocked or soft_blocked,
                     "blocked_report_available": bool(blocked_report_preview),
-                    "allow_continue_when_blocked": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": True,
+                    "soft_blocked": soft_blocked,
                     "graph": {
                         "subject": state.get("subject"),
                         "output_mode": state.get("output_mode"),
@@ -638,8 +643,10 @@ async def resume_graph_pipeline(
                 source="execute_resume",
             )
             blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
-            response_markdown = "" if quality_blocked else markdown
-            persisted_report = None if quality_blocked else report
+            # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
+            soft_blocked = quality_blocked and blocked_report_preview is not None
+            response_markdown = markdown if soft_blocked else ("" if quality_blocked else markdown)
+            persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
             if quality_blocked:
                 blocked_reason_codes = [
@@ -650,22 +657,23 @@ async def resume_graph_pipeline(
                 await _queue_event(
                     {
                         "type": "quality_blocked",
-                        "message": "Report blocked by quality gate",
+                        "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
-                        "publishable": False,
+                        "publishable": soft_blocked,
                         "blocked_report_available": bool(blocked_report_preview),
-                        "allow_continue_when_blocked": bool(blocked_report_preview),
+                        "allow_continue_when_blocked": True,
+                        "soft_blocked": soft_blocked,
                     }
                 )
-            elif isinstance(report, dict):
+            if isinstance(report, dict):
                 # Persist report index
                 deps.schedule_report_index(
                     session_id=thread_id, report=report, state=final_state,
                 )
 
             # Persist lightweight long-term memory snapshot (best-effort)
-            if not quality_blocked:
+            if not quality_blocked or soft_blocked:
                 try:
                     from backend.graph.store import persist_memory_snapshot
 
@@ -677,6 +685,7 @@ async def resume_graph_pipeline(
                 except Exception as exc:
                     logger.warning("[resume_pipeline] persist memory snapshot failed: %s", exc)
 
+            if not quality_blocked or soft_blocked:
                 # Stream markdown
                 await _queue_event(
                     {
@@ -724,10 +733,11 @@ async def resume_graph_pipeline(
                     "report": persisted_report,
                     "blocked_report": blocked_report_preview,
                     "quality": report_quality,
-                    "quality_blocked": quality_blocked,
-                    "publishable": not quality_blocked,
+                    "quality_blocked": quality_blocked and not soft_blocked,
+                    "publishable": not quality_blocked or soft_blocked,
                     "blocked_report_available": bool(blocked_report_preview),
-                    "allow_continue_when_blocked": bool(blocked_report_preview),
+                    "allow_continue_when_blocked": True,
+                    "soft_blocked": soft_blocked,
                     "metrics": {
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),

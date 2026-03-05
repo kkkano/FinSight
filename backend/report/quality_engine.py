@@ -151,7 +151,7 @@ def build_runtime_quality_reasons(
         reasons.append(
             _quality_reason(
                 code="QUALITY_PROFILE_CRITICAL_MISSING",
-                severity="block",
+                severity="warn",
                 metric="critical_missing_requirements",
                 actual=critical_missing,
                 threshold=0,

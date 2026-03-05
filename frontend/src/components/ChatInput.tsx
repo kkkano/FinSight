@@ -380,10 +380,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }
 
           if (!fullContent || fullContent.trim() === '' || fullContent.trim() === '[object Object]') {
-            const fallback = typeof meta?.response === 'string' ? meta.response : report?.summary || '';
+            const blockedReport = meta?.blocked_report && typeof meta.blocked_report === 'object'
+              ? meta.blocked_report : null;
+            const fallback = typeof meta?.response === 'string' && meta.response.trim()
+              ? meta.response
+              : report?.summary || blockedReport?.summary || '';
             if (fallback) {
               fullContent = fallback;
             }
+          }
+
+          // 当 report 为空但 blocked_report 存在时，使用 blocked_report
+          if (!report && meta?.blocked_report && typeof meta.blocked_report === 'object') {
+            report = meta.blocked_report;
           }
 
           const nextFocus = meta?.current_focus || report?.ticker || guessedTicker || null;
