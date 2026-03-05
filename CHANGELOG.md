@@ -27,6 +27,24 @@
 
 ---
 
+## [1.1.1] - 2026-03-05
+
+### 修复与硬化 (Core Fixes & Stability)
+
+- **网络连接性深度硬化 (SSE & Tunnel 重构)**
+  - 架构更新：将所有 API 后端流量物理分离，独立到专属的 `api.finsight-ai.chat` 二级域名子通道，解决 Cloudflare Tunnel HTTP/2 强制复用导致的前端静态资源与流式拉取互相干涉断联问题。
+  - 强化反发呆心跳协议：SSE 心跳由弱穿透的空白注释（`: heartbeat`）变更为伪装数据的硬性数据事件投喂，心跳间隔由 15s 缩短至 8s。
+  - 深度防断层防御：前端 API Client 加入严密的边界接管，针对断联进行 `sawError`/`sawDone` 状态监测并增加兜底自动报错防僵死。
+  - 网关链路拉长：Nginx 针对深度生成类请求的 `proxy_read_timeout` 与 `proxy_send_timeout` 预先扩大到 `2400s`。
+- **Agent 执行跟踪修复**：修复 LangGraph 内部长流事件 (`langgraph_*`) 发送至前端在 `AgentLogPanel` 的源路由判定，同时在 `ThinkingUserView` 中主动过滤空 pending 阶段的白版占据。
+
+### 文档 (Documentation)
+
+- 新增：`docs/12_PRODUCTION_SSE_TUNNEL_POSTMORTEM.md`，深度记录了此次大模型长轮询被代理网关（Tunnel底层的 H2 Reset）连坐断网的根因诊断复盘记录。
+- 更新说明 `README.md` 中暴露前端的反向代理端口映射记录，并插入了系统 Logo。
+
+---
+
 ## [1.1.0] - 2026-03-02
 
 在 v1.0.0 核心平台基础上，新增 Phase 1-4 实验性功能套件，覆盖对话式提醒、智能选股、A 股市场数据与策略回测。
