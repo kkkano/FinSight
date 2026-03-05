@@ -5,7 +5,7 @@
 用于展示 Agent 的思考过程，集成全局追踪事件
 """
 
-from typing import AsyncGenerator, Dict, Any, Optional, Callable, List
+from typing import AsyncGenerator, Dict, Any, Optional, Callable, List, AsyncIterator
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
@@ -15,6 +15,9 @@ from datetime import datetime
 from backend.orchestration.trace_emitter import get_trace_emitter, TraceEvent
 
 logger = logging.getLogger(__name__)
+HEARTBEAT_INTERVAL_SECONDS = 15.0
+# 必须是 data: 事件（非 SSE 注释），Cloudflare Tunnel HTTP/2 只转发实际数据帧
+HEARTBEAT_FRAME = f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 
 
 def _trace_event_to_sse(event: TraceEvent) -> str:
@@ -139,7 +142,18 @@ async def stream_report_sse(
     done_received = False
 
     try:
-        async for raw in report_agent.analyze_stream(query):
+        stream_iter: AsyncIterator[Any] = report_agent.analyze_stream(query).__aiter__()
+        while True:
+            try:
+                raw = await asyncio.wait_for(
+                    stream_iter.__anext__(),
+                    timeout=HEARTBEAT_INTERVAL_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                yield HEARTBEAT_FRAME
+                continue
+            except StopAsyncIteration:
+                break
             if raw is None:
                 continue
             payload = str(raw).strip()
@@ -196,7 +210,21 @@ async def stream_supervisor_sse(
     trace_emitter.set_async_queue(trace_queue)
 
     try:
-        async for raw in supervisor.analyze_stream(query, ticker):
+        stream_iter: AsyncIterator[Any] = supervisor.analyze_stream(query, ticker).__aiter__()
+        while True:
+            try:
+                raw = await asyncio.wait_for(
+                    stream_iter.__anext__(),
+                    timeout=HEARTBEAT_INTERVAL_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                trace_events = await _drain_trace_queue(trace_queue)
+                for te in trace_events:
+                    yield _trace_event_to_sse(te)
+                yield HEARTBEAT_FRAME
+                continue
+            except StopAsyncIteration:
+                break
             # 先处理所有待处理的 trace 事件
             trace_events = await _drain_trace_queue(trace_queue)
             for te in trace_events:

@@ -320,6 +320,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     let thinkingSteps: ThinkingStep[] = [];
     const effectiveOutputMode = outputMode;
 
+    const requestStartedAt = Date.now();
+
+    const recoverReportIfAvailable = async (): Promise<boolean> => {
+      const session = sessionId || useStore.getState().sessionId;
+      if (!session) return false;
+      try {
+        const index = await apiClient.listReportIndex({
+          sessionId: session,
+          limit: 1,
+          includeBlocked: true,
+        });
+        const latest = index.items?.[0];
+        if (!latest?.report_id) return false;
+
+        const ts = latest.generated_at || latest.created_at || latest.updated_at || '';
+        if (ts) {
+          const parsed = Date.parse(ts);
+          if (Number.isFinite(parsed) && parsed + 120000 < requestStartedAt) {
+            return false;
+          }
+        }
+
+        const replay = await apiClient.getReportReplay({
+          sessionId: session,
+          reportId: latest.report_id,
+          includeBlocked: true,
+        });
+        if (!replay?.report) return false;
+
+        updateMessage(aiMsgId, {
+          content: replay.report.summary || fullContent || 'Report recovered after stream interruption.',
+          isLoading: false,
+          report: replay.report,
+          evidence_pool: replay.citations,
+        });
+        setExecutionState('Recovered report', 100);
+        setStatus(null);
+        toast({
+          type: 'success',
+          title: '已恢复报告',
+          message: '流式连接中断后已从后端取回报告',
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     try {
       await apiClient.sendMessageStream(
         userMsgContent,
@@ -432,23 +480,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           setStatus(null);
         },
         (error) => {
-          updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
-          setStatus('Error occurred');
-          toast({
-            type: 'error',
-            title: '网络请求失败',
-            message: '请确认后端服务已启动',
-          });
-          const current = useStore.getState().executionProgress ?? 0;
-          setExecutionState('Execution failed', current);
-          addAgentLog({
-            id: uuidv4(),
-            timestamp: new Date().toISOString(),
-            source: 'system',
-            level: 'error',
-            message: `Error: ${error}`,
-          });
-          updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
+          const handleFailure = async () => {
+            const recovered = await recoverReportIfAvailable();
+            if (recovered) return;
+
+            updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
+            setStatus('Stream interrupted');
+            toast({
+              type: 'error',
+              title: '流式连接中断',
+              message: '连接被中断或服务暂不可用，请重试',
+            });
+            const current = useStore.getState().executionProgress ?? 0;
+            setExecutionState('Execution failed', current);
+            addAgentLog({
+              id: uuidv4(),
+              timestamp: new Date().toISOString(),
+              source: 'system',
+              level: 'error',
+              message: `Error: ${error}`,
+            });
+            updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
+          };
+
+          void handleFailure();
         },
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
@@ -526,8 +581,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       setStatus('Request failed');
       toast({
         type: 'error',
-        title: '网络请求失败',
-        message: '请确认后端服务已启动',
+        title: '请求失败',
+        message: '网络异常或服务不可用，请稍后重试',
       });
       const current = useStore.getState().executionProgress ?? 0;
       setExecutionState('Request failed', current);

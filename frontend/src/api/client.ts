@@ -336,6 +336,9 @@ export async function parseSSEStream(
         try {
           const data = JSON.parse(rawJson);
 
+          // 跳过后端 keep-alive / heartbeat 心跳帧（仅用于保持 Cloudflare Tunnel 连接）
+          if (data.type === 'heartbeat' || data.type === 'keep-alive') continue;
+
           // Forward raw event to developer console
           if (onRawEvent && traceRawEnabled) {
             const eventType: RawEventType = normalizeEventType(data);
@@ -849,11 +852,36 @@ export const apiClient = {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
+    let sawDone = false;
+    let sawError = false;
+
+    const wrappedOnDone = (report?: any, thinking?: any[], meta?: any) => {
+      sawDone = true;
+      onDone?.(report, thinking, meta);
+    };
+
+    const wrappedOnError = (error: string) => {
+      sawError = true;
+      onError?.(error);
+    };
+
     await parseSSEStream(
       response,
-      { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent },
+      {
+        onToken,
+        onToolStart,
+        onToolEnd,
+        onDone: wrappedOnDone,
+        onError: wrappedOnError,
+        onThinking,
+        onRawEvent,
+      },
       { traceRawEnabled },
     );
+
+    if (!sawDone && !sawError) {
+      wrappedOnError('Execution stream ended unexpectedly (missing done event)');
+    }
   },
 
   /**

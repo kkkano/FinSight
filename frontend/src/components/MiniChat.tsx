@@ -112,6 +112,51 @@ export const MiniChat: React.FC = () => {
     accumulatedThinkingRef.current = [];
     const effectiveOutputMode = outputMode;
 
+    const requestStartedAt = Date.now();
+
+    const recoverReportIfAvailable = async (): Promise<boolean> => {
+      const session = sessionId || useStore.getState().sessionId;
+      if (!session) return false;
+      try {
+        const index = await apiClient.listReportIndex({
+          sessionId: session,
+          limit: 1,
+          includeBlocked: true,
+        });
+        const latest = index.items?.[0];
+        if (!latest?.report_id) return false;
+
+        const ts = latest.generated_at || latest.created_at || latest.updated_at || '';
+        if (ts) {
+          const parsed = Date.parse(ts);
+          if (Number.isFinite(parsed) && parsed + 120000 < requestStartedAt) {
+            return false;
+          }
+        }
+
+        const replay = await apiClient.getReportReplay({
+          sessionId: session,
+          reportId: latest.report_id,
+          includeBlocked: true,
+        });
+        if (!replay?.report) return false;
+
+        updateMessage(aiMsgId, {
+          content: replay.report.summary || accumulatedContentRef.current || 'Report recovered after stream interruption.',
+          isLoading: false,
+          report: replay.report,
+        });
+        toast({
+          type: 'success',
+          title: '已恢复报告',
+          message: '流式连接中断后已从后端取回报告',
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     try {
       // 构建统一的历史记录（取 messages，排除 welcome 和 loading）
       const history = messages
@@ -168,11 +213,21 @@ export const MiniChat: React.FC = () => {
           });
         },
         (error: string) => {
-          updateMessage(aiMsgId, {
-            content: `Error: ${error}`,
-            isLoading: false,
-          });
-          toast({ type: 'error', title: '请求失败', message: error || '网络错误' });
+          const handleFailure = async () => {
+            const recovered = await recoverReportIfAvailable();
+            if (recovered) return;
+
+            updateMessage(aiMsgId, {
+              content: `Error: ${error}`,
+              isLoading: false,
+            });
+            toast({
+              type: 'error',
+              title: '流式连接中断',
+              message: error || '连接被中断或服务暂不可用，请重试',
+            });
+          };
+          void handleFailure();
         },
         (step) => {
           // onThinking

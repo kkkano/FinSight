@@ -501,9 +501,9 @@ async def run_graph_pipeline(
     try:
         while True:
             try:
-                item = await asyncio.wait_for(queue.get(), timeout=5)
+                item = await asyncio.wait_for(queue.get(), timeout=3)
             except asyncio.TimeoutError:
-                yield {"type": "keep-alive"}
+                yield {"type": "keep-alive", "ts": _utc_iso_now()}
                 continue
 
             if item is _END:
@@ -764,9 +764,9 @@ async def resume_graph_pipeline(
     try:
         while True:
             try:
-                item = await asyncio.wait_for(queue.get(), timeout=5)
+                item = await asyncio.wait_for(queue.get(), timeout=3)
             except asyncio.TimeoutError:
-                yield {"type": "keep-alive"}
+                yield {"type": "keep-alive", "ts": _utc_iso_now()}
                 continue
             if item is _END:
                 break
