@@ -57,10 +57,13 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 strict_selection = request.options.strict_selection
                 confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
 
-            # Chat entry point should never trigger confirmation interrupt —
-            # the Chat UI has no InterruptCard to accept/reject.
+            # Chat entry point defaults to skip — Chat UI has no InterruptCard.
+            # Exception: investment_report mode always requires confirmation (auto).
             if confirmation_mode is None:
-                confirmation_mode = "skip"
+                if str(output_mode or "").strip().lower() == "investment_report":
+                    confirmation_mode = "auto"
+                else:
+                    confirmation_mode = "skip"
 
             resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
@@ -147,10 +150,13 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             strict_selection = request.options.strict_selection
             confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
 
-        # Chat entry point should never trigger confirmation interrupt —
-        # the Chat UI has no InterruptCard to accept/reject.
+        # Chat entry point defaults to skip — Chat UI has no InterruptCard.
+        # Exception: investment_report mode always requires confirmation (auto).
         if confirmation_mode is None:
-            confirmation_mode = "skip"
+            if str(output_mode or "").strip().lower() == "investment_report":
+                confirmation_mode = "auto"
+            else:
+                confirmation_mode = "skip"
 
         resolved_query = deps.resolve_query_reference(request.query, thread_id)
 
