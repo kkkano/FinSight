@@ -1,6 +1,10 @@
 
 
 
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="FinSight AI Logo" width="80" height="80" />
+</p>
+
 <h1 align="center">FinSight AI</h1>
 
 <p align="center">
@@ -980,7 +984,7 @@ cp .env.example .env
 
 # 3. Start all services
 docker compose up -d
-# Frontend: http://localhost (port 80)
+# Frontend: http://localhost:5173
 # Backend:  http://localhost:8000
 # PostgreSQL: localhost:5432
 ```

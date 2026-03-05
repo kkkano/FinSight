@@ -188,7 +188,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
         async def _stream():
             async for event in pipeline:
                 if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield ": keep-alive\n\n"
+                    yield f"data: {_serialize_sse_item(event)}\n\n"
                 else:
                     yield f"data: {_serialize_sse_item(event)}\n\n"
 

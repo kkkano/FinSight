@@ -307,9 +307,11 @@ export const ThinkingUserView: React.FC<ThinkingUserViewProps> = ({ thinking }) 
 
   return (
     <div className="mt-2 space-y-1.5">
-      {/* Phase Milestones */}
+      {/* Phase Milestones - only show phases with activity */}
       <div className="space-y-0.5">
-        {phases.map((phase) => {
+        {phases
+          .filter((phase) => phase.status !== 'pending' || phase.steps.length > 0)
+          .map((phase) => {
           const isExpanded = expandedPhases.has(phase.id);
           const hasSteps = phase.steps.length > 0;
           const isClickable = hasSteps || phase.status !== 'pending';

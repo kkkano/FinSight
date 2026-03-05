@@ -15,7 +15,7 @@ from datetime import datetime
 from backend.orchestration.trace_emitter import get_trace_emitter, TraceEvent
 
 logger = logging.getLogger(__name__)
-HEARTBEAT_INTERVAL_SECONDS = 15.0
+HEARTBEAT_INTERVAL_SECONDS = 8.0
 # 必须是 data: 事件（非 SSE 注释），Cloudflare Tunnel HTTP/2 只转发实际数据帧
 HEARTBEAT_FRAME = f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 

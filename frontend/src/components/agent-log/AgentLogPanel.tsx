@@ -68,6 +68,19 @@ const canonicalAgentName = (value: unknown): string | null => {
 
 const getEventAgent = (event: RawSSEEvent): string => {
   const data = event.parsedData || {};
+
+  // LangGraph internal events → system
+  // eventType is always "thinking" for these; the langgraph_ prefix lives in
+  // parsedData.stage (e.g. "langgraph_build_initial_state_done").
+  const stage = String(data.stage || '');
+  if (stage.startsWith('langgraph_')) {
+    // Some langgraph stages carry an agent source (e.g. source:"planner")
+    // Route those to the known agent; otherwise → system.
+    const agentFromSource = canonicalAgentName(data.source);
+    if (agentFromSource && KNOWN_AGENTS.has(agentFromSource)) return agentFromSource;
+    return 'system';
+  }
+
   const inferred =
     canonicalAgentName(data.agent) ||
     canonicalAgentName(data.agent_name) ||
@@ -79,8 +92,6 @@ const getEventAgent = (event: RawSSEEvent): string => {
   if (event.eventType.startsWith('forum_')) return 'forum';
   if (event.eventType.startsWith('supervisor_')) return 'supervisor';
   if (event.eventType.startsWith('agent_')) return canonicalAgentName(data.agent) || 'system';
-  // LangGraph internal events → system
-  if (event.eventType.startsWith('langgraph_')) return 'system';
   if (event.eventType === 'system') return 'system';
   return 'system';
 };

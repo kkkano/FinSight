@@ -169,7 +169,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         async def _stream():
             async for event in pipeline:
                 if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield ": keep-alive\n\n"
+                    yield f"data: {_serialize(event)}\n\n"
                 else:
                     yield f"data: {_serialize(event)}\n\n"
 
@@ -227,7 +227,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         async def _stream():
             async for event in pipeline:
                 if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield ": keep-alive\n\n"
+                    yield f"data: {_serialize(event)}\n\n"
                 else:
                     yield f"data: {_serialize(event)}\n\n"
 

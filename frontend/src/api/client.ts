@@ -908,7 +908,26 @@ export const apiClient = {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await parseSSEStream(response, callbacks, opts);
+    let sawDone = false;
+    let sawError = false;
+
+    const wrappedCallbacks: SSECallbacks = {
+      ...callbacks,
+      onDone: (report, thinking, meta) => {
+        sawDone = true;
+        callbacks.onDone?.(report, thinking, meta);
+      },
+      onError: (error) => {
+        sawError = true;
+        callbacks.onError?.(error);
+      },
+    };
+
+    await parseSSEStream(response, wrappedCallbacks, opts);
+
+    if (!sawDone && !sawError) {
+      callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
+    }
   },
 
   /**
@@ -976,7 +995,26 @@ export const apiClient = {
     });
 
     if (callbacks && response.ok) {
-      await parseSSEStream(response.clone(), callbacks, opts);
+      let sawDone = false;
+      let sawError = false;
+
+      const wrappedCallbacks: SSECallbacks = {
+        ...callbacks,
+        onDone: (report, thinking, meta) => {
+          sawDone = true;
+          callbacks.onDone?.(report, thinking, meta);
+        },
+        onError: (error) => {
+          sawError = true;
+          callbacks.onError?.(error);
+        },
+      };
+
+      await parseSSEStream(response.clone(), wrappedCallbacks, opts);
+
+      if (!sawDone && !sawError) {
+        callbacks.onError?.('Resume stream ended unexpectedly (missing done event)');
+      }
     }
 
     return response;
