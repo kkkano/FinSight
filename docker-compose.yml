@@ -61,6 +61,11 @@ services:
       RAG_V2_ALLOW_MEMORY_FALLBACK: "true"
       RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
+      # Supabase runtime auth for /diagnostics/rag/*
+      # Keep these values aligned with frontend VITE_SUPABASE_* so backend can validate Bearer access tokens.
+      SUPABASE_URL:                 ${SUPABASE_URL:-}
+      SUPABASE_PUBLISHABLE_KEY:     ${SUPABASE_PUBLISHABLE_KEY:-}
+      RAG_OBSERVABILITY_AUTH_CACHE_SECONDS: ${RAG_OBSERVABILITY_AUTH_CACHE_SECONDS:-60}
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
@@ -89,6 +94,7 @@ services:
         # Empty string would trigger fallback to http://127.0.0.1:8000 in runtime.ts
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://175.178.159.112}
         # Optional Supabase auth (Magic Link)
+        # Must point to the same Supabase project as backend SUPABASE_* runtime env.
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
     container_name: finsight-frontend

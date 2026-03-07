@@ -72,8 +72,20 @@ Thumbs.db
 logs/
 *.log
 *.tmp
+.tmp*
+.tmp-*/
 temp/
 tmp/
+frontend/.tmp_*
+scripts/.tmp_*
+tmp_test_write.txt
+
+# --- Local Debug Screenshots ---
+desktop-welcome-check.png
+mobile-welcome-*.png
+welcome-dom-check.png
+rag-inspector-local-check.png
+*.bak
 
 # --- Auto-generated Reports ---
 docs/reports/
@@ -91,6 +103,9 @@ data/langgraph/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/*.sqlite
+data/memory/*.json
+!data/memory/anonymous.json
 backend/data/*.sqlite
 backend/data/*.db
 backend/data/*.bak
