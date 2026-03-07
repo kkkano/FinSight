@@ -89,6 +89,17 @@
 <p align="center">
   <img src="images/4dc0e95c-2963-4422-ba3e-d86a3788b4b1.png" alt="FinSight AI 仪表盘" width="100%"/>
 </p>
+### RAG Inspector
+
+<p align="center">
+  <img src="images/142bc537-d76f-4ab1-9a84-4d86a0db2af5.png" alt="RAG Inspector：展示查询运行、事件载荷、chunk 预览与原文内容" width="100%"/>
+</p>
+
+<p align="center">
+  <img src="images/6352da18-d7e9-418a-a219-15150cbeebcb.png" alt="RAG Inspector：展示原文内容、chunk 元数据与命中细节" width="100%"/>
+</p>
+
+RAG Inspector 用来把检索链路彻底摊开看清楚：你可以直接查看最近查询、24 小时统计、逐步事件 payload、命中的 chunk 切片、对应原文，以及 chunk metadata。它的目标是让 DeepSearch / Hybrid RAG 的“搜了什么、切了什么、命中了什么、落了什么”都变得可观测、可审计。
 
 <table>
 <tr>
