@@ -1,9 +1,15 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { CircleAlert, Mail, Moon, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  getRagInspectorDevIdentity,
+  isRagInspectorDevAuthAvailable,
+  setRagInspectorDevAuthActive,
+  verifyRagInspectorDevAccessPassword,
+} from '../../auth/devAuth';
 import { getSupabaseClient, isSupabaseAuthConfigured } from '../../api/supabaseClient';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
-import { buildAnonymousSessionId, useStore } from '../../store/useStore';
+import { buildAnonymousSessionId, buildUserSessionId, useStore } from '../../store/useStore';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useToast } from '../ui';
@@ -23,6 +29,8 @@ const resolveFallbackPath = (from: string | null): string => {
   if (raw.startsWith('/welcome')) return '/chat';
   return raw;
 };
+
+const isAuthenticatedOnlyPath = (path: string): boolean => path === '/rag-inspector' || path.startsWith('/rag-inspector?');
 
 const CAPABILITIES = [
   '价格分析',
@@ -82,12 +90,15 @@ export function WelcomePage() {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
+  const [ragInspectorPassword, setRagInspectorPassword] = useState('');
 
   const isDark = theme === 'dark';
   const supabaseReady = useMemo(() => isSupabaseAuthConfigured(), []);
   const isLoggedIn = Boolean(authIdentity?.userId);
   const sessionText = authIdentity?.email || 'GUEST-001';
   const redirectPath = resolveFallbackPath(new URLSearchParams(location.search).get('from'));
+  const requiresAuthenticatedEntry = isAuthenticatedOnlyPath(redirectPath);
+  const devAuthReady = useMemo(() => isRagInspectorDevAuthAvailable(), []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);
@@ -113,11 +124,81 @@ export function WelcomePage() {
   }, [marketQuotes]);
 
   const handleAnonymousEnter = () => {
+    if (requiresAuthenticatedEntry) {
+      toast({
+        type: 'error',
+        title: '该页面需要登录',
+        message: devAuthReady
+          ? 'RAG Inspector 只允许登录态访问；本地联调请点击“开发模式进入 RAG Inspector”。'
+          : 'RAG Inspector 只允许登录态访问，匿名体验会被路由守卫直接拦回欢迎页。',
+      });
+      return;
+    }
+
     markWelcomeGatePassed();
     setAuthIdentity(null);
     setEntryMode('anonymous');
     setSessionId(buildAnonymousSessionId());
     navigate(redirectPath);
+  };
+
+  const handleDevAuthEnter = () => {
+    const devIdentity = getRagInspectorDevIdentity();
+    if (!devIdentity) {
+      toast({
+        type: 'error',
+        title: '开发模式未配置',
+        message: '请先设置 VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN。',
+      });
+      return;
+    }
+
+    setRagInspectorDevAuthActive(true);
+    markWelcomeGatePassed();
+    setAuthIdentity(devIdentity);
+    setEntryMode('authenticated');
+    setSessionId(buildUserSessionId(devIdentity.userId));
+    if (devIdentity.email) {
+      setSubscriptionEmail(devIdentity.email);
+      setEmail(devIdentity.email);
+    }
+
+    toast({
+      type: 'success',
+      title: '开发模式已启用',
+      message: '已注入本地测试身份，正在进入 RAG Inspector。',
+    });
+    navigate(redirectPath);
+  };
+
+  const handleDevPasswordEnter = () => {
+    const normalizedPassword = String(ragInspectorPassword || '').trim();
+    if (!devAuthReady) {
+      toast({
+        type: 'error',
+        title: '开发模式未配置',
+        message: '请先设置 VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN。',
+      });
+      return;
+    }
+    if (!normalizedPassword) {
+      toast({
+        type: 'error',
+        title: '请输入密码',
+        message: '请输入 RAG Inspector 本地访问密码。',
+      });
+      return;
+    }
+    if (!verifyRagInspectorDevAccessPassword(normalizedPassword)) {
+      toast({
+        type: 'error',
+        title: '密码错误',
+        message: '本地访问密码不正确，请重试。',
+      });
+      return;
+    }
+    setRagInspectorPassword('');
+    handleDevAuthEnter();
   };
 
   const handleSendCode = async () => {
@@ -251,6 +332,8 @@ export function WelcomePage() {
         const { error } = await client.auth.signOut();
         if (error) throw error;
       }
+
+      setRagInspectorDevAuthActive(false);
 
       if (typeof window !== 'undefined') {
         window.sessionStorage.removeItem(WELCOME_GATE_KEY);
@@ -484,6 +567,54 @@ export function WelcomePage() {
               >
                 匿名体验（数据仅存本地）
               </Button>
+
+              {false && requiresAuthenticatedEntry && devAuthReady ? (
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={handleDevAuthEnter}
+                  className="mt-3 w-full !border-[rgba(255,140,0,0.35)] !bg-[var(--bb-orange-dim)] !text-[var(--bb-text)] hover:!bg-[rgba(255,140,0,0.18)]"
+                >
+                  开发模式进入 RAG Inspector
+                </Button>
+              ) : null}
+
+              {requiresAuthenticatedEntry && devAuthReady ? (
+                <div className="mt-3 space-y-3 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[rgba(255,140,0,0.08)] px-3 py-3">
+                  <Input
+                    label={'RAG Inspector 密码'}
+                    type="password"
+                    value={ragInspectorPassword}
+                    onChange={(event) => setRagInspectorPassword(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleDevPasswordEnter();
+                      }
+                    }}
+                    placeholder={'输入本地访问密码'}
+                    autoComplete="current-password"
+                    className="py-2.5 !bg-[var(--bb-bg)] !border-[rgba(255,140,0,0.35)] !text-[var(--bb-text)]"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={handleDevPasswordEnter}
+                    className="w-full !border-[rgba(255,140,0,0.35)] !bg-[var(--bb-orange-dim)] !text-[var(--bb-text)] hover:!bg-[rgba(255,140,0,0.18)]"
+                  >
+                    {'输入密码进入 RAG Inspector'}
+                  </Button>
+                  <div className="text-[11px] leading-5 text-[var(--bb-text-dim)]">
+                    {'这是本地开发门禁，主要用于联调入口收口；真正的数据读取权限仍由后端鉴权决定。'}
+                  </div>
+                </div>
+              ) : null}
+
+              {requiresAuthenticatedEntry ? (
+                <div className="mt-3 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[rgba(255,140,0,0.08)] px-3 py-2 text-xs text-[var(--bb-text-dim)] leading-6">
+                  当前目标页是 RAG Inspector；它默认只对登录用户开放，匿名模式不会放行。
+                </div>
+              ) : null}
 
               <div className="mt-2 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[var(--bb-orange-dim)] px-3 py-2 text-xs text-[var(--bb-text-dim)] flex items-start gap-2 leading-6">
                 <CircleAlert size={14} className="mt-1 shrink-0 text-[var(--bb-orange)]" />

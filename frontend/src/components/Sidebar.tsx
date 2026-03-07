@@ -2,6 +2,7 @@
 import {
   BarChart2,
   Bell,
+  Search,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -12,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { isRagInspectorDevAuthActive, setRagInspectorDevAuthActive } from '../auth/devAuth';
 import { apiClient } from '../api/client';
 import { getSupabaseClient } from '../api/supabaseClient';
 import { buildAnonymousSessionId, deriveUserIdFromSessionId, useStore } from '../store/useStore';
@@ -177,11 +179,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleLogout = useCallback(async () => {
     const client = getSupabaseClient();
-    if (!client) return;
+    const devAuthActive = isRagInspectorDevAuthActive();
+    if (!client && !devAuthActive) return;
     setAuthLoading(true);
     try {
-      const { error } = await client.auth.signOut();
-      if (error) throw error;
+      if (client) {
+        const { error } = await client.auth.signOut();
+        if (error) throw error;
+      }
+      setRagInspectorDevAuthActive(false);
       setAuthIdentity(null);
       setEntryMode('anonymous');
       setSessionId(buildAnonymousSessionId());
@@ -324,6 +330,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               setActiveTab('workbench');
               onWorkbenchClick?.();
+            }}
+          />
+
+          <NavItem
+            icon={<Search size={18} />}
+            label="RAG 观测"
+            testId="sidebar-nav-rag-inspector"
+            active={activeTab === 'rag-inspector'}
+            onClick={() => {
+              setActiveTab('rag-inspector');
+              navigate('/rag-inspector');
             }}
           />
 

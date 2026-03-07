@@ -4,6 +4,8 @@
 import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
 import type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
 import { API_BASE_URL, buildApiUrl } from '../config/runtime';
+import { getRagInspectorDevAccessToken } from '../auth/devAuth';
+import { getSupabaseClient } from './supabaseClient';
 
 /**
  * Chat Context - 临时上下文（不入库，仅本次请求生效）
@@ -270,6 +272,41 @@ const api = axios.create({
     'Content-Type': 'application/json; charset=utf-8',
   },
   timeout: 800000, // 120秒超时，防止 LLM 生成长文时前端断开
+});
+
+api.interceptors.request.use(async (config) => {
+  const client = getSupabaseClient();
+  let accessToken: string | null = null;
+
+  if (client) {
+    try {
+      const { data } = await client.auth.getSession();
+      accessToken = data.session?.access_token || null;
+    } catch {
+    }
+  }
+
+  if (!accessToken) {
+    accessToken = getRagInspectorDevAccessToken();
+  }
+
+  if (!accessToken) return config;
+
+  const headers: any = config.headers ?? {};
+  const hasAuthorization = typeof headers.get === 'function'
+    ? Boolean(headers.get('Authorization'))
+    : Boolean(headers.Authorization);
+
+  if (!hasAuthorization) {
+    if (typeof headers.set === 'function') {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    } else {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+  }
+
+  config.headers = headers;
+  return config;
 });
 
 // 响应拦截器：处理后端返回的非 200 错误
@@ -812,6 +849,82 @@ export const apiClient = {
 
   async diagnosticsOrchestrator(): Promise<any> {
     const response = await api.get('/diagnostics/orchestrator');
+    return response.data;
+  },
+
+  async diagnosticsRagStatus(): Promise<any> {
+    const response = await api.get('/diagnostics/rag/status');
+    return response.data;
+  },
+
+  async diagnosticsRagRuns(params?: { limit?: number; cursor?: string | null; q?: string; fallback_only?: boolean }): Promise<any> {
+    const response = await api.get('/diagnostics/rag/runs', {
+      params: {
+        limit: params?.limit ?? 20,
+        cursor: params?.cursor || undefined,
+        q: params?.q || undefined,
+        fallback_only: params?.fallback_only ?? false,
+      },
+    });
+    return response.data;
+  },
+
+  async diagnosticsRagRunDetail(runId: string): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/runs/${encodeURIComponent(runId)}`);
+    return response.data;
+  },
+
+  async diagnosticsRagRunEvents(runId: string, limit: number = 500): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/runs/${encodeURIComponent(runId)}/events`, { params: { limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagRunDocuments(runId: string, limit: number = 200): Promise<any> {
+    const response = await api.get('/diagnostics/rag/documents', { params: { run_id: runId, limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagRunChunks(runId: string, limit: number = 500): Promise<any> {
+    const response = await api.get('/diagnostics/rag/chunks', { params: { run_id: runId, limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagRunHits(runId: string, limit: number = 500): Promise<any> {
+    const response = await api.get('/diagnostics/rag/hits', { params: { run_id: runId, limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagCollections(params?: { limit?: number }): Promise<any> {
+    const response = await api.get('/diagnostics/rag/collections', { params: { limit: params?.limit ?? 200 } });
+    return response.data;
+  },
+
+  async diagnosticsRagCollectionDocuments(collection: string, limit: number = 200): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/collections/${encodeURIComponent(collection)}/documents`, { params: { limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagCollectionChunks(collection: string, limit: number = 500): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/collections/${encodeURIComponent(collection)}/chunks`, { params: { limit } });
+    return response.data;
+  },
+
+  async diagnosticsRagDbBrowser(tableName: string, params?: { limit?: number; offset?: number; q?: string; collection?: string; run_id?: string; source_doc_id?: string }): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/db-browser/${encodeURIComponent(tableName)}`, {
+      params: {
+        limit: params?.limit ?? 50,
+        offset: params?.offset ?? 0,
+        q: params?.q || undefined,
+        collection: params?.collection || undefined,
+        run_id: params?.run_id || undefined,
+        source_doc_id: params?.source_doc_id || undefined,
+      },
+    });
+    return response.data;
+  },
+
+  async diagnosticsRagSearchPreview(payload: { query: string; collection: string; top_k?: number }): Promise<any> {
+    const response = await api.post('/diagnostics/rag/search-preview', payload);
     return response.data;
   },
 

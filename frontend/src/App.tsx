@@ -7,6 +7,8 @@ import { ToastProvider } from './components/ui';
 import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
+import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
+import { RagInspectorPage } from './pages/RagInspectorPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
@@ -98,6 +100,19 @@ function EntryGuard({ children }: { children: ReactElement }) {
   return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
 }
 
+function AuthenticatedGuard({ children }: { children: ReactElement }) {
+  const authIdentity = useStore((state) => state.authIdentity);
+  const entryMode = useStore((state) => state.entryMode);
+  const location = useLocation();
+
+  if (Boolean(authIdentity?.userId) || entryMode === 'authenticated') {
+    return children;
+  }
+
+  const from = `${location.pathname}${location.search}`;
+  return <Navigate to={`/welcome?from=${encodeURIComponent(from)}`} replace />;
+}
+
 function RootRedirect() {
   return <Navigate to={{ pathname: '/welcome', search: '' }} replace />;
 }
@@ -120,7 +135,16 @@ function App() {
   useEffect(() => {
     const client = getSupabaseClient();
     if (!client) {
-      setAuthIdentity(null);
+      const devIdentity = isRagInspectorDevAuthActive() ? getRagInspectorDevIdentity() : null;
+      if (devIdentity) {
+        markWelcomeGatePassed();
+        setAuthIdentity(devIdentity);
+        setEntryMode('authenticated');
+        setSessionId(buildUserSessionId(devIdentity.userId));
+        if (devIdentity.email) setSubscriptionEmail(devIdentity.email);
+      } else {
+        setAuthIdentity(null);
+      }
       return;
     }
 
@@ -195,6 +219,7 @@ function App() {
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/chat" element={<EntryGuard><ChatRoute /></EntryGuard>} />
         <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
+        <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
         <Route path="/phase-labs" element={<EntryGuard><PhaseLabsRoute /></EntryGuard>} />
         <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
