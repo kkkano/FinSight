@@ -20,14 +20,16 @@ logger = logging.getLogger(__name__)
 
 
 
-def start_price_change_scheduler(
+def start_interval_scheduler(
     run_fn: Callable[[], None],
     *,
     interval_minutes: float = 15.0,
     enabled: bool = True,
+    job_id: str = "scheduled_cycle",
+    job_label: str = "scheduled job",
 ) -> Optional[BackgroundScheduler]:
     """
-    Start background scheduler for price_change cycle.
+    Start background scheduler for a generic interval job.
 
     Args:
         run_fn: callable without args that performs one sweep.
@@ -35,18 +37,33 @@ def start_price_change_scheduler(
         enabled: toggle; if False, returns None.
     """
     if not enabled:
-        logger.info("[Scheduler] price_change scheduler disabled (env).")
+        logger.info(f"[Scheduler] {job_label} disabled (env).")
         return None
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(
         run_fn,
         trigger=IntervalTrigger(minutes=interval_minutes),
-        id="price_change_cycle",
+        id=job_id,
         max_instances=1,
         coalesce=True,
         next_run_time=datetime.now(timezone.utc),  # fire once immediately
     )
     scheduler.start()
-    logger.info(f"[Scheduler] price_change scheduler started: every {interval_minutes} min.")
+    logger.info(f"[Scheduler] {job_label} started: every {interval_minutes} min.")
     return scheduler
+
+
+def start_price_change_scheduler(
+    run_fn: Callable[[], None],
+    *,
+    interval_minutes: float = 15.0,
+    enabled: bool = True,
+) -> Optional[BackgroundScheduler]:
+    return start_interval_scheduler(
+        run_fn,
+        interval_minutes=interval_minutes,
+        enabled=enabled,
+        job_id="price_change_cycle",
+        job_label="price_change scheduler",
+    )

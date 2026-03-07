@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional, Tuple, Callable
 from datetime import datetime, timezone
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -250,6 +251,14 @@ class DeepSearchAgent(BaseFinancialAgent):
         evidence_quality = self._compute_evidence_quality(all_docs or results)
         _log_event("evidence_quality", evidence_quality)
 
+        rag_observability = await self._record_rag_observability(
+            query=query,
+            ticker=ticker,
+            docs=all_docs or results,
+        )
+        if rag_observability:
+            _log_event("rag_observability", rag_observability)
+
         output = self._format_output(
             summary,
             all_docs or results,
@@ -273,7 +282,12 @@ class DeepSearchAgent(BaseFinancialAgent):
         results: List[Dict[str, Any]] = []
         for q in queries:
             logger.info(f"[DeepSearch] search: {q}")
-            results.extend(self._search_web(q))
+            for rank, item in enumerate(self._search_web(q), 1):
+                enriched = dict(item or {})
+                enriched["search_query"] = q
+                enriched["deepsearch_phase"] = "initial"
+                enriched["search_rank"] = rank
+                results.append(enriched)
 
         results = self._dedupe_results(results)
         results = self._filter_results(results, query=query, ticker=ticker)[:self.MAX_RESULTS]
@@ -356,7 +370,13 @@ queries 要求：
         results: List[Dict[str, Any]] = []
         for gap in gaps:
             query = f"{ticker} {gap}".strip()
-            results.extend(self._search_web(query))
+            for rank, item in enumerate(self._search_web(query), 1):
+                enriched = dict(item or {})
+                enriched["search_query"] = query
+                enriched["gap_query"] = gap
+                enriched["deepsearch_phase"] = "targeted"
+                enriched["search_rank"] = rank
+                results.append(enriched)
         results = self._dedupe_results(results)
         synthesized_query = f"{ticker} {' '.join([str(g).strip() for g in gaps if str(g).strip()])}".strip()
         results = self._filter_results(
@@ -899,15 +919,39 @@ queries 要求：
         return results
 
     def _dedupe_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        seen = set()
-        deduped = []
+        deduped_by_url: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
         for item in results:
             url = item.get("url", "").strip()
-            if not url or url in seen:
+            if not url:
                 continue
-            seen.add(url)
-            deduped.append(item)
-        return deduped
+            if url not in deduped_by_url:
+                merged = dict(item)
+                merged["search_queries"] = self._merge_unique_strings([], [item.get("search_query")])
+                merged["gap_queries"] = self._merge_unique_strings([], [item.get("gap_query")])
+                merged["deepsearch_phases"] = self._merge_unique_strings([], [item.get("deepsearch_phase")])
+                deduped_by_url[url] = merged
+                order.append(url)
+                continue
+
+            merged = deduped_by_url[url]
+            merged["search_queries"] = self._merge_unique_strings(merged.get("search_queries") or [], [item.get("search_query")])
+            merged["gap_queries"] = self._merge_unique_strings(merged.get("gap_queries") or [], [item.get("gap_query")])
+            merged["deepsearch_phases"] = self._merge_unique_strings(merged.get("deepsearch_phases") or [], [item.get("deepsearch_phase")])
+            merged["search_rank"] = min(
+                int(merged.get("search_rank") or 10**9),
+                int(item.get("search_rank") or 10**9),
+            )
+        return [deduped_by_url[url] for url in order]
+
+    def _merge_unique_strings(self, existing: List[Any], incoming: List[Any]) -> List[str]:
+        values: List[str] = []
+        for raw in list(existing or []) + list(incoming or []):
+            value = str(raw or "").strip()
+            if not value or value in values:
+                continue
+            values.append(value)
+        return values
 
     def _build_snippet_docs(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """当文档抓取全部失败时，从搜索 snippet 构建降级文档。"""
@@ -926,6 +970,13 @@ queries 要求：
                 "source": item.get("source", "web"),
                 "published_date": item.get("published_date"),
                 "is_pdf": False,
+                "search_query": item.get("search_query"),
+                "search_queries": item.get("search_queries") or [],
+                "gap_query": item.get("gap_query"),
+                "gap_queries": item.get("gap_queries") or [],
+                "deepsearch_phase": item.get("deepsearch_phase"),
+                "deepsearch_phases": item.get("deepsearch_phases") or [],
+                "search_rank": item.get("search_rank"),
                 "confidence": 0.5,  # 降级文档置信度较低
                 "degraded": True,
                 "degrade_reason": "snippet_only",
@@ -1066,10 +1117,106 @@ queries 要求：
             "source": item.get("source", self._infer_source(url)),
             "published_date": item.get("published_date"),
             "is_pdf": is_pdf,
+            "search_query": item.get("search_query"),
+            "search_queries": item.get("search_queries") or [],
+            "gap_query": item.get("gap_query"),
+            "gap_queries": item.get("gap_queries") or [],
+            "deepsearch_phase": item.get("deepsearch_phase"),
+            "deepsearch_phases": item.get("deepsearch_phases") or [],
+            "search_rank": item.get("search_rank"),
             "confidence": confidence,
             "degraded": used_snippet_fallback,
             "degrade_reason": "empty_content_use_snippet" if used_snippet_fallback else None,
         }
+
+    async def _record_rag_observability(self, *, query: str, ticker: str, docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not docs:
+            return {}
+        try:
+            from backend.rag import RAGDocument, get_rag_service
+        except Exception as exc:
+            logger.info("[DeepSearch] RAG observability unavailable: %s", exc)
+            return {"enabled": False, "error": str(exc)}
+
+        collection = self._build_rag_collection(query=query, ticker=ticker)
+        rag_docs: List[Any] = []
+        for index, item in enumerate(docs, 1):
+            content = str(item.get("content") or "").strip()
+            if not content:
+                continue
+            url = str(item.get("url") or "").strip()
+            title = str(item.get("title") or "").strip() or None
+            source = str(item.get("source") or self._infer_source(url) or "web").strip() or "web"
+            seed = url or f"{title or 'doc'}::{content[:120]}::{index}"
+            source_id = f"deepsearch:{hashlib.md5(seed.encode('utf-8')).hexdigest()}"
+            metadata = {
+                "origin": "deep_search_agent",
+                "ticker": ticker,
+                "search_query": item.get("search_query"),
+                "search_queries": item.get("search_queries") or [],
+                "gap_query": item.get("gap_query"),
+                "gap_queries": item.get("gap_queries") or [],
+                "deepsearch_phase": item.get("deepsearch_phase"),
+                "deepsearch_phases": item.get("deepsearch_phases") or [],
+                "search_rank": item.get("search_rank"),
+                "is_pdf": bool(item.get("is_pdf")),
+                "published_date": item.get("published_date"),
+                "confidence": item.get("confidence"),
+                "degraded": bool(item.get("degraded")),
+                "degrade_reason": item.get("degrade_reason"),
+                "doc_index": index,
+            }
+            rag_docs.append(
+                RAGDocument(
+                    collection=collection,
+                    scope="deepsearch",
+                    source_id=source_id,
+                    content=content,
+                    title=title,
+                    url=url or None,
+                    source=source,
+                    metadata=metadata,
+                )
+            )
+
+        if not rag_docs:
+            return {}
+
+        def _sync_record() -> Dict[str, Any]:
+            rag_service = get_rag_service()
+            ingest_stats = rag_service.ingest_documents(rag_docs)
+            hits = rag_service.hybrid_search(query, collection=collection, top_k=min(8, len(rag_docs)))
+            return {
+                "enabled": True,
+                "collection": collection,
+                "backend": str(getattr(rag_service, "backend_name", "unknown") or "unknown"),
+                "embedding_model": str(getattr(rag_service, "embedding_model", "unknown") or "unknown"),
+                "vector_dim": int(getattr(rag_service, "vector_dim", 0) or 0),
+                "ingest_stats": ingest_stats if isinstance(ingest_stats, dict) else {"result": ingest_stats},
+                "hit_count": len(hits),
+                "top_hits": [
+                    {
+                        "title": hit.get("title"),
+                        "url": hit.get("url"),
+                        "dense_score": hit.get("dense_score"),
+                        "sparse_score": hit.get("sparse_score"),
+                        "rrf_score": hit.get("rrf_score"),
+                    }
+                    for hit in (hits or [])[:5]
+                ],
+            }
+
+        try:
+            return await asyncio.to_thread(_sync_record)
+        except Exception as exc:
+            logger.exception("[DeepSearch] Failed to record RAG observability: %s", exc)
+            return {"enabled": False, "collection": collection, "error": str(exc)}
+
+    def _build_rag_collection(self, *, query: str, ticker: str) -> str:
+        normalized_ticker = (ticker or "unknown").strip().lower() or "unknown"
+        seed = f"{normalized_ticker}::{query.strip()}"
+        digest = hashlib.md5(seed.encode("utf-8")).hexdigest()[:16]
+        return f"session:deepsearch:{normalized_ticker}:{digest}"
 
     def _extract_pdf_text(self, data: bytes) -> str:
         if not PdfReader:

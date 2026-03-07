@@ -1,14 +1,19 @@
-import logging
-from fastapi import FastAPI, Request
+﻿import logging
+import json
+import asyncio
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import re
+import asyncio
 import sys
 import time
 from collections import deque
 from threading import Lock
 from typing import Any, Dict, List, Optional
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from uuid import uuid4
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -41,6 +46,7 @@ from backend.conversation.context import ContextManager
 from backend.graph import aget_graph_runner, get_graph_checkpointer_info, graph_runner_ready, reset_graph_runner
 from backend.orchestration.tools_bridge import get_global_orchestrator
 from backend.graph.nodes.planner import get_planner_ab_metrics
+from backend.rag import get_rag_observability_store, install_rag_observability_hooks
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.portfolio_store import get_positions as get_portfolio_positions
 from backend.services.report_index import get_report_index_store
@@ -51,6 +57,10 @@ logger = logging.getLogger(__name__)
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+# Windows + psycopg async 需要 Selector Event LoopPolicy，否则本地 PostgreSQL checkpointer 启动会报错。
+if sys.platform.startswith('win') and hasattr(asyncio, 'WindowsSelectorEventLoopPolicy'):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Load env once for scheduler/SMTP configs, etc.
 load_dotenv()
@@ -63,7 +73,7 @@ if not logging.getLogger().handlers:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-# 尝试导入核心工具
+# 鐏忔繆鐦€电厧鍙嗛弽绋跨妇瀹搞儱鍙?
 try:
     from backend.tools import (
         get_stock_price,
@@ -75,7 +85,7 @@ try:
     )
     logger.info("[Init] Core tools imported successfully.")
 except ImportError as e:
-    # 如果 backend.tools 导入失败，则尝试从根目录 tools 导入（兼容旧结构）
+    # 婵″倹鐏?backend.tools 鐎电厧鍙嗘径杈Е閿涘苯鍨亸婵婄槸娴犲孩鐗撮惄顔肩秿 tools 鐎电厧鍙嗛敍鍫濆悑鐎硅妫紒鎾寸€敍?
     try:
         from tools import (
             get_stock_price,
@@ -97,7 +107,7 @@ except ImportError as e:
     logger.info(f"[Init] Error importing chart detector: {e}")
     ChartTypeDetector = None
 
-# 导入 MemoryService
+# 鐎电厧鍙?MemoryService
 try:
     from backend.services.memory import MemoryService, UserProfile
     memory_service = MemoryService()
@@ -111,6 +121,9 @@ _schedulers = []
 _reference_contexts: Dict[str, ContextManager] = {}
 _reference_context_last_access: Dict[str, float] = {}
 _reference_lock = Lock()
+_AUTH_IDENTITY_CACHE_SENTINEL = object()
+_auth_identity_cache: Dict[str, tuple[float, Optional[Dict[str, Any]]]] = {}
+_auth_identity_lock = Lock()
 
 _SESSION_PART_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _SENSITIVE_KEY_FRAGMENTS = (
@@ -321,7 +334,7 @@ def _update_session_context(
 ) -> None:
     if not thread_id:
         return
-    # 指令型操作（如 alert_set）不应污染对话上下文
+    # 閹稿洣鎶ら崹瀣惙娴ｆ粣绱欐俊?alert_set閿涘绗夋惔鏃€钖勯弻鎾愁嚠鐠囨繀绗傛稉瀣瀮
     if skip_context:
         return
     try:
@@ -391,8 +404,23 @@ def _parse_csv_env(key: str, default: str) -> list[str]:
 
 
 def _cors_allow_origins() -> list[str]:
-    origins = _parse_csv_env("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
-    return origins or ["http://localhost:5173", "http://127.0.0.1:5173"]
+    origins = _parse_csv_env(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
+    )
+    return origins or [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ]
+
+
+def _cors_allow_origin_regex() -> str | None:
+    configured = str(os.getenv("CORS_ALLOW_ORIGIN_REGEX") or "").strip()
+    if configured:
+        return configured
+    return r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 def _cors_allow_credentials() -> bool:
@@ -417,6 +445,163 @@ def _extract_api_key(request: Request) -> Optional[str]:
     if auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
     return None
+
+
+def _extract_bearer_token(request: Request) -> Optional[str]:
+    auth = request.headers.get("Authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth.split(" ", 1)[1].strip() or None
+    return None
+
+
+def _resolve_supabase_auth_config() -> tuple[str, str]:
+    supabase_url = str(os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL") or "").strip().rstrip("/")
+    publishable_key = str(os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("VITE_SUPABASE_PUBLISHABLE_KEY") or "").strip()
+    return supabase_url, publishable_key
+
+
+def _is_supabase_auth_configured() -> bool:
+    supabase_url, publishable_key = _resolve_supabase_auth_config()
+    return bool(supabase_url and publishable_key)
+
+
+def _resolve_rag_observability_dev_auth_config() -> tuple[str, str, Optional[str]]:
+    token = str(os.getenv("RAG_OBSERVABILITY_DEV_ACCESS_TOKEN") or "").strip()
+    user_id = str(os.getenv("RAG_OBSERVABILITY_DEV_USER_ID") or "local-rag-inspector").strip() or "local-rag-inspector"
+    email_raw = str(os.getenv("RAG_OBSERVABILITY_DEV_EMAIL") or "local-rag@example.com").strip()
+    return token, user_id, email_raw or None
+
+
+def _is_rag_observability_dev_auth_enabled() -> bool:
+    token, _, _ = _resolve_rag_observability_dev_auth_config()
+    return _env_bool("RAG_OBSERVABILITY_DEV_AUTH_ENABLED", "false") and bool(token)
+
+
+def _resolve_rag_observability_dev_user_identity(token: str) -> Optional[Dict[str, Any]]:
+    normalized = str(token or "").strip()
+    if not normalized or not _is_rag_observability_dev_auth_enabled():
+        return None
+
+    dev_token, user_id, email = _resolve_rag_observability_dev_auth_config()
+    if normalized != dev_token:
+        return None
+
+    return {
+        "user_id": user_id,
+        "email": email,
+        "auth_type": "dev_bearer",
+        "role": "reader",
+    }
+
+
+def _is_internal_api_key_authorized(request: Request) -> bool:
+    api_key = _extract_api_key(request)
+    return bool(api_key and api_key in _parse_api_keys())
+
+
+def _auth_identity_cache_ttl_seconds() -> int:
+    raw = str(os.getenv("RAG_OBSERVABILITY_AUTH_CACHE_SECONDS", "60") or "60").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 60
+    return max(5, min(600, value))
+
+
+def _fetch_supabase_user_identity(token: str) -> Optional[Dict[str, Any]]:
+    normalized = str(token or "").strip()
+    if not normalized:
+        return None
+
+    now = time.time()
+    with _auth_identity_lock:
+        cached = _auth_identity_cache.get(normalized)
+        if cached and cached[0] > now:
+            return cached[1]
+
+    supabase_url, publishable_key = _resolve_supabase_auth_config()
+    if not supabase_url or not publishable_key:
+        raise RuntimeError("RAG diagnostics auth not configured")
+
+    request_obj = urllib_request.Request(
+        f"{supabase_url}/auth/v1/user",
+        headers={
+            "Authorization": f"Bearer {normalized}",
+            "apikey": publishable_key,
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+
+    user_identity: Optional[Dict[str, Any]] = None
+    try:
+        with urllib_request.urlopen(request_obj, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8") or "{}")
+        user_id = str(payload.get("id") or "").strip() if isinstance(payload, dict) else ""
+        if user_id:
+            email = payload.get("email") if isinstance(payload, dict) else None
+            user_identity = {
+                "user_id": user_id,
+                "email": str(email).strip() if email else None,
+                "auth_type": "supabase",
+                "role": "reader",
+            }
+    except urllib_error.HTTPError as exc:
+        if exc.code not in (401, 403):
+            raise RuntimeError(f"Supabase auth lookup failed with HTTP {exc.code}") from exc
+    except urllib_error.URLError as exc:
+        raise RuntimeError(f"Supabase auth lookup failed: {exc.reason}") from exc
+
+    with _auth_identity_lock:
+        _auth_identity_cache[normalized] = (now + _auth_identity_cache_ttl_seconds(), user_identity)
+    return user_identity
+
+
+def _resolve_request_user_identity(request: Request) -> Optional[Dict[str, Any]]:
+    cached = getattr(request.state, "rag_authenticated_user", _AUTH_IDENTITY_CACHE_SENTINEL)
+    if cached is not _AUTH_IDENTITY_CACHE_SENTINEL:
+        return cached
+
+    token = _extract_bearer_token(request)
+    if not token:
+        request.state.rag_authenticated_user = None
+        return None
+
+    dev_identity = _resolve_rag_observability_dev_user_identity(token)
+    if dev_identity:
+        request.state.rag_authenticated_user = dev_identity
+        return dev_identity
+
+    if not _is_supabase_auth_configured():
+        request.state.rag_authenticated_user = None
+        return None
+
+    user_identity = _fetch_supabase_user_identity(token)
+    request.state.rag_authenticated_user = user_identity
+    return user_identity
+
+
+def _require_rag_read_access(request: Request) -> Dict[str, Any]:
+    if _is_internal_api_key_authorized(request):
+        principal = {"user_id": "internal", "email": None, "auth_type": "api_key", "role": "internal"}
+        request.state.rag_authenticated_user = principal
+        return principal
+
+    if not (_is_supabase_auth_configured() or _is_rag_observability_dev_auth_enabled()):
+        raise HTTPException(status_code=503, detail="RAG diagnostics auth not configured")
+
+    user_identity = _resolve_request_user_identity(request)
+    if user_identity:
+        return user_identity
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def _require_rag_mutation_access(request: Request) -> Dict[str, Any]:
+    if _is_internal_api_key_authorized(request):
+        principal = {"user_id": "internal", "email": None, "auth_type": "api_key", "role": "internal"}
+        request.state.rag_authenticated_user = principal
+        return principal
+    raise HTTPException(status_code=403, detail="RAG diagnostics is read-only for logged-in users; mutation requires internal API key")
 
 
 def _is_allowlisted_path(path: str) -> bool:
@@ -535,7 +720,7 @@ async def lifespan(app: FastAPI):
     _init_default_user_config()
 
     from backend.services.alert_scheduler import run_price_change_cycle
-    from backend.services.scheduler_runner import start_price_change_scheduler
+    from backend.services.scheduler_runner import start_interval_scheduler, start_price_change_scheduler
 
     enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", "false")
     if enabled:
@@ -596,6 +781,36 @@ async def lifespan(app: FastAPI):
         logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
 
     try:
+        install_rag_observability_hooks()
+        rag_observability_status = get_rag_observability_store().ensure_schema() if hasattr(get_rag_observability_store(), 'ensure_schema') else False
+        logger.info("[RAGObservability] initialized=%s", rag_observability_status)
+    except Exception as exc:
+        logger.exception("[RAGObservability] initialization failed in lifespan: %s", exc)
+
+    rag_retention_enabled = _env_bool("RAG_OBSERVABILITY_RETENTION_ENABLED", "true")
+    if rag_retention_enabled:
+        rag_retention_interval = float(os.getenv("RAG_OBSERVABILITY_RETENTION_INTERVAL_MINUTES", "360"))
+
+        def _run_rag_observability_retention_cycle() -> None:
+            try:
+                deleted = get_rag_observability_store().cleanup_retention()
+                logger.info("[RAGObservability] retention cleanup deleted=%s", deleted)
+            except Exception as exc:
+                logger.exception("[RAGObservability] retention cleanup failed: %s", exc)
+
+        sched = start_interval_scheduler(
+            _run_rag_observability_retention_cycle,
+            interval_minutes=rag_retention_interval,
+            enabled=True,
+            job_id="rag_observability_retention",
+            job_label="rag observability retention",
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        logger.info("[RAGObservability] RAG_OBSERVABILITY_RETENTION_ENABLED is false; skip retention scheduler.")
+
+    try:
         await aget_graph_runner()
         logger.info("[GraphRunner] initialized in lifespan")
     except Exception as exc:
@@ -628,15 +843,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FinSight API",
-    description="FinSight 后端服务",
+    description="FinSight 閸氬海顏張宥呭",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS 配置
+# CORS 闁板秶鐤?
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_allow_origins(),
+    allow_origin_regex=_cors_allow_origin_regex(),
     allow_credentials=_cors_allow_credentials(),
     allow_methods=["*"],
     allow_headers=["*"],
@@ -654,10 +870,21 @@ async def security_gate(request: Request, call_next):
             return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})
         api_key = _extract_api_key(request)
         if not api_key or api_key not in keys:
-            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+            if request.url.path.startswith("/diagnostics/rag"):
+                try:
+                    user_identity = _require_rag_read_access(request)
+                    request.state.rag_authenticated_user = user_identity
+                except HTTPException as exc:
+                    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            else:
+                return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
     if _rate_limiter.enabled:
-        client_id = api_key or (request.client.host if request.client else "anonymous")
+        request_identity = getattr(request.state, "rag_authenticated_user", None)
+        if isinstance(request_identity, dict) and request_identity.get("user_id"):
+            client_id = f"user:{request_identity['user_id']}"
+        else:
+            client_id = api_key or (request.client.host if request.client else "anonymous")
         allowed, retry_after = _rate_limiter.allow(client_id)
         if not allowed:
             headers = {"Retry-After": str(retry_after)}
@@ -693,6 +920,9 @@ system_router = create_system_router(
         get_graph_checkpointer_info=get_graph_checkpointer_info,
         get_orchestrator_safe=_get_orchestrator_safe,
         get_planner_ab_metrics=get_planner_ab_metrics,
+        get_rag_observability_store=lambda: get_rag_observability_store(),
+        require_rag_read_access=lambda request: _require_rag_read_access(request),
+        require_rag_mutation_access=lambda request: _require_rag_mutation_access(request),
         memory_service=memory_service,
         logger=logger,
     )
@@ -822,6 +1052,8 @@ app.include_router(dashboard_router)
 app.include_router(portfolio_router)
 app.include_router(rebalance_router)
 app.include_router(morning_brief_router)
-# 启动入口
+# 閸氼垰濮╅崗銉ュ經
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
+
+

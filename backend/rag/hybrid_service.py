@@ -299,6 +299,14 @@ class _PostgresHybridStore:
         self._schema_ready = False
         self._schema_lock = threading.Lock()
 
+    @staticmethod
+    def _has_vector_type(conn: Any) -> bool:
+        try:
+            value = conn.execute(text("SELECT to_regtype('vector') IS NOT NULL")).scalar()
+        except Exception:
+            return False
+        return bool(value)
+
     def _ensure_schema(self) -> None:
         if self._schema_ready:
             return
@@ -306,7 +314,10 @@ class _PostgresHybridStore:
             if self._schema_ready:
                 return
             with self._engine.begin() as conn:
-                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                if self._has_vector_type(conn):
+                    logger.info("RAG v2 detected existing vector type; skip CREATE EXTENSION")
+                else:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
                 # E6: Check existing table dimension and migrate if needed
                 existing_dim = self._check_vector_dimension(conn)
