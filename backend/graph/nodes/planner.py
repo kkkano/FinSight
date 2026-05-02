@@ -341,6 +341,37 @@ def _build_budget_assertions(steps: list[dict[str, Any]], safe_budget: dict[str,
     }
 
 
+def _plan_tasks_from_state(state: GraphState) -> list[dict[str, Any]]:
+    raw_tasks = state.get("tasks")
+    if not isinstance(raw_tasks, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for idx, task in enumerate(raw_tasks[:16], 1):
+        if not isinstance(task, dict):
+            continue
+        operation = task.get("operation")
+        op_name = "qa"
+        if isinstance(operation, dict):
+            candidate = operation.get("name")
+            if isinstance(candidate, str) and candidate.strip():
+                op_name = candidate.strip()
+        tickers = task.get("tickers")
+        rows.append(
+            {
+                "id": str(task.get("id") or f"task_{idx}"),
+                "subject_type": str(task.get("subject_type") or "unknown"),
+                "tickers": [
+                    str(ticker).strip().upper()
+                    for ticker in (tickers if isinstance(tickers, list) else [])
+                    if str(ticker).strip()
+                ],
+                "operation": op_name,
+                "status": str(task.get("status") or "ready"),
+            }
+        )
+    return rows
+
+
 def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Enforce critical invariants from state + policy:
@@ -848,6 +879,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         "goal": goal,
         "subject": subject,
         "output_mode": output_mode,
+        "tasks": _plan_tasks_from_state(state),
         "budget": safe_budget,
         "steps": sanitized_steps,
         "synthesis": safe_synthesis,

@@ -27,6 +27,11 @@ def planner_stub(state: GraphState) -> dict:
     budget = PlanBudget.model_validate(raw_budget or {"max_rounds": 1, "max_tools": 0})
     allowed_tools = set((policy.get("allowed_tools") or []) if isinstance(policy, dict) else [])
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
+    raw_tasks = state.get("tasks")
+    ready_tasks = [
+        task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
+        if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
+    ]
 
     steps: list[dict] = []
     step_id = 1
@@ -77,21 +82,256 @@ def planner_stub(state: GraphState) -> dict:
         *,
         why: str,
         optional: bool = True,
+        parallel_group: str | None = None,
     ) -> None:
         nonlocal step_id
         if name not in allowed_tools:
             return
-        steps.append(
-            {
-                "id": f"s{step_id}",
-                "kind": "tool",
-                "name": name,
-                "inputs": inputs,
-                "why": why,
-                "optional": optional,
-            }
-        )
+        step = {
+            "id": f"s{step_id}",
+            "kind": "tool",
+            "name": name,
+            "inputs": inputs,
+            "why": why,
+            "optional": optional,
+        }
+        if parallel_group:
+            step["parallel_group"] = parallel_group
+        steps.append(step)
         step_id += 1
+
+    def _task_operation_name(task: dict) -> str:
+        op = task.get("operation")
+        if isinstance(op, dict):
+            name = op.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+        return "qa"
+
+    def _task_tickers(task: dict) -> list[str]:
+        values = task.get("tickers")
+        if not isinstance(values, list):
+            return []
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            ticker = str(value or "").strip().upper()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            result.append(ticker)
+        return result
+
+    def _plan_task_summary() -> list[dict]:
+        rows: list[dict] = []
+        for task in ready_tasks[:16]:
+            task_id = str(task.get("id") or f"task_{len(rows) + 1}").strip()
+            rows.append(
+                {
+                    "id": task_id or f"task_{len(rows) + 1}",
+                    "subject_type": str(task.get("subject_type") or "unknown"),
+                    "tickers": _task_tickers(task),
+                    "operation": _task_operation_name(task),
+                    "status": str(task.get("status") or "ready"),
+                }
+            )
+        return rows
+
+    def _append_company_task_steps(task: dict, *, group: str) -> None:
+        op_name = _task_operation_name(task)
+        tickers_for_task = _task_tickers(task)
+        if op_name == "compare" and len(tickers_for_task) >= 2:
+            mapping = {ticker: ticker for ticker in tickers_for_task[:6]}
+            _append_tool_step(
+                "get_performance_comparison",
+                {"tickers": mapping},
+                why="多标的对比任务：先取标准化表现数据。",
+                optional=False,
+                parallel_group=group,
+            )
+            return
+
+        for ticker in tickers_for_task[:6]:
+            if op_name in {"price", "technical", "qa", "analyze_impact", "daily_brief"}:
+                _append_tool_step(
+                    "get_stock_price",
+                    {"ticker": ticker},
+                    why=f"{ticker} 任务：获取价格/涨跌幅作为回答锚点。",
+                    optional=op_name not in {"price", "technical"},
+                    parallel_group=group,
+                )
+            if op_name == "technical":
+                _append_tool_step(
+                    "get_technical_snapshot",
+                    {"ticker": ticker},
+                    why=f"{ticker} 技术面任务：获取技术指标快照。",
+                    optional=False,
+                    parallel_group=group,
+                )
+            if op_name in {"fetch", "qa", "analyze_impact", "daily_brief"}:
+                _append_tool_step(
+                    "get_company_news",
+                    {"ticker": ticker},
+                    why=f"{ticker} 任务：获取相关新闻用于事件解释。",
+                    optional=op_name not in {"fetch", "analyze_impact"},
+                    parallel_group=group,
+                )
+            if op_name in {"qa", "analyze_impact"}:
+                _append_tool_step(
+                    "get_company_info",
+                    {"ticker": ticker},
+                    why=f"{ticker} 任务：补充公司基础信息，避免只看新闻标题。",
+                    optional=True,
+                    parallel_group=group,
+                )
+
+    def _append_macro_task_steps(task: dict, *, group: str) -> None:
+        task_query = str(task.get("subject_label") or query).strip() or query
+        _append_tool_step(
+            "get_current_datetime",
+            {},
+            why="宏观任务：获取当前日期，防止把旧政策当成当前事实。",
+            optional=True,
+            parallel_group=group,
+        )
+        _append_tool_step(
+            "get_official_macro_releases",
+            {"query": query, "max_results": 8},
+            why="宏观任务：优先检查官方宏观/央行发布。",
+            optional=False,
+            parallel_group=group,
+        )
+        _append_tool_step(
+            "get_authoritative_media_news",
+            {"query": task_query, "max_results": 6, "authoritative_only": True},
+            why="宏观任务：用权威媒体交叉验证市场影响。",
+            optional=True,
+            parallel_group=group,
+        )
+        _append_tool_step(
+            "search",
+            {"query": task_query},
+            why="宏观任务：补充开放搜索证据。",
+            optional=True,
+            parallel_group=group,
+        )
+
+    def _append_portfolio_task_steps(task: dict, *, group: str) -> None:
+        tickers_for_task = _task_tickers(task)
+        if tickers_for_task:
+            weight = round(1.0 / len(tickers_for_task), 4)
+            positions = [{"ticker": ticker, "weight": weight} for ticker in tickers_for_task[:8]]
+            _append_tool_step(
+                "get_factor_exposure",
+                {"positions": positions, "lookback_days": 252},
+                why="组合任务：估算持仓因子暴露。",
+                optional=True,
+                parallel_group=group,
+            )
+            _append_tool_step(
+                "run_portfolio_stress_test",
+                {"positions": positions, "lookback_days": 252},
+                why="组合任务：估算压力情景下的组合敏感性。",
+                optional=True,
+                parallel_group=group,
+            )
+        _append_tool_step(
+            "search",
+            {"query": query},
+            why="组合任务：检索影响持仓的近期市场事件。",
+            optional=True,
+            parallel_group=group,
+        )
+
+    def _append_theme_task_steps(task: dict, *, group: str) -> None:
+        task_query = str(task.get("subject_label") or query).strip() or query
+        _append_tool_step(
+            "get_current_datetime",
+            {},
+            why="主题任务：获取当前日期，限定近期事件语境。",
+            optional=True,
+            parallel_group=group,
+        )
+        _append_tool_step(
+            "get_authoritative_media_news",
+            {"query": query, "max_results": 6, "authoritative_only": True},
+            why="主题任务：优先用权威媒体验证行业事件。",
+            optional=True,
+            parallel_group=group,
+        )
+        _append_tool_step(
+            "search",
+            {"query": task_query},
+            why="主题任务：检索行业/主题的近期事件与影响。",
+            optional=False,
+            parallel_group=group,
+        )
+
+    def _append_understanding_task_steps() -> bool:
+        if len(ready_tasks) <= 1:
+            return False
+        for idx, task in enumerate(ready_tasks[:12], 1):
+            subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
+            group = f"task_{idx}"
+            if subject_for_task in {"company", "index", "commodity"}:
+                _append_company_task_steps(task, group=group)
+            elif subject_for_task == "macro":
+                _append_macro_task_steps(task, group=group)
+            elif subject_for_task == "portfolio":
+                _append_portfolio_task_steps(task, group=group)
+            elif subject_for_task == "theme":
+                _append_theme_task_steps(task, group=group)
+        return True
+
+    used_understanding_task_plan = _append_understanding_task_steps()
+
+    if used_understanding_task_plan:
+        task_sections = []
+        for task in ready_tasks[:8]:
+            label = str(task.get("subject_label") or ", ".join(_task_tickers(task)) or task.get("subject_type") or "任务")
+            task_sections.append(f"{label}:{_task_operation_name(task)}")
+        raw_plan = {
+            "goal": query or "N/A",
+            "subject": subject or PlanSubject(subject_type="unknown").model_dump(),
+            "output_mode": output_mode,
+            "tasks": _plan_task_summary(),
+            "steps": steps,
+            "synthesis": {"style": "structured", "sections": task_sections},
+            "budget": budget.model_dump(),
+        }
+        try:
+            plan = PlanIR.model_validate(raw_plan)
+            trace.update(
+                {
+                    "planner": {
+                        "type": "stub",
+                        "validated": True,
+                        "steps": len(plan.steps),
+                        "operation": operation,
+                        "understanding_task_count": len(ready_tasks),
+                    }
+                }
+            )
+            return {"plan_ir": plan.model_dump(), "trace": trace}
+        except Exception as exc:
+            fallback = PlanIR(
+                goal=query or "N/A",
+                subject=PlanSubject(subject_type="unknown"),
+                output_mode="brief",
+                steps=[],
+                budget=PlanBudget(max_rounds=1, max_tools=0),
+            )
+            trace.update(
+                {
+                    "planner": {
+                        "type": "stub",
+                        "validated": False,
+                        "fallback": True,
+                        "error": str(exc),
+                    }
+                }
+            )
+            return {"plan_ir": fallback.model_dump(), "trace": trace}
 
     if subject_type == "macro":
         _append_tool_step(
@@ -696,6 +936,7 @@ def planner_stub(state: GraphState) -> dict:
         "goal": query or "N/A",
         "subject": subject or PlanSubject(subject_type="unknown").model_dump(),
         "output_mode": output_mode,
+        "tasks": _plan_task_summary(),
         "steps": steps,
         "synthesis": {"style": "concise", "sections": []},
         "budget": budget.model_dump(),

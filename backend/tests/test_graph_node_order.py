@@ -27,10 +27,7 @@ _FULL_HAPPY_PATH = [
     "summarize_history",
     "normalize_ui_context",
     "decide_output_mode",
-    "chat_respond",
-    "resolve_subject",
-    "clarify",
-    "parse_operation",
+    "understand_request",
     "policy_gate",
     "planner",
     "confirmation_gate",
@@ -47,9 +44,7 @@ _CLARIFY_STOP_PATH = [
     "summarize_history",
     "normalize_ui_context",
     "decide_output_mode",
-    "chat_respond",
-    "resolve_subject",
-    "clarify",
+    "understand_request",
 ]
 
 # The prefix that MUST appear at the start of every execution path
@@ -60,7 +55,7 @@ _INVARIANT_PREFIX = [
     "summarize_history",
     "normalize_ui_context",
     "decide_output_mode",
-    "chat_respond",
+    "understand_request",
 ]
 
 
@@ -152,8 +147,8 @@ class TestGraphNodeOrderInvariant:
         assert nodes[0] == "build_initial_state"
         assert nodes[1] == "reset_turn_state"
 
-    def test_parse_operation_after_clarify_before_policy(self):
-        """parse_operation must sit between clarify and policy_gate."""
+    def test_understand_request_before_policy(self):
+        """understand_request must be the single runtime front-half node before policy."""
         from backend.graph import GraphRunner
 
         runner = GraphRunner.create()
@@ -163,13 +158,13 @@ class TestGraphNodeOrderInvariant:
             ui_context={"active_symbol": "MSFT"},
         ))
         nodes = _extract_node_order(result)
-        if "parse_operation" in nodes:
-            idx_parse = nodes.index("parse_operation")
-            assert "clarify" in nodes[:idx_parse], "clarify must come before parse_operation"
-            assert "policy_gate" in nodes[idx_parse + 1:], "policy_gate must come after parse_operation"
+        idx_understand = nodes.index("understand_request")
+        assert "policy_gate" in nodes[idx_understand + 1:], "policy_gate must run after understand_request"
+        assert "resolve_subject" not in nodes
+        assert "parse_operation" not in nodes
 
     def test_expected_node_count(self):
-        """Graph must have exactly 18 registered nodes (including alert flow)."""
+        """Graph must register the new understanding node plus legacy compatibility nodes."""
         from backend.graph.runner import _build_graph
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -183,7 +178,7 @@ class TestGraphNodeOrderInvariant:
             "chat_respond", "resolve_subject", "clarify",
             "parse_operation", "policy_gate", "planner",
             "confirmation_gate", "execute_plan", "synthesize", "render",
-            "alert_extractor", "alert_action",
+            "alert_extractor", "alert_action", "understand_request",
         }
         assert node_names == expected_nodes, (
             f"Node set mismatch!\n"

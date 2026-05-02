@@ -86,6 +86,137 @@ def _append_evidence_section_if_missing(markdown: str, evidence_md: str) -> str:
     return markdown.rstrip() + "\n\n### 引用来源\n\n" + evidence_md + "\n"
 
 
+def _task_operation_name(task: dict) -> str:
+    operation = task.get("operation")
+    if isinstance(operation, dict):
+        name = operation.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return "qa"
+
+
+def _task_tickers(task: dict) -> list[str]:
+    values = task.get("tickers")
+    if not isinstance(values, list):
+        return []
+    tickers: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        ticker = str(value or "").strip().upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        tickers.append(ticker)
+    return tickers
+
+
+def _summarize_step_output(output: object) -> list[str]:
+    if isinstance(output, dict) and output.get("skipped"):
+        reason = str(output.get("reason") or "skipped")
+        return [f"已规划，当前执行环境未运行实时工具（{reason}）。"]
+    if isinstance(output, str):
+        text = output.strip()
+        if not text:
+            return []
+        return [text[:220]]
+    if isinstance(output, list):
+        lines: list[str] = []
+        for item in output[:3]:
+            if isinstance(item, dict):
+                title = str(item.get("title") or item.get("headline") or item.get("summary") or "").strip()
+                source = str(item.get("source") or "").strip()
+                if title:
+                    lines.append(title + (f"（{source}）" if source else ""))
+            elif isinstance(item, str) and item.strip():
+                lines.append(item.strip()[:180])
+        return lines
+    if isinstance(output, dict):
+        for key in ("summary", "title", "headline", "snippet", "raw"):
+            value = output.get(key)
+            if isinstance(value, str) and value.strip():
+                return [value.strip()[:220]]
+        articles = output.get("articles") or output.get("items") or output.get("news") or output.get("results")
+        if isinstance(articles, list):
+            return _summarize_step_output(articles)
+        compact = ", ".join(f"{key}={value}" for key, value in list(output.items())[:5] if value is not None)
+        return [compact[:220]] if compact else []
+    return []
+
+
+def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
+    tasks = state.get("tasks")
+    ready_tasks = [task for task in (tasks if isinstance(tasks, list) else []) if isinstance(task, dict)]
+    blocked_tasks = state.get("blocked_tasks")
+    blocked = [task for task in (blocked_tasks if isinstance(blocked_tasks, list) else []) if isinstance(task, dict)]
+    if len(ready_tasks) <= 1 and not blocked:
+        return ""
+
+    plan_ir = state.get("plan_ir") if isinstance(state.get("plan_ir"), dict) else {}
+    steps = plan_ir.get("steps") if isinstance(plan_ir.get("steps"), list) else []
+    step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+    step_index = {str(step.get("id")): step for step in steps if isinstance(step, dict) and step.get("id")}
+
+    def _related_outputs(task: dict) -> list[str]:
+        tickers = set(_task_tickers(task))
+        subject_type = str(task.get("subject_type") or "").strip().lower()
+        related: list[str] = []
+        for step_id, result in step_results.items():
+            if not isinstance(result, dict):
+                continue
+            step = step_index.get(str(step_id))
+            if not isinstance(step, dict):
+                continue
+            inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+            ticker = str(inputs.get("ticker") or "").strip().upper()
+            name = str(step.get("name") or "").strip()
+            is_related = bool(ticker and ticker in tickers)
+            if subject_type == "macro" and name in {"get_official_macro_releases", "get_authoritative_media_news", "search"}:
+                is_related = True
+            if subject_type == "portfolio" and name in {"get_factor_exposure", "run_portfolio_stress_test", "search"}:
+                is_related = True
+            if not is_related:
+                continue
+            for line in _summarize_step_output(result.get("output")):
+                related.append(f"{name}: {line}")
+                if len(related) >= 3:
+                    return related
+        return related
+
+    lines = [
+        "## 本轮简报",
+        "",
+        f"我把这轮问题拆成 {len(ready_tasks)} 个可执行任务。"
+        + (f"另有 {len(blocked)} 个任务需要补充信息。" if blocked else ""),
+        "",
+    ]
+
+    for idx, task in enumerate(ready_tasks[:8], 1):
+        tickers = _task_tickers(task)
+        label = str(task.get("subject_label") or ", ".join(tickers) or task.get("subject_type") or f"任务 {idx}")
+        op_name = _task_operation_name(task)
+        time_scope = task.get("time_scope") if isinstance(task.get("time_scope"), dict) else {}
+        scope_label = str(time_scope.get("label") or time_scope.get("kind") or "").strip()
+        title_suffix = f"（{scope_label}）" if scope_label else ""
+        lines.extend([f"### {idx}. {label} / {op_name}{title_suffix}", ""])
+        related = _related_outputs(task)
+        if related:
+            lines.extend(f"- {item}" for item in related)
+        else:
+            lines.append("- 已识别为可执行任务；当前没有可展示的工具结果。")
+        lines.append("")
+
+    if blocked:
+        lines.extend(["### 需要补充的信息", ""])
+        for item in blocked[:5]:
+            reason = str(item.get("reason") or "blocked")
+            question = str(item.get("question") or "").strip()
+            lines.append(f"- {reason}" + (f"：{question}" if question else ""))
+        lines.append("")
+
+    lines.append("> 以上为研究辅助信息，不构成投资建议。")
+    return "\n".join(lines).strip() + "\n"
+
+
 def render_stub(state: GraphState) -> dict:
     """
     Phase 4 template renderer.
@@ -116,6 +247,11 @@ def render_stub(state: GraphState) -> dict:
             if patched != existing_draft:
                 artifacts = {**artifacts, "draft_markdown": patched}
         return {"artifacts": artifacts, "messages": [_build_ai_reply_message(artifacts)]}
+
+    multitask_markdown = _build_multitask_markdown(state, artifacts if isinstance(artifacts, dict) else {})
+    if multitask_markdown:
+        result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": multitask_markdown}
+        return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
 
     # ── Regular template rendering (stub / thin-draft fallback) ───
     subject = state.get("subject") or {}

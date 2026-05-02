@@ -67,6 +67,7 @@ def test_chat_supervisor_stream_respects_trace_raw_override_off(client):
     # startup thinking is emitted before override filter path; node-level thinking should be filtered.
     thinking_stages = [str(item.get("stage", "")) for item in events if item.get("type") == "thinking"]
     assert set(thinking_stages).issubset({"langgraph_start"})
+    assert any(item.get("type") == "trace" and item.get("stage") == "understanding" for item in events)
     assert any(item.get("type") == "token" for item in events)
     assert any(item.get("type") == "done" for item in events)
 

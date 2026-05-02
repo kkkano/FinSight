@@ -149,6 +149,7 @@ _ESSENTIAL_SSE_TYPES = {
     "agent_start",
     "agent_done",
     "agent_error",
+    "trace",
     "decision_note",
 }
 

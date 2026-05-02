@@ -28,6 +28,7 @@ from backend.graph.nodes import (
     reset_turn_state,
     resolve_subject,
     synthesize,
+    understand_request,
 )
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
@@ -57,6 +58,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
     graph.add_node("clarify", with_node_trace("clarify", clarify))
     graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
+    graph.add_node("understand_request", with_node_trace("understand_request", understand_request))
     graph.add_node("alert_extractor", with_node_trace("alert_extractor", alert_extractor))
     graph.add_node("alert_action", with_node_trace("alert_action", alert_action))
     graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
@@ -72,19 +74,26 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_edge("trim_history", "summarize_history")
     graph.add_edge("summarize_history", "normalize_ui_context")
     graph.add_edge("normalize_ui_context", "decide_output_mode")
-    graph.add_edge("decide_output_mode", "chat_respond")
+    graph.add_edge("decide_output_mode", "understand_request")
 
-    def _route_after_chat_respond(state: GraphState) -> str:
-        if state.get("chat_responded") is True:
+    def _route_after_understand_request(state: GraphState) -> str:
+        understanding = state.get("understanding") or {}
+        route = str(understanding.get("route") or "").strip().lower()
+        if route in {"direct", "clarify"}:
             return END
-        return "resolve_subject"
+        op = (state.get("operation") or {}).get("name", "qa")
+        if route == "alert" or op == "alert_set":
+            return "alert_extractor"
+        return "policy_gate"
 
     graph.add_conditional_edges(
-        "chat_respond",
-        _route_after_chat_respond,
-        {"resolve_subject": "resolve_subject", END: END},
+        "understand_request",
+        _route_after_understand_request,
+        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate", END: END},
     )
 
+    # Legacy front-half nodes are still registered for compatibility and
+    # focused unit tests, but the main runtime path now uses understand_request.
     graph.add_edge("resolve_subject", "clarify")
 
     def _route_after_clarify(state: GraphState) -> str:

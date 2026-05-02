@@ -25,11 +25,13 @@ from backend.graph.nodes.compare_gate import (
 from backend.graph.nodes.confirmation_gate import confirmation_gate
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
+from backend.graph.nodes.understand_request import understand_request
 
 __all__ = [
     "build_initial_state",
     "trim_conversation_history",
     "summarize_history",
+    "understand_request",
     "normalize_ui_context",
     "decide_output_mode",
     "chat_respond",

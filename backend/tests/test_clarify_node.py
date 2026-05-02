@@ -23,9 +23,7 @@ def test_clarify_node_interrupts_when_subject_unknown():
         "summarize_history",
         "normalize_ui_context",
         "decide_output_mode",
-        "chat_respond",
-        "resolve_subject",
-        "clarify",
+        "understand_request",
     ]
     assert (result.get("clarify") or {}).get("needed") is True
 
@@ -47,4 +45,3 @@ def test_clarify_node_allows_continue_when_subject_known():
     spans = trace.get("spans") or []
     nodes = [s.get("node") for s in spans]
     assert "policy_gate" in nodes
-

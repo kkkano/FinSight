@@ -84,6 +84,9 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
     allowed_agents = policy.get("allowed_agents") if isinstance(policy, dict) else None
     agent_schemas = policy.get("agent_schemas") if isinstance(policy, dict) else None
     memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else None
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else None
+    tasks = state.get("tasks") if isinstance(state.get("tasks"), list) else []
+    blocked_tasks = state.get("blocked_tasks") if isinstance(state.get("blocked_tasks"), list) else []
 
     planner_variant = str(variant or "A").strip().upper()
     if planner_variant not in {"A", "B"}:
@@ -102,6 +105,9 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
         "agent_schemas": agent_schemas,
+        "understanding": understanding,
+        "tasks": tasks,
+        "blocked_tasks": blocked_tasks,
     }
     if memory_context:
         inputs["memory_context"] = memory_context
@@ -134,6 +140,7 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
 - goal (string): 一句话描述计划目标
 - subject (object): 包含 ticker、name 等标的信息
 - output_mode ("chat"|"brief"|"investment_report"): 输出模式
+- tasks (array): 原样保留 request understanding 中的可执行任务摘要
 - steps (array): 执行步骤数组
 - synthesis (object): 合成策略，如 {{"strategy":"merge","template":"company_report"}}
 - budget (object): 资源预算，如 {{"max_steps":6,"max_tokens":4000}}
@@ -157,6 +164,7 @@ kind 类型说明：
 5) 可并行的步骤应设置相同的 parallel_group 值（如 "p1"）以提升执行效率。
 6) 每个步骤的 "why" 字段必须说明该步骤对回答用户问题的必要性。
 7) 若存在 conversation_history，利用对话上下文理解代词指代和隐含意图（如"它的PE"→"之前讨论的标的的PE"）。
+8) 若 inputs.tasks 非空，必须覆盖每个 ready task；blocked_tasks 只在 synthesis 中提示，不要为 blocked task 编造执行步骤。
 </constraints>
 
 <operation_guidelines>
