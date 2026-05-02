@@ -5,17 +5,21 @@ import functools
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
 from collections import defaultdict, deque
 from collections.abc import Iterable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
 
 from backend.rag.chunker import chunk_document
+from backend.rag.layering import collection_details
 from backend.rag.hybrid_service import HybridRAGService, RAGDocument, get_rag_service
 from backend.rag.observability_models import (
     ChunkRecord,
@@ -39,6 +43,14 @@ from backend.rag.observability_runtime import (
 
 logger = logging.getLogger(__name__)
 
+_hooks_suppressed: ContextVar[bool] = ContextVar("rag_observability_hooks_suppressed", default=False)
+
+_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+_BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b", re.IGNORECASE)
+_SECRET_RE = re.compile(r"\b(?:sk|tp|pk|rk|key|token)[-_][A-Za-z0-9._~+/=-]{12,}\b", re.IGNORECASE)
+_LONG_ALNUM_RE = re.compile(r"\b(?=[A-Za-z0-9._~+/=-]*[A-Za-z])(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{32,}\b")
+_LONG_NUMBER_RE = re.compile(r"\b\d{8,}\b")
+
 
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
@@ -59,6 +71,27 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256((value or "").encode("utf-8")).hexdigest()
 
 
+def redact_query_text(value: str | None) -> str:
+    text_value = str(value or "")
+    if not text_value:
+        return ""
+    redacted = _EMAIL_RE.sub("[email]", text_value)
+    redacted = _BEARER_RE.sub("Bearer [secret]", redacted)
+    redacted = _SECRET_RE.sub("[secret]", redacted)
+    redacted = _LONG_ALNUM_RE.sub("[secret]", redacted)
+    redacted = _LONG_NUMBER_RE.sub("[number]", redacted)
+    return redacted
+
+
+@contextmanager
+def suppress_rag_observability_hooks():
+    token = _hooks_suppressed.set(True)
+    try:
+        yield
+    finally:
+        _hooks_suppressed.reset(token)
+
+
 def _json_loads(value: Any, default: Any) -> Any:
     if isinstance(value, (dict, list)):
         return value
@@ -75,6 +108,19 @@ def _mapping_to_dict(row: Any) -> dict[str, Any]:
     for key in ("metadata_json", "payload_json"):
         if key in data:
             data[key] = _json_loads(data.get(key), {})
+    metadata = data.get('metadata_json') if isinstance(data.get('metadata_json'), dict) else data.get('metadata') if isinstance(data.get('metadata'), dict) else {}
+    collection = str(data.get('collection') or metadata.get('collection') or '').strip()
+    if collection:
+        details = collection_details(collection)
+        data['collection'] = collection
+        if not data.get('layer'):
+            data['layer'] = metadata.get('layer') or details.get('layer')
+        if not data.get('collection_kind'):
+            data['collection_kind'] = metadata.get('collection_kind') or details.get('collection_kind')
+        if not data.get('entity_scope'):
+            data['entity_scope'] = metadata.get('entity_scope') or details.get('entity_scope')
+        if not data.get('entity_key'):
+            data['entity_key'] = metadata.get('entity_key') or details.get('entity_key')
     return data
 
 
@@ -342,7 +388,7 @@ def _db_browser_order_by_sql(config: dict[str, Any], actual_columns: set[str], s
 
 
 class NoOpRAGObservabilityStore(_RuntimeNoOp):
-    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None) -> dict[str, Any]:
+    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None) -> dict[str, Any]:
         return {"table": table_name, "columns": [], "items": [], "total": 0, "limit": max(1, int(limit)), "offset": max(0, int(offset)), "has_more": False}
 
     def cache_ingest_batch(self, *, docs: Iterable[RAGDocument], ingest_stats: dict[str, Any] | None, backend_requested: str, backend_actual: str) -> list[PendingIngestBatch]:
@@ -358,7 +404,7 @@ class NoOpRAGObservabilityStore(_RuntimeNoOp):
             session_id="rag-observability",
             thread_id=None,
             query_text=query,
-            query_text_redacted=query,
+            query_text_redacted=redact_query_text(query),
             query_hash=_sha256_text(query),
             route_name=route_name,
             router_decision=router_decision,
@@ -550,9 +596,9 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
                 ]
         except Exception:
             return super().list_collections(limit=limit_value)
-        return {"items": items}
+        return {"items": [_mapping_to_dict(item) for item in items]}
 
-    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None) -> dict[str, Any]:
+    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None) -> dict[str, Any]:
         self.ensure_schema()
         table_key = str(table_name or "").strip()
         config = _DB_BROWSER_TABLES.get(table_key)
@@ -574,6 +620,11 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
             selected_columns = preferred_columns or [column for column in available_columns if column not in excluded_columns]
             if not selected_columns:
                 raise ValueError(f"no readable columns for table: {table_key}")
+            virtual_columns: list[str] = []
+            if 'collection' in available_column_set or 'metadata_json' in available_column_set or 'metadata' in available_column_set:
+                for column in ('layer', 'collection_kind', 'entity_scope', 'entity_key'):
+                    if column not in selected_columns and column not in virtual_columns:
+                        virtual_columns.append(column)
 
             where_clauses = ["1=1"]
             params: dict[str, Any] = {"limit": limit_value, "offset": offset_value}
@@ -595,6 +646,19 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
                 where_clauses.append(filter_sql)
                 params[filter_name] = filter_value
 
+            layer_value = str(layer or '').strip().lower()
+            if layer_value:
+                layer_case = "CASE WHEN collection LIKE 'kb:%' THEN 'kb' WHEN collection LIKE 'mem:%' THEN 'memory' WHEN collection LIKE 'ws:%' OR collection LIKE 'session:%' THEN 'ws' ELSE '' END"
+                if table_key == 'rag_documents_v2' and {'layer', 'metadata', 'collection'}.issubset(available_column_set):
+                    where_clauses.append(f"COALESCE(layer, metadata ->> 'layer', {layer_case}) = :layer")
+                    params['layer'] = layer_value
+                elif {'metadata_json', 'collection'}.issubset(available_column_set):
+                    where_clauses.append(f"COALESCE(metadata_json ->> 'layer', {layer_case}) = :layer")
+                    params['layer'] = layer_value
+                elif 'collection' in available_column_set:
+                    where_clauses.append(f"{layer_case} = :layer")
+                    params['layer'] = layer_value
+
             where_sql = " AND ".join(where_clauses)
             order_by_sql = _db_browser_order_by_sql(config, available_column_set, selected_columns)
             select_sql = ", ".join(_quote_identifier(column) for column in selected_columns)
@@ -611,7 +675,7 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
 
         return {
             "table": table_key,
-            "columns": selected_columns,
+            "columns": selected_columns + [column for column in virtual_columns if column not in selected_columns],
             "items": rows,
             "total": total,
             "limit": limit_value,
@@ -692,7 +756,7 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
             session_id='rag-observability',
             thread_id=None,
             query_text=query,
-            query_text_redacted=query,
+            query_text_redacted=redact_query_text(query),
             query_hash=_sha256_text(query),
             route_name=route_name,
             router_decision=router_decision,
@@ -771,7 +835,10 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
         records: list[RetrievalHitRecord] = []
         for hit in hits:
             source_id = str(hit.get('source_id') or '') or None
-            metadata_json = hit.get('metadata') if isinstance(hit.get('metadata'), dict) else {}
+            metadata_json = dict(hit.get('metadata') or {}) if isinstance(hit.get('metadata'), dict) else {}
+            for key in ('layer', 'collection_kind', 'entity_scope', 'entity_key', 'ingest_source', 'promotion_status', 'doc_fingerprint', 'parent_collection', 'parent_run_id'):
+                if hit.get(key) is not None and key not in metadata_json:
+                    metadata_json[key] = hit.get(key)
             records.append(RetrievalHitRecord(id=_new_id('hit'), run_id=context.run.id, chunk_id=context.primary_chunk_map.get(source_id or ''), collection=hit.get('collection') or context.run.collection, source_id=source_id, source_doc_id=context.source_doc_map.get(source_id or '') if source_id else None, scope=hit.get('scope'), dense_rank=hit.get('dense_rank'), dense_score=float(hit.get('dense_score') or 0.0) if hit.get('dense_score') is not None else None, sparse_rank=hit.get('sparse_rank'), sparse_score=float(hit.get('sparse_score') or 0.0) if hit.get('sparse_score') is not None else None, rrf_score=float(hit.get('rrf_score') or 0.0) if hit.get('rrf_score') is not None else None, selected_for_rerank=False, title=hit.get('title'), url=hit.get('url'), content_preview=_truncate(hit.get('content') or hit.get('content_preview') or '', 500), metadata_json=metadata_json))
         return records
 
@@ -831,10 +898,13 @@ def install_rag_observability_hooks() -> bool:
             return True
         original_ingest = HybridRAGService.ingest_documents
         original_search = HybridRAGService.hybrid_search
+        original_search_many = getattr(HybridRAGService, 'hybrid_search_many', None)
 
         @functools.wraps(original_ingest)
         def observed_ingest(self: HybridRAGService, docs: Iterable[RAGDocument]) -> dict[str, Any]:
             doc_list = list(docs or [])
+            if _hooks_suppressed.get():
+                return original_ingest(self, doc_list)
             result = original_ingest(self, doc_list)
             if doc_list:
                 try:
@@ -845,6 +915,8 @@ def install_rag_observability_hooks() -> bool:
 
         @functools.wraps(original_search)
         def observed_search(self: HybridRAGService, query: str, *, collection: str, top_k: int = 6) -> list[dict[str, Any]]:
+            if _hooks_suppressed.get():
+                return original_search(self, query, collection=collection, top_k=top_k)
             store = get_rag_observability_store()
             context: SearchRunContext | None = None
             try:
@@ -867,8 +939,56 @@ def install_rag_observability_hooks() -> bool:
                     logger.exception("[RAGObservability] 记录查询完成失败: %s", exc)
             return hits
 
+        @functools.wraps(original_search_many)
+        def observed_search_many(self: HybridRAGService, query: str, *, collections: Iterable[str], top_k: int = 6) -> list[dict[str, Any]]:
+            normalized_collections: list[str] = []
+            for collection_name in collections or []:
+                value = str(collection_name or '').strip()
+                if value and value not in normalized_collections:
+                    normalized_collections.append(value)
+            if _hooks_suppressed.get():
+                return original_search_many(self, query, collections=normalized_collections, top_k=top_k)
+            primary_collection = normalized_collections[0] if normalized_collections else ''
+            store = get_rag_observability_store()
+            context: SearchRunContext | None = None
+            try:
+                context = store.begin_search_run(
+                    query=query,
+                    collection=primary_collection,
+                    top_k=max(1, int(top_k)),
+                    backend_requested=str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower() or "auto",
+                    backend_actual=str(getattr(self, "backend_name", "unknown") or "unknown"),
+                    route_name="hybrid_search_many",
+                    router_decision="hybrid_search_many",
+                    fallback_reason=str(getattr(self, "fallback_reason", "") or "") or None,
+                    metadata_json={
+                        "embedding_model": getattr(self, "embedding_model", None),
+                        "vector_dim": getattr(self, "vector_dim", None),
+                        "search_collections": normalized_collections,
+                    },
+                )
+            except Exception as exc:
+                logger.exception("[RAGObservability] ??? collection ??????: %s", exc)
+            try:
+                hits = original_search_many(self, query, collections=normalized_collections, top_k=top_k)
+            except Exception as exc:
+                if context is not None:
+                    try:
+                        store.complete_search_run(context, hits=None, error=exc)
+                    except Exception as inner_exc:
+                        logger.exception("[RAGObservability] ??? collection ???????: %s", inner_exc)
+                raise
+            if context is not None:
+                try:
+                    store.complete_search_run(context, hits=hits, error=None)
+                except Exception as exc:
+                    logger.exception("[RAGObservability] ??? collection ??????: %s", exc)
+            return hits
+
         HybridRAGService.ingest_documents = observed_ingest
         HybridRAGService.hybrid_search = observed_search
+        if callable(original_search_many):
+            HybridRAGService.hybrid_search_many = observed_search_many
         setattr(HybridRAGService, "_rag_observability_hooks_installed", True)
         _hooks_installed = True
         return True
@@ -881,6 +1001,8 @@ __all__ = [
     "get_rag_observability_store",
     "reset_rag_observability_store_cache",
     "install_rag_observability_hooks",
+    "redact_query_text",
+    "suppress_rag_observability_hooks",
 ]
 
 

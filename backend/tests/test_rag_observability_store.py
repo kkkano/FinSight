@@ -6,7 +6,13 @@ import time
 from datetime import datetime, timezone
 
 from backend.rag.observability_models import PendingIngestBatch, QueryRunRecord, SearchRunContext
-from backend.rag.observability_store import SQLRAGObservabilityStore
+from backend.rag.hybrid_service import RAGDocument
+from backend.rag.observability_store import (
+    NoOpRAGObservabilityStore,
+    SQLRAGObservabilityStore,
+    install_rag_observability_hooks,
+    suppress_rag_observability_hooks,
+)
 
 
 class _FakeResult:
@@ -76,6 +82,78 @@ class _ProbeStore(SQLRAGObservabilityStore):
 
     def _append_event(self, run_id: str, event_type: str, stage: str, payload):
         self.events.append((run_id, event_type, stage, payload))
+
+
+class _HookProbeStore(NoOpRAGObservabilityStore):
+    def __init__(self):
+        self.begin_calls = []
+        self.cache_calls = []
+        self.complete_calls = []
+
+    def cache_ingest_batch(self, **kwargs):
+        self.cache_calls.append(kwargs)
+        return []
+
+    def begin_search_run(self, **kwargs):
+        self.begin_calls.append(kwargs)
+        return super().begin_search_run(**kwargs)
+
+    def complete_search_run(self, context, *, hits=None, error=None):
+        self.complete_calls.append((context, hits, error))
+        return super().complete_search_run(context, hits=hits, error=error)
+
+
+def test_begin_search_run_redacts_sensitive_query_text():
+    store = NoOpRAGObservabilityStore()
+
+    context = store.begin_search_run(
+        query="请分析 test@example.com token sk-1234567890abcdef1234567890 账号 6222021234567890123",
+        collection="ws:thread:tenant:user:thread",
+        top_k=3,
+        backend_requested="memory",
+        backend_actual="memory",
+    )
+
+    redacted = context.run.query_text_redacted or ""
+    assert "test@example.com" not in redacted
+    assert "sk-1234567890abcdef1234567890" not in redacted
+    assert "6222021234567890123" not in redacted
+    assert "[email]" in redacted
+    assert "[secret]" in redacted
+    assert "[number]" in redacted
+
+
+def test_suppress_rag_observability_hooks_skips_service_side_runs(monkeypatch):
+    from backend import rag as rag_pkg
+    from backend.rag.hybrid_service import HybridRAGService
+
+    probe = _HookProbeStore()
+    monkeypatch.setattr("backend.rag.observability_store.get_rag_observability_store", lambda: probe)
+    monkeypatch.setattr(rag_pkg, "get_rag_observability_store", lambda: probe)
+    install_rag_observability_hooks()
+
+    service = HybridRAGService.for_testing()
+
+    with suppress_rag_observability_hooks():
+        service.ingest_documents([
+            RAGDocument(
+                collection="ws:thread:tenant:user:thread",
+                scope="ephemeral",
+                source_id="doc-1",
+                content="Apple revenue growth and services demand improved.",
+                metadata={"source_id": "doc-1"},
+            )
+        ])
+        hits = service.hybrid_search_many(
+            "Apple services demand",
+            collections=["ws:thread:tenant:user:thread"],
+            top_k=3,
+        )
+
+    assert hits
+    assert probe.cache_calls == []
+    assert probe.begin_calls == []
+    assert probe.complete_calls == []
 
 
 def test_health_summary_returns_24h_counters_and_recent_lists():
@@ -230,7 +308,7 @@ def test_browse_db_table_returns_page_payload_and_excludes_vector_columns():
     payload = store.browse_db_table(table_name='rag_documents_v2', limit=2, offset=0, q='apple', collection='local-test', run_id='run-1')
 
     assert payload['table'] == 'rag_documents_v2'
-    assert payload['columns'] == ['id', 'collection', 'scope', 'source_id', 'title', 'url', 'source', 'content', 'metadata', 'created_at', 'expires_at']
+    assert payload['columns'] == ['id', 'collection', 'scope', 'source_id', 'title', 'url', 'source', 'content', 'metadata', 'created_at', 'expires_at', 'layer', 'collection_kind', 'entity_scope', 'entity_key']
     assert payload['total'] == 3
     assert payload['limit'] == 2
     assert payload['offset'] == 0

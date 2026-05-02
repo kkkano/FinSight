@@ -101,6 +101,33 @@ def test_chat_supervisor_default_output_mode_is_brief_and_trace_present(client):
     assert any(span.get("node") == "decide_output_mode" for span in spans)
 
 
+
+def test_chat_supervisor_sync_persists_memory_snapshot(client, monkeypatch):
+
+    captured = {}
+
+    def _fake_persist_memory_snapshot(*, thread_id, state, report=None, memory_service=None):
+        captured['thread_id'] = thread_id
+        captured['state'] = state
+        captured['report'] = report
+        return True
+
+    monkeypatch.setattr('backend.graph.store.persist_memory_snapshot', _fake_persist_memory_snapshot)
+
+    resp = client.post(
+        "/chat/supervisor",
+        json={
+            "query": "Analyze Apple impact",
+            "session_id": "tenant1:test_api_user:thread-sync-memory",
+            "context": {"active_symbol": "AAPL", "view": "chat"},
+        },
+    )
+    assert resp.status_code == 200
+    assert captured['thread_id'] == 'tenant1:test_api_user:thread-sync-memory'
+    assert isinstance(captured['state'], dict)
+    assert isinstance(captured['report'], dict) or captured['report'] is None
+
+
 def test_chat_supervisor_trace_planner_runtime_contains_variant_field(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析苹果影响"})

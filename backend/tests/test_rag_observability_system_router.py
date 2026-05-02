@@ -89,7 +89,7 @@ class _FakeRagStore:
             ]
         }
 
-    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None) -> dict[str, object]:
+    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None) -> dict[str, object]:
         self.last_db_browser_args = {
             'table_name': table_name,
             'limit': limit,
@@ -98,6 +98,7 @@ class _FakeRagStore:
             'collection': collection,
             'run_id': run_id,
             'source_doc_id': source_doc_id,
+            'layer': layer,
         }
         return {
             'table': table_name,
@@ -225,5 +226,6 @@ def test_rag_db_browser_endpoint_returns_rows_and_passes_filters():
         'collection': 'local-test',
         'run_id': 'run-1',
         'source_doc_id': 'doc-1',
+        'layer': None,
     }
 

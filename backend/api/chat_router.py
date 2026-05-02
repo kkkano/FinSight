@@ -102,6 +102,18 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 skip_context=bool(state.get("skip_session_context")),
             )
 
+            if not quality_blocked:
+                try:
+                    from backend.graph.store import persist_memory_snapshot
+
+                    persist_memory_snapshot(
+                        thread_id=thread_id,
+                        state=state,
+                        report=report,
+                    )
+                except Exception as exc:
+                    _logger.warning("[chat/supervisor] persist memory snapshot failed: %s", exc)
+
             _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
             return {
                 "success": True,

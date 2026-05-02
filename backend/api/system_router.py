@@ -192,10 +192,10 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
         return {"status": "ok", "data": _rag_store().list_chunks(collection=collection, include_deleted=include_deleted, limit=limit), "timestamp": _now()}
 
     @router.get("/diagnostics/rag/db-browser/{table_name}")
-    def diagnostics_rag_db_browser(table_name: str, request: Request, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0, le=100000), q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None):
+    def diagnostics_rag_db_browser(table_name: str, request: Request, limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0, le=100000), q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None):
         _require_rag_read_access(request)
         try:
-            payload = _rag_store().browse_db_table(table_name=table_name, limit=limit, offset=offset, q=q, collection=collection, run_id=run_id, source_doc_id=source_doc_id)
+            payload = _rag_store().browse_db_table(table_name=table_name, limit=limit, offset=offset, q=q, collection=collection, run_id=run_id, source_doc_id=source_doc_id, layer=layer)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"status": "ok", "data": payload, "timestamp": _now()}

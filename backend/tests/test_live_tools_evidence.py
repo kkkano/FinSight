@@ -176,7 +176,7 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
 
     assert rag_context, "rag_context should be populated from evidence_pool"
     assert rag_stats.get("backend") == "memory"
-    assert rag_stats.get("collection") == "session:thread-rag-1"
+    assert rag_stats.get("collection") == "ws:thread:thread-rag-1"
     assert any("Apple" in str(item.get("title") or item.get("content") or "") for item in rag_context)
 
 
