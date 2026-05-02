@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, X } from 'lucide-react';
+import { SendHorizontal, Paperclip, Square, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
@@ -212,6 +212,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setStatus,
     setExecutionState,
     resetExecutionState,
+    setAbortController,
+    cancelChatStream,
     draft,
     setDraft,
     currentTicker,
@@ -306,6 +308,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setLoading(true);
     setStatus('Streaming response...');
     setExecutionState('Preparing request', 0);
+    const streamController = new AbortController();
+    setAbortController(streamController);
 
     addAgentLog({
       id: uuidv4(),
@@ -572,8 +576,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         sessionId || undefined,
         traceRawEnabled,
+        { signal: streamController.signal },
       );
-    } catch {
+      if (streamController.signal.aborted) {
+        updateMessage(aiMsgId, {
+          content: fullContent || '已停止本次响应。',
+          isLoading: false,
+          thinking: thinkingSteps,
+        });
+        setExecutionState('Stopped', useStore.getState().executionProgress ?? null);
+      }
+    } catch (error) {
+      if (streamController.signal.aborted) {
+        updateMessage(aiMsgId, {
+          content: fullContent || '已停止本次响应。',
+          isLoading: false,
+          thinking: thinkingSteps,
+        });
+        setExecutionState('Stopped', useStore.getState().executionProgress ?? null);
+        return;
+      }
       updateMessage(aiMsgId, {
         content: 'Network request failed. Please confirm the backend service is running.',
         isLoading: false,
@@ -586,10 +608,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       });
       const current = useStore.getState().executionProgress ?? 0;
       setExecutionState('Request failed', current);
+      addAgentLog({
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        source: 'system',
+        level: 'error',
+        message: error instanceof Error ? error.message : 'Network request failed',
+      });
     } finally {
       setLoading(false);
       setStatus(null);
       resetExecutionState();
+      setAbortController(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
@@ -692,16 +722,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         />
 
         <div className="absolute right-2 flex items-center gap-2">
-          <button
-            data-testid="chat-send-btn"
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isChatLoading}
-            aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
-            className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
-          >
-            <SendHorizontal size={18} />
-          </button>
+          {isChatLoading ? (
+            <button
+              data-testid="chat-stop-btn"
+              onClick={cancelChatStream}
+              aria-label="停止生成"
+              className="p-2 bg-fin-danger text-white rounded-lg hover:bg-red-600 transition-colors"
+              title="停止生成"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              data-testid="chat-send-btn"
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
+              className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
+            >
+              <SendHorizontal size={18} />
+            </button>
+          )}
         </div>
       </div>
       <div className="text-center mt-2">

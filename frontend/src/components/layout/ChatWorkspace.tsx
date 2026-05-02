@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronUp, Loader2 } from 'lucide-react';
+import { Eraser, Moon, Plus, Sun, ChevronUp, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
@@ -46,6 +46,8 @@ export function ChatWorkspace({
   initialReportId,
 }: ChatWorkspaceProps) {
   const traceViewMode = useStore((state) => state.traceViewMode);
+  const startNewChat = useStore((state) => state.startNewChat);
+  const clearConversationContext = useStore((state) => state.clearConversationContext);
   const latestRunId = useExecutionStore((state) => (
     state.activeRuns[state.activeRuns.length - 1]?.runId
       ?? state.recentRuns[0]?.runId
@@ -93,8 +95,6 @@ export function ChatWorkspace({
             timestamp: Date.now(),
             report: data.report,
           });
-          // Clear the URL param to prevent reload on refresh
-          window.history.replaceState({}, '', '/chat');
         }
       })
       .catch((err) => {
@@ -125,6 +125,26 @@ export function ChatWorkspace({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            title="新建对话"
+            aria-label="新建对话"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">新对话</span>
+          </button>
+          <button
+            type="button"
+            onClick={clearConversationContext}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            title="清空上下文"
+            aria-label="清空上下文"
+          >
+            <Eraser size={14} />
+            <span className="hidden sm:inline">清空</span>
+          </button>
           <button
             type="button"
             onClick={onToggleTheme}

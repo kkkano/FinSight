@@ -170,6 +170,9 @@ interface AppState {
   resetExecutionState: () => void;
   abortController: AbortController | null;
   setAbortController: (controller: AbortController | null) => void;
+  cancelChatStream: () => void;
+  clearConversationContext: () => void;
+  startNewChat: () => void;
   currentTicker: string | null;
   setTicker: (ticker: string | null) => void;
   theme: Theme;
@@ -274,6 +277,36 @@ const persistMessages = (messages: Message[], sessionId: string) => {
   }
 };
 
+const clearPersistedMessages = (sessionId: string) => {
+  if (typeof window === 'undefined') return;
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  window.localStorage.removeItem(messageStorageKey(sid));
+};
+
+const createInitialAgentStatuses = (): Record<AgentLogSource, AgentStatus> => ({
+  supervisor: { source: 'supervisor', status: 'idle' },
+  router: { source: 'router', status: 'idle' },
+  gate: { source: 'gate', status: 'idle' },
+  planner: { source: 'planner', status: 'idle' },
+  news_agent: { source: 'news_agent', status: 'idle' },
+  price_agent: { source: 'price_agent', status: 'idle' },
+  fundamental_agent: { source: 'fundamental_agent', status: 'idle' },
+  technical_agent: { source: 'technical_agent', status: 'idle' },
+  macro_agent: { source: 'macro_agent', status: 'idle' },
+  deep_search_agent: { source: 'deep_search_agent', status: 'idle' },
+  forum: { source: 'forum', status: 'idle' },
+  system: { source: 'system', status: 'idle' },
+});
+
+const buildNewConversationSessionId = (identity: AuthIdentity | null): string => {
+  if (identity?.userId) {
+    const thread = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return buildUserSessionId(identity.userId, thread);
+  }
+  return buildAnonymousSessionId();
+};
+
 export const useStore = create<AppState>((set) => ({
   messages: getInitialMessages(initialSessionId),
   isChatLoading: false,
@@ -293,20 +326,7 @@ export const useStore = create<AppState>((set) => ({
   portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
-  agentStatuses: {
-    supervisor: { source: 'supervisor', status: 'idle' },
-    router: { source: 'router', status: 'idle' },
-    gate: { source: 'gate', status: 'idle' },
-    planner: { source: 'planner', status: 'idle' },
-    news_agent: { source: 'news_agent', status: 'idle' },
-    price_agent: { source: 'price_agent', status: 'idle' },
-    fundamental_agent: { source: 'fundamental_agent', status: 'idle' },
-    technical_agent: { source: 'technical_agent', status: 'idle' },
-    macro_agent: { source: 'macro_agent', status: 'idle' },
-    deep_search_agent: { source: 'deep_search_agent', status: 'idle' },
-    forum: { source: 'forum', status: 'idle' },
-    system: { source: 'system', status: 'idle' },
-  },
+  agentStatuses: createInitialAgentStatuses(),
   isAgentLogsPanelOpen: true,
   // Raw SSE Events 初始状态
   rawEvents: [],
@@ -371,6 +391,70 @@ export const useStore = create<AppState>((set) => ({
     })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
   setAbortController: (controller) => set({ abortController: controller }),
+  cancelChatStream: () =>
+    set((state) => {
+      state.abortController?.abort();
+      return {
+        abortController: null,
+        isChatLoading: false,
+        statusMessage: null,
+        statusSince: null,
+        currentStep: null,
+        executionProgress: null,
+      };
+    }),
+  clearConversationContext: () =>
+    set((state) => {
+      state.abortController?.abort();
+      clearPersistedMessages(state.sessionId);
+      return {
+        messages: [WELCOME_MESSAGE],
+        isChatLoading: false,
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: null,
+        currentTicker: null,
+        draft: '',
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
+  startNewChat: () =>
+    set((state) => {
+      state.abortController?.abort();
+      const nextSessionId = buildNewConversationSessionId(state.authIdentity);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+      return {
+        sessionId: nextSessionId,
+        messages: [WELCOME_MESSAGE],
+        isChatLoading: false,
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: null,
+        currentTicker: null,
+        draft: '',
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
 
   setTheme: (theme) => {
     set({ theme });
@@ -467,14 +551,9 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   clearAgentLogs: () =>
-    set((state) => ({
+    set(() => ({
       agentLogs: [],
-      agentStatuses: Object.fromEntries(
-        Object.keys(state.agentStatuses).map((key) => [
-          key,
-          { source: key as AgentLogSource, status: 'idle' as const },
-        ])
-      ) as Record<AgentLogSource, AgentStatus>,
+      agentStatuses: createInitialAgentStatuses(),
     })),
 
   setAgentLogsPanelOpen: (open) =>
@@ -530,6 +609,3 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
-
-
-

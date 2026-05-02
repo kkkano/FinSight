@@ -1,0 +1,55 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { useStore } from './useStore';
+
+describe('useStore conversation lifecycle', () => {
+  beforeEach(() => {
+    const state = useStore.getState();
+    state.clearConversationContext();
+    state.setSessionId('public:test-user:default');
+  });
+
+  it('clears the current conversation context without rotating session id', () => {
+    const state = useStore.getState();
+    const controller = new AbortController();
+
+    state.addMessage({ id: 'user-1', role: 'user', content: 'AAPL outlook', timestamp: 1 });
+    state.setDraft('draft query');
+    state.setTicker('AAPL');
+    state.setStatus('Running');
+    state.setExecutionState('Searching', 42);
+    state.setLoading(true);
+    state.setAbortController(controller);
+
+    state.clearConversationContext();
+
+    const next = useStore.getState();
+    expect(controller.signal.aborted).toBe(true);
+    expect(next.sessionId).toBe('public:test-user:default');
+    expect(next.messages).toHaveLength(1);
+    expect(next.messages[0].id).toBe('welcome');
+    expect(next.draft).toBe('');
+    expect(next.currentTicker).toBeNull();
+    expect(next.isChatLoading).toBe(false);
+    expect(next.statusMessage).toBeNull();
+    expect(next.executionProgress).toBeNull();
+    expect(next.abortController).toBeNull();
+  });
+
+  it('starts a new chat by rotating session id and resetting transient state', () => {
+    const before = useStore.getState();
+    before.addMessage({ id: 'user-1', role: 'user', content: 'TSLA news', timestamp: 1 });
+    before.setDraft('draft query');
+    before.setTicker('TSLA');
+
+    before.startNewChat();
+
+    const next = useStore.getState();
+    expect(next.sessionId).not.toBe('public:test-user:default');
+    expect(next.messages).toHaveLength(1);
+    expect(next.messages[0].id).toBe('welcome');
+    expect(next.draft).toBe('');
+    expect(next.currentTicker).toBeNull();
+    expect(next.isChatLoading).toBe(false);
+  });
+});
