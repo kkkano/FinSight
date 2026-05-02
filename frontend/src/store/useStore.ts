@@ -10,6 +10,15 @@ export interface AuthIdentity {
   email: string | null;
 }
 
+export interface ConversationSummary {
+  sessionId: string;
+  title: string;
+  lastMessagePreview: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 const DEFAULT_USER_ID = 'default_user';
 const SESSION_PART_PATTERN = /[^A-Za-z0-9._-]/g;
 const normalizeSessionPart = (value: string, fallback: string): string => {
@@ -173,6 +182,9 @@ interface AppState {
   cancelChatStream: () => void;
   clearConversationContext: () => void;
   startNewChat: () => void;
+  conversationSummaries: ConversationSummary[];
+  selectConversation: (sessionId: string) => void;
+  deleteConversation: (sessionId: string) => void;
   currentTicker: string | null;
   setTicker: (ticker: string | null) => void;
   theme: Theme;
@@ -233,7 +245,11 @@ const WELCOME_MESSAGE: Message = {
 };
 
 const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
+const CONVERSATIONS_STORAGE_KEY = 'finsight-conversations';
 const MAX_PERSISTED_MESSAGES = 100;
+const MAX_CONVERSATIONS = 50;
+const memoryMessageStore = new Map<string, string>();
+let memoryConversationSummaries: ConversationSummary[] = [];
 
 const messageStorageKey = (sessionId: string): string =>
   `${MESSAGES_STORAGE_PREFIX}${String(sessionId || '').trim()}`;
@@ -249,10 +265,129 @@ const normalizePersistedMessages = (raw: string | null): Message[] => {
   }
 };
 
+const normalizeConversationSummaries = (raw: string | null): ConversationSummary[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as ConversationSummary[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({
+        sessionId: String(item?.sessionId || '').trim(),
+        title: String(item?.title || '').trim() || '新对话',
+        lastMessagePreview: String(item?.lastMessagePreview || '').trim(),
+        messageCount: Math.max(0, Number(item?.messageCount || 0)),
+        createdAt: Number(item?.createdAt || Date.now()),
+        updatedAt: Number(item?.updatedAt || Date.now()),
+      }))
+      .filter((item) => item.sessionId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+  } catch {
+    return [];
+  }
+};
+
+const buildConversationSummary = (
+  sessionId: string,
+  messages: Message[],
+  previous?: ConversationSummary,
+): ConversationSummary => {
+  const visibleMessages = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
+  const nonWelcome = visibleMessages.filter((m) => m.id !== WELCOME_MESSAGE.id && m.content.trim());
+  const firstUser = nonWelcome.find((m) => m.role === 'user');
+  const latest = [...nonWelcome].reverse()[0] || visibleMessages[visibleMessages.length - 1] || WELCOME_MESSAGE;
+  const titleSource = firstUser?.content || latest?.content || previous?.title || '新对话';
+  const previewSource = latest?.content || previous?.lastMessagePreview || '';
+  const createdAt = previous?.createdAt || visibleMessages[0]?.timestamp || Date.now();
+  const updatedAt = latest?.timestamp || previous?.updatedAt || Date.now();
+
+  return {
+    sessionId,
+    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || '新对话',
+    lastMessagePreview: previewSource.replace(/\s+/g, ' ').trim().slice(0, 90),
+    messageCount: nonWelcome.length,
+    createdAt,
+    updatedAt,
+  };
+};
+
+const persistConversationSummaries = (summaries: ConversationSummary[]) => {
+  const normalized = summaries
+    .filter((item) => item.sessionId)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_CONVERSATIONS);
+  if (typeof window === 'undefined') {
+    memoryConversationSummaries = normalized;
+    return;
+  }
+  window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(normalized));
+};
+
+const loadConversationSummaries = (activeSessionId: string, activeMessages: Message[]): ConversationSummary[] => {
+  if (typeof window === 'undefined') {
+    const bySession = new Map<string, ConversationSummary>();
+    for (const item of memoryConversationSummaries) {
+      bySession.set(item.sessionId, item);
+    }
+    for (const [key, raw] of memoryMessageStore.entries()) {
+      if (!key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
+      const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
+      const messages = normalizePersistedMessages(raw);
+      if (sid && messages.length) {
+        bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
+      }
+    }
+    bySession.set(activeSessionId, buildConversationSummary(activeSessionId, activeMessages, bySession.get(activeSessionId)));
+    return Array.from(bySession.values())
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+  }
+
+  const bySession = new Map<string, ConversationSummary>();
+  for (const item of normalizeConversationSummaries(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))) {
+    bySession.set(item.sessionId, item);
+  }
+
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
+    const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
+    if (!sid) continue;
+    const messages = normalizePersistedMessages(window.localStorage.getItem(key));
+    if (!messages.length) continue;
+    bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
+  }
+
+  bySession.set(activeSessionId, buildConversationSummary(activeSessionId, activeMessages, bySession.get(activeSessionId)));
+  return Array.from(bySession.values())
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_CONVERSATIONS);
+};
+
+const upsertConversationSummary = (
+  summaries: ConversationSummary[],
+  sessionId: string,
+  messages: Message[],
+): ConversationSummary[] => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return summaries;
+  const previous = summaries.find((item) => item.sessionId === sid);
+  const next = [
+    buildConversationSummary(sid, messages, previous),
+    ...summaries.filter((item) => item.sessionId !== sid),
+  ].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS);
+  persistConversationSummaries(next);
+  return next;
+};
+
 const loadMessagesForSession = (sessionId: string): Message[] => {
-  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
   const sid = String(sessionId || '').trim();
   if (!sid) return [WELCOME_MESSAGE];
+  if (typeof window === 'undefined') {
+    const scoped = normalizePersistedMessages(memoryMessageStore.get(messageStorageKey(sid)) || null);
+    if (scoped.length > 0) return scoped;
+    return [WELCOME_MESSAGE];
+  }
 
   const scoped = normalizePersistedMessages(window.localStorage.getItem(messageStorageKey(sid)));
   if (scoped.length > 0) return scoped;
@@ -264,13 +399,16 @@ const getInitialMessages = (sessionId: string): Message[] => {
 };
 
 const persistMessages = (messages: Message[], sessionId: string) => {
-  if (typeof window === 'undefined') return;
   const sid = String(sessionId || '').trim();
   if (!sid) return;
   try {
     const toSave = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(-MAX_PERSISTED_MESSAGES);
+    if (typeof window === 'undefined') {
+      memoryMessageStore.set(messageStorageKey(sid), JSON.stringify(toSave));
+      return;
+    }
     window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
   } catch {
     // localStorage full or unavailable — silently ignore
@@ -278,9 +416,22 @@ const persistMessages = (messages: Message[], sessionId: string) => {
 };
 
 const clearPersistedMessages = (sessionId: string) => {
-  if (typeof window === 'undefined') return;
   const sid = String(sessionId || '').trim();
   if (!sid) return;
+  if (typeof window === 'undefined') {
+    memoryMessageStore.delete(messageStorageKey(sid));
+    return;
+  }
+  window.localStorage.removeItem(messageStorageKey(sid));
+};
+
+const clearPersistedConversation = (sessionId: string) => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  if (typeof window === 'undefined') {
+    memoryMessageStore.delete(messageStorageKey(sid));
+    return;
+  }
   window.localStorage.removeItem(messageStorageKey(sid));
 };
 
@@ -309,6 +460,7 @@ const buildNewConversationSessionId = (identity: AuthIdentity | null): string =>
 
 export const useStore = create<AppState>((set) => ({
   messages: getInitialMessages(initialSessionId),
+  conversationSummaries: loadConversationSummaries(initialSessionId, getInitialMessages(initialSessionId)),
   isChatLoading: false,
   statusMessage: null,
   statusSince: null,
@@ -346,7 +498,10 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const next = [...state.messages, message];
       persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
+      };
     }),
 
   updateMessage: (id, patch) =>
@@ -354,7 +509,12 @@ export const useStore = create<AppState>((set) => ({
       const next = state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
       // Only persist when message finishes loading (avoid thrashing during streaming)
       if (patch.isLoading === false) persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: patch.isLoading === false
+          ? upsertConversationSummary(state.conversationSummaries, state.sessionId, next)
+          : state.conversationSummaries,
+      };
     }),
 
   updateLastMessage: (content) =>
@@ -370,7 +530,10 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const next = state.messages.filter((m) => m.id !== id);
       persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
+      };
     }),
 
   setLoading: (loading) => set({ isChatLoading: loading }),
@@ -407,8 +570,14 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       state.abortController?.abort();
       clearPersistedMessages(state.sessionId);
+      const conversationSummaries = upsertConversationSummary(
+        state.conversationSummaries,
+        state.sessionId,
+        [WELCOME_MESSAGE],
+      );
       return {
         messages: [WELCOME_MESSAGE],
+        conversationSummaries,
         isChatLoading: false,
         statusMessage: null,
         statusSince: null,
@@ -434,9 +603,15 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
       }
+      const conversationSummaries = upsertConversationSummary(
+        state.conversationSummaries,
+        nextSessionId,
+        [WELCOME_MESSAGE],
+      );
       return {
         sessionId: nextSessionId,
         messages: [WELCOME_MESSAGE],
+        conversationSummaries,
         isChatLoading: false,
         statusMessage: null,
         statusSince: null,
@@ -489,14 +664,90 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setSessionId: (sessionId) =>
-    set(() => {
+    set((state) => {
       const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
+      const messages = loadMessagesForSession(normalized);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
       return {
         sessionId: normalized,
-        messages: loadMessagesForSession(normalized),
+        messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
+      };
+    }),
+
+  selectConversation: (sessionId) =>
+    set((state) => {
+      state.abortController?.abort();
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const messages = loadMessagesForSession(normalized);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', normalized);
+      }
+      return {
+        sessionId: normalized,
+        messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
+        isChatLoading: false,
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: null,
+        currentTicker: null,
+        draft: '',
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
+
+  deleteConversation: (sessionId) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      if (normalized === state.sessionId) {
+        state.abortController?.abort();
+      }
+      clearPersistedConversation(normalized);
+      const remaining = state.conversationSummaries
+        .filter((item) => item.sessionId !== normalized)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      const nextSessionId = normalized === state.sessionId
+        ? (remaining[0]?.sessionId || buildNewConversationSessionId(state.authIdentity))
+        : state.sessionId;
+      const nextMessages = normalized === state.sessionId
+        ? loadMessagesForSession(nextSessionId)
+        : state.messages;
+      const nextSummaries = remaining.length > 0 || nextSessionId === state.sessionId
+        ? remaining
+        : upsertConversationSummary([], nextSessionId, nextMessages);
+      persistConversationSummaries(nextSummaries);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+      return {
+        sessionId: nextSessionId,
+        messages: nextMessages,
+        conversationSummaries: nextSummaries,
+        isChatLoading: normalized === state.sessionId ? false : state.isChatLoading,
+        statusMessage: normalized === state.sessionId ? null : state.statusMessage,
+        statusSince: normalized === state.sessionId ? null : state.statusSince,
+        executionProgress: normalized === state.sessionId ? null : state.executionProgress,
+        currentStep: normalized === state.sessionId ? null : state.currentStep,
+        abortController: normalized === state.sessionId ? null : state.abortController,
+        currentTicker: normalized === state.sessionId ? null : state.currentTicker,
+        draft: normalized === state.sessionId ? '' : state.draft,
+        agentLogs: normalized === state.sessionId ? [] : state.agentLogs,
+        agentStatuses: normalized === state.sessionId ? createInitialAgentStatuses() : state.agentStatuses,
+        rawEvents: normalized === state.sessionId ? [] : state.rawEvents,
       };
     }),
 

@@ -93,6 +93,32 @@ def planner_stub(state: GraphState) -> dict:
         )
         step_id += 1
 
+    if subject_type == "macro":
+        _append_tool_step(
+            "get_current_datetime",
+            {},
+            why="宏观/主题问题先获取当前日期，避免把旧政策路径当成当前事实。",
+            optional=True,
+        )
+        _append_tool_step(
+            "get_official_macro_releases",
+            {"query": query, "max_results": 8},
+            why="宏观/主题问题优先检索官方宏观发布与央行材料。",
+            optional=True,
+        )
+        _append_tool_step(
+            "get_authoritative_media_news",
+            {"query": query, "max_results": 6, "authoritative_only": True},
+            why="补充权威媒体对宏观路径和市场估值影响的交叉验证。",
+            optional=True,
+        )
+        _append_tool_step(
+            "search",
+            {"query": query},
+            why="补充开放搜索证据，用于覆盖主题研究中未被官方发布直接解释的市场影响。",
+            optional=True,
+        )
+
     # Morning brief: per-ticker price + news in parallel.
     if operation == "morning_brief":
         brief_tickers = [t for t in (tickers if isinstance(tickers, list) else []) if isinstance(t, str) and t.strip()]
@@ -637,6 +663,31 @@ def planner_stub(state: GraphState) -> dict:
                     "parallel_group": agent_parallel_group,
                     "why": f"研报模式：运行 {agent_name} 产出结构化摘要+证据（用于卡片展示）",
                     "optional": True,
+                }
+            )
+            step_id += 1
+
+    if output_mode == "investment_report" and subject_type == "macro" and not primary_ticker:
+        policy_agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+        required_agents = []
+        if isinstance(policy_agent_selection, dict):
+            required_agents = [str(name) for name in (policy_agent_selection.get("required") or []) if isinstance(name, str)]
+        ordered_agents = ["macro_agent", "news_agent", "deep_search_agent"]
+        selected_agents = [name for name in ordered_agents if name in allowed_agents]
+        if not selected_agents and "macro_agent" in allowed_agents:
+            selected_agents = ["macro_agent"]
+        agent_parallel_group = "report_agents" if len(selected_agents) > 1 else None
+
+        for agent_name in selected_agents:
+            steps.append(
+                {
+                    "id": f"s{step_id}",
+                    "kind": "agent",
+                    "name": agent_name,
+                    "inputs": {"query": query, "ticker": ""},
+                    "parallel_group": agent_parallel_group,
+                    "why": f"宏观/主题研报模式：运行 {agent_name} 产出结构化摘要与证据。",
+                    "optional": agent_name not in required_agents,
                 }
             )
             step_id += 1

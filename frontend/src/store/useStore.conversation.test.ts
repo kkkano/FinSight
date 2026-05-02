@@ -4,9 +4,12 @@ import { useStore } from './useStore';
 
 describe('useStore conversation lifecycle', () => {
   beforeEach(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.clear();
+    }
     const state = useStore.getState();
-    state.clearConversationContext();
     state.setSessionId('public:test-user:default');
+    state.clearConversationContext();
   });
 
   it('clears the current conversation context without rotating session id', () => {
@@ -51,5 +54,37 @@ describe('useStore conversation lifecycle', () => {
     expect(next.draft).toBe('');
     expect(next.currentTicker).toBeNull();
     expect(next.isChatLoading).toBe(false);
+  });
+
+  it('keeps previous chats selectable after starting a new chat', () => {
+    const before = useStore.getState();
+    before.addMessage({ id: 'user-1', role: 'user', content: 'TSLA news', timestamp: 10 });
+    const originalSession = before.sessionId;
+
+    before.startNewChat();
+
+    const afterNew = useStore.getState();
+    expect(afterNew.sessionId).not.toBe(originalSession);
+    expect(afterNew.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(true);
+    expect(afterNew.conversationSummaries.some((item) => item.sessionId === afterNew.sessionId)).toBe(true);
+
+    afterNew.selectConversation(originalSession);
+
+    const restored = useStore.getState();
+    expect(restored.sessionId).toBe(originalSession);
+    expect(restored.messages.some((message) => message.content === 'TSLA news')).toBe(true);
+  });
+
+  it('deletes a stored conversation from the switcher', () => {
+    const state = useStore.getState();
+    state.addMessage({ id: 'user-1', role: 'user', content: 'AAPL outlook', timestamp: 10 });
+    const originalSession = state.sessionId;
+    state.startNewChat();
+
+    useStore.getState().deleteConversation(originalSession);
+
+    const next = useStore.getState();
+    expect(next.sessionId).not.toBe(originalSession);
+    expect(next.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(false);
   });
 });

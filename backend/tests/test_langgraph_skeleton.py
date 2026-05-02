@@ -118,6 +118,27 @@ def test_resolve_subject_query_ticker_overrides_active_symbol():
     assert subject.get("tickers") == ["NVDA"]
 
 
+def test_macro_theme_query_without_ticker_is_answerable():
+    from backend.graph import GraphRunner
+
+    runner = GraphRunner.create()
+    result = _run(
+        runner.ainvoke(
+            thread_id="t-macro-theme",
+            query="美联储利率路径对大型科技股估值有什么影响",
+            ui_context={},
+            output_mode="brief",
+        )
+    )
+
+    subject = result.get("subject") or {}
+    clarify = result.get("clarify") or {}
+    draft = ((result.get("artifacts") or {}).get("draft_markdown")) or ""
+    assert subject.get("subject_type") == "macro"
+    assert clarify.get("needed") is False
+    assert "先选定分析对象" not in draft
+
+
 def test_decide_output_mode_ui_override_and_safe_default():
     from backend.graph import GraphRunner
 

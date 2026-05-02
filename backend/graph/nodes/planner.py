@@ -399,6 +399,8 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     tickers = tickers if isinstance(tickers, list) else []
     tickers = [str(t).strip().upper() for t in tickers if isinstance(t, str) and str(t).strip()]
     primary_ticker = tickers[0] if tickers else None
+    subject_type = str(subject.get("subject_type") or "unknown").strip().lower() if isinstance(subject, dict) else "unknown"
+    is_macro_subject = subject_type == "macro"
     selection_ids = subject.get("selection_ids") if isinstance(subject, dict) else None
     selection_ids = selection_ids if isinstance(selection_ids, list) else []
     selection_ids = [str(s).strip() for s in selection_ids if isinstance(s, str) and s.strip()]
@@ -609,6 +611,27 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             {"tickers": mapping},
             "Compare request: fetch multi-ticker performance baseline (YTD/1Y) first",
         )
+    if is_macro_subject:
+        _insert_optional_tool(
+            "get_current_datetime",
+            {},
+            "Macro/theme request: anchor the policy and market context to the current date.",
+        )
+        _insert_optional_tool(
+            "get_official_macro_releases",
+            {"query": query, "max_results": 8},
+            "Macro/theme request: retrieve official macro and central-bank releases first.",
+        )
+        _insert_optional_tool(
+            "get_authoritative_media_news",
+            {"query": query, "max_results": 6, "authoritative_only": True},
+            "Macro/theme request: add authoritative market interpretation as cross-check evidence.",
+        )
+        _insert_optional_tool(
+            "search",
+            {"query": query},
+            "Macro/theme request: cover market-impact context not directly present in official releases.",
+        )
     if output_mode == "investment_report" and primary_ticker:
         filing_inserter = _insert_required_tool if has_deep_hint else _insert_optional_tool
         if "get_local_market_filings" in allowed_tools:
@@ -671,7 +694,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 agent_order.append("deep_search_agent")
 
     # In report mode, enforce a deterministic score-selected agent baseline.
-    if output_mode == "investment_report" and primary_ticker:
+    if output_mode == "investment_report" and (primary_ticker or is_macro_subject):
         existing_agent_names = {s.get("name") for s in sanitized_steps if s.get("kind") == "agent"}
 
         insert_at = 0
@@ -692,7 +715,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 continue
             is_required_agent = agent_name in required_agents
             force_escalation = agent_name in required_agents or (agent_name == "deep_search_agent" and has_deep_hint)
-            agent_inputs = {"query": query, "ticker": primary_ticker, "selection_ids": selection_ids}
+            agent_inputs = {"query": query, "ticker": primary_ticker or "", "selection_ids": selection_ids}
             if agent_name in _HIGH_COST_AGENTS:
                 agent_inputs = {
                     **agent_inputs,
@@ -742,7 +765,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     if max_tools > 0:
         # In report mode, prioritize keeping the baseline agent cards so the UI is stable/readable.
         baseline_agents: set[str] = set()
-        if output_mode == "investment_report" and primary_ticker:
+        if output_mode == "investment_report" and (primary_ticker or is_macro_subject):
             baseline_agents = {a for a in agent_order if a in allowed_agents}
 
         if baseline_agents:

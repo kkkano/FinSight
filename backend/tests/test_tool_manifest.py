@@ -53,3 +53,16 @@ def test_select_tools_us_includes_sec_tools_for_company_qa():
     assert "get_official_macro_releases" in tools
     assert "get_authoritative_media_news" in tools
     assert "get_earnings_call_transcripts" in tools
+
+
+def test_select_tools_macro_includes_macro_evidence_sources():
+    tools = select_tools(
+        subject_type="macro",
+        operation_name="qa",
+        output_mode="brief",
+        analysis_depth="report",
+        market="US",
+    )
+    assert "get_official_macro_releases" in tools
+    assert "get_authoritative_media_news" in tools
+    assert "search" in tools

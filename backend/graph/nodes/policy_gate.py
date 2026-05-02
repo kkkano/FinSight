@@ -98,6 +98,13 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "search",
             "get_current_datetime",
         ]
+    if subject_type == "macro":
+        return [
+            "get_official_macro_releases",
+            "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
     if subject_type == "company":
         if op_name == "price":
             return [

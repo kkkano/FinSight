@@ -133,6 +133,8 @@ def render_stub(state: GraphState) -> dict:
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     ticker = (tickers or [None])[0] if isinstance(tickers, list) else None
     tickers_label = " vs ".join([t for t in (tickers or []) if isinstance(t, str) and t.strip()][:4]) if isinstance(tickers, list) and len(tickers) > 1 else (ticker or "N/A")
+    if subject_type == "macro":
+        tickers_label = "宏观主题"
     selection_payload = subject.get("selection_payload") if isinstance(subject, dict) else None
     selection_payload = selection_payload if isinstance(selection_payload, list) else []
 
@@ -249,6 +251,8 @@ def render_stub(state: GraphState) -> dict:
             template_key = "company_report" if output_mode == "investment_report" else "company_brief"
     elif subject_type in ("filing", "research_doc"):
         template_key = "filing_report" if output_mode == "investment_report" else "filing_brief"
+    elif subject_type == "macro":
+        template_key = "company_report" if output_mode == "investment_report" else "company_brief"
 
     note_prefix = ""
     if not template_key:

@@ -1001,6 +1001,66 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             risks=base_risks,
         ).model_dump()
 
+    if subject_type == "macro":
+        macro_out = _get_agent_output("macro_agent")
+
+        def _fmt_macro_tool(tool_name: str, label: str) -> list[str]:
+            out = _get_tool_output(tool_name)
+            if out is None:
+                return []
+            if isinstance(out, (dict, list)):
+                text = json_dumps_safe(out, ensure_ascii=False)[:900]
+            else:
+                text = str(out).strip()[:900]
+            return [f"- {label}: {text}"] if text else []
+
+        macro_lines: list[str] = []
+        if isinstance(macro_out, dict) and macro_out.get("summary"):
+            macro_lines.append(f"- MacroAgent: {str(macro_out['summary']).strip()[:900]}")
+        macro_lines.extend(_fmt_macro_tool("get_official_macro_releases", "官方宏观发布"))
+        macro_lines.extend(_fmt_macro_tool("get_authoritative_media_news", "权威媒体交叉验证"))
+        macro_lines.extend(_fmt_macro_tool("search", "开放搜索"))
+        macro_context = "\n".join(macro_lines[:6]) or "- 暂未获取到外部证据，以下为基于问题本身的结构化分析框架。"
+
+        risks = [
+            "- 利率路径本身具有强不确定性，需持续跟踪 FOMC 表述、通胀和就业数据。",
+            "- 大型科技股估值对贴现率敏感，但盈利韧性、AI 资本开支和现金流质量会造成分化。",
+            "- 以上仅供研究参考，不构成投资建议。",
+        ]
+        return RenderVars(
+            conclusion="\n".join(
+                [
+                    f"- 问题：{query}",
+                    "- 核心判断：无 ticker 的宏观/主题问题应走宏观研究路径，而不是要求用户先选公司。",
+                    "- 分析框架：利率预期 → 折现率/风险偏好 → 久期资产估值 → 盈利预期与行业分化。",
+                ]
+            ),
+            investment_summary=macro_context,
+            investment_thesis="\n".join(
+                [
+                    "- 若市场预期降息提前，长久期成长股估值通常受益；若利率维持高位或再上修，估值倍数承压。",
+                    "- 对大型科技股不能只看利率，还要同步看盈利增速、AI 投资回报周期、监管和美元流动性。",
+                ]
+            ),
+            company_overview=macro_context,
+            catalysts="\n".join(
+                [
+                    "- FOMC 点阵图、主席发布会措辞和核心 PCE/CPI 是主要触发器。",
+                    "- 10Y 美债收益率、实际利率和信用利差决定估值压力是否扩散。",
+                ]
+            ),
+            valuation="\n".join(
+                [
+                    "- 估值传导主要通过贴现率、股权风险溢价和远期盈利折现。",
+                    "- 利率下行利好高久期资产，但若来自衰退压力，盈利预期下修会抵消估值扩张。",
+                ]
+            ),
+            price_snapshot="- 宏观/主题研究不绑定单一 ticker；建议结合 NASDAQ 100、10Y 美债收益率和大型科技股篮子观察。",
+            technical_snapshot="- 宏观/主题研究不生成单股技术面；可后续指定 QQQ、AAPL、MSFT、GOOGL 等标的再做图表/技术分析。",
+            risks="\n".join(risks),
+            conflict_disclosure=_collect_conflict_disclosure(),
+        ).model_dump()
+
     if subject_type == "company":
         report_hint = "（研报模式）" if output_mode == "investment_report" else "（快评模式）"
         price_snapshot = _fmt_price_snapshot()

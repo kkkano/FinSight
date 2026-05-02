@@ -19,6 +19,17 @@ const TICKER_STOPWORDS = new Set([
 
 const MAX_AUTO_CHART_TICKERS = 3;
 const TICKER_PATTERN = /^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/;
+const EMPTY_RESEARCH_PROMPTS = new Set([
+  'hi',
+  'hello',
+  'hey',
+  '你好',
+  '您好',
+  '嗨',
+  '哈喽',
+  '在吗',
+  '在么',
+]);
 
 const mergeTickerCandidates = (...sources: Array<string[] | undefined>): string[] => {
   const merged: string[] = [];
@@ -86,6 +97,20 @@ const extractTicker = (text: string): string | null => {
   const tickers = extractTickers(text);
   return tickers.length ? tickers[0] : null;
 };
+
+const hasActionableResearchInput = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const compact = trimmed.replace(/\s+/g, '').toLowerCase();
+  const withoutPunctuation = compact.replace(/[?!,.，。！？、；;:：'"“”‘’()[\]{}<>《》]/g, '');
+  if (!withoutPunctuation) return false;
+  if (EMPTY_RESEARCH_PROMPTS.has(withoutPunctuation)) return false;
+  if (!/[A-Za-z0-9\u3400-\u9FFF]/.test(trimmed)) return false;
+
+  return withoutPunctuation.length >= 2 || TICKER_PATTERN.test(trimmed.toUpperCase());
+};
+
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '图表', 'k线'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 
@@ -632,6 +657,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
   }, [draft, setDraft]);
 
+  useEffect(() => {
+    setInput('');
+    setOutputMode('brief');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.overflowY = 'hidden';
+    }
+  }, [sessionId]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -639,7 +673,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
   };
 
-  const canGenerateReport = Boolean(activeAsset?.symbol || currentTicker || activeSelections.length > 0);
+  const canGenerateReport = Boolean(
+    activeAsset?.symbol
+    || currentTicker
+    || activeSelections.length > 0
+    || hasActionableResearchInput(input)
+  );
 
   useEffect(() => {
     if (!canGenerateReport && outputMode === 'investment_report') {
@@ -696,7 +735,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               ? 'border-amber-500 text-amber-500 bg-amber-500/10'
               : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
-          title={canGenerateReport ? '切换到深度分析模式' : '请选择标的或引用内容后启用深度分析'}
+          title={canGenerateReport ? '切换到深度分析模式' : '输入可研究的问题、选择标的或引用内容后启用深度分析'}
         >
           深度
         </button>
@@ -714,7 +753,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything about a ticker... (e.g., AAPL price trend)"
+          placeholder="Ask about markets, macro, themes, or a ticker... (e.g., AAPL price trend)"
           disabled={isChatLoading}
           aria-label="输入聊天消息"
           rows={1}
