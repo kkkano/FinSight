@@ -115,6 +115,44 @@ START
 
 `understand_request` 是新的请求理解节点，是前半段语义的唯一写入点。
 
+### 5.0 状态契约必须先落地
+
+实现顺序上必须先改状态契约，再改图节点。否则新节点只能继续把复合语义塞回旧的 `subject` / `operation`，问题不会真正消失。
+
+`backend/graph/state.py` 需要新增或校准：
+
+- `SubjectType` 增加 `macro`、`index`、`commodity`、`theme`。
+- `OperationName` 使用受控枚举，至少覆盖本 spec 的 operation 列表。
+- `UnderstandingTask`：单个可执行或待澄清任务。
+- `BlockedTask`：缺上下文、缺权限、缺持仓、缺 selection 等不能执行的局部任务。
+- `Understanding`：本轮请求理解的单一事实源。
+- `ContextRef`：来源于 `thread`、`ui_selection`、`active_symbol`、`portfolio`、`document`、`explicit_user_input` 的上下文引用。
+- `TimeScope`：`today`、`yesterday`、`latest`、`last_7_days`、`this_week`、`explicit_range`、`unknown`，并保存解析依据。
+
+推荐最小结构：
+
+```python
+class Understanding(TypedDict, total=False):
+    conversation_intent: Literal["casual", "general_chat", "financial_task", "mixed"]
+    route: Literal["direct", "clarify", "research", "alert", "mixed"]
+    social_prefix: str | None
+    direct_response: str | None
+    output_mode: OutputMode
+    tasks: list[UnderstandingTask]
+    blocked_tasks: list[BlockedTask]
+    primary_task_id: str | None
+    requires_planner: bool
+    route_reason: list[str]
+    assumptions: list[str]
+    context_refs: list[ContextRef]
+    request_time: str
+    timezone: str
+```
+
+`reset_turn_state` 必须把 `understanding`、`tasks`、`blocked_tasks`、`context_refs`、`route`、`cancelled` 等本轮临时字段清掉；长期 conversation memory 不能在这里清理。
+
+当前代码有一个需要先修的契约漂移：`resolve_subject.py` 已可能写入 `subject_type="macro"`，但 `GraphState.SubjectType` 还没有 `macro`。这是 Phase 1 的硬前置，不应拖到 planner 阶段。
+
 ### 5.1 三层策略
 
 第一层：硬规则
@@ -199,6 +237,17 @@ START
 
 第二阶段再让 `planner` 原生消费 `tasks[]`。
 
+兼容投影规则：
+
+- 只从 `primary_task_id` 对应的可执行 task 投影。
+- 如果只有 `blocked_tasks`，不得伪造 `subject` / `operation`；走 `clarify`。
+- 如果 route 为 `mixed`，可执行 task 正常投影，blocked task 保留到 `understanding.blocked_tasks`，最终 synthesis 负责提示。
+- 如果 task 是 `macro` 且没有 ticker，不能投影成 `unknown company`。
+- 如果用户显式给出本轮 holdings，例如“我持有 AAPL、GOOGL”，该上下文优先级高于已保存 portfolio。
+- 如果用户给出 fallback，例如“不知道就按苹果处理”，不能进入全局 clarify。
+
+兼容模式的目标不是一次性多任务全跑完，而是先保证旧 planner 不崩、旧能力不回退、新理解结果可观测。
+
 ## 6. 路由语义
 
 | route | 条件 | 行为 |
@@ -278,6 +327,32 @@ PlanIR 增加 `tasks`：
 
 LLM 不能越过 policy gate 选择工具。
 
+## 8.1 RAG 与记忆边界
+
+RAG 不能继续被当成 deep search 的一次性缓存来理解。系统需要四层明确边界：
+
+| 层 | 生命周期 | 写入来源 | 读取场景 | 删除/过期 |
+|---|---|---|---|---|
+| `run_cache` | 单次 run | 工具、搜索、agent 中间结果 | 同一次回答内去重和合成 | run 结束后可丢弃或短 TTL |
+| `conversation_memory` | 单个会话 | 用户明确表达、系统对话摘要、已确认上下文 | 指代解析、连续追问、上一轮风险点 | 删除会话时删除或标记不可用 |
+| `workspace_kb` | 工作区/文档级 | 上传 PDF、报告、用户保存的研究材料 | 文档问答、跨会话材料复用 | 用户删除文档时删除 |
+| `user_profile/portfolio` | 用户级 | 用户保存的持仓、偏好、风险约束 | 组合影响、调仓建议、默认偏好 | 用户显式编辑或删除 |
+
+执行约束：
+
+- deep search 产生的网页证据默认只进入 `run_cache`，不能自动污染长期 memory。
+- 只有用户明确保存、系统高置信摘要并通过策略允许、或文档上传索引，才可进入长期层。
+- RAG 命中必须带 `layer`、`collection`、`source_id`、`score`、`freshness`、`permission_scope`。
+- synthesis 引用 RAG 时要区分“本轮检索证据”和“历史记忆”，避免把旧结论当新事实。
+- 删除会话时，必须清理或隔离对应 `conversation_memory`，不能让旧 ticker/风险点泄露到新会话。
+
+首阶段 MVP：
+
+- 保留现有 deep search 缓存作为 `run_cache`。
+- 为 conversation/thread 增加最小 memory scope 标记。
+- trace 中展示 RAG 命中层级和数量。
+- 不做复杂向量库迁移，避免把请求理解重构和 RAG 存储重构绑死。
+
 ## 9. 前端契约
 
 前端只做交互状态，不做金融语义识别。
@@ -295,6 +370,33 @@ LLM 不能越过 policy gate 选择工具。
 - 维护公司名到 ticker 的字典。
 - 判断 macro/company/portfolio。
 - 根据关键词决定后端工具或 agent。
+
+### 9.0 会话体验契约
+
+会话体验要接近 ChatGPT 的基本模型：新建、切换、删除、保留历史、上下文隔离。
+
+MVP 允许前端 localStorage 保存会话列表和消息，但架构目标必须是后端会话 API：
+
+- `GET /conversations`：列出会话摘要。
+- `POST /conversations`：新建会话并返回 `session_id/thread_id`。
+- `GET /conversations/{id}`：加载消息、最近摘要、可用上下文。
+- `DELETE /conversations/{id}`：删除会话，并触发 conversation memory 清理。
+- `PATCH /conversations/{id}`：改标题、置顶、归档等后续能力。
+
+行为要求：
+
+- 新建会话必须生成新的 `session_id/thread_id`，清空当前 active context、pending trace、agent 状态和未完成流。
+- 切换旧会话必须恢复该会话消息和会话级上下文，但不能恢复上一会话的临时 run 状态。
+- 删除当前会话后要进入最近一个会话；没有剩余会话时创建空白会话。
+- 删除非当前会话不能影响当前流式 run。
+- 正在生成时切换/删除会话，前端必须先取消当前 run 或明确提示状态；不能让 token 写入错误会话。
+- 会话标题优先用首条用户消息生成摘要，不能永远显示固定“新对话”。
+
+需要后端配合的边界：
+
+- `thread_id` 是图 checkpoint、conversation memory、trace run 的共同会话键。
+- `run_id` 是单次执行键，不能代替 `thread_id`。
+- 新会话默认不继承旧会话 ticker/selection，除非用户显式选择全局 portfolio/profile。
 
 ### 9.1 用户可见思考过程设计
 
@@ -340,6 +442,25 @@ Assistant Message
 - 把所有 trace dump 给用户，造成噪音。
 - 用“AI 正在深度思考”这种不可验证文案替代真实事件。
 - 在 brief 模式下展示和 deep search 一样重的过程 UI。
+
+### 9.2 Deep / Brief 控件契约
+
+Deep / Brief 的可点击状态不能依赖前端金融词典。
+
+前端只根据以下条件启用：
+
+- 输入非空，或存在可提交的 selection / active context。
+- 当前没有进行中的提交，或当前 UI 显示的是“停止”。
+- 用户权限允许该 output mode。
+
+后端负责判断：
+
+- “谷歌 / 微软 / 苹果”映射成什么 ticker。
+- 没有 ticker 的 macro 问题是否可执行。
+- deep search 是否必要、是否被用户禁用、是否因 brief 模式跳过。
+- 多任务请求中哪些 task 可以执行、哪些需要澄清。
+
+如果后端判定 brief/deep 不适合，应返回 user-visible trace 或 answer caveat，而不是让前端提前禁用。
 
 ## 10. SSE 与可观测性
 
@@ -410,6 +531,38 @@ Assistant Message
 - `visibility != "user"` 的内部 debug 事件只进入开发面板，不进入普通用户视图。
 - cancelled 事件必须显示“用户已停止”或“后端已取消”，不能伪装成失败。
 
+### 10.2 SSE 过滤与兼容规则
+
+当前 `execution_service` 存在 `trace_raw_enabled=false` 时过滤 raw trace 的逻辑。新增 `type="trace"` 事件后必须明确：
+
+- `visibility="user"` 的 `trace` 事件永远不被 raw trace 过滤。
+- `visibility="debug"` 或未声明 visibility 的内部事件，在 raw trace 关闭时进入过滤。
+- 旧 `type="thinking"` 事件可以保留，但新 Process Strip 以 `type="trace"` 为主。
+- 前端 `parseSSEStream` 必须显式支持 `type="trace"`，并按 `stage/status/task_id` 合并到 timeline。
+- 同一 run 的事件必须带 `session_id` 和 `run_id`。
+- 事件 payload 必须 JSON 可序列化，时间统一 ISO 8601。
+- provider、query、tool args 只展示摘要，不能泄露密钥、完整认证头或用户隐私字段。
+
+### 10.3 停止生成与取消链路
+
+“停止”不是前端假停止，必须形成端到端取消语义。
+
+要求：
+
+- 前端点击停止后调用 `AbortController.abort()`，并把当前 run 标记为 `cancelling`。
+- 后端 streaming generator 感知断开后取消 producer task。
+- graph runner、agent、tool wrapper 应检查 cancellation token 或处理 `asyncio.CancelledError`。
+- 被取消的 run 必须发出或记录 `trace/status=cancelled`，包含已完成阶段和取消时间。
+- 已经产出的 token 和 trace 保留在当前会话，不回滚。
+- 取消后用户可以继续追问；下一轮 `reset_turn_state` 不能继承上轮 cancelled 的临时状态。
+- 若某个外部 API 无法中断，后端至少要停止继续合成，并在 trace 里记录 `best_effort_cancel`。
+
+UI 文案：
+
+- 普通停止：`已停止生成，保留已完成的结果。`
+- 后端确认取消：`后端已取消本次运行。`
+- 超时或工具不可中断：`已停止展示，部分后台调用可能已超时结束。`
+
 ## 11. 回归测试矩阵
 
 | Query | 预期 |
@@ -458,7 +611,95 @@ Assistant Message
 | C14 | `如果今天纳指继续跌，AAPL、MSFT、NVDA哪个对我组合拖累最大？我没有组合的话就按等权假设。` | `index/NDX or QQQ/scenario`；`company/[AAPL,MSFT,NVDA]/analyze_impact`；portfolio impact，若无 holdings 使用 equal-weight assumption 而不是 blocked | 缺持仓时澄清，忽略用户给出的等权 fallback |
 | C15 | `请先确认美联储今天有没有公告，再判断这会不会影响我的持仓；如果没持仓，就只讲对大型科技股估值的影响。` | `macro/fact_check/today` 必须先执行；portfolio impact 有持仓则执行；无持仓 fallback 为 `macro/analyze_impact(large_tech_valuation)` | 因无持仓直接结束，或跳过 fact_check 直接泛谈 |
 
-## 12. 迁移计划
+### 11.2 测试与评估门槛
+
+请求理解重构必须先有可重复评估，不能靠手感。
+
+后端单元测试至少覆盖：
+
+- pure casual 不触发金融任务。
+- company alias、ticker、中文公司名都由后端解析。
+- macro 无 ticker 也可形成可执行任务。
+- selection / active_symbol / thread subject 的优先级。
+- explicit holdings 和 fallback assumption。
+- mixed route 中可执行 task 与 blocked task 分离。
+- `reset_turn_state` 清理新字段，不污染下一轮。
+- `SubjectType`、`OperationName`、`TimeScope` 枚举校验。
+
+契约测试至少覆盖：
+
+- `understand_request` 输出 JSON schema 校验。
+- 兼容投影到旧 `subject` / `operation`。
+- `trace/visibility=user` 在 raw trace 关闭时仍能到前端。
+- `trace/visibility=debug` 在 raw trace 关闭时不进普通用户视图。
+- cancellation 事件状态。
+
+前端测试至少覆盖：
+
+- `parseSSEStream` 识别 `type="trace"`。
+- Process Strip 只展示收到的真实 stage。
+- 没有 retrieval/tool 事件时不显示假检索/假工具步骤。
+- 新建/切换/删除会话不会串消息。
+- 停止生成后保留已收到 token 和 trace。
+- Deep/Brief 启用逻辑不依赖 ticker 字典。
+
+Playwright 手测场景至少覆盖：
+
+- C01、C03、C06、C09、C12、C15。
+- 中文公司名输入：`谷歌`、`微软`、`苹果`。
+- 无 ticker 宏观问题：`美联储利率路径对大型科技股估值有什么影响`。
+- 混合闲聊 + 金融任务 + 持仓任务。
+- 运行中停止、随后继续追问。
+- 新建会话后旧 ticker 不泄露；切回旧会话后历史可用。
+
+LLM-as-judge 可以作为辅助质量评估，但不能作为唯一 gate。合并前的硬 gate 是 schema、golden case、契约测试和 Playwright。
+
+## 12. 执行前置清单
+
+开工前必须确认以下内容已经写入 issue/task 或实现计划：
+
+- 状态契约：新增 `Understanding`、`UnderstandingTask`、`BlockedTask`、`ContextRef`、`TimeScope`。
+- 类型漂移：修复 `SubjectType` 缺 `macro/index/commodity/theme`。
+- 测试先行：创建 `backend/tests/test_understand_request.py`，先录入 golden cases。
+- 兼容投影：定义 `primary_task -> subject/operation` 的投影函数。
+- 图接入：先接入 `understand_request`，不要先删除旧文件。
+- Trace：新增 `type="trace"`、`visibility=user/debug`、stage/status 字段。
+- 前端解析：`parseSSEStream` 支持 trace event，execution store 支持按 stage 合并。
+- Process Strip：只渲染真实 trace，不渲染假进度。
+- 会话：确认 MVP localStorage 与后端 conversation API 的边界。
+- RAG：确认 `run_cache/conversation_memory/workspace_kb/user_profile` 四层边界。
+- 取消：确认前后端 cancellation 最小闭环。
+- 文档：实现完成后同步 README、架构文档、事件契约和 docs index。
+
+明确禁止的实现路径：
+
+- 不先重写 planner/executor。
+- 不在前端补 ticker/company 字典。
+- 不把 deep search 缓存直接升级成长期记忆。
+- 不展示隐藏 chain-of-thought。
+- 不用节点顺序测试替代语义测试。
+- 不为了支持 operation 增加更多前置 graph 节点。
+
+## 13. 需要用户决策的事项
+
+以下事项不是代码能自动替你决定的产品边界，需要你拍板。默认建议已给出：
+
+| 决策项 | 推荐默认 | 影响 |
+|---|---|---|
+| 会话持久化 | 先 localStorage MVP，随后补后端 conversation API | MVP 快，后续多设备和服务端 memory 需要迁移 |
+| 删除会话是否删除 conversation memory | 删除或隔离该会话 memory | 更符合用户直觉，避免旧上下文泄露 |
+| Deep 模式默认触发 | 用户显式 Deep 或 investment_report 才触发 | 控成本、提速，避免 brief 问题过重 |
+| Brief 是否允许 deep_search | 默认不允许，除非后端判定必须且返回说明 | 保持 brief 快速稳定 |
+| RAG 长期记忆写入 | 默认只保存用户明确保存/上传/确认的信息 | 避免把临时网页结论污染长期记忆 |
+| 用户可见 trace 详细度 | 默认 compact，一键展开详情 | 普通用户不被噪音淹没，高级用户可观测 |
+| 停止生成后的结果 | 保留 partial answer 和 trace | 符合聊天产品直觉 |
+| 宏观问题无 ticker | 允许执行 macro task | 解决“美联储利率路径...”这类问题 |
+| 持仓缺失 | 局部 blocked，其他任务继续 | 避免因为 portfolio 缺失阻塞全部回答 |
+| 投资建议措辞 | 输出分析与风险，不做确定性买卖承诺 | 降低合规和误导风险 |
+
+如果你不特别改，后续实现就按“推荐默认”执行。
+
+## 14. 迁移计划
 
 ### Phase 0：文档与契约
 
@@ -469,7 +710,9 @@ Assistant Message
 ### Phase 1：类型与测试
 
 - `GraphState` 增加 `understanding`、`tasks`。
-- `SubjectType` 增加 `macro`、`index`、`commodity`。
+- `SubjectType` 增加 `macro`、`index`、`commodity`、`theme`。
+- 增加 `Understanding`、`UnderstandingTask`、`BlockedTask`、`ContextRef`、`TimeScope`。
+- 增加 `OperationName` 枚举或等价受控字面量。
 - 新增 `backend/tests/test_understand_request.py`。
 - 将复杂 Query Golden Set 转为表驱动测试，至少断言 route、task count、tickers、blocked_tasks、time_scope、output_mode、planner constraints。
 - 将旧 `test_greeting_shortcircuit` 改成 route 断言，而不是节点顺序断言。
@@ -502,12 +745,20 @@ Assistant Message
 - 展示 task decomposition。
 - 实现可折叠 Process Strip：理解 / 计划 / 检索 / Agent / 合成。
 - 由 SSE `trace` 事件驱动前端过程展示，禁止前端写死假步骤或假百分比。
+- `parseSSEStream` 支持 `type="trace"`，普通用户视图只消费 `visibility=user`。
 - 展开详情能看到 search query、tool args 摘要、provider、result_count、agent evidence_count、blocked task reason。
 - 普通用户视图只展示 `visibility=user` 事件，内部 debug trace 放开发面板。
 - “停止生成”保留 AbortController，并补后端 run cancellation。
 - Deep/Brief 按钮只传 `output_mode`，不判断 ticker。
 
-### Phase 6：文档收口
+### Phase 6：RAG、会话、取消闭环
+
+- RAG 分层标记 `run_cache/conversation_memory/workspace_kb/user_profile`。
+- 删除会话时清理或隔离 conversation memory。
+- 新建会话时隔离 thread context。
+- 停止生成形成前端 abort、后端 cancel、trace cancelled 的闭环。
+
+### Phase 7：文档收口
 
 实现完成后必须同步：
 
@@ -528,7 +779,7 @@ Assistant Message
 - 旧 `ConversationRouter` / `SchemaRouter` 相关说明进入 `docs/archive/<yyyy-mm-topic>/`。
 - 已完成 todolist、临时报表、旧 roadmap 只保留在 archive。
 
-## 13. 验收标准
+## 15. 验收标准
 
 后端：
 
@@ -537,6 +788,10 @@ Assistant Message
 - 复合请求不再被压成单一 subject。
 - macro 无 ticker 请求不触发“先选定分析对象”。
 - 泛聊天不触发金融 clarify。
+- mixed route 中 blocked task 不阻塞可执行 task。
+- `trace/visibility=user` 在 raw trace 关闭时仍能通过 SSE 到达前端。
+- 停止生成后 run 状态为 cancelled 或 best_effort_cancelled。
+- 删除会话后旧 conversation memory 不参与新会话理解。
 
 前端：
 
@@ -549,6 +804,9 @@ Assistant Message
   - 展开 Process Strip 后能看到真实 trace：task decomposition、search query、tool/agent 状态、blocked task reason。
   - 过程 UI 来自 SSE 事件；模拟后端不发 retrieval/tool 事件时，前端不能显示对应假步骤。
   - 用户可停止流式输出。
+  - 新建会话后旧 ticker/selection 不泄露；切回旧会话后历史消息和上下文可恢复。
+  - 输入 `谷歌`、`微软`、`苹果` 时 Deep/Brief 可提交，但前端没有公司字典。
+  - 输入无 ticker 宏观问题时可提交，后端返回 macro task。
 
 文档：
 
