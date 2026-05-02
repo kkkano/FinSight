@@ -144,9 +144,9 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
         return {"status": "ok", "data": payload, "timestamp": _now()}
 
     @router.get("/diagnostics/rag/runs")
-    def diagnostics_rag_runs(request: Request, limit: int = Query(default=20, ge=1, le=200), cursor: str | None = None, q: str | None = None, fallback_only: bool = False):
+    def diagnostics_rag_runs(request: Request, limit: int = Query(default=20, ge=1, le=200), cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False):
         _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_runs(limit=limit, cursor=cursor, q=q, fallback_only=fallback_only), "timestamp": _now()}
+        return {"status": "ok", "data": _rag_store().list_runs(limit=limit, cursor=cursor, q=q, fallback_only=fallback_only, include_deleted=include_deleted), "timestamp": _now()}
 
     @router.get("/diagnostics/rag/runs/{run_id}")
     def diagnostics_rag_run_detail(run_id: str, request: Request):
@@ -157,9 +157,9 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
         return {"status": "ok", "data": item, "timestamp": _now()}
 
     @router.get("/diagnostics/rag/runs/{run_id}/events")
-    def diagnostics_rag_run_events(run_id: str, request: Request, limit: int = Query(default=500, ge=1, le=2000)):
+    def diagnostics_rag_run_events(run_id: str, request: Request, limit: int = Query(default=500, ge=1, le=2000), include_deleted: bool = False):
         _require_rag_read_access(request)
-        return {"status": "ok", "data": _rag_store().list_events(run_id=run_id, limit=limit), "timestamp": _now()}
+        return {"status": "ok", "data": _rag_store().list_events(run_id=run_id, limit=limit, include_deleted=include_deleted), "timestamp": _now()}
 
     @router.get("/diagnostics/rag/documents")
     def diagnostics_rag_documents(request: Request, run_id: str | None = None, collection: str | None = None, include_deleted: bool = False, limit: int = Query(default=200, ge=1, le=1000)):

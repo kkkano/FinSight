@@ -34,7 +34,7 @@ class _FakeResult:
 
 class _FakeConnection:
     def __init__(self, responses, executions=None):
-        self._responses = list(responses)
+        self._responses = responses
         self._executions = executions if executions is not None else []
 
     def __enter__(self):
@@ -56,6 +56,9 @@ class _FakeEngine:
         self.executions = []
 
     def connect(self):
+        return _FakeConnection(self._responses, self.executions)
+
+    def begin(self):
         return _FakeConnection(self._responses, self.executions)
 
 
@@ -358,6 +361,86 @@ def test_browse_db_table_filters_layer_from_metadata_json_without_collection_col
     assert "metadata_json ->> 'layer' = :layer" in rows_sql
     assert count_params['layer'] == 'kb'
     assert rows_params['layer'] == 'kb'
+
+
+def test_list_runs_and_events_default_hide_deleted_but_can_include_them():
+    store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
+    engine = _FakeEngine(
+        [
+            _FakeResult([{'id': 'run-1', 'started_at': datetime(2026, 3, 7, tzinfo=timezone.utc)}]),
+            _FakeResult([{'id': 'run-deleted', 'started_at': datetime(2026, 3, 6, tzinfo=timezone.utc), 'deleted_at': datetime(2026, 3, 7, tzinfo=timezone.utc)}]),
+            _FakeResult([{'id': 'evt-1', 'run_id': 'run-1', 'seq_no': 1}]),
+            _FakeResult([{'id': 'evt-deleted', 'run_id': 'run-1', 'seq_no': 2, 'deleted_at': datetime(2026, 3, 7, tzinfo=timezone.utc)}]),
+        ]
+    )
+    store._engine = engine
+    store.ensure_schema = lambda: True
+
+    visible_runs = store.list_runs(limit=5)
+    all_runs = store.list_runs(limit=5, include_deleted=True)
+    visible_events = store.list_events(run_id='run-1', limit=5)
+    all_events = store.list_events(run_id='run-1', limit=5, include_deleted=True)
+
+    visible_runs_sql = engine.executions[0][0]
+    all_runs_sql = engine.executions[1][0]
+    visible_events_sql = engine.executions[2][0]
+    all_events_sql = engine.executions[3][0]
+    assert visible_runs['items'][0]['id'] == 'run-1'
+    assert all_runs['items'][0]['id'] == 'run-deleted'
+    assert visible_events['items'][0]['id'] == 'evt-1'
+    assert all_events['items'][0]['id'] == 'evt-deleted'
+    assert 'deleted_at IS NULL' in visible_runs_sql
+    assert 'deleted_at IS NULL' not in all_runs_sql
+    assert 'deleted_at IS NULL' in visible_events_sql
+    assert 'deleted_at IS NULL' not in all_events_sql
+
+
+def test_soft_delete_source_doc_cascades_to_hits_and_rerank_hits():
+    store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
+    engine = _FakeEngine(
+        [
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([{'id': 'source-doc-1', 'deleted_by': 'tester', 'delete_reason': 'privacy'}]),
+        ]
+    )
+    store._engine = engine
+    store.ensure_schema = lambda: True
+
+    item = store.soft_delete_source_doc('source-doc-1', deleted_by='tester', reason='privacy')
+
+    executed_sql = [sql for sql, _params in engine.executions]
+    assert item and item['id'] == 'source-doc-1'
+    assert any('UPDATE rag_source_docs SET deleted_at' in sql for sql in executed_sql)
+    assert any('UPDATE rag_chunks SET deleted_at' in sql for sql in executed_sql)
+    assert any('UPDATE rag_retrieval_hits SET deleted_at' in sql and 'source_doc_id = :source_doc_id' in sql for sql in executed_sql)
+    assert any('UPDATE rag_rerank_hits SET deleted_at' in sql and 'source_doc_id = :source_doc_id' in sql for sql in executed_sql)
+
+
+def test_list_hits_hides_deleted_hits_chunks_and_rerank_rows_by_default():
+    store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
+    engine = _FakeEngine(
+        [
+            _FakeResult([{'id': 'hit-1', 'chunk_text': 'Apple services demand improved.'}]),
+            _FakeResult([{'id': 'hit-deleted', 'chunk_text': 'Deleted evidence.', 'chunk_deleted_at': datetime(2026, 3, 7, tzinfo=timezone.utc)}]),
+        ]
+    )
+    store._engine = engine
+    store.ensure_schema = lambda: True
+
+    visible_hits = store.list_hits(run_id='run-1', limit=5)
+    all_hits = store.list_hits(run_id='run-1', limit=5, include_deleted=True)
+
+    visible_sql = engine.executions[0][0]
+    all_sql = engine.executions[1][0]
+    assert visible_hits['items'][0]['chunk_preview'] == 'Apple services demand improved.'
+    assert all_hits['items'][0]['chunk_deleted_at'] is not None
+    assert 'rh.deleted_at IS NULL' in visible_sql
+    assert '(ch.id IS NULL OR ch.deleted_at IS NULL)' in visible_sql
+    assert '(rr.id IS NULL OR rr.deleted_at IS NULL)' in visible_sql
+    assert 'rh.deleted_at IS NULL' not in all_sql
 
 
 def test_complete_search_run_uses_materialized_chunk_count_for_summary():

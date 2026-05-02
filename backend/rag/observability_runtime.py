@@ -279,13 +279,15 @@ def _sql_health_summary(self: SQLRAGObservabilityStore, recent_limit: int = 3, f
     return {'enabled': True, 'status': 'ok', 'recent_runs': recent_runs, 'fallback_summary': fallback_summary, 'recent_run_count_24h': total_recent, 'recent_fallback_count_24h': int(fallback.get('recent_fallback_count_24h') or 0), 'recent_empty_hits_rate_24h': (empty_recent / total_recent) if total_recent > 0 else 0.0, 'last_run_at': stats.get('last_run_at'), 'last_fallback_at': fallback.get('last_fallback_at')}
 
 
-def _noop_list_runs(self: NoOpRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False) -> dict[str, Any]:
+def _noop_list_runs(self: NoOpRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False) -> dict[str, Any]:
     return {'items': [], 'next_cursor': None}
 
 
-def _sql_list_runs(self: SQLRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False) -> dict[str, Any]:
-    where = ["deleted_at IS NULL"]
+def _sql_list_runs(self: SQLRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False) -> dict[str, Any]:
+    where = ["1=1"]
     params: dict[str, Any] = {'limit': max(1, min(int(limit), 200))}
+    if not include_deleted:
+        where.append("deleted_at IS NULL")
     if cursor:
         where.append("started_at < :cursor")
         params['cursor'] = cursor
@@ -306,12 +308,15 @@ def _sql_get_run_detail(self: SQLRAGObservabilityStore, run_id: str) -> dict[str
     return _runtime_fetch_one(self, "SELECT * FROM rag_query_runs WHERE id = :run_id", {'run_id': run_id})
 
 
-def _noop_list_events(self: NoOpRAGObservabilityStore, *, run_id: str, limit: int = 500) -> dict[str, Any]:
+def _noop_list_events(self: NoOpRAGObservabilityStore, *, run_id: str, limit: int = 500, include_deleted: bool = False) -> dict[str, Any]:
     return {'items': []}
 
 
-def _sql_list_events(self: SQLRAGObservabilityStore, *, run_id: str, limit: int = 500) -> dict[str, Any]:
-    return {'items': _runtime_fetch_all(self, "SELECT * FROM rag_query_events WHERE run_id = :run_id AND deleted_at IS NULL ORDER BY seq_no ASC LIMIT :limit", {'run_id': run_id, 'limit': max(1, min(int(limit), 2000))})}
+def _sql_list_events(self: SQLRAGObservabilityStore, *, run_id: str, limit: int = 500, include_deleted: bool = False) -> dict[str, Any]:
+    where = ["run_id = :run_id"]
+    if not include_deleted:
+        where.append("deleted_at IS NULL")
+    return {'items': _runtime_fetch_all(self, f"SELECT * FROM rag_query_events WHERE {' AND '.join(where)} ORDER BY seq_no ASC LIMIT :limit", {'run_id': run_id, 'limit': max(1, min(int(limit), 2000))})}
 
 
 def _noop_list_documents(self: NoOpRAGObservabilityStore, *, run_id: str | None = None, collection: str | None = None, include_deleted: bool = False, limit: int = 200) -> dict[str, Any]:
@@ -362,10 +367,12 @@ def _sql_list_hits(self: SQLRAGObservabilityStore, *, run_id: str | None = None,
     params: dict[str, Any] = {'limit': max(1, min(int(limit), 2000))}
     if not include_deleted:
         where.append("rh.deleted_at IS NULL")
+        where.append("(ch.id IS NULL OR ch.deleted_at IS NULL)")
+        where.append("(rr.id IS NULL OR rr.deleted_at IS NULL)")
     if run_id:
         where.append("rh.run_id = :run_id")
         params['run_id'] = run_id
-    items = _runtime_fetch_all(self, f"SELECT rh.*, rr.input_rank, rr.output_rank, rr.rerank_score, rr.selected_for_answer, ch.chunk_index, ch.chunk_text FROM rag_retrieval_hits rh LEFT JOIN rag_rerank_hits rr ON rr.run_id = rh.run_id AND COALESCE(rr.chunk_id, '') = COALESCE(rh.chunk_id, '') LEFT JOIN rag_chunks ch ON ch.id = rh.chunk_id WHERE {' AND '.join(where)} ORDER BY rh.created_at DESC LIMIT :limit", params)
+    items = _runtime_fetch_all(self, f"SELECT rh.*, rr.input_rank, rr.output_rank, rr.rerank_score, rr.selected_for_answer, rr.deleted_at AS rerank_deleted_at, ch.chunk_index, ch.chunk_text, ch.deleted_at AS chunk_deleted_at FROM rag_retrieval_hits rh LEFT JOIN rag_rerank_hits rr ON rr.run_id = rh.run_id AND COALESCE(rr.chunk_id, '') = COALESCE(rh.chunk_id, '') LEFT JOIN rag_chunks ch ON ch.id = rh.chunk_id WHERE {' AND '.join(where)} ORDER BY rh.created_at DESC LIMIT :limit", params)
     if collection:
         items = [item for item in items if str(item.get('collection') or '') == collection]
     for item in items:
@@ -419,6 +426,8 @@ def _sql_soft_delete_source_doc(self: SQLRAGObservabilityStore, source_doc_id: s
     with self._engine.begin() as conn:
         conn.execute(text("UPDATE rag_source_docs SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE id = :source_doc_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
         conn.execute(text("UPDATE rag_chunks SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE source_doc_id = :source_doc_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
+        conn.execute(text("UPDATE rag_retrieval_hits SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE (source_doc_id = :source_doc_id OR chunk_id IN (SELECT id FROM rag_chunks WHERE source_doc_id = :source_doc_id)) AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
+        conn.execute(text("UPDATE rag_rerank_hits SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE chunk_id IN (SELECT id FROM rag_chunks WHERE source_doc_id = :source_doc_id) AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
     return _runtime_fetch_one(self, "SELECT * FROM rag_source_docs WHERE id = :source_doc_id", {'source_doc_id': source_doc_id})
 
 
