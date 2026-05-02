@@ -1,10 +1,10 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-02-26
+> 更新时间：2026-05-03
 > 适用分支：`feat/p0-p2-quality-orchestration-productization`
 > 主链实现：`backend/graph/runner.py`
 
-> 2026-05-03 架构方向：本文是当前运行时参考；下一阶段聊天意图层将按 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 收敛为 request understanding task graph。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+> 2026-05-03 运行时事实：聊天前半段已接入 `understand_request`，旧 `chat_respond / resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
 
 ## 1. 系统总览
 
@@ -57,14 +57,10 @@ flowchart TD
   trim_history --> summarize_history
   summarize_history --> normalize_ui_context
   normalize_ui_context --> decide_output_mode
-  decide_output_mode --> chat_respond
-  chat_respond -->|chat直出| END
-  chat_respond -->|进入分析| resolve_subject
-  resolve_subject --> clarify
-  clarify -->|需澄清| END
-  clarify -->|继续| parse_operation
-  parse_operation -->|alert_set| alert_extractor
-  parse_operation -->|其他| policy_gate
+  decide_output_mode --> understand_request
+  understand_request -->|direct/clarify| END
+  understand_request -->|alert| alert_extractor
+  understand_request -->|research| policy_gate
   alert_extractor -->|valid| alert_action
   alert_extractor -->|invalid| END
   alert_action --> END
@@ -76,28 +72,18 @@ flowchart TD
   render --> END
 ```
 
-### 2.1 意图分类（parse_operation）
+### 2.1 请求理解（understand_request）
 
-`parse_operation` 节点实现规则优先的意图分类，包含 14 种操作类型：
+`understand_request` 是聊天前半段的语义事实源，一次性处理：
 
-| 优先级 | 操作 | 置信度 | 说明 |
-|:---:|------|:---:|------|
-| 1 | `compare` | 0.85 | vs/对比/比较 |
-| 2 | `analyze_impact` | 0.75 | 影响/冲击/利好利空 |
-| 3 | `backtest` | 0.86 | 回测/策略回测 (Phase 4) |
-| 4 | `alert_set` | 0.88 | 提醒/预警 (Phase 1) |
-| 5 | `screen` | 0.86 | 筛选/选股 (Phase 2) |
-| 6 | `cn_market` | 0.84 | 资金流向/北向/龙虎榜 (Phase 3) |
-| 7 | `technical` | 0.85 | 技术面/macd/rsi |
-| 8 | `price` | 0.80 | 股价/现价/报价 |
-| 9 | `summarize` | 0.75 | 总结/摘要 |
-| 10 | `extract_metrics` | 0.70 | 提取指标/eps |
-| 11 | `fetch` | 0.65 | 获取/新闻 |
-| 12 | `morning_brief` | 0.85 | 晨报/早报 |
-| 13 | 多标的默认 | 0.70 | `len(tickers)>=2` 自动 compare |
-| 14 | `qa` | 0.40-0.55 | 兜底问答 |
+- 普通寒暄 / 非金融对话：`route=direct`，直接结束。
+- 公司、ticker、中文别名、index、commodity、macro、theme、selection、portfolio。
+- 复合请求拆成 `tasks[]`，例如 `company/GOOGL/price` + `company/MSFT/fetch` + `macro/fact_check`。
+- 局部缺信息写入 `blocked_tasks[]`，例如缺持仓只阻塞 portfolio task，不阻塞公司/宏观任务。
+- 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
+- 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
 
-**Guardrail-A**：单任务关键词（如 price）阻止多标的强制 compare。
+旧 `parse_operation` 仍保留为兼容工具，被 `understand_request` 在少数单任务回退场景中复用，但不再是主链路入口。
 
 ## 3. 规划与执行策略
 

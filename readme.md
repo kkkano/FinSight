@@ -59,7 +59,7 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | Stateful LangGraph runtime for chat, quick analysis, alerts, and deep reports. Current runtime is 18 nodes; the target refactor consolidates request understanding into a multi-task graph. |
+| **LangGraph Pipeline** | Stateful LangGraph runtime for chat, quick analysis, alerts, and deep reports. The chat front-half now routes through `understand_request`, a multi-task request understanding layer with user-visible trace events. |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
@@ -244,11 +244,11 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (Current Runtime + Target Refactor)
+## 🔄 LangGraph Pipeline (Request Understanding Runtime)
 
-The current FinSight chat runtime is an **18-node LangGraph stateful graph**. It handles casual chat, quick analysis, alert setup, and deep investment reports through one `/chat/supervisor*` entry path.
+The FinSight chat runtime is a LangGraph stateful graph. Its main chat path now consolidates the old subject/intent front-half into `understand_request`, which produces `understanding`, `tasks[]`, `blocked_tasks[]`, and a compatibility projection for the existing policy/planner/executor boundary.
 
-The next architecture target is documented in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md): consolidate `decide_output_mode`, `chat_respond`, `resolve_subject`, `clarify`, and `parse_operation` into a single `understand_request` layer that supports multi-task requests such as company + macro + portfolio questions in one turn.
+The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The 20-query probe output is in [`docs/reports/2026-05-03_request_understanding_query_results.md`](docs/reports/2026-05-03_request_understanding_query_results.md).
 
 Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
@@ -260,20 +260,14 @@ flowchart TD
     TRIM --> SUMMARY["④ summarize_history<br/><i>Compress long context</i>"]
     SUMMARY --> CTX["⑤ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
     CTX --> MODE["⑥ decide_output_mode<br/><i>Mode hints</i>"]
-    MODE --> CHAT{"⑦ chat_respond<br/><i>Direct response?</i>"}
+    MODE --> UNDERSTAND{"⑦ understand_request<br/><i>Tasks + blocked tasks + trace</i>"}
 
-    CHAT -->|"chat responded"| END_CHAT((End))
-    CHAT -->|"needs analysis"| SUBJ["⑧ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
-
-    SUBJ --> CLARIFY{"⑨ clarify<br/><i>Missing required slots?</i>"}
-    CLARIFY -->|"needs clarification"| END_CLARIFY((End))
-    CLARIFY -->|"continue"| PARSE["⑩ parse_operation<br/><i>14-level intent classifier</i>"]
-
-    PARSE -->|"alert_set"| ALERT_EX["⑪ alert_extractor<br/><i>Extract alert params</i>"]
+    UNDERSTAND -->|"direct / clarify"| END_CHAT((End))
+    UNDERSTAND -->|"alert"| ALERT_EX["⑧ alert_extractor<br/><i>Extract alert params</i>"]
     ALERT_EX -->|"valid"| ALERT_ACT["⑫ alert_action<br/><i>Save & schedule</i>"]
     ALERT_EX -->|"invalid"| END_ALERT_INVALID((End))
     ALERT_ACT --> END_ALERT((End))
-    PARSE -->|"other ops"| POLICY["⑬ policy_gate<br/><i>Capability scoring + budget</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑨ policy_gate<br/><i>Capability scoring + task tool union</i>"]
     POLICY --> PLAN["⑭ planner<br/><i>LLM Planner or Stub Fallback</i>"]
 
     PLAN --> CONFIRM{"⑮ confirmation_gate<br/><i>HITL approval?</i>"}
@@ -300,28 +294,19 @@ flowchart TD
 
 `report_builder` and hallucination/evidence checks are implementation helpers inside the graph runtime, not separate graph nodes in `backend/graph/runner.py`.
 
-### Current Runtime Operation Parsing (`parse_operation`)
+### Request Understanding (`understand_request`)
 
-The current runtime still uses `parse_operation` as a rule-first operation classifier with 14 operation types. This is a compatibility layer; the target architecture moves request understanding into `understand_request` and keeps policy/planning separate from natural-language classification.
+`understand_request` is now the semantic source of truth for the chat front-half:
 
-| Priority | Operation | Confidence | Trigger Keywords |
-|:---:|---------|:---:|--------------|
-| 1 | `compare` | 0.85 | vs, versus, compare, 对比, 比较, 哪个更好 |
-| 2 | `analyze_impact` | 0.75 | 影响, 冲击, 利好, 利空, impact |
-| 3 | `backtest` | 0.86 | 回测, 策略回测, ma cross, macd strategy (Phase 4) |
-| 4 | `alert_set` | 0.88 | 提醒, 预警, alert, notify, remind me (Phase 1) |
-| 5 | `screen` | 0.86 | 筛选, 选股, screener, stock screen (Phase 2) |
-| 6 | `cn_market` | 0.84 | 资金流向, 北向, 龙虎榜, 概念股 (Phase 3) |
-| 7 | `technical` | 0.85 | 技术面, macd, rsi, k线, 支撑阻力 |
-| 8 | `price` | 0.80 | 股价, 现价, price, quote |
-| 9 | `summarize` | 0.75 | 总结, 摘要, tl;dr |
-| 10 | `extract_metrics` | 0.70 | 提取指标, eps, 营收, guidance |
-| 11 | `fetch` | 0.65 | 获取, 新闻, latest news |
-| 12 | `morning_brief` | 0.85 | 晨报, 早报, morning brief |
-| 13 | (multi-ticker default) | 0.70 | Auto-triggered when `len(tickers) >= 2` without guardrail hit |
-| 14 | `qa` | 0.40–0.55 | Fallback for general questions |
+| Output | Purpose |
+|--------|---------|
+| `understanding` | Route, summary, confidence, assumptions, and user-visible task explanation |
+| `tasks[]` | Ready tasks such as `company/GOOGL/price`, `macro/analyze_impact`, `portfolio/rebalance_check` |
+| `blocked_tasks[]` | Locally blocked tasks, e.g. missing portfolio holdings, without blocking ready tasks |
+| compatibility `subject` / `operation` | Primary-task projection so the existing policy/planner/executor path remains stable |
+| `trace` event | `type="trace"`, `visibility="user"`, `stage="understanding"` for frontend process UI |
 
-**Guardrail-A Mechanism**: When a single-task keyword is detected (e.g., `price`), the classifier prevents multi-ticker queries from being forced into `compare` mode.
+Legacy `chat_respond`, `resolve_subject`, `clarify`, and `parse_operation` remain registered for compatibility and focused tests, but the main runtime path skips them.
 
 ### GraphState Fields
 
@@ -331,6 +316,9 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 |-------|------|-------------|
 | `messages` | `Annotated[list, add_messages]` | Conversation history (append-only via LangGraph reducer) |
 | `subject` | `dict` | Resolved entity — `{type, ticker, name, market}` |
+| `understanding` | `dict` | Request understanding result for the current turn |
+| `tasks` | `list[dict]` | Ready task decomposition for multi-task requests |
+| `blocked_tasks` | `list[dict]` | Local missing-context tasks that should not block the whole turn |
 | `output_mode` | `str` | `"chat"` / `"quick_report"` / `"investment_report"` |
 | `plan_ir` | `dict` | Execution plan with steps, groups, dependencies, cost estimates |
 | `step_results` | `dict` | Raw outputs from each agent/tool execution |
@@ -1071,6 +1059,16 @@ pnpm dev
 # Open http://localhost:5173
 ```
 
+### Validation
+
+```bash
+pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_skeleton.py backend/tests/test_policy_gate.py
+npm run build --prefix frontend
+cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
+```
+
+The chat UX Playwright smoke covers Deep/Brief enablement, new/switch/delete conversations, user-visible trace summaries, and stream stop behavior. The request-understanding query matrix is recorded in `docs/reports/2026-05-03_request_understanding_query_results.md`.
+
 ### Optional: PostgreSQL for RAG
 
 ```bash
@@ -1111,9 +1109,10 @@ FinSight/
 │   │   └── nodes/              # Individual node implementations
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
-│   │       ├── chat_respond.py      # current runtime; target: merge into understand_request
-│   │       ├── resolve_subject.py   # current runtime; target: merge into understand_request
-│   │       ├── parse_operation.py   # current runtime; target: merge into understand_request
+│   │       ├── understand_request.py # current request understanding runtime
+│   │       ├── chat_respond.py      # legacy compatibility node
+│   │       ├── resolve_subject.py   # legacy compatibility node
+│   │       ├── parse_operation.py   # legacy compatibility node
 │   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

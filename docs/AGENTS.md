@@ -22,7 +22,9 @@
 ## 当前事实源
 
 - 架构入口：`01_ARCHITECTURE.md`、`06a_LANGGRAPH_DESIGN_SPEC.md`
-- 请求理解目标 spec：`plans/2026-05-03_request_understanding_task_graph_spec.md`
+- 请求理解实现 spec：`plans/2026-05-03_request_understanding_task_graph_spec.md`
+- 请求理解查询矩阵：`reports/2026-05-03_request_understanding_query_results.md`
+- 聊天 UX 浏览器验证：`reports/2026-05-03_playwright_chat_smoke.md`
 - 执行链路参考：`LANGGRAPH_FLOW.md`、`LANGGRAPH_PIPELINE_DEEP_DIVE.md`
 - Agent/Tool：`AGENTS_GUIDE.md`
 - 事件契约：`execution-event-contract.md`

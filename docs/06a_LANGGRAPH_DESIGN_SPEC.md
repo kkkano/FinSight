@@ -1,11 +1,11 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-02-15
+> **更新日期**：2026-05-03
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
-> **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
+> **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
-> 2026-05-03 修订说明：当前代码仍以 `backend/graph/runner.py` 的 18 节点运行时为准；下一阶段意图层重构以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为目标 spec。该目标会把 `decide_output_mode`、`chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 收敛为 `understand_request`，并支持 multi-task decision。
+> 2026-05-03 修订说明：聊天主链路已接入 `understand_request`。旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍注册为兼容节点，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ---
 
@@ -126,6 +126,10 @@ flowchart LR
 | `filing` | 财报/公告（结构化 PDF） | selection.type=`filing`（含过期） |
 | `research_doc` | 研报/文档/PDF | selection.type=`doc`（含过期） |
 | `portfolio` | 持仓概览 | UI 模块 / watchlist |
+| `macro` | 宏观主题 | 美联储、CPI、利率路径、通胀、纳指等 |
+| `index` | 指数/ETF | QQQ、SPY、^IXIC 等 |
+| `commodity` | 大宗商品 | 黄金、原油、期货代码 |
+| `theme` | 行业/主题 | 半导体、AI、大型科技股等 |
 | `unknown` | 未明确主体 | 需要 clarify |
 
 ### 2.3 Operation 规范（稳定小列表）

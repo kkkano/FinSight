@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-05-03 - Request understanding runtime implementation
+
+- `backend/graph/nodes/understand_request.py` 接入主链路，替代旧前半段运行路径：`decide_output_mode -> understand_request -> policy_gate/alert/direct`。
+- `GraphState` 新增 `Understanding`、`UnderstandingTask`、`BlockedTask`、`ContextRef`、`TimeScope`，并扩展 `macro/index/commodity/theme`。
+- `policy_gate` 按 `tasks[]` 做工具白名单并集，避免复合 query 只按 primary task 给工具。
+- `planner_stub` 原生消费 `tasks[]`，为多公司、宏观、主题、组合任务生成多组计划步骤。
+- `render_stub` 增加多任务简报 fallback，展示 ready task 的工具结果和 blocked task 原因。
+- SSE 增加 `type="trace"`、`visibility="user"` 的 understanding 事件；raw trace 关闭时仍保留。
+- 前端 `parseSSEStream`、`executionStore`、Thinking UI 已消费 `trace` 事件。
+- 新增 `scripts/request_understanding_probe.py` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`，记录 20 条复杂 query 的实际任务拆解与计划。
+- 验证：`pytest -q backend/tests/test_understand_request.py backend/tests/test_policy_gate.py backend/tests/test_policy_planner_query_regression.py backend/tests/test_planner_prompt.py backend/tests/test_planner_node.py` 通过。
+
 ## 2026-05-03 - Request understanding task graph spec
 
 - 新增 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`，作为下一阶段意图层重构目标。

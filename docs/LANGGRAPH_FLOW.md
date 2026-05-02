@@ -1,8 +1,8 @@
 # FinSight LangGraph Flow Documentation
 
-> 2026-05-03 状态说明：本文是当前/历史 LangGraph 运行链路参考，不是下一阶段目标架构。请求理解层重构目标以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为准。
+> 2026-05-03 状态说明：当前主路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 章节保留为兼容节点说明，不再代表主聊天路径。
 
-> Current overview is aligned to the 18-node runtime in `backend/graph/runner.py`; older node-by-node notes below are retained as historical implementation detail.
+> Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
 ---
 
@@ -16,19 +16,13 @@ graph TD
     trim_history --> summarize_history
     summarize_history --> normalize_ui_context
     normalize_ui_context --> decide_output_mode
-    decide_output_mode --> chat_respond
-    chat_respond -->|chat_responded=true| END_CHAT([END: 直接回复])
-    chat_respond -->|chat_responded=false| resolve_subject
-    resolve_subject --> clarify
-
-    clarify -->|needs_clarification=true| END_CLARIFY([END: 返回澄清请求])
-    clarify -->|needs_clarification=false| parse_operation
-
-    parse_operation -->|alert_set| alert_extractor
+    decide_output_mode --> understand_request
+    understand_request -->|direct/clarify| END_CHAT([END: 直接回复/澄清])
+    understand_request -->|alert| alert_extractor
     alert_extractor -->|valid| alert_action
     alert_action --> END_ALERT([END: 保存提醒])
     alert_extractor -->|invalid| END_ALERT_INVALID([END: 参数无效])
-    parse_operation -->|other| policy_gate
+    understand_request -->|research| policy_gate
     policy_gate --> planner
     planner --> confirmation_gate
     confirmation_gate -->|cancel_execution| END_CANCEL([END: 用户取消])
@@ -76,6 +70,7 @@ graph TD
 | `plan_ir` | Write (None) | 清除计划 IR |
 | `artifacts` | Write (None) | 清除制品 |
 | `chat_responded` | Write (None) | 清除聊天回复标记 |
+| `understanding/tasks/blocked_tasks/context_refs` | Write (None) | 清除上一轮请求理解结果 |
 | `confirmation_*` (5) | Write (None) | 清除所有确认门控字段 |
 | `trace` | Write | 保留 spans (events/timings/failures)，清除运行时 sub-keys (operation_decision/planner_runtime/synthesize_runtime/executor/rag) |
 
@@ -159,7 +154,29 @@ graph TD
 
 ---
 
-### 6. resolve_subject
+### 6. understand_request（主路径）
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `query` | Read | 用户查询 |
+| `ui_context` | Read | selection、active_symbol、portfolio 等上下文 |
+| `understanding` | Write | route、summary、confidence、assumptions |
+| `tasks` | Write | 可执行任务列表 |
+| `blocked_tasks` | Write | 局部阻塞任务列表 |
+| `subject` / `operation` | Write | primary task 的兼容投影 |
+| `artifacts.draft_markdown` | Write | direct/clarify route 的短回复 |
+| `trace` | Write | understanding 用户可见 trace |
+
+**条件边**:
+- `route=direct/clarify` → **END**
+- `route=alert` 或 primary operation=`alert_set` → `alert_extractor`
+- `route=research` → `policy_gate`
+
+**Source**: `backend/graph/nodes/understand_request.py`
+
+---
+
+### 6L. resolve_subject（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -173,7 +190,7 @@ graph TD
 
 ---
 
-### 7. clarify (条件分支)
+### 7L. clarify（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -187,7 +204,7 @@ graph TD
 
 ---
 
-### 8. parse_operation
+### 8L. parse_operation（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -205,7 +222,8 @@ graph TD
 |-------|-----------|-------------|
 | `operation` | Read | 操作类型 |
 | `subject` | Read | 主体信息 |
-| `policy` | Write | `{budget, constraints, allowed_tools, max_rounds, max_seconds}` |
+| `tasks` | Read | 多任务请求的 ready task 列表 |
+| `policy` | Write | `{budget, constraints, allowed_tools, max_rounds, max_seconds}`，工具白名单按 tasks 并集 |
 
 根据操作类型设置资源预算:
 - `BUDGET_MAX_TOOL_CALLS` (default: 24)
@@ -221,6 +239,7 @@ graph TD
 | `query` | Read | 用户查询 |
 | `subject` | Read | 主体信息 |
 | `operation` | Read | 操作类型 |
+| `tasks` | Read | 多任务请求时生成多组 PlanIR steps |
 | `policy` | Read | 资源预算 |
 | `plan_ir` | Write | PlanIR (执行计划中间表示) |
 | `trace` | Write | `planner_runtime` 追踪数据 |

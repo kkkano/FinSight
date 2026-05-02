@@ -59,7 +59,7 @@
 | 类别 | 亮点 |
 |------|------|
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
-| **LangGraph 管线** | 18 节点有状态图，处理聊天、快速分析和深度投研报告，自适应路由 |
+| **LangGraph 管线** | 聊天前半段已收敛到 `understand_request`：一次性识别多任务、局部阻塞项和用户可见 trace |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
 | **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |
@@ -209,7 +209,7 @@ graph TB
 
     subgraph "后端 (FastAPI)"
         ROUTER[API 路由<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph 管线<br/>18 节点有状态图]
+        GRAPH[LangGraph 管线<br/>请求理解 + 执行图]
         AGENTS[智能体层<br/>7 研究智能体 + 5 洞察评分器]
         TOOLS[工具层<br/>32 个注册工具]
         SYNTH[合成节点<br/>冲突检测 · 幻觉洗涤]
@@ -243,32 +243,28 @@ graph TB
 
 ---
 
-## 🔄 LangGraph 管线（18 节点）
+## 🔄 LangGraph 管线（请求理解运行时）
 
-FinSight 的核心是一个 **18 节点 LangGraph 有状态图**，处理从日常对话到深度投资报告的所有场景。
-仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于这个 18 节点 LangGraph 主链路。
+FinSight 的聊天主链路已经把旧的 `chat_respond / resolve_subject / clarify / parse_operation` 前半段收敛到 `understand_request`。它会输出 `understanding`、`tasks[]`、`blocked_tasks[]`，并通过 `type="trace"`、`visibility="user"` 的 SSE 事件把“系统识别了什么”展示给前端。
+
+仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于聊天 LangGraph 主链路。
 
 ```mermaid
 flowchart TD
     START((开始)) --> INIT["① build_initial_state<br/><i>解析输入，加载记忆</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>清除临时字段 + trace 运行时</i>"]
-    RESET --> CTX["③ normalize_ui_context<br/><i>合并 UI 提示，检测 ticker</i>"]
-    CTX --> MODE{"④ chat_respond<br/><i>输出模式？</i>"}
+    RESET --> TRIM["③ trim_history<br/><i>限制历史窗口</i>"]
+    TRIM --> SUMMARY["④ summarize_history<br/><i>压缩长上下文</i>"]
+    SUMMARY --> CTX["⑤ normalize_ui_context<br/><i>合并 UI 提示</i>"]
+    CTX --> MODE["⑥ decide_output_mode<br/><i>输出模式提示</i>"]
+    MODE --> UNDERSTAND{"⑦ understand_request<br/><i>多任务 + 局部阻塞 + trace</i>"}
 
-    MODE -->|"闲聊 / 问答"| CHAT_END["直接 LLM 回复"]
-    CHAT_END --> RENDER
-    MODE -->|"需要分析"| SUBJ["⑤ resolve_subject<br/><i>Ticker 解析 + 去重</i>"]
-
-    SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>有歧义？</i>"}
-    CLARIFY -->|"有歧义"| ASK["请求用户澄清"]
-    ASK --> RENDER
-    CLARIFY -->|"明确"| PARSE["⑦ parse_operation<br/><i>14 级意图分类器</i>"]
-
-    PARSE -->|"alert_set"| ALERT_EX["⑦a alert_extractor<br/><i>提取提醒参数</i>"]
+    UNDERSTAND -->|"direct / clarify"| RENDER
+    UNDERSTAND -->|"alert"| ALERT_EX["⑧ alert_extractor<br/><i>提取提醒参数</i>"]
     ALERT_EX -->|"有效"| ALERT_ACT["⑦b alert_action<br/><i>保存并调度</i>"]
     ALERT_EX -->|"无效"| RENDER
     ALERT_ACT --> RENDER
-    PARSE -->|"其他操作"| POLICY["⑧ policy_gate<br/><i>能力评分 + 预算</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑨ policy_gate<br/><i>能力评分 + task 工具并集</i>"]
     POLICY --> PLAN["⑨ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
 
     PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>人工审批？</i>"}
@@ -296,28 +292,19 @@ flowchart TD
     style POLICY fill:#2196f3,color:#fff
 ```
 
-### 意图分类（`parse_operation`）
+### 请求理解（`understand_request`）
 
-`parse_operation` 节点实现了一个**规则优先的意图分类器**，包含 14 种操作类型，按优先级从高到低排列：
+`understand_request` 是聊天前半段的语义事实源：
 
-| 优先级 | 操作类型 | 置信度 | 触发关键词 |
-|:---:|---------|:---:|--------------|
-| 1 | `compare` | 0.85 | vs, versus, 对比, 比较, 哪个更好 |
-| 2 | `analyze_impact` | 0.75 | 影响, 冲击, 利好, 利空 |
-| 3 | `backtest` | 0.86 | 回测, 策略回测, ma cross, macd strategy (Phase 4) |
-| 4 | `alert_set` | 0.88 | 提醒, 预警, alert, notify, remind me (Phase 1) |
-| 5 | `screen` | 0.86 | 筛选, 选股, screener (Phase 2) |
-| 6 | `cn_market` | 0.84 | 资金流向, 北向, 龙虎榜, 概念股 (Phase 3) |
-| 7 | `technical` | 0.85 | 技术面, macd, rsi, k线, 支撑阻力 |
-| 8 | `price` | 0.80 | 股价, 现价, 报价, price, quote |
-| 9 | `summarize` | 0.75 | 总结, 摘要, tl;dr |
-| 10 | `extract_metrics` | 0.70 | 提取指标, eps, 营收, guidance |
-| 11 | `fetch` | 0.65 | 获取, 新闻, latest news |
-| 12 | `morning_brief` | 0.85 | 晨报, 早报, morning brief |
-| 13 | (多标的默认) | 0.70 | 当 `len(tickers) >= 2` 且无护栏命中时自动触发 compare |
-| 14 | `qa` | 0.40–0.55 | 兜底问答 |
+| 输出 | 作用 |
+|------|------|
+| `understanding` | route、摘要、置信度、假设和用户可见解释 |
+| `tasks[]` | 可执行任务，例如 `company/GOOGL/price`、`macro/analyze_impact`、`portfolio/rebalance_check` |
+| `blocked_tasks[]` | 缺持仓、缺 selection 等局部阻塞项，不阻塞其他可执行任务 |
+| 兼容 `subject` / `operation` | 将 primary task 投影给现有 policy/planner/executor |
+| `trace` 事件 | `type="trace"`、`visibility="user"`、`stage="understanding"`，供前端过程 UI 展示 |
 
-**Guardrail-A 机制**：当检测到明确的单任务关键词（如 `price`）时，即使有多个股票代码也不会强制进入 `compare` 模式。
+旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍保留为兼容节点和单元测试对象，但主运行路径已经跳过它们。
 
 ### GraphState 字段
 
@@ -1067,6 +1054,16 @@ pnpm dev
 # 打开 http://localhost:5173
 ```
 
+### 验证
+
+```bash
+pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_skeleton.py backend/tests/test_policy_gate.py
+npm run build --prefix frontend
+cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
+```
+
+聊天 UX Playwright smoke 覆盖 Deep/Brief 启用、新建/切换/删除会话、用户可见 trace 摘要和停止生成。20 条 request-understanding query 矩阵记录在 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+
 ### 可选：PostgreSQL（RAG 后端）
 
 ```bash
@@ -1101,15 +1098,16 @@ FinSight/
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
 │   │   └── tools_router.py     # GET /api/tools（工具清单）
 │   ├── graph/                  # LangGraph 管线
-│   │   ├── builder.py          # 图构建（16 节点 + 边）
+│   │   ├── runner.py           # 图构建与 GraphRunner 入口
 │   │   ├── state.py            # GraphState 定义
 │   │   ├── report_builder.py   # ReportIR 结构构建
 │   │   └── nodes/              # 各节点实现
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn 临时字段 + trace 运行时清除
-│   │       ├── chat_respond.py
-│   │       ├── resolve_subject.py
-│   │       ├── parse_operation.py   # 4 级优先链（对比 → 护栏 → 多标的 → qa）
+│   │       ├── understand_request.py # 当前请求理解主节点
+│   │       ├── chat_respond.py       # legacy 兼容节点
+│   │       ├── resolve_subject.py    # legacy 兼容节点
+│   │       ├── parse_operation.py    # legacy 兼容节点
 │   │       ├── compare_gate.py      # 对比证据门控（3 个谓词函数）
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

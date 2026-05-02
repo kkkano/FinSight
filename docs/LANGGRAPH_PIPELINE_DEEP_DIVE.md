@@ -1,8 +1,8 @@
 # FinSight LangGraph 全流程深度拆解
 
-> 版本：v1.1.0-sprint2 | 更新时间：2026-02-11 | 节点数：历史 11；当前运行时以 `backend/graph/runner.py` 为准（18 节点） | Agent 数：6
+> 版本：v1.2.0-request-understanding | 更新时间：2026-05-03 | 当前运行时以 `backend/graph/runner.py` 为准 | Agent 数：7
 
-> 2026-05-03 状态说明：本文是当前/历史 Pipeline 深度拆解参考，不是下一阶段目标架构。请求理解层重构目标以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为准。
+> 2026-05-03 状态说明：主聊天路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 内容保留为兼容与历史细节，不再代表主路径。
 
 ---
 
@@ -38,29 +38,33 @@ graph TB
         ChatRouter --> GraphRunner[GraphRunner]
     end
 
-    subgraph "LangGraph 管道（历史 11 节点快照）"
+    subgraph "LangGraph 管道（当前主路径）"
         GraphRunner --> N1[build_initial_state]
-        N1 --> N2[normalize_ui_context]
-        N2 --> N3[decide_output_mode]
-        N3 --> N4[resolve_subject]
-        N4 --> N5[clarify]
-        N5 -->|需要澄清| END1[END: 返回提问]
-        N5 -->|继续| N6[parse_operation]
-        N6 --> N7[policy_gate]
-        N7 --> N8[planner]
-        N8 --> N9[execute_plan]
-        N9 --> N10[synthesize]
-        N10 --> N11[render]
-        N11 --> END2[END: 返回结果]
+        N1 --> N2[reset_turn_state]
+        N2 --> N3[trim_history]
+        N3 --> N4[summarize_history]
+        N4 --> N5[normalize_ui_context]
+        N5 --> N6[decide_output_mode]
+        N6 --> N7[understand_request]
+        N7 -->|direct/clarify| END1[END: 直接回复或澄清]
+        N7 -->|alert| ALERT[alert_extractor/action]
+        ALERT --> END1
+        N7 -->|research| N8[policy_gate]
+        N8 --> N9[planner]
+        N9 --> N10[execute_plan]
+        N10 --> N11[synthesize]
+        N11 --> N12[render]
+        N12 --> END2[END: 返回结果]
     end
 
     subgraph "Agent 执行层"
-        N9 --> PA[PriceAgent]
-        N9 --> NA[NewsAgent]
-        N9 --> FA[FundamentalAgent]
-        N9 --> TA[TechnicalAgent]
-        N9 --> MA[MacroAgent]
-        N9 --> DA[DeepSearchAgent]
+        N10 --> PA[PriceAgent]
+        N10 --> NA[NewsAgent]
+        N10 --> FA[FundamentalAgent]
+        N10 --> TA[TechnicalAgent]
+        N10 --> MA[MacroAgent]
+        N10 --> RA[RiskAgent]
+        N10 --> DA[DeepSearchAgent]
     end
 
     subgraph "数据源层"
@@ -100,15 +104,17 @@ graph TB
 ```mermaid
 flowchart TD
     START((START)) --> A[build_initial_state]
-    A --> B[normalize_ui_context]
+    A --> R[reset_turn_state]
+    R --> T[trim_history]
+    T --> S[summarize_history]
+    S --> B[normalize_ui_context]
     B --> C[decide_output_mode]
-    C --> D[resolve_subject]
-    D --> E[clarify]
+    C --> U[understand_request]
 
-    E -->|"needed=true<br/>空 query / 问候 / 无法识别主体"| END_CLARIFY((END<br/>返回澄清提问))
-    E -->|"needed=false<br/>主体已识别"| F[parse_operation]
-
-    F --> G[policy_gate]
+    U -->|"direct / clarify"| END_CLARIFY((END<br/>直接回复或澄清))
+    U -->|"alert"| AL[alert_extractor/action]
+    AL --> END_ALERT((END<br/>保存提醒))
+    U -->|"research"| G[policy_gate]
     G --> H[planner]
     H --> I[execute_plan]
     I --> J[synthesize]
@@ -116,7 +122,7 @@ flowchart TD
     K --> END_RESULT((END<br/>输出结果))
 
     style A fill:#4a9eff,color:#fff
-    style E fill:#ff9f43,color:#fff
+    style U fill:#ff9f43,color:#fff
     style H fill:#ee5a24,color:#fff
     style I fill:#0abde3,color:#fff
     style J fill:#10ac84,color:#fff
@@ -212,11 +218,14 @@ classDiagram
 | 字段 | 写入节点 | 读取节点 | 类型 |
 |------|---------|---------|------|
 | `query` | 外部输入 | 所有节点 | `str` |
-| `ui_context` | 外部输入, normalize_ui_context | resolve_subject, policy_gate | `dict` |
-| `subject` | resolve_subject | clarify, parse_operation, policy_gate, planner, execute_plan, synthesize, render | `Subject` |
-| `operation` | parse_operation | policy_gate, planner, execute_plan, synthesize, render | `Operation` |
+| `ui_context` | 外部输入, normalize_ui_context | understand_request, policy_gate | `dict` |
+| `understanding` | understand_request | policy_gate, planner, frontend trace | `Understanding` |
+| `tasks` | understand_request | policy_gate, planner, render | `list[UnderstandingTask]` |
+| `blocked_tasks` | understand_request | render, frontend trace | `list[BlockedTask]` |
+| `subject` | understand_request 兼容投影 | policy_gate, planner, execute_plan, synthesize, render | `Subject` |
+| `operation` | understand_request 兼容投影 | policy_gate, planner, execute_plan, synthesize, render | `Operation` |
 | `output_mode` | decide_output_mode | policy_gate, planner, synthesize, render, report_builder | `str` |
-| `clarify` | clarify | 路由条件 `_route_after_clarify` | `Clarify` |
+| `clarify` | understand_request / legacy clarify | route=clarify 或兼容测试 | `Clarify` |
 | `policy` | policy_gate | planner, execute_plan | `Policy` |
 | `plan_ir` | planner | execute_plan | `PlanIR` |
 | `artifacts` | execute_plan, synthesize, render | synthesize, render, report_builder | `Artifacts` |
@@ -232,6 +241,10 @@ classDiagram
 | `filing` | 选中财报/公告 | 选择 10-K 文件 |
 | `research_doc` | 选中研究文档 | 选择研报 PDF |
 | `portfolio` | 投资组合相关 | "我的持仓分析" |
+| `macro` | 宏观主题 | "美联储利率路径" |
+| `index` | 指数/ETF | "QQQ / 纳指" |
+| `commodity` | 大宗商品 | "黄金 / 原油" |
+| `theme` | 行业主题 | "半导体 / 大型科技股" |
 | `unknown` | 无法识别主体 | "你好" / 模糊查询 |
 
 ---

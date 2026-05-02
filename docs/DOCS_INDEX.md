@@ -6,7 +6,7 @@
 ## 当前必读
 
 - `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块和数据流。
-- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码仍以 `backend/graph/runner.py` 为准。
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py` 与 `understand_request` 测试为准。
 - `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。
 - `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
 - `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
@@ -14,9 +14,9 @@
 - `docs/DEPLOYMENT.md`：部署说明。
 - `docs/AGENTS.md`：docs 目录协作规则和归档边界。
 
-## 当前目标 Spec
+## 当前实现 Spec
 
-- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。目标是把 18 节点前半段收敛为 `prepare_context + understand_request`，并从 single intent 升级为 multi-task decision。
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。Phase 1/2 已接入 `understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace，以及 planner stub 多任务消费；后续剩余项是 `prepare_context` 合并、planner/executor/synthesize 全量多任务原生化和后端 conversation API。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
@@ -29,6 +29,8 @@
 
 ## 质量与报告
 
+- `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
+- `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用和用户可见 trace 的 Playwright 验证记录。
 - `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
 - `docs/REPORT_CHART_SPEC.md`：报告图表规范。
 - `docs/rag-evaluation-guide.md`：RAG 评估方法。
