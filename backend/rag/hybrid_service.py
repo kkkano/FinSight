@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Optional
@@ -30,6 +32,61 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int, *, min_value: int = 1, max_value: int = 64) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        return default
+    return max(min_value, min(max_value, value))
+
+
+def _normalize_collections(collections: Iterable[str]) -> list[str]:
+    normalized: list[str] = []
+    for collection in collections or []:
+        value = str(collection or "").strip()
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def _search_many_bounded(
+    search_one,
+    query: str,
+    *,
+    collections: Iterable[str],
+    top_k: int,
+    max_workers: int | None = None,
+) -> list[list[dict[str, Any]]]:
+    normalized = _normalize_collections(collections)
+    if not normalized:
+        return []
+
+    candidate_k = max(1, int(top_k))
+    worker_count = min(len(normalized), max(1, int(max_workers or _env_int("RAG_SEARCH_MANY_MAX_WORKERS", 4, min_value=1, max_value=16))))
+    groups: list[list[dict[str, Any]]] = [[] for _ in normalized]
+
+    def _run(collection_index: int, collection: str) -> tuple[int, list[dict[str, Any]]]:
+        hits = list(search_one(query, collection=collection, top_k=candidate_k) or [])
+        for local_rank, hit in enumerate(hits, start=1):
+            hit["search_collections"] = list(normalized)
+            hit["source_collection_rank"] = collection_index + 1
+            hit["search_rank_in_collection"] = local_rank
+        return collection_index, hits
+
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="rag-search-many") as executor:
+        futures = {}
+        for collection_index, collection in enumerate(normalized):
+            context = copy_context()
+            futures[executor.submit(context.run, _run, collection_index, collection)] = collection_index
+        for future in as_completed(futures):
+            collection_index, hits = future.result()
+            groups[collection_index] = hits
+    return groups
 
 
 def _is_production_env() -> bool:
@@ -475,14 +532,15 @@ class _InMemoryHybridStore:
         return _sort_search_hits(fused)[: max(1, int(top_k))]
 
     def hybrid_search_many(self, query: str, *, collections: Iterable[str], top_k: int) -> list[dict[str, Any]]:
-        normalized = []
-        for collection in collections or []:
-            value = str(collection or "").strip()
-            if value and value not in normalized:
-                normalized.append(value)
+        normalized = _normalize_collections(collections)
         if not normalized:
             return []
-        groups = [self.hybrid_search(query, collection=collection, top_k=max(1, int(top_k))) for collection in normalized]
+        groups = _search_many_bounded(
+            self.hybrid_search,
+            query,
+            collections=normalized,
+            top_k=max(1, int(top_k)),
+        )
         return _merge_search_hits(groups, top_k=max(1, int(top_k)))
 
     def cleanup_expired(self) -> int:
@@ -874,14 +932,15 @@ class _PostgresHybridStore:
             return hits
 
     def hybrid_search_many(self, query: str, *, collections: Iterable[str], top_k: int) -> list[dict[str, Any]]:
-        normalized = []
-        for collection in collections or []:
-            value = str(collection or "").strip()
-            if value and value not in normalized:
-                normalized.append(value)
+        normalized = _normalize_collections(collections)
         if not normalized:
             return []
-        groups = [self.hybrid_search(query, collection=collection, top_k=max(1, int(top_k))) for collection in normalized]
+        groups = _search_many_bounded(
+            self.hybrid_search,
+            query,
+            collections=normalized,
+            top_k=max(1, int(top_k)),
+        )
         return _merge_search_hits(groups, top_k=max(1, int(top_k)))
 
     def cleanup_expired(self) -> int:
@@ -1053,22 +1112,16 @@ class HybridRAGService:
         return [_decorate_search_hit(hit) for hit in list(hits or [])]
 
     def hybrid_search_many(self, query: str, *, collections: Iterable[str], top_k: int = 6) -> list[dict[str, Any]]:
-        normalized_collections: list[str] = []
-        for collection in collections or []:
-            value = str(collection or "").strip()
-            if value and value not in normalized_collections:
-                normalized_collections.append(value)
+        normalized_collections = _normalize_collections(collections)
         if not normalized_collections:
             return []
-        groups: list[list[dict[str, Any]]] = []
         candidate_k = max(1, int(top_k)) * 2
-        for collection_index, collection in enumerate(normalized_collections, start=1):
-            hits = self.hybrid_search(query, collection=collection, top_k=candidate_k)
-            for local_rank, hit in enumerate(hits, start=1):
-                hit["search_collections"] = list(normalized_collections)
-                hit["source_collection_rank"] = collection_index
-                hit["search_rank_in_collection"] = local_rank
-            groups.append(hits)
+        groups = _search_many_bounded(
+            self.hybrid_search,
+            query,
+            collections=normalized_collections,
+            top_k=candidate_k,
+        )
         return _merge_search_hits(groups, top_k=max(1, int(top_k)))
 
     def cleanup_expired(self) -> int:

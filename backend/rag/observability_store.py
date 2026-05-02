@@ -655,6 +655,9 @@ class SQLRAGObservabilityStore(_RuntimeSQL):
                 elif {'metadata_json', 'collection'}.issubset(available_column_set):
                     where_clauses.append(f"COALESCE(metadata_json ->> 'layer', {layer_case}) = :layer")
                     params['layer'] = layer_value
+                elif 'metadata_json' in available_column_set:
+                    where_clauses.append("metadata_json ->> 'layer' = :layer")
+                    params['layer'] = layer_value
                 elif 'collection' in available_column_set:
                     where_clauses.append(f"{layer_case} = :layer")
                     params['layer'] = layer_value

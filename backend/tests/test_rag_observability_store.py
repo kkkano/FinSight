@@ -33,8 +33,9 @@ class _FakeResult:
 
 
 class _FakeConnection:
-    def __init__(self, responses):
+    def __init__(self, responses, executions=None):
         self._responses = list(responses)
+        self._executions = executions if executions is not None else []
 
     def __enter__(self):
         return self
@@ -43,6 +44,7 @@ class _FakeConnection:
         return False
 
     def execute(self, _sql, _params=None):
+        self._executions.append((str(_sql), dict(_params or {})))
         if not self._responses:
             raise AssertionError('unexpected SQL execution')
         return self._responses.pop(0)
@@ -51,9 +53,10 @@ class _FakeConnection:
 class _FakeEngine:
     def __init__(self, responses):
         self._responses = list(responses)
+        self.executions = []
 
     def connect(self):
-        return _FakeConnection(self._responses)
+        return _FakeConnection(self._responses, self.executions)
 
 
 class _ProbeStore(SQLRAGObservabilityStore):
@@ -315,6 +318,47 @@ def test_browse_db_table_returns_page_payload_and_excludes_vector_columns():
     assert payload['has_more'] is True
     assert payload['items'][0]['id'] == 101
     assert payload['items'][0]['metadata']['run_id'] == 'run-1'
+
+
+def test_browse_db_table_filters_layer_from_metadata_json_without_collection_column():
+    store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
+    engine = _FakeEngine(
+        [
+            _FakeResult([
+                {'column_name': 'id'},
+                {'column_name': 'run_id'},
+                {'column_name': 'source_id'},
+                {'column_name': 'title'},
+                {'column_name': 'metadata_json'},
+                {'column_name': 'created_at'},
+            ]),
+            _FakeResult([{'total': 1}]),
+            _FakeResult([
+                {
+                    'id': 'source-doc-1',
+                    'run_id': 'run-1',
+                    'source_id': 'doc-1',
+                    'title': 'Apple knowledge base source',
+                    'metadata_json': {'layer': 'kb'},
+                    'created_at': datetime(2026, 3, 7, tzinfo=timezone.utc),
+                }
+            ]),
+        ]
+    )
+    store._engine = engine
+    store.ensure_schema = lambda: True
+
+    payload = store.browse_db_table(table_name='rag_source_docs', limit=10, offset=0, layer='kb')
+
+    count_sql, count_params = engine.executions[1]
+    rows_sql, rows_params = engine.executions[2]
+    assert payload['total'] == 1
+    assert payload['items'][0]['metadata_json']['layer'] == 'kb'
+    assert "metadata_json ->> 'layer' = :layer" in count_sql
+    assert "metadata_json ->> 'layer' = :layer" in rows_sql
+    assert count_params['layer'] == 'kb'
+    assert rows_params['layer'] == 'kb'
+
 
 def test_complete_search_run_uses_materialized_chunk_count_for_summary():
     store = _ProbeStore()

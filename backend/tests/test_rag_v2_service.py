@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -46,6 +48,57 @@ def test_hybrid_rag_memory_ingest_and_search_ranks_relevant_doc():
     assert hits, "hybrid search should return at least one hit"
     assert hits[0]["source_id"] == "doc_apple"
     assert hits[0]["rrf_score"] > 0
+
+
+def test_hybrid_search_many_uses_bounded_parallel(monkeypatch):
+    monkeypatch.setenv("RAG_SEARCH_MANY_MAX_WORKERS", "2")
+    service = HybridRAGService.for_testing(backend="memory")
+    base = _now()
+    docs = [
+        RAGDocument(
+            collection=f"ws:thread:t:u:{idx}",
+            scope="ephemeral",
+            source_id=f"doc-{idx}",
+            content=f"Apple services demand collection {idx}",
+            title=f"Doc {idx}",
+            source="test",
+            metadata={"idx": idx},
+            expires_at=base + timedelta(hours=1),
+        )
+        for idx in range(4)
+    ]
+    service.ingest_documents(docs)
+
+    active = 0
+    max_active = 0
+    lock = threading.Lock()
+    original_search = service.hybrid_search
+
+    def slow_search(query, *, collection, top_k):
+        nonlocal active, max_active
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            time.sleep(0.08)
+            return original_search(query, collection=collection, top_k=top_k)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(service, "hybrid_search", slow_search)
+
+    started_at = time.perf_counter()
+    hits = service.hybrid_search_many(
+        "Apple services demand",
+        collections=[doc.collection for doc in docs],
+        top_k=8,
+    )
+    elapsed = time.perf_counter() - started_at
+
+    assert hits
+    assert max_active == 2
+    assert elapsed < 0.28
 
 
 def test_hybrid_rag_memory_ttl_and_cleanup():
