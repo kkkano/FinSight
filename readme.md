@@ -34,7 +34,7 @@
 - [Key Features](#-key-features)
 - [Platform Preview](#-platform-preview)
 - [System Architecture](#%EF%B8%8F-system-architecture)
-- [LangGraph Pipeline](#-langgraph-pipeline-18-nodes)
+- [LangGraph Pipeline](#-langgraph-pipeline-current-runtime--target-refactor)
 - [Agent Ecosystem](#-agent-ecosystem)
 - [Dashboard](#-dashboard---6-analytical-tabs)
 - [RAG Engine](#-rag-engine---hybrid-search-pipeline)
@@ -59,7 +59,7 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | 18-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
+| **LangGraph Pipeline** | Stateful LangGraph runtime for chat, quick analysis, alerts, and deep reports. Current runtime is 18 nodes; the target refactor consolidates request understanding into a multi-task graph. |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
@@ -210,7 +210,7 @@ graph TB
 
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph Pipeline<br/>18-node Stateful Graph]
+        GRAPH[LangGraph Pipeline<br/>Stateful Graph Runtime]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
         TOOLS[Tool Layer<br/>32 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
@@ -244,44 +244,46 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (18 Nodes)
+## 🔄 LangGraph Pipeline (Current Runtime + Target Refactor)
 
-The core of FinSight is an **18-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
-Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 18-node pipeline.
+The current FinSight chat runtime is an **18-node LangGraph stateful graph**. It handles casual chat, quick analysis, alert setup, and deep investment reports through one `/chat/supervisor*` entry path.
+
+The next architecture target is documented in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md): consolidate `decide_output_mode`, `chat_respond`, `resolve_subject`, `clarify`, and `parse_operation` into a single `understand_request` layer that supports multi-task requests such as company + macro + portfolio questions in one turn.
+
+Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
-    RESET --> CTX["③ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
-    CTX --> MODE{"④ chat_respond<br/><i>Output mode?</i>"}
+    RESET --> TRIM["③ trim_history<br/><i>Bound conversation window</i>"]
+    TRIM --> SUMMARY["④ summarize_history<br/><i>Compress long context</i>"]
+    SUMMARY --> CTX["⑤ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
+    CTX --> MODE["⑥ decide_output_mode<br/><i>Mode hints</i>"]
+    MODE --> CHAT{"⑦ chat_respond<br/><i>Direct response?</i>"}
 
-    MODE -->|"chat / qa"| CHAT_END["Direct LLM Response"]
-    CHAT_END --> RENDER
-    MODE -->|"needs analysis"| SUBJ["⑤ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
+    CHAT -->|"chat responded"| END_CHAT((End))
+    CHAT -->|"needs analysis"| SUBJ["⑧ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
 
-    SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>Ambiguous?</i>"}
-    CLARIFY -->|"Ambiguous"| ASK["Ask User for Clarification"]
-    ASK --> RENDER
-    CLARIFY -->|"Clear"| PARSE["⑦ parse_operation<br/><i>14-level intent classifier</i>"]
+    SUBJ --> CLARIFY{"⑨ clarify<br/><i>Missing required slots?</i>"}
+    CLARIFY -->|"needs clarification"| END_CLARIFY((End))
+    CLARIFY -->|"continue"| PARSE["⑩ parse_operation<br/><i>14-level intent classifier</i>"]
 
-    PARSE -->|"alert_set"| ALERT_EX["⑦a alert_extractor<br/><i>Extract alert params</i>"]
-    ALERT_EX -->|"valid"| ALERT_ACT["⑦b alert_action<br/><i>Save & schedule</i>"]
-    ALERT_EX -->|"invalid"| RENDER
-    ALERT_ACT --> RENDER
-    PARSE -->|"other ops"| POLICY["⑧ policy_gate<br/><i>Capability scoring + budget</i>"]
-    POLICY --> PLAN["⑨ planner_node<br/><i>LLM Planner or Stub Fallback</i>"]
+    PARSE -->|"alert_set"| ALERT_EX["⑪ alert_extractor<br/><i>Extract alert params</i>"]
+    ALERT_EX -->|"valid"| ALERT_ACT["⑫ alert_action<br/><i>Save & schedule</i>"]
+    ALERT_EX -->|"invalid"| END_ALERT_INVALID((End))
+    ALERT_ACT --> END_ALERT((End))
+    PARSE -->|"other ops"| POLICY["⑬ policy_gate<br/><i>Capability scoring + budget</i>"]
+    POLICY --> PLAN["⑭ planner<br/><i>LLM Planner or Stub Fallback</i>"]
 
-    PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>HITL approval?</i>"}
-    CONFIRM -->|"Rejected"| RENDER
-    CONFIRM -->|"Approved"| EXEC["⑪ execute_plan<br/><i>Parallel agent groups</i>"]
+    PLAN --> CONFIRM{"⑮ confirmation_gate<br/><i>HITL approval?</i>"}
+    CONFIRM -->|"cancel"| END_CANCEL((End))
+    CONFIRM -->|"adjust"| PLAN
+    CONFIRM -->|"confirm"| EXEC["⑯ execute_plan<br/><i>Parallel agent groups</i>"]
 
-    EXEC --> SYNTH["⑫ synthesize<br/><i>Merge outputs + compare_gate + Conflict check</i>"]
-    SYNTH --> SCRUB["⑬ Hallucination Scrub<br/><i>Regex + Evidence validation</i>"]
-    SCRUB --> BUILD["⑭ report_builder<br/><i>Build ReportIR structure</i>"]
-    BUILD --> RENDER["⑮ render_response<br/><i>Format for frontend</i>"]
-    RENDER --> SAVE["⑯ save_memory<br/><i>Persist to memory store</i>"]
-    SAVE --> END((End))
+    EXEC --> SYNTH["⑰ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
+    SYNTH --> RENDER["⑱ render<br/><i>Format for frontend</i>"]
+    RENDER --> END((End))
 
     subgraph "Execution Engine (⑪)"
         direction LR
@@ -293,13 +295,14 @@ flowchart TD
 
     style RESET fill:#a855f7,color:#fff
     style SYNTH fill:#ff9800,color:#000
-    style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
 ```
 
-### Intent Classification (`parse_operation`)
+`report_builder` and hallucination/evidence checks are implementation helpers inside the graph runtime, not separate graph nodes in `backend/graph/runner.py`.
 
-The `parse_operation` node implements a **rule-first intent classifier** with 14 operation types, prioritized from highest to lowest:
+### Current Runtime Operation Parsing (`parse_operation`)
+
+The current runtime still uses `parse_operation` as a rule-first operation classifier with 14 operation types. This is a compatibility layer; the target architecture moves request understanding into `understand_request` and keeps policy/planning separate from natural-language classification.
 
 | Priority | Operation | Confidence | Trigger Keywords |
 |:---:|---------|:---:|--------------|
@@ -896,7 +899,7 @@ Per-user memory stored as JSON files in `data/memory/{user_id}.json`:
 
 The memory system integrates with:
 - **Watchlist API**: `POST /api/user/watchlist/add` / `remove` — persisted and used by alert schedulers
-- **LangGraph Memory**: Loaded at `build_initial_state` node, saved at `save_memory` node
+- **LangGraph Memory**: Loaded at `build_initial_state`; checkpoints are handled by the LangGraph checkpointer, and long-term snapshots are persisted best-effort by the execution service.
 - **Dashboard Store**: Frontend `dashboardStore` syncs watchlist via API on init
 
 ---
@@ -1102,15 +1105,15 @@ FinSight/
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
 │   │   └── tools_router.py     # GET /api/tools (manifest)
 │   ├── graph/                  # LangGraph pipeline
-│   │   ├── builder.py          # Graph construction (16 nodes, edges)
+│   │   ├── runner.py           # Graph construction (current runtime; target refactor in docs/plans)
 │   │   ├── state.py            # GraphState definition
-│   │   ├── report_builder.py   # ReportIR structure builder
+│   │   ├── report_builder.py   # ReportIR helper; not a graph node
 │   │   └── nodes/              # Individual node implementations
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
-│   │       ├── chat_respond.py
-│   │       ├── resolve_subject.py
-│   │       ├── parse_operation.py   # 4-level priority chain (compare → guardrail → multi-ticker → qa)
+│   │       ├── chat_respond.py      # current runtime; target: merge into understand_request
+│   │       ├── resolve_subject.py   # current runtime; target: merge into understand_request
+│   │       ├── parse_operation.py   # current runtime; target: merge into understand_request
 │   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

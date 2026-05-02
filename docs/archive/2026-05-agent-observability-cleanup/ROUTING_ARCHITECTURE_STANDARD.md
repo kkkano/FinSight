@@ -2,8 +2,10 @@
 
 > **文档版本**: v1.0
 > **创建日期**: 2026-01-31
-> **状态**: 开发标准
+> **状态**: Superseded / 历史参考
 > **目的**: 记录架构决策过程，作为后续开发的标准参考
+
+> 状态说明：本文不再作为当前聊天主链路事实源。当前 `/chat/supervisor*` 主路径以 LangGraph 为唯一入口；下一阶段请求理解层以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为准。
 
 ---
 

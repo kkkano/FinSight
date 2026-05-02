@@ -4,6 +4,8 @@
 > 适用分支：`feat/p0-p2-quality-orchestration-productization`
 > 主链实现：`backend/graph/runner.py`
 
+> 2026-05-03 架构方向：本文是当前运行时参考；下一阶段聊天意图层将按 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 收敛为 request understanding task graph。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+
 ## 1. 系统总览
 
 ```mermaid

@@ -5,6 +5,8 @@
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
 
+> 2026-05-03 修订说明：当前代码仍以 `backend/graph/runner.py` 的 18 节点运行时为准；下一阶段意图层重构以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为目标 spec。该目标会把 `decide_output_mode`、`chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 收敛为 `understand_request`，并支持 multi-task decision。
+
 ---
 
 ## 0. 更新管理（重要！）

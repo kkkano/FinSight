@@ -1,6 +1,8 @@
 # FinSight LangGraph Flow Documentation
 
-> Complete data flow documentation for the 16-node StateGraph pipeline.
+> 2026-05-03 状态说明：本文是当前/历史 LangGraph 运行链路参考，不是下一阶段目标架构。请求理解层重构目标以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为准。
+
+> Current overview is aligned to the 18-node runtime in `backend/graph/runner.py`; older node-by-node notes below are retained as historical implementation detail.
 
 ---
 
@@ -14,15 +16,24 @@ graph TD
     trim_history --> summarize_history
     summarize_history --> normalize_ui_context
     normalize_ui_context --> decide_output_mode
-    decide_output_mode --> resolve_subject
+    decide_output_mode --> chat_respond
+    chat_respond -->|chat_responded=true| END_CHAT([END: 直接回复])
+    chat_respond -->|chat_responded=false| resolve_subject
     resolve_subject --> clarify
 
     clarify -->|needs_clarification=true| END_CLARIFY([END: 返回澄清请求])
     clarify -->|needs_clarification=false| parse_operation
 
-    parse_operation --> policy_gate
+    parse_operation -->|alert_set| alert_extractor
+    alert_extractor -->|valid| alert_action
+    alert_action --> END_ALERT([END: 保存提醒])
+    alert_extractor -->|invalid| END_ALERT_INVALID([END: 参数无效])
+    parse_operation -->|other| policy_gate
     policy_gate --> planner
-    planner --> execute_plan
+    planner --> confirmation_gate
+    confirmation_gate -->|cancel_execution| END_CANCEL([END: 用户取消])
+    confirmation_gate -->|adjust_parameters| planner
+    confirmation_gate -->|confirm_execute| execute_plan
     execute_plan --> synthesize
     synthesize --> render
     render --> END_DONE([END: 返回最终响应])
@@ -35,7 +46,7 @@ graph TD
     style END_DONE fill:#3b82f6,color:#fff
 ```
 
-**Source**: `backend/graph/runner.py:33-77` — `_build_graph()`
+**Source**: `backend/graph/runner.py` — `_build_graph()`
 
 ---
 

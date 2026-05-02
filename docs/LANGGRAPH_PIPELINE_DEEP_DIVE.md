@@ -1,13 +1,15 @@
 # FinSight LangGraph 全流程深度拆解
 
-> 版本：v1.1.0-sprint2 | 更新时间：2026-02-11 | 节点数：11 | Agent 数：6
+> 版本：v1.1.0-sprint2 | 更新时间：2026-02-11 | 节点数：历史 11；当前运行时以 `backend/graph/runner.py` 为准（18 节点） | Agent 数：6
+
+> 2026-05-03 状态说明：本文是当前/历史 Pipeline 深度拆解参考，不是下一阶段目标架构。请求理解层重构目标以 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 为准。
 
 ---
 
 ## 目录
 
 1. [架构总览](#1-架构总览)
-2. [主流程图（完整 11 节点）](#2-主流程图)
+2. [历史主流程图（11 节点快照）](#2-主流程图)
 3. [GraphState 状态模型](#3-graphstate-状态模型)
 4. [节点逐层拆解](#4-节点逐层拆解)
 5. [Agent 子系统](#5-agent-子系统)
@@ -36,7 +38,7 @@ graph TB
         ChatRouter --> GraphRunner[GraphRunner]
     end
 
-    subgraph "LangGraph 管道 (11 节点)"
+    subgraph "LangGraph 管道（历史 11 节点快照）"
         GraphRunner --> N1[build_initial_state]
         N1 --> N2[normalize_ui_context]
         N2 --> N3[decide_output_mode]

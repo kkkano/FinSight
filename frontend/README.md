@@ -1,73 +1,53 @@
-# React + TypeScript + Vite
+# FinSight Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+FinSight frontend is a React + TypeScript + Vite application for the chat workspace, dashboard, workbench, execution timeline, RAG inspector, and report views.
 
-Currently, two official plugins are available:
+## Runtime Role
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The frontend owns interaction state and rendering:
 
-## React Compiler
+- conversation list, new chat, switch chat, delete chat
+- chat input state, stream abort button, loading states
+- explicit user options such as `output_mode`
+- ephemeral UI context such as `active_symbol`, selections, and portfolio panel context
+- SSE parsing and user-facing execution timeline
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The frontend does not own financial semantics:
 
-## Expanding the ESLint configuration
+- no company-name-to-ticker dictionary
+- no macro/company/portfolio classifier
+- no tool or agent selection
+- no planner or research routing
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Those decisions belong to the backend LangGraph request understanding layer. The target contract is documented in:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+../docs/plans/2026-05-03_request_understanding_task_graph_spec.md
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Main Files
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `src/components/ChatInput.tsx`: chat composer, output mode controls, streaming lifecycle.
+- `src/components/layout/ChatWorkspace.tsx`: chat layout and conversation rail.
+- `src/store/useStore.ts`: chat messages, session id, conversation summaries.
+- `src/store/executionStore.ts`: SSE execution state, timeline, streamed content.
+- `src/api/client.ts`: API client and SSE parser.
+- `src/components/agent-log/`: raw event stream and agent pipeline views.
+- `src/components/execution/`: user-facing execution progress and interrupt UI.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Development
+
+```bash
+npm install
+npm run dev
+npm run build
+npx vitest run src
 ```
+
+For frontend behavior changes, verify with Playwright against the running app. Chat UX changes must cover:
+
+- empty input and normal input states
+- brief/deep mode selection
+- stream abort
+- new/switch/delete conversation
+- SSE thinking events and final answer rendering

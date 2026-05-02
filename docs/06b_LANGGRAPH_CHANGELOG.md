@@ -5,6 +5,12 @@
 
 ---
 
+## 2026-05-03 - Request understanding task graph spec
+
+- 新增 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`，作为下一阶段意图层重构目标。
+- 目标：将 `decide_output_mode`、`chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 收敛为 `understand_request`，支持 multi-task decision。
+- 同步更新 README、DOCS_INDEX、docs 协作规则，并将旧 routing 标准标记为历史参考。
+
 ## 2026-02-26 P0-P2 Quality Orchestration & Productization
 
 ### P0: ThinkingBubble 三层展示
