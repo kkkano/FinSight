@@ -2,7 +2,7 @@
 
 > **状态**: Active (Production-Oriented, Phase E Upgraded)
 > **最后更新**: 2026-02-17
-> **SSOT 对齐**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.10 / 11.11.2）
+> **SSOT 对齐**: `docs/06a_LANGGRAPH_DESIGN_SPEC.md`、`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`
 
 ---
 

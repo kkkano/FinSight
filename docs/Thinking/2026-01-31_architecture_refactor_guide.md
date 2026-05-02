@@ -3,7 +3,7 @@
 > **状态**: Superseded  
 > **生效日期**: 2026-01-31  
 > **替代日期**: 2026-02-07  
-> **当前依据**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md` + `docs/01_ARCHITECTURE.md`
+> **历史依据**: `docs/archive/06_LANGGRAPH_REFACTOR_GUIDE.md` + `docs/01_ARCHITECTURE.md`
 
 ---
 
@@ -45,7 +45,7 @@
 ## 4. 替代映射
 
 - 当前架构：`docs/01_ARCHITECTURE.md`
-- 当前重构与任务清单：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.7+）
+- 历史重构与任务清单：`docs/archive/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.7+）
 - 当前部署执行：`docs/11_PRODUCTION_RUNBOOK.md`
 
 ---
