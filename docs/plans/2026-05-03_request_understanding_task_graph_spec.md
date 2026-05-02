@@ -160,7 +160,7 @@ START
       "subject_type": "company | macro | portfolio | news_item | news_set | filing | research_doc | index | commodity | unknown",
       "tickers": ["GOOGL"],
       "entity_name": "Google",
-      "operation": "qa | daily_brief | price | technical | fetch | summarize | analyze_impact | fact_check | news_impact | compare | alert_set | morning_brief",
+      "operation": "qa | daily_brief | price | technical | fetch | summarize | analyze_impact | fact_check | news_impact | compare | alert_set | morning_brief | rebalance_check",
       "time_scope": "today | latest | historical | explicit_range | unknown",
       "needs_clarification": false,
       "clarify_question": null,
@@ -296,6 +296,51 @@ LLM 不能越过 policy gate 选择工具。
 - 判断 macro/company/portfolio。
 - 根据关键词决定后端工具或 agent。
 
+### 9.1 用户可见思考过程设计
+
+前端需要展示更具体的“可观测推理过程”，但不要展示模型隐藏思维链。用户应该看到系统基于哪些可验证信号做了什么决定，而不是看到一组写死的“正在分析、正在搜索、正在生成”假步骤。
+
+核心原则：
+
+- 后端事件驱动：所有步骤来自 SSE/trace 事件，前端只负责渲染，不伪造进度。
+- 可折叠：默认展示 1 行当前动作，用户展开后看到结构化详情。
+- 可解释：每个关键步骤都回答“识别了什么、为什么这么走、下一步查什么、哪些信息缺失”。
+- 可验证：搜索、工具、agent、RAG 命中都显示真实 query/source/count/status。
+- 可控：流式期间提供停止按钮；停止后保留已完成步骤和取消原因。
+- 不泄露隐藏 chain-of-thought：展示的是 `reason_summary`、`route_reason`、`evidence_summary`，不是原始模型逐 token 推理。
+
+建议 UI 结构：
+
+```text
+Assistant Message
+├─ Process Strip（默认折叠）
+│  ├─ 理解：识别 4 个任务，1 个待补充
+│  ├─ 计划：准备查询价格、新闻、宏观事件、组合影响
+│  ├─ 检索：3 个搜索 / 5 个工具 / 2 个 RAG 命中
+│  ├─ Agent：Price、News、Macro、Risk 已完成
+│  └─ 合成：发现 1 个冲突，已在回答中标注
+└─ Final Answer
+```
+
+展开详情用分组 timeline，不做营销式大卡片：
+
+| 组 | 展示内容 | 示例 |
+|---|---|---|
+| `understanding` | task decomposition、route、blocked task、assumptions | “谷歌=GOOGL；微软=MSFT；持仓影响需要持仓数据” |
+| `planning` | plan groups、预算、禁用项、output mode | “brief 模式：跳过 deep_search，优先价格+新闻” |
+| `retrieval` | search query、provider、live/cache、result_count | `search: GOOGL news yesterday` |
+| `tool` | tool name、args 摘要、status、latency | `get_stock_price(GOOGL)` |
+| `agent` | agent name、目标、evidence_count、confidence | “Macro agent 查找 FOMC/Fed 官方信息” |
+| `synthesis` | evidence merge、conflicts、caveats | “新闻情绪与盘中涨跌不一致，标注为短期冲突” |
+
+禁止：
+
+- 前端写死固定 5 步进度，不管后端是否真的执行。
+- 显示假百分比。
+- 把所有 trace dump 给用户，造成噪音。
+- 用“AI 正在深度思考”这种不可验证文案替代真实事件。
+- 在 brief 模式下展示和 deep search 一样重的过程 UI。
+
 ## 10. SSE 与可观测性
 
 新增用户可见事件：
@@ -324,6 +369,47 @@ LLM 不能越过 policy gate 选择工具。
 - Agent log 显示完整 task 列表和 route reason。
 - 用户可以看到“系统不是忘了持仓，而是缺持仓数据”。
 
+### 10.1 用户可见 Trace Event
+
+新增统一事件载荷，供 `ThinkingBubble`、执行 timeline、agent log 共用：
+
+```json
+{
+  "type": "trace",
+  "visibility": "user",
+  "stage": "understanding | planning | retrieval | tool | agent | synthesis",
+  "status": "started | completed | skipped | blocked | failed | cancelled",
+  "title": "识别请求",
+  "summary": "识别 4 个任务，其中持仓影响需要补充持仓数据",
+  "data": {
+    "task_ids": ["t1", "t2", "t3", "t4"],
+    "route_reason": ["matched company aliases", "portfolio data missing"],
+    "assumptions": ["昨天按交易日解析"],
+    "source_kind": "rule | llm | tool | rag | cache | web",
+    "latency_ms": 124
+  }
+}
+```
+
+各阶段最低字段：
+
+| stage | 必须字段 |
+|---|---|
+| `understanding` | `tasks[]`、`blocked_tasks[]`、`route_reason[]`、`assumptions[]` |
+| `planning` | `plan_groups[]`、`allowed_tools[]`、`skipped_tools[]`、`budget` |
+| `retrieval` | `query`、`provider`、`result_count`、`cache_status` |
+| `tool` | `tool_name`、`args_summary`、`status`、`latency_ms` |
+| `agent` | `agent_name`、`goal`、`evidence_count`、`confidence` |
+| `synthesis` | `sections[]`、`conflicts[]`、`caveats[]` |
+
+前端渲染规则：
+
+- compact view 只显示 `title + summary + status icon`。
+- detail view 显示分组 timeline 和关键字段。
+- 同一个 `run_id + stage + task_id` 的事件应合并更新，避免刷屏。
+- `visibility != "user"` 的内部 debug 事件只进入开发面板，不进入普通用户视图。
+- cancelled 事件必须显示“用户已停止”或“后端已取消”，不能伪装成失败。
+
 ## 11. 回归测试矩阵
 
 | Query | 预期 |
@@ -350,6 +436,28 @@ LLM 不能越过 policy gate 选择工具。
 | `今天有什么大新闻影响我的持仓吗` + no portfolio | `blocked_task/missing_portfolio_holdings` |
 | `今天天气不错，你帮我看看谷歌今天咋样，然后美联储降息没，今天有什么大新闻会影响我的持仓吗` | `mixed`，至少 company + macro 可执行，portfolio 可阻塞 |
 
+### 11.1 复杂 Query Golden Set
+
+这些 query 是后续 `backend/tests/test_understand_request.py` 的表驱动 golden cases。测试目标不是判断最终回答文案，而是判断请求理解层是否稳定拆任务、保留上下文、区分可执行任务与 blocked task。所有 `今天`、`昨天`、`最近` 必须基于请求时间解析，不能写死自然日。
+
+| ID | Query | 预期拆解 | 失败判定 |
+|---|---|---|---|
+| C01 | `你好，今天天气不错，帮我看看谷歌昨天涨了多少，谷歌有什么新闻，然后微软呢？微软的新闻和涨幅如何？最近有没有发生什么大事影响我的几只股票？我的调仓要变动吗？` | `mixed`；`social_prefix` 保留；`GOOGL/price/yesterday` + `GOOGL/fetch/latest_news` + `MSFT/price/yesterday` + `MSFT/fetch/latest_news`；portfolio `news_impact` 和 `rebalance_check` 视持仓是否存在执行或进入 `blocked_tasks` | 只识别谷歌、忘记微软、把天气当天气查询、因缺持仓阻塞全部任务 |
+| C02 | `早，昨天苹果为什么跌了？微软也是同样原因吗？如果不是，分别列出主要原因。` | `mixed/research`；`AAPL/price+news_impact/yesterday`；`MSFT/price+news_impact/yesterday`；第二句“同样原因”指向 AAPL 但必须生成 MSFT 独立任务 | 把“也是”误解成只回答 AAPL，或只做 compare 不查各自原因 |
+| C03 | `美联储这周降息概率变了吗？这对QQQ、苹果、微软和我的科技股仓位有什么影响？` | `macro/fact_check/explicit_range(this_week)`；`index/QQQ/analyze_impact`；`company/[AAPL,MSFT]/analyze_impact`；portfolio impact 若无持仓则局部 blocked | 要求 ticker 后才能回答 macro，或把 QQQ 当公司 |
+| C04 | `先别做长报告，30秒告诉我谷歌和微软今天谁更强，新闻、涨跌幅、风险点各一句。` | `output_mode=brief`；`compare/[GOOGL,MSFT]`；每个 ticker 有 price/news/risk 子需求；工具预算低 | 进入 investment_report，或只比较价格不处理新闻和风险 |
+| C05 | `做深度研究：NVDA，但只看最近一周新闻、财报和竞争格局，最后给我买入/观望/卖出的理由。` | `output_mode=investment_report`；`company/NVDA`；time_scope explicit range `last_7_days`；constraints 包含 news/filing/competitive landscape；结论格式偏好保留 | 忽略“最近一周”，或当成普通聊天短答 |
+| C06 | `我持有AAPL、GOOGL、MSFT，现在CPI超预期，对我的组合影响最大的是哪一个？需要怎么调仓？` | 显式 holdings 写入 task context；`macro/analyze_impact(CPI)`；`portfolio/news_impact or macro_impact`；`portfolio/rebalance_check` 可执行 | 因没有已保存 portfolio 而澄清全部，或丢掉用户本轮给出的持仓 |
+| C07 | `看一下这条新闻会不会影响TSLA和我的组合，顺便如果TSLA跌破180提醒我。` + news selection | `news_item/analyze_impact`；`company/TSLA/news_impact`；portfolio impact 可执行或局部 blocked；`alert_set/TSLA/below/180` 走 alert path 或 mixed alert handling | 因 alert 把研究任务吞掉，或无 selection 时不澄清新闻上下文 |
+| C08 | `我昨天问的那家公司今天有什么更新？如果你不知道我说的是谁，就按苹果处理。` | 有 thread subject 时解析为该 subject；无 thread subject 时 fallback `AAPL`；operation `fetch/latest_news` 或 `daily_brief/today` | 无上下文时直接澄清，忽略用户提供的 fallback |
+| C09 | `这个PDF里的公司和谷歌相比怎么样？重点看收入增长和估值，不要泛泛而谈。` + doc selection | `research_doc/extract_metrics`；`company/GOOGL/extract_metrics`；`compare`；constraints 包含 revenue growth + valuation | 前端或后端要求用户再输入 PDF 公司名，或只总结 PDF 不比较谷歌 |
+| C10 | `最近有什么大事影响半导体？NVDA、AMD、TSM分别怎么看，给表格，不要长篇。` | `theme/semiconductor/news_impact/latest`；`company/[NVDA,AMD,TSM]/daily_brief or analyze_impact`；format preference table + brief | 只识别第一个 ticker，或把 TSM 当美股以外 unsupported |
+| C11 | `谷歌AI capex 会不会拖累利润率？微软和Meta有没有类似问题？顺便看一下最近市场怎么定价。` | `company/GOOGL/analyze_impact(capex -> margin)`；`company/[MSFT,META]/compare or analyze_impact`；market pricing 触发 price/news/valuation evidence | 只输出结构化摘要不回答问题，或把 Meta 漏掉 |
+| C12 | `不用deep search，快速看下GOOGL和MSFT今天涨跌、新闻、有没有需要我马上注意的风险。` | `output_mode=brief`；planner constraint `no_deep_search`；`company/[GOOGL,MSFT]/price+news+risk`；可使用轻量工具 | 仍调用 deep search，或因为多 ticker 强制进入长报告 |
+| C13 | `帮我看看苹果今天咋样，然后把刚才说的那个风险也考虑进去。` + prior risk in thread | `company/AAPL/daily_brief/today`；thread memory 中提取 prior risk 作为 constraint；无 prior risk 时只对该 constraint 局部降级，不阻塞 AAPL | 因“刚才那个风险”缺失而完全澄清，或忘记 AAPL |
+| C14 | `如果今天纳指继续跌，AAPL、MSFT、NVDA哪个对我组合拖累最大？我没有组合的话就按等权假设。` | `index/NDX or QQQ/scenario`；`company/[AAPL,MSFT,NVDA]/analyze_impact`；portfolio impact，若无 holdings 使用 equal-weight assumption 而不是 blocked | 缺持仓时澄清，忽略用户给出的等权 fallback |
+| C15 | `请先确认美联储今天有没有公告，再判断这会不会影响我的持仓；如果没持仓，就只讲对大型科技股估值的影响。` | `macro/fact_check/today` 必须先执行；portfolio impact 有持仓则执行；无持仓 fallback 为 `macro/analyze_impact(large_tech_valuation)` | 因无持仓直接结束，或跳过 fact_check 直接泛谈 |
+
 ## 12. 迁移计划
 
 ### Phase 0：文档与契约
@@ -363,6 +471,7 @@ LLM 不能越过 policy gate 选择工具。
 - `GraphState` 增加 `understanding`、`tasks`。
 - `SubjectType` 增加 `macro`、`index`、`commodity`。
 - 新增 `backend/tests/test_understand_request.py`。
+- 将复杂 Query Golden Set 转为表驱动测试，至少断言 route、task count、tickers、blocked_tasks、time_scope、output_mode、planner constraints。
 - 将旧 `test_greeting_shortcircuit` 改成 route 断言，而不是节点顺序断言。
 
 ### Phase 2：兼容实现
@@ -391,6 +500,10 @@ LLM 不能越过 policy gate 选择工具。
 ### Phase 5：前端可观测 UX
 
 - 展示 task decomposition。
+- 实现可折叠 Process Strip：理解 / 计划 / 检索 / Agent / 合成。
+- 由 SSE `trace` 事件驱动前端过程展示，禁止前端写死假步骤或假百分比。
+- 展开详情能看到 search query、tool args 摘要、provider、result_count、agent evidence_count、blocked task reason。
+- 普通用户视图只展示 `visibility=user` 事件，内部 debug trace 放开发面板。
 - “停止生成”保留 AbortController，并补后端 run cancellation。
 - Deep/Brief 按钮只传 `output_mode`，不判断 ticker。
 
@@ -433,6 +546,8 @@ LLM 不能越过 policy gate 选择工具。
   - 新建/切换/删除会话。
   - Deep/Brief 按钮只受 actionable input 和 output mode 影响。
   - 复合请求能显示多个理解 task。
+  - 展开 Process Strip 后能看到真实 trace：task decomposition、search query、tool/agent 状态、blocked task reason。
+  - 过程 UI 来自 SSE 事件；模拟后端不发 retrieval/tool 事件时，前端不能显示对应假步骤。
   - 用户可停止流式输出。
 
 文档：
