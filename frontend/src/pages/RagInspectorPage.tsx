@@ -27,11 +27,29 @@ type RagRun = Record<string, any>;
 type RagRunListResponse = { status?: string; data?: { items?: RagRun[]; next_cursor?: string | null } };
 
 type RagRunBundle = {
+  runId: string;
   summary: RagRun | null;
   events: Array<Record<string, any>>;
   documents: Array<Record<string, any>>;
   chunks: Array<Record<string, any>>;
   hits: Array<Record<string, any>>;
+};
+
+const EMPTY_RUN_BUNDLE: RagRunBundle = {
+  runId: '',
+  summary: null,
+  events: [],
+  documents: [],
+  chunks: [],
+  hits: [],
+};
+
+type LayerHitSummary = {
+  layer: string;
+  count: number;
+  share: number;
+  collections: string[];
+  sampleTitles: string[];
 };
 
 type DbBrowserTableName = 'rag_query_runs' | 'rag_source_docs' | 'rag_chunks' | 'rag_documents_v2';
@@ -49,10 +67,10 @@ type DbBrowserPayload = {
 const DB_BROWSER_TABLES: DbBrowserTableName[] = ['rag_query_runs', 'rag_source_docs', 'rag_chunks', 'rag_documents_v2'];
 
 const DB_BROWSER_COLUMN_PRIORITY: Record<DbBrowserTableName, string[]> = {
-  rag_query_runs: ['id', 'started_at', 'status', 'collection', 'route_name', 'backend_actual', 'query_text'],
-  rag_source_docs: ['id', 'run_id', 'collection', 'source_type', 'title', 'url', 'content_preview'],
-  rag_chunks: ['id', 'run_id', 'source_doc_id', 'collection', 'chunk_index', 'doc_type', 'chunk_strategy', 'chunk_text'],
-  rag_documents_v2: ['id', 'collection', 'scope', 'source_id', 'title', 'url', 'source', 'content'],
+  rag_query_runs: ['id', 'started_at', 'status', 'layer', 'collection_kind', 'entity_scope', 'entity_key', 'collection', 'route_name', 'backend_actual'],
+  rag_source_docs: ['id', 'run_id', 'layer', 'collection_kind', 'entity_scope', 'entity_key', 'collection', 'source_type', 'title', 'url'],
+  rag_chunks: ['id', 'run_id', 'layer', 'collection_kind', 'entity_scope', 'entity_key', 'collection', 'source_doc_id', 'chunk_index', 'doc_type'],
+  rag_documents_v2: ['id', 'layer', 'collection_kind', 'entity_scope', 'entity_key', 'collection', 'scope', 'source_id', 'title', 'url'],
 };
 
 const DB_BROWSER_DETAIL_FIELDS: Record<DbBrowserTableName, string[]> = {
@@ -97,6 +115,46 @@ const extractItems = (payload: unknown): Array<Record<string, any>> => {
   return [];
 };
 
+const unwrapApiPayload = (payload: unknown): unknown => {
+  let current = payload;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return current;
+    }
+    const candidate = current as {
+      data?: unknown;
+      status?: unknown;
+      timestamp?: unknown;
+      statusText?: unknown;
+      headers?: unknown;
+      config?: unknown;
+      request?: unknown;
+    };
+    if (
+      'data' in candidate
+      && (
+        'status' in candidate
+        || 'timestamp' in candidate
+        || 'statusText' in candidate
+        || 'headers' in candidate
+        || 'config' in candidate
+        || 'request' in candidate
+      )
+    ) {
+      current = candidate.data;
+      continue;
+    }
+    break;
+  }
+  return current;
+};
+
+const extractRecord = (payload: unknown): Record<string, any> | null => {
+  const candidate = unwrapApiPayload(payload);
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+  return candidate as Record<string, any>;
+};
+
 const jsonPreview = (value: unknown): string => {
   if (value == null) return '';
   if (typeof value === 'string') return value;
@@ -111,6 +169,188 @@ const formatDbBrowserCell = (value: unknown, maxLength = 120): string => {
   if (value == null || value === '') return '?';
   const text = typeof value === 'string' ? value : jsonPreview(value);
   return text.length > maxLength ? `${text.slice(0, maxLength)}?` : text;
+};
+
+const extractInspectorMetadata = (value: Record<string, any> | null | undefined): Record<string, any> => {
+  if (!value || typeof value !== 'object') return {};
+  const directMetadata = value.metadata && typeof value.metadata === 'object' ? value.metadata : {};
+  const rawMetadataJson = value.metadata_json;
+  let parsedMetadataJson: Record<string, any> = {};
+  if (rawMetadataJson && typeof rawMetadataJson === 'object' && !Array.isArray(rawMetadataJson)) {
+    parsedMetadataJson = rawMetadataJson as Record<string, any>;
+  } else if (typeof rawMetadataJson === 'string') {
+    try {
+      const parsed = JSON.parse(rawMetadataJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsedMetadataJson = parsed as Record<string, any>;
+      }
+    } catch {
+      parsedMetadataJson = {};
+    }
+  }
+  return { ...directMetadata, ...parsedMetadataJson };
+};
+
+const deriveCollectionDescriptor = (value: Record<string, any> | null | undefined): {
+  collection: string;
+  layer: string;
+  collectionKind: string;
+  entityScope: string;
+  entityKey: string;
+} => {
+  const metadata = extractInspectorMetadata(value);
+  const collection = String(value?.collection || metadata.collection || '').trim();
+  const parts = collection.split(':');
+  let layer = String(value?.layer || metadata.layer || '').trim();
+  let collectionKind = String(value?.collection_kind || metadata.collection_kind || '').trim();
+  let entityScope = String(value?.entity_scope || metadata.entity_scope || '').trim();
+  let entityKey = String(value?.entity_key || metadata.entity_key || '').trim();
+
+  if (!layer) {
+    if (parts[0] === 'mem') layer = 'memory';
+    else if (parts[0] === 'ws' || parts[0] === 'session') layer = 'ws';
+    else if (parts[0] === 'kb') layer = 'kb';
+  }
+
+  if (!collectionKind) {
+    if (parts[0] === 'mem' && parts[1] === 'thread') collectionKind = 'thread_memory';
+    else if (parts[0] === 'ws' && parts[1] === 'thread') collectionKind = 'thread_working_set';
+    else if (parts[0] === 'ws' && parts[1] === 'run') collectionKind = 'run_working_set';
+    else if (parts[0] === 'ws' && parts[1] === 'deepsearch') collectionKind = 'deepsearch_working_set';
+    else if (parts[0] === 'kb' && parts[1] === 'stock') collectionKind = 'stock_kb';
+    else if (parts[0] === 'kb' && parts[1] === 'theme') collectionKind = 'theme_kb';
+    else if (parts[0] === 'kb' && parts[1] === 'macro') collectionKind = 'macro_kb';
+    else if (parts[0] === 'session') collectionKind = parts[1] === 'deepsearch' ? 'legacy_deepsearch' : 'legacy_session';
+  }
+
+  if (!entityScope) {
+    if ((parts[0] === 'mem' || parts[0] === 'ws') && parts[1] === 'thread') entityScope = 'thread';
+    else if (parts[0] === 'ws' && parts[1] === 'run') entityScope = 'run';
+    else if ((parts[0] === 'ws' && parts[1] === 'deepsearch') || (parts[0] === 'kb' && parts[1] === 'stock') || (parts[0] === 'session' && parts[1] === 'deepsearch')) entityScope = 'stock';
+    else if (parts[0] === 'kb' && parts[1] === 'theme') entityScope = 'theme';
+    else if (parts[0] === 'kb' && parts[1] === 'macro') entityScope = 'macro';
+  }
+
+  if (!entityKey) {
+    if ((parts[0] === 'mem' || parts[0] === 'ws') && parts[1] === 'thread' && parts.length >= 3) entityKey = parts.slice(2).join(':');
+    else if (parts[0] === 'ws' && parts[1] === 'run' && parts.length >= 3) entityKey = parts[2];
+    else if (((parts[0] === 'ws' && parts[1] === 'deepsearch') || (parts[0] === 'kb' && parts[1] === 'stock') || (parts[0] === 'session' && parts[1] === 'deepsearch')) && parts.length >= 3) entityKey = String(parts[2] || '').toUpperCase();
+    else if ((parts[0] === 'kb' && (parts[1] === 'theme' || parts[1] === 'macro')) && parts.length >= 3) entityKey = parts[2];
+  }
+
+  return { collection, layer, collectionKind, entityScope, entityKey };
+};
+
+const resolveLayer = (value: Record<string, any> | null | undefined): string => deriveCollectionDescriptor(value).layer;
+const resolveCollectionKind = (value: Record<string, any> | null | undefined): string => deriveCollectionDescriptor(value).collectionKind;
+const resolveEntityLabel = (value: Record<string, any> | null | undefined): string => {
+  const { entityScope, entityKey } = deriveCollectionDescriptor(value);
+  if (entityScope && entityKey) return `${entityScope}:${entityKey}`;
+  return entityKey || entityScope;
+};
+const resolveSearchCollections = (value: Record<string, any> | null | undefined): string[] => {
+  const metadata = extractInspectorMetadata(value);
+  const direct = value?.search_collections;
+  const nested = metadata.search_collections;
+  const payload = Array.isArray(direct) ? direct : Array.isArray(nested) ? nested : [];
+  return payload.map((item) => String(item || '').trim()).filter(Boolean);
+};
+
+const resolveMatchedCollections = (value: Record<string, any> | null | undefined): string[] => {
+  const metadata = extractInspectorMetadata(value);
+  const direct = Array.isArray(value?.matched_collections) ? value?.matched_collections : [];
+  const nested = Array.isArray(metadata.matched_collections) ? metadata.matched_collections : [];
+  return mergeUniqueStrings([...direct, ...nested], 12);
+};
+
+
+const normalizeInspectorLayer = (value: unknown): string => {
+  const layer = String(value || '').trim().toLowerCase();
+  if (!layer) return 'unknown';
+  if (layer === 'memory' || layer === 'mem') return 'memory';
+  if (layer === 'ws' || layer === 'working_set' || layer === 'working-set') return 'ws';
+  if (layer === 'kb' || layer === 'knowledge_base' || layer === 'knowledge-base') return 'kb';
+  return layer;
+};
+
+const layerSortRank = (layer: string): number => {
+  const normalized = normalizeInspectorLayer(layer);
+  if (normalized === 'memory') return 0;
+  if (normalized === 'ws') return 1;
+  if (normalized === 'kb') return 2;
+  return 3;
+};
+
+const mergeUniqueStrings = (values: unknown[], limit = 6): string[] => {
+  const result: string[] = [];
+  values.forEach((item) => {
+    const normalized = String(item || '').trim();
+    if (!normalized || result.includes(normalized) || result.length >= limit) return;
+    result.push(normalized);
+  });
+  return result;
+};
+
+const finalizeLayerHitSummaries = (items: LayerHitSummary[]): LayerHitSummary[] => {
+  const normalized = items.filter((item) => item.count > 0 || item.collections.length > 0 || item.sampleTitles.length > 0);
+  const totalCount = normalized.reduce((sum, item) => sum + Math.max(0, Number(item.count || 0)), 0);
+  return normalized
+    .map((item) => ({
+      ...item,
+      layer: normalizeInspectorLayer(item.layer),
+      share: totalCount > 0 ? Math.max(0, Number(item.count || 0)) / totalCount : Math.max(0, Number(item.share || 0)),
+    }))
+    .sort((left, right) => {
+      const rankDiff = layerSortRank(left.layer) - layerSortRank(right.layer);
+      if (rankDiff !== 0) return rankDiff;
+      return Number(right.count || 0) - Number(left.count || 0);
+    });
+};
+
+const normalizeLayerHitSummary = (value: Record<string, any> | null | undefined): LayerHitSummary => ({
+  layer: normalizeInspectorLayer(value?.layer),
+  count: Math.max(0, Number(value?.count || 0)),
+  share: Math.max(0, Number(value?.share || 0)),
+  collections: mergeUniqueStrings(Array.isArray(value?.collections) ? value?.collections : []),
+  sampleTitles: mergeUniqueStrings(Array.isArray(value?.sample_titles) ? value?.sample_titles : [], 4),
+});
+
+const buildLayerHitSummaryFromHits = (hits: Array<Record<string, any>>): LayerHitSummary[] => {
+  const buckets = new Map<string, LayerHitSummary>();
+
+  hits.forEach((hit) => {
+    const metadata = extractInspectorMetadata(hit);
+    const normalizedLayer = normalizeInspectorLayer(resolveLayer(hit));
+    const primaryCollection = String(hit.collection || metadata.collection || resolveMatchedCollections(hit)[0] || '').trim();
+    const title = String(hit.title || metadata.title || hit.source_id || hit.chunk_id || '').trim();
+    const bucket = buckets.get(normalizedLayer) ?? {
+      layer: normalizedLayer,
+      count: 0,
+      share: 0,
+      collections: [],
+      sampleTitles: [],
+    };
+
+    bucket.count += 1;
+    bucket.collections = mergeUniqueStrings([...bucket.collections, primaryCollection], 12);
+    if (title) {
+      bucket.sampleTitles = mergeUniqueStrings([...bucket.sampleTitles, title], 4);
+    }
+    buckets.set(normalizedLayer, bucket);
+  });
+
+  return finalizeLayerHitSummaries(Array.from(buckets.values()));
+};
+
+const LayerBadge: React.FC<{ value?: string | null }> = ({ value }) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  const palette = normalized === 'kb'
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+    : normalized === 'memory'
+      ? 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+      : 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+  return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${palette}`}>{normalized}</span>;
 };
 
 const getDbBrowserRowKey = (table: DbBrowserTableName, row: Record<string, any>, index: number): string => {
@@ -192,11 +432,13 @@ const ExpandableText: React.FC<{
 export const RagInspectorPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkedRunId = String(searchParams.get('run_id') || '').trim();
+  const deepLinkedCollection = String(searchParams.get('collection') || '').trim();
+  const deepLinkedLayer = String(searchParams.get('layer') || '').trim();
   const [status, setStatus] = useState<RagStatusResponse['data'] | null>(null);
   const [runs, setRuns] = useState<RagRun[]>([]);
   const [collections, setCollections] = useState<Array<Record<string, any>>>([]);
   const [selectedRunId, setSelectedRunId] = useState<string>(() => deepLinkedRunId);
-  const [bundle, setBundle] = useState<RagRunBundle>({ summary: null, events: [], documents: [], chunks: [], hits: [] });
+  const [bundle, setBundle] = useState<RagRunBundle>(EMPTY_RUN_BUNDLE);
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string>('');
@@ -211,14 +453,37 @@ export const RagInspectorPage: React.FC = () => {
   const [dbBrowserCollection, setDbBrowserCollection] = useState('');
   const [dbBrowserRunId, setDbBrowserRunId] = useState('');
   const [dbBrowserSourceDocId, setDbBrowserSourceDocId] = useState('');
+  const [dbBrowserLayer, setDbBrowserLayer] = useState('');
   const [dbBrowserLimit, setDbBrowserLimit] = useState(25);
   const [dbBrowserOffset, setDbBrowserOffset] = useState(0);
   const [selectedDbRowKey, setSelectedDbRowKey] = useState('');
   const detailSectionRef = useRef<HTMLDivElement | null>(null);
+  const detailRequestSeqRef = useRef(0);
 
   const syncSelectedRunId = useCallback((runId: string) => {
     setSelectedRunId(String(runId || '').trim());
   }, []);
+
+  const handleRunSelect = useCallback((runId: string) => {
+    const normalizedRunId = String(runId || '').trim();
+    const currentRunId = String(selectedRunId || '').trim();
+    const isSameRun = normalizedRunId === currentRunId;
+
+    if (!isSameRun) {
+      syncSelectedRunId(normalizedRunId);
+      setBundle(EMPTY_RUN_BUNDLE);
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (normalizedRunId) {
+      nextSearchParams.set('run_id', normalizedRunId);
+    } else {
+      nextSearchParams.delete('run_id');
+    }
+    nextSearchParams.delete('collection');
+    nextSearchParams.delete('layer');
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, selectedRunId, setSearchParams, syncSelectedRunId]);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -254,35 +519,55 @@ export const RagInspectorPage: React.FC = () => {
   }, [fallbackOnly, queryFilter]);
 
   const loadRunBundle = useCallback(async (runId: string) => {
-    if (!runId) {
-      setBundle({ summary: null, events: [], documents: [], chunks: [], hits: [] });
+    const normalizedRunId = String(runId || '').trim();
+    const requestSeq = detailRequestSeqRef.current + 1;
+    detailRequestSeqRef.current = requestSeq;
+
+    if (!normalizedRunId) {
+      setBundle(EMPTY_RUN_BUNDLE);
+      setLoadingDetail(false);
       return;
     }
+
     setLoadingDetail(true);
     setError('');
+    setBundle(EMPTY_RUN_BUNDLE);
     try {
       const [summaryRes, eventsRes, docsRes, chunksRes, hitsRes] = await Promise.all([
-        apiClient.diagnosticsRagRunDetail(runId),
-        apiClient.diagnosticsRagRunEvents(runId),
-        apiClient.diagnosticsRagRunDocuments(runId),
-        apiClient.diagnosticsRagRunChunks(runId),
-        apiClient.diagnosticsRagRunHits(runId),
+        apiClient.diagnosticsRagRunDetail(normalizedRunId),
+        apiClient.diagnosticsRagRunEvents(normalizedRunId),
+        apiClient.diagnosticsRagRunDocuments(normalizedRunId),
+        apiClient.diagnosticsRagRunChunks(normalizedRunId),
+        apiClient.diagnosticsRagRunHits(normalizedRunId),
       ]);
+
+      if (detailRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+
       setBundle({
-        summary: summaryRes?.data ?? null,
-        events: extractItems(eventsRes?.data),
-        documents: extractItems(docsRes?.data),
-        chunks: extractItems(chunksRes?.data),
-        hits: extractItems(hitsRes?.data),
+        runId: normalizedRunId,
+        summary: extractRecord(summaryRes),
+        events: extractItems(unwrapApiPayload(eventsRes)),
+        documents: extractItems(unwrapApiPayload(docsRes)),
+        chunks: extractItems(unwrapApiPayload(chunksRes)),
+        hits: extractItems(unwrapApiPayload(hitsRes)),
       });
     } catch (fetchError) {
+      if (detailRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      setBundle(EMPTY_RUN_BUNDLE);
       setError(fetchError instanceof Error ? fetchError.message : '加载查询详情失败');
     } finally {
-      setLoadingDetail(false);
+      if (detailRequestSeqRef.current === requestSeq) {
+        setLoadingDetail(false);
+      }
     }
   }, []);
 
-  const loadDbBrowser = useCallback(async (next?: Partial<{ table: DbBrowserTableName; limit: number; offset: number; q: string; collection: string; run_id: string; source_doc_id: string }>) => {
+
+  const loadDbBrowser = useCallback(async (next?: Partial<{ table: DbBrowserTableName; limit: number; offset: number; q: string; collection: string; run_id: string; source_doc_id: string; layer: string }>) => {
     const nextTable = next?.table ?? dbBrowserTable;
     const nextLimit = next?.limit ?? dbBrowserLimit;
     const nextOffset = next?.offset ?? dbBrowserOffset;
@@ -290,6 +575,7 @@ export const RagInspectorPage: React.FC = () => {
     const nextCollection = next?.collection ?? dbBrowserCollection;
     const nextRunId = next?.run_id ?? dbBrowserRunId;
     const nextSourceDocId = next?.source_doc_id ?? dbBrowserSourceDocId;
+    const nextLayer = next?.layer ?? dbBrowserLayer;
 
     setDbBrowserLoading(true);
     setDbBrowserError('');
@@ -301,6 +587,7 @@ export const RagInspectorPage: React.FC = () => {
         collection: nextCollection,
         run_id: nextRunId,
         source_doc_id: nextSourceDocId,
+        layer: nextLayer,
       });
       const payload = (response?.data ?? {}) as Record<string, any>;
       const items = extractItems(payload);
@@ -327,10 +614,29 @@ export const RagInspectorPage: React.FC = () => {
     } finally {
       setDbBrowserLoading(false);
     }
-  }, [dbBrowserCollection, dbBrowserLimit, dbBrowserOffset, dbBrowserQ, dbBrowserRunId, dbBrowserSourceDocId, dbBrowserTable]);
+  }, [dbBrowserCollection, dbBrowserLayer, dbBrowserLimit, dbBrowserOffset, dbBrowserQ, dbBrowserRunId, dbBrowserSourceDocId, dbBrowserTable]);
 
   const handleCollectionSelect = useCallback((collection: Record<string, any>) => {
+    const collectionName = String(collection.collection || '').trim();
+    const layerName = resolveLayer(collection);
     const runId = String(collection.synthetic_backfill_run_id || '').trim();
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (runId) {
+      nextSearchParams.set('run_id', runId);
+    } else {
+      nextSearchParams.delete('run_id');
+    }
+    if (collectionName) {
+      nextSearchParams.set('collection', collectionName);
+    } else {
+      nextSearchParams.delete('collection');
+    }
+    if (layerName) {
+      nextSearchParams.set('layer', layerName);
+    } else {
+      nextSearchParams.delete('layer');
+    }
+    setSearchParams(nextSearchParams, { replace: true });
     if (!runId) {
       return;
     }
@@ -341,7 +647,7 @@ export const RagInspectorPage: React.FC = () => {
     requestAnimationFrame(() => {
       detailSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-  }, [loadRunBundle, selectedRunId, syncSelectedRunId]);
+  }, [loadRunBundle, searchParams, selectedRunId, setSearchParams, syncSelectedRunId]);
 
   useEffect(() => {
     if (!deepLinkedRunId || deepLinkedRunId === String(selectedRunId || '').trim()) {
@@ -353,15 +659,11 @@ export const RagInspectorPage: React.FC = () => {
   useEffect(() => {
     const currentRunId = String(searchParams.get('run_id') || '').trim();
     const nextRunId = String(selectedRunId || '').trim();
-    if (currentRunId === nextRunId) {
+    if (currentRunId || !nextRunId) {
       return;
     }
     const nextSearchParams = new URLSearchParams(searchParams);
-    if (nextRunId) {
-      nextSearchParams.set('run_id', nextRunId);
-    } else {
-      nextSearchParams.delete('run_id');
-    }
+    nextSearchParams.set('run_id', nextRunId);
     setSearchParams(nextSearchParams, { replace: true });
   }, [searchParams, selectedRunId, setSearchParams]);
 
@@ -370,7 +672,7 @@ export const RagInspectorPage: React.FC = () => {
   }, [loadOverview]);
 
   useEffect(() => {
-    void loadDbBrowser({ table: 'rag_query_runs', limit: 25, offset: 0, q: '', collection: '', run_id: '', source_doc_id: '' });
+    void loadDbBrowser({ table: 'rag_query_runs', limit: 25, offset: 0, q: '', collection: '', run_id: '', source_doc_id: '', layer: '' });
   }, []);
 
   useEffect(() => {
@@ -383,15 +685,52 @@ export const RagInspectorPage: React.FC = () => {
     }
   }, [loadRunBundle, runs, selectedRunId]);
 
+  const selectedRunListItem = useMemo(
+    () => runs.find((item) => String(item.id) === String(selectedRunId)) ?? null,
+    [runs, selectedRunId],
+  );
+
+  const activeBundle = useMemo(
+    () => (String(bundle.runId || '').trim() === String(selectedRunId || '').trim() ? bundle : EMPTY_RUN_BUNDLE),
+    [bundle, selectedRunId],
+  );
+
   const selectedRun = useMemo(
-    () => runs.find((item) => String(item.id) === String(selectedRunId)) ?? bundle.summary,
-    [bundle.summary, runs, selectedRunId],
+    () => activeBundle.summary ?? selectedRunListItem,
+    [activeBundle.summary, selectedRunListItem],
   );
 
   const selectedCollectionName = useMemo(
-    () => String(selectedRun?.collection || '').trim(),
-    [selectedRun],
+    () => String(deepLinkedCollection || selectedRun?.collection || '').trim(),
+    [deepLinkedCollection, selectedRun],
   );
+
+  const selectedCollectionLayer = useMemo(
+    () => String(deepLinkedLayer || resolveLayer(selectedRun) || '').trim(),
+    [deepLinkedLayer, selectedRun],
+  );
+
+  const selectedRunMetadata = useMemo(() => extractInspectorMetadata(selectedRun), [selectedRun]);
+
+  const liveLayerHitBreakdown = useMemo(() => buildLayerHitSummaryFromHits(activeBundle.hits), [activeBundle.hits]);
+
+  const layerHitBreakdown = useMemo(() => {
+    if (liveLayerHitBreakdown.length > 0) {
+      return liveLayerHitBreakdown;
+    }
+    const metadataItems = Array.isArray(selectedRunMetadata.layer_hit_breakdown)
+      ? selectedRunMetadata.layer_hit_breakdown.filter((item): item is Record<string, any> => Boolean(item) && typeof item === 'object')
+      : [];
+    return finalizeLayerHitSummaries(metadataItems.map((item) => normalizeLayerHitSummary(item)));
+  }, [liveLayerHitBreakdown, selectedRunMetadata]);
+
+  const layerHitBreakdownSource = useMemo(() => (
+    liveLayerHitBreakdown.length > 0
+      ? 'live hits'
+      : Array.isArray(selectedRunMetadata.layer_hit_breakdown) && selectedRunMetadata.layer_hit_breakdown.length > 0
+        ? 'run metadata'
+        : 'live hits'
+  ), [liveLayerHitBreakdown.length, selectedRunMetadata]);
 
   const dbBrowserVisibleColumns = useMemo(() => {
     const currentColumns = dbBrowserPayload.columns.filter(Boolean);
@@ -451,11 +790,13 @@ export const RagInspectorPage: React.FC = () => {
   const handleDbBrowserUseSelectedContext = useCallback(() => {
     const nextCollection = String(selectedCollectionName || '').trim();
     const nextRunId = String(selectedRunId || '').trim();
+    const nextLayer = String(selectedCollectionLayer || resolveLayer(selectedRun) || '').trim();
     setDbBrowserCollection(nextCollection);
     setDbBrowserRunId(nextRunId);
+    setDbBrowserLayer(nextLayer);
     setDbBrowserOffset(0);
-    void loadDbBrowser({ collection: nextCollection, run_id: nextRunId, offset: 0 });
-  }, [loadDbBrowser, selectedCollectionName, selectedRunId]);
+    void loadDbBrowser({ collection: nextCollection, run_id: nextRunId, layer: nextLayer, offset: 0 });
+  }, [loadDbBrowser, selectedCollectionLayer, selectedCollectionName, selectedRun, selectedRunId]);
 
   const currentDeepLink = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -466,8 +807,18 @@ export const RagInspectorPage: React.FC = () => {
     } else {
       nextUrl.searchParams.delete('run_id');
     }
+    if (selectedCollectionName) {
+      nextUrl.searchParams.set('collection', selectedCollectionName);
+    } else {
+      nextUrl.searchParams.delete('collection');
+    }
+    if (selectedCollectionLayer) {
+      nextUrl.searchParams.set('layer', selectedCollectionLayer);
+    } else {
+      nextUrl.searchParams.delete('layer');
+    }
     return nextUrl.toString();
-  }, [searchParams, selectedRunId]);
+  }, [selectedCollectionLayer, selectedCollectionName, selectedRunId]);
 
   const handleCopyDeepLink = useCallback(async () => {
     const copied = await copyTextToClipboard(currentDeepLink);
@@ -567,7 +918,7 @@ export const RagInspectorPage: React.FC = () => {
                   <button
                     key={runId}
                     type="button"
-                    onClick={() => syncSelectedRunId(runId)}
+                    onClick={() => handleRunSelect(runId)}
                     className={[
                       'w-full rounded-xl border px-3 py-3 text-left transition-colors',
                       active ? 'border-fin-primary bg-fin-primary/10' : 'border-fin-border bg-fin-bg hover:bg-fin-bg-secondary',
@@ -576,6 +927,12 @@ export const RagInspectorPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <div className="line-clamp-2 text-sm font-medium text-fin-text">{String(run.query_text_redacted || run.query_text || '未命名查询')}</div>
                       <span className="rounded-full bg-fin-bg-secondary px-2 py-0.5 text-[11px] text-fin-muted">{String(run.backend_actual || 'unknown')}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <LayerBadge value={resolveLayer(run)} />
+                      {resolveCollectionKind(run) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveCollectionKind(run)}</span> : null}
+                      {resolveEntityLabel(run) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveEntityLabel(run)}</span> : null}
+                      {String(run.collection || '').trim() ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{String(run.collection).trim()}</span> : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-fin-muted">
                       <span>状态：{String(run.status || 'unknown')}</span>
@@ -597,8 +954,12 @@ export const RagInspectorPage: React.FC = () => {
             <SectionCard title="查询总览" extra={loadingDetail ? <span className="text-xs text-fin-muted">加载中…</span> : null}>
               {selectedRun ? (
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <div><div className="text-xs text-fin-muted">Query</div><div className="mt-1 text-sm text-fin-text">{String(selectedRun.query_text_redacted || selectedRun.query_text || '—')}</div></div>
-                  <div><div className="text-xs text-fin-muted">Collection</div><div className="mt-1 text-sm text-fin-text">{String(selectedRun.collection || '—')}</div></div>
+                  <div className="md:col-span-2 xl:col-span-3"><div className="text-xs text-fin-muted">Query</div><div className="mt-1 text-sm text-fin-text">{String(selectedRun.query_text_redacted || selectedRun.query_text || '—')}</div></div>
+                  <div><div className="text-xs text-fin-muted">Search Path</div><div className="mt-1 text-sm text-fin-text break-words">{(() => { const path = resolveSearchCollections(selectedRun); return path.length > 0 ? path.join(' → ') : '—'; })()}</div></div>
+                  <div><div className="text-xs text-fin-muted">Collection</div><div className="mt-1 break-all font-mono text-sm text-fin-text">{String(selectedRun.collection || '—')}</div></div>
+                  <div><div className="text-xs text-fin-muted">Layer</div><div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-fin-text"><LayerBadge value={resolveLayer(selectedRun)} />{resolveCollectionKind(selectedRun) ? <span>{resolveCollectionKind(selectedRun)}</span> : null}</div></div>
+                  <div><div className="text-xs text-fin-muted">Entity</div><div className="mt-1 text-sm text-fin-text">{resolveEntityLabel(selectedRun) || '—'}</div></div>
+                  <div><div className="text-xs text-fin-muted">Promoted Chunks</div><div className="mt-1 text-sm text-fin-text">{Number(selectedRun.promoted_chunk_count ?? extractInspectorMetadata(selectedRun).promoted_chunk_count ?? 0)}</div></div>
                   <div><div className="text-xs text-fin-muted">Router</div><div className="mt-1 text-sm text-fin-text">{String(selectedRun.router_decision || '—')}</div></div>
                   <div><div className="text-xs text-fin-muted">Backend</div><div className="mt-1 text-sm text-fin-text">{String(selectedRun.backend_actual || '—')}</div></div>
                   <div><div className="text-xs text-fin-muted">开始时间</div><div className="mt-1 text-sm text-fin-text">{formatDateTime(selectedRun.started_at)}</div></div>
@@ -609,7 +970,7 @@ export const RagInspectorPage: React.FC = () => {
 
             <SectionCard title="事件时间线（含 payload）">
               <div className="space-y-2">
-                {bundle.events.length === 0 ? <div className="text-sm text-fin-muted">暂无事件</div> : bundle.events.map((event) => (
+                {activeBundle.events.length === 0 ? <div className="text-sm text-fin-muted">暂无事件</div> : activeBundle.events.map((event) => (
                   <div key={String(event.id)} className="rounded-lg border border-fin-border bg-fin-bg px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-sm font-medium text-fin-text">{String(event.event_type || event.stage || 'event')}</div>
@@ -622,11 +983,44 @@ export const RagInspectorPage: React.FC = () => {
               </div>
             </SectionCard>
 
+            <SectionCard
+              title={'三层命中占比'}
+              extra={<span className="text-xs text-fin-muted">{layerHitBreakdownSource}</span>}
+            >
+              {layerHitBreakdown.length === 0 ? (
+                <div className="text-sm text-fin-muted">{'暂无三层命中统计'}</div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {layerHitBreakdown.map((item) => (
+                    <div key={item.layer} className="rounded-lg border border-fin-border bg-fin-bg px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <LayerBadge value={item.layer} />
+                          <span className="text-sm font-medium text-fin-text">{item.layer}</span>
+                        </div>
+                        <div className="text-[11px] text-fin-muted">{item.count} / {formatPercent(item.share)}</div>
+                      </div>
+                      <div className="mt-3 space-y-2 text-xs text-fin-muted">
+                        <div>
+                          <span className="font-medium text-fin-text">{'来源集合：'}</span>
+                          <span className="ml-1 break-words">{item.collections.length > 0 ? item.collections.join(', ') : 'none'}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-fin-text">{'样例命中：'}</span>
+                          <span className="ml-1 break-words">{item.sampleTitles.length > 0 ? item.sampleTitles.join(', ') : 'none'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
             <SectionCard title="命中与重排">
               <div className="space-y-3">
-                {bundle.hits.length === 0 ? (
+                {activeBundle.hits.length === 0 ? (
                   <div className="text-sm text-fin-muted">暂无命中结果</div>
-                ) : bundle.hits.map((hit) => (
+                ) : activeBundle.hits.map((hit) => (
                   <div key={String(hit.id)} className="rounded-lg border border-fin-border bg-fin-bg px-3 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm font-medium text-fin-text">
@@ -641,6 +1035,11 @@ export const RagInspectorPage: React.FC = () => {
                     </div>
                     <div className="mt-1 text-[11px] text-fin-muted">
                       {String(hit.title || hit.source_id || 'unknown')} · {String(hit.collection || '—')}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <LayerBadge value={resolveLayer(hit)} />
+                      {resolveCollectionKind(hit) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveCollectionKind(hit)}</span> : null}
+                      {resolveEntityLabel(hit) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveEntityLabel(hit)}</span> : null}
                     </div>
                     {hit.url ? (
                       <a href={String(hit.url)} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-fin-primary underline-offset-2 hover:underline">
@@ -657,13 +1056,18 @@ export const RagInspectorPage: React.FC = () => {
             <section className="grid gap-6 xl:grid-cols-2">
               <SectionCard title="原始文档（含原文）">
                 <div className="space-y-3">
-                  {bundle.documents.length === 0 ? <div className="text-sm text-fin-muted">暂无原始文档</div> : bundle.documents.map((doc) => (
+                  {activeBundle.documents.length === 0 ? <div className="text-sm text-fin-muted">暂无原始文档</div> : activeBundle.documents.map((doc) => (
                     <div key={String(doc.id)} className="rounded-lg border border-fin-border bg-fin-bg px-3 py-3">
                       <div className="text-sm font-medium text-fin-text">{String(doc.title || doc.source_id || 'untitled')}</div>
                       <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-fin-muted">
                         <span>{String(doc.source_type || 'unknown')}</span>
                         <span>创建：{formatDateTime(doc.created_at)}</span>
                         <span>长度：{String(doc.content_length ?? '—')}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <LayerBadge value={resolveLayer(doc)} />
+                        {resolveCollectionKind(doc) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveCollectionKind(doc)}</span> : null}
+                        {resolveEntityLabel(doc) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveEntityLabel(doc)}</span> : null}
                       </div>
                       {doc.url ? (
                         <a href={String(doc.url)} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-fin-primary underline-offset-2 hover:underline">
@@ -680,7 +1084,7 @@ export const RagInspectorPage: React.FC = () => {
 
               <SectionCard title="切片明细（含完整 chunk）">
                 <div className="space-y-3">
-                  {bundle.chunks.length === 0 ? <div className="text-sm text-fin-muted">暂无切片明细</div> : bundle.chunks.map((chunk) => (
+                  {activeBundle.chunks.length === 0 ? <div className="text-sm text-fin-muted">暂无切片明细</div> : activeBundle.chunks.map((chunk) => (
                     <div key={String(chunk.id)} className="rounded-lg border border-fin-border bg-fin-bg px-3 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-medium text-fin-text">chunk #{String(chunk.chunk_index ?? '0')}</div>
@@ -695,6 +1099,11 @@ export const RagInspectorPage: React.FC = () => {
                         <span>char：{String(chunk.char_start ?? '—')} - {String(chunk.char_end ?? '—')}</span>
                       </div>
                       <div className="mt-1 text-[11px] text-fin-muted">来源：{String(chunk.title || chunk.source_doc_id || '—')}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <LayerBadge value={resolveLayer(chunk)} />
+                        {resolveCollectionKind(chunk) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveCollectionKind(chunk)}</span> : null}
+                        {resolveEntityLabel(chunk) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveEntityLabel(chunk)}</span> : null}
+                      </div>
                       <ExpandableText label="chunk 全文" value={String(chunk.chunk_text || '')} previewLength={360} />
                       <ExpandableText label="chunk metadata" value={jsonPreview(chunk.metadata_json)} previewLength={260} mono />
                     </div>
@@ -715,7 +1124,7 @@ export const RagInspectorPage: React.FC = () => {
                   const syntheticBackfillRunId = String(collection.synthetic_backfill_run_id || '').trim();
                   const syntheticBackfillStartedAt = collection.synthetic_backfill_started_at ?? null;
                   const clickable = Boolean(syntheticBackfillRunId);
-                  const active = Boolean(collectionName) && collectionName === selectedCollectionName;
+                  const active = Boolean(collectionName) && collectionName === selectedCollectionName && (!selectedCollectionLayer || resolveLayer(collection) === selectedCollectionLayer);
                   const cardClassName = [
                     'w-full rounded-lg border px-3 py-3 text-left transition-colors',
                     active
@@ -728,7 +1137,14 @@ export const RagInspectorPage: React.FC = () => {
                   const cardBody = (
                     <>
                       <div className="flex items-start justify-between gap-2">
-                        <div className="text-sm font-medium text-fin-text">{collectionName || 'unknown'}</div>
+                        <div>
+                          <div className="text-sm font-medium text-fin-text">{collectionName || 'unknown'}</div>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <LayerBadge value={resolveLayer(collection)} />
+                            {resolveCollectionKind(collection) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveCollectionKind(collection)}</span> : null}
+                            {resolveEntityLabel(collection) ? <span className="rounded-full border border-fin-border px-2 py-0.5 text-[10px] text-fin-muted">{resolveEntityLabel(collection)}</span> : null}
+                          </div>
+                        </div>
                         {active ? (
                           <span className="rounded-full bg-fin-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fin-primary">
                             selected
@@ -738,7 +1154,12 @@ export const RagInspectorPage: React.FC = () => {
                       <div className="mt-1 text-[11px] text-fin-muted">run: {String(runCount)} | doc: {String(documentCount)} | chunk: {String(chunkCount)}</div>
                       <div className="mt-1 text-[11px] text-fin-muted">latest query: {formatDateTime(latestRunAt)}</div>
                       <div className="mt-1 text-[11px] text-fin-muted">latest doc: {formatDateTime(latestDocumentAt)}</div>
-                      <div className={[                        'mt-1 text-[11px]',                        clickable ? 'text-fin-primary' : 'text-fin-muted',                      ].join(' ')}>
+                      <div
+                        className={[
+                          'mt-1 text-[11px]',
+                          clickable ? 'text-fin-primary' : 'text-fin-muted',
+                        ].join(' ')}
+                      >
                         {clickable
                           ? `synthetic backfill: ${formatDateTime(syntheticBackfillStartedAt)} | click to inspect`
                           : 'no synthetic backfill run'}
@@ -791,7 +1212,7 @@ export const RagInspectorPage: React.FC = () => {
                   })}
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
                   <input
                     value={dbBrowserQ}
                     onChange={(event) => setDbBrowserQ(event.target.value)}
@@ -814,6 +1235,12 @@ export const RagInspectorPage: React.FC = () => {
                     value={dbBrowserSourceDocId}
                     onChange={(event) => setDbBrowserSourceDocId(event.target.value)}
                     placeholder="source_doc_id"
+                    className="min-w-0 rounded-md border border-fin-border bg-fin-bg px-3 py-2 text-sm text-fin-text outline-none"
+                  />
+                  <input
+                    value={dbBrowserLayer}
+                    onChange={(event) => setDbBrowserLayer(event.target.value)}
+                    placeholder="layer: ws / kb / memory"
                     className="min-w-0 rounded-md border border-fin-border bg-fin-bg px-3 py-2 text-sm text-fin-text outline-none"
                   />
                   <label className="flex items-center gap-2 rounded-md border border-fin-border bg-fin-bg px-3 py-2 text-xs text-fin-muted">
