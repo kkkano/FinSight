@@ -415,6 +415,16 @@ export async function parseSSEStream(
               runId: typeof data.run_id === 'string' ? data.run_id : undefined,
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
+          } else if (data.type === 'trace') {
+            onThinking?.({
+              stage: data.stage || 'trace',
+              message: data.summary || data.title || data.message || 'trace',
+              result: data,
+              timestamp: data.timestamp || new Date().toISOString(),
+              eventType: 'trace',
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
+            });
           } else if (data.type === 'thinking') {
             onThinking?.({
               stage: data.stage || 'any',

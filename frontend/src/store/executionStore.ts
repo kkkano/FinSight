@@ -535,6 +535,16 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     });
   }
 
+  if (eventType === 'trace') {
+    const title = asText(result.title);
+    const summary = asText(result.summary);
+    patch.currentStep = message || summary || title || run.currentStep;
+    if (stage === 'understanding' || result.stage === 'understanding') {
+      patch.progress = Math.max(run.progress, 8);
+    }
+    return mergePatchAndEstimateEta(run, patch);
+  }
+
   if (eventType === 'supervisor_start' || stage === 'supervisor_start') {
     const agentNames: string[] = Array.isArray(result.agents) ? result.agents.map((name) => String(name)) : [];
     const newStatuses: Record<string, AgentRunInfo> = {};

@@ -138,6 +138,7 @@ const mapStageToSource = (stage: string): AgentLogSource => {
     llm_call: 'supervisor',
     error: 'system',
   };
+  if (stage === 'understanding' || stage.startsWith('trace_')) return 'router';
   if (stage.startsWith('langgraph_')) return 'supervisor';
   if (stage.startsWith('executor_step')) return 'supervisor';
   if (stage.startsWith('llm_')) return 'supervisor';
@@ -157,6 +158,7 @@ const mapStageToSource = (stage: string): AgentLogSource => {
 const estimateProgress = (stage: string, current: number): number => {
   const langgraphNodeProgress: Record<string, number> = {
     normalize_ui_context: 5,
+    understand_request: 18,
     resolve_subject: 12,
     clarify: 18,
     parse_operation: 25,
@@ -178,6 +180,7 @@ const estimateProgress = (stage: string, current: number): number => {
   }
 
   const staticProgress: Record<string, number> = {
+    understanding: 18,
     classifying: 8,
     classified: 15,
     reference_resolution: 20,

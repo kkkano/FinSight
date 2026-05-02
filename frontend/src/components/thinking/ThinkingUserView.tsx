@@ -12,13 +12,13 @@ const PHASES = [
     // langgraph node prefixes
     nodes: [
       'build_initial_state', 'reset_turn', 'trim', 'summarize',
-      'normalize', 'decide_output', 'chat_respond',
+      'normalize', 'decide_output', 'understand_request', 'chat_respond',
       'resolve_subject', 'clarify', 'parse_operation',
     ],
     // supervisor / streaming stage names
-    altStages: ['classifying', 'classified', 'intent_classification'],
-    doneMarker: 'parse_operation',
-    altDoneStages: ['classified'],
+    altStages: ['understanding', 'classifying', 'classified', 'intent_classification'],
+    doneMarker: 'understand_request',
+    altDoneStages: ['understanding', 'classified'],
   },
   {
     id: 'plan',
@@ -102,6 +102,10 @@ function getStepMessage(step: ThinkingStep): string {
   if (step.result?.userMessage && typeof step.result.userMessage === 'string') {
     return step.result.userMessage;
   }
+  // User-visible trace events should keep the backend's concrete summary.
+  if ((step.eventType === 'trace' || step.result?.type === 'trace') && step.message) {
+    return step.message;
+  }
   // Frontend mapping
   const mapped = resolveUserMessage(step.stage);
   if (mapped) return mapped;
@@ -176,7 +180,7 @@ function computePhases(steps: ThinkingStep[]): ComputedPhase[] {
           stage: s.stage,
           message: getStepMessage(s),
           timestamp: s.timestamp,
-          isDone: s.stage.endsWith('_done') || s.stage === 'classified' || s.stage === 'complete',
+          isDone: s.stage.endsWith('_done') || s.stage === 'understanding' || s.stage === 'classified' || s.stage === 'complete',
           agentName: typeof agentName === 'string' ? agentName : undefined,
         });
       }
@@ -277,6 +281,13 @@ export const ThinkingUserView: React.FC<ThinkingUserViewProps> = ({ thinking }) 
   // Last meaningful user-friendly message
   const statusText = useMemo(() => {
     for (let i = thinking.length - 1; i >= 0; i--) {
+      const step = thinking[i];
+      if (step.result?.userMessage && typeof step.result.userMessage === 'string') {
+        return step.result.userMessage;
+      }
+      if ((step.eventType === 'trace' || step.result?.type === 'trace') && step.message) {
+        return step.message;
+      }
       const msg = resolveUserMessage(thinking[i].stage);
       if (msg) return msg;
     }

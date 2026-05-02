@@ -197,4 +197,23 @@ describe('pipelineReducer', () => {
     expect(patch.currentStep).toBe('custom status message');
     expect(patch.progress === undefined || patch.progress >= 42).toBe(true);
   });
+
+  it('maps user-visible trace events into current step without fake progress', () => {
+    const run = buildRun({ progress: 4 });
+    const step = {
+      eventType: 'trace',
+      stage: 'understanding',
+      message: 'GOOGL:price；阻塞项:1',
+      timestamp: '2026-02-19T00:00:04.000Z',
+      result: {
+        type: 'trace',
+        stage: 'understanding',
+        summary: 'GOOGL:price；阻塞项:1',
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('trace')]);
+    expect(patch.currentStep).toBe('GOOGL:price；阻塞项:1');
+    expect(patch.progress).toBe(8);
+  });
 });

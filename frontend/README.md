@@ -42,7 +42,10 @@ npm install
 npm run dev
 npm run build
 npx vitest run src
+npx playwright test e2e/request-understanding-chat.spec.ts
 ```
+
+Playwright starts Vite on `127.0.0.1:4273` from `playwright.config.ts`.
 
 For frontend behavior changes, verify with Playwright against the running app. Chat UX changes must cover:
 
