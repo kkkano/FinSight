@@ -177,6 +177,18 @@ function asFiniteNumber(value: unknown): number | undefined {
   return value;
 }
 
+function asText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  return text || undefined;
+}
+
+function clampPercent(value: unknown): number | undefined {
+  const number = asFiniteNumber(value);
+  if (number === undefined) return undefined;
+  return Math.min(100, Math.max(0, number));
+}
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -432,9 +444,28 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
 
   if (eventType === 'plan_ready' || stage === 'plan_ready') {
     const planSteps = asPlanSteps(result.plan_steps);
+    const selectedAgents = asStringArray(result.selected_agents ?? result.agents);
+    const agentNames = selectedAgents.length > 0
+      ? selectedAgents
+      : planSteps
+        .filter((item) => item.kind === 'agent')
+        .map((item) => item.name);
+    const statuses = { ...run.agentStatuses };
+    for (const agentName of agentNames) {
+      const planStep = planSteps.find((item) => item.name === agentName);
+      const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
+      statuses[agentName] = {
+        ...existing,
+        name: existing.name || agentName,
+        status: existing.status ?? 'pending',
+        stepId: existing.stepId ?? planStep?.id,
+        parallelGroup: existing.parallelGroup ?? planStep?.parallelGroup ?? null,
+      };
+    }
     patch.planSteps = planSteps;
-    patch.selectedAgents = asStringArray(result.selected_agents ?? result.agents);
+    patch.selectedAgents = selectedAgents.length > 0 ? selectedAgents : agentNames;
     patch.skippedAgents = asStringArray(result.skipped_agents);
+    patch.agentStatuses = statuses;
     patch.hasParallelPlan = result.has_parallel === true;
     patch.reasoningBrief = typeof result.reasoning_brief === 'string' ? result.reasoning_brief : undefined;
     patch.currentStep = message || '计划已生成';
@@ -519,8 +550,13 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
   }
 
   if (eventType === 'agent_start' || stage === 'agent_start') {
-    const agentName = typeof result.agent === 'string' ? result.agent : undefined;
+    const agentName = asText(result.agent) ?? asText(result.name);
     if (agentName) {
+      const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
+      const progress = clampPercent(result.progress_percent ?? result.progress);
+      const currentStep = asText(result.current_step ?? result.currentStep)
+        ?? asText(result.step)
+        ?? message;
       const statuses = { ...run.agentStatuses };
       if (!statuses[agentName]) {
         statuses[agentName] = { name: agentName, status: 'pending' };
@@ -528,7 +564,14 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       statuses[agentName] = {
         ...statuses[agentName],
         status: 'running',
-        startedAt: typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString(),
+        progress: Math.max(statuses[agentName].progress ?? 0, progress ?? 5),
+        currentStep: currentStep || statuses[agentName].currentStep,
+        lastEventAt: timestamp,
+        stepId: asText(result.step_id) ?? asText(result.stepId) ?? statuses[agentName].stepId,
+        parallelGroup: asText(result.parallel_group)
+          ?? asText(result.parallelGroup)
+          ?? statuses[agentName].parallelGroup,
+        startedAt: statuses[agentName].startedAt ?? timestamp,
       };
       patch.agentStatuses = statuses;
       patch.progress = calculateAgentProgress(statuses, run.progress);
@@ -537,19 +580,58 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     }
   }
 
-  if (eventType === 'agent_done' || stage === 'agent_done') {
-    const agentName = typeof result.agent === 'string' ? result.agent : undefined;
+  if (eventType === 'agent_step' || stage === 'agent_step') {
+    const agentName = asText(result.agent) ?? asText(result.name);
     if (agentName) {
+      const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
+      const progress = clampPercent(result.progress_percent ?? result.progress);
       const statuses = { ...run.agentStatuses };
       const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
+      const currentStep = asText(result.current_step ?? result.currentStep)
+        ?? asText(result.step)
+        ?? message
+        ?? existing.currentStep;
+      statuses[agentName] = {
+        ...existing,
+        status: 'running',
+        progress: Math.max(existing.progress ?? 0, progress ?? 15),
+        currentStep,
+        lastEventAt: timestamp,
+        stepId: asText(result.step_id) ?? asText(result.stepId) ?? existing.stepId,
+        parallelGroup: asText(result.parallel_group)
+          ?? asText(result.parallelGroup)
+          ?? existing.parallelGroup,
+        startedAt: existing.startedAt ?? timestamp,
+      };
+      patch.agentStatuses = statuses;
+      patch.progress = calculateAgentProgress(statuses, run.progress);
+      patch.currentStep = currentStep || run.currentStep;
+      return mergePatchAndEstimateEta(run, patch);
+    }
+  }
+
+  if (eventType === 'agent_done' || stage === 'agent_done') {
+    const agentName = asText(result.agent) ?? asText(result.name);
+    if (agentName) {
+      const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
+      const statuses = { ...run.agentStatuses };
+      const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
+      const dataSources = asStringArray(result.data_sources);
       statuses[agentName] = {
         ...existing,
         status: 'done',
-        completedAt: typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString(),
+        progress: 100,
+        currentStep: message || existing.currentStep,
+        lastEventAt: timestamp,
+        stepId: asText(result.step_id) ?? asText(result.stepId) ?? existing.stepId,
+        parallelGroup: asText(result.parallel_group)
+          ?? asText(result.parallelGroup)
+          ?? existing.parallelGroup,
+        completedAt: timestamp,
         confidence: asFiniteNumber(result.confidence) ?? existing.confidence,
         evidenceCount: asFiniteNumber(result.evidence_count) ?? existing.evidenceCount,
-        dataSources: asStringArray(result.data_sources).length > 0
-          ? asStringArray(result.data_sources)
+        dataSources: dataSources.length > 0
+          ? dataSources
           : existing.dataSources,
         durationMs: asFiniteNumber(result.duration_ms) ?? existing.durationMs,
       };
@@ -561,16 +643,24 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
   }
 
   if (eventType === 'agent_error' || stage === 'agent_error') {
-    const agentName = typeof result.agent === 'string' ? result.agent : undefined;
+    const agentName = asText(result.agent) ?? asText(result.name);
     if (agentName) {
+      const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
       const statuses = { ...run.agentStatuses };
       const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
       const errorText = typeof result.error === 'string' ? result.error : 'Unknown error';
       statuses[agentName] = {
         ...existing,
         status: 'error',
+        progress: 100,
+        currentStep: message || existing.currentStep,
+        lastEventAt: timestamp,
+        stepId: asText(result.step_id) ?? asText(result.stepId) ?? existing.stepId,
+        parallelGroup: asText(result.parallel_group)
+          ?? asText(result.parallelGroup)
+          ?? existing.parallelGroup,
         error: errorText,
-        completedAt: typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString(),
+        completedAt: timestamp,
       };
       const fallbackReasons = [...run.fallbackReasons];
       if (errorText) fallbackReasons.push(`${agentName}: ${errorText}`);
@@ -1299,4 +1389,3 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }));
   },
 }));
-

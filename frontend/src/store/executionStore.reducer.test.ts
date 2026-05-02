@@ -90,7 +90,44 @@ describe('pipelineReducer', () => {
     expect(patch.skippedAgents).toEqual(['macro_agent']);
     expect(patch.hasParallelPlan).toBe(true);
     expect(patch.reasoningBrief).toContain('Selected agents');
+    expect(patch.agentStatuses?.news_agent?.status).toBe('pending');
+    expect(patch.agentStatuses?.technical_agent?.parallelGroup).toBe('p1');
     expect((patch.progress ?? 0) >= 8).toBe(true);
+  });
+
+  it('maps agent_step into per-agent progress state', () => {
+    const run = buildRun({
+      progress: 35,
+      agentStatuses: {
+        news_agent: {
+          name: 'news_agent',
+          status: 'running',
+          progress: 10,
+        } satisfies AgentRunInfo,
+      },
+    });
+    const step = {
+      eventType: 'agent_step',
+      timestamp: '2026-02-19T00:00:03.000Z',
+      message: 'Searching authoritative news',
+      result: {
+        type: 'agent_step',
+        agent: 'news_agent',
+        progress_percent: 45,
+        current_step: 'Searching authoritative news',
+        step_id: 'agent-news-search',
+        parallel_group: 'report_agents',
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('agent_step')]);
+    const mapped = patch.agentStatuses?.news_agent;
+    expect(mapped?.status).toBe('running');
+    expect(mapped?.progress).toBe(45);
+    expect(mapped?.currentStep).toBe('Searching authoritative news');
+    expect(mapped?.stepId).toBe('agent-news-search');
+    expect(mapped?.parallelGroup).toBe('report_agents');
+    expect(mapped?.lastEventAt).toBe('2026-02-19T00:00:03.000Z');
   });
 
   it('advances pipeline stage on pipeline_stage event', () => {

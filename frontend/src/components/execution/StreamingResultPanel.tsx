@@ -13,7 +13,6 @@ import React from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  Loader2,
   MessageSquare,
   PauseCircle,
   Send,
@@ -25,17 +24,9 @@ import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 import { ReportView } from '../report/ReportView';
 import { AgentTimeline } from './AgentTimeline';
+import { AgentProgressList } from './AgentProgressList';
 import { InterruptCard } from './InterruptCard';
-import type { AgentRunInfo, ExecutionRun } from '../../types/execution';
-
-const AGENT_DISPLAY_ORDER = [
-  'price_agent',
-  'news_agent',
-  'fundamental_agent',
-  'technical_agent',
-  'macro_agent',
-  'deep_search_agent',
-];
+import type { ExecutionRun } from '../../types/execution';
 
 type KeySectionIssueView = {
   section: string;
@@ -117,58 +108,6 @@ function extractKeySectionIssues(run: ExecutionRun): {
     .filter((item): item is string => typeof item === 'string')
     .map((item) => parseLegacyKeySectionIssue(item));
   return { blockIssues: legacyIssues, warnIssues: [] };
-}
-
-function AgentStatusIcon({ status }: { status: AgentRunInfo['status'] }) {
-  switch (status) {
-    case 'running':
-      return <Loader2 size={12} className="animate-spin text-blue-400" />;
-    case 'done':
-      return <CheckCircle2 size={12} className="text-emerald-400" />;
-    case 'error':
-      return <XCircle size={12} className="text-red-400" />;
-    case 'skipped':
-      return <span className="w-3 h-3 rounded-full bg-gray-500 inline-block" />;
-    default:
-      return <span className="w-3 h-3 rounded-full border border-fin-border inline-block" />;
-  }
-}
-
-function AgentStatusBar({
-  agents,
-  compact,
-}: {
-  agents: Record<string, AgentRunInfo>;
-  compact?: boolean;
-}) {
-  const ordered = AGENT_DISPLAY_ORDER
-    .filter((name) => agents[name])
-    .map((name) => agents[name]);
-  const extra = Object.values(agents).filter(
-    (agent) => !AGENT_DISPLAY_ORDER.includes(agent.name),
-  );
-  const all = [...ordered, ...extra];
-
-  if (all.length === 0) return null;
-
-  return (
-    <div className={`flex flex-wrap ${compact ? 'gap-1.5' : 'gap-2'}`}>
-      {all.map((agent) => (
-        <div
-          key={agent.name}
-          className="flex items-center gap-1 text-2xs text-fin-muted"
-          title={agent.error ?? agent.name}
-        >
-          <AgentStatusIcon status={agent.status} />
-          {!compact && (
-            <span className="truncate max-w-20">
-              {agent.name.replace(/_agent$/, '')}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 interface StreamingResultPanelProps {
@@ -272,7 +211,12 @@ export const StreamingResultPanel: React.FC<StreamingResultPanelProps> = ({
   if (run.status === 'running') {
     return (
       <div className={`flex flex-col gap-3 ${className}`}>
-        <AgentStatusBar agents={run.agentStatuses} compact={compact} />
+        <AgentProgressList
+          agentStatuses={run.agentStatuses}
+          selectedAgents={run.selectedAgents}
+          planSteps={run.planSteps}
+          className={compact ? 'max-h-44 overflow-y-auto pr-1' : ''}
+        />
 
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
