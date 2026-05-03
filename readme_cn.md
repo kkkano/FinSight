@@ -249,38 +249,35 @@ FinSight 的聊天主链路已经把旧的 `chat_respond / resolve_subject / cla
 
 仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于聊天 LangGraph 主链路。
 
-会话体验现在分层处理：前端 localStorage 暂时保存消息历史；后端 `/api/conversations` 负责 thread 生命周期。删除会话会清理 session context、report/citation index、thread RAG memory/working-set collections 以及对应 RAG observability runs。停止生成走前端 `AbortController` + 后端 `cancelled` trace/pipeline 事件，保留 partial answer，不当成失败。
+会话体验现在分层处理：前端 localStorage 保存当前浏览器运行态；后端 `/api/conversations` 负责 thread 生命周期，并通过轻量 `conversation_store` 保存 `messages`、`title`、`pinned`、`archive` snapshot。新建、切换、改标题、删除会话都走后端 API；删除会话会清理 session context、report/citation index、thread RAG memory/working-set collections 以及对应 RAG observability runs。停止生成走前端 `AbortController` + 后端取消事件 + executor/agent cancellation token，保留 partial answer，不当成失败。
 
 ```mermaid
 flowchart TD
     START((开始)) --> INIT["① build_initial_state<br/><i>解析输入，加载记忆</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>清除临时字段 + trace 运行时</i>"]
-    RESET --> TRIM["③ trim_history<br/><i>限制历史窗口</i>"]
-    TRIM --> SUMMARY["④ summarize_history<br/><i>压缩长上下文</i>"]
-    SUMMARY --> CTX["⑤ normalize_ui_context<br/><i>合并 UI 提示</i>"]
-    CTX --> MODE["⑥ decide_output_mode<br/><i>输出模式提示</i>"]
-    MODE --> UNDERSTAND{"⑦ understand_request<br/><i>多任务 + 局部阻塞 + trace</i>"}
+    RESET --> PREPARE["③ prepare_context<br/><i>限制历史、摘要、合并 UI 提示</i>"]
+    PREPARE --> UNDERSTAND{"④ understand_request<br/><i>多任务 + 局部阻塞 + trace</i>"}
 
     UNDERSTAND -->|"direct / clarify"| RENDER
-    UNDERSTAND -->|"alert"| ALERT_EX["⑧ alert_extractor<br/><i>提取提醒参数</i>"]
+    UNDERSTAND -->|"alert"| ALERT_EX["⑤ alert_extractor<br/><i>提取提醒参数</i>"]
     ALERT_EX -->|"有效"| ALERT_ACT["⑦b alert_action<br/><i>保存并调度</i>"]
     ALERT_EX -->|"无效"| RENDER
     ALERT_ACT --> RENDER
-    UNDERSTAND -->|"research"| POLICY["⑨ policy_gate<br/><i>能力评分 + task 工具并集</i>"]
-    POLICY --> PLAN["⑨ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑥ policy_gate<br/><i>能力评分 + task 工具并集</i>"]
+    POLICY --> PLAN["⑦ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
 
-    PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>人工审批？</i>"}
+    PLAN --> CONFIRM{"⑧ confirmation_gate<br/><i>人工审批？</i>"}
     CONFIRM -->|"拒绝"| RENDER
-    CONFIRM -->|"批准"| EXEC["⑪ execute_plan<br/><i>并行智能体组</i>"]
+    CONFIRM -->|"批准"| EXEC["⑨ execute_plan<br/><i>并行智能体组</i>"]
 
-    EXEC --> SYNTH["⑫ synthesize<br/><i>合并输出 + compare_gate + 冲突检查</i>"]
-    SYNTH --> SCRUB["⑬ 幻觉洗涤<br/><i>正则 + 证据验证</i>"]
-    SCRUB --> BUILD["⑭ report_builder<br/><i>构建 ReportIR 结构</i>"]
-    BUILD --> RENDER["⑮ render_response<br/><i>格式化输出</i>"]
-    RENDER --> SAVE["⑯ save_memory<br/><i>持久化记忆</i>"]
+    EXEC --> SYNTH["⑩ synthesize<br/><i>合并输出 + compare_gate + 冲突检查</i>"]
+    SYNTH --> SCRUB["⑪ 幻觉洗涤<br/><i>正则 + 证据验证</i>"]
+    SCRUB --> BUILD["⑫ report_builder<br/><i>构建 ReportIR 结构</i>"]
+    BUILD --> RENDER["⑬ render_response<br/><i>格式化输出</i>"]
+    RENDER --> SAVE["⑭ save_memory<br/><i>持久化记忆</i>"]
     SAVE --> END((结束))
 
-    subgraph "执行引擎 (⑪)"
+    subgraph "执行引擎 (⑨)"
         direction LR
         EG1["组 1<br/>price · news"] --> EG2["组 2<br/>fundamental · technical"]
         EG2 --> EG3["组 3<br/>macro · risk · deep_search"]

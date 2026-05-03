@@ -25,7 +25,9 @@
 - 请求理解实现 spec：`plans/2026-05-03_request_understanding_task_graph_spec.md`
 - 请求理解查询矩阵：`reports/2026-05-03_request_understanding_query_results.md`
 - 聊天 UX 浏览器验证：`reports/2026-05-03_playwright_chat_smoke.md`
-- 会话生命周期：`backend/api/conversation_router.py` 与 `plans/2026-05-03_request_understanding_task_graph_spec.md`
+- 当前聊天主路径：`backend/graph/runner.py` 中的 `build_initial_state -> reset_turn_state -> prepare_context -> understand_request`
+- 会话生命周期：`backend/api/conversation_router.py`、`backend/services/conversation_store.py` 与 `plans/2026-05-03_request_understanding_task_graph_spec.md`
+- 停止生成：`backend/services/execution_service.py`、`backend/graph/cancellation.py`、`backend/graph/executor.py`
 - 执行链路参考：`LANGGRAPH_FLOW.md`、`LANGGRAPH_PIPELINE_DEEP_DIVE.md`
 - Agent/Tool：`AGENTS_GUIDE.md`
 - 事件契约：`execution-event-contract.md`
@@ -37,6 +39,6 @@
 符合以下任一条件时，文档不应继续留在根目录作为当前事实源：
 
 - 仍描述 `ConversationRouter` / `SchemaRouter` 作为主聊天入口。
-- 把旧节点顺序当作目标架构，而不是当前运行快照。
+- 把旧节点顺序当作目标架构，而不是历史/兼容 helper；当前主路径必须以 `prepare_context -> understand_request` 为准。
 - 是已完成阶段的 todolist、hotfix 报告、一次性测试报告。
 - 与 `backend/graph/runner.py`、`backend/graph/state.py`、测试结果冲突。

@@ -5,7 +5,7 @@
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
-> 2026-05-03 修订说明：聊天主链路已接入 `understand_request`。旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍注册为兼容节点，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供最小后端 API，停止生成已形成前端 abort + 后端 cancelled trace 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+> 2026-05-03 修订说明：聊天主链路已接入 `prepare_context -> understand_request`。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / chat_respond / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ---
 
@@ -41,13 +41,12 @@
 ```mermaid
 flowchart TD
   UI[Chat / MiniChat / Workbench] --> CHAT["/chat/supervisor*"]
-  UI --> CONV["/api/conversations<br/>list/create/get/delete"]
+  UI --> CONV["/api/conversations<br/>list/create/get/patch/delete"]
   CHAT --> RUNNER[LangGraph Runner]
   RUNNER --> INIT[build_initial_state]
   INIT --> RESET[reset_turn_state]
-  RESET --> HISTORY[trim_history + summarize_history + normalize_ui_context]
-  HISTORY --> MODE[decide_output_mode]
-  MODE --> UNDERSTAND[understand_request]
+  RESET --> PREPARE[prepare_context]
+  PREPARE --> UNDERSTAND[understand_request]
   UNDERSTAND -->|direct / clarify| ENDNODE[END]
   UNDERSTAND -->|alert| ALERT[alert_extractor -> alert_action]
   UNDERSTAND -->|research / mixed| POLICY[policy_gate]
@@ -59,6 +58,7 @@ flowchart TD
   EXEC --> TOOLS[Tool / Agent Adapters]
   TOOLS --> LIVE[Live Tools]
   TOOLS --> RAG[RAG / Evidence]
+  CONV --> SNAPSHOT[conversation_store snapshot]
   CONV --> CTX[Session Context + Report Index + Thread RAG Cleanup]
 ```
 
@@ -310,7 +310,7 @@ class GraphState(TypedDict):
 |---|---|---|---|
 | `BuildInitialState` | request | `thread_id,messages,query,ui_context` | 无 |
 | `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留长期 memory |
-| `PrepareContext` | history + `ui_context` | 修剪/摘要/规范化 selections | 无；当前由 `trim_history/summarize_history/normalize_ui_context` 分步承担 |
+| `PrepareContext` | history + `ui_context` | 修剪历史、摘要长上下文、规范化 selections、合并输出模式 hints | 已接入主路径；旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 作为兼容 helper 保留 |
 | `UnderstandRequest` | `query,ui_context,memory_summary,options` | `understanding,tasks,blocked_tasks,subject,operation,output_mode,route` | direct/clarify 可直接结束；低置信度进入 blocked task |
 | `AlertExtractor` | alert task | alert 参数 | invalid 时返回澄清 |
 | `AlertAction` | alert 参数 | alert 结果 | 写入失败时返回错误 |
@@ -488,8 +488,8 @@ SUBJECT_SUBGRAPHS = {
 - 在 Chat 和 MiniChat 间切换 session_id 下，历史对话一致，但 UI selection 是上下文而非偏向用户积累。
 - 「生成投资报告」按钮只改变 output_mode，不改变用户输入（别注入「生成 研报」等关键词到输入框）。
 - Deep/Brief 控件不依赖前端 ticker/company 字典；无 ticker 宏观问题也可提交，由后端生成 `macro/theme/index` task。
-- 会话栏的新建/切换/删除只管理交互状态和 `session_id`；删除动作会调用 `/api/conversations/{id}`，后端负责清理该 thread 的 session context、report index、RAG working set 和 RAG observability runs。
-- 流式运行中点击停止必须保留 partial answer 和 trace；前端不把取消伪装成失败，后端应发出 `stage=cancelled` 的用户可见事件。
+- 会话栏的新建/切换/删除只管理交互状态和 `session_id`；新建/触达走 `POST /api/conversations`，标题/messages/置顶/归档 snapshot 走 `PATCH /api/conversations/{id}`，删除动作会调用 `DELETE /api/conversations/{id}`，后端负责清理该 thread 的 session context、report index、RAG working set 和 RAG observability runs。
+- 流式运行中点击停止必须保留 partial answer 和 trace；前端不把取消伪装成失败，后端应发出 `stage=cancelled` 的用户可见事件，executor/agent adapter 应读取 cancellation token 并停止后续输出。
 
 ---
 

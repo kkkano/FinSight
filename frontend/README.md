@@ -27,10 +27,10 @@ Those decisions belong to the backend LangGraph request understanding layer. The
 
 Conversation boundary:
 
-- frontend localStorage is the MVP source for message history and conversation summaries
-- `/api/conversations` owns backend session lifecycle and cleanup
-- deleting a conversation should call the backend API, then clear local persisted messages
-- stop generation should keep partial content and cancelled thinking steps
+- frontend localStorage is the active browser runtime cache for messages and the current conversation list
+- `/api/conversations` owns backend session lifecycle, server-side conversation snapshots, and cleanup
+- `POST /api/conversations` creates/touches a session; `PATCH /api/conversations/{id}` syncs `messages`, `title`, `pinned`, and `archive`; `DELETE` clears backend state and then the frontend clears local persisted messages
+- stop generation should keep partial content and cancelled thinking steps; cancellation must be driven by the stream abort and backend cancellation events, not a fake frontend error
 
 ## Main Files
 

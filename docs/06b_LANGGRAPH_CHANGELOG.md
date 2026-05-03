@@ -7,11 +7,12 @@
 
 ## 2026-05-03 - Conversation lifecycle and cancellation UX
 
-- 新增 `backend/api/conversation_router.py` 并挂载 `/api/conversations`：支持 list/create/get/delete 会话生命周期。
+- 新增 `backend/api/conversation_router.py` 并挂载 `/api/conversations`：支持 list/create/get/patch/delete 会话生命周期。
+- 新增 `backend/services/conversation_store.py`：服务端保存轻量 `messages/title/pinned/archive` snapshot；前端 `useStore` 在消息和标题变化时同步 `PATCH /api/conversations/{id}`。
 - 删除会话时清理 session context、report index、thread memory/working-set RAG collections，并按 collection 批量软删除 RAG observability runs，避免旧 ticker/风险点泄露到新会话。
-- 停止生成链路补齐：前端 AbortController、后端 `CancelledError` trace/pipeline 事件、前端 cancelled thinking step 和停止状态提示。
+- 停止生成链路补齐：前端 AbortController、后端 `CancelledError` trace/pipeline 事件、`backend/graph/cancellation.py` context-scoped cancellation token、executor/agent adapter cooperative cancel、前端 cancelled thinking step 和停止状态提示。
 - MiniChat 与主 Chat 的 Deep/Brief 启用逻辑保持一致：只判断是否有 actionable input/context，不在前端维护 ticker/company 字典。
-- 验证：conversation/cancel/RAG cleanup targeted pytest 15 passed；前端 unit 15 passed；Playwright chat smoke 4 passed；frontend build passed。
+- 验证：`pytest -q backend/tests/test_conversation_router.py backend/tests/test_execution_cancel.py backend/tests/test_execution_stage_events.py backend/tests/test_executor.py` 19 passed；conversation router targeted 3 passed；前端 conversation unit 9 passed；Playwright chat smoke 4 passed。
 
 ## 2026-05-03 - Docs governance cleanup
 
@@ -21,7 +22,8 @@
 
 ## 2026-05-03 - Request understanding runtime implementation
 
-- `backend/graph/nodes/understand_request.py` 接入主链路，替代旧前半段运行路径：`decide_output_mode -> understand_request -> policy_gate/alert/direct`。
+- `backend/graph/nodes/prepare_context.py` 接入主链路，合并旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 的主路径职责。
+- `backend/graph/nodes/understand_request.py` 接入主链路，替代旧前半段运行路径：`prepare_context -> understand_request -> policy_gate/alert/direct`。
 - `GraphState` 新增 `Understanding`、`UnderstandingTask`、`BlockedTask`、`ContextRef`、`TimeScope`，并扩展 `macro/index/commodity/theme`。
 - `policy_gate` 按 `tasks[]` 做工具白名单并集，避免复合 query 只按 primary task 给工具。
 - `planner_stub` 原生消费 `tasks[]`，为多公司、宏观、主题、组合任务生成多组计划步骤。

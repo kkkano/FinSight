@@ -252,36 +252,33 @@ The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_re
 
 Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
-Conversation UX is now split deliberately: the frontend stores MVP message history locally, while `/api/conversations` owns backend thread lifecycle. Deleting a conversation clears session context, report/citation index rows, thread RAG memory/working-set collections, and matching RAG observability runs. Stream stop uses `AbortController` plus backend `cancelled` trace/pipeline events, preserving partial answers instead of treating cancellation as an error.
+Conversation UX is now split deliberately: the frontend keeps the active browser runtime in localStorage, while `/api/conversations` owns backend thread lifecycle and a lightweight server snapshot store for `messages`, `title`, `pinned`, and `archive` metadata. Creating, switching, renaming, and deleting conversations go through the backend API; deletion clears session context, report/citation index rows, thread RAG memory/working-set collections, and matching RAG observability runs. Stream stop uses `AbortController` plus backend cancellation events and executor/agent cancellation tokens, preserving partial answers instead of treating cancellation as an error.
 
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
-    RESET --> TRIM["③ trim_history<br/><i>Bound conversation window</i>"]
-    TRIM --> SUMMARY["④ summarize_history<br/><i>Compress long context</i>"]
-    SUMMARY --> CTX["⑤ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
-    CTX --> MODE["⑥ decide_output_mode<br/><i>Mode hints</i>"]
-    MODE --> UNDERSTAND{"⑦ understand_request<br/><i>Tasks + blocked tasks + trace</i>"}
+    RESET --> PREPARE["③ prepare_context<br/><i>Bound history, summarize, normalize UI hints</i>"]
+    PREPARE --> UNDERSTAND{"④ understand_request<br/><i>Tasks + blocked tasks + trace</i>"}
 
     UNDERSTAND -->|"direct / clarify"| END_CHAT((End))
-    UNDERSTAND -->|"alert"| ALERT_EX["⑧ alert_extractor<br/><i>Extract alert params</i>"]
-    ALERT_EX -->|"valid"| ALERT_ACT["⑫ alert_action<br/><i>Save & schedule</i>"]
+    UNDERSTAND -->|"alert"| ALERT_EX["⑤ alert_extractor<br/><i>Extract alert params</i>"]
+    ALERT_EX -->|"valid"| ALERT_ACT["⑤b alert_action<br/><i>Save & schedule</i>"]
     ALERT_EX -->|"invalid"| END_ALERT_INVALID((End))
     ALERT_ACT --> END_ALERT((End))
-    UNDERSTAND -->|"research"| POLICY["⑨ policy_gate<br/><i>Capability scoring + task tool union</i>"]
-    POLICY --> PLAN["⑭ planner<br/><i>LLM Planner or Stub Fallback</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑥ policy_gate<br/><i>Capability scoring + task tool union</i>"]
+    POLICY --> PLAN["⑦ planner<br/><i>LLM Planner or Stub Fallback</i>"]
 
-    PLAN --> CONFIRM{"⑮ confirmation_gate<br/><i>HITL approval?</i>"}
+    PLAN --> CONFIRM{"⑧ confirmation_gate<br/><i>HITL approval?</i>"}
     CONFIRM -->|"cancel"| END_CANCEL((End))
     CONFIRM -->|"adjust"| PLAN
-    CONFIRM -->|"confirm"| EXEC["⑯ execute_plan<br/><i>Parallel agent groups</i>"]
+    CONFIRM -->|"confirm"| EXEC["⑨ execute_plan<br/><i>Parallel agent groups</i>"]
 
-    EXEC --> SYNTH["⑰ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
-    SYNTH --> RENDER["⑱ render<br/><i>Format for frontend</i>"]
+    EXEC --> SYNTH["⑩ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
+    SYNTH --> RENDER["⑪ render<br/><i>Format for frontend</i>"]
     RENDER --> END((End))
 
-    subgraph "Execution Engine (⑪)"
+    subgraph "Execution Engine (⑨)"
         direction LR
         EG1["Group 1<br/>price · news"] --> EG2["Group 2<br/>fundamental · technical"]
         EG2 --> EG3["Group 3<br/>macro · risk · deep_search"]

@@ -99,7 +99,9 @@ def test_chat_supervisor_default_output_mode_is_brief_and_trace_present(client):
     assert trace.get("routing_chain") == ["langgraph"]
     spans = trace.get("spans")
     assert isinstance(spans, list) and spans, "trace.spans should exist in LangGraph stub path"
-    assert any(span.get("node") == "decide_output_mode" for span in spans)
+    span_nodes = [span.get("node") for span in spans]
+    assert "prepare_context" in span_nodes
+    assert "understand_request" in span_nodes
 
 
 

@@ -2,7 +2,7 @@
 
 > 版本：v1.2.0-request-understanding | 更新时间：2026-05-03 | 当前运行时以 `backend/graph/runner.py` 为准 | Agent 数：7
 
-> 2026-05-03 状态说明：主聊天路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 内容保留为兼容与历史细节，不再代表主路径。会话生命周期与删除清理走 `/api/conversations`；停止生成保留 partial answer 并发出 cancelled trace/pipeline 事件。
+> 2026-05-03 状态说明：主聊天路径已接入 `prepare_context -> understand_request`。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 内容保留为兼容与历史细节，不再代表主路径。会话生命周期与删除清理走 `/api/conversations` + `conversation_store` snapshot；停止生成保留 partial answer，并发出 cancelled trace/pipeline 事件与 executor/agent cancellation token。
 
 ---
 
@@ -44,11 +44,8 @@ graph TB
     subgraph "LangGraph 管道（当前主路径）"
         GraphRunner --> N1[build_initial_state]
         N1 --> N2[reset_turn_state]
-        N2 --> N3[trim_history]
-        N3 --> N4[summarize_history]
-        N4 --> N5[normalize_ui_context]
-        N5 --> N6[decide_output_mode]
-        N6 --> N7[understand_request]
+        N2 --> N3[prepare_context]
+        N3 --> N7[understand_request]
         N7 -->|direct/clarify| END1[END: 直接回复或澄清]
         N7 -->|alert| ALERT[alert_extractor/action]
         ALERT --> END1
@@ -97,8 +94,8 @@ graph TB
 | **故障隔离** | 每个 Agent 独立断路器 + 缓存 + 降级 |
 | **端点轮转** | LLM 调用失败自动切换到下一个 API 端点 |
 | **可观测** | 全量 trace 事件 + timing + failure 记录 |
-| **会话隔离** | `/api/conversations` 清理 session context、report index、thread RAG collections 和 observability runs |
-| **可停止** | 前端 abort + 后端 cancelled trace；partial answer 不回滚 |
+| **会话隔离** | `/api/conversations` 保存轻量 snapshot，并清理 session context、report index、thread RAG collections 和 observability runs |
+| **可停止** | 前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token；partial answer 不回滚 |
 
 ---
 
@@ -110,11 +107,8 @@ graph TB
 flowchart TD
     START((START)) --> A[build_initial_state]
     A --> R[reset_turn_state]
-    R --> T[trim_history]
-    T --> S[summarize_history]
-    S --> B[normalize_ui_context]
-    B --> C[decide_output_mode]
-    C --> U[understand_request]
+    R --> P[prepare_context]
+    P --> U[understand_request]
 
     U -->|"direct / clarify"| END_CLARIFY((END<br/>直接回复或澄清))
     U -->|"alert"| AL[alert_extractor/action]
@@ -136,11 +130,11 @@ flowchart TD
     style END_RESULT fill:#1dd1a1,color:#fff
 ```
 
-### 2.2 output_mode 三档路由
+### 2.2 output_mode 三档路由（prepare_context 内部）
 
 ```mermaid
 flowchart LR
-    Q[用户查询] --> DM{decide_output_mode}
+    Q[用户查询] --> DM{prepare_context output_mode hints}
 
     DM -->|"含 '投资报告/研报/report'"| IR[investment_report]
     DM -->|"UI 显式设定"| EXPLICIT[UI 指定模式]
@@ -223,13 +217,13 @@ classDiagram
 | 字段 | 写入节点 | 读取节点 | 类型 |
 |------|---------|---------|------|
 | `query` | 外部输入 | 所有节点 | `str` |
-| `ui_context` | 外部输入, normalize_ui_context | understand_request, policy_gate | `dict` |
+| `ui_context` | 外部输入, prepare_context | understand_request, policy_gate | `dict` |
 | `understanding` | understand_request | policy_gate, planner, frontend trace | `Understanding` |
 | `tasks` | understand_request | policy_gate, planner, render | `list[UnderstandingTask]` |
 | `blocked_tasks` | understand_request | render, frontend trace | `list[BlockedTask]` |
 | `subject` | understand_request 兼容投影 | policy_gate, planner, execute_plan, synthesize, render | `Subject` |
 | `operation` | understand_request 兼容投影 | policy_gate, planner, execute_plan, synthesize, render | `Operation` |
-| `output_mode` | decide_output_mode | policy_gate, planner, synthesize, render, report_builder | `str` |
+| `output_mode` | prepare_context | policy_gate, planner, synthesize, render, report_builder | `str` |
 | `clarify` | understand_request / legacy clarify | route=clarify 或兼容测试 | `Clarify` |
 | `policy` | policy_gate | planner, execute_plan | `Policy` |
 | `plan_ir` | planner | execute_plan | `PlanIR` |
@@ -277,7 +271,18 @@ flowchart TD
 
 ---
 
-### 4.2 normalize_ui_context
+### 4.2 prepare_context
+
+| 项 | 详情 |
+|----|------|
+| **输入** | `messages`, `ui_context.selections`, `output_mode`, `query` |
+| **输出** | 修剪/摘要后的 `messages`、标准化 `ui_context`、`output_mode` |
+| **主职责** | 合并历史窗口控制、长上下文摘要、selection 去重、UI 显式 output mode 与默认 hints |
+| **兼容实现** | 旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 逻辑保留为 helper 或历史测试对象 |
+
+---
+
+### 4.2L normalize_ui_context（legacy helper）
 
 | 项 | 详情 |
 |----|------|
@@ -289,7 +294,7 @@ flowchart TD
 
 ---
 
-### 4.3 decide_output_mode
+### 4.3L decide_output_mode（legacy helper）
 
 ```mermaid
 flowchart TD
@@ -1039,11 +1044,8 @@ sequenceDiagram
     API->>G: ainvoke(query, thread_id)
 
     Note over G: build_initial_state
-    Note over G: normalize_ui_context
-    Note over G: decide_output_mode → "investment_report"
-    Note over G: resolve_subject → company, tickers=["AAPL"]
-    Note over G: clarify → needed=false
-    Note over G: parse_operation → qa (0.55)
+    Note over G: prepare_context → ui_context + output_mode hints
+    Note over G: understand_request → company/AAPL task + investment_report
     Note over G: policy_gate → 5 agents, 7 tools
     Note over G: planner → PlanIR (7 steps)
 
@@ -1075,17 +1077,14 @@ sequenceDiagram
 | 步骤 | 节点 | state 变更 | 耗时估算 |
 |------|------|-----------|---------|
 | 1 | build_initial_state | +messages, +trace, +schema_version | <1ms |
-| 2 | normalize_ui_context | ui_context 标准化 | <1ms |
-| 3 | decide_output_mode | output_mode = "investment_report" | <1ms |
-| 4 | resolve_subject | subject = {type: "company", tickers: ["AAPL"]} | ~5ms |
-| 5 | clarify | clarify = {needed: false} | <1ms |
-| 6 | parse_operation | operation = {name: "qa", confidence: 0.55} | <1ms |
-| 7 | policy_gate | policy = {agents: 5个, tools: 7个, rounds: 6} | ~10ms |
-| 8 | planner | plan_ir = {steps: [tools + agents]} | ~50ms (stub) |
-| 9 | execute_plan | artifacts = {evidence_pool, agent_outputs} | **5-30s** |
-| 10 | synthesize | artifacts.render_vars = {thesis, conclusion, ...} | ~10ms |
-| 11 | render | artifacts.draft_markdown = 完整 Markdown | ~5ms |
-| 12 | report_builder | report payload = ReportIR | ~20ms |
+| 2 | prepare_context | ui_context 标准化 + output_mode hints + history safety | <1ms |
+| 3 | understand_request | tasks/blocked_tasks + subject/operation compatibility projection | ~5ms |
+| 4 | policy_gate | policy = {agents: 5个, tools: 7个, rounds: 6} | ~10ms |
+| 5 | planner | plan_ir = {steps: [tools + agents]} | ~50ms (stub) |
+| 6 | execute_plan | artifacts = {evidence_pool, agent_outputs, task_results} | **5-30s** |
+| 7 | synthesize | artifacts.render_vars = {thesis, conclusion, ...} | ~10ms |
+| 8 | render | artifacts.draft_markdown = 完整 Markdown | ~5ms |
+| 9 | report_builder | report payload = ReportIR | ~20ms |
 
 ---
 
@@ -1147,7 +1146,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    DEL[DELETE /api/conversations/{session_id}] --> CTX[移除 ContextManager]
+    POST[POST /api/conversations] --> STORE[conversation_store snapshot]
+    PATCH[PATCH /api/conversations/{session_id}] --> STORE
+    GET[GET /api/conversations/{session_id}] --> STORE
+    DEL[DELETE /api/conversations/{session_id}] --> STORE
+    DEL --> CTX[移除 ContextManager]
     DEL --> REPORT[删除 report_index / citation_index]
     DEL --> RAG[删除 thread memory + working-set collections]
     DEL --> OBS[按 collection 软删除 RAG observability runs]
@@ -1156,12 +1159,14 @@ flowchart TD
     ABORT --> CANCEL[后端 CancelledError]
     CANCEL --> TRACE[trace: stage=cancelled]
     CANCEL --> PIPE[pipeline_stage: stage=cancelled]
+    CANCEL --> TOKEN[executor/agent cancellation token]
     TRACE --> UI[前端保留 partial answer + thinking steps]
 ```
 
 约束：
 
 - 删除会话不能只删前端消息；必须同步隔离后端 thread context 和 RAG 临时材料。
+- `conversation_store` 是当前服务端轻量 snapshot，不替代多用户数据库；多设备同步需要数据库迁移和用户权限隔离。
 - 取消不是失败；不能触发 missing done 错误，也不能清空已收到的 token 和 trace。
 
 ---

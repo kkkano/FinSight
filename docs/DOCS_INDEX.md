@@ -16,7 +16,7 @@
 
 ## 当前实现 Spec
 
-- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace、planner stub 多任务消费、后端 `/api/conversations` 生命周期 API 和停止生成闭环；后续剩余项是 `prepare_context` 合并、planner/executor/synthesize 全量多任务原生化，以及服务端消息持久化/PATCH 标题能力。
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、`understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace、planner stub 多任务消费、executor `task_results`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。

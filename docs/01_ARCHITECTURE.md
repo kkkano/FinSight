@@ -5,7 +5,7 @@
 > 主链实现：`backend/graph/runner.py`
 
 > 2026-05-03 运行时事实：聊天前半段已接入 `understand_request`，旧 `chat_respond / resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
-> 同日增量：后端已提供 `/api/conversations` 最小会话生命周期 API；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件并保留已完成内容。
+> 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 
 ## 1. 系统总览
 
@@ -56,11 +56,8 @@ flowchart LR
 flowchart TD
   START --> build_initial_state
   build_initial_state --> reset_turn_state
-  reset_turn_state --> trim_history
-  trim_history --> summarize_history
-  summarize_history --> normalize_ui_context
-  normalize_ui_context --> decide_output_mode
-  decide_output_mode --> understand_request
+  reset_turn_state --> prepare_context
+  prepare_context --> understand_request
   understand_request -->|direct/clarify| END
   understand_request -->|alert| alert_extractor
   understand_request -->|research| policy_gate
@@ -86,7 +83,7 @@ flowchart TD
 - 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
 - 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
 
-旧 `parse_operation` 仍保留为兼容工具，被 `understand_request` 在少数单任务回退场景中复用，但不再是主链路入口。
+旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
 
 ## 3. 规划与执行策略
 
@@ -149,6 +146,7 @@ sequenceDiagram
 
 - 前端通过 `AbortController.abort()` 停止当前 SSE。
 - `backend/services/execution_service.py` 捕获取消后发送 `trace.stage="cancelled"` 和 `pipeline_stage.stage="cancelled"`。
+- `backend/graph/cancellation.py` 提供 context-scoped cancellation token，executor 与 agent adapter 在阶段边界检查 token，尽量停止后续 step/agent 输出。
 - 前端消息保留已收到 token、thinking steps 和“已停止生成，保留已完成的结果。”提示。
 
 ## 4.1 会话生命周期链路
@@ -158,7 +156,12 @@ flowchart LR
   RAIL[Conversation Rail] --> CREATE[POST /api/conversations]
   RAIL --> LIST[GET /api/conversations]
   RAIL --> GET[GET /api/conversations/{id}]
+  RAIL --> PATCH[PATCH /api/conversations/{id}]
   RAIL --> DELETE[DELETE /api/conversations/{id}]
+  CREATE --> STORE[conversation_store.json]
+  GET --> STORE
+  PATCH --> STORE
+  DELETE --> STORE
   DELETE --> CTX[Clear session context]
   DELETE --> RPT[Delete report/citation index rows]
   DELETE --> RAG[Delete thread RAG collections]
@@ -167,9 +170,10 @@ flowchart LR
 
 边界：
 
-- 前端 localStorage 仍是当前消息历史 MVP 真相源。
-- 后端 conversation API 负责 thread context 隔离和删除清理。
-- 下一阶段服务端 conversation store 需要补 messages/title/pinned/archive/PATCH。
+- 前端 localStorage 仍是当前浏览器运行态的消息真相源。
+- 后端 `conversation_store` 保存 messages/title/pinned/archive snapshot，服务 list/get/patch/delete 和基础恢复。
+- 后端 conversation API 负责 thread context 隔离、服务端 snapshot 删除和 RAG/report/session 清理。
+- 下一阶段若要多设备同步，应迁移到数据库并增加用户级权限边界。
 
 ## 5. Dashboard / Workbench 数据链路
 

@@ -52,7 +52,8 @@
 取消语义：
 
 - 前端点击停止后使用 `AbortController.abort()` 断开当前 SSE。
-- 后端 producer 捕获 `asyncio.CancelledError` 后发出 `pipeline_stage.stage="cancelled"` 和用户可见 `trace.stage="cancelled"`。
+- 后端 execution service 捕获 `asyncio.CancelledError` 后发出 `pipeline_stage.stage="cancelled"` 和用户可见 `trace.stage="cancelled"`。
+- executor 和 agent adapter 读取 context-scoped cancellation token，阶段边界或 agent 返回前停止后续 step/agent 事件；同步外部 HTTP/LLM 调用可能只能在返回后丢弃后续输出。
 - 取消不是错误；已经产出的 token、trace 和 report partial 保留在当前会话。
 
 ### `plan_ready`
@@ -129,6 +130,7 @@
 - `synthesizing:start/done/error`：`backend/graph/nodes/synthesize.py`
 - `rendering:start/done`（run + resume）：`backend/services/execution_service.py`
 - `cancelled`（run + resume）：`backend/services/execution_service.py`
+- `cancelled` cooperative token：`backend/graph/cancellation.py`、`backend/graph/executor.py`、`backend/graph/adapters/agent_adapter.py`
 - `done`：`backend/services/execution_service.py`
 
 ## 前端消费与降级
