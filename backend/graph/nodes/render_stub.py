@@ -157,6 +157,7 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
     step_index = {str(step.get("id")): step for step in steps if isinstance(step, dict) and step.get("id")}
 
     def _related_outputs(task: dict) -> list[str]:
+        task_id = str(task.get("id") or "").strip()
         tickers = set(_task_tickers(task))
         subject_type = str(task.get("subject_type") or "").strip().lower()
         related: list[str] = []
@@ -165,6 +166,13 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
                 continue
             step = step_index.get(str(step_id))
             if not isinstance(step, dict):
+                continue
+            step_task_ids = [str(value or "").strip() for value in (step.get("task_ids") or []) if str(value or "").strip()]
+            if task_id and task_id in step_task_ids:
+                for line in _summarize_step_output(result.get("output")):
+                    related.append(f"{step.get('name') or step_id}: {line}")
+                    if len(related) >= 3:
+                        return related
                 continue
             inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
             ticker = str(inputs.get("ticker") or "").strip().upper()

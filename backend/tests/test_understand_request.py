@@ -260,6 +260,12 @@ def test_planner_stub_builds_multitask_steps_from_understanding_tasks():
     assert ("get_company_news", {"ticker": "MSFT"}) in tool_inputs
     assert any(step["name"] == "get_official_macro_releases" for step in steps)
     assert len(plan["tasks"]) == 5
+    assert all(step.get("task_ids") for step in steps)
+    assert {
+        tuple(step.get("task_ids") or [])
+        for step in steps
+        if (step.get("inputs") or {}).get("ticker") == "GOOGL"
+    } == {("task_1",), ("task_2",)}
 
 
 def test_multitask_render_mentions_blocked_portfolio_without_hiding_ready_tasks():

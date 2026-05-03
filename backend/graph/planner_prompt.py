@@ -148,7 +148,7 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
 
 <step_schema>
 每个 step 必须遵循此结构：
-{{"id":"s1","kind":"tool|agent|llm","name":"<allowlist中的名称>","inputs":{{...}},"parallel_group":null,"why":"<一句话理由>","optional":false}}
+{{"id":"s1","kind":"tool|agent|llm","name":"<allowlist中的名称>","inputs":{{...}},"task_id":"task_1","task_ids":["task_1"],"parallel_group":null,"why":"<一句话理由>","optional":false}}
 
 kind 类型说明：
 - "tool": 调用数据获取工具（get_stock_price, get_company_news 等）
@@ -165,6 +165,7 @@ kind 类型说明：
 6) 每个步骤的 "why" 字段必须说明该步骤对回答用户问题的必要性。
 7) 若存在 conversation_history，利用对话上下文理解代词指代和隐含意图（如"它的PE"→"之前讨论的标的的PE"）。
 8) 若 inputs.tasks 非空，必须覆盖每个 ready task；blocked_tasks 只在 synthesis 中提示，不要为 blocked task 编造执行步骤。
+9) 每个 ready task 对应的步骤必须写 task_id/task_ids，值使用 inputs.tasks[].id 原值；不要只靠 ticker 推断任务归属。
 </constraints>
 
 <operation_guidelines>

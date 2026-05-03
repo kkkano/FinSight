@@ -150,11 +150,13 @@ class Policy(TypedDict, total=False):
 class PlanIR(TypedDict, total=False):
     """Planner intermediate representation."""
 
+    goal: str
+    subject: dict
+    output_mode: OutputMode
+    tasks: list[dict]
     steps: list[dict]
-    required_agents: list[str]
-    estimated_cost: str
-    rationale: str
-    prompt_variant: str
+    synthesis: dict
+    budget: dict
 
 
 class Artifacts(TypedDict, total=False):

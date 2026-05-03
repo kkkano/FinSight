@@ -603,6 +603,21 @@ async def execute_plan_stub(state: GraphState) -> dict:
     steps = plan_ir.get("steps") if isinstance(plan_ir, dict) else None
     step_index = {s.get("id"): s for s in (steps or []) if isinstance(s, dict) and s.get("id")}
 
+    def _step_task_ids(step: dict[str, Any]) -> list[str]:
+        raw = step.get("task_ids")
+        values = raw if isinstance(raw, list) else []
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            task_id = str(value or "").strip()
+            if task_id and task_id not in seen:
+                seen.add(task_id)
+                result.append(task_id)
+        single = str(step.get("task_id") or "").strip()
+        if single and single not in seen:
+            result.insert(0, single)
+        return result
+
     def _append_tool_evidence(tool_name: str, step_id: str, output: Any) -> None:
         if output is None:
             return
@@ -917,12 +932,22 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 if step.get("kind") == "agent":
                     agent_name = step.get("name") or ""
                     if agent_name:
+                        before_count = len(evidence_pool)
                         _append_agent_evidence(str(agent_name), str(step_id), item.get("output"))
+                        for evidence in evidence_pool[before_count:]:
+                            if isinstance(evidence, dict):
+                                evidence["step_id"] = str(step_id)
+                                evidence["task_ids"] = _step_task_ids(step)
                 continue
             tool_name = step.get("name") or ""
             if not tool_name:
                 continue
+            before_count = len(evidence_pool)
             _append_tool_evidence(str(tool_name), str(step_id), item.get("output"))
+            for evidence in evidence_pool[before_count:]:
+                if isinstance(evidence, dict):
+                    evidence["step_id"] = str(step_id)
+                    evidence["task_ids"] = _step_task_ids(step)
 
     # Dedupe by url or title+source
     seen: set[str] = set()
@@ -936,6 +961,14 @@ async def execute_plan_stub(state: GraphState) -> dict:
         seen.add(str(key))
         deduped.append(e)
     artifacts["evidence_pool"] = deduped
+    evidence_by_task: dict[str, list[dict[str, Any]]] = {}
+    for evidence in deduped:
+        task_ids = evidence.get("task_ids") if isinstance(evidence, dict) else None
+        for task_id in [str(value or "").strip() for value in (task_ids if isinstance(task_ids, list) else [])]:
+            if not task_id:
+                continue
+            evidence_by_task.setdefault(task_id, []).append(evidence)
+    artifacts["evidence_by_task"] = evidence_by_task
 
     # Phase P0-3c: collect per-agent fallback diagnostics into artifacts
     # so synthesize/render can surface degradation info to the user.

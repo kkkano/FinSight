@@ -425,6 +425,8 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     has_deep_hint = _is_deep_hint(query, state)
+    plan_tasks = _plan_tasks_from_state(state)
+    plan_task_ids = {str(task.get("id") or "").strip() for task in plan_tasks if str(task.get("id") or "").strip()}
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     tickers = tickers if isinstance(tickers, list) else []
@@ -497,6 +499,17 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         why = raw.get("why")
         why = str(why).strip() if isinstance(why, str) and why.strip() else None
         optional = bool(raw.get("optional"))
+        raw_task_ids = raw.get("task_ids")
+        task_ids = [
+            str(value or "").strip()
+            for value in (raw_task_ids if isinstance(raw_task_ids, list) else [])
+            if str(value or "").strip() in plan_task_ids
+        ]
+        raw_task_id = str(raw.get("task_id") or "").strip()
+        if raw_task_id in plan_task_ids and raw_task_id not in task_ids:
+            task_ids.insert(0, raw_task_id)
+        if not task_ids and isinstance(parallel_group, str) and parallel_group in plan_task_ids:
+            task_ids = [parallel_group]
 
         # Normalize known tool inputs for robustness.
         if kind == "tool" and name == "get_performance_comparison":
@@ -530,7 +543,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             if selection_ids and "selection_ids" not in inputs:
                 inputs = {**inputs, "selection_ids": selection_ids}
 
-        return {
+        sanitized = {
             "id": step_id,
             "kind": kind,
             "name": name.strip(),
@@ -539,6 +552,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             "why": why,
             "optional": optional,
         }
+        if task_ids:
+            sanitized["task_ids"] = task_ids
+            sanitized["task_id"] = task_ids[0]
+        return sanitized
 
     # Enforce selection summary constraint deterministically.
     selection_payload = None
@@ -557,6 +574,11 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 "kind": "llm",
                 "name": "summarize_selection",
                 "inputs": {"selection": selection_payload or [], "query": query},
+                "task_ids": [
+                    task["id"]
+                    for task in plan_tasks
+                    if task.get("subject_type") in {"news_item", "news_set", "filing", "research_doc"}
+                ],
                 "parallel_group": None,
                 "why": "Selection is high-signal evidence; summarize it first to avoid redundant tool calls.",
                 "optional": False,
@@ -938,6 +960,11 @@ def _build_plan_steps_summary(plan_dict: dict[str, Any]) -> list[dict[str, Any]]
                 "id": str(step.get("id") or "").strip() or "unknown",
                 "kind": str(step.get("kind") or "").strip() or "unknown",
                 "name": str(step.get("name") or "").strip() or "unknown",
+                "task_ids": [
+                    str(value or "").strip()
+                    for value in (step.get("task_ids") if isinstance(step.get("task_ids"), list) else [])
+                    if str(value or "").strip()
+                ],
                 "parallel_group": (
                     str(step.get("parallel_group") or "").strip()
                     if step.get("parallel_group") is not None

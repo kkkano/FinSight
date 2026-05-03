@@ -144,6 +144,7 @@ async def execute_plan(
 
     artifacts: dict[str, Any] = {
         "step_results": {},
+        "task_results": {},
         "errors": [],
         "signals": {
             "max_confidence": 0.0,
@@ -153,6 +154,21 @@ async def execute_plan(
         },
     }
     exec_events: list[dict[str, Any]] = []
+
+    def _step_task_ids(step: dict[str, Any]) -> list[str]:
+        raw = step.get("task_ids")
+        values = raw if isinstance(raw, list) else []
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            task_id = str(value or "").strip()
+            if task_id and task_id not in seen:
+                seen.add(task_id)
+                result.append(task_id)
+        single = str(step.get("task_id") or "").strip()
+        if single and single not in seen:
+            result.insert(0, single)
+        return result
 
     def _as_float(value: Any) -> float | None:
         try:
@@ -194,15 +210,21 @@ async def execute_plan(
         inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
         optional = bool(step.get("optional"))
         parallel_group = step.get("parallel_group") if isinstance(step.get("parallel_group"), str) else None
+        task_ids = _step_task_ids(step)
+        task_id = task_ids[0] if task_ids else None
 
         start = time.perf_counter()
-        exec_events.append({"event": "executor.step_started", "step_id": step_id, "kind": kind, "name": name})
+        exec_events.append(
+            {"event": "executor.step_started", "step_id": step_id, "kind": kind, "name": name, "task_ids": task_ids}
+        )
         await emit_event(
             {
                 "type": "step_start",
                 "step_id": step_id,
                 "kind": kind,
                 "name": name,
+                "task_id": task_id,
+                "task_ids": task_ids,
                 "inputs_keys": list(inputs.keys()) if isinstance(inputs, dict) else [],
                 "parallel_group": parallel_group,
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -218,9 +240,17 @@ async def execute_plan(
                 "duration_ms": duration_ms,
                 "status_reason": "cache_hit",
                 "parallel_group": parallel_group,
+                "task_id": task_id,
+                "task_ids": task_ids,
             }
             exec_events.append(
-                {"event": "executor.step_finished", "step_id": step_id, "cached": True, "duration_ms": duration_ms}
+                {
+                    "event": "executor.step_finished",
+                    "step_id": step_id,
+                    "cached": True,
+                    "duration_ms": duration_ms,
+                    "task_ids": task_ids,
+                }
             )
             await emit_event(
                 {
@@ -231,6 +261,8 @@ async def execute_plan(
                     "cached": True,
                     "duration_ms": duration_ms,
                     "parallel_group": parallel_group,
+                    "task_id": task_id,
+                    "task_ids": task_ids,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
@@ -259,6 +291,8 @@ async def execute_plan(
                     "duration_ms": duration_ms,
                     "status_reason": "escalation_not_needed",
                     "parallel_group": parallel_group,
+                    "task_id": task_id,
+                    "task_ids": task_ids,
                 }
                 exec_events.append(
                     {
@@ -267,6 +301,7 @@ async def execute_plan(
                         "cached": False,
                         "duration_ms": duration_ms,
                         "skipped": True,
+                        "task_ids": task_ids,
                     }
                 )
                 await emit_event(
@@ -280,6 +315,8 @@ async def execute_plan(
                         "reason": "escalation_not_needed",
                         "duration_ms": duration_ms,
                         "parallel_group": parallel_group,
+                        "task_id": task_id,
+                        "task_ids": task_ids,
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     }
                 )
@@ -293,12 +330,21 @@ async def execute_plan(
                 output = {"skipped": True, "reason": "dry_run", "inputs": inputs}
             else:
                 if kind == "tool":
-                    await emit_event({"type": "tool_start", "name": str(name), "step_id": step_id, "inputs": inputs})
+                    await emit_event(
+                        {
+                            "type": "tool_start",
+                            "name": str(name),
+                            "step_id": step_id,
+                            "task_id": task_id,
+                            "task_ids": task_ids,
+                            "inputs": inputs,
+                        }
+                    )
                     invoker = async_tools.get(str(name))
                     if not invoker:
                         raise ValueError(f"tool not allowed/registered: {name}")
                     output = await _maybe_await(invoker(inputs))
-                    await emit_event({"type": "tool_end", "step_id": step_id})
+                    await emit_event({"type": "tool_end", "step_id": step_id, "task_id": task_id, "task_ids": task_ids})
                 elif kind == "agent":
                     await emit_event(
                         {
@@ -307,6 +353,8 @@ async def execute_plan(
                             "name": str(name),
                             "status": "running",
                             "step_id": step_id,
+                            "task_id": task_id,
+                            "task_ids": task_ids,
                             "inputs": inputs,
                         }
                     )
@@ -321,6 +369,8 @@ async def execute_plan(
                             "name": str(name),
                             "status": "done",
                             "step_id": step_id,
+                            "task_id": task_id,
+                            "task_ids": task_ids,
                         }
                     )
                 else:
@@ -337,10 +387,18 @@ async def execute_plan(
                 "duration_ms": duration_ms,
                 "status_reason": status_reason,
                 "parallel_group": parallel_group,
+                "task_id": task_id,
+                "task_ids": task_ids,
             }
             _update_signals_from_output(output)
             exec_events.append(
-                {"event": "executor.step_finished", "step_id": step_id, "cached": False, "duration_ms": duration_ms}
+                {
+                    "event": "executor.step_finished",
+                    "step_id": step_id,
+                    "cached": False,
+                    "duration_ms": duration_ms,
+                    "task_ids": task_ids,
+                }
             )
             await emit_event(
                 {
@@ -353,6 +411,8 @@ async def execute_plan(
                     "duration_ms": duration_ms,
                     "status_reason": status_reason,
                     "parallel_group": parallel_group,
+                    "task_id": task_id,
+                    "task_ids": task_ids,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
@@ -365,6 +425,8 @@ async def execute_plan(
                 "error": str(exc),
                 "error_type": exc.__class__.__name__,
                 "optional": optional,
+                "task_id": task_id,
+                "task_ids": task_ids,
                 "retryable": False,
                 "retry_attempts": 0,
             }
@@ -376,7 +438,14 @@ async def execute_plan(
                 exc,
             )
             exec_events.append(
-                {"event": "executor.step_failed", "step_id": step_id, "duration_ms": int((time.perf_counter() - start) * 1000), "error": str(exc), "optional": optional}
+                {
+                    "event": "executor.step_failed",
+                    "step_id": step_id,
+                    "duration_ms": int((time.perf_counter() - start) * 1000),
+                    "error": str(exc),
+                    "optional": optional,
+                    "task_ids": task_ids,
+                }
             )
             await emit_event(
                 {
@@ -388,6 +457,8 @@ async def execute_plan(
                     "error_type": exc.__class__.__name__,
                     "optional": optional,
                     "parallel_group": parallel_group,
+                    "task_id": task_id,
+                    "task_ids": task_ids,
                     "duration_ms": int((time.perf_counter() - start) * 1000),
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
@@ -428,6 +499,27 @@ async def execute_plan(
             }
         )
 
+    task_results: dict[str, dict[str, Any]] = {}
+    step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        step_id = str(step.get("id") or "").strip()
+        if not step_id or step_id not in step_results:
+            continue
+        for task_id in _step_task_ids(step):
+            bucket = task_results.setdefault(task_id, {"task_id": task_id, "step_ids": [], "results": {}, "errors": []})
+            bucket["step_ids"].append(step_id)
+            bucket["results"][step_id] = step_results[step_id]
+
+    for err in artifacts.get("errors") or []:
+        if not isinstance(err, dict):
+            continue
+        for task_id in [str(value or "").strip() for value in (err.get("task_ids") or []) if str(value or "").strip()]:
+            bucket = task_results.setdefault(task_id, {"task_id": task_id, "step_ids": [], "results": {}, "errors": []})
+            bucket["errors"].append(err)
+
+    artifacts["task_results"] = task_results
     return artifacts, exec_events
 
 

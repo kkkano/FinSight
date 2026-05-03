@@ -32,6 +32,7 @@ def planner_stub(state: GraphState) -> dict:
         task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
         if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
     ]
+    ready_task_id_set = {str(task.get("id") or "").strip() for task in ready_tasks if str(task.get("id") or "").strip()}
 
     steps: list[dict] = []
     step_id = 1
@@ -83,6 +84,7 @@ def planner_stub(state: GraphState) -> dict:
         why: str,
         optional: bool = True,
         parallel_group: str | None = None,
+        task_ids: list[str] | None = None,
     ) -> None:
         nonlocal step_id
         if name not in allowed_tools:
@@ -95,10 +97,20 @@ def planner_stub(state: GraphState) -> dict:
             "why": why,
             "optional": optional,
         }
+        normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
+        if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ready_task_id_set:
+            normalized_task_ids = [parallel_group]
+        if normalized_task_ids:
+            step["task_ids"] = normalized_task_ids
+            step["task_id"] = normalized_task_ids[0]
         if parallel_group:
             step["parallel_group"] = parallel_group
         steps.append(step)
         step_id += 1
+
+    def _task_id(task: dict) -> str:
+        value = str(task.get("id") or "").strip()
+        return value or f"task_{len(steps) + 1}"
 
     def _task_operation_name(task: dict) -> str:
         op = task.get("operation")
@@ -272,7 +284,7 @@ def planner_stub(state: GraphState) -> dict:
             return False
         for idx, task in enumerate(ready_tasks[:12], 1):
             subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
-            group = f"task_{idx}"
+            group = _task_id(task) or f"task_{idx}"
             if subject_for_task in {"company", "index", "commodity"}:
                 _append_company_task_steps(task, group=group)
             elif subject_for_task == "macro":
