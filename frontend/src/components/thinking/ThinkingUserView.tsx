@@ -318,6 +318,16 @@ export const ThinkingUserView: React.FC<ThinkingUserViewProps> = ({ thinking }) 
     }
     return null;
   }, [thinking]);
+  const cancelledStep = useMemo(() => {
+    for (let i = thinking.length - 1; i >= 0; i--) {
+      const step = thinking[i];
+      const resultStatus = typeof step.result?.status === 'string' ? step.result.status : '';
+      if (step.stage === 'cancelled' || resultStatus === 'cancelled') {
+        return step;
+      }
+    }
+    return null;
+  }, [thinking]);
 
   const allDone = phases.every((p) => p.status === 'done');
   const anyActive = phases.some((p) => p.status === 'active');
@@ -437,10 +447,20 @@ export const ThinkingUserView: React.FC<ThinkingUserViewProps> = ({ thinking }) 
       </div>
 
       {/* Active Status Message */}
-      {statusText && anyActive && (
+      {statusText && anyActive && !cancelledStep && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-blue-500/5 text-blue-200/80 border border-blue-500/10">
           <Loader2 size={12} className="animate-spin text-blue-400 shrink-0" />
           <span className="truncate">{statusText}</span>
+        </div>
+      )}
+
+      {/* Cancelled Banner */}
+      {cancelledStep && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-amber-500/10 text-amber-200 border border-amber-500/20">
+          <AlertTriangle size={13} className="text-amber-300 shrink-0" />
+          <span className="truncate">
+            {getStepMessage(cancelledStep)}
+          </span>
         </div>
       )}
 
@@ -484,7 +504,7 @@ export const ThinkingUserView: React.FC<ThinkingUserViewProps> = ({ thinking }) 
       )}
 
       {/* Completion Banner */}
-      {allDone && (
+      {allDone && !cancelledStep && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
           <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
           <span>

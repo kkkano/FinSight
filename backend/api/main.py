@@ -365,20 +365,40 @@ def _clear_thread_rag_artifacts(thread_id: str) -> dict[str, int]:
             deleted_collections = int(delete_collections(collections=collections) or 0)
 
         store = get_rag_observability_store()
+        soft_delete_runs_for_collections = getattr(store, "soft_delete_runs_for_collections", None)
+        if callable(soft_delete_runs_for_collections):
+            soft_deleted_runs = int(
+                soft_delete_runs_for_collections(
+                    collections=collections,
+                    deleted_by="conversation_api",
+                    reason="conversation_deleted",
+                )
+                or 0
+            )
+            return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}
+
         list_runs = getattr(store, "list_runs", None)
         soft_delete_run = getattr(store, "soft_delete_run", None)
         if callable(list_runs) and callable(soft_delete_run):
-            runs = list_runs(limit=500, include_deleted=False)
-            for item in runs.get("items") or []:
-                if not isinstance(item, dict):
-                    continue
-                if str(item.get("collection") or "").strip() not in collections:
-                    continue
-                run_id = str(item.get("id") or "").strip()
-                if not run_id:
-                    continue
-                soft_delete_run(run_id, deleted_by="conversation_api", reason="conversation_deleted")
-                soft_deleted_runs += 1
+            cursor = None
+            seen_cursors: set[str] = set()
+            while True:
+                runs = list_runs(limit=200, cursor=cursor, include_deleted=False)
+                for item in runs.get("items") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    if str(item.get("collection") or "").strip() not in collections:
+                        continue
+                    run_id = str(item.get("id") or "").strip()
+                    if not run_id:
+                        continue
+                    soft_delete_run(run_id, deleted_by="conversation_api", reason="conversation_deleted")
+                    soft_deleted_runs += 1
+                next_cursor = str(runs.get("next_cursor") or "").strip()
+                if not next_cursor or next_cursor in seen_cursors:
+                    break
+                seen_cursors.add(next_cursor)
+                cursor = next_cursor
     except Exception:
         logger.exception("failed to clear RAG artifacts for session")
     return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}

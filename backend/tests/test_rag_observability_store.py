@@ -419,6 +419,38 @@ def test_soft_delete_source_doc_cascades_to_hits_and_rerank_hits():
     assert any('UPDATE rag_rerank_hits SET deleted_at' in sql and 'source_doc_id = :source_doc_id' in sql for sql in executed_sql)
 
 
+def test_soft_delete_runs_for_collections_updates_all_matching_runs_without_paging():
+    store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
+    engine = _FakeEngine(
+        [
+            _FakeResult([{'id': 'run-1'}, {'id': 'run-2'}]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+            _FakeResult([]),
+        ]
+    )
+    store._engine = engine
+    store.ensure_schema = lambda: True
+
+    deleted = store.soft_delete_runs_for_collections(
+        collections=['ws:thread:public:user:thread', 'mem:thread:public:user:thread'],
+        deleted_by='conversation_api',
+        reason='conversation_deleted',
+    )
+
+    executed_sql = [sql for sql, _params in engine.executions]
+    assert deleted == 2
+    assert 'SELECT id FROM rag_query_runs' in executed_sql[0]
+    assert 'collection IN' in executed_sql[0]
+    assert any("UPDATE rag_query_runs SET status = 'deleted'" in sql for sql in executed_sql)
+    assert any('UPDATE rag_query_events SET deleted_at' in sql for sql in executed_sql)
+    assert all(params.get('run_ids') == ['run-1', 'run-2'] for _sql, params in engine.executions[1:])
+
+
 def test_list_hits_hides_deleted_hits_chunks_and_rerank_rows_by_default():
     store = SQLRAGObservabilityStore.__new__(SQLRAGObservabilityStore)
     engine = _FakeEngine(

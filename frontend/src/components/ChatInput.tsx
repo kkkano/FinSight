@@ -423,6 +423,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         isLoading: false,
         thinking: thinkingSteps,
       });
+      setStatus(STOPPED_GENERATION_MESSAGE);
       setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
       addAgentLog({
         id: uuidv4(),
@@ -672,9 +673,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         message: error instanceof Error ? error.message : 'Network request failed',
       });
     } finally {
+      const wasAborted = streamController.signal.aborted;
       setLoading(false);
-      setStatus(null);
-      resetExecutionState();
+      if (wasAborted) {
+        setStatus(STOPPED_GENERATION_MESSAGE);
+        setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+      } else {
+        setStatus(null);
+        resetExecutionState();
+      }
       setAbortController(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }

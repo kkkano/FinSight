@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 
 from backend.rag.layering import collection_details
 from backend.rag.observability_models import (
@@ -407,6 +407,10 @@ def _noop_soft_delete_run(self: NoOpRAGObservabilityStore, run_id: str, deleted_
     return None
 
 
+def _noop_soft_delete_runs_for_collections(self: NoOpRAGObservabilityStore, *, collections: Iterable[str], deleted_by: str = 'system', reason: str | None = None) -> int:
+    return 0
+
+
 def _sql_soft_delete_run(self: SQLRAGObservabilityStore, run_id: str, deleted_by: str = 'system', reason: str | None = None) -> dict[str, Any] | None:
     self.update_query_run(run_id, status='deleted')
     deleted_at = _utc_now()
@@ -415,6 +419,46 @@ def _sql_soft_delete_run(self: SQLRAGObservabilityStore, run_id: str, deleted_by
             key = 'id' if table == 'rag_query_runs' else 'run_id'
             conn.execute(text(f"UPDATE {table} SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE {key} = :run_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'run_id': run_id})
     return _sql_get_run_detail(self, run_id)
+
+
+def _sql_soft_delete_runs_for_collections(self: SQLRAGObservabilityStore, *, collections: Iterable[str], deleted_by: str = 'system', reason: str | None = None) -> int:
+    normalized = sorted({str(collection or '').strip() for collection in collections if str(collection or '').strip()})
+    if not normalized:
+        return 0
+
+    self.ensure_schema()
+    deleted_at = _utc_now()
+    with self._engine.begin() as conn:
+        run_id_stmt = text(
+            "SELECT id FROM rag_query_runs "
+            "WHERE collection IN :collections AND deleted_at IS NULL"
+        ).bindparams(bindparam('collections', expanding=True))
+        run_ids = [
+            str(row['id'])
+            for row in conn.execute(run_id_stmt, {'collections': normalized}).mappings()
+            if row.get('id')
+        ]
+        if not run_ids:
+            return 0
+
+        for table in ('rag_query_runs', 'rag_query_events', 'rag_source_docs', 'rag_chunks', 'rag_retrieval_hits', 'rag_rerank_hits', 'rag_fallback_events'):
+            key = 'id' if table == 'rag_query_runs' else 'run_id'
+            status_sql = "status = 'deleted', " if table == 'rag_query_runs' else ''
+            stmt = text(
+                f"UPDATE {table} SET {status_sql}deleted_at = :deleted_at, "
+                f"deleted_by = :deleted_by, delete_reason = :reason "
+                f"WHERE {key} IN :run_ids AND deleted_at IS NULL"
+            ).bindparams(bindparam('run_ids', expanding=True))
+            conn.execute(
+                stmt,
+                {
+                    'deleted_at': deleted_at,
+                    'deleted_by': deleted_by,
+                    'reason': reason,
+                    'run_ids': run_ids,
+                },
+            )
+    return len(run_ids)
 
 
 def _noop_soft_delete_source_doc(self: NoOpRAGObservabilityStore, source_doc_id: str, deleted_by: str = 'system', reason: str | None = None) -> dict[str, Any] | None:
@@ -451,5 +495,7 @@ NoOpRAGObservabilityStore.search_preview = _noop_search_preview
 SQLRAGObservabilityStore.search_preview = _sql_search_preview
 NoOpRAGObservabilityStore.soft_delete_run = _noop_soft_delete_run
 SQLRAGObservabilityStore.soft_delete_run = _sql_soft_delete_run
+NoOpRAGObservabilityStore.soft_delete_runs_for_collections = _noop_soft_delete_runs_for_collections
+SQLRAGObservabilityStore.soft_delete_runs_for_collections = _sql_soft_delete_runs_for_collections
 NoOpRAGObservabilityStore.soft_delete_source_doc = _noop_soft_delete_source_doc
 SQLRAGObservabilityStore.soft_delete_source_doc = _sql_soft_delete_source_doc
