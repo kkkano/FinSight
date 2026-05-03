@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-05-03 - chat_respond 接入主链路 + 两层闲聊/OOS 防御
+
+- `backend/graph/runner.py`：修复 `chat_respond` orphan-node 问题。新拓扑 `prepare_context -> chat_respond -> (END | understand_request)`，通过 `_route_after_chat_respond(state)` 按 `state["chat_responded"]` 路由。
+- `backend/graph/nodes/chat_respond.py`：完整重写为 async 节点，实现两层防御。
+  - **Tier-1 规则白名单**：`is_casual_chat()` 命中 greeting/thanks/bye/meta，直接走模板池（每类 ≥10 模板，hash(query) 决定性轮换）。零延迟。
+  - **Tier-2 LLM 分类器**：仅在 Tier-1 未命中且 query 不含金融词时调用，模型 mimo-v2.5（OpenAI-compatible），2.5s 超时，置信度阈值 70。仅 `out_of_scope` 且 conf ≥ 70 时拦截，输出 OOS 模板池回复（11 条）。
+  - **Fail-open**：分类器超时/异常/空响应一律放行至 `understand_request`，避免单点故障阻断业务。
+  - 命中后写入 `artifacts.draft_markdown` + 可选 `artifacts.intent_classification` 元信息，并 emit RemoveMessage 清理当前 casual HumanMessage 防止历史污染。
+- 新增 `backend/graph/nodes/intent_classifier.py`：sidecar 分类器，独立于主 LLM 轮换池。
+  - 配置三级覆盖：`user_config.json["intent_classifier"]` → `INTENT_CLASSIFIER_*` env 变量 → 硬编码默认（api_base/api_key/model 均可热替换，无需改代码）。
+  - 默认指向 `https://token-plan-cn.xiaomimimo.com/v1` + `mimo-v2.5`。
+- 模板池扩展：greeting/thanks/bye 各 11 条，meta 9 模式 × 3 变体，新增 OOS 11 条；hash 轮换保证「同 query 同回复、不同 query 分散」，可重现且不重复。
+- 文档同步：`docs/01_ARCHITECTURE.md`、`docs/06a_LANGGRAPH_DESIGN_SPEC.md`、`docs/LANGGRAPH_FLOW.md` 主拓扑图与说明已更新。
+- 验证：`docs/reports/2026-05-03_chat_respond_two_tier_test.md`（20 条 query 实测，覆盖 Tier-1 规则、Tier-2 LLM-OOS、注入攻击、金融直通、模糊用例）。
+
 ## 2026-05-03 - Conversation lifecycle and cancellation UX
 
 - 新增 `backend/api/conversation_router.py` 并挂载 `/api/conversations`：支持 list/create/get/patch/delete 会话生命周期。

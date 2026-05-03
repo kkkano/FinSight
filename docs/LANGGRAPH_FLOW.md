@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> 2026-05-03 状态说明：当前主路径已接入 `prepare_context -> understand_request`。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。会话生命周期走 `/api/conversations` + `conversation_store` snapshot；停止生成会产生 `cancelled` trace/pipeline 事件，并通过 executor/agent cancellation token 尽量中止后续工作。
+> 2026-05-03 状态说明：当前主路径已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单 + Tier-2 LLM 分类器 sidecar），命中即 END。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。会话生命周期走 `/api/conversations` + `conversation_store` snapshot；停止生成会产生 `cancelled` trace/pipeline 事件，并通过 executor/agent cancellation token 尽量中止后续工作。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
@@ -13,7 +13,9 @@ graph TD
     START([START]) --> build_initial_state
     build_initial_state --> reset_turn_state
     reset_turn_state --> prepare_context
-    prepare_context --> understand_request
+    prepare_context --> chat_respond
+    chat_respond -->|chat_responded=true| END_CASUAL([END: 闲聊/OOS 短路])
+    chat_respond -->|chat_responded=false| understand_request
     understand_request -->|direct/clarify| END_CHAT([END: 直接回复/澄清])
     understand_request -->|alert| alert_extractor
     alert_extractor -->|valid| alert_action

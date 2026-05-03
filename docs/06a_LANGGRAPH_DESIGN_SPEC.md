@@ -5,7 +5,7 @@
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
-> 2026-05-03 修订说明：聊天主链路已接入 `prepare_context -> understand_request`。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / chat_respond / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+> 2026-05-03 修订说明：聊天主链路已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 是闲聊/OOS 短路层，采用两层防御：Tier-1 规则白名单（greeting/thanks/bye/meta，零延迟，每类 ≥10 模板 hash 轮换）+ Tier-2 LLM 分类器 sidecar（mimo-v2.5，2.5s 超时，置信度阈值 70）。Tier-1/Tier-2 任一命中则 `chat_responded=True` → END，不进入 understand_request。Tier-2 sidecar 用独立 `intent_classifier.py`，配置走 `user_config.json["intent_classifier"]` → `INTENT_CLASSIFIER_*` env → 默认值三级覆盖，不影响主 LLM 轮换池。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ---
 
@@ -46,7 +46,9 @@ flowchart TD
   RUNNER --> INIT[build_initial_state]
   INIT --> RESET[reset_turn_state]
   RESET --> PREPARE[prepare_context]
-  PREPARE --> UNDERSTAND[understand_request]
+  PREPARE --> CHATRESP[chat_respond<br/>Tier-1 规则 + Tier-2 LLM]
+  CHATRESP -->|chat_responded=true| ENDNODE[END]
+  CHATRESP -->|chat_responded=false| UNDERSTAND[understand_request]
   UNDERSTAND -->|direct / clarify| ENDNODE[END]
   UNDERSTAND -->|alert| ALERT[alert_extractor -> alert_action]
   UNDERSTAND -->|research / mixed| POLICY[policy_gate]

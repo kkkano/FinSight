@@ -4,7 +4,7 @@
 > 适用分支：`feat/p0-p2-quality-orchestration-productization`
 > 主链实现：`backend/graph/runner.py`
 
-> 2026-05-03 运行时事实：聊天前半段已接入 `understand_request`，旧 `chat_respond / resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+> 2026-05-03 运行时事实：聊天前半段已接入 `chat_respond -> understand_request` 双节点串联。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单零延迟、Tier-2 mimo-v2.5 LLM 分类器 sidecar），命中即短路至 END，不进入语义理解；旧 `resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
 > 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 
 ## 1. 系统总览
@@ -57,7 +57,9 @@ flowchart TD
   START --> build_initial_state
   build_initial_state --> reset_turn_state
   reset_turn_state --> prepare_context
-  prepare_context --> understand_request
+  prepare_context --> chat_respond
+  chat_respond -->|chat_responded=true| END
+  chat_respond -->|chat_responded=false| understand_request
   understand_request -->|direct/clarify| END
   understand_request -->|alert| alert_extractor
   understand_request -->|research| policy_gate
