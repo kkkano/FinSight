@@ -2160,8 +2160,49 @@ async def synthesize(state: GraphState) -> dict:
     - LANGGRAPH_SYNTHESIZE_MODE=stub (default): deterministic render_vars
     - LANGGRAPH_SYNTHESIZE_MODE=llm: LLM fills render_vars JSON; validate; fallback to stub
     - LANGGRAPH_SYNTHESIZE_MODE=narrative: LLM writes full markdown report; render_vars kept for cards
+
+    Mode resolution (2026-05-03 fix for "答非所问"):
+    - The ``narrative`` mode (LLM writes a 5-section markdown report) only
+      applies when ``output_mode == 'investment_report'`` (user explicitly
+      asked for a report, e.g. clicked 「生成研报」or said 「研报」).
+    - For ``brief`` / ``chat`` output modes (the default for casual Q&A like
+      「今天微软什么价格」), narrative is downgraded to ``stub`` so a single
+      short template renders instead of the full narrative LLM report.
+    - ``stub`` and ``llm`` modes are NOT downgraded — both already produce
+      compact ``render_vars`` for the brief template, no length explosion.
+    - For multi-task plans (``len(tasks) >= 2`` that are not a pure compare),
+      we also force ``stub`` so ``render_stub._build_multitask_markdown`` can
+      render per-task sections.  ``narrative`` cannot disambiguate multiple
+      independent tickers and tends to drop all-but-one (the C20 bug).
     """
-    mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
+    env_mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
+    output_mode = state.get("output_mode") or "brief"
+    _ready_tasks_raw = state.get("tasks")
+    _ready_tasks = _ready_tasks_raw if isinstance(_ready_tasks_raw, list) else []
+    _op_dict = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    _op_name_for_mode = str(_op_dict.get("name") or "").strip().lower()
+    _is_pure_compare = _op_name_for_mode == "compare" and len(_ready_tasks) <= 2
+    _multi_task_force_stub = len(_ready_tasks) >= 2 and not _is_pure_compare
+
+    if _multi_task_force_stub:
+        mode = "stub"
+        logger.info(
+            "[Synthesize] Multi-task plan detected (%d tasks); forcing stub mode "
+            "so render_stub._build_multitask_markdown can render per-task sections "
+            "(env_mode=%s, output_mode=%s)",
+            len(_ready_tasks),
+            env_mode,
+            output_mode,
+        )
+    elif env_mode == "narrative" and output_mode != "investment_report":
+        mode = "stub"
+        logger.info(
+            "[Synthesize] narrative downgraded to stub (output_mode=%s ≠ investment_report); "
+            "narrative reserved for explicit deep-report requests only",
+            output_mode,
+        )
+    else:
+        mode = env_mode
     trace = state.get("trace") or {}
     synth_started_at = time.perf_counter()
 

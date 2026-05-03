@@ -463,3 +463,130 @@ def test_compute_unresolved_unsupported_claims_returns_residual_claims():
     )
     assert len(unresolved) == 1
     assert unresolved[0]["claim"] == "Claim B"
+
+
+# ========================================================================
+# 2026-05-03 — Regression tests for "答非所问" fix.
+# Mode-resolution rules in synthesize() entry:
+#   - env=narrative + output_mode=brief         → downgrade to stub
+#   - env=narrative + output_mode=investment_report → keep narrative
+#   - tasks >= 2 (not pure compare)             → force stub regardless of env
+# ========================================================================
+
+def test_synthesize_narrative_downgraded_when_output_mode_brief(monkeypatch):
+    """env=narrative + brief Q&A → must NOT trigger narrative LLM."""
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+
+    import importlib
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    narrative_called = {"flag": False}
+
+    async def _fake_generate(_state, _render_vars, _trace):
+        narrative_called["flag"] = True
+        return ("## should not be called\n\nbody", None)
+
+    monkeypatch.setattr(synth_mod, "_generate_narrative_draft", _fake_generate)
+
+    state = {
+        "query": "今天微软什么价格",
+        "output_mode": "brief",
+        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["MSFT"]},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    assert narrative_called["flag"] is False, (
+        "narrative LLM should NOT run for brief output_mode; "
+        "expected stub render_vars instead"
+    )
+    artifacts = out.get("artifacts") or {}
+    # stub mode populates render_vars but does NOT pre-write draft_markdown.
+    assert "render_vars" in artifacts
+    assert "draft_markdown" not in artifacts
+
+
+def test_synthesize_narrative_kept_for_investment_report(monkeypatch):
+    """env=narrative + output_mode=investment_report → narrative still runs."""
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+
+    import importlib
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    async def _fake_generate(_state, _render_vars, _trace):
+        return ("## report\n\ncontent", {"enabled": True, "checked": True})
+
+    monkeypatch.setattr(synth_mod, "_generate_narrative_draft", _fake_generate)
+
+    state = {
+        "query": "生成 AAPL 投资研报",
+        "output_mode": "investment_report",
+        "operation": {"name": "investment_report", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    artifacts = out.get("artifacts") or {}
+    assert artifacts.get("draft_markdown") == "## report\n\ncontent"
+
+
+def test_synthesize_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
+    """
+    Multi-task plan (>=2 tasks, not pure compare) must force stub mode so
+    render_stub._build_multitask_markdown can render per-task sections.
+    Fixes the C20 bug where 「小米和理想，CPI 影响吗」only rendered 理想.
+    """
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
+
+    import importlib
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    narrative_called = {"flag": False}
+
+    async def _fake_generate(_state, _render_vars, _trace):
+        narrative_called["flag"] = True
+        return ("## report\n\ncontent", None)
+
+    monkeypatch.setattr(synth_mod, "_generate_narrative_draft", _fake_generate)
+
+    state = {
+        "query": "我老婆要我买基金，烦死了，对了帮我看下小米和理想汽车，CPI 影响吗",
+        "output_mode": "investment_report",  # even with deep-report mode
+        "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["XIACY"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["XIACY"],
+                "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "tickers": ["LI"],
+                "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+            },
+            {
+                "id": "task_3",
+                "subject_type": "macro",
+                "tickers": [],
+                "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+            },
+        ],
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    assert narrative_called["flag"] is False, (
+        "Multi-task plan must downgrade to stub so per-task sections are rendered; "
+        "narrative cannot disambiguate multiple independent tickers"
+    )
+    artifacts = out.get("artifacts") or {}
+    assert "render_vars" in artifacts
+
