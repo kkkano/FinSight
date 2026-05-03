@@ -294,14 +294,14 @@ flowchart LR
 
 ### 9.2 晨报 Graph Pipeline 接入
 
-晨报操作通过 LangGraph Pipeline 执行，使用确定性合成（零 LLM 成本）：
+晨报操作通过独立的 `morning_brief_router` 入口接入 LangGraph Pipeline，使用确定性合成（零 LLM 成本）。**该路径不经过主聊天的 `prepare_context → understand_request`**，仍由兼容 `parse_operation` 节点做关键词解析；后续若把 morning_brief 收敛进 `understand_request` 的 task graph，这条独立路径会被替换为 `understanding.tasks[].operation == "morning_brief"`。
 
 ```mermaid
 flowchart TD
-    ROUTER["morning_brief_router"] --> CACHE{"Cache 30min?"}
+    ROUTER["morning_brief_router<br/>(独立入口，非主聊天链路)"] --> CACHE{"Cache 30min?"}
     CACHE -->|Hit| RET[Return]
     CACHE -->|Miss| GP["GraphRunner.ainvoke()"]
-    GP --> PARSE["parse_operation → morning_brief"]
+    GP --> PARSE["parse_operation → morning_brief<br/>(legacy 兼容节点)"]
     PARSE --> POLICY["policy_gate → whitelist"]
     POLICY --> PLAN["planner_stub → per-ticker parallel"]
     PLAN --> EXEC["execute_plan"]

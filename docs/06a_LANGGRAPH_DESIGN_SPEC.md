@@ -513,11 +513,12 @@ SUBJECT_SUBGRAPHS = {
 
 ### 9.2 测试建议（审查）
 
-- `test_resolve_subject_selection_priority.py`
+- `test_understand_request.py`（当前主路径请求理解层 golden cases，2026-05-03 已落地）
 - `test_output_mode_ui_override.py`
 - `test_planner_planir_schema_validation.py`
 - `test_executor_parallel_groups.py`
 - `test_news_brief_template_no_empty_chapters.py`
+- `test_resolve_subject_selection_priority.py`（legacy 兼容回归，仅在保留 `resolve_subject` 兼容节点期间有效）
 
 ### 9.3 验收标准（测试部分）
 
