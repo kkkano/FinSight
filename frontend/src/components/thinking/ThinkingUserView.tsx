@@ -30,6 +30,15 @@ const PHASES = [
     altDoneStages: ['agent_selected'],
   },
   {
+    id: 'retrieve',
+    label: '检索证据',
+    emoji: '🔎',
+    nodes: ['search', 'retrieve', 'rag', 'tool'],
+    altStages: ['tool_start', 'tool_call', 'tool_end', 'data_source', 'api_call', 'cache_hit', 'cache_miss', 'cache_set'],
+    doneMarker: 'execute_plan',
+    altDoneStages: ['tool_end', 'data_source', 'api_call'],
+  },
+  {
     id: 'execute',
     label: '执行分析',
     emoji: '🔬',
@@ -105,6 +114,22 @@ function getStepMessage(step: ThinkingStep): string {
   // User-visible trace events should keep the backend's concrete summary.
   if ((step.eventType === 'trace' || step.result?.type === 'trace') && step.message) {
     return step.message;
+  }
+  if (step.stage === 'tool_start' || step.stage === 'tool_call' || step.stage === 'tool_end') {
+    const toolName = step.result?.name || step.result?.tool || step.result?.tool_name || 'tool';
+    if (step.stage === 'tool_start') return `调用工具：${toolName}`;
+    if (step.stage === 'tool_end') return `工具完成：${toolName}`;
+    return `工具请求：${toolName}`;
+  }
+  if (step.stage === 'api_call') {
+    const method = step.result?.method || 'GET';
+    const endpoint = step.result?.endpoint || step.result?.url || '';
+    return `请求数据源：${method} ${endpoint}`.trim();
+  }
+  if (step.stage === 'data_source') {
+    const source = step.result?.source || step.result?.provider || '数据源';
+    const queryType = step.result?.query_type || step.result?.operation || '';
+    return `读取${source}${queryType ? `：${queryType}` : ''}`;
   }
   // Frontend mapping
   const mapped = resolveUserMessage(step.stage);

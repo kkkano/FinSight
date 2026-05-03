@@ -1,5 +1,6 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
+import { apiClient } from '../api/client';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
@@ -248,8 +249,19 @@ const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
 const CONVERSATIONS_STORAGE_KEY = 'finsight-conversations';
 const MAX_PERSISTED_MESSAGES = 100;
 const MAX_CONVERSATIONS = 50;
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 const memoryMessageStore = new Map<string, string>();
 let memoryConversationSummaries: ConversationSummary[] = [];
+
+const createBackendConversation = (sessionId: string) => {
+  if (!sessionId) return;
+  void apiClient.createConversation(sessionId).catch(() => undefined);
+};
+
+const deleteBackendConversation = (sessionId: string) => {
+  if (!sessionId) return;
+  void apiClient.deleteConversation(sessionId).catch(() => undefined);
+};
 
 const messageStorageKey = (sessionId: string): string =>
   `${MESSAGES_STORAGE_PREFIX}${String(sessionId || '').trim()}`;
@@ -556,14 +568,15 @@ export const useStore = create<AppState>((set) => ({
   setAbortController: (controller) => set({ abortController: controller }),
   cancelChatStream: () =>
     set((state) => {
+      const progress = state.executionProgress;
       state.abortController?.abort();
       return {
         abortController: null,
         isChatLoading: false,
-        statusMessage: null,
-        statusSince: null,
-        currentStep: null,
-        executionProgress: null,
+        statusMessage: STOPPED_GENERATION_MESSAGE,
+        statusSince: Date.now(),
+        currentStep: '已停止生成',
+        executionProgress: progress,
       };
     }),
   clearConversationContext: () =>
@@ -603,6 +616,7 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
       }
+      createBackendConversation(nextSessionId);
       const conversationSummaries = upsertConversationSummary(
         state.conversationSummaries,
         nextSessionId,
@@ -670,6 +684,7 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
+      createBackendConversation(normalized);
       return {
         sessionId: normalized,
         messages,
@@ -716,6 +731,7 @@ export const useStore = create<AppState>((set) => ({
       if (normalized === state.sessionId) {
         state.abortController?.abort();
       }
+      deleteBackendConversation(normalized);
       clearPersistedConversation(normalized);
       const remaining = state.conversationSummaries
         .filter((item) => item.sessionId !== normalized)
@@ -732,6 +748,9 @@ export const useStore = create<AppState>((set) => ({
       persistConversationSummaries(nextSummaries);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+      if (normalized === state.sessionId && nextSessionId !== normalized) {
+        createBackendConversation(nextSessionId);
       }
       return {
         sessionId: nextSessionId,

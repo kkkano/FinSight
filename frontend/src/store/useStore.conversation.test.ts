@@ -87,4 +87,23 @@ describe('useStore conversation lifecycle', () => {
     expect(next.sessionId).not.toBe(originalSession);
     expect(next.conversationSummaries.some((item) => item.sessionId === originalSession)).toBe(false);
   });
+
+  it('marks chat stream as stopped when cancelling active generation', () => {
+    const state = useStore.getState();
+    const controller = new AbortController();
+    state.setLoading(true);
+    state.setStatus('Streaming response...');
+    state.setExecutionState('Searching', 40);
+    state.setAbortController(controller);
+
+    state.cancelChatStream();
+
+    const next = useStore.getState();
+    expect(controller.signal.aborted).toBe(true);
+    expect(next.isChatLoading).toBe(false);
+    expect(next.statusMessage).toBe('已停止生成，保留已完成的结果。');
+    expect(next.currentStep).toBe('已停止生成');
+    expect(next.executionProgress).toBe(40);
+    expect(next.abortController).toBeNull();
+  });
 });

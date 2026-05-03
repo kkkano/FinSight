@@ -543,6 +543,16 @@ class _InMemoryHybridStore:
         )
         return _merge_search_hits(groups, top_k=max(1, int(top_k)))
 
+    def delete_collections(self, *, collections: Iterable[str]) -> int:
+        normalized = set(_normalize_collections(collections))
+        if not normalized:
+            return 0
+        with self._lock:
+            keys = [key for key in self._docs if key[0] in normalized]
+            for key in keys:
+                self._docs.pop(key, None)
+        return len(keys)
+
     def cleanup_expired(self) -> int:
         now = _utc_now()
         to_delete: list[tuple[str, str]] = []
@@ -950,6 +960,21 @@ class _PostgresHybridStore:
             result = conn.execute(sql)
         return int(result.rowcount or 0)
 
+    def delete_collections(self, *, collections: Iterable[str]) -> int:
+        normalized = _normalize_collections(collections)
+        if not normalized:
+            return 0
+        self._ensure_schema()
+        deleted = 0
+        with self._engine.begin() as conn:
+            for collection in normalized:
+                result = conn.execute(
+                    text("DELETE FROM rag_documents_v2 WHERE collection = :collection"),
+                    {"collection": collection},
+                )
+                deleted += int(result.rowcount or 0)
+        return deleted
+
     def count_documents(self) -> int:
         self._ensure_schema()
         sql = text(
@@ -1137,6 +1162,12 @@ class HybridRAGService:
         cleanup_fn = getattr(self._store, "cleanup_stale_filings", None)
         if callable(cleanup_fn):
             return int(cleanup_fn(older_than_days=older_than_days))
+        return 0
+
+    def delete_collections(self, *, collections: Iterable[str]) -> int:
+        delete_fn = getattr(self._store, "delete_collections", None)
+        if callable(delete_fn):
+            return int(delete_fn(collections=collections))
         return 0
 
 

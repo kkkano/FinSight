@@ -32,6 +32,15 @@ const installCommonRoutes = async (page: any) => {
   await page.route('**/api/reports/replay/**', async (route: any) => {
     await fulfillJson(route, { success: true, report: null, citations: [], trace_digest: {} });
   });
+  await page.route('**/api/conversations/**', async (route: any) => {
+    const body = parseRequestBody(route);
+    await fulfillJson(route, {
+      success: true,
+      session_id: body.session_id || 'public:anonymous:e2e-request-understanding',
+      cleared: { context: true },
+      conversation: { turns: 0 },
+    });
+  });
   await page.route('**/api/user/profile**', async (route: any) => {
     await fulfillJson(route, { profile: { name: 'E2E User', watchlist: ['AAPL', 'MSFT'] } });
   });
@@ -168,5 +177,5 @@ test('running chat streams can be stopped from the input control', async ({ page
   await expect(page.getByTestId('chat-stop-btn')).toBeVisible();
   await page.getByTestId('chat-stop-btn').click();
   await expect(page.getByTestId('chat-send-btn')).toBeVisible();
-  await expect(page.locator('#chat-scroll-container').getByText('已停止本次响应。')).toBeVisible();
+  await expect(page.locator('#chat-scroll-container').getByText('已停止生成，保留已完成的结果。')).toBeVisible();
 });

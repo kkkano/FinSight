@@ -111,6 +111,28 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
         return 900.0 if mode == "investment_report" else 500.0
 
 
+def _cancelled_trace_payload() -> dict[str, Any]:
+    return {
+        "type": "trace",
+        "stage": "cancelled",
+        "status": "cancelled",
+        "visibility": "user",
+        "title": "已停止生成",
+        "summary": "已停止生成，保留已完成的结果。",
+        "timestamp": _utc_iso_now(),
+    }
+
+
+def _cancelled_pipeline_payload() -> dict[str, Any]:
+    return {
+        "type": "pipeline_stage",
+        "stage": "cancelled",
+        "status": "cancelled",
+        "message": "Generation cancelled by client",
+        "timestamp": _utc_iso_now(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Dependency injection container
 # ---------------------------------------------------------------------------
@@ -478,6 +500,10 @@ async def run_graph_pipeline(
                     },
                 }
             )
+        except asyncio.CancelledError:
+            await _queue_event(_cancelled_trace_payload(), record_metric=False)
+            await _queue_event(_cancelled_pipeline_payload(), record_metric=False)
+            logger.info("[execution_service] graph run cancelled thread_id=%s", thread_id)
         except Exception as exc:
             logger.error(
                 "[execution_service] unhandled: %s", exc, exc_info=True,
@@ -515,6 +541,8 @@ async def run_graph_pipeline(
             producer_task.cancel()
             try:
                 await producer_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
 
@@ -744,6 +772,10 @@ async def resume_graph_pipeline(
                     },
                 }
             )
+        except asyncio.CancelledError:
+            await _queue_event(_cancelled_trace_payload())
+            await _queue_event(_cancelled_pipeline_payload())
+            logger.info("[resume_pipeline] graph resume cancelled thread_id=%s", thread_id)
         except Exception as exc:
             logger.error("[resume_pipeline] unhandled: %s", exc, exc_info=True)
             await _queue_event(
@@ -777,5 +809,7 @@ async def resume_graph_pipeline(
             producer_task.cancel()
             try:
                 await producer_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass

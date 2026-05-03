@@ -642,6 +642,24 @@ export const apiClient = {
     return response.data;
   },
 
+  async createConversation(sessionId?: string): Promise<{
+    success: boolean;
+    session_id: string;
+    conversation?: Record<string, unknown>;
+  }> {
+    const response = await api.post('/api/conversations', sessionId ? { session_id: sessionId } : {});
+    return response.data;
+  },
+
+  async deleteConversation(sessionId: string): Promise<{
+    success: boolean;
+    session_id: string;
+    cleared?: Record<string, unknown>;
+  }> {
+    const response = await api.delete(`/api/conversations/${encodeURIComponent(sessionId)}`);
+    return response.data;
+  },
+
   /** Compare two reports — GET /api/reports/compare */
   async compareReports(params: {
     sessionId: string;
@@ -1056,6 +1074,10 @@ export const apiClient = {
 
     await parseSSEStream(response, wrappedCallbacks, opts);
 
+    if (opts.signal?.aborted) {
+      return;
+    }
+
     if (!sawDone && !sawError) {
       callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
     }
@@ -1142,6 +1164,10 @@ export const apiClient = {
       };
 
       await parseSSEStream(response.clone(), wrappedCallbacks, opts);
+
+      if (opts?.signal?.aborted) {
+        return response;
+      }
 
       if (!sawDone && !sawError) {
         callbacks.onError?.('Resume stream ended unexpectedly (missing done event)');

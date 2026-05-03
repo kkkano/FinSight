@@ -24,6 +24,7 @@ from backend.api.schemas import (
 from backend.api.chat_router import ChatRouterDeps, create_chat_router
 from backend.api.agent_router import AgentRouterDeps, create_agent_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
+from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
 from backend.api.dashboard_router import dashboard_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.api.market_router import MarketRouterDeps, create_market_router
@@ -316,6 +317,107 @@ def _get_session_context(session_id: str) -> ContextManager:
             _reference_contexts[session_id] = manager
         _reference_context_last_access[session_id] = now
         return manager
+
+
+def _summarize_session_context(session_id: str, manager: ContextManager) -> dict[str, Any]:
+    try:
+        state = manager.get_state()
+    except Exception:
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    return {
+        "session_id": session_id,
+        "turns": int(state.get("turns") or 0),
+        "current_focus": state.get("current_focus"),
+        "current_focus_name": state.get("current_focus_name"),
+        "current_focus_market": state.get("current_focus_market"),
+        "pending_clarification": bool(state.get("pending_clarification")),
+        "cached_data_keys": state.get("cached_data_keys") if isinstance(state.get("cached_data_keys"), list) else [],
+        "last_access": _reference_context_last_access.get(session_id),
+    }
+
+
+def _list_session_contexts() -> list[dict[str, Any]]:
+    with _reference_lock:
+        _cleanup_session_contexts(time.time())
+        items = [
+            _summarize_session_context(session_id, manager)
+            for session_id, manager in _reference_contexts.items()
+        ]
+    return sorted(items, key=lambda item: float(item.get("last_access") or 0), reverse=True)
+
+
+def _clear_thread_rag_artifacts(thread_id: str) -> dict[str, int]:
+    deleted_collections = 0
+    soft_deleted_runs = 0
+    try:
+        from backend.rag import get_rag_service
+        from backend.rag.layering import build_thread_memory_collection, build_thread_working_set_collection
+
+        collections = [
+            build_thread_working_set_collection(thread_id),
+            build_thread_memory_collection(thread_id=thread_id),
+        ]
+        service = get_rag_service()
+        delete_collections = getattr(service, "delete_collections", None)
+        if callable(delete_collections):
+            deleted_collections = int(delete_collections(collections=collections) or 0)
+
+        store = get_rag_observability_store()
+        list_runs = getattr(store, "list_runs", None)
+        soft_delete_run = getattr(store, "soft_delete_run", None)
+        if callable(list_runs) and callable(soft_delete_run):
+            runs = list_runs(limit=500, include_deleted=False)
+            for item in runs.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("collection") or "").strip() not in collections:
+                    continue
+                run_id = str(item.get("id") or "").strip()
+                if not run_id:
+                    continue
+                soft_delete_run(run_id, deleted_by="conversation_api", reason="conversation_deleted")
+                soft_deleted_runs += 1
+    except Exception:
+        logger.exception("failed to clear RAG artifacts for session")
+    return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}
+
+
+def _clear_session_context(thread_id: str) -> dict[str, Any]:
+    normalized = str(thread_id or "").strip()
+    result: dict[str, Any] = {
+        "context": False,
+        "reports": 0,
+        "citations": 0,
+        "rag_collections": 0,
+        "rag_runs": 0,
+    }
+    if not normalized:
+        return result
+
+    with _reference_lock:
+        manager = _reference_contexts.pop(normalized, None)
+        _reference_context_last_access.pop(normalized, None)
+    if manager is not None:
+        try:
+            manager.clear()
+        except Exception:
+            logger.debug("session context clear failed after pop", exc_info=True)
+        result["context"] = True
+
+    try:
+        delete_session = getattr(get_report_index_store(), "delete_session", None)
+        if callable(delete_session):
+            deleted = delete_session(session_id=normalized)
+            if isinstance(deleted, dict):
+                result["reports"] = int(deleted.get("reports") or 0)
+                result["citations"] = int(deleted.get("citations") or 0)
+    except Exception:
+        logger.exception("failed to delete report index session")
+
+    result.update(_clear_thread_rag_artifacts(normalized))
+    return result
 
 
 def _resolve_query_reference(query: str, thread_id: str) -> str:
@@ -913,6 +1015,15 @@ chat_router = create_chat_router(
     )
 )
 
+conversation_router = create_conversation_router(
+    ConversationRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_session_context=_get_session_context,
+        list_session_contexts=_list_session_contexts,
+        clear_session_context=_clear_session_context,
+    )
+)
+
 system_router = create_system_router(
     SystemRouterDeps(
         metrics_enabled=METRICS_ENABLED,
@@ -1037,6 +1148,7 @@ rebalance_router = create_rebalance_router(
 app.include_router(system_router)
 app.include_router(user_router)
 app.include_router(agent_router)
+app.include_router(conversation_router)
 app.include_router(chat_router)
 app.include_router(market_router)
 app.include_router(subscription_router)

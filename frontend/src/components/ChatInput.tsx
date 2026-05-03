@@ -113,6 +113,20 @@ const hasActionableResearchInput = (text: string): boolean => {
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '图表', 'k线'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
+
+const buildCancelledThinkingStep = (): ThinkingStep => ({
+  stage: 'cancelled',
+  message: STOPPED_GENERATION_MESSAGE,
+  timestamp: new Date().toISOString(),
+  eventType: 'trace',
+  result: {
+    type: 'trace',
+    stage: 'cancelled',
+    status: 'cancelled',
+    summary: STOPPED_GENERATION_MESSAGE,
+  },
+});
 
 // Agent 阶段到日志源的映射 (stage -> AgentLogSource)
 const mapStageToSource = (stage: string): AgentLogSource => {
@@ -400,6 +414,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       }
     };
 
+    const finishAbortedStream = () => {
+      if (!thinkingSteps.some((step) => step.stage === 'cancelled')) {
+        thinkingSteps = [...thinkingSteps, buildCancelledThinkingStep()];
+      }
+      updateMessage(aiMsgId, {
+        content: fullContent || STOPPED_GENERATION_MESSAGE,
+        isLoading: false,
+        thinking: thinkingSteps,
+      });
+      setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+      addAgentLog({
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        source: 'system',
+        level: 'warn',
+        message: STOPPED_GENERATION_MESSAGE,
+      });
+      updateAgentStatus('supervisor', {
+        status: 'waiting',
+        endTime: new Date().toISOString(),
+        lastMessage: STOPPED_GENERATION_MESSAGE,
+      });
+    };
+
     try {
       await apiClient.sendMessageStream(
         userMsgContent,
@@ -607,21 +645,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         { signal: streamController.signal },
       );
       if (streamController.signal.aborted) {
-        updateMessage(aiMsgId, {
-          content: fullContent || '已停止本次响应。',
-          isLoading: false,
-          thinking: thinkingSteps,
-        });
-        setExecutionState('Stopped', useStore.getState().executionProgress ?? null);
+        finishAbortedStream();
       }
     } catch (error) {
       if (streamController.signal.aborted) {
-        updateMessage(aiMsgId, {
-          content: fullContent || '已停止本次响应。',
-          isLoading: false,
-          thinking: thinkingSteps,
-        });
-        setExecutionState('Stopped', useStore.getState().executionProgress ?? null);
+        finishAbortedStream();
         return;
       }
       updateMessage(aiMsgId, {
