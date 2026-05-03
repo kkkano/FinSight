@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
+from backend.graph.cancellation import get_cancel_event
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
@@ -107,6 +108,7 @@ async def execute_plan(
     agent_invokers: Mapping[str, Callable[[dict[str, Any]], Any]] | None = None,
     dry_run: bool = True,
     cache: MutableMapping[str, Any] | None = None,
+    cancel_event: asyncio.Event | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Execute a PlanIR `steps` list with:
@@ -120,6 +122,30 @@ async def execute_plan(
     if not isinstance(steps, list):
         steps = []
     execution_started_at = time.perf_counter()
+    cancel_event = cancel_event or get_cancel_event()
+    cancelled_stage_emitted = False
+
+    async def _emit_cancelled_stage() -> None:
+        nonlocal cancelled_stage_emitted
+        if cancelled_stage_emitted:
+            return
+        cancelled_stage_emitted = True
+        await emit_event(
+            {
+                "type": "pipeline_stage",
+                "stage": "cancelled",
+                "status": "cancelled",
+                "message": "Executor cancelled by client",
+                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        )
+
+    async def _raise_if_cancelled() -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            await _emit_cancelled_stage()
+            raise asyncio.CancelledError()
+
     await emit_event(
         {
             "type": "pipeline_stage",
@@ -217,6 +243,7 @@ async def execute_plan(
         exec_events.append(
             {"event": "executor.step_started", "step_id": step_id, "kind": kind, "name": name, "task_ids": task_ids}
         )
+        await _raise_if_cancelled()
         await emit_event(
             {
                 "type": "step_start",
@@ -330,6 +357,7 @@ async def execute_plan(
                 output = {"skipped": True, "reason": "dry_run", "inputs": inputs}
             else:
                 if kind == "tool":
+                    await _raise_if_cancelled()
                     await emit_event(
                         {
                             "type": "tool_start",
@@ -344,8 +372,10 @@ async def execute_plan(
                     if not invoker:
                         raise ValueError(f"tool not allowed/registered: {name}")
                     output = await _maybe_await(invoker(inputs))
+                    await _raise_if_cancelled()
                     await emit_event({"type": "tool_end", "step_id": step_id, "task_id": task_id, "task_ids": task_ids})
                 elif kind == "agent":
+                    await _raise_if_cancelled()
                     await emit_event(
                         {
                             "type": "agent_start",
@@ -362,6 +392,7 @@ async def execute_plan(
                     if not invoker:
                         raise ValueError(f"agent not allowed/registered: {name}")
                     output = await _maybe_await(invoker(inputs))
+                    await _raise_if_cancelled()
                     await emit_event(
                         {
                             "type": "agent_done",
@@ -416,6 +447,9 @@ async def execute_plan(
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
             )
+        except asyncio.CancelledError:
+            await _emit_cancelled_stage()
+            raise
         except Exception as exc:
             err = {
                 "schema_version": FAILURE_STRATEGY_VERSION,
@@ -468,24 +502,29 @@ async def execute_plan(
 
     groups = group_steps_by_parallel_group(steps)
     aborted_by_required_error = False
-    for group in groups:
-        try:
+    try:
+        await _raise_if_cancelled()
+        for group in groups:
+            await _raise_if_cancelled()
             await asyncio.gather(*[_run_step(step) for step in group])
-        except Exception as exc:
-            # Required step failed; stop further execution but return partial artifacts.
-            aborted_by_required_error = True
-            await emit_event(
-                {
-                    "type": "pipeline_stage",
-                    "stage": "executing",
-                    "status": "error",
-                    "message": "Executor aborted by required step failure",
-                    "error": str(exc)[:300],
-                    "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
-                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                }
-            )
-            break
+            await _raise_if_cancelled()
+    except asyncio.CancelledError:
+        await _emit_cancelled_stage()
+        raise
+    except Exception as exc:
+        # Required step failed; stop further execution but return partial artifacts.
+        aborted_by_required_error = True
+        await emit_event(
+            {
+                "type": "pipeline_stage",
+                "stage": "executing",
+                "status": "error",
+                "message": "Executor aborted by required step failure",
+                "error": str(exc)[:300],
+                "duration_ms": int((time.perf_counter() - execution_started_at) * 1000),
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        )
 
     if not aborted_by_required_error:
         await emit_event(

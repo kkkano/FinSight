@@ -2,6 +2,8 @@
 import asyncio
 import importlib
 
+import pytest
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -70,6 +72,38 @@ def test_executor_emits_executing_stage_events(monkeypatch):
     pipeline_events = [event for event in events if event.get("type") == "pipeline_stage"]
     assert any(event.get("stage") == "executing" and event.get("status") == "start" for event in pipeline_events)
     assert any(event.get("stage") == "executing" and event.get("status") == "done" for event in pipeline_events)
+
+
+def test_executor_emits_cancelled_stage_when_cancel_event_is_set(monkeypatch):
+    import backend.graph.executor as executor_mod
+
+    events: list[dict] = []
+
+    async def _fake_emit(payload: dict):
+        events.append(payload)
+
+    monkeypatch.setattr(executor_mod, "emit_event", _fake_emit)
+
+    cancel_event = asyncio.Event()
+    cancel_event.set()
+
+    async def _run_cancelled():
+        with pytest.raises(asyncio.CancelledError):
+            await executor_mod.execute_plan(
+                {"steps": [{"id": "s1", "kind": "tool", "name": "slow", "inputs": {}}]},
+                dry_run=True,
+                cancel_event=cancel_event,
+                tool_invokers={},
+                agent_invokers={},
+                cache={},
+            )
+
+    _run(_run_cancelled())
+
+    pipeline_events = [event for event in events if event.get("type") == "pipeline_stage"]
+    assert any(event.get("stage") == "executing" and event.get("status") == "start" for event in pipeline_events)
+    assert any(event.get("stage") == "cancelled" and event.get("status") == "cancelled" for event in pipeline_events)
+    assert not any(event.get("stage") == "executing" and event.get("status") == "done" for event in pipeline_events)
 
 
 def test_synthesize_stub_emits_synthesizing_stage_events(monkeypatch):

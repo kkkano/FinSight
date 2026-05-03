@@ -203,10 +203,12 @@ async def run_graph_pipeline(
         markdown response.
     """
     from backend.graph.event_bus import reset_event_emitter, set_event_emitter
+    from backend.graph.cancellation import reset_cancel_event, set_cancel_event
     from backend.orchestration.trace_emitter import TraceEvent, get_trace_emitter
 
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
+    cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
     stream_metrics: dict[str, int] = {
@@ -276,6 +278,7 @@ async def run_graph_pipeline(
 
     async def _producer() -> None:
         token = set_event_emitter(_emit)
+        cancel_token = set_cancel_event(cancel_event)
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
@@ -309,6 +312,7 @@ async def run_graph_pipeline(
                     timeout=timeout_seconds,
                 )
             except asyncio.TimeoutError:
+                cancel_event.set()
                 logger.error(
                     "[execution_service] graph timeout thread_id=%s timeout=%ss query=%s",
                     thread_id,
@@ -501,6 +505,7 @@ async def run_graph_pipeline(
                 }
             )
         except asyncio.CancelledError:
+            cancel_event.set()
             await _queue_event(_cancelled_trace_payload(), record_metric=False)
             await _queue_event(_cancelled_pipeline_payload(), record_metric=False)
             logger.info("[execution_service] graph run cancelled thread_id=%s", thread_id)
@@ -517,6 +522,7 @@ async def run_graph_pipeline(
             )
         finally:
             trace_emitter.remove_listener(_enqueue_trace_event)
+            reset_cancel_event(cancel_token)
             reset_event_emitter(token)
             await queue.put(_END)
 
@@ -538,6 +544,7 @@ async def run_graph_pipeline(
                 yield item
     finally:
         if not producer_task.done():
+            cancel_event.set()
             producer_task.cancel()
             try:
                 await producer_task
@@ -568,10 +575,12 @@ async def resume_graph_pipeline(
     checkpointed graph via ``runner.resume()``.
     """
     from backend.graph.event_bus import reset_event_emitter, set_event_emitter
+    from backend.graph.cancellation import reset_cancel_event, set_cancel_event
     from backend.orchestration.trace_emitter import TraceEvent, get_trace_emitter
 
     queue: asyncio.Queue[object] = asyncio.Queue()
     _END = object()
+    cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
 
@@ -619,6 +628,7 @@ async def resume_graph_pipeline(
 
     async def _producer() -> None:
         token = set_event_emitter(_emit)
+        cancel_token = set_cancel_event(cancel_event)
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
@@ -773,6 +783,7 @@ async def resume_graph_pipeline(
                 }
             )
         except asyncio.CancelledError:
+            cancel_event.set()
             await _queue_event(_cancelled_trace_payload())
             await _queue_event(_cancelled_pipeline_payload())
             logger.info("[resume_pipeline] graph resume cancelled thread_id=%s", thread_id)
@@ -787,6 +798,7 @@ async def resume_graph_pipeline(
             )
         finally:
             trace_emitter.remove_listener(_enqueue_trace_event)
+            reset_cancel_event(cancel_token)
             reset_event_emitter(token)
             await queue.put(_END)
 
@@ -806,6 +818,7 @@ async def resume_graph_pipeline(
                 yield item
     finally:
         if not producer_task.done():
+            cancel_event.set()
             producer_task.cancel()
             try:
                 await producer_task

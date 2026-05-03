@@ -21,8 +21,11 @@ async def _collect_events(generator):
 def test_run_graph_pipeline_emits_cancelled_trace_when_graph_is_cancelled(monkeypatch):
     execution_service = importlib.import_module("backend.services.execution_service")
     runner_module = importlib.import_module("backend.graph.runner")
+    cancellation = importlib.import_module("backend.graph.cancellation")
+    seen: dict[str, object] = {}
 
     async def _cancelled_run_graph_traced(*_args, **_kwargs):
+        seen["cancel_event"] = cancellation.get_cancel_event()
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(runner_module, "run_graph_traced", _cancelled_run_graph_traced)
@@ -61,3 +64,5 @@ def test_run_graph_pipeline_emits_cancelled_trace_when_graph_is_cancelled(monkey
         and event.get("status") == "cancelled"
         for event in events
     )
+    assert seen.get("cancel_event") is not None
+    assert seen["cancel_event"].is_set() is True
