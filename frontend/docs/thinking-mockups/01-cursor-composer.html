@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Mockup 01 · Cursor Composer 风格</title>
+<style>
+  :root{
+    --bg:#0a0a10;--panel:#13131c;--panel2:#1a1a26;--border:#2a2a3a;
+    --text:#e8e8f0;--muted:#8a8aa0;--muted2:#5e5e74;
+    --primary:#a78bfa;--primary2:#7c3aed;--accent:#22d3ee;
+    --done:#34d399;--running:#60a5fa;--error:#f87171;--warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.55 -apple-system,"Segoe UI","PingFang SC",sans-serif;
+       background:radial-gradient(1200px 600px at 80% -10%,#1e1140 0%,#0a0a10 60%);
+       color:var(--text);min-height:100vh;padding:32px}
+  .preview-frame{max-width:780px;margin:0 auto;background:var(--panel);
+       border:1px solid var(--border);border-radius:16px;overflow:hidden;
+       box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px rgba(167,139,250,.08)}
+  .chat-bubble{padding:20px 24px;border-bottom:1px solid var(--border)}
+  .chat-bubble.user{background:transparent;text-align:right;color:var(--muted)}
+  .chat-bubble.user .bubble{display:inline-block;background:var(--panel2);
+       padding:10px 14px;border-radius:16px 16px 4px 16px;color:var(--text);max-width:75%;text-align:left}
+  .chat-bubble.bot{background:linear-gradient(180deg,rgba(167,139,250,.04),transparent)}
+  .answer{margin-bottom:16px;color:var(--text)}
+
+  /* === 思考过程容器 === */
+  .thinking{background:var(--panel2);border:1px solid var(--border);
+       border-radius:12px;padding:14px 16px;margin-top:10px}
+  .thinking-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .thinking-head .title{font-weight:600;letter-spacing:.02em}
+  .thinking-head .badge{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* 圆形进度环 */
+  .ring{width:36px;height:36px;position:relative}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+       font-size:11px;font-weight:600;color:var(--primary)}
+  .meta-chip{font-size:11px;padding:3px 8px;border-radius:999px;
+       background:rgba(167,139,250,.12);color:var(--primary);border:1px solid rgba(167,139,250,.25)}
+
+  /* === 时间轴 === */
+  .timeline{position:relative;padding-left:22px}
+  .timeline::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;
+       background:linear-gradient(180deg,var(--primary2) 0%,var(--accent) 100%);opacity:.35;border-radius:2px}
+  .phase{position:relative;padding:6px 0 14px;}
+  .phase .dot{position:absolute;left:-22px;top:8px;width:18px;height:18px;border-radius:50%;
+       background:var(--panel);border:2px solid var(--border);display:flex;align-items:center;justify-content:center}
+  .phase.done .dot{border-color:var(--done);background:rgba(52,211,153,.12)}
+  .phase.done .dot::after{content:"✓";color:var(--done);font-size:10px;font-weight:700}
+  .phase.running .dot{border-color:var(--running);background:rgba(96,165,250,.15);animation:pulse 1.6s ease-in-out infinite}
+  .phase.running .dot::after{content:"";width:6px;height:6px;background:var(--running);border-radius:50%}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(96,165,250,.5)}50%{box-shadow:0 0 0 8px rgba(96,165,250,0)}}
+
+  .phase-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 8px;border-radius:6px;
+       transition:background .15s}
+  .phase-row:hover{background:rgba(255,255,255,.03)}
+  .phase-label{flex:1;font-weight:500;font-size:13px}
+  .phase-meta{display:flex;gap:6px;align-items:center}
+  .duration{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;font-family:"JetBrains Mono",ui-monospace,monospace}
+  .duration.long{color:var(--warn)}
+
+  .phase-detail{margin:6px 0 0 4px;padding-left:14px;border-left:1px dashed var(--border)}
+  .step{display:flex;align-items:center;gap:10px;padding:5px 6px;font-size:12.5px;color:var(--muted);
+       border-radius:5px;animation:slideIn .3s ease}
+  .step:hover{background:rgba(255,255,255,.02);color:var(--text)}
+  .step .icon{width:14px;height:14px;flex-shrink:0;color:var(--muted2)}
+  .step.done .icon{color:var(--done)}
+  .step.running .icon{color:var(--running)}
+  .step .msg{flex:1;color:var(--text)}
+  .step.done .msg{color:var(--muted)}
+  .step .agent-tag{font-size:10px;padding:1px 6px;border-radius:3px;
+       background:rgba(34,211,238,.1);color:var(--accent);border:1px solid rgba(34,211,238,.2)}
+  .step .ts{font-size:10px;color:var(--muted2);font-family:"JetBrains Mono",ui-monospace,monospace}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+
+  /* Agent 卡片 */
+  .agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0 4px 4px;padding-left:14px}
+  .agent-card{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:8px;padding:8px 10px;
+       display:flex;flex-direction:column;gap:4px;font-size:12px}
+  .agent-card.done{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.04)}
+  .agent-card.running{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.05)}
+  .agent-card .row1{display:flex;align-items:center;gap:6px}
+  .agent-card .name{flex:1;font-weight:500}
+  .agent-card .conf{font-size:10px;color:var(--muted)}
+  .agent-card .bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+  .agent-card .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--primary));border-radius:2px;
+       transition:width .4s}
+  .agent-card .meta{display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)}
+
+  .stream-out{margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+       font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;color:var(--muted);max-height:120px;overflow:auto}
+  .stream-out::before{content:"📄 Streaming output · rendering";display:block;color:var(--accent);
+       font-size:10px;margin-bottom:6px;letter-spacing:.04em}
+  .typing::after{content:"▍";color:var(--accent);animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .footer-status{margin-top:10px;padding:8px 12px;background:rgba(52,211,153,.08);
+       border:1px solid rgba(52,211,153,.2);border-radius:8px;display:flex;align-items:center;gap:8px;
+       color:var(--done);font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="preview-frame">
+
+  <!-- 用户问 -->
+  <div class="chat-bubble user">
+    <span class="bubble">AAPL 最近股价走势和基本面分析</span>
+  </div>
+
+  <!-- Bot 回复 -->
+  <div class="chat-bubble bot">
+    <div class="answer">已为你完成苹果（AAPL）的多维度分析。<b>核心结论：偏多，置信度 72%</b>。技术面短期超买但基本面强劲，建议分批建仓。</div>
+
+    <!-- === 思考过程主块 === -->
+    <div class="thinking">
+      <div class="thinking-head">
+        <div class="ring">
+          <svg width="36" height="36"><circle cx="18" cy="18" r="14" stroke="#2a2a3a" stroke-width="3" fill="none"/>
+            <circle cx="18" cy="18" r="14" stroke="#a78bfa" stroke-width="3" fill="none"
+              stroke-dasharray="88" stroke-dashoffset="0" stroke-linecap="round"/></svg>
+          <div class="pct">100</div>
+        </div>
+        <div>
+          <div class="title">分析过程</div>
+          <div style="font-size:11px;color:var(--muted)">5/5 阶段 · 12 个事件 · 0 个错误</div>
+        </div>
+        <div class="badge">
+          <span class="meta-chip">⏱ 12.4s</span>
+          <span class="meta-chip">runId: 7f3c8e</span>
+        </div>
+      </div>
+
+      <!-- 时间轴 -->
+      <div class="timeline">
+
+        <!-- 阶段 1：理解意图（done） -->
+        <div class="phase done">
+          <div class="dot"></div>
+          <div class="phase-row">
+            <span class="phase-label">🔍 理解意图</span>
+            <div class="phase-meta">
+              <span class="duration">0.4s</span>
+              <span style="font-size:11px;color:var(--muted)">已识别 AAPL · 操作=综合分析</span>
+            </div>
+          </div>
+          <div class="phase-detail">
+            <div class="step done"><span class="icon">✓</span><span class="msg">拆解你的问题</span><span class="ts">14:32:01.2</span></div>
+            <div class="step done"><span class="icon">✓</span><span class="msg">识别分析标的</span><span class="agent-tag">AAPL</span><span class="ts">14:32:01.4</span></div>
+          </div>
+        </div>
+
+        <!-- 阶段 2：规划策略 -->
+        <div class="phase done">
+          <div class="dot"></div>
+          <div class="phase-row">
+            <span class="phase-label">📋 规划策略</span>
+            <div class="phase-meta">
+              <span class="duration">0.6s</span>
+              <span style="font-size:11px;color:var(--muted)">5 个分析师 · 并行执行</span>
+            </div>
+          </div>
+          <div class="phase-detail">
+            <div class="step done"><span class="icon">✓</span><span class="msg">制定分析策略</span><span class="ts">14:32:01.6</span></div>
+            <div class="step done"><span class="icon">✓</span><span class="msg">规划 5 步执行计划</span><span class="agent-tag">parallel × 5</span><span class="ts">14:32:02.0</span></div>
+          </div>
+        </div>
+
+        <!-- 阶段 3：检索证据 -->
+        <div class="phase done">
+          <div class="dot"></div>
+          <div class="phase-row">
+            <span class="phase-label">🔎 检索证据</span>
+            <div class="phase-meta">
+              <span class="duration">4.2s</span>
+              <span style="font-size:11px;color:var(--muted)">3 个数据源命中</span>
+            </div>
+          </div>
+          <div class="phase-detail">
+            <div class="step done"><span class="icon">✓</span><span class="msg">读取行情数据</span><span class="agent-tag">yfinance</span><span class="ts">14:32:03.1</span></div>
+            <div class="step done"><span class="icon">✓</span><span class="msg">抓取近 30 天新闻</span><span class="agent-tag">finnhub · 47 条</span><span class="ts">14:32:04.8</span></div>
+            <div class="step done"><span class="icon">✓</span><span class="msg">读取财报数据</span><span class="agent-tag">cache hit</span><span class="ts">14:32:05.6</span></div>
+          </div>
+        </div>
+
+        <!-- 阶段 4：执行分析（含 agent 卡片） -->
+        <div class="phase done">
+          <div class="dot"></div>
+          <div class="phase-row">
+            <span class="phase-label">🔬 执行分析</span>
+            <div class="phase-meta">
+              <span class="duration long">6.8s</span>
+              <span style="font-size:11px;color:var(--muted)">5/5 分析师完成</span>
+            </div>
+          </div>
+
+          <div class="agent-grid">
+            <div class="agent-card done">
+              <div class="row1"><span style="color:var(--done)">●</span><span class="name">行情分析师</span><span class="conf">置信 88%</span></div>
+              <div class="bar"><div class="fill" style="width:88%"></div></div>
+              <div class="meta"><span>1.2s</span><span>价格趋势 · MA · 波动率</span></div>
+            </div>
+            <div class="agent-card done">
+              <div class="row1"><span style="color:var(--done)">●</span><span class="name">新闻分析师</span><span class="conf">置信 72%</span></div>
+              <div class="bar"><div class="fill" style="width:72%"></div></div>
+              <div class="meta"><span>2.1s</span><span>47 条 · 情绪偏多</span></div>
+            </div>
+            <div class="agent-card done">
+              <div class="row1"><span style="color:var(--done)">●</span><span class="name">基本面分析师</span><span class="conf">置信 81%</span></div>
+              <div class="bar"><div class="fill" style="width:81%"></div></div>
+              <div class="meta"><span>3.4s</span><span>PE · ROE · 现金流</span></div>
+            </div>
+            <div class="agent-card done">
+              <div class="row1"><span style="color:var(--done)">●</span><span class="name">技术面分析师</span><span class="conf">置信 65%</span></div>
+              <div class="bar"><div class="fill" style="width:65%"></div></div>
+              <div class="meta"><span>2.0s</span><span>RSI · MACD · 支撑位</span></div>
+            </div>
+            <div class="agent-card done" style="grid-column:1/-1">
+              <div class="row1"><span style="color:var(--done)">●</span><span class="name">风险分析师</span><span class="conf">置信 70%</span></div>
+              <div class="bar"><div class="fill" style="width:70%"></div></div>
+              <div class="meta"><span>0.8s</span><span>VaR · 回撤 · Beta</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 阶段 5：整合报告（running 演示） -->
+        <div class="phase done">
+          <div class="dot"></div>
+          <div class="phase-row">
+            <span class="phase-label">📊 整合报告</span>
+            <div class="phase-meta">
+              <span class="duration">0.4s</span>
+              <span style="font-size:11px;color:var(--muted)">已生成 1832 字研报</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 流式输出区（演示流式 token） -->
+      <div class="stream-out">
+        <div>## 投资论点</div>
+        <div>核心判断：偏多，置信度 72%。AAPL 当前估值合理偏高（PE 34.5），但 ROE 157%</div>
+        <div class="typing">展现强劲资本回报能力。短期 RSI 76 进入超买区</div>
+      </div>
+
+      <!-- 完成横幅 -->
+      <div class="footer-status">✓ 分析完成 · 耗时 12.4s · 共 12 步 · 5 位分析师参与</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

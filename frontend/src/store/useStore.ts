@@ -115,9 +115,9 @@ const getInitialTraceRawShowRawJson = (): boolean => {
   return raw === 'true';
 };
 const getInitialTraceViewMode = (): TraceViewMode => {
-  if (typeof window === 'undefined') return 'expert';
+  if (typeof window === 'undefined') return 'user';
   const raw = window.localStorage.getItem('finsight-trace-view-mode');
-  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'expert';
+  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'user';
 };
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {

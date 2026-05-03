@@ -1,10 +1,23 @@
 import { useState, useMemo } from 'react';
 import { Brain, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
-import type { ThinkingStep } from '../../types';
+import type { ThinkingStep, TraceViewMode } from '../../types';
 import React from 'react';
 import { useStore } from '../../store/useStore';
 import { ThinkingStepList } from './ThinkingStepList';
 import { ThinkingUserView } from './ThinkingUserView';
+
+const VIEW_MODE_LABELS: Record<TraceViewMode, string> = {
+  user: '用户视图',
+  expert: '专家视图',
+  dev: '开发视图',
+};
+
+const VIEW_MODE_ORDER: TraceViewMode[] = ['user', 'expert', 'dev'];
+
+const cycleViewMode = (mode: TraceViewMode): TraceViewMode => {
+  const idx = VIEW_MODE_ORDER.indexOf(mode);
+  return VIEW_MODE_ORDER[(idx + 1) % VIEW_MODE_ORDER.length];
+};
 
 // 重新导出类型供子组件使用
 export type { TraceViewMode } from '../../types';
@@ -20,6 +33,7 @@ interface ThinkingProcessProps {
  */
 export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) => {
   const traceViewMode = useStore((state) => state.traceViewMode);
+  const setTraceViewMode = useStore((state) => state.setTraceViewMode);
   const isUserMode = traceViewMode === 'user';
 
   // 用户模式默认收起，开发/专家模式默认展开
@@ -49,6 +63,15 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
     setExpandedSteps(newExpanded);
   };
 
+  // T4：视图模式 chip 改为按钮 —— 单击循环切换 user → expert → dev
+  const handleCycleViewMode = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = cycleViewMode(traceViewMode);
+    setTraceViewMode(next);
+    // 切到非用户视图自动展开，方便看 trace
+    if (next !== 'user') setIsExpanded(true);
+  };
+
   return (
     <div className="mt-3 border-t border-fin-border pt-3">
       {/* 整体展开/收起按钮 */}
@@ -72,8 +95,21 @@ export const ThinkingProcess: React.FC<ThinkingProcessProps> = ({ thinking }) =>
           ) : (
             <span className="text-fin-muted">({thinking.length} 步骤)</span>
           )}
-          <span className="text-2xs px-1.5 py-0.5 rounded bg-fin-panel border border-fin-border/60 text-fin-muted">
-            {traceViewMode === 'user' ? '用户视图' : traceViewMode === 'expert' ? '专家视图' : '开发视图'}
+          {/* 可点击的视图模式切换 chip */}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={handleCycleViewMode}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleCycleViewMode(e as unknown as React.MouseEvent);
+              }
+            }}
+            title={`点击切换视图（当前：${VIEW_MODE_LABELS[traceViewMode]}）`}
+            className="text-2xs px-1.5 py-0.5 rounded bg-fin-panel border border-fin-border/60 text-fin-muted hover:bg-fin-primary/10 hover:border-fin-primary/40 hover:text-fin-primary cursor-pointer transition-colors select-none"
+          >
+            {VIEW_MODE_LABELS[traceViewMode]}
           </span>
         </div>
         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}

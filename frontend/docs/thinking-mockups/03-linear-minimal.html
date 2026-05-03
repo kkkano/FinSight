@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Mockup 03 · Linear 极简风格</title>
+<style>
+  :root{
+    --bg:#fafaf9;--panel:#ffffff;--border:#e7e5e4;--border2:#f5f5f4;
+    --text:#1c1917;--text2:#44403c;--muted:#78716c;--muted2:#a8a29e;
+    --primary:#5b21b6;--accent:#0891b2;
+    --done:#059669;--running:#2563eb;--error:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0c0a09;--panel:#1c1917;--border:#292524;--border2:#1c1917;
+      --text:#fafaf9;--text2:#d6d3d1;--muted:#a8a29e;--muted2:#78716c;
+      --primary:#a78bfa;--accent:#22d3ee;
+      --done:#34d399;--running:#60a5fa;--error:#f87171;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14.5px/1.65 -apple-system,"Inter","Segoe UI","PingFang SC",sans-serif;
+       background:var(--bg);color:var(--text);min-height:100vh;padding:48px 24px;
+       letter-spacing:-0.005em;-webkit-font-smoothing:antialiased}
+  .preview-frame{max-width:760px;margin:0 auto;background:var(--panel);
+       border-radius:18px;padding:8px;
+       box-shadow:0 1px 0 rgba(0,0,0,.04),0 24px 60px rgba(0,0,0,.06)}
+  .chat-bubble{padding:24px 28px}
+  .chat-bubble.user{text-align:right;color:var(--muted)}
+  .chat-bubble.user .bubble{display:inline-block;background:var(--bg);
+       padding:10px 14px;border-radius:14px;color:var(--text);max-width:75%;text-align:left}
+  .chat-bubble.bot{border-top:1px solid var(--border2)}
+  .answer{margin-bottom:24px;color:var(--text);font-size:15px;line-height:1.7}
+  .answer b{font-weight:600}
+
+  /* SVG 图标精灵 */
+  .icon{display:inline-block;width:14px;height:14px;vertical-align:middle;flex-shrink:0}
+  .icon.check{color:var(--done)}
+  .icon.dot{color:var(--running)}
+
+  /* === 思考过程容器 === */
+  .thinking{padding-top:12px;border-top:1px solid var(--border2)}
+  .th-head{display:flex;align-items:baseline;gap:12px;margin-bottom:24px}
+  .th-head .label{font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+  .th-head .total{font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+  .th-head .total b{color:var(--text);font-weight:600}
+
+  /* 阶段：极简列表 */
+  .phase-list{list-style:none;padding:0;margin:0}
+  .phase-list > li{padding:14px 0;border-bottom:1px solid var(--border2);transition:background .15s}
+  .phase-list > li:last-child{border-bottom:0}
+  .phase-list > li:hover{background:rgba(120,113,108,.03)}
+
+  .phase-head{display:flex;align-items:baseline;gap:14px;cursor:pointer;padding:0 4px}
+  .phase-num{font-size:11px;color:var(--muted2);font-variant-numeric:tabular-nums;width:18px;flex-shrink:0}
+  .phase-name{font-weight:500;font-size:15px;color:var(--text);flex:1;letter-spacing:-0.01em}
+  .phase-desc{font-size:13px;color:var(--muted);font-weight:400}
+  .phase-dur{font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums;font-weight:500;min-width:50px;text-align:right}
+  .phase-dur.long{color:var(--accent)}
+
+  /* 子步骤 */
+  .substeps{list-style:none;padding:8px 0 0 32px;margin:0;font-size:13px;line-height:1.85}
+  .substeps li{display:flex;align-items:baseline;gap:10px;color:var(--muted);padding:2px 0}
+  .substeps li > .dot{width:3px;height:3px;border-radius:50%;background:var(--muted2);margin-right:6px;flex-shrink:0;transform:translateY(-2px)}
+  .substeps li > .text{flex:1}
+  .substeps li > .text b{color:var(--text2);font-weight:500}
+  .substeps li > .ts{color:var(--muted2);font-size:11px;font-variant-numeric:tabular-nums}
+
+  /* 简约 agent 列表 */
+  .agents{padding:8px 0 0 32px}
+  .agents-head{font-size:11px;color:var(--muted);letter-spacing:.04em;margin-bottom:6px}
+  .agent-row{display:flex;align-items:baseline;gap:14px;padding:3px 0;font-size:13px}
+  .agent-row .nm{color:var(--text2);min-width:90px}
+  .agent-row .conf-bar{flex:1;height:1px;background:var(--border);position:relative}
+  .agent-row .conf-bar::after{content:"";position:absolute;left:0;top:0;height:1px;background:var(--done);
+       width:var(--w,0%)}
+  .agent-row .pct{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;min-width:32px;text-align:right}
+  .agent-row .dur{color:var(--muted2);font-size:11px;font-variant-numeric:tabular-nums;min-width:36px;text-align:right}
+
+  /* 完成提示 */
+  .done-banner{margin-top:24px;padding:14px 18px;background:transparent;
+       border:1px solid var(--border);border-radius:10px;font-size:13px;color:var(--text2);
+       display:flex;align-items:center;gap:10px}
+  .done-banner .ic{width:14px;height:14px;color:var(--done)}
+  .done-banner b{font-weight:500;color:var(--text)}
+</style>
+</head>
+<body>
+
+<svg style="display:none">
+  <symbol id="i-check" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 6L9 17l-5-5"/>
+  </symbol>
+  <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+</svg>
+
+<div class="preview-frame">
+
+  <div class="chat-bubble user">
+    <span class="bubble">AAPL 最近股价走势和基本面分析</span>
+  </div>
+
+  <div class="chat-bubble bot">
+    <div class="answer">已为你完成苹果（AAPL）的多维度分析。<b>核心结论：偏多，置信度 72%</b>。技术面短期超买但基本面强劲，建议分批建仓。</div>
+
+    <div class="thinking">
+      <div class="th-head">
+        <div class="label">分析过程</div>
+        <div class="total"><b>5</b> 阶段 · <b>12</b> 步 · 耗时 <b>12.4s</b></div>
+      </div>
+
+      <ol class="phase-list">
+
+        <li>
+          <div class="phase-head">
+            <span class="phase-num">01</span>
+            <span class="phase-name">理解意图</span>
+            <span class="phase-desc">已识别 AAPL · 综合分析</span>
+            <span class="phase-dur">0.4s</span>
+          </div>
+          <ul class="substeps">
+            <li><span class="dot"></span><span class="text">拆解你的问题</span><span class="ts">14:32:01.2</span></li>
+            <li><span class="dot"></span><span class="text">识别分析标的为 <b>AAPL</b></span><span class="ts">14:32:01.4</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <div class="phase-head">
+            <span class="phase-num">02</span>
+            <span class="phase-name">规划策略</span>
+            <span class="phase-desc">5 个分析师 · 并行</span>
+            <span class="phase-dur">0.6s</span>
+          </div>
+          <ul class="substeps">
+            <li><span class="dot"></span><span class="text">制定分析策略</span><span class="ts">14:32:01.6</span></li>
+            <li><span class="dot"></span><span class="text">规划 <b>5 步</b>执行计划，含并行分析师</span><span class="ts">14:32:02.0</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <div class="phase-head">
+            <span class="phase-num">03</span>
+            <span class="phase-name">检索证据</span>
+            <span class="phase-desc">3 个数据源 · 47 条新闻</span>
+            <span class="phase-dur long">4.2s</span>
+          </div>
+          <ul class="substeps">
+            <li><span class="dot"></span><span class="text">读取行情数据 <b>yfinance</b></span><span class="ts">14:32:03.1</span></li>
+            <li><span class="dot"></span><span class="text">抓取近 30 天新闻 <b>finnhub</b> · 47 条</span><span class="ts">14:32:04.8</span></li>
+            <li><span class="dot"></span><span class="text">读取财报 <b>cache hit</b></span><span class="ts">14:32:05.6</span></li>
+          </ul>
+        </li>
+
+        <li>
+          <div class="phase-head">
+            <span class="phase-num">04</span>
+            <span class="phase-name">执行分析</span>
+            <span class="phase-desc">5/5 分析师完成</span>
+            <span class="phase-dur long">6.8s</span>
+          </div>
+          <div class="agents">
+            <div class="agents-head">分析师团队</div>
+            <div class="agent-row"><span class="nm">行情分析师</span><span class="conf-bar" style="--w:88%"></span><span class="pct">88%</span><span class="dur">1.2s</span></div>
+            <div class="agent-row"><span class="nm">新闻分析师</span><span class="conf-bar" style="--w:72%"></span><span class="pct">72%</span><span class="dur">2.1s</span></div>
+            <div class="agent-row"><span class="nm">基本面分析师</span><span class="conf-bar" style="--w:81%"></span><span class="pct">81%</span><span class="dur">3.4s</span></div>
+            <div class="agent-row"><span class="nm">技术面分析师</span><span class="conf-bar" style="--w:65%"></span><span class="pct">65%</span><span class="dur">2.0s</span></div>
+            <div class="agent-row"><span class="nm">风险分析师</span><span class="conf-bar" style="--w:70%"></span><span class="pct">70%</span><span class="dur">0.8s</span></div>
+          </div>
+        </li>
+
+        <li>
+          <div class="phase-head">
+            <span class="phase-num">05</span>
+            <span class="phase-name">整合报告</span>
+            <span class="phase-desc">1832 字研报</span>
+            <span class="phase-dur">0.4s</span>
+          </div>
+        </li>
+
+      </ol>
+
+      <div class="done-banner">
+        <svg class="ic"><use href="#i-check"/></svg>
+        <span><b>分析完成</b> · 共 12 步 · 耗时 12.4s · 5 位分析师参与</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

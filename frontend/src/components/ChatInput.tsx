@@ -313,7 +313,51 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
-    const guessedTicker = extractTicker(userMsgContent);
+
+    // T2：模糊查询前端拦截 —— 仅当用户明确写"分析股票/帮我分析"等模糊动词，
+    //      且 query 里既没有英文 ticker / 中文公司名 / 数字代码 / 已选股票时，
+    //      直接给出澄清提示，避免把 active_symbol 误绑成上次的标的。
+    const guessedTickerForGuard = extractTicker(userMsgContent);
+    const hasContextSelection = Boolean(currentTicker);
+    const isFuzzyAnalyze = (() => {
+      const q = userMsgContent.replace(/\s+/g, '');
+      // 触发词：纯模糊动词，不带任何标的线索
+      const fuzzyPatterns = [
+        /^帮我分析(一下)?(股票|股价|公司|这个|这只|个股)?[？?！!。.]?$/,
+        /^分析(一下)?(股票|股价|公司|这个|这只|个股)$/,
+        /^(看看|分析下|帮看下)$/,
+        /^分析影响[？?！!。.]?$/,
+      ];
+      return fuzzyPatterns.some((p) => p.test(q));
+    })();
+
+    if (isFuzzyAnalyze && !guessedTickerForGuard && !hasContextSelection) {
+      addMessage({
+        id: uuidv4(),
+        role: 'user',
+        content: userMsgContent,
+        timestamp: Date.now(),
+      });
+      addMessage({
+        id: uuidv4(),
+        role: 'assistant',
+        content:
+          '请告诉我具体要分析哪只股票或公司，例如：\n' +
+          '• 输入股票代码：`AAPL`、`TSLA`、`600036`\n' +
+          '• 输入公司名：`苹果`、`特斯拉`、`招商银行`\n' +
+          '• 或直接说："分析苹果最近的股价走势"',
+        timestamp: Date.now(),
+      });
+      setInput('');
+      setDraft('');
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        inputRef.current.style.overflowY = 'hidden';
+      }
+      return;
+    }
+
+    const guessedTicker = guessedTickerForGuard;
     if (guessedTicker) {
       setTicker(guessedTicker);
     }
