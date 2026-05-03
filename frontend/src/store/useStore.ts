@@ -253,9 +253,35 @@ const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果�
 const memoryMessageStore = new Map<string, string>();
 let memoryConversationSummaries: ConversationSummary[] = [];
 
-const createBackendConversation = (sessionId: string) => {
+const serializeBackendMessages = (messages?: Message[]): Array<Record<string, unknown>> => {
+  const rows = Array.isArray(messages) ? messages : [];
+  return rows
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim())
+    .slice(-100)
+    .map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    }));
+};
+
+const deriveBackendTitle = (messages?: Message[]): string | undefined => {
+  const rows = Array.isArray(messages) ? messages : [];
+  const firstUser = rows.find((m) => m.role === 'user' && m.content.trim());
+  const source = firstUser?.content || rows.find((m) => m.content.trim())?.content || '';
+  return source.replace(/\s+/g, ' ').trim().slice(0, 42) || undefined;
+};
+
+const createBackendConversation = (sessionId: string, messages?: Message[]) => {
   if (!sessionId) return;
-  void apiClient.createConversation(sessionId).catch(() => undefined);
+  const payload = messages
+    ? {
+        title: deriveBackendTitle(messages),
+        messages: serializeBackendMessages(messages),
+      }
+    : undefined;
+  void apiClient.createConversation(sessionId, payload).catch(() => undefined);
 };
 
 const deleteBackendConversation = (sessionId: string) => {
@@ -419,9 +445,11 @@ const persistMessages = (messages: Message[], sessionId: string) => {
       .slice(-MAX_PERSISTED_MESSAGES);
     if (typeof window === 'undefined') {
       memoryMessageStore.set(messageStorageKey(sid), JSON.stringify(toSave));
+      createBackendConversation(sid, toSave);
       return;
     }
     window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
+    createBackendConversation(sid, toSave);
   } catch {
     // localStorage full or unavailable — silently ignore
   }
@@ -583,6 +611,7 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       state.abortController?.abort();
       clearPersistedMessages(state.sessionId);
+      createBackendConversation(state.sessionId, [WELCOME_MESSAGE]);
       const conversationSummaries = upsertConversationSummary(
         state.conversationSummaries,
         state.sessionId,
@@ -616,7 +645,7 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
       }
-      createBackendConversation(nextSessionId);
+      createBackendConversation(nextSessionId, [WELCOME_MESSAGE]);
       const conversationSummaries = upsertConversationSummary(
         state.conversationSummaries,
         nextSessionId,
@@ -684,7 +713,7 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
-      createBackendConversation(normalized);
+      createBackendConversation(normalized, messages);
       return {
         sessionId: normalized,
         messages,
@@ -750,7 +779,7 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-session-id', nextSessionId);
       }
       if (normalized === state.sessionId && nextSessionId !== normalized) {
-        createBackendConversation(nextSessionId);
+        createBackendConversation(nextSessionId, nextMessages);
       }
       return {
         sessionId: nextSessionId,

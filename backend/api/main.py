@@ -51,6 +51,7 @@ from backend.rag import get_rag_observability_store, install_rag_observability_h
 from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.portfolio_store import get_positions as get_portfolio_positions
 from backend.services.report_index import get_report_index_store
+from backend.services.conversation_store import get_conversation_store
 
 logger = logging.getLogger(__name__)
 
@@ -1041,6 +1042,11 @@ conversation_router = create_conversation_router(
         get_session_context=_get_session_context,
         list_session_contexts=_list_session_contexts,
         clear_session_context=_clear_session_context,
+        list_conversation_records=lambda: get_conversation_store().list(),
+        get_conversation_record=lambda session_id: get_conversation_store().get(session_id),
+        upsert_conversation_record=lambda session_id, payload: get_conversation_store().upsert(session_id, payload),
+        patch_conversation_record=lambda session_id, payload: get_conversation_store().patch(session_id, payload),
+        delete_conversation_record=lambda session_id: get_conversation_store().delete(session_id),
     )
 )
 

@@ -642,12 +642,40 @@ export const apiClient = {
     return response.data;
   },
 
-  async createConversation(sessionId?: string): Promise<{
+  async createConversation(
+    sessionId?: string,
+    payload?: {
+      title?: string;
+      messages?: Array<Record<string, unknown>>;
+      pinned?: boolean;
+      archived?: boolean;
+    },
+  ): Promise<{
     success: boolean;
     session_id: string;
     conversation?: Record<string, unknown>;
   }> {
-    const response = await api.post('/api/conversations', sessionId ? { session_id: sessionId } : {});
+    const response = await api.post('/api/conversations', {
+      ...(payload || {}),
+      ...(sessionId ? { session_id: sessionId } : {}),
+    });
+    return response.data;
+  },
+
+  async patchConversation(
+    sessionId: string,
+    payload: {
+      title?: string;
+      messages?: Array<Record<string, unknown>>;
+      pinned?: boolean;
+      archived?: boolean;
+    },
+  ): Promise<{
+    success: boolean;
+    session_id: string;
+    conversation?: Record<string, unknown>;
+  }> {
+    const response = await api.patch(`/api/conversations/${encodeURIComponent(sessionId)}`, payload);
     return response.data;
   },
 
