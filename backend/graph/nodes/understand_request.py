@@ -28,6 +28,18 @@ _MACRO_HINTS = (
 )
 _THEME_HINTS = ("半导体", "芯片", "ai", "人工智能", "大型科技股", "科技股")
 _FALLBACK_HINTS = ("如果不知道", "不知道就", "没持仓就", "没有持仓就", "按等权", "按大型科技股", "fallback")
+# P2 (2026-05-03) — vague subject deixis: when the user says "this stock"
+# without naming it AND ui_context.active_symbol is present, do a transparent
+# weak fallback (bind active_symbol + warn user it can be corrected).
+# Risk: a wrong fallback is corrected by one user message; a missed fallback
+# costs an extra clarify round-trip. We bias toward the cheaper failure mode.
+_VAGUE_SUBJECT_HINTS = (
+    "这只票", "这个票", "那只票", "这只股", "这个股", "那只股",
+    "这家公司", "那家公司", "这家", "那家",
+    "这只", "这个", "这支",
+    "刚才那个", "刚才说的", "之前那个",
+    "this stock", "that stock", "this one", "the company",
+)
 _SOCIAL_PREFIX_RE = re.compile(r"^\s*(你好|您好|早|早上好|嗨|哈喽|hello|hi)[，,。\s]*(今天天气不错[，,。\s]*)?", re.IGNORECASE)
 
 
@@ -263,6 +275,31 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     if not tickers and isinstance(ui_context.get("active_symbol"), str) and has_financial_intent(query):
         tickers = [normalize_ticker(str(ui_context["active_symbol"]))]
         context_refs.append({"source": "ui_context", "key": "active_symbol", "label": "当前标的", "value": tickers[0]})
+
+    # P2 weak fallback — query lacks tickers AND lacks financial intent, but
+    # contains a vague subject deixis ("这只票", "this stock", ...) and
+    # ui_context.active_symbol is present. Bind the active symbol and surface
+    # the assumption to the user so they can correct it in one turn.
+    if (
+        not tickers
+        and isinstance(ui_context.get("active_symbol"), str)
+        and ui_context["active_symbol"].strip()
+        and _contains_any(query, _VAGUE_SUBJECT_HINTS)
+    ):
+        active = normalize_ticker(str(ui_context["active_symbol"]))
+        if active:
+            tickers = [active]
+            context_refs.append(
+                {
+                    "source": "ui_context",
+                    "key": "active_symbol",
+                    "label": "当前标的(弱兜底)",
+                    "value": active,
+                }
+            )
+            fallback_assumptions.append(
+                f"按你正在看的 {active} 处理，如不是请告诉我具体哪只。"
+            )
 
     if not query:
         blocked_tasks.append(

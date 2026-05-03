@@ -325,3 +325,86 @@ def test_multitask_render_mentions_blocked_portfolio_without_hiding_ready_tasks(
     assert "Google headline" in draft
     assert "Microsoft headline" in draft
     assert "missing_portfolio_holdings" in draft
+
+
+
+# ==================== P2 weak fallback (vague-subject deixis) ====================
+
+def test_weak_fallback_binds_active_symbol_when_query_uses_vague_deixis():
+    """这只票/这家公司 + ui_context.active_symbol → 透明绑定 + 提示."""
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "这只票今天怎么了",
+                "ui_context": {"active_symbol": "AAPL"},
+                "output_mode": "brief",
+                "trace": {},
+            }
+        )
+    )
+    understanding = result.get("understanding") or {}
+    assert understanding.get("route") == "research"
+    assert _task_ops(result) == [("company", ("AAPL",), "qa")]
+    fallback = understanding.get("fallback_assumptions") or []
+    assert any("AAPL" in s and "正在看" in s for s in fallback)
+
+
+def test_weak_fallback_skipped_without_active_symbol():
+    """同样的模糊 query 但没 active_symbol → 不兜底，走 clarify."""
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "这只票今天怎么了",
+                "ui_context": {},
+                "output_mode": "brief",
+                "trace": {},
+            }
+        )
+    )
+    understanding = result.get("understanding") or {}
+    assert understanding.get("route") == "clarify"
+    assert result.get("tasks") == []
+
+
+def test_weak_fallback_does_not_override_explicit_ticker():
+    """显式提到 AAPL 时，active_symbol=GOOGL 不应改写为 GOOGL."""
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "帮我看苹果",
+                "ui_context": {"active_symbol": "GOOGL"},
+                "output_mode": "brief",
+                "trace": {},
+            }
+        )
+    )
+    tickers = [t.get("tickers") for t in result.get("tasks") or []]
+    assert tickers and tickers[0] == ["AAPL"], f"expected AAPL, got {tickers}"
+    fallback = (result.get("understanding") or {}).get("fallback_assumptions") or []
+    # 显式 ticker 不应触发弱兜底提示
+    assert not any("正在看" in s for s in fallback)
+
+
+def test_weak_fallback_does_not_fire_on_pure_greeting():
+    """纯问候 + active_symbol 不应触发弱兜底（仍走 direct）."""
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "你好",
+                "ui_context": {"active_symbol": "AAPL"},
+                "output_mode": "brief",
+                "trace": {},
+            }
+        )
+    )
+    understanding = result.get("understanding") or {}
+    assert understanding.get("route") == "direct"
+    assert result.get("tasks") == []
