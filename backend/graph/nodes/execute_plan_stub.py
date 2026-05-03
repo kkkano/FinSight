@@ -17,6 +17,17 @@ from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
+from backend.rag.layering import (
+    build_kb_vector_source_id,
+    build_subject_kb_collection,
+    build_thread_memory_collection,
+    build_thread_working_set_collection,
+    collection_details,
+    compute_doc_fingerprint,
+    enrich_metadata,
+    is_long_term_candidate,
+    preferred_retrieval_collections,
+)
 
 
 def build_tool_invokers(allowed_tools: list[str]) -> dict[str, Any]:
@@ -115,14 +126,231 @@ def _sanitize_collection_segment(value: str) -> str:
 
 
 def _collection_from_thread_id(thread_id: str) -> str:
-    raw = str(thread_id or "").strip()
-    parts = raw.split(":")
-    if len(parts) == 3:
-        tenant, user, thread = (_sanitize_collection_segment(p) for p in parts)
-        return f"session:{tenant}:{user}:{thread}"
-    return f"session:{_sanitize_collection_segment(raw)}"
+    return build_thread_working_set_collection(thread_id)
 
 
+def _kb_collection_from_subject(subject: dict[str, Any] | None) -> str | None:
+    return build_subject_kb_collection(subject if isinstance(subject, dict) else None)
+
+
+def _memory_collection_from_thread(*, thread_id: str, user_id: str | None = None) -> str:
+    return build_thread_memory_collection(thread_id=thread_id, user_id=user_id)
+
+
+def _normalize_watchlist_items(value: Any, *, limit: int = 12) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        symbol = str(item or '').strip().upper()
+        if not symbol or symbol in result:
+            continue
+        result.append(symbol)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _normalize_memory_focus_list(value: Any, *, limit: int = 3) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        normalized = {
+            'ticker': str(item.get('ticker') or '').strip().upper(),
+            'query': str(item.get('query') or '').strip(),
+            'summary': str(item.get('summary') or '').strip(),
+            'sentiment': str(item.get('sentiment') or '').strip(),
+            'updated_at': str(item.get('updated_at') or '').strip(),
+        }
+        if not any(normalized.values()):
+            continue
+        result.append(normalized)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _build_memory_context_specs(*, memory_context: dict[str, Any], user_id: str) -> list[dict[str, Any]]:
+    if not isinstance(memory_context, dict) or not memory_context:
+        return []
+
+    risk_tolerance = str(memory_context.get("risk_tolerance") or "").strip().lower()
+    investment_style = str(memory_context.get("investment_style") or "").strip().lower()
+    watchlist = _normalize_watchlist_items(memory_context.get("watchlist"))
+    last_focus_raw = memory_context.get("last_focus") if isinstance(memory_context.get("last_focus"), dict) else None
+    last_focus_list = _normalize_memory_focus_list([last_focus_raw] if last_focus_raw else [], limit=1)
+    last_focus = last_focus_list[0] if last_focus_list else None
+    recent_focuses = _normalize_memory_focus_list(memory_context.get("recent_focuses"), limit=3)
+
+    specs: list[dict[str, Any]] = []
+    if watchlist or risk_tolerance not in {"", "medium"} or investment_style not in {"", "balanced"}:
+        profile_lines = [
+            "memory_kind: profile",
+            f"user_id: {user_id}",
+            f"risk_tolerance: {risk_tolerance or 'medium'}",
+            f"investment_style: {investment_style or 'balanced'}",
+        ]
+        if watchlist:
+            profile_lines.append(f"watchlist: {', '.join(watchlist)}")
+        specs.append({
+            "source_id": "memdoc:profile",
+            "title": "Memory Profile",
+            "content": "\n".join(profile_lines),
+            "metadata": {
+                "memory_kind": "profile",
+                "watchlist": watchlist,
+            },
+        })
+
+    if watchlist:
+        specs.append({
+            "source_id": "memdoc:watchlist",
+            "title": "Memory Watchlist",
+            "content": "\n".join([
+                "memory_kind: watchlist",
+                f"user_id: {user_id}",
+                f"watchlist: {', '.join(watchlist)}",
+            ]),
+            "metadata": {
+                "memory_kind": "watchlist",
+                "watchlist": watchlist,
+            },
+        })
+
+    if last_focus:
+        ticker = str(last_focus.get("ticker") or "").strip().upper()
+        focus_lines = [
+            "memory_kind: last_focus",
+            f"user_id: {user_id}",
+        ]
+        if ticker:
+            focus_lines.append(f"ticker: {ticker}")
+        if last_focus.get("query"):
+            focus_lines.append(f"query: {last_focus['query']}")
+        if last_focus.get("summary"):
+            focus_lines.append(f"summary: {last_focus['summary']}")
+        if last_focus.get("sentiment"):
+            focus_lines.append(f"sentiment: {last_focus['sentiment']}")
+        if last_focus.get("updated_at"):
+            focus_lines.append(f"updated_at: {last_focus['updated_at']}")
+        specs.append({
+            "source_id": "memdoc:last_focus",
+            "title": f"Memory Last Focus {ticker or user_id}",
+            "content": "\n".join(focus_lines),
+            "metadata": {
+                "memory_kind": "last_focus",
+                "ticker": ticker or None,
+                "query": last_focus.get("query") or None,
+                "sentiment": last_focus.get("sentiment") or None,
+                "updated_at": last_focus.get("updated_at") or None,
+            },
+        })
+
+    seen_recent_keys: set[tuple[str, str]] = set()
+    if last_focus:
+        seen_recent_keys.add((str(last_focus.get("ticker") or "").strip().upper(), str(last_focus.get("query") or "").strip()))
+
+    for index, focus in enumerate(recent_focuses, start=1):
+        ticker = str(focus.get("ticker") or "").strip().upper()
+        query = str(focus.get("query") or "").strip()
+        focus_key = (ticker, query)
+        if focus_key in seen_recent_keys:
+            continue
+        seen_recent_keys.add(focus_key)
+        recent_lines = [
+            "memory_kind: recent_focus",
+            f"user_id: {user_id}",
+            f"recent_focus_rank: {index}",
+        ]
+        if ticker:
+            recent_lines.append(f"ticker: {ticker}")
+        if query:
+            recent_lines.append(f"query: {query}")
+        if focus.get("summary"):
+            recent_lines.append(f"summary: {focus['summary']}")
+        if focus.get("sentiment"):
+            recent_lines.append(f"sentiment: {focus['sentiment']}")
+        if focus.get("updated_at"):
+            recent_lines.append(f"updated_at: {focus['updated_at']}")
+        specs.append({
+            "source_id": f"memdoc:recent_focus:{index}",
+            "title": f"Memory Recent Focus {index} {ticker or user_id}",
+            "content": "\n".join(recent_lines),
+            "metadata": {
+                "memory_kind": "recent_focus",
+                "memory_rank": index,
+                "ticker": ticker or None,
+                "query": query or None,
+                "sentiment": focus.get("sentiment") or None,
+                "updated_at": focus.get("updated_at") or None,
+            },
+        })
+
+    return [spec for spec in specs if str(spec.get("content") or "").strip()]
+    return [spec for spec in specs if str(spec.get("content") or "").strip()]
+
+
+def _resolve_hit_layer(hit: dict[str, Any]) -> str:
+    metadata = hit.get('metadata') if isinstance(hit.get('metadata'), dict) else {}
+    collection = str(hit.get('collection') or metadata.get('collection') or '').strip()
+    details = collection_details(collection)
+    return str(hit.get('layer') or metadata.get('layer') or details.get('layer') or 'unknown').strip().lower() or 'unknown'
+
+
+def _summarize_layer_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = {}
+    total_matches = 0
+
+    for hit in hits or []:
+        metadata = hit.get('metadata') if isinstance(hit.get('metadata'), dict) else {}
+        matched_collections_raw = hit.get('matched_collections') or metadata.get('matched_collections')
+        collection_pairs: list[tuple[str, str]] = []
+        if isinstance(matched_collections_raw, list):
+            for item in matched_collections_raw:
+                collection = str(item or '').strip()
+                if not collection:
+                    continue
+                details = collection_details(collection)
+                layer = str(details.get('layer') or 'unknown').strip().lower() or 'unknown'
+                collection_pairs.append((layer, collection))
+
+        if not collection_pairs:
+            collection = str(hit.get('collection') or metadata.get('collection') or '').strip()
+            collection_pairs.append((_resolve_hit_layer(hit), collection))
+
+        title = str(hit.get('title') or hit.get('source_id') or '').strip()
+        seen_layers_for_hit: set[str] = set()
+        for layer, collection in collection_pairs:
+            normalized_layer = str(layer or 'unknown').strip().lower() or 'unknown'
+            bucket = buckets.setdefault(normalized_layer, {
+                'layer': normalized_layer,
+                'count': 0,
+                'collections': [],
+                'sample_titles': [],
+            })
+            if normalized_layer not in seen_layers_for_hit:
+                bucket['count'] += 1
+                total_matches += 1
+                seen_layers_for_hit.add(normalized_layer)
+            if collection and collection not in bucket['collections']:
+                bucket['collections'].append(collection)
+            if title and title not in bucket['sample_titles'] and len(bucket['sample_titles']) < 3:
+                bucket['sample_titles'].append(title)
+
+    total = max(1, total_matches)
+    items = []
+    for layer, bucket in buckets.items():
+        items.append({
+            'layer': layer,
+            'count': int(bucket['count']),
+            'share': float(bucket['count']) / float(total),
+            'collections': bucket['collections'],
+            'sample_titles': bucket['sample_titles'],
+        })
+    return sorted(items, key=lambda item: (-int(item['count']), str(item['layer'])))
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +529,16 @@ def _decorate_rag_hit(hit: dict[str, Any]) -> dict[str, Any]:
         "chunk_strategy",
         "chunk_size",
         "chunk_overlap",
+        "layer",
+        "entity_scope",
+        "entity_key",
+        "ingest_source",
+        "promotion_status",
+        "doc_fingerprint",
+        "parent_collection",
+        "parent_run_id",
+        "matched_layers",
+        "matched_collections",
     ):
         if key in metadata and key not in result:
             result[key] = metadata.get(key)
@@ -364,6 +602,21 @@ async def execute_plan_stub(state: GraphState) -> dict:
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
     steps = plan_ir.get("steps") if isinstance(plan_ir, dict) else None
     step_index = {s.get("id"): s for s in (steps or []) if isinstance(s, dict) and s.get("id")}
+
+    def _step_task_ids(step: dict[str, Any]) -> list[str]:
+        raw = step.get("task_ids")
+        values = raw if isinstance(raw, list) else []
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            task_id = str(value or "").strip()
+            if task_id and task_id not in seen:
+                seen.add(task_id)
+                result.append(task_id)
+        single = str(step.get("task_id") or "").strip()
+        if single and single not in seen:
+            result.insert(0, single)
+        return result
 
     def _append_tool_evidence(tool_name: str, step_id: str, output: Any) -> None:
         if output is None:
@@ -500,6 +753,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 title = str(article.get("title") or "").strip()
                 url = str(article.get("url") or "").strip()
                 snippet = str(article.get("snippet") or title).strip()
+                article_text = f"{title} {snippet} {url}".lower()
+                if "cpi" in article_text and (
+                    "london stock exchange:cpi" in article_text
+                    or "lse:cpi" in article_text
+                    or "capita" in article_text
+                ):
+                    continue
                 if not title and not url:
                     continue
                 evidence_pool.append(
@@ -679,12 +939,22 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 if step.get("kind") == "agent":
                     agent_name = step.get("name") or ""
                     if agent_name:
+                        before_count = len(evidence_pool)
                         _append_agent_evidence(str(agent_name), str(step_id), item.get("output"))
+                        for evidence in evidence_pool[before_count:]:
+                            if isinstance(evidence, dict):
+                                evidence["step_id"] = str(step_id)
+                                evidence["task_ids"] = _step_task_ids(step)
                 continue
             tool_name = step.get("name") or ""
             if not tool_name:
                 continue
+            before_count = len(evidence_pool)
             _append_tool_evidence(str(tool_name), str(step_id), item.get("output"))
+            for evidence in evidence_pool[before_count:]:
+                if isinstance(evidence, dict):
+                    evidence["step_id"] = str(step_id)
+                    evidence["task_ids"] = _step_task_ids(step)
 
     # Dedupe by url or title+source
     seen: set[str] = set()
@@ -698,6 +968,14 @@ async def execute_plan_stub(state: GraphState) -> dict:
         seen.add(str(key))
         deduped.append(e)
     artifacts["evidence_pool"] = deduped
+    evidence_by_task: dict[str, list[dict[str, Any]]] = {}
+    for evidence in deduped:
+        task_ids = evidence.get("task_ids") if isinstance(evidence, dict) else None
+        for task_id in [str(value or "").strip() for value in (task_ids if isinstance(task_ids, list) else [])]:
+            if not task_id:
+                continue
+            evidence_by_task.setdefault(task_id, []).append(evidence)
+    artifacts["evidence_by_task"] = evidence_by_task
 
     # Phase P0-3c: collect per-agent fallback diagnostics into artifacts
     # so synthesize/render can surface degradation info to the user.
@@ -750,13 +1028,26 @@ async def execute_plan_stub(state: GraphState) -> dict:
             RetrievalHitRecord,
             SourceDocRecord,
         )
-        from backend.rag.observability_runtime import get_rag_observability_store
+        from backend.rag.observability_store import (
+            get_rag_observability_store,
+            redact_query_text,
+            suppress_rag_observability_hooks,
+        )
         from backend.rag.rag_router import RAGPriority, decide_rag_priority
 
         query_text = str(state.get("query") or "").strip()
         thread_id = str(state.get("thread_id") or "").strip() or "unknown"
         session_id = _resolve_session_id(state)
         user_id = _resolve_rag_user_id(state, session_id=session_id)
+        memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
+        if not memory_context:
+            try:
+                from backend.graph.store import load_memory_context
+
+                memory_context = load_memory_context(thread_id=thread_id)
+            except Exception as exc:
+                logger.debug("load_memory_context for RAG failed: %s", exc)
+                memory_context = {}
         output_mode = str(state.get("output_mode") or "").strip()
         operation_name = str((state.get("operation") or {}).get("name", "")).strip() if isinstance(state.get("operation"), dict) else ""
         backend_requested = str(os.getenv("RAG_V2_BACKEND", "auto") or "auto").strip().lower() or "auto"
@@ -816,6 +1107,7 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     session_id=session_id,
                     thread_id=thread_id,
                     query_text=query_text,
+                    query_text_redacted=redact_query_text(query_text),
                     query_hash=query_hash,
                     route_name="execute_plan_stub",
                     router_decision=rag_priority.value,
@@ -880,14 +1172,168 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "finished_at": finished_at,
                     "latency_ms": (finished_at - rag_started_at).total_seconds() * 1000.0,
                 }
-        elif query_text and deduped:
+        elif query_text:
             rag = get_rag_service()
             subject_type = str((subject or {}).get("subject_type") or "unknown")
             collection = _collection_from_thread_id(thread_id)
+            kb_collection = _kb_collection_from_subject(subject)
+            memory_specs = _build_memory_context_specs(memory_context=memory_context, user_id=user_id)
+            memory_collection = _memory_collection_from_thread(thread_id=thread_id, user_id=user_id) if memory_specs else None
+            working_set_details = collection_details(collection)
+            memory_details = collection_details(memory_collection) if memory_collection else {}
+            kb_details = collection_details(kb_collection) if kb_collection else {}
+            search_collections = preferred_retrieval_collections(memory_collection=memory_collection, working_set_collection=collection, kb_collection=kb_collection)
             now = datetime.now(timezone.utc)
             rag_docs: list[RAGDocument] = []
             source_doc_records: list[Any] = []
             chunk_records: list[Any] = []
+            promoted_chunk_count = 0
+            memory_doc_count = 0
+            layer_hit_breakdown: list[dict[str, Any]] = []
+
+            _append_rag_event(
+                "retrieval_scope_planned",
+                "retrieval",
+                {
+                    "memory_collection": memory_collection,
+                    "working_set_collection": collection,
+                    "kb_collection": kb_collection,
+                    "memory_doc_count": len(memory_specs),
+                    "search_collections": search_collections,
+                },
+            )
+
+            if memory_specs and memory_collection:
+                for memory_index, memory_spec in enumerate(memory_specs):
+                    memory_title = str(memory_spec.get("title") or "Memory Context").strip()
+                    memory_content = str(memory_spec.get("content") or "").strip()
+                    if not memory_content:
+                        continue
+                    memory_source_id = str(memory_spec.get("source_id") or f"memdoc:{memory_index}").strip() or f"memdoc:{memory_index}"
+                    memory_metadata = memory_spec.get("metadata") if isinstance(memory_spec.get("metadata"), dict) else {}
+                    memory_updated_at = _parse_datetime(memory_metadata.get("updated_at"))
+                    memory_doc_fingerprint = compute_doc_fingerprint(
+                        title=memory_title or None,
+                        url=None,
+                        content=memory_content,
+                        source_id=memory_source_id,
+                    )
+                    memory_source_doc_id = _build_source_doc_obs_id(
+                        run_id=rag_run_id or "unknown",
+                        source_id=memory_source_id,
+                        title=memory_title,
+                        url="",
+                        index=memory_index,
+                    )
+                    memory_chunk_id = _build_chunk_record_id(
+                        run_id=rag_run_id or "unknown",
+                        source_doc_id=memory_source_doc_id,
+                        chunk_index=0,
+                        chunk_text=memory_content,
+                    )
+                    memory_source_doc_metadata = enrich_metadata(
+                        {
+                            "scope": "persistent",
+                            "run_id": rag_run_id,
+                            "memory_kind": memory_metadata.get("memory_kind"),
+                            **memory_metadata,
+                        },
+                        collection=memory_collection,
+                        ingest_source="memory_context",
+                        promotion_status="memory",
+                        parent_run_id=rag_run_id,
+                        doc_fingerprint=memory_doc_fingerprint,
+                    )
+                    memory_chunk_metadata = enrich_metadata(
+                        {
+                            "scope": "persistent",
+                            "run_id": rag_run_id,
+                            "source_id": memory_source_id,
+                            "source_name": "memory",
+                            "title": memory_title,
+                            "vector_source_id": memory_source_id,
+                            "source_doc_id": memory_source_doc_id,
+                            "chunk_id": memory_chunk_id,
+                            "doc_type": "memory_context",
+                            "chunk_index": 0,
+                            "total_chunks": 1,
+                            "chunk_strategy": "memory_context",
+                            "chunk_size": len(memory_content),
+                            "chunk_overlap": 0,
+                            "memory_kind": memory_metadata.get("memory_kind"),
+                            **memory_metadata,
+                        },
+                        collection=memory_collection,
+                        ingest_source="memory_context",
+                        promotion_status="memory",
+                        parent_run_id=rag_run_id,
+                        doc_fingerprint=memory_doc_fingerprint,
+                    )
+                    source_doc_records.append(
+                        SourceDocRecord(
+                            id=memory_source_doc_id,
+                            run_id=rag_run_id or "unknown",
+                            collection=memory_collection,
+                            source_id=memory_source_id,
+                            source_type="memory_context",
+                            source_name="memory",
+                            url=None,
+                            title=memory_title or None,
+                            published_at=memory_updated_at,
+                            content_raw=memory_content,
+                            content_preview=memory_content[:800],
+                            content_length=len(memory_content),
+                            metadata_json=memory_source_doc_metadata,
+                        )
+                    )
+                    chunk_records.append(
+                        ChunkRecord(
+                            id=memory_chunk_id,
+                            run_id=rag_run_id or "unknown",
+                            collection=memory_collection,
+                            source_id=memory_source_id,
+                            source_doc_id=memory_source_doc_id,
+                            chunk_index=0,
+                            total_chunks=1,
+                            chunk_text=memory_content,
+                            chunk_length=len(memory_content),
+                            doc_type="memory_context",
+                            chunk_strategy="memory_context",
+                            chunk_size=len(memory_content),
+                            chunk_overlap=0,
+                            metadata_json=memory_chunk_metadata,
+                        )
+                    )
+                    rag_docs.append(
+                        RAGDocument(
+                            collection=memory_collection,
+                            scope="persistent",
+                            source_id=memory_source_id,
+                            content=memory_content,
+                            title=memory_title or None,
+                            url=None,
+                            source="memory",
+                            metadata=memory_chunk_metadata,
+                            expires_at=None,
+                            layer=memory_details.get("layer"),
+                            entity_scope=memory_details.get("entity_scope"),
+                            entity_key=memory_details.get("entity_key"),
+                            ingest_source="memory_context",
+                            promotion_status="memory",
+                            doc_fingerprint=memory_doc_fingerprint,
+                            parent_run_id=rag_run_id,
+                        )
+                    )
+                    memory_doc_count += 1
+                _append_rag_event(
+                    "memory_materialized",
+                    "memory",
+                    {
+                        "memory_collection": memory_collection,
+                        "memory_doc_count": memory_doc_count,
+                        "memory_source_ids": [str(item.get("source_id") or "").strip() for item in memory_specs],
+                    },
+                )
 
             _append_rag_event(
                 "evidence_deduped",
@@ -943,6 +1389,35 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 chunk_total = len(chunk_result.chunks)
                 chunk_strategy = _infer_chunk_strategy(doc_type=doc_type, chunk_count=chunk_total, content=raw_content)
 
+                doc_fingerprint = compute_doc_fingerprint(
+                    title=title or None,
+                    url=evidence_url or None,
+                    content=raw_content,
+                    source_id=source_id,
+                )
+                promote_to_kb = bool(kb_collection) and is_long_term_candidate(
+                    source_type=evidence_type,
+                    source=source,
+                    metadata=evidence if isinstance(evidence, dict) else None,
+                    title=title or None,
+                    url=evidence_url or None,
+                )
+                source_doc_metadata = enrich_metadata(
+                    {
+                        "scope": scope,
+                        "confidence": evidence.get("confidence"),
+                        "published_date": evidence.get("published_date"),
+                        "type": evidence_type,
+                        "source": source,
+                        "run_id": rag_run_id,
+                        "kb_collection": kb_collection,
+                    },
+                    collection=collection,
+                    ingest_source="execute_plan_stub",
+                    promotion_status="promoted" if promote_to_kb else "working_set_only",
+                    parent_run_id=rag_run_id,
+                    doc_fingerprint=doc_fingerprint,
+                )
                 source_doc_records.append(
                     SourceDocRecord(
                         id=source_doc_id,
@@ -957,14 +1432,7 @@ async def execute_plan_stub(state: GraphState) -> dict:
                         content_raw=raw_content,
                         content_preview=raw_content[:800],
                         content_length=len(raw_content),
-                        metadata_json={
-                            "collection": collection,
-                            "scope": scope,
-                            "confidence": evidence.get("confidence"),
-                            "published_date": evidence.get("published_date"),
-                            "type": evidence_type,
-                            "source": source,
-                        },
+                        metadata_json=source_doc_metadata,
                     )
                 )
 
@@ -985,6 +1453,34 @@ async def execute_plan_stub(state: GraphState) -> dict:
                         chunk_index=chunk_index,
                         chunk_text=chunk_body,
                     )
+                    chunk_metadata = enrich_metadata(
+                        {
+                            "scope": scope,
+                            "source_id": source_id,
+                            "source_name": source,
+                            "url": evidence_url or None,
+                            "title": title or None,
+                            "vector_source_id": vector_source_id,
+                            "published_date": evidence.get("published_date"),
+                            "confidence": evidence.get("confidence"),
+                            "type": evidence_type,
+                            "run_id": rag_run_id,
+                            "source_doc_id": source_doc_id,
+                            "chunk_id": chunk_record_id,
+                            "doc_type": str(chunk_meta.get("doc_type") or doc_type),
+                            "chunk_index": chunk_index,
+                            "total_chunks": max(1, int(chunk_meta.get("total_chunks") or chunk_total or 1)),
+                            "chunk_strategy": chunk_strategy,
+                            "chunk_size": int(chunk_profile.get("max_chunk_size") or len(chunk_body)),
+                            "chunk_overlap": int(chunk_profile.get("overlap") or 0),
+                            "kb_collection": kb_collection,
+                        },
+                        collection=collection,
+                        ingest_source="execute_plan_stub",
+                        promotion_status="promoted" if promote_to_kb else "working_set_only",
+                        parent_run_id=rag_run_id,
+                        doc_fingerprint=doc_fingerprint,
+                    )
                     chunk_records.append(
                         ChunkRecord(
                             id=chunk_record_id,
@@ -1000,15 +1496,7 @@ async def execute_plan_stub(state: GraphState) -> dict:
                             chunk_strategy=chunk_strategy,
                             chunk_size=int(chunk_profile.get("max_chunk_size") or len(chunk_body)),
                             chunk_overlap=int(chunk_profile.get("overlap") or 0),
-                            metadata_json={
-                                "collection": collection,
-                                "scope": scope,
-                                "source_id": source_id,
-                                "source_name": source,
-                                "url": evidence_url or None,
-                                "title": title or None,
-                                "vector_source_id": vector_source_id,
-                            },
+                            metadata_json=chunk_metadata,
                         )
                     )
                     rag_docs.append(
@@ -1020,29 +1508,65 @@ async def execute_plan_stub(state: GraphState) -> dict:
                             title=title or None,
                             url=evidence_url or None,
                             source=source,
-                            metadata={
-                                "published_date": evidence.get("published_date"),
-                                "confidence": evidence.get("confidence"),
-                                "type": evidence_type,
-                                "run_id": rag_run_id,
-                                "source_id": source_id,
-                                "source_doc_id": source_doc_id,
-                                "chunk_id": chunk_record_id,
-                                "doc_type": str(chunk_meta.get("doc_type") or doc_type),
-                                "chunk_index": chunk_index,
-                                "total_chunks": max(1, int(chunk_meta.get("total_chunks") or chunk_total or 1)),
-                                "chunk_strategy": chunk_strategy,
-                                "chunk_size": int(chunk_profile.get("max_chunk_size") or len(chunk_body)),
-                                "chunk_overlap": int(chunk_profile.get("overlap") or 0),
-                            },
+                            metadata=chunk_metadata,
                             expires_at=expires_at,
+                            layer=working_set_details.get("layer"),
+                            entity_scope=working_set_details.get("entity_scope"),
+                            entity_key=working_set_details.get("entity_key"),
+                            ingest_source="execute_plan_stub",
+                            promotion_status="working_set",
+                            doc_fingerprint=doc_fingerprint,
+                            parent_run_id=rag_run_id,
                         )
                     )
+                    if promote_to_kb and kb_collection:
+                        kb_vector_source_id = build_kb_vector_source_id(doc_fingerprint=doc_fingerprint, chunk_index=chunk_index)
+                        kb_metadata = enrich_metadata(
+                            dict(chunk_metadata),
+                            collection=kb_collection,
+                            ingest_source="execute_plan_stub",
+                            promotion_status="promoted",
+                            parent_collection=collection,
+                            parent_run_id=rag_run_id,
+                            doc_fingerprint=doc_fingerprint,
+                        )
+                        rag_docs.append(
+                            RAGDocument(
+                                collection=kb_collection,
+                                scope="persistent",
+                                source_id=kb_vector_source_id,
+                                content=chunk_body,
+                                title=title or None,
+                                url=evidence_url or None,
+                                source=source,
+                                metadata=kb_metadata,
+                                expires_at=None,
+                                layer=kb_details.get("layer"),
+                                entity_scope=kb_details.get("entity_scope"),
+                                entity_key=kb_details.get("entity_key"),
+                                ingest_source="execute_plan_stub",
+                                promotion_status="promoted",
+                                doc_fingerprint=doc_fingerprint,
+                                parent_collection=collection,
+                                parent_run_id=rag_run_id,
+                            )
+                        )
+                        promoted_chunk_count += 1
 
             _store_call("append_source_docs", source_doc_records)
             _store_call("append_chunks", chunk_records)
             _append_rag_event("source_doc_created", "source_docs", {"source_doc_count": len(source_doc_records)})
-            _append_rag_event("chunk_created", "chunking", {"chunk_count": len(chunk_records)})
+            _append_rag_event(
+                "chunk_created",
+                "chunking",
+                {
+                    "chunk_count": len(chunk_records),
+                    "memory_doc_count": memory_doc_count,
+                    "promoted_chunk_count": promoted_chunk_count,
+                    "memory_collection": memory_collection,
+                    "kb_collection": kb_collection,
+                },
+            )
 
             if getattr(rag, "fallback_reason", None):
                 rag_fallback_records.append(
@@ -1066,17 +1590,29 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     },
                 )
 
-            if rag_docs:
-                ingest_stats = await asyncio.to_thread(rag.ingest_documents, rag_docs)
-                rerank_top_n = _env_int("RAG_V2_RERANK_TOP_N", 8, min_value=1, max_value=20)
-                retrieval_k = _env_int("RAG_V2_TOP_K", max(rerank_top_n * 3, 18), min_value=1, max_value=60)
-                retrieved_hits = await asyncio.to_thread(
-                    rag.hybrid_search,
-                    query_text,
-                    collection=collection,
-                    top_k=retrieval_k,
-                )
+            if search_collections:
+                ingest_stats: dict[str, Any] = {"indexed": 0, "skipped": 0}
+                with suppress_rag_observability_hooks():
+                    if rag_docs:
+                        ingest_stats = await asyncio.to_thread(rag.ingest_documents, rag_docs)
+                    rerank_top_n = _env_int("RAG_V2_RERANK_TOP_N", 8, min_value=1, max_value=20)
+                    retrieval_k = _env_int("RAG_V2_TOP_K", max(rerank_top_n * 3, 18), min_value=1, max_value=60)
+                    if len(search_collections) > 1:
+                        retrieved_hits = await asyncio.to_thread(
+                            rag.hybrid_search_many,
+                            query_text,
+                            collections=search_collections,
+                            top_k=retrieval_k,
+                        )
+                    else:
+                        retrieved_hits = await asyncio.to_thread(
+                            rag.hybrid_search,
+                            query_text,
+                            collection=search_collections[0],
+                            top_k=retrieval_k,
+                        )
                 pre_rerank_hits = [_decorate_rag_hit(hit) for hit in (retrieved_hits or [])]
+                layer_hit_breakdown = _summarize_layer_hits(pre_rerank_hits)
                 rag_hits = pre_rerank_hits[:rerank_top_n]
                 reranker_used = False
                 try:
@@ -1133,6 +1669,18 @@ async def execute_plan_stub(state: GraphState) -> dict:
                                 "chunk_index": hit.get("chunk_index") or metadata.get("chunk_index"),
                                 "total_chunks": hit.get("total_chunks") or metadata.get("total_chunks"),
                                 "vector_source_id": hit.get("vector_source_id") or hit.get("source_id"),
+                                "layer": hit.get("layer") or metadata.get("layer"),
+                                "collection_kind": hit.get("collection_kind") or metadata.get("collection_kind"),
+                                "entity_scope": hit.get("entity_scope") or metadata.get("entity_scope"),
+                                "entity_key": hit.get("entity_key") or metadata.get("entity_key"),
+                                "search_collections": hit.get("search_collections") or metadata.get("search_collections"),
+                                "source_collection_rank": hit.get("source_collection_rank") or metadata.get("source_collection_rank"),
+                                "search_rank_in_collection": hit.get("search_rank_in_collection") or metadata.get("search_rank_in_collection"),
+                                "promotion_status": hit.get("promotion_status") or metadata.get("promotion_status"),
+                                "parent_collection": hit.get("parent_collection") or metadata.get("parent_collection"),
+                                "parent_run_id": hit.get("parent_run_id") or metadata.get("parent_run_id"),
+                                "matched_layers": hit.get("matched_layers") or metadata.get("matched_layers"),
+                                "matched_collections": hit.get("matched_collections") or metadata.get("matched_collections"),
                             },
                         )
                     )
@@ -1144,6 +1692,10 @@ async def execute_plan_stub(state: GraphState) -> dict:
                         "retrieval_k": retrieval_k,
                         "hit_count": len(pre_rerank_hits),
                         "top_chunk_ids": [hit.get("chunk_id") for hit in pre_rerank_hits[:10]],
+                        "search_collections": search_collections,
+                        "memory_collection": memory_collection,
+                        "kb_collection": kb_collection,
+                        "layer_hit_breakdown": layer_hit_breakdown,
                     },
                 )
 
@@ -1165,6 +1717,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
                                 "url": hit.get("url"),
                                 "source": hit.get("source"),
                                 "doc_type": hit.get("doc_type") or metadata.get("doc_type"),
+                                "layer": hit.get("layer") or metadata.get("layer"),
+                                "collection_kind": hit.get("collection_kind") or metadata.get("collection_kind"),
+                                "entity_scope": hit.get("entity_scope") or metadata.get("entity_scope"),
+                                "entity_key": hit.get("entity_key") or metadata.get("entity_key"),
+                                "promotion_status": hit.get("promotion_status") or metadata.get("promotion_status"),
+                                "matched_layers": hit.get("matched_layers") or metadata.get("matched_layers"),
+                                "matched_collections": hit.get("matched_collections") or metadata.get("matched_collections"),
                             },
                         )
                     )
@@ -1199,6 +1758,9 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "reranker_used": reranker_used,
                     "router_decision": rag_priority.value,
                     "collection": collection,
+                    "memory_collection": memory_collection,
+                    "kb_collection": kb_collection,
+                    "search_collections": search_collections,
                     "indexed": int(ingest_stats.get("indexed", 0)),
                     "skipped": int(ingest_stats.get("skipped", 0)),
                     "hits": len(rag_hits),
@@ -1209,6 +1771,8 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "user_id": user_id,
                     "source_doc_count": len(source_doc_records),
                     "chunk_count": len(chunk_records),
+                    "memory_doc_count": memory_doc_count,
+                    "layer_hit_breakdown": layer_hit_breakdown,
                 }
                 rag_trace = {
                     "enabled": True,
@@ -1217,6 +1781,9 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "reranker_used": reranker_used,
                     "router_decision": rag_priority.value,
                     "collection": collection,
+                    "memory_collection": memory_collection,
+                    "kb_collection": kb_collection,
+                    "search_collections": search_collections,
                     "indexed": int(ingest_stats.get("indexed", 0)),
                     "hits": len(rag_hits),
                     "retrieval_k": retrieval_k,
@@ -1225,6 +1792,8 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "user_id": user_id,
                     "source_doc_count": len(source_doc_records),
                     "chunk_count": len(chunk_records),
+                    "memory_doc_count": memory_doc_count,
+                    "layer_hit_breakdown": layer_hit_breakdown,
                 }
                 finished_at = datetime.now(timezone.utc)
                 rag_final_update = {
@@ -1238,6 +1807,16 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "chunk_count": len(chunk_records),
                     "retrieval_hit_count": len(pre_rerank_hits),
                     "rerank_hit_count": len(rerank_records),
+                    "metadata_json": {
+                        "layer": working_set_details.get("layer"),
+                        "memory_collection": memory_collection,
+                        "working_set_collection": collection,
+                        "kb_collection": kb_collection,
+                        "search_collections": search_collections,
+                        "memory_doc_count": memory_doc_count,
+                        "promoted_chunk_count": promoted_chunk_count,
+                        "layer_hit_breakdown": layer_hit_breakdown,
+                    },
                     "fallback_reason": str(getattr(rag, "fallback_reason", "") or "") or None,
                     "status": "success" if rag_hits else "partial",
                     "finished_at": finished_at,
@@ -1251,21 +1830,23 @@ async def execute_plan_stub(state: GraphState) -> dict:
                         "hit_count": len(rag_hits),
                         "source_doc_count": len(source_doc_records),
                         "chunk_count": len(chunk_records),
+                        "memory_doc_count": memory_doc_count,
+                        "layer_hit_breakdown": layer_hit_breakdown,
                     },
                 )
             else:
                 rag_trace = {
                     "enabled": False,
-                    "reason": "no_rag_documents",
+                    "reason": "no_search_collections",
                     "router_decision": rag_priority.value,
                     "run_id": rag_run_id,
                 }
                 rag_fallback_records.append(
                     FallbackEventRecord(
-                        id=_stable_id("fallback", rag_run_id or "unknown", "no_rag_documents"),
+                        id=_stable_id("fallback", rag_run_id or "unknown", "no_search_collections"),
                         run_id=rag_run_id,
-                        reason_code="no_rag_documents",
-                        reason_text="deduped evidence did not produce chunkable content",
+                        reason_code="no_search_collections",
+                        reason_text="query did not resolve any RAG collections",
                         backend_before=backend_requested,
                         backend_after=backend_requested if backend_requested in {"memory", "postgres"} else "memory",
                         payload_json={"deduped_count": len(deduped)},
@@ -1281,7 +1862,17 @@ async def execute_plan_stub(state: GraphState) -> dict:
                     "chunk_count": len(chunk_records),
                     "retrieval_hit_count": 0,
                     "rerank_hit_count": 0,
-                    "fallback_reason": "no_rag_documents",
+                    "metadata_json": {
+                        "layer": working_set_details.get("layer"),
+                        "memory_collection": memory_collection,
+                        "working_set_collection": collection,
+                        "kb_collection": kb_collection,
+                        "search_collections": search_collections,
+                        "memory_doc_count": memory_doc_count,
+                        "promoted_chunk_count": promoted_chunk_count,
+                        "layer_hit_breakdown": layer_hit_breakdown,
+                    },
+                    "fallback_reason": "no_search_collections",
                     "status": "partial",
                     "finished_at": finished_at,
                     "latency_ms": (finished_at - (rag_started_at or finished_at)).total_seconds() * 1000.0,

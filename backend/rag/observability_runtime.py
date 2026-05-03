@@ -8,8 +8,9 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 
+from backend.rag.layering import collection_details
 from backend.rag.observability_models import (
     ChunkRecord,
     FallbackEventRecord,
@@ -94,7 +95,8 @@ class SQLRAGObservabilityStore:
             if self._schema_ready:
                 return True
             with self._engine.begin() as conn:
-                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_query_runs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL, thread_id TEXT NULL, query_text TEXT NOT NULL, query_text_redacted TEXT NULL, query_hash TEXT NOT NULL, route_name TEXT NULL, router_decision TEXT NULL, backend_requested TEXT NOT NULL, backend_actual TEXT NOT NULL, collection TEXT NULL, retrieval_k INTEGER NOT NULL DEFAULT 0, rerank_top_n INTEGER NOT NULL DEFAULT 0, source_doc_count INTEGER NOT NULL DEFAULT 0, chunk_count INTEGER NOT NULL DEFAULT 0, retrieval_hit_count INTEGER NOT NULL DEFAULT 0, rerank_hit_count INTEGER NOT NULL DEFAULT 0, fallback_reason TEXT NULL, status TEXT NOT NULL DEFAULT 'running', error_message TEXT NULL, started_at TIMESTAMPTZ NOT NULL, finished_at TIMESTAMPTZ NULL, latency_ms DOUBLE PRECISION NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"))
+                conn.execute(text("CREATE TABLE IF NOT EXISTS rag_query_runs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL, thread_id TEXT NULL, query_text TEXT NOT NULL, query_text_redacted TEXT NULL, query_hash TEXT NOT NULL, route_name TEXT NULL, router_decision TEXT NULL, backend_requested TEXT NOT NULL, backend_actual TEXT NOT NULL, collection TEXT NULL, retrieval_k INTEGER NOT NULL DEFAULT 0, rerank_top_n INTEGER NOT NULL DEFAULT 0, source_doc_count INTEGER NOT NULL DEFAULT 0, chunk_count INTEGER NOT NULL DEFAULT 0, retrieval_hit_count INTEGER NOT NULL DEFAULT 0, rerank_hit_count INTEGER NOT NULL DEFAULT 0, fallback_reason TEXT NULL, status TEXT NOT NULL DEFAULT 'running', error_message TEXT NULL, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, started_at TIMESTAMPTZ NOT NULL, finished_at TIMESTAMPTZ NULL, latency_ms DOUBLE PRECISION NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"))
+                conn.execute(text("ALTER TABLE rag_query_runs ADD COLUMN IF NOT EXISTS metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb"))
                 conn.execute(text("CREATE TABLE IF NOT EXISTS rag_query_events (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, seq_no INTEGER NOT NULL, event_type TEXT NOT NULL, stage TEXT NOT NULL, payload_json JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, UNIQUE(run_id, seq_no))"))
                 conn.execute(text("CREATE TABLE IF NOT EXISTS rag_source_docs (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, source_id TEXT NOT NULL, source_type TEXT NOT NULL, source_name TEXT NULL, url TEXT NULL, title TEXT NULL, published_at TIMESTAMPTZ NULL, content_raw TEXT NOT NULL, content_preview TEXT NULL, content_length INTEGER NOT NULL DEFAULT 0, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(run_id, source_id))"))
                 conn.execute(text("CREATE TABLE IF NOT EXISTS rag_chunks (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES rag_query_runs(id) ON DELETE CASCADE, source_doc_id TEXT NOT NULL REFERENCES rag_source_docs(id) ON DELETE CASCADE, chunk_index INTEGER NOT NULL, total_chunks INTEGER NOT NULL, chunk_text TEXT NOT NULL, chunk_length INTEGER NOT NULL, doc_type TEXT NOT NULL, chunk_strategy TEXT NOT NULL, chunk_size INTEGER NOT NULL, chunk_overlap INTEGER NOT NULL, char_start INTEGER NULL, char_end INTEGER NULL, metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb, deleted_at TIMESTAMPTZ NULL, deleted_by TEXT NULL, delete_reason TEXT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(source_doc_id, chunk_index))"))
@@ -107,11 +109,11 @@ class SQLRAGObservabilityStore:
     def start_query_run(self, record: QueryRunRecord) -> str:
         self.ensure_schema()
         with self._engine.begin() as conn:
-            conn.execute(text("INSERT INTO rag_query_runs (id, user_id, session_id, thread_id, query_text, query_text_redacted, query_hash, route_name, router_decision, backend_requested, backend_actual, collection, retrieval_k, rerank_top_n, source_doc_count, chunk_count, retrieval_hit_count, rerank_hit_count, fallback_reason, status, error_message, started_at, finished_at, latency_ms, updated_at) VALUES (:id, :user_id, :session_id, :thread_id, :query_text, :query_text_redacted, :query_hash, :route_name, :router_decision, :backend_requested, :backend_actual, :collection, :retrieval_k, :rerank_top_n, :source_doc_count, :chunk_count, :retrieval_hit_count, :rerank_hit_count, :fallback_reason, :status, :error_message, :started_at, :finished_at, :latency_ms, :updated_at) ON CONFLICT (id) DO UPDATE SET updated_at = EXCLUDED.updated_at"), {'id': record.id, 'user_id': record.user_id, 'session_id': record.session_id, 'thread_id': record.thread_id, 'query_text': record.query_text, 'query_text_redacted': record.query_text_redacted, 'query_hash': record.query_hash, 'route_name': record.route_name, 'router_decision': record.router_decision, 'backend_requested': record.backend_requested, 'backend_actual': record.backend_actual, 'collection': record.collection, 'retrieval_k': int(record.retrieval_k), 'rerank_top_n': int(record.rerank_top_n), 'source_doc_count': int(record.source_doc_count), 'chunk_count': int(record.chunk_count), 'retrieval_hit_count': int(record.retrieval_hit_count), 'rerank_hit_count': int(record.rerank_hit_count), 'fallback_reason': record.fallback_reason, 'status': record.status, 'error_message': record.error_message, 'started_at': record.started_at, 'finished_at': record.finished_at, 'latency_ms': record.latency_ms, 'updated_at': _utc_now()})
+            conn.execute(text("INSERT INTO rag_query_runs (id, user_id, session_id, thread_id, query_text, query_text_redacted, query_hash, route_name, router_decision, backend_requested, backend_actual, collection, retrieval_k, rerank_top_n, source_doc_count, chunk_count, retrieval_hit_count, rerank_hit_count, fallback_reason, status, error_message, metadata_json, started_at, finished_at, latency_ms, updated_at) VALUES (:id, :user_id, :session_id, :thread_id, :query_text, :query_text_redacted, :query_hash, :route_name, :router_decision, :backend_requested, :backend_actual, :collection, :retrieval_k, :rerank_top_n, :source_doc_count, :chunk_count, :retrieval_hit_count, :rerank_hit_count, :fallback_reason, :status, :error_message, CAST(:metadata_json AS jsonb), :started_at, :finished_at, :latency_ms, :updated_at) ON CONFLICT (id) DO UPDATE SET metadata_json = EXCLUDED.metadata_json, updated_at = EXCLUDED.updated_at"), {'id': record.id, 'user_id': record.user_id, 'session_id': record.session_id, 'thread_id': record.thread_id, 'query_text': record.query_text, 'query_text_redacted': record.query_text_redacted, 'query_hash': record.query_hash, 'route_name': record.route_name, 'router_decision': record.router_decision, 'backend_requested': record.backend_requested, 'backend_actual': record.backend_actual, 'collection': record.collection, 'retrieval_k': int(record.retrieval_k), 'rerank_top_n': int(record.rerank_top_n), 'source_doc_count': int(record.source_doc_count), 'chunk_count': int(record.chunk_count), 'retrieval_hit_count': int(record.retrieval_hit_count), 'rerank_hit_count': int(record.rerank_hit_count), 'fallback_reason': record.fallback_reason, 'status': record.status, 'error_message': record.error_message, 'metadata_json': _json_dumps(record.metadata_json), 'started_at': record.started_at, 'finished_at': record.finished_at, 'latency_ms': record.latency_ms, 'updated_at': _utc_now()})
         return record.id
     def update_query_run(self, run_id: str, **fields: Any) -> int:
         self.ensure_schema()
-        allowed = {'router_decision','backend_requested','backend_actual','collection','retrieval_k','rerank_top_n','source_doc_count','chunk_count','retrieval_hit_count','rerank_hit_count','fallback_reason','status','error_message','finished_at','latency_ms'}
+        allowed = {'router_decision','backend_requested','backend_actual','collection','retrieval_k','rerank_top_n','source_doc_count','chunk_count','retrieval_hit_count','rerank_hit_count','fallback_reason','status','error_message','metadata_json','finished_at','latency_ms'}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return 0
@@ -119,8 +121,12 @@ class SQLRAGObservabilityStore:
         assignments: list[str] = []
         for idx, (key, value) in enumerate(updates.items()):
             bind_key = f'v{idx}'
-            assignments.append(f'{key} = :{bind_key}')
-            params[bind_key] = value
+            if key == 'metadata_json':
+                assignments.append(f"{key} = CAST(:{bind_key} AS jsonb)")
+                params[bind_key] = _json_dumps(value if isinstance(value, dict) else {})
+            else:
+                assignments.append(f'{key} = :{bind_key}')
+                params[bind_key] = value
         assignments.append('updated_at = :updated_at')
         with self._engine.begin() as conn:
             result = conn.execute(text(f"UPDATE rag_query_runs SET {', '.join(assignments)} WHERE id = :id"), params)
@@ -208,6 +214,27 @@ __all__ = [
 ]
 
 
+def _enrich_observability_item(item: dict[str, Any]) -> dict[str, Any]:
+    data = dict(item or {})
+    metadata = data.get('metadata_json') if isinstance(data.get('metadata_json'), dict) else data.get('metadata') if isinstance(data.get('metadata'), dict) else {}
+    collection = str(data.get('collection') or metadata.get('collection') or '').strip()
+    if collection:
+        details = collection_details(collection)
+        data['collection'] = collection
+        if not data.get('layer'):
+            data['layer'] = metadata.get('layer') or details.get('layer')
+        if not data.get('collection_kind'):
+            data['collection_kind'] = metadata.get('collection_kind') or details.get('collection_kind')
+        if not data.get('entity_scope'):
+            data['entity_scope'] = metadata.get('entity_scope') or details.get('entity_scope')
+        if not data.get('entity_key'):
+            data['entity_key'] = metadata.get('entity_key') or details.get('entity_key')
+    search_collections = metadata.get('search_collections') if isinstance(metadata, dict) else None
+    if isinstance(search_collections, list) and 'search_collections' not in data:
+        data['search_collections'] = search_collections
+    return data
+
+
 def _runtime_fetch_all(store: SQLRAGObservabilityStore, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     store.ensure_schema()
     with store._engine.connect() as conn:
@@ -229,7 +256,7 @@ def _runtime_fetch_all(store: SQLRAGObservabilityStore, sql: str, params: dict[s
                 item['metadata'] = json.loads(item['metadata']) if isinstance(item['metadata'], str) else item['metadata']
             except Exception:
                 item['metadata'] = {}
-    return items
+    return [_enrich_observability_item(item) for item in items]
 
 
 def _runtime_fetch_one(store: SQLRAGObservabilityStore, sql: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -252,13 +279,15 @@ def _sql_health_summary(self: SQLRAGObservabilityStore, recent_limit: int = 3, f
     return {'enabled': True, 'status': 'ok', 'recent_runs': recent_runs, 'fallback_summary': fallback_summary, 'recent_run_count_24h': total_recent, 'recent_fallback_count_24h': int(fallback.get('recent_fallback_count_24h') or 0), 'recent_empty_hits_rate_24h': (empty_recent / total_recent) if total_recent > 0 else 0.0, 'last_run_at': stats.get('last_run_at'), 'last_fallback_at': fallback.get('last_fallback_at')}
 
 
-def _noop_list_runs(self: NoOpRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False) -> dict[str, Any]:
+def _noop_list_runs(self: NoOpRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False) -> dict[str, Any]:
     return {'items': [], 'next_cursor': None}
 
 
-def _sql_list_runs(self: SQLRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False) -> dict[str, Any]:
-    where = ["deleted_at IS NULL"]
+def _sql_list_runs(self: SQLRAGObservabilityStore, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False) -> dict[str, Any]:
+    where = ["1=1"]
     params: dict[str, Any] = {'limit': max(1, min(int(limit), 200))}
+    if not include_deleted:
+        where.append("deleted_at IS NULL")
     if cursor:
         where.append("started_at < :cursor")
         params['cursor'] = cursor
@@ -279,12 +308,15 @@ def _sql_get_run_detail(self: SQLRAGObservabilityStore, run_id: str) -> dict[str
     return _runtime_fetch_one(self, "SELECT * FROM rag_query_runs WHERE id = :run_id", {'run_id': run_id})
 
 
-def _noop_list_events(self: NoOpRAGObservabilityStore, *, run_id: str, limit: int = 500) -> dict[str, Any]:
+def _noop_list_events(self: NoOpRAGObservabilityStore, *, run_id: str, limit: int = 500, include_deleted: bool = False) -> dict[str, Any]:
     return {'items': []}
 
 
-def _sql_list_events(self: SQLRAGObservabilityStore, *, run_id: str, limit: int = 500) -> dict[str, Any]:
-    return {'items': _runtime_fetch_all(self, "SELECT * FROM rag_query_events WHERE run_id = :run_id AND deleted_at IS NULL ORDER BY seq_no ASC LIMIT :limit", {'run_id': run_id, 'limit': max(1, min(int(limit), 2000))})}
+def _sql_list_events(self: SQLRAGObservabilityStore, *, run_id: str, limit: int = 500, include_deleted: bool = False) -> dict[str, Any]:
+    where = ["run_id = :run_id"]
+    if not include_deleted:
+        where.append("deleted_at IS NULL")
+    return {'items': _runtime_fetch_all(self, f"SELECT * FROM rag_query_events WHERE {' AND '.join(where)} ORDER BY seq_no ASC LIMIT :limit", {'run_id': run_id, 'limit': max(1, min(int(limit), 2000))})}
 
 
 def _noop_list_documents(self: NoOpRAGObservabilityStore, *, run_id: str | None = None, collection: str | None = None, include_deleted: bool = False, limit: int = 200) -> dict[str, Any]:
@@ -335,10 +367,12 @@ def _sql_list_hits(self: SQLRAGObservabilityStore, *, run_id: str | None = None,
     params: dict[str, Any] = {'limit': max(1, min(int(limit), 2000))}
     if not include_deleted:
         where.append("rh.deleted_at IS NULL")
+        where.append("(ch.id IS NULL OR ch.deleted_at IS NULL)")
+        where.append("(rr.id IS NULL OR rr.deleted_at IS NULL)")
     if run_id:
         where.append("rh.run_id = :run_id")
         params['run_id'] = run_id
-    items = _runtime_fetch_all(self, f"SELECT rh.*, rr.input_rank, rr.output_rank, rr.rerank_score, rr.selected_for_answer, ch.chunk_index, ch.chunk_text FROM rag_retrieval_hits rh LEFT JOIN rag_rerank_hits rr ON rr.run_id = rh.run_id AND COALESCE(rr.chunk_id, '') = COALESCE(rh.chunk_id, '') LEFT JOIN rag_chunks ch ON ch.id = rh.chunk_id WHERE {' AND '.join(where)} ORDER BY rh.created_at DESC LIMIT :limit", params)
+    items = _runtime_fetch_all(self, f"SELECT rh.*, rr.input_rank, rr.output_rank, rr.rerank_score, rr.selected_for_answer, rr.deleted_at AS rerank_deleted_at, ch.chunk_index, ch.chunk_text, ch.deleted_at AS chunk_deleted_at FROM rag_retrieval_hits rh LEFT JOIN rag_rerank_hits rr ON rr.run_id = rh.run_id AND COALESCE(rr.chunk_id, '') = COALESCE(rh.chunk_id, '') LEFT JOIN rag_chunks ch ON ch.id = rh.chunk_id WHERE {' AND '.join(where)} ORDER BY rh.created_at DESC LIMIT :limit", params)
     if collection:
         items = [item for item in items if str(item.get('collection') or '') == collection]
     for item in items:
@@ -373,6 +407,10 @@ def _noop_soft_delete_run(self: NoOpRAGObservabilityStore, run_id: str, deleted_
     return None
 
 
+def _noop_soft_delete_runs_for_collections(self: NoOpRAGObservabilityStore, *, collections: Iterable[str], deleted_by: str = 'system', reason: str | None = None) -> int:
+    return 0
+
+
 def _sql_soft_delete_run(self: SQLRAGObservabilityStore, run_id: str, deleted_by: str = 'system', reason: str | None = None) -> dict[str, Any] | None:
     self.update_query_run(run_id, status='deleted')
     deleted_at = _utc_now()
@@ -381,6 +419,46 @@ def _sql_soft_delete_run(self: SQLRAGObservabilityStore, run_id: str, deleted_by
             key = 'id' if table == 'rag_query_runs' else 'run_id'
             conn.execute(text(f"UPDATE {table} SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE {key} = :run_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'run_id': run_id})
     return _sql_get_run_detail(self, run_id)
+
+
+def _sql_soft_delete_runs_for_collections(self: SQLRAGObservabilityStore, *, collections: Iterable[str], deleted_by: str = 'system', reason: str | None = None) -> int:
+    normalized = sorted({str(collection or '').strip() for collection in collections if str(collection or '').strip()})
+    if not normalized:
+        return 0
+
+    self.ensure_schema()
+    deleted_at = _utc_now()
+    with self._engine.begin() as conn:
+        run_id_stmt = text(
+            "SELECT id FROM rag_query_runs "
+            "WHERE collection IN :collections AND deleted_at IS NULL"
+        ).bindparams(bindparam('collections', expanding=True))
+        run_ids = [
+            str(row['id'])
+            for row in conn.execute(run_id_stmt, {'collections': normalized}).mappings()
+            if row.get('id')
+        ]
+        if not run_ids:
+            return 0
+
+        for table in ('rag_query_runs', 'rag_query_events', 'rag_source_docs', 'rag_chunks', 'rag_retrieval_hits', 'rag_rerank_hits', 'rag_fallback_events'):
+            key = 'id' if table == 'rag_query_runs' else 'run_id'
+            status_sql = "status = 'deleted', " if table == 'rag_query_runs' else ''
+            stmt = text(
+                f"UPDATE {table} SET {status_sql}deleted_at = :deleted_at, "
+                f"deleted_by = :deleted_by, delete_reason = :reason "
+                f"WHERE {key} IN :run_ids AND deleted_at IS NULL"
+            ).bindparams(bindparam('run_ids', expanding=True))
+            conn.execute(
+                stmt,
+                {
+                    'deleted_at': deleted_at,
+                    'deleted_by': deleted_by,
+                    'reason': reason,
+                    'run_ids': run_ids,
+                },
+            )
+    return len(run_ids)
 
 
 def _noop_soft_delete_source_doc(self: NoOpRAGObservabilityStore, source_doc_id: str, deleted_by: str = 'system', reason: str | None = None) -> dict[str, Any] | None:
@@ -392,6 +470,8 @@ def _sql_soft_delete_source_doc(self: SQLRAGObservabilityStore, source_doc_id: s
     with self._engine.begin() as conn:
         conn.execute(text("UPDATE rag_source_docs SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE id = :source_doc_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
         conn.execute(text("UPDATE rag_chunks SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE source_doc_id = :source_doc_id AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
+        conn.execute(text("UPDATE rag_retrieval_hits SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE (source_doc_id = :source_doc_id OR chunk_id IN (SELECT id FROM rag_chunks WHERE source_doc_id = :source_doc_id)) AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
+        conn.execute(text("UPDATE rag_rerank_hits SET deleted_at = :deleted_at, deleted_by = :deleted_by, delete_reason = :reason WHERE chunk_id IN (SELECT id FROM rag_chunks WHERE source_doc_id = :source_doc_id) AND deleted_at IS NULL"), {'deleted_at': deleted_at, 'deleted_by': deleted_by, 'reason': reason, 'source_doc_id': source_doc_id})
     return _runtime_fetch_one(self, "SELECT * FROM rag_source_docs WHERE id = :source_doc_id", {'source_doc_id': source_doc_id})
 
 
@@ -415,5 +495,7 @@ NoOpRAGObservabilityStore.search_preview = _noop_search_preview
 SQLRAGObservabilityStore.search_preview = _sql_search_preview
 NoOpRAGObservabilityStore.soft_delete_run = _noop_soft_delete_run
 SQLRAGObservabilityStore.soft_delete_run = _sql_soft_delete_run
+NoOpRAGObservabilityStore.soft_delete_runs_for_collections = _noop_soft_delete_runs_for_collections
+SQLRAGObservabilityStore.soft_delete_runs_for_collections = _sql_soft_delete_runs_for_collections
 NoOpRAGObservabilityStore.soft_delete_source_doc = _noop_soft_delete_source_doc
 SQLRAGObservabilityStore.soft_delete_source_doc = _sql_soft_delete_source_doc

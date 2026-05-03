@@ -45,6 +45,44 @@ _FINANCIAL_CONFIDENCE_THRESHOLD = 75
 # LLM call hard timeout (seconds)
 _LLM_CLASSIFY_TIMEOUT = 5.0
 
+_MACRO_OR_THEME_HINTS = (
+    "macro",
+    "fed",
+    "fomc",
+    "cpi",
+    "ppi",
+    "gdp",
+    "rates",
+    "rate path",
+    "inflation",
+    "treasury",
+    "valuation",
+    "sector",
+    "theme",
+    "\u5b8f\u89c2",
+    "\u7f8e\u8054\u50a8",
+    "\u5229\u7387",
+    "\u52a0\u606f",
+    "\u964d\u606f",
+    "\u901a\u80c0",
+    "\u503a\u5238",
+    "\u56fd\u503a",
+    "\u6536\u76ca\u7387",
+    "\u4f30\u503c",
+    "\u677f\u5757",
+    "\u884c\u4e1a",
+    "\u4e3b\u9898",
+    "\u5927\u578b\u79d1\u6280\u80a1",
+    "\u79d1\u6280\u80a1",
+)
+
+
+def _is_macro_or_theme_subject(query: str) -> bool:
+    lowered = (query or "").strip().lower()
+    if not lowered:
+        return False
+    return any(hint in lowered for hint in _MACRO_OR_THEME_HINTS)
+
 
 async def _llm_classify_financial(query: str) -> tuple[bool, int]:
     """
@@ -162,6 +200,10 @@ async def resolve_subject(state: GraphState) -> dict:
                 binding_tier = "tier1_explicit_ticker"
         except Exception:
             pass
+
+        if subject_type == "unknown" and _is_macro_or_theme_subject(query):
+            subject_type = "macro"
+            binding_tier = "macro_or_theme"
 
     # ------------------------------------------------------------------
     # Fallback: active_symbol binding decision (three-tier gate)

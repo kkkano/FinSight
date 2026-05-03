@@ -1,4 +1,4 @@
-﻿# DeepSearch / RAG 可观测性治理开发依据
+# DeepSearch / RAG 可观测性治理开发依据
 
 更新时间：2026-03-06  
 状态：开发中（P1-P4 首版已落地）  
@@ -665,6 +665,7 @@ WHERE deleted_at IS NOT NULL
 - [x] 新增 collection 浏览器
 - [ ] 新增 fallback 横幅与状态条（当前已有 fallback 状态卡与提示，专用横幅待补）
 
+- [ ] 将 memory 从“用户级快照直接注入”重构为 `user + thread + thread_ticker` 分层作用域，明确 ticker 隔离、跨 ticker 对比与多标的上下文保留策略
 ### P5：指标、评测、告警
 
 - [ ] 接入 retrieval eval 结果展示

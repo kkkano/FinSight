@@ -71,6 +71,47 @@ def _infer_market_from_subject(subject: dict | None) -> str | None:
     return None
 
 
+def _ready_understanding_tasks(state: GraphState) -> list[dict]:
+    tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        return []
+    ready: list[dict] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        status = str(task.get("status") or "ready").strip().lower()
+        if status == "blocked":
+            continue
+        ready.append(task)
+    return ready
+
+
+def _task_operation_name(task: dict) -> str:
+    operation = task.get("operation")
+    if isinstance(operation, dict):
+        name = operation.get("name")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return "qa"
+
+
+def _task_subject_type(task: dict) -> str:
+    value = task.get("subject_type")
+    return str(value).strip().lower() if isinstance(value, str) and value.strip() else "unknown"
+
+
+def _infer_market_from_task(task: dict, fallback: str) -> str:
+    tickers = task.get("tickers")
+    if isinstance(tickers, list):
+        for ticker in tickers:
+            if not isinstance(ticker, str):
+                continue
+            inferred = _infer_market_from_ticker(ticker)
+            if inferred:
+                return inferred
+    return fallback
+
+
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
     if op_name == "screen":
@@ -98,7 +139,14 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "search",
             "get_current_datetime",
         ]
-    if subject_type == "company":
+    if subject_type == "macro":
+        return [
+            "get_official_macro_releases",
+            "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
+    if subject_type in ("company", "index", "commodity"):
         if op_name == "price":
             return [
                 "get_stock_price",
@@ -172,12 +220,23 @@ def policy_gate(state: GraphState) -> dict:
     agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
 
     # Budget baseline
+    ready_tasks = _ready_understanding_tasks(state)
+
     if output_mode == "investment_report":
         budget = {"max_rounds": 6, "max_tools": 8}
     elif output_mode == "chat":
         budget = {"max_rounds": 4, "max_tools": 4}
     else:
         budget = {"max_rounds": 3, "max_tools": 4}
+
+    if ready_tasks:
+        task_count = len(ready_tasks)
+        if output_mode == "investment_report":
+            budget["max_tools"] = max(budget["max_tools"], min(18, task_count * 3))
+        elif output_mode == "chat":
+            budget["max_tools"] = max(budget["max_tools"], min(10, task_count * 2))
+        else:
+            budget["max_tools"] = max(budget["max_tools"], min(12, task_count * 2))
 
     # Apply budget_override from ui_context (validated: 1-10)
     if isinstance(budget_override, (int, float)):
@@ -204,9 +263,50 @@ def policy_gate(state: GraphState) -> dict:
         if not allowed_tools:
             allowed_tools = _legacy_select_tools(subject_type, op_name)
             fallback_reason = "manifest_empty_selection"
+        if subject_type in {"index", "commodity"}:
+            for tool_name in _legacy_select_tools(subject_type, op_name):
+                if tool_name not in allowed_tools:
+                    allowed_tools.append(tool_name)
+        if ready_tasks:
+            union_tools = list(allowed_tools)
+            seen_tools = set(union_tools)
+            for task in ready_tasks:
+                task_subject_type = _task_subject_type(task)
+                task_op_name = _task_operation_name(task)
+                task_market = _infer_market_from_task(task, market)
+                task_tools = select_tools(
+                    subject_type=task_subject_type,
+                    operation_name=task_op_name,
+                    output_mode=output_mode,
+                    analysis_depth=analysis_depth,
+                    market=task_market,
+                )
+                if not task_tools:
+                    task_tools = _legacy_select_tools(task_subject_type, task_op_name)
+                if task_subject_type in {"index", "commodity"}:
+                    task_tools = list(task_tools) + [
+                        name for name in _legacy_select_tools(task_subject_type, task_op_name)
+                        if name not in task_tools
+                    ]
+                for tool_name in task_tools:
+                    if tool_name in seen_tools:
+                        continue
+                    seen_tools.add(tool_name)
+                    union_tools.append(tool_name)
+            allowed_tools = union_tools
     except Exception:
         allowed_tools = _legacy_select_tools(subject_type, op_name)
         fallback_reason = "manifest_exception"
+        if ready_tasks:
+            union_tools = list(allowed_tools)
+            seen_tools = set(union_tools)
+            for task in ready_tasks:
+                for tool_name in _legacy_select_tools(_task_subject_type(task), _task_operation_name(task)):
+                    if tool_name in seen_tools:
+                        continue
+                    seen_tools.add(tool_name)
+                    union_tools.append(tool_name)
+            allowed_tools = union_tools
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
@@ -349,6 +449,7 @@ def policy_gate(state: GraphState) -> dict:
                 "analysis_depth": analysis_depth,
                 "market": market,
                 "tool_selection_fallback": fallback_reason,
+                "understanding_task_count": len(ready_tasks),
                 "agent_selection": {
                     "required": list(agent_selection.get("required") or []),
                     "max_agents": agent_selection.get("max_agents"),

@@ -149,6 +149,44 @@ def test_execute_plan_supports_agent_steps_in_live_mode():
     assert output.get("agent") == "ok"
 
 
+def test_execute_plan_groups_results_by_task_ids():
+    def fake_news(inputs):
+        return [{"title": f"{inputs['ticker']} headline"}]
+
+    plan = {
+        "tasks": [
+            {"id": "task_1", "subject_type": "company", "tickers": ["GOOGL"], "operation": "fetch"},
+            {"id": "task_2", "subject_type": "company", "tickers": ["MSFT"], "operation": "fetch"},
+        ],
+        "steps": [
+            {
+                "id": "s1",
+                "kind": "tool",
+                "name": "news",
+                "inputs": {"ticker": "GOOGL"},
+                "task_ids": ["task_1"],
+                "optional": False,
+            },
+            {
+                "id": "s2",
+                "kind": "tool",
+                "name": "news",
+                "inputs": {"ticker": "MSFT"},
+                "task_ids": ["task_2"],
+                "optional": False,
+            },
+        ],
+    }
+
+    artifacts, events = _run(execute_plan(plan, tool_invokers={"news": fake_news}, dry_run=False))
+
+    assert artifacts["step_results"]["s1"]["task_ids"] == ["task_1"]
+    assert artifacts["step_results"]["s2"]["task_id"] == "task_2"
+    assert artifacts["task_results"]["task_1"]["step_ids"] == ["s1"]
+    assert artifacts["task_results"]["task_2"]["step_ids"] == ["s2"]
+    assert any(event.get("task_ids") == ["task_1"] for event in events)
+
+
 def test_execute_plan_progressive_escalation_skips_high_cost_step_when_confidence_sufficient():
     calls = {"deep": 0}
 

@@ -57,7 +57,7 @@ AGENT_CAPABILITIES: dict[str, AgentCapability] = {
     ),
     "macro_agent": AgentCapability(
         name="macro_agent",
-        subject_weights={"company": 0.35, "portfolio": 0.45, "news_set": 0.35},
+        subject_weights={"macro": 0.85, "company": 0.35, "portfolio": 0.45, "news_set": 0.35},
         operation_weights={"generate_report": 0.35, "analyze_impact": 0.35, "compare": 0.2},
         output_mode_weights={"investment_report": 0.25, "brief": 0.05},
         keyword_hints=("\u5b8f\u89c2", "macro", "cpi", "ppi", "fed", "fomc", "\u5229\u7387", "\u901a\u80c0", "\u5c31\u4e1a"),
@@ -182,6 +182,8 @@ def required_agents_for_request(state: dict[str, Any], candidates: Iterable[str]
         required = ["deep_search_agent", "fundamental_agent"]
     elif subject_type in ("news_item", "news_set"):
         required = ["news_agent", "price_agent"]
+    elif subject_type == "macro":
+        required = ["macro_agent"]
     elif subject_type == "company":
         required = ["price_agent", "news_agent", "fundamental_agent"]
         # Always include macro + technical for comprehensive investment reports

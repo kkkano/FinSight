@@ -11,6 +11,9 @@ export interface ThinkingStep {
   message?: string;
   result?: any;
   timestamp: string;
+  eventType?: RawEventType;
+  runId?: string;
+  sessionId?: string;
 }
 
 // Evidence item for citations/sources
@@ -276,6 +279,8 @@ export type RawEventType =
   | 'plan_ready'
   // Pipeline stage events
   | 'pipeline_stage'
+  // User-visible structured trace events
+  | 'trace'
   | 'quality_blocked'
   // Structured decision summaries
   | 'decision_note'

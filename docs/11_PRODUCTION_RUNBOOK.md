@@ -2,7 +2,7 @@
 
 > 最后更新：2026-02-06  
 > 适用范围：当前 `main` 上的 LangGraph 单入口架构  
-> SSOT：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`
+> SSOT：`docs/01_ARCHITECTURE.md`、`docs/06a_LANGGRAPH_DESIGN_SPEC.md`
 
 ## 1. 目标与边界
 

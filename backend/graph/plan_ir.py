@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 PlanIR schema + validation helpers (SSOT):
-docs/06_LANGGRAPH_REFACTOR_GUIDE.md
+docs/06a_LANGGRAPH_DESIGN_SPEC.md
+docs/plans/2026-05-03_request_understanding_task_graph_spec.md
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ class PlanStep(BaseModel):
     kind: Literal["tool", "agent", "llm"]
     name: str = Field(min_length=1)
     inputs: dict[str, Any] = Field(default_factory=dict)
+    task_id: Optional[str] = None
+    task_ids: list[str] = Field(default_factory=list)
     parallel_group: Optional[str] = None
     why: Optional[str] = None
     optional: bool = False
@@ -49,10 +52,21 @@ class PlanSubject(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class PlanTask(BaseModel):
+    id: str = Field(min_length=1)
+    subject_type: str = Field(min_length=1)
+    tickers: list[str] = Field(default_factory=list)
+    operation: str = Field(min_length=1)
+    status: str = "ready"
+
+    model_config = {"extra": "forbid"}
+
+
 class PlanIR(BaseModel):
     goal: str = Field(min_length=1)
     subject: PlanSubject
     output_mode: Literal["chat", "brief", "investment_report"]
+    tasks: list[PlanTask] = Field(default_factory=list)
     steps: list[PlanStep] = Field(default_factory=list)
     synthesis: PlanSynthesis = Field(default_factory=PlanSynthesis)
     budget: PlanBudget
@@ -66,4 +80,3 @@ def plan_ir_json_schema() -> dict[str, Any]:
 
 def validate_plan_ir(payload: Any) -> PlanIR:
     return PlanIR.model_validate(payload)
-

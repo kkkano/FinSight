@@ -1,6 +1,8 @@
 # FinSight LangGraph Flow Documentation
 
-> Complete data flow documentation for the 16-node StateGraph pipeline.
+> 2026-05-03 状态说明：当前主路径已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单 + Tier-2 LLM 分类器 sidecar），命中即 END。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。会话生命周期走 `/api/conversations` + `conversation_store` snapshot；停止生成会产生 `cancelled` trace/pipeline 事件，并通过 executor/agent cancellation token 尽量中止后续工作。
+
+> Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
 ---
 
@@ -10,32 +12,33 @@
 graph TD
     START([START]) --> build_initial_state
     build_initial_state --> reset_turn_state
-    reset_turn_state --> trim_history
-    trim_history --> summarize_history
-    summarize_history --> normalize_ui_context
-    normalize_ui_context --> decide_output_mode
-    decide_output_mode --> resolve_subject
-    resolve_subject --> clarify
-
-    clarify -->|needs_clarification=true| END_CLARIFY([END: 返回澄清请求])
-    clarify -->|needs_clarification=false| parse_operation
-
-    parse_operation --> policy_gate
+    reset_turn_state --> prepare_context
+    prepare_context --> chat_respond
+    chat_respond -->|chat_responded=true| END_CASUAL([END: 闲聊/OOS 短路])
+    chat_respond -->|chat_responded=false| understand_request
+    understand_request -->|direct/clarify| END_CHAT([END: 直接回复/澄清])
+    understand_request -->|alert| alert_extractor
+    alert_extractor -->|valid| alert_action
+    alert_action --> END_ALERT([END: 保存提醒])
+    alert_extractor -->|invalid| END_ALERT_INVALID([END: 参数无效])
+    understand_request -->|research| policy_gate
     policy_gate --> planner
-    planner --> execute_plan
+    planner --> confirmation_gate
+    confirmation_gate -->|cancel_execution| END_CANCEL([END: 用户取消])
+    confirmation_gate -->|adjust_parameters| planner
+    confirmation_gate -->|confirm_execute| execute_plan
     execute_plan --> synthesize
     synthesize --> render
     render --> END_DONE([END: 返回最终响应])
 
     style START fill:#10b981,color:#fff
     style reset_turn_state fill:#a855f7,color:#fff
-    style trim_history fill:#f59e0b,color:#fff
-    style summarize_history fill:#f59e0b,color:#fff
+    style prepare_context fill:#f59e0b,color:#fff
     style END_CLARIFY fill:#ef4444,color:#fff
     style END_DONE fill:#3b82f6,color:#fff
 ```
 
-**Source**: `backend/graph/runner.py:33-77` — `_build_graph()`
+**Source**: `backend/graph/runner.py` — `_build_graph()`
 
 ---
 
@@ -65,6 +68,7 @@ graph TD
 | `plan_ir` | Write (None) | 清除计划 IR |
 | `artifacts` | Write (None) | 清除制品 |
 | `chat_responded` | Write (None) | 清除聊天回复标记 |
+| `understanding/tasks/blocked_tasks/context_refs` | Write (None) | 清除上一轮请求理解结果 |
 | `confirmation_*` (5) | Write (None) | 清除所有确认门控字段 |
 | `trace` | Write | 保留 spans (events/timings/failures)，清除运行时 sub-keys (operation_decision/planner_runtime/synthesize_runtime/executor/rag) |
 
@@ -74,7 +78,21 @@ graph TD
 
 ---
 
-### 2. trim_history (Memory Safety)
+### 2. prepare_context（主路径）
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `messages` | Read/Write | 修剪超预算历史，并在需要时写入摘要 |
+| `ui_context` | Read/Write | 规范化 selections、active_symbol、view 等前端上下文 |
+| `output_mode` | Write | 合并 UI 显式模式和默认 brief/deep hints |
+
+`prepare_context` 是当前主路径的上下文准备入口。它承接旧 `trim_history`、`summarize_history`、`normalize_ui_context`、`decide_output_mode` 的职责，减少图上前半段节点数量，并保证 `understand_request` 获取的是同一份规范化上下文。
+
+**Source**: `backend/graph/nodes/prepare_context.py`
+
+---
+
+### 2L. trim_history (legacy helper)
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -94,7 +112,7 @@ graph TD
 
 ---
 
-### 3. summarize_history (Conditional Compression)
+### 3L. summarize_history (legacy helper)
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -123,7 +141,7 @@ graph TD
 
 ---
 
-### 4. normalize_ui_context
+### 4L. normalize_ui_context (legacy helper)
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -133,7 +151,7 @@ graph TD
 
 ---
 
-### 5. decide_output_mode
+### 5L. decide_output_mode (legacy helper)
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -148,7 +166,29 @@ graph TD
 
 ---
 
-### 6. resolve_subject
+### 6. understand_request（主路径）
+
+| Field | Direction | Description |
+|-------|-----------|-------------|
+| `query` | Read | 用户查询 |
+| `ui_context` | Read | selection、active_symbol、portfolio 等上下文 |
+| `understanding` | Write | route、summary、confidence、assumptions |
+| `tasks` | Write | 可执行任务列表 |
+| `blocked_tasks` | Write | 局部阻塞任务列表 |
+| `subject` / `operation` | Write | primary task 的兼容投影 |
+| `artifacts.draft_markdown` | Write | direct/clarify route 的短回复 |
+| `trace` | Write | understanding 用户可见 trace |
+
+**条件边**:
+- `route=direct/clarify` → **END**
+- `route=alert` 或 primary operation=`alert_set` → `alert_extractor`
+- `route=research` → `policy_gate`
+
+**Source**: `backend/graph/nodes/understand_request.py`
+
+---
+
+### 6L. resolve_subject（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -162,7 +202,7 @@ graph TD
 
 ---
 
-### 7. clarify (条件分支)
+### 7L. clarify（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -176,7 +216,7 @@ graph TD
 
 ---
 
-### 8. parse_operation
+### 8L. parse_operation（legacy compatibility）
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
@@ -194,7 +234,8 @@ graph TD
 |-------|-----------|-------------|
 | `operation` | Read | 操作类型 |
 | `subject` | Read | 主体信息 |
-| `policy` | Write | `{budget, constraints, allowed_tools, max_rounds, max_seconds}` |
+| `tasks` | Read | 多任务请求的 ready task 列表 |
+| `policy` | Write | `{budget, constraints, allowed_tools, max_rounds, max_seconds}`，工具白名单按 tasks 并集 |
 
 根据操作类型设置资源预算:
 - `BUDGET_MAX_TOOL_CALLS` (default: 24)
@@ -210,6 +251,7 @@ graph TD
 | `query` | Read | 用户查询 |
 | `subject` | Read | 主体信息 |
 | `operation` | Read | 操作类型 |
+| `tasks` | Read | 多任务请求时生成多组 PlanIR steps |
 | `policy` | Read | 资源预算 |
 | `plan_ir` | Write | PlanIR (执行计划中间表示) |
 | `trace` | Write | `planner_runtime` 追踪数据 |
@@ -353,6 +395,11 @@ Supports 3 backends (configured via `LANGGRAPH_CHECKPOINTER_BACKEND`):
 - 前端消费：
   - `frontend/src/api/client.ts` 透传 `runId/sessionId` 到 `onThinking/onRawEvent`
   - `frontend/src/store/executionStore.ts` 按 `runId` 过滤并写入 `timeline`
+- 取消语义：
+  - 前端点击停止后调用 `AbortController.abort()`。
+  - 后端在 `run_graph_pipeline` / `resume_graph_pipeline` 中捕获 `asyncio.CancelledError`，发送 `trace.stage="cancelled"` 与 `pipeline_stage.stage="cancelled"`。
+  - executor 与 agent adapter 读取 `backend/graph/cancellation.py` 的 context-scoped token，停止后续 step/agent 输出。
+  - 前端保留 partial answer、thinking steps 和停止提示，不报 missing done。
 
 ```mermaid
 flowchart LR
@@ -362,6 +409,24 @@ flowchart LR
   SSE --> PARSE[parseSSEStream]
   PARSE --> STORE[executionStore timeline]
   STORE --> PANEL[AgentTimeline UI]
+```
+
+### A2) Conversation lifecycle contract
+
+- `GET /api/conversations`：列出当前后端 conversation snapshot 与 session context 摘要。
+- `POST /api/conversations`：创建或触达会话，返回规范化 `session_id`。
+- `GET /api/conversations/{id}`：读取会话摘要和轻量 messages/title snapshot。
+- `PATCH /api/conversations/{id}`：同步标题、messages、置顶和归档 metadata。
+- `DELETE /api/conversations/{id}`：清理 session context、report/citation index、thread RAG collections 和对应 RAG observability runs。
+
+```mermaid
+flowchart LR
+  FE[Conversation Rail] --> API[/api/conversations]
+  API --> STORE[conversation_store snapshot]
+  API --> SESSION[ContextManager by thread_id]
+  API --> REPORT[ReportIndexStore.delete_session]
+  API --> RAG[HybridRAGService.delete_collections]
+  API --> OBS[RAG observability soft delete by collection]
 ```
 
 ### B) Alert feed contract

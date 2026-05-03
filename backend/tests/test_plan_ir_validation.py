@@ -31,6 +31,42 @@ def test_validate_plan_ir_accepts_minimal_payload():
     assert plan.subject.subject_type == "news_item"
 
 
+def test_validate_plan_ir_accepts_task_ids_on_steps():
+    payload = {
+        "goal": "分析谷歌新闻和微软涨幅",
+        "subject": {"subject_type": "company", "tickers": ["GOOGL"]},
+        "output_mode": "brief",
+        "tasks": [
+            {"id": "task_1", "subject_type": "company", "tickers": ["GOOGL"], "operation": "fetch"},
+            {"id": "task_2", "subject_type": "company", "tickers": ["MSFT"], "operation": "price"},
+        ],
+        "steps": [
+            {
+                "id": "s1",
+                "kind": "tool",
+                "name": "get_company_news",
+                "inputs": {"ticker": "GOOGL"},
+                "task_ids": ["task_1"],
+                "task_id": "task_1",
+            },
+            {
+                "id": "s2",
+                "kind": "tool",
+                "name": "get_stock_price",
+                "inputs": {"ticker": "MSFT"},
+                "task_ids": ["task_2"],
+                "task_id": "task_2",
+            },
+        ],
+        "synthesis": {"style": "structured", "sections": ["GOOGL:fetch", "MSFT:price"]},
+        "budget": {"max_rounds": 1, "max_tools": 4},
+    }
+
+    plan = validate_plan_ir(payload)
+    assert plan.steps[0].task_ids == ["task_1"]
+    assert plan.steps[1].task_id == "task_2"
+
+
 def test_planner_stub_falls_back_on_invalid_output_mode():
     result = planner_stub(
         {
@@ -48,4 +84,3 @@ def test_planner_stub_falls_back_on_invalid_output_mode():
     plan_ir = result.get("plan_ir") or {}
     assert plan_ir.get("output_mode") == "brief"
     assert (result.get("trace") or {}).get("planner", {}).get("fallback") is True
-

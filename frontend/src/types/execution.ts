@@ -47,6 +47,11 @@ export interface DecisionNote {
 export interface AgentRunInfo {
   name: string;
   status: AgentRunStatus;
+  progress?: number;
+  currentStep?: string;
+  lastEventAt?: string;
+  stepId?: string;
+  parallelGroup?: string | null;
   startedAt?: string;
   completedAt?: string;
   error?: string;

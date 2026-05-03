@@ -67,6 +67,7 @@ def test_chat_supervisor_stream_respects_trace_raw_override_off(client):
     # startup thinking is emitted before override filter path; node-level thinking should be filtered.
     thinking_stages = [str(item.get("stage", "")) for item in events if item.get("type") == "thinking"]
     assert set(thinking_stages).issubset({"langgraph_start"})
+    assert any(item.get("type") == "trace" and item.get("stage") == "understanding" for item in events)
     assert any(item.get("type") == "token" for item in events)
     assert any(item.get("type") == "done" for item in events)
 
@@ -98,7 +99,36 @@ def test_chat_supervisor_default_output_mode_is_brief_and_trace_present(client):
     assert trace.get("routing_chain") == ["langgraph"]
     spans = trace.get("spans")
     assert isinstance(spans, list) and spans, "trace.spans should exist in LangGraph stub path"
-    assert any(span.get("node") == "decide_output_mode" for span in spans)
+    span_nodes = [span.get("node") for span in spans]
+    assert "prepare_context" in span_nodes
+    assert "understand_request" in span_nodes
+
+
+
+def test_chat_supervisor_sync_persists_memory_snapshot(client, monkeypatch):
+
+    captured = {}
+
+    def _fake_persist_memory_snapshot(*, thread_id, state, report=None, memory_service=None):
+        captured['thread_id'] = thread_id
+        captured['state'] = state
+        captured['report'] = report
+        return True
+
+    monkeypatch.setattr('backend.graph.store.persist_memory_snapshot', _fake_persist_memory_snapshot)
+
+    resp = client.post(
+        "/chat/supervisor",
+        json={
+            "query": "Analyze Apple impact",
+            "session_id": "tenant1:test_api_user:thread-sync-memory",
+            "context": {"active_symbol": "AAPL", "view": "chat"},
+        },
+    )
+    assert resp.status_code == 200
+    assert captured['thread_id'] == 'tenant1:test_api_user:thread-sync-memory'
+    assert isinstance(captured['state'], dict)
+    assert isinstance(captured['report'], dict) or captured['report'] is None
 
 
 def test_chat_supervisor_trace_planner_runtime_contains_variant_field(client):

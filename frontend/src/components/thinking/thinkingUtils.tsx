@@ -33,6 +33,7 @@ export const stageLabels: Record<string, string> = {
   llm_call_start: '🧠 LLM 调用开始',
   llm_call_done: '🧠 LLM 调用完成',
   llm_call_error: '🧠 LLM 调用失败',
+  understanding: '🔍 请求理解完成',
 };
 
 // ========== LangGraph 阶段格式化 ==========
@@ -177,6 +178,9 @@ const EXPERT_CANDIDATE_KEYS = [
   'agent',
   'agent_name',
   'status',
+  'summary',
+  'tasks',
+  'blocked_tasks',
   'confidence',
   'fallback_reason',
   // Planner events

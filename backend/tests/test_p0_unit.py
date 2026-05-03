@@ -284,6 +284,7 @@ class TestResetTurnState:
         """All per-turn decision fields must be set to None."""
         result = reset_turn_state({})
         expected_none_keys = [
+            "understanding", "tasks", "blocked_tasks", "context_refs",
             "subject", "operation", "clarify", "policy",
             "plan_ir", "artifacts", "chat_responded",
         ]
@@ -323,9 +324,9 @@ class TestResetTurnState:
         assert isinstance(result, dict)
 
     def test_exactly_13_keys_returned(self):
-        """Exactly 15 keys should be reset (9 decision + 5 confirmation + 1 trace)."""
+        """Exactly 19 keys should be reset (13 decision + 5 confirmation + 1 trace)."""
         result = reset_turn_state({})
-        assert len(result) == 15, f"Expected 15 keys, got {len(result)}: {list(result.keys())}"
+        assert len(result) == 19, f"Expected 19 keys, got {len(result)}: {list(result.keys())}"
 
     def test_trace_runtime_subkeys_cleared(self):
         """Per-turn trace runtime sub-keys must be removed."""

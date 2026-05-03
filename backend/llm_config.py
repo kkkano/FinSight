@@ -113,7 +113,7 @@ LLM_CONFIGS = {
         "api_key": os.getenv("OPENAI_COMPATIBLE_API_KEY") or os.getenv("GEMINI_PROXY_API_KEY"),
         "api_base": _normalize_api_base(os.getenv("OPENAI_COMPATIBLE_API_BASE") or os.getenv("GEMINI_PROXY_API_BASE")),
         "models": [
-            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or "gpt-4o-mini",
+            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or "mimo-v2.5-pro",
             "gemini-2.5-flash",
             "gemini-2.5-pro",
         ],
@@ -262,7 +262,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
             elif model:
                 endpoint_model = str(model).strip()
             else:
-                endpoint_model = "gpt-4o-mini"
+                endpoint_model = "mimo-v2.5-pro"
                 logger.warning(
                     "[LLM Config] endpoint '%s' has empty model field, falling back to '%s'. "
                     "Please set the model name in Settings → Endpoint Pool.",
@@ -297,7 +297,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
         legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
         legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
         if not legacy_model:
-            legacy_model = "gpt-4o-mini"
+            legacy_model = "mimo-v2.5-pro"
             logger.warning(
                 "[LLM Config] legacy endpoint has empty llm_model, falling back to '%s'. "
                 "Please set the model name in Settings.",
@@ -346,8 +346,8 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
 
     canonical = _canonical_provider(provider)
     if canonical == "openai_compatible":
-        # Read OPENAI_COMPATIBLE_MODEL env var; fall back to grok-4.1-fast.
-        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or "grok-4.1-fast"
+        # Read OPENAI_COMPATIBLE_MODEL env var; fall back to the production default.
+        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or "mimo-v2.5-pro"
         _try_add("openai-compatible-primary", "openai_compatible", "OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_API_BASE", _oc_model)
         _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")

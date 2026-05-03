@@ -558,6 +558,27 @@ class ReportIndexStore:
                 )
                 return cur.rowcount > 0
 
+    def delete_session(self, *, session_id: str) -> dict[str, int]:
+        normalized = str(session_id or "").strip()
+        if not normalized:
+            return {"reports": 0, "citations": 0}
+
+        with self._lock:
+            with self._connect() as conn:
+                citation_cur = conn.execute(
+                    "DELETE FROM citation_index WHERE session_id = ?",
+                    (normalized,),
+                )
+                report_cur = conn.execute(
+                    "DELETE FROM report_index WHERE session_id = ?",
+                    (normalized,),
+                )
+
+        return {
+            "reports": int(report_cur.rowcount or 0),
+            "citations": int(citation_cur.rowcount or 0),
+        }
+
 
 _REPORT_INDEX_STORE: ReportIndexStore | None = None
 

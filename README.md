@@ -34,7 +34,7 @@
 - [Key Features](#-key-features)
 - [Platform Preview](#-platform-preview)
 - [System Architecture](#%EF%B8%8F-system-architecture)
-- [LangGraph Pipeline](#-langgraph-pipeline-18-nodes)
+- [LangGraph Pipeline](#-langgraph-pipeline-current-runtime--target-refactor)
 - [Agent Ecosystem](#-agent-ecosystem)
 - [Dashboard](#-dashboard---6-analytical-tabs)
 - [RAG Engine](#-rag-engine---hybrid-search-pipeline)
@@ -59,7 +59,7 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | 18-node stateful graph handling chat, quick analysis, and deep investment reports with adaptive routing |
+| **LangGraph Pipeline** | Stateful LangGraph runtime for chat, quick analysis, alerts, and deep reports. The chat front-half now routes through `understand_request`, a multi-task request understanding layer with user-visible trace events. |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
@@ -210,7 +210,7 @@ graph TB
 
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph Pipeline<br/>18-node Stateful Graph]
+        GRAPH[LangGraph Pipeline<br/>Stateful Graph Runtime]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
         TOOLS[Tool Layer<br/>32 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
@@ -244,46 +244,41 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (18 Nodes)
+## 🔄 LangGraph Pipeline (Request Understanding Runtime)
 
-The core of FinSight is an **18-node LangGraph stateful graph** that handles everything from casual chat to deep investment reports.
-Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the 18-node pipeline.
+The FinSight chat runtime is a LangGraph stateful graph. Its main chat path now consolidates the old subject/intent front-half into `understand_request`, which produces `understanding`, `tasks[]`, `blocked_tasks[]`, and a compatibility projection for the existing policy/planner/executor boundary.
+
+The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The 20-query probe output is in [`docs/reports/2026-05-03_request_understanding_query_results.md`](docs/reports/2026-05-03_request_understanding_query_results.md).
+
+Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
+
+Conversation UX is now split deliberately: the frontend keeps the active browser runtime in localStorage, while `/api/conversations` owns backend thread lifecycle and a lightweight server snapshot store for `messages`, `title`, `pinned`, and `archive` metadata. Creating, switching, renaming, and deleting conversations go through the backend API; deletion clears session context, report/citation index rows, thread RAG memory/working-set collections, and matching RAG observability runs. Stream stop uses `AbortController` plus backend cancellation events and executor/agent cancellation tokens, preserving partial answers instead of treating cancellation as an error.
 
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
-    RESET --> CTX["③ normalize_ui_context<br/><i>Merge UI hints, detect ticker</i>"]
-    CTX --> MODE{"④ chat_respond<br/><i>Output mode?</i>"}
+    RESET --> PREPARE["③ prepare_context<br/><i>Bound history, summarize, normalize UI hints</i>"]
+    PREPARE --> UNDERSTAND{"④ understand_request<br/><i>Tasks + blocked tasks + trace</i>"}
 
-    MODE -->|"chat / qa"| CHAT_END["Direct LLM Response"]
-    CHAT_END --> RENDER
-    MODE -->|"needs analysis"| SUBJ["⑤ resolve_subject<br/><i>Ticker resolution + dedup</i>"]
+    UNDERSTAND -->|"direct / clarify"| END_CHAT((End))
+    UNDERSTAND -->|"alert"| ALERT_EX["⑤ alert_extractor<br/><i>Extract alert params</i>"]
+    ALERT_EX -->|"valid"| ALERT_ACT["⑤b alert_action<br/><i>Save & schedule</i>"]
+    ALERT_EX -->|"invalid"| END_ALERT_INVALID((End))
+    ALERT_ACT --> END_ALERT((End))
+    UNDERSTAND -->|"research"| POLICY["⑥ policy_gate<br/><i>Capability scoring + task tool union</i>"]
+    POLICY --> PLAN["⑦ planner<br/><i>LLM Planner or Stub Fallback</i>"]
 
-    SUBJ --> CLARIFY{"⑥ clarify_gate<br/><i>Ambiguous?</i>"}
-    CLARIFY -->|"Ambiguous"| ASK["Ask User for Clarification"]
-    ASK --> RENDER
-    CLARIFY -->|"Clear"| PARSE["⑦ parse_operation<br/><i>14-level intent classifier</i>"]
+    PLAN --> CONFIRM{"⑧ confirmation_gate<br/><i>HITL approval?</i>"}
+    CONFIRM -->|"cancel"| END_CANCEL((End))
+    CONFIRM -->|"adjust"| PLAN
+    CONFIRM -->|"confirm"| EXEC["⑨ execute_plan<br/><i>Parallel agent groups</i>"]
 
-    PARSE -->|"alert_set"| ALERT_EX["⑦a alert_extractor<br/><i>Extract alert params</i>"]
-    ALERT_EX -->|"valid"| ALERT_ACT["⑦b alert_action<br/><i>Save & schedule</i>"]
-    ALERT_EX -->|"invalid"| RENDER
-    ALERT_ACT --> RENDER
-    PARSE -->|"other ops"| POLICY["⑧ policy_gate<br/><i>Capability scoring + budget</i>"]
-    POLICY --> PLAN["⑨ planner_node<br/><i>LLM Planner or Stub Fallback</i>"]
+    EXEC --> SYNTH["⑩ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
+    SYNTH --> RENDER["⑪ render<br/><i>Format for frontend</i>"]
+    RENDER --> END((End))
 
-    PLAN --> CONFIRM{"⑩ confirmation_gate<br/><i>HITL approval?</i>"}
-    CONFIRM -->|"Rejected"| RENDER
-    CONFIRM -->|"Approved"| EXEC["⑪ execute_plan<br/><i>Parallel agent groups</i>"]
-
-    EXEC --> SYNTH["⑫ synthesize<br/><i>Merge outputs + compare_gate + Conflict check</i>"]
-    SYNTH --> SCRUB["⑬ Hallucination Scrub<br/><i>Regex + Evidence validation</i>"]
-    SCRUB --> BUILD["⑭ report_builder<br/><i>Build ReportIR structure</i>"]
-    BUILD --> RENDER["⑮ render_response<br/><i>Format for frontend</i>"]
-    RENDER --> SAVE["⑯ save_memory<br/><i>Persist to memory store</i>"]
-    SAVE --> END((End))
-
-    subgraph "Execution Engine (⑪)"
+    subgraph "Execution Engine (⑨)"
         direction LR
         EG1["Group 1<br/>price · news"] --> EG2["Group 2<br/>fundamental · technical"]
         EG2 --> EG3["Group 3<br/>macro · risk · deep_search"]
@@ -293,32 +288,24 @@ flowchart TD
 
     style RESET fill:#a855f7,color:#fff
     style SYNTH fill:#ff9800,color:#000
-    style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
 ```
 
-### Intent Classification (`parse_operation`)
+`report_builder` and hallucination/evidence checks are implementation helpers inside the graph runtime, not separate graph nodes in `backend/graph/runner.py`.
 
-The `parse_operation` node implements a **rule-first intent classifier** with 14 operation types, prioritized from highest to lowest:
+### Request Understanding (`understand_request`)
 
-| Priority | Operation | Confidence | Trigger Keywords |
-|:---:|---------|:---:|--------------|
-| 1 | `compare` | 0.85 | vs, versus, compare, 对比, 比较, 哪个更好 |
-| 2 | `analyze_impact` | 0.75 | 影响, 冲击, 利好, 利空, impact |
-| 3 | `backtest` | 0.86 | 回测, 策略回测, ma cross, macd strategy (Phase 4) |
-| 4 | `alert_set` | 0.88 | 提醒, 预警, alert, notify, remind me (Phase 1) |
-| 5 | `screen` | 0.86 | 筛选, 选股, screener, stock screen (Phase 2) |
-| 6 | `cn_market` | 0.84 | 资金流向, 北向, 龙虎榜, 概念股 (Phase 3) |
-| 7 | `technical` | 0.85 | 技术面, macd, rsi, k线, 支撑阻力 |
-| 8 | `price` | 0.80 | 股价, 现价, price, quote |
-| 9 | `summarize` | 0.75 | 总结, 摘要, tl;dr |
-| 10 | `extract_metrics` | 0.70 | 提取指标, eps, 营收, guidance |
-| 11 | `fetch` | 0.65 | 获取, 新闻, latest news |
-| 12 | `morning_brief` | 0.85 | 晨报, 早报, morning brief |
-| 13 | (multi-ticker default) | 0.70 | Auto-triggered when `len(tickers) >= 2` without guardrail hit |
-| 14 | `qa` | 0.40–0.55 | Fallback for general questions |
+`understand_request` is now the semantic source of truth for the chat front-half:
 
-**Guardrail-A Mechanism**: When a single-task keyword is detected (e.g., `price`), the classifier prevents multi-ticker queries from being forced into `compare` mode.
+| Output | Purpose |
+|--------|---------|
+| `understanding` | Route, summary, confidence, assumptions, and user-visible task explanation |
+| `tasks[]` | Ready tasks such as `company/GOOGL/price`, `macro/analyze_impact`, `portfolio/rebalance_check` |
+| `blocked_tasks[]` | Locally blocked tasks, e.g. missing portfolio holdings, without blocking ready tasks |
+| compatibility `subject` / `operation` | Primary-task projection so the existing policy/planner/executor path remains stable |
+| `trace` event | `type="trace"`, `visibility="user"`, `stage="understanding"` for frontend process UI |
+
+Legacy `chat_respond`, `resolve_subject`, `clarify`, and `parse_operation` remain registered for compatibility and focused tests, but the main runtime path skips them.
 
 ### GraphState Fields
 
@@ -328,7 +315,10 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 |-------|------|-------------|
 | `messages` | `Annotated[list, add_messages]` | Conversation history (append-only via LangGraph reducer) |
 | `subject` | `dict` | Resolved entity — `{type, ticker, name, market}` |
-| `output_mode` | `str` | `"chat"` / `"quick_report"` / `"investment_report"` |
+| `understanding` | `dict` | Request understanding result for the current turn |
+| `tasks` | `list[dict]` | Ready task decomposition for multi-task requests |
+| `blocked_tasks` | `list[dict]` | Local missing-context tasks that should not block the whole turn |
+| `output_mode` | `str` | `"chat"` / `"brief"` / `"investment_report"` |
 | `plan_ir` | `dict` | Execution plan with steps, groups, dependencies, cost estimates |
 | `step_results` | `dict` | Raw outputs from each agent/tool execution |
 | `evidence_pool` | `list[dict]` | Collected evidence items with source attribution |
@@ -896,7 +886,7 @@ Per-user memory stored as JSON files in `data/memory/{user_id}.json`:
 
 The memory system integrates with:
 - **Watchlist API**: `POST /api/user/watchlist/add` / `remove` — persisted and used by alert schedulers
-- **LangGraph Memory**: Loaded at `build_initial_state` node, saved at `save_memory` node
+- **LangGraph Memory**: Loaded at `build_initial_state`; checkpoints are handled by the LangGraph checkpointer, and long-term snapshots are persisted best-effort by the execution service.
 - **Dashboard Store**: Frontend `dashboardStore` syncs watchlist via API on init
 
 ---
@@ -991,11 +981,11 @@ git clone https://github.com/kkkano/FinSight.git
 cd FinSight
 
 # 2. Configure environment
-cp .env.example .env
-# Edit .env with your API keys (see "API Keys" section below)
+cp .env.server.example .env.server
+# Edit .env.server with your real API keys (see "API Keys" section below)
 
 # 3. Start all services
-docker compose up -d
+docker compose --env-file .env.server up -d --build
 # Frontend: http://localhost:5173
 # Backend:  http://localhost:8000
 # PostgreSQL: localhost:5432
@@ -1007,14 +997,17 @@ docker compose up -d
 
 | API Key | Required? | Purpose | If Not Configured |
 |---------|-----------|---------|-------------------|
-| `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | ✅ **Required** | LLM for analysis & planning | App won't function |
+| `OPENAI_COMPATIBLE_API_KEY` | ✅ **Required** | Default OpenAI-compatible LLM endpoint (`mimo-v2.5-pro` by default) | App won't function |
+| `OPENAI_COMPATIBLE_API_BASE` | ✅ **Required** | OpenAI-compatible base URL (`https://token-plan-cn.xiaomimimo.com/v1` by default) | Uses the code default |
+| `OPENAI_COMPATIBLE_MODEL` | ✅ **Required** | User-facing default model (`mimo-v2.5-pro` by default) | Uses the code default |
+| `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | Optional | Alternative LLM providers | OpenAI-compatible endpoint is used |
 | `FMP_API_KEY` | ⭐ Recommended | Financial data (earnings, ratios) | Falls back to yfinance |
 | `FINNHUB_API_KEY` | Optional | Real-time quotes, news | Falls back to other sources |
 | `TAVILY_API_KEY` | Optional | Web search | Falls back to DuckDuckGo |
 | `FRED_API_KEY` | Optional | Macro economic data | Limited macro features |
 | `ALPHA_VANTAGE_API_KEY` | Optional | Additional price data | Uses other price sources |
 
-> **Minimum Setup**: Only `OPENAI_API_KEY` (or equivalent LLM key) is required. All other APIs have automatic fallbacks.
+> **Minimum Setup**: configure `OPENAI_COMPATIBLE_API_KEY` in `.env.server`. All other APIs have automatic fallbacks.
 
 ### 💾 Database Initialization
 
@@ -1046,8 +1039,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 3. Configure environment
-copy .env.example .env
-# Edit .env with your API keys:
+copy .env.server.example .env.server
+# Edit .env.server with your API keys:
+#   OPENAI_COMPATIBLE_API_KEY=sk-...
+#   OPENAI_COMPATIBLE_API_BASE=https://token-plan-cn.xiaomimimo.com/v1
+#   OPENAI_COMPATIBLE_MODEL=mimo-v2.5-pro
 #   OPENAI_API_KEY=sk-...
 #   GOOGLE_API_KEY=...        (for Gemini)
 #   FMP_API_KEY=...           (Financial Modeling Prep)
@@ -1067,6 +1063,16 @@ pnpm install
 pnpm dev
 # Open http://localhost:5173
 ```
+
+### Validation
+
+```bash
+pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_skeleton.py backend/tests/test_policy_gate.py
+npm run build --prefix frontend
+cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
+```
+
+The chat UX Playwright smoke covers Deep/Brief enablement, new/switch/delete conversations, user-visible trace summaries, and stream stop behavior. The request-understanding query matrix is recorded in `docs/reports/2026-05-03_request_understanding_query_results.md`; the latest smoke log is `docs/reports/2026-05-03_playwright_chat_smoke.md`.
 
 ### Optional: PostgreSQL for RAG
 
@@ -1102,15 +1108,16 @@ FinSight/
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
 │   │   └── tools_router.py     # GET /api/tools (manifest)
 │   ├── graph/                  # LangGraph pipeline
-│   │   ├── builder.py          # Graph construction (16 nodes, edges)
+│   │   ├── runner.py           # Graph construction (current runtime; target refactor in docs/plans)
 │   │   ├── state.py            # GraphState definition
-│   │   ├── report_builder.py   # ReportIR structure builder
+│   │   ├── report_builder.py   # ReportIR helper; not a graph node
 │   │   └── nodes/              # Individual node implementations
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
-│   │       ├── chat_respond.py
-│   │       ├── resolve_subject.py
-│   │       ├── parse_operation.py   # 4-level priority chain (compare → guardrail → multi-ticker → qa)
+│   │       ├── understand_request.py # current request understanding runtime
+│   │       ├── chat_respond.py      # legacy compatibility node
+│   │       ├── resolve_subject.py   # legacy compatibility node
+│   │       ├── parse_operation.py   # legacy compatibility node
 │   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

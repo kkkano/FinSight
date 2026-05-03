@@ -2,7 +2,7 @@
 
 > **状态**: Accepted  
 > **日期**: 2026-02-07  
-> **SSOT 对齐**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.10 / 11.11 / 11.12）
+> **历史 SSOT 对齐**: `docs/archive/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.10 / 11.11 / 11.12）
 
 ---
 
@@ -45,4 +45,3 @@
 
 - 评分规则需要持续校准（避免偏向某些 Agent）。
 - 必须通过回归测试保障“关键场景保底 Agent”不被误裁剪。
-

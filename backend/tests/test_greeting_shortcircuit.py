@@ -111,7 +111,9 @@ class TestAnalyticalQueryPassThrough:
         trace = result.get("trace") or {}
         spans = trace.get("spans") or []
         nodes = [s.get("node") for s in spans]
-        assert "resolve_subject" in nodes
+        # 2026-05-03: front-half nodes were collapsed into understand_request,
+        # so the legacy resolve_subject assertion is replaced by the new node.
+        assert "understand_request" in nodes
         assert "chat_respond" in nodes
 
 

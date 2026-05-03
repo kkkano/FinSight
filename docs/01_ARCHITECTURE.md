@@ -1,8 +1,11 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-02-26
+> 更新时间：2026-05-03
 > 适用分支：`feat/p0-p2-quality-orchestration-productization`
 > 主链实现：`backend/graph/runner.py`
+
+> 2026-05-03 运行时事实：聊天前半段已接入 `chat_respond -> understand_request` 双节点串联。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单零延迟、Tier-2 mimo-v2.5 LLM 分类器 sidecar），命中即短路至 END，不进入语义理解；旧 `resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+> 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 
 ## 1. 系统总览
 
@@ -19,6 +22,7 @@ flowchart LR
     EXEC_EP[/api/execute*]
     DASH_EP[/api/dashboard*]
     REPORT_EP[/api/reports/*]
+    CONV_EP[/api/conversations/*]
     AGENT_PREF_EP[/api/agents/preferences]
   end
 
@@ -42,6 +46,7 @@ flowchart LR
   RUNNER --> NODES --> EXECUTOR --> ANALYSIS --> SYNTH
   DASH_EP --> FE
   REPORT_EP --> FE
+  CONV_EP --> FE
   AGENT_PREF_EP --> FE
 ```
 
@@ -51,18 +56,13 @@ flowchart LR
 flowchart TD
   START --> build_initial_state
   build_initial_state --> reset_turn_state
-  reset_turn_state --> trim_history
-  trim_history --> summarize_history
-  summarize_history --> normalize_ui_context
-  normalize_ui_context --> decide_output_mode
-  decide_output_mode --> chat_respond
-  chat_respond -->|chat直出| END
-  chat_respond -->|进入分析| resolve_subject
-  resolve_subject --> clarify
-  clarify -->|需澄清| END
-  clarify -->|继续| parse_operation
-  parse_operation -->|alert_set| alert_extractor
-  parse_operation -->|其他| policy_gate
+  reset_turn_state --> prepare_context
+  prepare_context --> chat_respond
+  chat_respond -->|chat_responded=true| END
+  chat_respond -->|chat_responded=false| understand_request
+  understand_request -->|direct/clarify| END
+  understand_request -->|alert| alert_extractor
+  understand_request -->|research| policy_gate
   alert_extractor -->|valid| alert_action
   alert_extractor -->|invalid| END
   alert_action --> END
@@ -74,28 +74,18 @@ flowchart TD
   render --> END
 ```
 
-### 2.1 意图分类（parse_operation）
+### 2.1 请求理解（understand_request）
 
-`parse_operation` 节点实现规则优先的意图分类，包含 14 种操作类型：
+`understand_request` 是聊天前半段的语义事实源，一次性处理：
 
-| 优先级 | 操作 | 置信度 | 说明 |
-|:---:|------|:---:|------|
-| 1 | `compare` | 0.85 | vs/对比/比较 |
-| 2 | `analyze_impact` | 0.75 | 影响/冲击/利好利空 |
-| 3 | `backtest` | 0.86 | 回测/策略回测 (Phase 4) |
-| 4 | `alert_set` | 0.88 | 提醒/预警 (Phase 1) |
-| 5 | `screen` | 0.86 | 筛选/选股 (Phase 2) |
-| 6 | `cn_market` | 0.84 | 资金流向/北向/龙虎榜 (Phase 3) |
-| 7 | `technical` | 0.85 | 技术面/macd/rsi |
-| 8 | `price` | 0.80 | 股价/现价/报价 |
-| 9 | `summarize` | 0.75 | 总结/摘要 |
-| 10 | `extract_metrics` | 0.70 | 提取指标/eps |
-| 11 | `fetch` | 0.65 | 获取/新闻 |
-| 12 | `morning_brief` | 0.85 | 晨报/早报 |
-| 13 | 多标的默认 | 0.70 | `len(tickers)>=2` 自动 compare |
-| 14 | `qa` | 0.40-0.55 | 兜底问答 |
+- 普通寒暄 / 非金融对话：`route=direct`，直接结束。
+- 公司、ticker、中文别名、index、commodity、macro、theme、selection、portfolio。
+- 复合请求拆成 `tasks[]`，例如 `company/GOOGL/price` + `company/MSFT/fetch` + `macro/fact_check`。
+- 局部缺信息写入 `blocked_tasks[]`，例如缺持仓只阻塞 portfolio task，不阻塞公司/宏观任务。
+- 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
+- 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
 
-**Guardrail-A**：单任务关键词（如 price）阻止多标的强制 compare。
+旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
 
 ## 3. 规划与执行策略
 
@@ -153,6 +143,39 @@ sequenceDiagram
 ```
 
 前端事件解析位置：`frontend/src/api/client.ts`
+
+取消语义：
+
+- 前端通过 `AbortController.abort()` 停止当前 SSE。
+- `backend/services/execution_service.py` 捕获取消后发送 `trace.stage="cancelled"` 和 `pipeline_stage.stage="cancelled"`。
+- `backend/graph/cancellation.py` 提供 context-scoped cancellation token，executor 与 agent adapter 在阶段边界检查 token，尽量停止后续 step/agent 输出。
+- 前端消息保留已收到 token、thinking steps 和“已停止生成，保留已完成的结果。”提示。
+
+## 4.1 会话生命周期链路
+
+```mermaid
+flowchart LR
+  RAIL[Conversation Rail] --> CREATE[POST /api/conversations]
+  RAIL --> LIST[GET /api/conversations]
+  RAIL --> GET[GET /api/conversations/{id}]
+  RAIL --> PATCH[PATCH /api/conversations/{id}]
+  RAIL --> DELETE[DELETE /api/conversations/{id}]
+  CREATE --> STORE[conversation_store.json]
+  GET --> STORE
+  PATCH --> STORE
+  DELETE --> STORE
+  DELETE --> CTX[Clear session context]
+  DELETE --> RPT[Delete report/citation index rows]
+  DELETE --> RAG[Delete thread RAG collections]
+  DELETE --> OBS[Soft-delete RAG observability runs]
+```
+
+边界：
+
+- 前端 localStorage 仍是当前浏览器运行态的消息真相源。
+- 后端 `conversation_store` 保存 messages/title/pinned/archive snapshot，服务 list/get/patch/delete 和基础恢复。
+- 后端 conversation API 负责 thread context 隔离、服务端 snapshot 删除和 RAG/report/session 清理。
+- 下一阶段若要多设备同步，应迁移到数据库并增加用户级权限边界。
 
 ## 5. Dashboard / Workbench 数据链路
 
@@ -273,14 +296,14 @@ flowchart LR
 
 ### 9.2 晨报 Graph Pipeline 接入
 
-晨报操作通过 LangGraph Pipeline 执行，使用确定性合成（零 LLM 成本）：
+晨报操作通过独立的 `morning_brief_router` 入口接入 LangGraph Pipeline，使用确定性合成（零 LLM 成本）。**该路径不经过主聊天的 `prepare_context → understand_request`**，仍由兼容 `parse_operation` 节点做关键词解析；后续若把 morning_brief 收敛进 `understand_request` 的 task graph，这条独立路径会被替换为 `understanding.tasks[].operation == "morning_brief"`。
 
 ```mermaid
 flowchart TD
-    ROUTER["morning_brief_router"] --> CACHE{"Cache 30min?"}
+    ROUTER["morning_brief_router<br/>(独立入口，非主聊天链路)"] --> CACHE{"Cache 30min?"}
     CACHE -->|Hit| RET[Return]
     CACHE -->|Miss| GP["GraphRunner.ainvoke()"]
-    GP --> PARSE["parse_operation → morning_brief"]
+    GP --> PARSE["parse_operation → morning_brief<br/>(legacy 兼容节点)"]
     PARSE --> POLICY["policy_gate → whitelist"]
     POLICY --> PLAN["planner_stub → per-ticker parallel"]
     PLAN --> EXEC["execute_plan"]

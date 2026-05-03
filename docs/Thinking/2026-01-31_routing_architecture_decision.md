@@ -3,7 +3,7 @@
 > **状态**: Superseded  
 > **生效日期**: 2026-01-31  
 > **替代日期**: 2026-02-07  
-> **当前依据**: `docs/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.7~11.11）
+> **历史依据**: `docs/archive/06_LANGGRAPH_REFACTOR_GUIDE.md`（11.7~11.11）
 
 ---
 
@@ -33,7 +33,7 @@
 
 - 路由与编排：`backend/graph/*`
 - 契约与事件：`backend/contracts.py`、`backend/api/main.py`
-- 重构任务与验收记录：`docs/06_LANGGRAPH_REFACTOR_GUIDE.md`
+- 重构任务与验收记录：`docs/archive/06_LANGGRAPH_REFACTOR_GUIDE.md`
 
 ---
 

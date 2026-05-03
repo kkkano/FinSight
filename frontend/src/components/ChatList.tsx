@@ -14,6 +14,7 @@ import { useStore } from '../store/useStore';
 import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/index';
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
 const shouldGenerateChart = async (
   query: string,
@@ -139,6 +140,9 @@ export const ChatList: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsed, setElapsed] = useState<string>('0.0');
+  const showExecutionBanner = isChatLoading
+    || statusMessage === STOPPED_GENERATION_MESSAGE
+    || currentStep === '已停止生成';
 
   // 只滚动聊天容器本身，避免整页被拉走
   useEffect(() => {
@@ -148,7 +152,7 @@ export const ChatList: React.FC = () => {
       top: container.scrollHeight,
       behavior: 'smooth',
     });
-  }, [messages, isChatLoading]);
+  }, [messages, isChatLoading, showExecutionBanner]);
 
   // 动态计时
   useEffect(() => {
@@ -362,7 +366,7 @@ export const ChatList: React.FC = () => {
       ))}
 
       {/* Loading Indicator */}
-      {isChatLoading && (
+      {showExecutionBanner && (
         <div className="flex w-full justify-start animate-fade-in">
           <div className="ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 shadow-sm min-w-[280px] max-w-[420px]">
             <div className="flex items-center gap-2">
@@ -372,7 +376,9 @@ export const ChatList: React.FC = () => {
                 <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
               <span className="text-xs text-fin-muted">
-                {statusMessage || 'Analyzing...'}（用时 {elapsed}s）
+                {statusMessage === STOPPED_GENERATION_MESSAGE
+                  ? '本次生成已停止（结果已保留）'
+                  : statusMessage || 'Analyzing...'}（用时 {elapsed}s）
               </span>
             </div>
             <div className="mt-2">

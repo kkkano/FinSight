@@ -196,6 +196,28 @@ def test_policy_gate_company_report_deep_query_includes_deep_search_agent():
     assert "deep_search_agent" in allowed_agents
 
 
+def test_policy_gate_macro_report_requires_macro_agent():
+    result = policy_gate(
+        {
+            "query": "美联储利率路径对大型科技股估值有什么影响",
+            "subject": {
+                "subject_type": "macro",
+                "tickers": [],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+            "output_mode": "investment_report",
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    required_agents = ((policy.get("agent_selection") or {}).get("required") or [])
+    assert "macro_agent" in allowed_agents
+    assert "macro_agent" in required_agents
+
+
 def test_policy_gate_agents_override_takes_priority():
     """agents_override from ui_context should override automatic agent selection."""
     result = policy_gate(

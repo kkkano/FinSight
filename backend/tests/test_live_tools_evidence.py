@@ -33,10 +33,13 @@ def test_execute_plan_stub_merges_tool_output_into_evidence_pool(monkeypatch):
                     "kind": "tool",
                     "name": "search",
                     "inputs": {"query": "AAPL"},
+                    "task_ids": ["task_1"],
+                    "task_id": "task_1",
                     "why": "unit",
                     "optional": False,
                 }
             ],
+            "tasks": [{"id": "task_1", "subject_type": "company", "tickers": ["AAPL"], "operation": "fetch"}],
             "budget": {"max_rounds": 1, "max_tools": 1},
             "synthesis": {"style": "concise", "sections": []},
         },
@@ -48,8 +51,11 @@ def test_execute_plan_stub_merges_tool_output_into_evidence_pool(monkeypatch):
     out = _run(execute_plan_stub(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
+    evidence_by_task = artifacts.get("evidence_by_task") or {}
 
     assert any(e.get("source") == "search" for e in pool), "tool output should be normalized into evidence_pool"
+    assert evidence_by_task.get("task_1"), "tool evidence should be grouped by task"
+    assert all("task_1" in (item.get("task_ids") or []) for item in evidence_by_task["task_1"])
 
 
 def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
@@ -106,6 +112,10 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
     monkeypatch.setenv("RAG_V2_BACKEND", "memory")
     monkeypatch.setenv("RAG_V2_TOP_K", "3")
+
+    from backend.rag.hybrid_service import reset_rag_service_cache
+
+    reset_rag_service_cache()
 
     from backend.graph.nodes.execute_plan_stub import execute_plan_stub
 
@@ -176,7 +186,7 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
 
     assert rag_context, "rag_context should be populated from evidence_pool"
     assert rag_stats.get("backend") == "memory"
-    assert rag_stats.get("collection") == "session:thread-rag-1"
+    assert rag_stats.get("collection") == "ws:thread:thread-rag-1"
     assert any("Apple" in str(item.get("title") or item.get("content") or "") for item in rag_context)
 
 

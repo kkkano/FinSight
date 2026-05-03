@@ -341,6 +341,37 @@ def _build_budget_assertions(steps: list[dict[str, Any]], safe_budget: dict[str,
     }
 
 
+def _plan_tasks_from_state(state: GraphState) -> list[dict[str, Any]]:
+    raw_tasks = state.get("tasks")
+    if not isinstance(raw_tasks, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for idx, task in enumerate(raw_tasks[:16], 1):
+        if not isinstance(task, dict):
+            continue
+        operation = task.get("operation")
+        op_name = "qa"
+        if isinstance(operation, dict):
+            candidate = operation.get("name")
+            if isinstance(candidate, str) and candidate.strip():
+                op_name = candidate.strip()
+        tickers = task.get("tickers")
+        rows.append(
+            {
+                "id": str(task.get("id") or f"task_{idx}"),
+                "subject_type": str(task.get("subject_type") or "unknown"),
+                "tickers": [
+                    str(ticker).strip().upper()
+                    for ticker in (tickers if isinstance(tickers, list) else [])
+                    if str(ticker).strip()
+                ],
+                "operation": op_name,
+                "status": str(task.get("status") or "ready"),
+            }
+        )
+    return rows
+
+
 def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Enforce critical invariants from state + policy:
@@ -394,11 +425,15 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     has_deep_hint = _is_deep_hint(query, state)
+    plan_tasks = _plan_tasks_from_state(state)
+    plan_task_ids = {str(task.get("id") or "").strip() for task in plan_tasks if str(task.get("id") or "").strip()}
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     tickers = tickers if isinstance(tickers, list) else []
     tickers = [str(t).strip().upper() for t in tickers if isinstance(t, str) and str(t).strip()]
     primary_ticker = tickers[0] if tickers else None
+    subject_type = str(subject.get("subject_type") or "unknown").strip().lower() if isinstance(subject, dict) else "unknown"
+    is_macro_subject = subject_type == "macro"
     selection_ids = subject.get("selection_ids") if isinstance(subject, dict) else None
     selection_ids = selection_ids if isinstance(selection_ids, list) else []
     selection_ids = [str(s).strip() for s in selection_ids if isinstance(s, str) and s.strip()]
@@ -464,6 +499,17 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         why = raw.get("why")
         why = str(why).strip() if isinstance(why, str) and why.strip() else None
         optional = bool(raw.get("optional"))
+        raw_task_ids = raw.get("task_ids")
+        task_ids = [
+            str(value or "").strip()
+            for value in (raw_task_ids if isinstance(raw_task_ids, list) else [])
+            if str(value or "").strip() in plan_task_ids
+        ]
+        raw_task_id = str(raw.get("task_id") or "").strip()
+        if raw_task_id in plan_task_ids and raw_task_id not in task_ids:
+            task_ids.insert(0, raw_task_id)
+        if not task_ids and isinstance(parallel_group, str) and parallel_group in plan_task_ids:
+            task_ids = [parallel_group]
 
         # Normalize known tool inputs for robustness.
         if kind == "tool" and name == "get_performance_comparison":
@@ -497,7 +543,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             if selection_ids and "selection_ids" not in inputs:
                 inputs = {**inputs, "selection_ids": selection_ids}
 
-        return {
+        sanitized = {
             "id": step_id,
             "kind": kind,
             "name": name.strip(),
@@ -506,6 +552,10 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             "why": why,
             "optional": optional,
         }
+        if task_ids:
+            sanitized["task_ids"] = task_ids
+            sanitized["task_id"] = task_ids[0]
+        return sanitized
 
     # Enforce selection summary constraint deterministically.
     selection_payload = None
@@ -524,6 +574,11 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 "kind": "llm",
                 "name": "summarize_selection",
                 "inputs": {"selection": selection_payload or [], "query": query},
+                "task_ids": [
+                    task["id"]
+                    for task in plan_tasks
+                    if task.get("subject_type") in {"news_item", "news_set", "filing", "research_doc"}
+                ],
                 "parallel_group": None,
                 "why": "Selection is high-signal evidence; summarize it first to avoid redundant tool calls.",
                 "optional": False,
@@ -609,6 +664,27 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             {"tickers": mapping},
             "Compare request: fetch multi-ticker performance baseline (YTD/1Y) first",
         )
+    if is_macro_subject:
+        _insert_optional_tool(
+            "get_current_datetime",
+            {},
+            "Macro/theme request: anchor the policy and market context to the current date.",
+        )
+        _insert_optional_tool(
+            "get_official_macro_releases",
+            {"query": query, "max_results": 8},
+            "Macro/theme request: retrieve official macro and central-bank releases first.",
+        )
+        _insert_optional_tool(
+            "get_authoritative_media_news",
+            {"query": query, "max_results": 6, "authoritative_only": True},
+            "Macro/theme request: add authoritative market interpretation as cross-check evidence.",
+        )
+        _insert_optional_tool(
+            "search",
+            {"query": query},
+            "Macro/theme request: cover market-impact context not directly present in official releases.",
+        )
     if output_mode == "investment_report" and primary_ticker:
         filing_inserter = _insert_required_tool if has_deep_hint else _insert_optional_tool
         if "get_local_market_filings" in allowed_tools:
@@ -671,7 +747,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 agent_order.append("deep_search_agent")
 
     # In report mode, enforce a deterministic score-selected agent baseline.
-    if output_mode == "investment_report" and primary_ticker:
+    if output_mode == "investment_report" and (primary_ticker or is_macro_subject):
         existing_agent_names = {s.get("name") for s in sanitized_steps if s.get("kind") == "agent"}
 
         insert_at = 0
@@ -692,7 +768,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 continue
             is_required_agent = agent_name in required_agents
             force_escalation = agent_name in required_agents or (agent_name == "deep_search_agent" and has_deep_hint)
-            agent_inputs = {"query": query, "ticker": primary_ticker, "selection_ids": selection_ids}
+            agent_inputs = {"query": query, "ticker": primary_ticker or "", "selection_ids": selection_ids}
             if agent_name in _HIGH_COST_AGENTS:
                 agent_inputs = {
                     **agent_inputs,
@@ -742,7 +818,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     if max_tools > 0:
         # In report mode, prioritize keeping the baseline agent cards so the UI is stable/readable.
         baseline_agents: set[str] = set()
-        if output_mode == "investment_report" and primary_ticker:
+        if output_mode == "investment_report" and (primary_ticker or is_macro_subject):
             baseline_agents = {a for a in agent_order if a in allowed_agents}
 
         if baseline_agents:
@@ -825,6 +901,7 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
         "goal": goal,
         "subject": subject,
         "output_mode": output_mode,
+        "tasks": _plan_tasks_from_state(state),
         "budget": safe_budget,
         "steps": sanitized_steps,
         "synthesis": safe_synthesis,
@@ -883,6 +960,11 @@ def _build_plan_steps_summary(plan_dict: dict[str, Any]) -> list[dict[str, Any]]
                 "id": str(step.get("id") or "").strip() or "unknown",
                 "kind": str(step.get("kind") or "").strip() or "unknown",
                 "name": str(step.get("name") or "").strip() or "unknown",
+                "task_ids": [
+                    str(value or "").strip()
+                    for value in (step.get("task_ids") if isinstance(step.get("task_ids"), list) else [])
+                    if str(value or "").strip()
+                ],
                 "parallel_group": (
                     str(step.get("parallel_group") or "").strip()
                     if step.get("parallel_group") is not None
@@ -1009,6 +1091,40 @@ async def planner(state: GraphState) -> dict:
         status="start",
         message="Planner started",
     )
+
+    tasks = state.get("tasks")
+    ready_tasks = [task for task in (tasks if isinstance(tasks, list) else []) if isinstance(task, dict)]
+    operation_name = str((state.get("operation") or {}).get("name") or "").strip().lower()
+    if (
+        mode == "llm"
+        and operation_name == "compare"
+        and len(ready_tasks) >= 2
+        and all(str((task.get("operation") or {}).get("name") or "").strip().lower() == "compare" for task in ready_tasks)
+    ):
+        trace.update(
+            {
+                "planner_runtime": {
+                    **build_runtime(mode="stub", fallback=False),
+                    "variant": planner_variant,
+                    "reason": "fast_compare_plan",
+                }
+            }
+        )
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=False,
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
+        return out
 
     if mode != "llm":
         trace.update({"planner_runtime": {**build_runtime(mode="stub", fallback=False), "variant": planner_variant}})

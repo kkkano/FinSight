@@ -964,7 +964,7 @@ if (onRawEvent) {
 # 附录: TradingKey 风格改造规划 (Phase 2)
 
 > 最后更新: 2026-02-13
-> 依赖: AGENTIC_SPRINT_TODOLIST.md Phase 2 (P2-1 ~ P2-8)
+> 历史依赖: 原 sprint Phase 2 (P2-1 ~ P2-8)；当前执行入口见 `docs/DOCS_INDEX.md` 与 `docs/plans/`。
 > 前置条件: P1-3 (Dashboard 卡片可操作化) 完成后启动
 > 参考设计: [TradingKey](https://www.tradingkey.com/) 暗色分析面板风格
 

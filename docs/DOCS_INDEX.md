@@ -1,119 +1,68 @@
-# 文档索引（2026-02-24）
+# FinSight 文档索引
 
-本页用于区分“当前有效文档”与“历史归档文档”，避免继续引用过期方案。
+更新时间：2026-05-04
+目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
-## 1) 当前有效（开发与运维优先阅读）
+## 当前必读
 
-- `readme.md`：项目入口、启动与关键链路摘要
-- `readme_cn.md`：中文版架构与使用说明
-- `docs/01_ARCHITECTURE.md`：当前系统架构与流程图（Mermaid）
-- `docs/AGENTS_GUIDE.md`：Agent 与 Tool 链路矩阵（与代码对齐）
-- `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`：Dashboard 前后端开发指南
-- `docs/DASHBOARD_AGENT_TODOLIST.md`：Dashboard/Workbench 迭代路线
-- `docs/11_PRODUCTION_RUNBOOK.md`：生产运行与排障手册
-- `docs/05_RAG_ARCHITECTURE.md`：RAG 体系结构说明
-- `docs/LANGGRAPH_FLOW.md`：LangGraph 流程文档
-- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：LangGraph 深度拆解
+- `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块和数据流。
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py` 与 `understand_request` 测试为准。
+- `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。
+- `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
+- `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
+- `docs/11_PRODUCTION_RUNBOOK.md`：生产运行和排障手册。
+- `docs/DEPLOYMENT.md`：部署说明。
+- `docs/AGENTS.md`：docs 目录协作规则和归档边界。
 
-## 2) 设计与计划文档（按需参考）
+## 当前实现 Spec
 
-- `docs/plans/*`：规划类文档
-- `docs/design/*`：视觉/方案设计稿
-- `docs/prototype/*`：原型页面
-- `docs/feature_logs/*`：阶段功能日志
-- `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md`：Phase J 证据质量增强落地记录
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、`understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace、planner stub 多任务消费、executor `task_results`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
+- `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
+- `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
+- `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
+- `docs/plans/2026-03-06_rag_observability_inspector_todolist.md`：RAG inspector 计划。
 
-## 3) 思考与决策记录（保留，不删除）
+## 当前运行链路参考
 
-- `docs/Thinking/*`：思考过程、ADR、问题分析
+- `docs/LANGGRAPH_FLOW.md`：当前运行时节点流参考。注意：它描述的是现状/历史快照，不是下一阶段目标架构。
+- `docs/LANGGRAPH_PIPELINE_DEEP_DIVE.md`：Pipeline 深度拆解和排障入口。注意：节点数量和目标架构以最新 spec 与代码为准。
 
-> 规则：`docs/Thinking` 为保留区，不做清理删除。
+## 质量与报告
 
-## 4) 归档区
+- `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
+- `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
+- `docs/qa/chat_regression_queries_2026_05_03.md`：聊天并发、最终答案格式、新闻链接和复杂 query 回答质量的回归样本；配套 JSON 为 `docs/qa/chat_regression_queries_2026_05_03.json`。
+- `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
+- `docs/REPORT_CHART_SPEC.md`：报告图表规范。
+- `docs/rag-evaluation-guide.md`：RAG 评估方法。
+- `docs/12_PRODUCTION_SSE_TUNNEL_POSTMORTEM.md`：SSE 隧道事故复盘，作为生产风险参考。
 
-- `docs/archive/*`
-- `docs/archive/2026-02-doc-cleanup/*`
+## RAG 体系
 
-历史方案、旧阶段报告、已完成临时文档统一进入归档目录。
+- `docs/05_RAG_ARCHITECTURE.md`：RAG v2 生产化架构说明。
+- `docs/08_RAG_ARCHITECTURE.md`：pgvector + bge-m3 混合检索升级对比。
 
-## 5) 本轮清理记录
+## 前端与 Dashboard
 
-- 已将 `docs/workbench_v2_preview.html` 归档到 `docs/archive/2026-02-doc-cleanup/workbench_v2_preview.html`
+- `docs/DASHBOARD_DEVELOPMENT_GUIDE.md`：Dashboard/Workbench 开发指南。
+- `docs/design/`：视觉方案与品牌资产。
+- `docs/prototype/`：静态原型。
+- `docs/ux/`：信息架构和交互提案。
 
-## 6) 文档治理规则
+## 历史与归档
 
-- 任何架构链路变化，至少同步更新：
-  - `readme.md`
-  - `docs/01_ARCHITECTURE.md`
-  - `docs/AGENTS_GUIDE.md`
-- 新文档创建后，必须在本索引登记。
-- 不确定是否废弃时，优先“归档 + 索引备注”，不直接删除。
+- `docs/archive/`：过期方案、旧路线图、临时报表和被替代文档。
+- `docs/archive/2026-05-agent-observability-cleanup/`：2026-05 文档清理归档批次。
+- `docs/archive/2026-05-agent-observability-cleanup/ROUTING_ARCHITECTURE_STANDARD.md`：旧 `ConversationRouter` / `SchemaRouter` 标准，已被 LangGraph 单入口和 request understanding spec 取代。
+- `docs/feature_logs/`：已完成工作的流水记录，只作追溯证据。
+- `docs/Thinking/`：ADR、探索草稿和问题分析；默认不作为当前事实源。
+- `docs/release_evidence/`：发布演练和运行证据。
+- `docs/reports/`：生成报告和 trace 报告样本。
 
-## 2026-02-20 ����ͬ����Phase J P0/P1��
-- ����/�����ص��ĵ���
-  - `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md`��P0/P1 ��� + smoke �����
-  - `docs/06b_LANGGRAPH_CHANGELOG.md`��Phase J P0/P1 completion��
-  - `scripts/phase_j_smoke_before_after_2026-02-19.json`��AAPL/600519 before-after �Աȣ�
-- �������ļ�һ���Ķ���������ԭ���ִӡ������ż�����ʧ�ܡ�������� API �������������á������·����
+## 治理规则
 
-## 2026-02-20 Incremental Sync (Phase J P2)
-- Updated docs:
-  - `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md` (added P2 section)
-  - `docs/06b_LANGGRAPH_CHANGELOG.md` (added Phase J P2 completion)
-  - `docs/AGENTS_GUIDE.md` (added P2 tool matrix and routing notes)
-  - `AGENTS.md` (added architecture sync block for P2)
-- New/updated runtime evidence path summary:
-  - DeepSearch fallback order now includes Wayback for hard paywalls.
-  - Transcript retrieval expanded for CN/HK markets.
-  - Macro agent now emits official-source release evidence (BLS/BEA/FED).
-
-## 2026-02-20 Incremental Sync (Phase J P3)
-- Updated docs:
-  - `docs/feature_logs/2026-02-19_phase_j_evidence_quality_upgrade.md` (added P3 section)
-  - `docs/06b_LANGGRAPH_CHANGELOG.md` (added Phase J P3 completion)
-  - `docs/AGENTS_GUIDE.md` (added market-routing tool matrix)
-  - `AGENTS.md` (added architecture sync block for P3)
-- Runtime capability summary:
-  - US quarterly financial fallback now includes SEC CompanyFacts (XBRL).
-  - CN/HK valuation + financials + kline now have dedicated free source routing.
-  - Peer defaults are now split by market to avoid US-basket fallback on CN/HK symbols.
-
-## 2026-02-26 P0-P2 Quality Orchestration & Productization
-
-- 新增/更新文档：
-  - `docs/feature_logs/2026-02-26_p0_p2_quality_orchestration_productization.md`：完整 Todolist + 架构图 + ADR
-  - `docs/06b_LANGGRAPH_CHANGELOG.md`：追加 P0/P1/P2 变更条目
-  - `docs/01_ARCHITECTURE.md`：新增 ThinkingBubble / 晨报 Pipeline / 调仓增强架构节
-  - `README.md`：Key Features 表新增 ThinkingBubble、晨报 Pipeline、调仓 LLM 增强
-- 变更概要：
-  - P0：ThinkingBubble 三层展示（trace → SSE → 前端打字机效果）
-  - P1：晨报接入 Graph Pipeline（确定性合成，零 LLM 成本）
-  - P2：调仓引擎 Agent-backed LLM 增强 + SSE 流式端点
-
-## 2026-02-27 P3-2 死代码清理 + README 截图扩充
-
-- 新增文档：
-  - `frontend/docs/DELETION_LOG.md`：P3-2 死代码清理记录（12 文件 / -2002 行 / TypeScript 零错误验证）
-- 更新文档：
-  - `readme.md` / `readme_cn.md`：Platform Preview 新增 ThinkingBubble 用户视图 + 执行时间线截图
-  - `CHANGELOG.md`：追加 [Unreleased] 条目
-- 前端微修复：
-  - `ReportView.tsx`：sections 变量包裹 useMemo
-  - `ErrorBoundary.tsx`：eslint 注释格式修正
-  - `taskStateMachine.ts`：移除未使用的 ListTodo 导入
-
-## 2026-02-24 Pseudo-Comparison Bug Fix + Turn State Reset
-
-- 更新文档：
-  - `readme.md` / `readme_cn.md`：LangGraph 管线 15→16 节点，Mermaid 图加入 `reset_turn_state`
-  - `docs/LANGGRAPH_FLOW.md`：13→16 节点，加入 reset_turn_state 节点文档
-  - `docs/01_ARCHITECTURE.md`：流程图加入 reset_turn_state
-  - `docs/06b_LANGGRAPH_CHANGELOG.md`：追加完整变更条目
-- 新增模块：
-  - `backend/graph/nodes/compare_gate.py`：compare evidence gate（3 个谓词函数）
-  - `backend/graph/nodes/reset_turn_state.py`：per-turn 状态清除（12 字段 + 5 trace sub-keys）
-- 新增测试：
-  - `backend/tests/test_compare_gate.py`（24 tests）
-  - `backend/tests/test_graph_node_order.py`（6 tests）
-  - `backend/tests/test_p0_unit.py`（41 tests）
-- 回归：964 passed, 15 skipped, 0 failed
+- 根目录只放当前有效、需要长期引用的文档。
+- 新计划放 `docs/plans/`，完成或过期后归档到 `docs/archive/<yyyy-mm-topic>/`。
+- 不直接删除历史文档；归档时在批次 README 记录原路径和原因。
+- 文档新增、移动或归档后，必须同步更新本索引。
+- 如果文档与代码冲突，以代码、测试和运行日志为准，并在文档中标记需校准项。

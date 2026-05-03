@@ -11,6 +11,7 @@ from backend.api.system_router import SystemRouterDeps, create_system_router
 class _FakeRagStore:
     def __init__(self) -> None:
         self.last_runs_args: dict[str, object] | None = None
+        self.last_events_args: dict[str, object] | None = None
         self.last_db_browser_args: dict[str, object] | None = None
 
     def health_summary(self, recent_limit: int = 5, fallback_limit: int = 5) -> dict[str, object]:
@@ -27,12 +28,13 @@ class _FakeRagStore:
             'fallback_summary': [],
         }
 
-    def list_runs(self, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False) -> dict[str, object]:
+    def list_runs(self, *, limit: int = 20, cursor: str | None = None, q: str | None = None, fallback_only: bool = False, include_deleted: bool = False) -> dict[str, object]:
         self.last_runs_args = {
             'limit': limit,
             'cursor': cursor,
             'q': q,
             'fallback_only': fallback_only,
+            'include_deleted': include_deleted,
         }
         return {
             'items': [
@@ -58,7 +60,12 @@ class _FakeRagStore:
             'collection': 'finance-news',
         }
 
-    def list_events(self, *, run_id: str, limit: int = 500) -> dict[str, object]:
+    def list_events(self, *, run_id: str, limit: int = 500, include_deleted: bool = False) -> dict[str, object]:
+        self.last_events_args = {
+            'run_id': run_id,
+            'limit': limit,
+            'include_deleted': include_deleted,
+        }
         return {'items': [{'id': 'evt-1', 'run_id': run_id, 'seq_no': 1, 'event_type': 'query_received'}], 'next_cursor': None}
 
     def list_documents(self, **_: object) -> dict[str, object]:
@@ -89,7 +96,7 @@ class _FakeRagStore:
             ]
         }
 
-    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None) -> dict[str, object]:
+    def browse_db_table(self, *, table_name: str, limit: int = 50, offset: int = 0, q: str | None = None, collection: str | None = None, run_id: str | None = None, source_doc_id: str | None = None, layer: str | None = None) -> dict[str, object]:
         self.last_db_browser_args = {
             'table_name': table_name,
             'limit': limit,
@@ -98,6 +105,7 @@ class _FakeRagStore:
             'collection': collection,
             'run_id': run_id,
             'source_doc_id': source_doc_id,
+            'layer': layer,
         }
         return {
             'table': table_name,
@@ -157,13 +165,26 @@ def test_rag_runs_endpoint_returns_items_and_passes_filters():
     store = _FakeRagStore()
     client = _build_client(store)
 
-    response = client.get('/diagnostics/rag/runs', params={'limit': 15, 'q': 'AAPL', 'fallback_only': 'true'})
+    response = client.get('/diagnostics/rag/runs', params={'limit': 15, 'q': 'AAPL', 'fallback_only': 'true', 'include_deleted': 'true'})
 
     assert response.status_code == 200
     payload = response.json()
     assert payload['status'] == 'ok'
     assert payload['data']['items'][0]['id'] == 'run-1'
-    assert store.last_runs_args == {'limit': 15, 'cursor': None, 'q': 'AAPL', 'fallback_only': True}
+    assert store.last_runs_args == {'limit': 15, 'cursor': None, 'q': 'AAPL', 'fallback_only': True, 'include_deleted': True}
+
+
+def test_rag_run_events_endpoint_passes_include_deleted():
+    store = _FakeRagStore()
+    client = _build_client(store)
+
+    response = client.get('/diagnostics/rag/runs/run-1/events', params={'limit': 25, 'include_deleted': 'true'})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['status'] == 'ok'
+    assert payload['data']['items'][0]['id'] == 'evt-1'
+    assert store.last_events_args == {'run_id': 'run-1', 'limit': 25, 'include_deleted': True}
 
 
 def test_rag_run_detail_endpoint_returns_item_and_404_for_missing_run():
@@ -225,5 +246,6 @@ def test_rag_db_browser_endpoint_returns_rows_and_passes_filters():
         'collection': 'local-test',
         'run_id': 'run-1',
         'source_doc_id': 'doc-1',
+        'layer': None,
     }
 

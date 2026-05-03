@@ -1,9 +1,11 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-02-15
+> **更新日期**：2026-05-03
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
-> **唯一真实来源（SSOT）**：本文件是 LangGraph 重构的唯一设计文件。当与历史文档冲突时，以本文件为准。具体的「变更记录」和「补充说明」见 `06b_LANGGRAPH_CHANGELOG.md`，TODO/路线图见 `AGENTIC_SPRINT_TODOLIST.md`。
+> **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
+
+> 2026-05-03 修订说明：聊天主链路已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 是闲聊/OOS 短路层，采用两层防御：Tier-1 规则白名单（greeting/thanks/bye/meta，零延迟，每类 ≥10 模板 hash 轮换）+ Tier-2 LLM 分类器 sidecar（mimo-v2.5，2.5s 超时，置信度阈值 70）。Tier-1/Tier-2 任一命中则 `chat_responded=True` → END，不进入 understand_request。Tier-2 sidecar 用独立 `intent_classifier.py`，配置走 `user_config.json["intent_classifier"]` → `INTENT_CLASSIFIER_*` env → 默认值三级覆盖，不影响主 LLM 轮换池。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ---
 
@@ -11,10 +13,9 @@
 
 ### 0.1 本文档的「小步」更新流程
 
-- 任何与 LangGraph 重构相关的实现、测试、接口、UI 变动，均须登记在 `AGENTIC_SPRINT_TODOLIST.md` 的 **TODOLIST** 中作为目标（优先查找目标再写代码）。
-- 每完成一个 **小步**（一个可独立合并并验证的单元），须更新 TODOLIST：
-  - 标记应更新为 `TODO` → `DOING` → `DONE`（含规格 + 日期 + PR/commit 标注）
-  - 必须附带验证证据（截图/日志关键字/ trace 记录）
+- 任何与 LangGraph 重构相关的实现、测试、接口、UI 变动，先登记到当前有效 spec 或 `docs/plans/`；本轮请求理解事实源是 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`。
+- 每完成一个 **小步**（一个可独立合并并验证的单元），须同步更新对应 spec、`06b_LANGGRAPH_CHANGELOG.md` 和验证报告（`docs/reports/` 或 `docs/feature_logs/`）。
+- 验证证据必须可复现：命令、关键输出、截图/trace/report 路径至少保留一种。
 - 每新增一项工具（比如：字段、输入、按钮位置、模板章节、预设测试），须同步写入 `06b_LANGGRAPH_CHANGELOG.md` 的 **变更记录**。
 
 ### 0.2 设计约束（防止再次雪山崩塌）
@@ -35,17 +36,32 @@
 
 ### 0.4 当前项目架构图（简明代码）
 
-#### 0.4.1 当前（2026-02-06）
+#### 0.4.1 当前（2026-05-03）
 
 ```mermaid
-flowchart LR
-  UI[ChatInput / MiniChat] --> SSE["/chat/supervisor/stream"]
-  UI --> API["/chat/supervisor"]
-  API --> LG[LangGraph Runner]
-  API -.legacy fallback hooks.-> LC[Legacy Context/Agent Compatibility]
-  API --> ORCH[Global ToolOrchestrator]
-  LG --> MEM[LangGraph MemorySaver]
-  ORCH --> CACHE[Tool Cache]
+flowchart TD
+  UI[Chat / MiniChat / Workbench] --> CHAT["/chat/supervisor*"]
+  UI --> CONV["/api/conversations<br/>list/create/get/patch/delete"]
+  CHAT --> RUNNER[LangGraph Runner]
+  RUNNER --> INIT[build_initial_state]
+  INIT --> RESET[reset_turn_state]
+  RESET --> PREPARE[prepare_context]
+  PREPARE --> CHATRESP[chat_respond<br/>Tier-1 规则 + Tier-2 LLM]
+  CHATRESP -->|chat_responded=true| ENDNODE[END]
+  CHATRESP -->|chat_responded=false| UNDERSTAND[understand_request]
+  UNDERSTAND -->|direct / clarify| ENDNODE[END]
+  UNDERSTAND -->|alert| ALERT[alert_extractor -> alert_action]
+  UNDERSTAND -->|research / mixed| POLICY[policy_gate]
+  POLICY --> PLAN[planner]
+  PLAN --> EXEC[execute_plan]
+  EXEC --> SYNTH[synthesize]
+  SYNTH --> RENDER[render]
+  RENDER --> ENDNODE
+  EXEC --> TOOLS[Tool / Agent Adapters]
+  TOOLS --> LIVE[Live Tools]
+  TOOLS --> RAG[RAG / Evidence]
+  CONV --> SNAPSHOT[conversation_store snapshot]
+  CONV --> CTX[Session Context + Report Index + Thread RAG Cleanup]
 ```
 
 #### 0.4.2 目标（最终态）
@@ -54,15 +70,21 @@ flowchart LR
 flowchart LR
   FE[React App + Router + Design System]
   FE -->|session_id + context + options| CHATAPI["/chat/supervisor*"]
-  CHATAPI --> ORCHAPI[API Compatibility Layer]
-  ORCHAPI --> GRAPH[Single LangGraph Entry]
-  GRAPH --> POLICY[PolicyGate]
-  GRAPH --> PLAN[Planner]
-  GRAPH --> EXEC[Executor]
-  GRAPH --> RENDER[Template Renderer]
+  CHATAPI --> GRAPH[Single LangGraph Entry]
+  GRAPH --> PREPARE[prepare_context]
+  PREPARE --> UNDER[understand_request]
+  UNDER -->|direct / clarify| OUT[Stream / Return]
+  UNDER -->|alert| ALERT[Alert Subgraph]
+  UNDER -->|research / mixed| POLICY[PolicyGate]
+  POLICY --> PLAN[Planner]
+  PLAN --> EXEC[Executor]
+  EXEC --> SYN[Synthesize]
+  SYN --> RENDER[Template Renderer]
+  RENDER --> OUT
   GRAPH --> CKPT[Persistent Checkpointer]
   EXEC --> TOOLS[Tool/Agent Adapters]
-  TOOLS --> CACHE2[Unified Cache]
+  TOOLS --> LIVE[Live Tools]
+  TOOLS --> RAG[RAG Layers]
 ```
 
 ### 0.5 2026-02-06 起执行的重构原则（强制）
@@ -71,7 +93,7 @@ flowchart LR
 2. `session_id` 必须前端稳定透传，缺失时服务端生成 UUID，严禁固定默认传入。
 3. 上下文容器须按 `session_id` 隔离，禁止全局上下文容器渲染。
 4. 文档的「完成」只以验证为准：跑过 `pytest` + 前端 `build` + 必要的 e2e。
-5. 所有重构工作须统一登记到 `AGENTIC_SPRINT_TODOLIST.md`，同步写入 Worklog。
+5. 所有重构工作须统一登记到当前有效 spec 或 `docs/plans/`，同步写入 `06b_LANGGRAPH_CHANGELOG.md` 与验证报告。
 
 ---
 
@@ -124,6 +146,10 @@ flowchart LR
 | `filing` | 财报/公告（结构化 PDF） | selection.type=`filing`（含过期） |
 | `research_doc` | 研报/文档/PDF | selection.type=`doc`（含过期） |
 | `portfolio` | 持仓概览 | UI 模块 / watchlist |
+| `macro` | 宏观主题 | 美联储、CPI、利率路径、通胀、纳指等 |
+| `index` | 指数/ETF | QQQ、SPY、^IXIC 等 |
+| `commodity` | 大宗商品 | 黄金、原油、期货代码 |
+| `theme` | 行业/主题 | 半导体、AI、大型科技股等 |
 | `unknown` | 未明确主体 | 需要 clarify |
 
 ### 2.3 Operation 规范（稳定小列表）
@@ -159,19 +185,20 @@ flowchart LR
 ```mermaid
 flowchart TD
   A["API /chat/*"] --> B[BuildInitialState]
-  B --> C[NormalizeUIContext]
-  C --> H["DecideOutputMode (UI > explicit words > default)"]
-  H --> D["ResolveSubject (deterministic)"]
-  D --> E{"Need Clarify?"}
-  E -- yes --> F["Clarify/Interrupt"] --> Z["Return/Stream"]
-  E -- no --> G["ParseOperation (LLM constrained)"]
-  G --> I["Policy/Budget Gate"]
-  I --> J{"FastPath?"}
-  J -- yes --> K["Direct Node (single tool/agent)"] --> S[Synthesize]
-  J -- no --> P["Planner Node (LLM -> PlanIR)"]
-  P --> Q["Execute Plan (parallel/serial)"] --> S[Synthesize]
+  B --> C[ResetTurnState]
+  C --> D[PrepareContext]
+  D --> E["UnderstandRequest<br/>tasks + blocked_tasks + output_mode"]
+  E -- direct / clarify --> Z["Return/Stream"]
+  E -- alert --> A1[AlertExtractor]
+  A1 --> A2[AlertAction]
+  A2 --> Z
+  E -- research / mixed --> I["Policy/Budget Gate"]
+  I --> P["Planner Node<br/>LLM or stub -> PlanIR"]
+  P --> H[ConfirmationGate]
+  H --> Q["Execute Plan<br/>parallel/serial"]
+  Q --> S[Synthesize]
   S --> R["Render Template by SubjectType+OutputMode"]
-  R --> M["Memory Writeback (allowed fields only)"]
+  R --> M["Memory Writeback<br/>allowed fields only"]
   M --> Z
 ```
 
@@ -221,7 +248,7 @@ class ChatRequest(BaseModel):
 ```python
 from typing import TypedDict, Literal, NotRequired
 
-SubjectType = Literal["news_item","news_set","company","filing","research_doc","portfolio","unknown"]
+SubjectType = Literal["news_item","news_set","company","filing","research_doc","portfolio","macro","index","commodity","theme","unknown"]
 OutputMode = Literal["chat","brief","investment_report"]
 
 class Subject(TypedDict):
@@ -284,16 +311,17 @@ class GraphState(TypedDict):
 | Node | 输入（读取字段） | 输出（写入字段） | 失败/回退 |
 |---|---|---|---|
 | `BuildInitialState` | request | `thread_id,messages,query,ui_context` | 无 |
-| `NormalizeUIContext` | `ui_context` | 规范化 selections 去重 | 无 |
-| `ResolveSubject` | `ui_context,query` | `subject`（deterministic） | `subject_type=unknown` |
-| `Clarify` | `subject,query` | interrupt / clarify question | 统一错误回复 |
-| `ParseOperation` | `query,subject` | `operation` | 简单规则兜底 |
-| `DecideOutputMode` | `options,query` | `output_mode` | 默认 `brief` |
-| `PolicyGate` | `output_mode,subject` | `policy/budget` | 触发 fastpath |
-| `Planner` | `subject,operation,output_mode` | `plan_ir` | fallback 单 agent |
-| `ExecutePlan` | `plan_ir` | `artifacts` | 单步失败记录 |
-| `Synthesize` | `artifacts` | `draft_answer` | 简化回复 |
-| `Render` | `subject_type,output_mode` | 最终 markdown | 模板缺失回退 |
+| `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留长期 memory |
+| `PrepareContext` | history + `ui_context` | 修剪历史、摘要长上下文、规范化 selections、合并输出模式 hints | 已接入主路径；旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 作为兼容 helper 保留 |
+| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `understanding,tasks,blocked_tasks,subject,operation,output_mode,route` | direct/clarify 可直接结束；低置信度进入 blocked task |
+| `AlertExtractor` | alert task | alert 参数 | invalid 时返回澄清 |
+| `AlertAction` | alert 参数 | alert 结果 | 写入失败时返回错误 |
+| `PolicyGate` | `tasks,output_mode,ui_context,budget/preferences` | `policy/budget/allowed_tools/allowed_agents` | 降级到最小 allowlist |
+| `Planner` | `tasks,policy,output_mode` | `plan_ir` | LLM 失败 fallback 到 `planner_stub` |
+| `ConfirmationGate` | `plan_ir,policy` | continue / interrupt | 默认继续 |
+| `ExecutePlan` | `plan_ir` | `artifacts` | optional step 失败不中止；required step 记录错误 |
+| `Synthesize` | `artifacts,understanding` | `draft_answer` | 多任务 fallback 简报 |
+| `Render` | `subject_type,output_mode,draft_answer` | 最终 markdown | 模板缺失回退 |
 | `MemoryWriteback` | `messages,selected_memory` | 持久化 | 只写允许字段 |
 
 ### 5.2 Subject 子图映射（常量表）
@@ -424,10 +452,13 @@ SUBJECT_SUBGRAPHS = {
 #### 推荐位置
 
 - 放在 **输入框右侧的发送区域**，和 `Send` 并排，在 Chat 和 MiniChat 同样位置（方便用户也找到）。
-- 按钮启用条件（任一即时满足）：
-  - 有 `active_symbol`
-  - 有 selections 非空
-- 条件不满也可以提示「请先选择一条消息内容再生成投标」。
+- 按钮启用条件只判断是否有可提交内容，不做金融语义识别：
+  - 输入非空；
+  - 或有 `active_symbol` / selections / 当前页面上下文；
+  - 当前没有进行中的提交，或按钮处于“停止”状态；
+  - 用户权限允许该 output mode。
+- 前端不得维护公司名到 ticker 的字典；`谷歌/微软/苹果`、无 ticker 的宏观问题、portfolio 缺失等判断均由后端 `understand_request` 处理。
+- 条件不满时提示「请输入问题或选择上下文后再开始分析」。
 
 #### 发送差异
 
@@ -458,6 +489,9 @@ SUBJECT_SUBGRAPHS = {
 
 - 在 Chat 和 MiniChat 间切换 session_id 下，历史对话一致，但 UI selection 是上下文而非偏向用户积累。
 - 「生成投资报告」按钮只改变 output_mode，不改变用户输入（别注入「生成 研报」等关键词到输入框）。
+- Deep/Brief 控件不依赖前端 ticker/company 字典；无 ticker 宏观问题也可提交，由后端生成 `macro/theme/index` task。
+- 会话栏的新建/切换/删除只管理交互状态和 `session_id`；新建/触达走 `POST /api/conversations`，标题/messages/置顶/归档 snapshot 走 `PATCH /api/conversations/{id}`，删除动作会调用 `DELETE /api/conversations/{id}`，后端负责清理该 thread 的 session context、report index、RAG working set 和 RAG observability runs。
+- 流式运行中点击停止必须保留 partial answer 和 trace；前端不把取消伪装成失败，后端应发出 `stage=cancelled` 的用户可见事件，executor/agent adapter 应读取 cancellation token 并停止后续输出。
 
 ---
 
@@ -474,14 +508,19 @@ SUBJECT_SUBGRAPHS = {
 | T-F1 | 「总结要点」 | selection=filing(1) | `filing` | `brief` | 文档摘要模板 |
 | T-P1 | 「对比AAPL和MSFT」 | none | `company`/`portfolio` | `brief` | operation=compare；计划包含对比所需信息 |
 | T-T1 | 「NVDA 最新股价和技术面分析」 | active_symbol=GOOGL | `company` | `brief` | subject 应为 NVDA；operation=technical；计划含 price+technical |
+| T-M1 | 「美联储利率路径对大型科技股估值有什么影响」 | none | `macro/theme` | `brief` | 无 ticker 也可执行，不要求用户先选公司 |
+| T-X1 | 混合闲聊 + 谷歌/微软 + 宏观 + 持仓 | none/optional portfolio | `mixed` | `brief` | 可执行 task 与 blocked portfolio task 分离 |
+
+完整复杂 Query Golden Set 与 20 条 probe 结果见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ### 9.2 测试建议（审查）
 
-- `test_resolve_subject_selection_priority.py`
+- `test_understand_request.py`（当前主路径请求理解层 golden cases，2026-05-03 已落地）
 - `test_output_mode_ui_override.py`
 - `test_planner_planir_schema_validation.py`
 - `test_executor_parallel_groups.py`
 - `test_news_brief_template_no_empty_chapters.py`
+- `test_resolve_subject_selection_priority.py`（legacy 兼容回归，仅在保留 `resolve_subject` 兼容节点期间有效）
 
 ### 9.3 验收标准（测试部分）
 

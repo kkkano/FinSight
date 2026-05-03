@@ -392,6 +392,13 @@ def select_tools(
             "search",
             "get_current_datetime",
         ]
+    elif subject == "macro":
+        candidate_names = [
+            "get_official_macro_releases",
+            "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
     elif subject == "company":
         if operation == "price":
             candidate_names = [

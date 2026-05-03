@@ -8,7 +8,7 @@ import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
 import { PipelineStageBar } from './PipelineStageBar';
 import { ThinkingBubble } from './ThinkingBubble';
-import { AgentSummaryCards } from './AgentSummaryCards';
+import { AgentProgressList } from './AgentProgressList';
 
 /** Max characters for details JSON before truncation. */
 const DETAILS_MAX_CHARS = 500;
@@ -201,9 +201,10 @@ export function ExecutionPanel({
             timeline={run.timeline}
             isRunning={run.status === 'running'}
           />
-          <AgentSummaryCards
+          <AgentProgressList
             agentStatuses={run.agentStatuses}
             selectedAgents={run.selectedAgents}
+            planSteps={run.planSteps}
           />
         </>
       )}

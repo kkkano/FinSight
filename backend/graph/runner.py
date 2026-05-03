@@ -23,11 +23,13 @@ from backend.graph.nodes import (
     normalize_ui_context,
     parse_operation,
     policy_gate,
+    prepare_context,
     planner,
     render_stub,
     reset_turn_state,
     resolve_subject,
     synthesize,
+    understand_request,
 )
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
@@ -49,6 +51,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph = StateGraph(GraphState)
     graph.add_node("build_initial_state", with_node_trace("build_initial_state", build_initial_state))
     graph.add_node("reset_turn_state", with_node_trace("reset_turn_state", reset_turn_state))
+    graph.add_node("prepare_context", with_node_trace("prepare_context", prepare_context))
     graph.add_node("trim_history", with_node_trace("trim_history", trim_conversation_history))
     graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
@@ -57,6 +60,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
     graph.add_node("clarify", with_node_trace("clarify", clarify))
     graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
+    graph.add_node("understand_request", with_node_trace("understand_request", understand_request))
     graph.add_node("alert_extractor", with_node_trace("alert_extractor", alert_extractor))
     graph.add_node("alert_action", with_node_trace("alert_action", alert_action))
     graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
@@ -68,23 +72,41 @@ def _build_graph(*, checkpointer: Any) -> Any:
 
     graph.add_edge(START, "build_initial_state")
     graph.add_edge("build_initial_state", "reset_turn_state")
-    graph.add_edge("reset_turn_state", "trim_history")
-    graph.add_edge("trim_history", "summarize_history")
-    graph.add_edge("summarize_history", "normalize_ui_context")
-    graph.add_edge("normalize_ui_context", "decide_output_mode")
-    graph.add_edge("decide_output_mode", "chat_respond")
+    graph.add_edge("reset_turn_state", "prepare_context")
+    # 把 chat_respond 接到主链路：prepare_context → chat_respond → (chat_responded? END : understand_request)
+    # 之前 chat_respond 是孤儿节点（注册了但没接进主路径），导致两层闲聊兜底里的
+    # Tier-1 规则池 + Tier-2 LLM 分类器 都不会触发。修复后真正生效。
+    graph.add_edge("prepare_context", "chat_respond")
 
     def _route_after_chat_respond(state: GraphState) -> str:
-        if state.get("chat_responded") is True:
+        if bool(state.get("chat_responded")):
             return END
-        return "resolve_subject"
+        return "understand_request"
 
     graph.add_conditional_edges(
         "chat_respond",
         _route_after_chat_respond,
-        {"resolve_subject": "resolve_subject", END: END},
+        {"understand_request": "understand_request", END: END},
     )
 
+    def _route_after_understand_request(state: GraphState) -> str:
+        understanding = state.get("understanding") or {}
+        route = str(understanding.get("route") or "").strip().lower()
+        if route in {"direct", "clarify"}:
+            return END
+        op = (state.get("operation") or {}).get("name", "qa")
+        if route == "alert" or op == "alert_set":
+            return "alert_extractor"
+        return "policy_gate"
+
+    graph.add_conditional_edges(
+        "understand_request",
+        _route_after_understand_request,
+        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate", END: END},
+    )
+
+    # Legacy front-half nodes are still registered for compatibility and
+    # focused unit tests, but the main runtime path now uses understand_request.
     graph.add_edge("resolve_subject", "clarify")
 
     def _route_after_clarify(state: GraphState) -> str:

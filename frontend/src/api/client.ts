@@ -415,6 +415,16 @@ export async function parseSSEStream(
               runId: typeof data.run_id === 'string' ? data.run_id : undefined,
               sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
             });
+          } else if (data.type === 'trace') {
+            onThinking?.({
+              stage: data.stage || 'trace',
+              message: data.summary || data.title || data.message || 'trace',
+              result: data,
+              timestamp: data.timestamp || new Date().toISOString(),
+              eventType: 'trace',
+              runId: typeof data.run_id === 'string' ? data.run_id : undefined,
+              sessionId: typeof data.session_id === 'string' ? data.session_id : undefined,
+            });
           } else if (data.type === 'thinking') {
             onThinking?.({
               stage: data.stage || 'any',
@@ -629,6 +639,52 @@ export const apiClient = {
       session_id: params.sessionId,
       is_favorite: params.isFavorite,
     });
+    return response.data;
+  },
+
+  async createConversation(
+    sessionId?: string,
+    payload?: {
+      title?: string;
+      messages?: Array<Record<string, unknown>>;
+      pinned?: boolean;
+      archived?: boolean;
+    },
+  ): Promise<{
+    success: boolean;
+    session_id: string;
+    conversation?: Record<string, unknown>;
+  }> {
+    const response = await api.post('/api/conversations', {
+      ...(payload || {}),
+      ...(sessionId ? { session_id: sessionId } : {}),
+    });
+    return response.data;
+  },
+
+  async patchConversation(
+    sessionId: string,
+    payload: {
+      title?: string;
+      messages?: Array<Record<string, unknown>>;
+      pinned?: boolean;
+      archived?: boolean;
+    },
+  ): Promise<{
+    success: boolean;
+    session_id: string;
+    conversation?: Record<string, unknown>;
+  }> {
+    const response = await api.patch(`/api/conversations/${encodeURIComponent(sessionId)}`, payload);
+    return response.data;
+  },
+
+  async deleteConversation(sessionId: string): Promise<{
+    success: boolean;
+    session_id: string;
+    cleared?: Record<string, unknown>;
+  }> {
+    const response = await api.delete(`/api/conversations/${encodeURIComponent(sessionId)}`);
     return response.data;
   },
 
@@ -857,13 +913,14 @@ export const apiClient = {
     return response.data;
   },
 
-  async diagnosticsRagRuns(params?: { limit?: number; cursor?: string | null; q?: string; fallback_only?: boolean }): Promise<any> {
+  async diagnosticsRagRuns(params?: { limit?: number; cursor?: string | null; q?: string; fallback_only?: boolean; include_deleted?: boolean }): Promise<any> {
     const response = await api.get('/diagnostics/rag/runs', {
       params: {
         limit: params?.limit ?? 20,
         cursor: params?.cursor || undefined,
         q: params?.q || undefined,
         fallback_only: params?.fallback_only ?? false,
+        include_deleted: params?.include_deleted || undefined,
       },
     });
     return response.data;
@@ -874,8 +931,8 @@ export const apiClient = {
     return response.data;
   },
 
-  async diagnosticsRagRunEvents(runId: string, limit: number = 500): Promise<any> {
-    const response = await api.get(`/diagnostics/rag/runs/${encodeURIComponent(runId)}/events`, { params: { limit } });
+  async diagnosticsRagRunEvents(runId: string, limit: number = 500, includeDeleted: boolean = false): Promise<any> {
+    const response = await api.get(`/diagnostics/rag/runs/${encodeURIComponent(runId)}/events`, { params: { limit, include_deleted: includeDeleted || undefined } });
     return response.data;
   },
 
@@ -909,7 +966,7 @@ export const apiClient = {
     return response.data;
   },
 
-  async diagnosticsRagDbBrowser(tableName: string, params?: { limit?: number; offset?: number; q?: string; collection?: string; run_id?: string; source_doc_id?: string }): Promise<any> {
+  async diagnosticsRagDbBrowser(tableName: string, params?: { limit?: number; offset?: number; q?: string; collection?: string; run_id?: string; source_doc_id?: string; layer?: string }): Promise<any> {
     const response = await api.get(`/diagnostics/rag/db-browser/${encodeURIComponent(tableName)}`, {
       params: {
         limit: params?.limit ?? 50,
@@ -918,6 +975,7 @@ export const apiClient = {
         collection: params?.collection || undefined,
         run_id: params?.run_id || undefined,
         source_doc_id: params?.source_doc_id || undefined,
+        layer: params?.layer || undefined,
       },
     });
     return response.data;
@@ -949,6 +1007,7 @@ export const apiClient = {
     options?: ChatOptions,
     sessionId?: string,
     traceRawEnabled: boolean = true,
+    opts: { signal?: AbortSignal } = {},
   ): Promise<void> {
     const body: Record<string, any> = { query, history };
     if (sessionId) body.session_id = sessionId;
@@ -959,6 +1018,7 @@ export const apiClient = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
 
     if (!response.ok) {
@@ -989,8 +1049,12 @@ export const apiClient = {
         onThinking,
         onRawEvent,
       },
-      { traceRawEnabled },
+      { traceRawEnabled, signal: opts.signal },
     );
+
+    if (opts.signal?.aborted) {
+      return;
+    }
 
     if (!sawDone && !sawError) {
       wrappedOnError('Execution stream ended unexpectedly (missing done event)');
@@ -1037,6 +1101,10 @@ export const apiClient = {
     };
 
     await parseSSEStream(response, wrappedCallbacks, opts);
+
+    if (opts.signal?.aborted) {
+      return;
+    }
 
     if (!sawDone && !sawError) {
       callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
@@ -1124,6 +1192,10 @@ export const apiClient = {
       };
 
       await parseSSEStream(response.clone(), wrappedCallbacks, opts);
+
+      if (opts?.signal?.aborted) {
+        return response;
+      }
 
       if (!sawDone && !sawError) {
         callbacks.onError?.('Resume stream ended unexpectedly (missing done event)');

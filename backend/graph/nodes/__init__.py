@@ -7,6 +7,7 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.execute_plan_stub import execute_plan_stub
 from backend.graph.nodes.normalize_ui_context import normalize_ui_context
 from backend.graph.nodes.parse_operation import parse_operation
+from backend.graph.nodes.prepare_context import prepare_context
 from backend.graph.nodes.alert_extractor import alert_extractor
 from backend.graph.nodes.alert_action import alert_action
 from backend.graph.nodes.policy_gate import policy_gate
@@ -25,11 +26,14 @@ from backend.graph.nodes.compare_gate import (
 from backend.graph.nodes.confirmation_gate import confirmation_gate
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
 from backend.graph.nodes.summarize_history import summarize_history
+from backend.graph.nodes.understand_request import understand_request
 
 __all__ = [
     "build_initial_state",
+    "prepare_context",
     "trim_conversation_history",
     "summarize_history",
+    "understand_request",
     "normalize_ui_context",
     "decide_output_mode",
     "chat_respond",

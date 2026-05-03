@@ -1,5 +1,6 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
+import { apiClient } from '../api/client';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
@@ -8,6 +9,15 @@ export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
 export interface AuthIdentity {
   userId: string;
   email: string | null;
+}
+
+export interface ConversationSummary {
+  sessionId: string;
+  title: string;
+  lastMessagePreview: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 const DEFAULT_USER_ID = 'default_user';
@@ -105,9 +115,9 @@ const getInitialTraceRawShowRawJson = (): boolean => {
   return raw === 'true';
 };
 const getInitialTraceViewMode = (): TraceViewMode => {
-  if (typeof window === 'undefined') return 'expert';
+  if (typeof window === 'undefined') return 'user';
   const raw = window.localStorage.getItem('finsight-trace-view-mode');
-  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'expert';
+  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'user';
 };
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {
@@ -156,11 +166,15 @@ applyThemeClass(initialTheme);
 interface AppState {
   messages: Message[];
   addMessage: (message: Message) => void;
+  addMessageToSession: (sessionId: string, message: Message) => void;
   updateMessage: (id: string, patch: Partial<Message>) => void;
+  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>) => void;
   updateLastMessage: (content: string) => void;
   removeMessage: (id: string) => void;
   setLoading: (loading: boolean) => void;
+  setSessionLoading: (sessionId: string, loading: boolean) => void;
   isChatLoading: boolean;
+  chatLoadingBySession: Record<string, boolean>;
   statusMessage: string | null;
   statusSince: number | null;
   executionProgress: number | null;
@@ -169,7 +183,15 @@ interface AppState {
   setExecutionState: (step: string | null, progress?: number | null) => void;
   resetExecutionState: () => void;
   abortController: AbortController | null;
+  abortControllersBySession: Record<string, AbortController | null>;
   setAbortController: (controller: AbortController | null) => void;
+  setSessionAbortController: (sessionId: string, controller: AbortController | null) => void;
+  cancelChatStream: () => void;
+  clearConversationContext: () => void;
+  startNewChat: () => void;
+  conversationSummaries: ConversationSummary[];
+  selectConversation: (sessionId: string) => void;
+  deleteConversation: (sessionId: string) => void;
   currentTicker: string | null;
   setTicker: (ticker: string | null) => void;
   theme: Theme;
@@ -178,6 +200,7 @@ interface AppState {
   setLayoutMode: (mode: LayoutMode) => void;
   setDraft: (text: string) => void;
   draft: string;
+  draftBySession: Record<string, string>;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
   entryMode: EntryMode;
@@ -230,7 +253,48 @@ const WELCOME_MESSAGE: Message = {
 };
 
 const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
+const CONVERSATIONS_STORAGE_KEY = 'finsight-conversations';
 const MAX_PERSISTED_MESSAGES = 100;
+const MAX_CONVERSATIONS = 50;
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
+const memoryMessageStore = new Map<string, string>();
+let memoryConversationSummaries: ConversationSummary[] = [];
+
+const serializeBackendMessages = (messages?: Message[]): Array<Record<string, unknown>> => {
+  const rows = Array.isArray(messages) ? messages : [];
+  return rows
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim())
+    .slice(-100)
+    .map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+    }));
+};
+
+const deriveBackendTitle = (messages?: Message[]): string | undefined => {
+  const rows = Array.isArray(messages) ? messages : [];
+  const firstUser = rows.find((m) => m.role === 'user' && m.content.trim());
+  const source = firstUser?.content || rows.find((m) => m.content.trim())?.content || '';
+  return source.replace(/\s+/g, ' ').trim().slice(0, 42) || undefined;
+};
+
+const createBackendConversation = (sessionId: string, messages?: Message[]) => {
+  if (!sessionId) return;
+  const payload = messages
+    ? {
+        title: deriveBackendTitle(messages),
+        messages: serializeBackendMessages(messages),
+      }
+    : undefined;
+  void apiClient.createConversation(sessionId, payload).catch(() => undefined);
+};
+
+const deleteBackendConversation = (sessionId: string) => {
+  if (!sessionId) return;
+  void apiClient.deleteConversation(sessionId).catch(() => undefined);
+};
 
 const messageStorageKey = (sessionId: string): string =>
   `${MESSAGES_STORAGE_PREFIX}${String(sessionId || '').trim()}`;
@@ -246,10 +310,129 @@ const normalizePersistedMessages = (raw: string | null): Message[] => {
   }
 };
 
+const normalizeConversationSummaries = (raw: string | null): ConversationSummary[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as ConversationSummary[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({
+        sessionId: String(item?.sessionId || '').trim(),
+        title: String(item?.title || '').trim() || '新对话',
+        lastMessagePreview: String(item?.lastMessagePreview || '').trim(),
+        messageCount: Math.max(0, Number(item?.messageCount || 0)),
+        createdAt: Number(item?.createdAt || Date.now()),
+        updatedAt: Number(item?.updatedAt || Date.now()),
+      }))
+      .filter((item) => item.sessionId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+  } catch {
+    return [];
+  }
+};
+
+const buildConversationSummary = (
+  sessionId: string,
+  messages: Message[],
+  previous?: ConversationSummary,
+): ConversationSummary => {
+  const visibleMessages = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
+  const nonWelcome = visibleMessages.filter((m) => m.id !== WELCOME_MESSAGE.id && m.content.trim());
+  const firstUser = nonWelcome.find((m) => m.role === 'user');
+  const latest = [...nonWelcome].reverse()[0] || visibleMessages[visibleMessages.length - 1] || WELCOME_MESSAGE;
+  const titleSource = firstUser?.content || latest?.content || previous?.title || '新对话';
+  const previewSource = latest?.content || previous?.lastMessagePreview || '';
+  const createdAt = previous?.createdAt || visibleMessages[0]?.timestamp || Date.now();
+  const updatedAt = latest?.timestamp || previous?.updatedAt || Date.now();
+
+  return {
+    sessionId,
+    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || '新对话',
+    lastMessagePreview: previewSource.replace(/\s+/g, ' ').trim().slice(0, 90),
+    messageCount: nonWelcome.length,
+    createdAt,
+    updatedAt,
+  };
+};
+
+const persistConversationSummaries = (summaries: ConversationSummary[]) => {
+  const normalized = summaries
+    .filter((item) => item.sessionId)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_CONVERSATIONS);
+  if (typeof window === 'undefined') {
+    memoryConversationSummaries = normalized;
+    return;
+  }
+  window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(normalized));
+};
+
+const loadConversationSummaries = (activeSessionId: string, activeMessages: Message[]): ConversationSummary[] => {
+  if (typeof window === 'undefined') {
+    const bySession = new Map<string, ConversationSummary>();
+    for (const item of memoryConversationSummaries) {
+      bySession.set(item.sessionId, item);
+    }
+    for (const [key, raw] of memoryMessageStore.entries()) {
+      if (!key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
+      const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
+      const messages = normalizePersistedMessages(raw);
+      if (sid && messages.length) {
+        bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
+      }
+    }
+    bySession.set(activeSessionId, buildConversationSummary(activeSessionId, activeMessages, bySession.get(activeSessionId)));
+    return Array.from(bySession.values())
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+  }
+
+  const bySession = new Map<string, ConversationSummary>();
+  for (const item of normalizeConversationSummaries(window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY))) {
+    bySession.set(item.sessionId, item);
+  }
+
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(MESSAGES_STORAGE_PREFIX)) continue;
+    const sid = key.slice(MESSAGES_STORAGE_PREFIX.length).trim();
+    if (!sid) continue;
+    const messages = normalizePersistedMessages(window.localStorage.getItem(key));
+    if (!messages.length) continue;
+    bySession.set(sid, buildConversationSummary(sid, messages, bySession.get(sid)));
+  }
+
+  bySession.set(activeSessionId, buildConversationSummary(activeSessionId, activeMessages, bySession.get(activeSessionId)));
+  return Array.from(bySession.values())
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_CONVERSATIONS);
+};
+
+const upsertConversationSummary = (
+  summaries: ConversationSummary[],
+  sessionId: string,
+  messages: Message[],
+): ConversationSummary[] => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return summaries;
+  const previous = summaries.find((item) => item.sessionId === sid);
+  const next = [
+    buildConversationSummary(sid, messages, previous),
+    ...summaries.filter((item) => item.sessionId !== sid),
+  ].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS);
+  persistConversationSummaries(next);
+  return next;
+};
+
 const loadMessagesForSession = (sessionId: string): Message[] => {
-  if (typeof window === 'undefined') return [WELCOME_MESSAGE];
   const sid = String(sessionId || '').trim();
   if (!sid) return [WELCOME_MESSAGE];
+  if (typeof window === 'undefined') {
+    const scoped = normalizePersistedMessages(memoryMessageStore.get(messageStorageKey(sid)) || null);
+    if (scoped.length > 0) return scoped;
+    return [WELCOME_MESSAGE];
+  }
 
   const scoped = normalizePersistedMessages(window.localStorage.getItem(messageStorageKey(sid)));
   if (scoped.length > 0) return scoped;
@@ -261,29 +444,93 @@ const getInitialMessages = (sessionId: string): Message[] => {
 };
 
 const persistMessages = (messages: Message[], sessionId: string) => {
-  if (typeof window === 'undefined') return;
   const sid = String(sessionId || '').trim();
   if (!sid) return;
   try {
     const toSave = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(-MAX_PERSISTED_MESSAGES);
+    if (typeof window === 'undefined') {
+      memoryMessageStore.set(messageStorageKey(sid), JSON.stringify(toSave));
+      createBackendConversation(sid, toSave);
+      return;
+    }
     window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
+    createBackendConversation(sid, toSave);
   } catch {
     // localStorage full or unavailable — silently ignore
   }
 };
 
+const appendMessageForSession = (messages: Message[], message: Message): Message[] => {
+  return [...messages, message];
+};
+
+const patchMessageForSession = (
+  messages: Message[],
+  id: string,
+  patch: Partial<Message>,
+): Message[] => {
+  return messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
+};
+
+const clearPersistedMessages = (sessionId: string) => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  if (typeof window === 'undefined') {
+    memoryMessageStore.delete(messageStorageKey(sid));
+    return;
+  }
+  window.localStorage.removeItem(messageStorageKey(sid));
+};
+
+const clearPersistedConversation = (sessionId: string) => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  if (typeof window === 'undefined') {
+    memoryMessageStore.delete(messageStorageKey(sid));
+    return;
+  }
+  window.localStorage.removeItem(messageStorageKey(sid));
+};
+
+const createInitialAgentStatuses = (): Record<AgentLogSource, AgentStatus> => ({
+  supervisor: { source: 'supervisor', status: 'idle' },
+  router: { source: 'router', status: 'idle' },
+  gate: { source: 'gate', status: 'idle' },
+  planner: { source: 'planner', status: 'idle' },
+  news_agent: { source: 'news_agent', status: 'idle' },
+  price_agent: { source: 'price_agent', status: 'idle' },
+  fundamental_agent: { source: 'fundamental_agent', status: 'idle' },
+  technical_agent: { source: 'technical_agent', status: 'idle' },
+  macro_agent: { source: 'macro_agent', status: 'idle' },
+  deep_search_agent: { source: 'deep_search_agent', status: 'idle' },
+  forum: { source: 'forum', status: 'idle' },
+  system: { source: 'system', status: 'idle' },
+});
+
+const buildNewConversationSessionId = (identity: AuthIdentity | null): string => {
+  if (identity?.userId) {
+    const thread = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    return buildUserSessionId(identity.userId, thread);
+  }
+  return buildAnonymousSessionId();
+};
+
 export const useStore = create<AppState>((set) => ({
   messages: getInitialMessages(initialSessionId),
+  conversationSummaries: loadConversationSummaries(initialSessionId, getInitialMessages(initialSessionId)),
   isChatLoading: false,
+  chatLoadingBySession: {},
   statusMessage: null,
   statusSince: null,
   executionProgress: null,
   currentStep: null,
   currentTicker: null,
   abortController: null,
+  abortControllersBySession: {},
   draft: '',
+  draftBySession: {},
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
@@ -293,20 +540,7 @@ export const useStore = create<AppState>((set) => ({
   portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
-  agentStatuses: {
-    supervisor: { source: 'supervisor', status: 'idle' },
-    router: { source: 'router', status: 'idle' },
-    gate: { source: 'gate', status: 'idle' },
-    planner: { source: 'planner', status: 'idle' },
-    news_agent: { source: 'news_agent', status: 'idle' },
-    price_agent: { source: 'price_agent', status: 'idle' },
-    fundamental_agent: { source: 'fundamental_agent', status: 'idle' },
-    technical_agent: { source: 'technical_agent', status: 'idle' },
-    macro_agent: { source: 'macro_agent', status: 'idle' },
-    deep_search_agent: { source: 'deep_search_agent', status: 'idle' },
-    forum: { source: 'forum', status: 'idle' },
-    system: { source: 'system', status: 'idle' },
-  },
+  agentStatuses: createInitialAgentStatuses(),
   isAgentLogsPanelOpen: true,
   // Raw SSE Events 初始状态
   rawEvents: [],
@@ -324,17 +558,57 @@ export const useStore = create<AppState>((set) => ({
 
   addMessage: (message) =>
     set((state) => {
-      const next = [...state.messages, message];
+      const next = appendMessageForSession(state.messages, message);
       persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
+      };
+    }),
+
+  addMessageToSession: (sessionId, message) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const baseMessages = normalized === state.sessionId
+        ? state.messages
+        : loadMessagesForSession(normalized);
+      const next = appendMessageForSession(baseMessages, message);
+      persistMessages(next, normalized);
+      return {
+        messages: normalized === state.sessionId ? next : state.messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, next),
+      };
     }),
 
   updateMessage: (id, patch) =>
     set((state) => {
-      const next = state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
+      const next = patchMessageForSession(state.messages, id, patch);
       // Only persist when message finishes loading (avoid thrashing during streaming)
       if (patch.isLoading === false) persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: patch.isLoading === false
+          ? upsertConversationSummary(state.conversationSummaries, state.sessionId, next)
+          : state.conversationSummaries,
+      };
+    }),
+
+  updateMessageInSession: (sessionId, id, patch) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const baseMessages = normalized === state.sessionId
+        ? state.messages
+        : loadMessagesForSession(normalized);
+      const next = patchMessageForSession(baseMessages, id, patch);
+      if (patch.isLoading === false) persistMessages(next, normalized);
+      return {
+        messages: normalized === state.sessionId ? next : state.messages,
+        conversationSummaries: patch.isLoading === false
+          ? upsertConversationSummary(state.conversationSummaries, normalized, next)
+          : state.conversationSummaries,
+      };
     }),
 
   updateLastMessage: (content) =>
@@ -350,10 +624,32 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const next = state.messages.filter((m) => m.id !== id);
       persistMessages(next, state.sessionId);
-      return { messages: next };
+      return {
+        messages: next,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
+      };
     }),
 
-  setLoading: (loading) => set({ isChatLoading: loading }),
+  setLoading: (loading) =>
+    set((state) => ({
+      isChatLoading: loading,
+      chatLoadingBySession: {
+        ...state.chatLoadingBySession,
+        [state.sessionId]: loading,
+      },
+    })),
+  setSessionLoading: (sessionId, loading) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      return {
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [normalized]: loading,
+        },
+        isChatLoading: normalized === state.sessionId ? loading : state.isChatLoading,
+      };
+    }),
   setStatus: (message) =>
     set(() => ({
       statusMessage: message,
@@ -370,7 +666,126 @@ export const useStore = create<AppState>((set) => ({
       executionProgress: null,
     })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
-  setAbortController: (controller) => set({ abortController: controller }),
+  setAbortController: (controller) =>
+    set((state) => ({
+      abortController: controller,
+      abortControllersBySession: {
+        ...state.abortControllersBySession,
+        [state.sessionId]: controller,
+      },
+    })),
+  setSessionAbortController: (sessionId, controller) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      return {
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [normalized]: controller,
+        },
+        abortController: normalized === state.sessionId ? controller : state.abortController,
+      };
+    }),
+  cancelChatStream: () =>
+    set((state) => {
+      const progress = state.executionProgress;
+      const activeController = state.abortControllersBySession[state.sessionId] || state.abortController;
+      activeController?.abort();
+      return {
+        abortController: null,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [state.sessionId]: null,
+        },
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [state.sessionId]: false,
+        },
+        isChatLoading: false,
+        statusMessage: STOPPED_GENERATION_MESSAGE,
+        statusSince: Date.now(),
+        currentStep: '已停止生成',
+        executionProgress: progress,
+      };
+    }),
+  clearConversationContext: () =>
+    set((state) => {
+      const activeController = state.abortControllersBySession[state.sessionId] || state.abortController;
+      activeController?.abort();
+      clearPersistedMessages(state.sessionId);
+      createBackendConversation(state.sessionId, [WELCOME_MESSAGE]);
+      const conversationSummaries = upsertConversationSummary(
+        state.conversationSummaries,
+        state.sessionId,
+        [WELCOME_MESSAGE],
+      );
+      return {
+        messages: [WELCOME_MESSAGE],
+        conversationSummaries,
+        isChatLoading: false,
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [state.sessionId]: false,
+        },
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: null,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [state.sessionId]: null,
+        },
+        currentTicker: null,
+        draft: '',
+        draftBySession: {
+          ...state.draftBySession,
+          [state.sessionId]: '',
+        },
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
+  startNewChat: () =>
+    set((state) => {
+      const nextSessionId = buildNewConversationSessionId(state.authIdentity);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+      createBackendConversation(nextSessionId, [WELCOME_MESSAGE]);
+      const conversationSummaries = upsertConversationSummary(
+        state.conversationSummaries,
+        nextSessionId,
+        [WELCOME_MESSAGE],
+      );
+      return {
+        sessionId: nextSessionId,
+        messages: [WELCOME_MESSAGE],
+        conversationSummaries,
+        isChatLoading: Boolean(state.chatLoadingBySession[nextSessionId]),
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: state.abortControllersBySession[nextSessionId] || null,
+        currentTicker: null,
+        draft: state.draftBySession[nextSessionId] || '',
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
 
   setTheme: (theme) => {
     set({ theme });
@@ -405,14 +820,110 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setSessionId: (sessionId) =>
-    set(() => {
+    set((state) => {
       const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
+      const messages = loadMessagesForSession(normalized);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', normalized);
+      }
+      createBackendConversation(normalized, messages);
+      return {
+        sessionId: normalized,
+        messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
+        isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
+        abortController: state.abortControllersBySession[normalized] || null,
+        draft: state.draftBySession[normalized] || '',
+      };
+    }),
+
+  selectConversation: (sessionId) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const messages = loadMessagesForSession(normalized);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
       return {
         sessionId: normalized,
-        messages: loadMessagesForSession(normalized),
+        messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
+        isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
+        statusMessage: null,
+        statusSince: null,
+        executionProgress: null,
+        currentStep: null,
+        abortController: state.abortControllersBySession[normalized] || null,
+        currentTicker: null,
+        draft: state.draftBySession[normalized] || '',
+        agentLogs: [],
+        agentStatuses: createInitialAgentStatuses(),
+        rawEvents: [],
+        requestMetrics: {
+          llmTotalCalls: 0,
+          toolTotalCalls: 0,
+          updatedAt: null,
+        },
+      };
+    }),
+
+  deleteConversation: (sessionId) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      if (normalized === state.sessionId) {
+        const activeController = state.abortControllersBySession[normalized] || state.abortController;
+        activeController?.abort();
+      }
+      deleteBackendConversation(normalized);
+      clearPersistedConversation(normalized);
+      const remaining = state.conversationSummaries
+        .filter((item) => item.sessionId !== normalized)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+      const nextSessionId = normalized === state.sessionId
+        ? (remaining[0]?.sessionId || buildNewConversationSessionId(state.authIdentity))
+        : state.sessionId;
+      const nextMessages = normalized === state.sessionId
+        ? loadMessagesForSession(nextSessionId)
+        : state.messages;
+      const nextSummaries = remaining.length > 0 || nextSessionId === state.sessionId
+        ? remaining
+        : upsertConversationSummary([], nextSessionId, nextMessages);
+      persistConversationSummaries(nextSummaries);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-session-id', nextSessionId);
+      }
+      if (normalized === state.sessionId && nextSessionId !== normalized) {
+        createBackendConversation(nextSessionId, nextMessages);
+      }
+      return {
+        sessionId: nextSessionId,
+        messages: nextMessages,
+        conversationSummaries: nextSummaries,
+        isChatLoading: normalized === state.sessionId ? Boolean(state.chatLoadingBySession[nextSessionId]) : state.isChatLoading,
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [normalized]: false,
+        },
+        statusMessage: normalized === state.sessionId ? null : state.statusMessage,
+        statusSince: normalized === state.sessionId ? null : state.statusSince,
+        executionProgress: normalized === state.sessionId ? null : state.executionProgress,
+        currentStep: normalized === state.sessionId ? null : state.currentStep,
+        abortController: normalized === state.sessionId ? (state.abortControllersBySession[nextSessionId] || null) : state.abortController,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [normalized]: null,
+        },
+        currentTicker: normalized === state.sessionId ? null : state.currentTicker,
+        draft: normalized === state.sessionId ? (state.draftBySession[nextSessionId] || '') : state.draft,
+        draftBySession: {
+          ...state.draftBySession,
+          [normalized]: '',
+        },
+        agentLogs: normalized === state.sessionId ? [] : state.agentLogs,
+        agentStatuses: normalized === state.sessionId ? createInitialAgentStatuses() : state.agentStatuses,
+        rawEvents: normalized === state.sessionId ? [] : state.rawEvents,
       };
     }),
 
@@ -445,7 +956,13 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setDraft: (text) =>
-    set(() => ({ draft: text })),
+    set((state) => ({
+      draft: text,
+      draftBySession: {
+        ...state.draftBySession,
+        [state.sessionId]: text,
+      },
+    })),
 
   // Agent Logs Actions
   addAgentLog: (log) =>
@@ -467,14 +984,9 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   clearAgentLogs: () =>
-    set((state) => ({
+    set(() => ({
       agentLogs: [],
-      agentStatuses: Object.fromEntries(
-        Object.keys(state.agentStatuses).map((key) => [
-          key,
-          { source: key as AgentLogSource, status: 'idle' as const },
-        ])
-      ) as Record<AgentLogSource, AgentStatus>,
+      agentStatuses: createInitialAgentStatuses(),
     })),
 
   setAgentLogsPanelOpen: (open) =>
@@ -530,6 +1042,3 @@ export const useStore = create<AppState>((set) => ({
   toggleRightPanel: () =>
     set((state) => ({ showRightPanel: !state.showRightPanel })),
 }));
-
-
-

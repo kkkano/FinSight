@@ -967,12 +967,12 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
 
         lines: list[str] = []
         for item in items[:6]:
-            title = item.get("title") or item.get("headline") or "(untitled)"
-            url = item.get("url")
-            source = item.get("source")
-            ts = item.get("published_date") or item.get("published_at") or item.get("datetime")
-            meta = " / ".join([x for x in [source, ts] if isinstance(x, str) and x.strip()])
-            if isinstance(url, str) and url.strip():
+            title = str(item.get("title") or item.get("headline") or "(untitled)").strip()
+            url = str(item.get("url") or item.get("link") or item.get("article_url") or "").strip()
+            source = str(item.get("source") or item.get("publisher") or "").strip()
+            ts = str(item.get("published_date") or item.get("published_at") or item.get("datetime") or item.get("date") or "").strip()
+            meta = " / ".join([x for x in [source, ts[:10] if ts else ""] if x])
+            if url.startswith(("http://", "https://")):
                 lines.append(f"- [{title}]({url})" + (f"（{meta}）" if meta else ""))
             else:
                 lines.append(f"- {title}" + (f"（{meta}）" if meta else ""))
@@ -999,6 +999,79 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 ]
             ),
             risks=base_risks,
+        ).model_dump()
+
+    if subject_type == "macro":
+        macro_out = _get_agent_output("macro_agent")
+
+        def _fmt_macro_tool(tool_name: str, label: str) -> list[str]:
+            out = _get_tool_output(tool_name)
+            if out is None:
+                return []
+            if tool_name == "get_authoritative_media_news" and isinstance(out, dict):
+                rows = []
+                for item in out.get("articles") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    text = " ".join(
+                        str(item.get(key) or "")
+                        for key in ("title", "snippet", "url")
+                    ).lower()
+                    if "cpi" in text and ("lse:cpi" in text or "london stock exchange:cpi" in text or "capita" in text):
+                        continue
+                    rows.append(item)
+                out = {**out, "articles": rows, "count": len(rows)}
+            if isinstance(out, (dict, list)):
+                text = json_dumps_safe(out, ensure_ascii=False)[:900]
+            else:
+                text = str(out).strip()[:900]
+            return [f"- {label}: {text}"] if text else []
+
+        macro_lines: list[str] = []
+        if isinstance(macro_out, dict) and macro_out.get("summary"):
+            macro_lines.append(f"- MacroAgent: {str(macro_out['summary']).strip()[:900]}")
+        macro_lines.extend(_fmt_macro_tool("get_official_macro_releases", "官方宏观发布"))
+        macro_lines.extend(_fmt_macro_tool("get_authoritative_media_news", "权威媒体交叉验证"))
+        macro_lines.extend(_fmt_macro_tool("search", "开放搜索"))
+        macro_context = "\n".join(macro_lines[:6]) or "- 暂未获取到外部证据，以下为基于问题本身的结构化分析框架。"
+
+        risks = [
+            "- 利率路径本身具有强不确定性，需持续跟踪 FOMC 表述、通胀和就业数据。",
+            "- 大型科技股估值对贴现率敏感，但盈利韧性、AI 资本开支和现金流质量会造成分化。",
+            "- 以上仅供研究参考，不构成投资建议。",
+        ]
+        return RenderVars(
+            conclusion="\n".join(
+                [
+                    f"- 问题：{query}",
+                    "- 核心判断：无 ticker 的宏观/主题问题应走宏观研究路径，而不是要求用户先选公司。",
+                    "- 分析框架：利率预期 → 折现率/风险偏好 → 久期资产估值 → 盈利预期与行业分化。",
+                ]
+            ),
+            investment_summary=macro_context,
+            investment_thesis="\n".join(
+                [
+                    "- 若市场预期降息提前，长久期成长股估值通常受益；若利率维持高位或再上修，估值倍数承压。",
+                    "- 对大型科技股不能只看利率，还要同步看盈利增速、AI 投资回报周期、监管和美元流动性。",
+                ]
+            ),
+            company_overview=macro_context,
+            catalysts="\n".join(
+                [
+                    "- FOMC 点阵图、主席发布会措辞和核心 PCE/CPI 是主要触发器。",
+                    "- 10Y 美债收益率、实际利率和信用利差决定估值压力是否扩散。",
+                ]
+            ),
+            valuation="\n".join(
+                [
+                    "- 估值传导主要通过贴现率、股权风险溢价和远期盈利折现。",
+                    "- 利率下行利好高久期资产，但若来自衰退压力，盈利预期下修会抵消估值扩张。",
+                ]
+            ),
+            price_snapshot="- 宏观/主题研究不绑定单一 ticker；建议结合 NASDAQ 100、10Y 美债收益率和大型科技股篮子观察。",
+            technical_snapshot="- 宏观/主题研究不生成单股技术面；可后续指定 QQQ、AAPL、MSFT、GOOGL 等标的再做图表/技术分析。",
+            risks="\n".join(risks),
+            conflict_disclosure=_collect_conflict_disclosure(),
         ).model_dump()
 
     if subject_type == "company":
@@ -2100,8 +2173,49 @@ async def synthesize(state: GraphState) -> dict:
     - LANGGRAPH_SYNTHESIZE_MODE=stub (default): deterministic render_vars
     - LANGGRAPH_SYNTHESIZE_MODE=llm: LLM fills render_vars JSON; validate; fallback to stub
     - LANGGRAPH_SYNTHESIZE_MODE=narrative: LLM writes full markdown report; render_vars kept for cards
+
+    Mode resolution (2026-05-03 fix for "答非所问"):
+    - The ``narrative`` mode (LLM writes a 5-section markdown report) only
+      applies when ``output_mode == 'investment_report'`` (user explicitly
+      asked for a report, e.g. clicked 「生成研报」or said 「研报」).
+    - For ``brief`` / ``chat`` output modes (the default for casual Q&A like
+      「今天微软什么价格」), narrative is downgraded to ``stub`` so a single
+      short template renders instead of the full narrative LLM report.
+    - ``stub`` and ``llm`` modes are NOT downgraded — both already produce
+      compact ``render_vars`` for the brief template, no length explosion.
+    - For multi-task plans (``len(tasks) >= 2`` that are not a pure compare),
+      we also force ``stub`` so ``render_stub._build_multitask_markdown`` can
+      render per-task sections.  ``narrative`` cannot disambiguate multiple
+      independent tickers and tends to drop all-but-one (the C20 bug).
     """
-    mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
+    env_mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
+    output_mode = state.get("output_mode") or "brief"
+    _ready_tasks_raw = state.get("tasks")
+    _ready_tasks = _ready_tasks_raw if isinstance(_ready_tasks_raw, list) else []
+    _op_dict = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    _op_name_for_mode = str(_op_dict.get("name") or "").strip().lower()
+    _is_pure_compare = _op_name_for_mode == "compare" and len(_ready_tasks) <= 2
+    _multi_task_force_stub = len(_ready_tasks) >= 2 and not _is_pure_compare
+
+    if _multi_task_force_stub:
+        mode = "stub"
+        logger.info(
+            "[Synthesize] Multi-task plan detected (%d tasks); forcing stub mode "
+            "so render_stub._build_multitask_markdown can render per-task sections "
+            "(env_mode=%s, output_mode=%s)",
+            len(_ready_tasks),
+            env_mode,
+            output_mode,
+        )
+    elif env_mode == "narrative" and output_mode != "investment_report":
+        mode = "stub"
+        logger.info(
+            "[Synthesize] narrative downgraded to stub (output_mode=%s ≠ investment_report); "
+            "narrative reserved for explicit deep-report requests only",
+            output_mode,
+        )
+    else:
+        mode = env_mode
     trace = state.get("trace") or {}
     synth_started_at = time.perf_counter()
 

@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Graph state contract (SSOT):
-docs/06_LANGGRAPH_REFACTOR_GUIDE.md
+docs/06a_LANGGRAPH_DESIGN_SPEC.md
+docs/plans/2026-05-03_request_understanding_task_graph_spec.md
 """
 
 from __future__ import annotations
@@ -18,6 +19,10 @@ SubjectType = Literal[
     "news_item",
     "news_set",
     "company",
+    "index",
+    "commodity",
+    "macro",
+    "theme",
     "filing",
     "research_doc",
     "portfolio",
@@ -25,6 +30,17 @@ SubjectType = Literal[
 ]
 
 OutputMode = Literal["chat", "brief", "investment_report"]
+UnderstandingRoute = Literal["direct", "research", "alert", "clarify"]
+UnderstandingTaskStatus = Literal["ready", "blocked"]
+TimeScopeKind = Literal[
+    "today",
+    "yesterday",
+    "this_week",
+    "latest",
+    "recent",
+    "explicit_range",
+    "unspecified",
+]
 
 
 class Subject(TypedDict):
@@ -41,6 +57,61 @@ class Operation(TypedDict):
     name: str
     confidence: float
     params: dict
+
+
+class TimeScope(TypedDict, total=False):
+    kind: TimeScopeKind
+    label: str
+    start: str
+    end: str
+
+
+class ContextRef(TypedDict, total=False):
+    source: str
+    key: str
+    label: str
+    value: Any
+
+
+class UnderstandingTask(TypedDict, total=False):
+    id: str
+    subject_type: SubjectType
+    subject_label: str
+    tickers: list[str]
+    selection_ids: list[str]
+    selection_types: list[str]
+    operation: Operation
+    time_scope: TimeScope
+    priority: int
+    status: UnderstandingTaskStatus
+    reason: str
+    constraints: list[str]
+    params: dict[str, Any]
+
+
+class BlockedTask(TypedDict, total=False):
+    id: str
+    subject_type: SubjectType
+    subject_label: str
+    operation: Operation
+    reason: str
+    question: str
+    suggestions: list[str]
+    fallback_allowed: bool
+
+
+class Understanding(TypedDict, total=False):
+    route: UnderstandingRoute
+    original_query: str
+    cleaned_query: str
+    language: str
+    social_prefix: str
+    user_visible_summary: str
+    confidence: float
+    tasks: list[UnderstandingTask]
+    blocked_tasks: list[BlockedTask]
+    context_refs: list[ContextRef]
+    fallback_assumptions: list[str]
 
 
 class Clarify(TypedDict):
@@ -79,11 +150,13 @@ class Policy(TypedDict, total=False):
 class PlanIR(TypedDict, total=False):
     """Planner intermediate representation."""
 
+    goal: str
+    subject: dict
+    output_mode: OutputMode
+    tasks: list[dict]
     steps: list[dict]
-    required_agents: list[str]
-    estimated_cost: str
-    rationale: str
-    prompt_variant: str
+    synthesis: dict
+    budget: dict
 
 
 class Artifacts(TypedDict, total=False):
@@ -134,6 +207,10 @@ class GraphState(MessagesState):
     clarify: NotRequired[Clarify]
     chat_responded: NotRequired[bool]
     memory_context: NotRequired[dict[str, Any]]
+    understanding: NotRequired[Understanding]
+    tasks: NotRequired[list[UnderstandingTask]]
+    blocked_tasks: NotRequired[list[BlockedTask]]
+    context_refs: NotRequired[list[ContextRef]]
 
     policy: NotRequired[Policy]
     plan_ir: NotRequired[PlanIR]
@@ -155,6 +232,11 @@ __all__ = [
     "ConfirmationMode",
     "Subject",
     "Operation",
+    "TimeScope",
+    "ContextRef",
+    "UnderstandingTask",
+    "BlockedTask",
+    "Understanding",
     "Clarify",
     "Policy",
     "PlanIR",

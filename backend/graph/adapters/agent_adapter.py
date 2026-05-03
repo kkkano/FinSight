@@ -8,6 +8,7 @@ import os
 import time
 from typing import Any, Iterable, Mapping
 
+from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
 
 logger = logging.getLogger(__name__)
@@ -308,6 +309,8 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
         init_error = init_errors.get(name)
 
         async def _invoke(inputs: dict[str, Any], *, _agent=agent, _name=name, _init_error=init_error) -> dict[str, Any]:
+            if is_cancelled():
+                raise asyncio.CancelledError()
             query = inputs.get("query") if isinstance(inputs, dict) else None
             query = str(query).strip() if isinstance(query, str) and query.strip() else default_query
             ticker = inputs.get("ticker") if isinstance(inputs, dict) else None
@@ -341,6 +344,8 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
             last_retryable = False
             last_stage = "unknown"
             for attempt in range(1, max_attempts + 1):
+                if is_cancelled():
+                    raise asyncio.CancelledError()
                 try:
                     invoke_timeout = (
                         deep_search_timeout_seconds if _name == "deep_search_agent" else timeout_seconds
@@ -355,6 +360,8 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                         query=query,
                         ticker=ticker,
                     )
+                    if is_cancelled():
+                        raise asyncio.CancelledError()
                     if normalized.get("summary"):
                         await emit_event({
                             "type": "agent_done",

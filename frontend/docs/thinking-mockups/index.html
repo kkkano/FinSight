@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>FinSight · 思考过程 UI 风格对比</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.6 -apple-system,"Inter","PingFang SC",sans-serif;
+       background:#0a0a10;color:#e8e8f0;min-height:100vh;padding:48px 24px}
+  .container{max-width:1200px;margin:0 auto}
+  h1{font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0 0 8px}
+  h1 span{background:linear-gradient(90deg,#a78bfa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .subtitle{color:#8a8aa0;margin-bottom:40px;font-size:16px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .card{background:#13131c;border:1px solid #2a2a3a;border-radius:16px;overflow:hidden;
+       transition:all .25s;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-4px);border-color:#a78bfa;box-shadow:0 20px 60px rgba(167,139,250,.12)}
+  .preview{height:240px;position:relative;overflow:hidden}
+  .preview iframe{position:absolute;top:0;left:0;width:200%;height:200%;transform:scale(0.5);transform-origin:top left;
+       border:0;pointer-events:none;background:#0a0a10}
+  .card-body{padding:20px 22px;flex:1;display:flex;flex-direction:column;gap:8px}
+  .card-num{font-size:11px;color:#8a8aa0;letter-spacing:.08em;text-transform:uppercase}
+  .card-title{font-size:18px;font-weight:600;letter-spacing:-0.01em}
+  .card-desc{font-size:13.5px;color:#8a8aa0;line-height:1.6}
+  .tags{margin-top:auto;display:flex;flex-wrap:wrap;gap:6px;padding-top:10px}
+  .tag{font-size:10.5px;padding:3px 8px;border-radius:999px;background:rgba(167,139,250,.12);color:#c4b5fd;border:1px solid rgba(167,139,250,.2)}
+  .footer{margin-top:50px;padding-top:30px;border-top:1px solid #2a2a3a;color:#5e5e74;font-size:13px}
+  kbd{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11.5px;padding:2px 6px;background:#1a1a26;border:1px solid #2a2a3a;border-radius:4px;color:#c4b5fd}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>FinSight · <span>思考过程 UI 风格对比</span></h1>
+  <div class="subtitle">3 种 Cursor / Copilot 系风格变体，基于同一份 AAPL 分析数据。点击卡片打开完整预览，主人挑一个浮浮酱再编码。</div>
+
+  <div class="grid">
+
+    <a href="01-cursor-composer.html" class="card">
+      <div class="preview"><iframe src="01-cursor-composer.html" loading="lazy"></iframe></div>
+      <div class="card-body">
+        <div class="card-num">Mockup 01</div>
+        <div class="card-title">Cursor Composer</div>
+        <div class="card-desc">紫黑酷炫 · 时间轴竖线 · Agent 卡片 · 流式输出区 · 进度环。信息密度高、视觉层级强、最有"AI 工程感"。</div>
+        <div class="tags">
+          <span class="tag">高密度</span><span class="tag">流式动画</span><span class="tag">紫色脉动</span><span class="tag">Agent 卡片</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="02-anthropic-console.html" class="card">
+      <div class="preview"><iframe src="02-anthropic-console.html" loading="lazy"></iframe></div>
+      <div class="card-body">
+        <div class="card-num">Mockup 02</div>
+        <div class="card-title">Anthropic Console</div>
+        <div class="card-desc">终端 trace · 顶部 Agent DAG 工作流图 · 单行密集事件流 · 可展开 JSON · token / cost 元数据。最有"开发者审美"。</div>
+        <div class="tags">
+          <span class="tag">DAG 工作流</span><span class="tag">事件 trace</span><span class="tag">JSON 折叠</span><span class="tag">等宽字体</span>
+        </div>
+      </div>
+    </a>
+
+    <a href="03-linear-minimal.html" class="card">
+      <div class="preview"><iframe src="03-linear-minimal.html" loading="lazy"></iframe></div>
+      <div class="card-body">
+        <div class="card-num">Mockup 03</div>
+        <div class="card-title">Linear 极简</div>
+        <div class="card-desc">大留白 · 编号列表 · 细线分隔 · 极少色彩 · Agent 行用细线进度条。<b>克制、呼吸感、长期看不累</b>。</div>
+        <div class="tags">
+          <span class="tag">极简</span><span class="tag">大字号</span><span class="tag">细线条</span><span class="tag">深浅自适应</span>
+        </div>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="footer">
+    本地预览：双击 <kbd>D:\AgentProject\FinSight\frontend\docs\thinking-mockups\index.html</kbd>。
+    选定后浮浮酱会基于真实 SSE 事件结构重写 <kbd>ThinkingUserView.tsx</kbd>，并复用 FinSight 现有 Tailwind 设计系统（fin-bg / fin-panel / fin-primary）。
+  </div>
+
+</div>
+</body>
+</html>

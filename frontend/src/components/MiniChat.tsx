@@ -6,7 +6,7 @@
  * 临时上下文（如当前关注的 symbol 和选中的新闻），不会注入到消息内容中。
  */
 import { useRef, useEffect, useState } from 'react';
-import { Send, Loader2, X, Paperclip } from 'lucide-react';
+import { Send, Loader2, X, Paperclip, Square } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,16 +16,54 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { ReportView } from './report';
 import { useToast } from './ui';
 
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
+
+const EMPTY_RESEARCH_PROMPTS = new Set([
+  'hi',
+  'hello',
+  'hey',
+  '你好',
+  '您好',
+  '嗨',
+  '哈喽',
+  '在吗',
+  '在么',
+]);
+
+const hasActionableResearchInput = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  const compact = trimmed.replace(/\s+/g, '').toLowerCase();
+  const normalized = compact.replace(/[?!,.，。！？、；;:：'"“”‘’()[\]{}<>《》]/g, '');
+  if (!normalized || EMPTY_RESEARCH_PROMPTS.has(normalized)) return false;
+  return /[A-Za-z0-9\u3400-\u9FFF]/.test(trimmed) && normalized.length >= 2;
+};
+
+const buildCancelledThinkingStep = () => ({
+  stage: 'cancelled',
+  message: STOPPED_GENERATION_MESSAGE,
+  timestamp: new Date().toISOString(),
+  eventType: 'trace',
+  result: {
+    type: 'trace',
+    stage: 'cancelled',
+    status: 'cancelled',
+    summary: STOPPED_GENERATION_MESSAGE,
+  },
+});
+
 export const MiniChat: React.FC = () => {
   // 共享主 Chat 的 messages（统一上下文）
   const {
     messages,
-    addMessage,
-    updateMessage,
+    addMessageToSession,
+    updateMessageInSession,
     currentTicker,
     subscriptionEmail,
     sessionId,
     setSessionId,
+    draft,
+    setDraft,
     addRawEvent,
     traceRawEnabled,
     setRequestMetrics,
@@ -41,14 +79,18 @@ export const MiniChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSessionIdRef = useRef(sessionId);
 
   // 流式内容累积 ref（避免闭包问题）
   const accumulatedContentRef = useRef<string>('');
   const accumulatedThinkingRef = useRef<any[]>([]);
+  const streamControllerRef = useRef<AbortController | null>(null);
 
   // 当前 symbol（优先 dashboardStore，兜底 useStore）
   const currentSymbol = activeAsset?.symbol || currentTicker || null;
-  const canGenerateReport = Boolean(currentSymbol || activeSelections.length > 0);
+  const canGenerateReport = Boolean(
+    currentSymbol || activeSelections.length > 0 || hasActionableResearchInput(input),
+  );
 
   // 是否展示 context pill
   const showContextPill = contextEnabled && !!currentSymbol;
@@ -78,11 +120,15 @@ export const MiniChat: React.FC = () => {
     const text = input.trim();
     if (!text || isLoading) return;
 
+    const requestSessionId = sessionId || useStore.getState().sessionId;
+    const updateScopedMessage = (id: string, patch: Parameters<typeof updateMessageInSession>[2]) => {
+      updateMessageInSession(requestSessionId, id, patch);
+    };
     const userMsgId = uuidv4();
     const aiMsgId = uuidv4();
 
     // 添加用户消息（带 via: 'mini' 标记，内容不注入 symbol）
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: userMsgId,
       role: 'user',
       content: text,
@@ -91,7 +137,7 @@ export const MiniChat: React.FC = () => {
     });
 
     // 添加 AI 加载占位消息
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: aiMsgId,
       role: 'assistant',
       content: '',
@@ -101,6 +147,7 @@ export const MiniChat: React.FC = () => {
     });
 
     setInput('');
+    setDraft('');
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
       inputRef.current.style.overflowY = 'hidden';
@@ -111,6 +158,8 @@ export const MiniChat: React.FC = () => {
     accumulatedContentRef.current = '';
     accumulatedThinkingRef.current = [];
     const effectiveOutputMode = outputMode;
+    const streamController = new AbortController();
+    streamControllerRef.current = streamController;
 
     const requestStartedAt = Date.now();
 
@@ -141,7 +190,7 @@ export const MiniChat: React.FC = () => {
         });
         if (!replay?.report) return false;
 
-        updateMessage(aiMsgId, {
+        updateScopedMessage(aiMsgId, {
           content: replay.report.summary || accumulatedContentRef.current || 'Report recovered after stream interruption.',
           isLoading: false,
           report: replay.report,
@@ -185,7 +234,7 @@ export const MiniChat: React.FC = () => {
         text,
         (token: string) => {
           accumulatedContentRef.current += token;
-          updateMessage(aiMsgId, {
+          updateScopedMessage(aiMsgId, {
             content: accumulatedContentRef.current,
             isLoading: false,
           });
@@ -203,10 +252,10 @@ export const MiniChat: React.FC = () => {
             });
           }
 
-          if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
+          if (useStore.getState().sessionId === requestSessionId && typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== requestSessionId) {
             setSessionId(meta.session_id);
           }
-          updateMessage(aiMsgId, {
+          updateScopedMessage(aiMsgId, {
             isLoading: false,
             report,
             thinking,
@@ -217,7 +266,7 @@ export const MiniChat: React.FC = () => {
             const recovered = await recoverReportIfAvailable();
             if (recovered) return;
 
-            updateMessage(aiMsgId, {
+            updateScopedMessage(aiMsgId, {
               content: `Error: ${error}`,
               isLoading: false,
             });
@@ -232,7 +281,7 @@ export const MiniChat: React.FC = () => {
         (step) => {
           // onThinking
           accumulatedThinkingRef.current = [...accumulatedThinkingRef.current, step];
-          updateMessage(aiMsgId, {
+          updateScopedMessage(aiMsgId, {
             thinking: accumulatedThinkingRef.current,
           });
         },
@@ -249,11 +298,35 @@ export const MiniChat: React.FC = () => {
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
           }
           : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
-        sessionId || undefined,
+        requestSessionId || undefined,
         traceRawEnabled,
+        { signal: streamController.signal },
       );
+      if (streamController.signal.aborted) {
+        accumulatedThinkingRef.current = [
+          ...accumulatedThinkingRef.current,
+          buildCancelledThinkingStep(),
+        ];
+        updateScopedMessage(aiMsgId, {
+          content: accumulatedContentRef.current || STOPPED_GENERATION_MESSAGE,
+          isLoading: false,
+          thinking: accumulatedThinkingRef.current,
+        });
+      }
     } catch (error) {
-      updateMessage(aiMsgId, {
+      if (streamController.signal.aborted) {
+        accumulatedThinkingRef.current = [
+          ...accumulatedThinkingRef.current,
+          buildCancelledThinkingStep(),
+        ];
+        updateScopedMessage(aiMsgId, {
+          content: accumulatedContentRef.current || STOPPED_GENERATION_MESSAGE,
+          isLoading: false,
+          thinking: accumulatedThinkingRef.current,
+        });
+        return;
+      }
+      updateScopedMessage(aiMsgId, {
         content: `发送失败: ${error}`,
         isLoading: false,
       });
@@ -263,9 +336,28 @@ export const MiniChat: React.FC = () => {
         message: String(error),
       });
     } finally {
+      if (streamControllerRef.current === streamController) {
+        streamControllerRef.current = null;
+      }
       setIsLoading(false);
     }
   };
+
+  const handleStop = () => {
+    streamControllerRef.current?.abort();
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    setInput(draft || '');
+  }, [draft]);
+
+  useEffect(() => {
+    if (lastSessionIdRef.current !== sessionId) {
+      lastSessionIdRef.current = sessionId;
+      setInput(useStore.getState().draft || '');
+    }
+  }, [sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -409,6 +501,7 @@ export const MiniChat: React.FC = () => {
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
+              setDraft(e.target.value);
               const el = e.target;
               el.style.height = 'auto';
               el.style.height = `${Math.min(el.scrollHeight, 80)}px`;
@@ -420,19 +513,27 @@ export const MiniChat: React.FC = () => {
             rows={1}
             className="flex-1 px-3 py-2 text-xs bg-fin-bg border border-fin-border rounded-lg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary disabled:opacity-50 resize-none overflow-y-hidden max-h-[80px]"
           />
-          <button
-            data-testid="mini-chat-send-btn"
-            onClick={() => handleSend()}
-            disabled={isLoading || !input.trim()}
-            className="p-2 bg-fin-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
-          >
-            {isLoading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
+          {isLoading ? (
+            <button
+              data-testid="mini-chat-stop-btn"
+              onClick={handleStop}
+              className="p-2 bg-fin-danger text-white rounded-lg hover:opacity-90 transition-opacity"
+              title="停止生成"
+              aria-label="停止生成"
+            >
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              data-testid="mini-chat-send-btn"
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              className="p-2 bg-fin-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
+            >
               <Send size={14} />
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, X } from 'lucide-react';
+import type { Message, ThinkingStep, AgentLogSource } from '../types/index';
+import { SendHorizontal, Paperclip, Square, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
@@ -19,6 +19,17 @@ const TICKER_STOPWORDS = new Set([
 
 const MAX_AUTO_CHART_TICKERS = 3;
 const TICKER_PATTERN = /^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/;
+const EMPTY_RESEARCH_PROMPTS = new Set([
+  'hi',
+  'hello',
+  'hey',
+  '你好',
+  '您好',
+  '嗨',
+  '哈喽',
+  '在吗',
+  '在么',
+]);
 
 const mergeTickerCandidates = (...sources: Array<string[] | undefined>): string[] => {
   const merged: string[] = [];
@@ -86,8 +97,36 @@ const extractTicker = (text: string): string | null => {
   const tickers = extractTickers(text);
   return tickers.length ? tickers[0] : null;
 };
+
+const hasActionableResearchInput = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const compact = trimmed.replace(/\s+/g, '').toLowerCase();
+  const withoutPunctuation = compact.replace(/[?!,.，。！？、；;:：'"“”‘’()[\]{}<>《》]/g, '');
+  if (!withoutPunctuation) return false;
+  if (EMPTY_RESEARCH_PROMPTS.has(withoutPunctuation)) return false;
+  if (!/[A-Za-z0-9\u3400-\u9FFF]/.test(trimmed)) return false;
+
+  return withoutPunctuation.length >= 2 || TICKER_PATTERN.test(trimmed.toUpperCase());
+};
+
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '图表', 'k线'];
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
+const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
+
+const buildCancelledThinkingStep = (): ThinkingStep => ({
+  stage: 'cancelled',
+  message: STOPPED_GENERATION_MESSAGE,
+  timestamp: new Date().toISOString(),
+  eventType: 'trace',
+  result: {
+    type: 'trace',
+    stage: 'cancelled',
+    status: 'cancelled',
+    summary: STOPPED_GENERATION_MESSAGE,
+  },
+});
 
 // Agent 阶段到日志源的映射 (stage -> AgentLogSource)
 const mapStageToSource = (stage: string): AgentLogSource => {
@@ -113,6 +152,7 @@ const mapStageToSource = (stage: string): AgentLogSource => {
     llm_call: 'supervisor',
     error: 'system',
   };
+  if (stage === 'understanding' || stage.startsWith('trace_')) return 'router';
   if (stage.startsWith('langgraph_')) return 'supervisor';
   if (stage.startsWith('executor_step')) return 'supervisor';
   if (stage.startsWith('llm_')) return 'supervisor';
@@ -132,6 +172,7 @@ const mapStageToSource = (stage: string): AgentLogSource => {
 const estimateProgress = (stage: string, current: number): number => {
   const langgraphNodeProgress: Record<string, number> = {
     normalize_ui_context: 5,
+    understand_request: 18,
     resolve_subject: 12,
     clarify: 18,
     parse_operation: 25,
@@ -153,6 +194,7 @@ const estimateProgress = (stage: string, current: number): number => {
   }
 
   const staticProgress: Record<string, number> = {
+    understanding: 18,
     classifying: 8,
     classified: 15,
     reference_resolution: 20,
@@ -204,14 +246,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
   const {
-    addMessage,
-    updateMessage,
-    setLoading,
+    addMessageToSession,
+    updateMessageInSession,
+    setSessionLoading,
     isChatLoading,
     setTicker,
     setStatus,
     setExecutionState,
     resetExecutionState,
+    setSessionAbortController,
+    cancelChatStream,
     draft,
     setDraft,
     currentTicker,
@@ -229,6 +273,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSessionIdRef = useRef(sessionId);
 
   const shouldGenerateChart = async (
     query: string,
@@ -269,10 +314,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
-    const guessedTicker = extractTicker(userMsgContent);
+
+    // T2：模糊查询前端拦截 —— 仅当用户明确写"分析股票/帮我分析"等模糊动词，
+    //      且 query 里既没有英文 ticker / 中文公司名 / 数字代码 / 已选股票时，
+    //      直接给出澄清提示，避免把 active_symbol 误绑成上次的标的。
+    const guessedTickerForGuard = extractTicker(userMsgContent);
+    const hasContextSelection = Boolean(currentTicker);
+    const isFuzzyAnalyze = (() => {
+      const q = userMsgContent.replace(/\s+/g, '');
+      // 触发词：纯模糊动词，不带任何标的线索
+      const fuzzyPatterns = [
+        /^帮我分析(一下)?(股票|股价|公司|这个|这只|个股)?[？?！!。.]?$/,
+        /^分析(一下)?(股票|股价|公司|这个|这只|个股)$/,
+        /^(看看|分析下|帮看下)$/,
+        /^分析影响[？?！!。.]?$/,
+      ];
+      return fuzzyPatterns.some((p) => p.test(q));
+    })();
+
+    if (isFuzzyAnalyze && !guessedTickerForGuard && !hasContextSelection) {
+      const activeSessionId = sessionId || useStore.getState().sessionId;
+      addMessageToSession(activeSessionId, {
+        id: uuidv4(),
+        role: 'user',
+        content: userMsgContent,
+        timestamp: Date.now(),
+      });
+      addMessageToSession(activeSessionId, {
+        id: uuidv4(),
+        role: 'assistant',
+        content:
+          '请告诉我具体要分析哪只股票或公司，例如：\n' +
+          '• 输入股票代码：`AAPL`、`TSLA`、`600036`\n' +
+          '• 输入公司名：`苹果`、`特斯拉`、`招商银行`\n' +
+          '• 或直接说："分析苹果最近的股价走势"',
+        timestamp: Date.now(),
+      });
+      setInput('');
+      setDraft('');
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        inputRef.current.style.overflowY = 'hidden';
+      }
+      return;
+    }
+
+    const guessedTicker = guessedTickerForGuard;
     if (guessedTicker) {
       setTicker(guessedTicker);
     }
+    const requestSessionId = sessionId || useStore.getState().sessionId;
+    const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
+    const updateScopedMessage = (id: string, patch: Partial<Message>) => {
+      updateMessageInSession(requestSessionId, id, patch);
+    };
     setInput('');
     setDraft('');
     if (inputRef.current) {
@@ -287,7 +382,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       .slice(-DEFAULT_HISTORY_LIMIT)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: uuidv4(),
       role: 'user',
       content: userMsgContent,
@@ -295,7 +390,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     });
 
     const aiMsgId = uuidv4();
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: aiMsgId,
       role: 'assistant',
       content: '',
@@ -303,9 +398,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       isLoading: true,
     });
 
-    setLoading(true);
-    setStatus('Streaming response...');
-    setExecutionState('Preparing request', 0);
+    setSessionLoading(requestSessionId, true);
+    if (isRequestSessionActive()) {
+      setStatus('Streaming response...');
+      setExecutionState('Preparing request', 0);
+    }
+    const streamController = new AbortController();
+    setSessionAbortController(requestSessionId, streamController);
 
     addAgentLog({
       id: uuidv4(),
@@ -323,7 +422,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     const requestStartedAt = Date.now();
 
     const recoverReportIfAvailable = async (): Promise<boolean> => {
-      const session = sessionId || useStore.getState().sessionId;
+      const session = requestSessionId;
       if (!session) return false;
       try {
         const index = await apiClient.listReportIndex({
@@ -349,14 +448,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         });
         if (!replay?.report) return false;
 
-        updateMessage(aiMsgId, {
+        updateScopedMessage(aiMsgId, {
           content: replay.report.summary || fullContent || 'Report recovered after stream interruption.',
           isLoading: false,
           report: replay.report,
           evidence_pool: replay.citations,
         });
-        setExecutionState('Recovered report', 100);
-        setStatus(null);
+        if (isRequestSessionActive()) {
+          setExecutionState('Recovered report', 100);
+          setStatus(null);
+        }
         toast({
           type: 'success',
           title: '已恢复报告',
@@ -368,6 +469,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       }
     };
 
+    const finishAbortedStream = () => {
+      if (!thinkingSteps.some((step) => step.stage === 'cancelled')) {
+        thinkingSteps = [...thinkingSteps, buildCancelledThinkingStep()];
+      }
+      updateScopedMessage(aiMsgId, {
+        content: fullContent || STOPPED_GENERATION_MESSAGE,
+        isLoading: false,
+        thinking: thinkingSteps,
+      });
+      if (isRequestSessionActive()) {
+        setStatus(STOPPED_GENERATION_MESSAGE);
+        setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+      }
+      addAgentLog({
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        source: 'system',
+        level: 'warn',
+        message: STOPPED_GENERATION_MESSAGE,
+      });
+      updateAgentStatus('supervisor', {
+        status: 'waiting',
+        endTime: new Date().toISOString(),
+        lastMessage: STOPPED_GENERATION_MESSAGE,
+      });
+    };
+
     try {
       await apiClient.sendMessageStream(
         userMsgContent,
@@ -376,12 +504,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           if (safeToken) {
             fullContent += safeToken;
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: true });
+          updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
         (name) => {
-          setStatus(`Calling tool: ${name}...`);
           const current = useStore.getState().executionProgress ?? 0;
-          setExecutionState(`Tool: ${name}`, Math.max(current, 72));
+          if (isRequestSessionActive()) {
+            setStatus(`Calling tool: ${name}...`);
+            setExecutionState(`Tool: ${name}`, Math.max(current, 72));
+          }
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -392,9 +522,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           });
         },
         () => {
-          setStatus('Generating response...');
           const current = useStore.getState().executionProgress ?? 0;
-          setExecutionState('Synthesizing response', Math.max(current, 80));
+          if (isRequestSessionActive()) {
+            setStatus('Generating response...');
+            setExecutionState('Synthesizing response', Math.max(current, 80));
+          }
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -413,7 +545,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             });
           }
 
-          if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
+          if (isRequestSessionActive() && typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== requestSessionId) {
             setSessionId(meta.session_id);
           }
 
@@ -469,30 +601,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             }
           }
 
-          updateMessage(aiMsgId, {
+          updateScopedMessage(aiMsgId, {
             content: fullContent,
             isLoading: false,
             report,
             thinking: thinkingSteps,
             evidence_pool: evidencePool,
           });
-          setExecutionState('Completed', 100);
-          setStatus(null);
+          if (isRequestSessionActive()) {
+            setExecutionState('Completed', 100);
+            setStatus(null);
+          }
         },
         (error) => {
           const handleFailure = async () => {
             const recovered = await recoverReportIfAvailable();
             if (recovered) return;
 
-            updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
-            setStatus('Stream interrupted');
+            updateScopedMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
+            if (isRequestSessionActive()) {
+              setStatus('Stream interrupted');
+            }
             toast({
               type: 'error',
               title: '流式连接中断',
               message: '连接被中断或服务暂不可用，请重试',
             });
             const current = useStore.getState().executionProgress ?? 0;
-            setExecutionState('Execution failed', current);
+            if (isRequestSessionActive()) {
+              setExecutionState('Execution failed', current);
+            }
             addAgentLog({
               id: uuidv4(),
               timestamp: new Date().toISOString(),
@@ -507,11 +645,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         },
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
-          updateMessage(aiMsgId, { thinking: thinkingSteps });
+          updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
           const current = useStore.getState().executionProgress ?? 0;
           const progress = estimateProgress(step.stage, current);
           const stepLabel = formatExecutionStep(step.stage, step.message);
-          setExecutionState(stepLabel, progress);
+          if (isRequestSessionActive()) {
+            setExecutionState(stepLabel, progress);
+          }
 
           const source = mapStageToSource(step.stage);
           const isError = step.stage.includes('error');
@@ -570,26 +710,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
             }
           : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
-        sessionId || undefined,
+        requestSessionId || undefined,
         traceRawEnabled,
+        { signal: streamController.signal },
       );
-    } catch {
-      updateMessage(aiMsgId, {
+      if (streamController.signal.aborted) {
+        finishAbortedStream();
+      }
+    } catch (error) {
+      if (streamController.signal.aborted) {
+        finishAbortedStream();
+        return;
+      }
+      updateScopedMessage(aiMsgId, {
         content: 'Network request failed. Please confirm the backend service is running.',
         isLoading: false,
       });
-      setStatus('Request failed');
+      if (isRequestSessionActive()) {
+        setStatus('Request failed');
+      }
       toast({
         type: 'error',
         title: '请求失败',
         message: '网络异常或服务不可用，请稍后重试',
       });
       const current = useStore.getState().executionProgress ?? 0;
-      setExecutionState('Request failed', current);
+      if (isRequestSessionActive()) {
+        setExecutionState('Request failed', current);
+      }
+      addAgentLog({
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        source: 'system',
+        level: 'error',
+        message: error instanceof Error ? error.message : 'Network request failed',
+      });
     } finally {
-      setLoading(false);
-      setStatus(null);
-      resetExecutionState();
+      const wasAborted = streamController.signal.aborted;
+      setSessionLoading(requestSessionId, false);
+      if (isRequestSessionActive()) {
+        if (wasAborted) {
+          setStatus(STOPPED_GENERATION_MESSAGE);
+          setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+        } else {
+          setStatus(null);
+          resetExecutionState();
+        }
+      }
+      setSessionAbortController(requestSessionId, null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
@@ -598,9 +766,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput(draft || '');
     if (draft && inputRef.current) {
       inputRef.current.focus();
-      setDraft('');
     }
-  }, [draft, setDraft]);
+  }, [draft]);
+
+  useEffect(() => {
+    if (lastSessionIdRef.current !== sessionId) {
+      lastSessionIdRef.current = sessionId;
+      const nextDraft = useStore.getState().draft || '';
+      setInput(nextDraft);
+    }
+    setOutputMode('brief');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.overflowY = 'hidden';
+    }
+  }, [sessionId]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -609,7 +789,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     }
   };
 
-  const canGenerateReport = Boolean(activeAsset?.symbol || currentTicker || activeSelections.length > 0);
+  const canGenerateReport = Boolean(
+    activeAsset?.symbol
+    || currentTicker
+    || activeSelections.length > 0
+    || hasActionableResearchInput(input)
+  );
 
   useEffect(() => {
     if (!canGenerateReport && outputMode === 'investment_report') {
@@ -666,7 +851,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               ? 'border-amber-500 text-amber-500 bg-amber-500/10'
               : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
-          title={canGenerateReport ? '切换到深度分析模式' : '请选择标的或引用内容后启用深度分析'}
+          title={canGenerateReport ? '切换到深度分析模式' : '输入可研究的问题、选择标的或引用内容后启用深度分析'}
         >
           深度
         </button>
@@ -678,13 +863,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
+            setDraft(e.target.value);
             const el = e.target;
             el.style.height = 'auto';
             el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
             el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything about a ticker... (e.g., AAPL price trend)"
+          placeholder="Ask about markets, macro, themes, or a ticker... (e.g., AAPL price trend)"
           disabled={isChatLoading}
           aria-label="输入聊天消息"
           rows={1}
@@ -692,16 +878,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         />
 
         <div className="absolute right-2 flex items-center gap-2">
-          <button
-            data-testid="chat-send-btn"
-            onClick={() => handleSend()}
-            disabled={!input.trim() || isChatLoading}
-            aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
-            className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
-          >
-            <SendHorizontal size={18} />
-          </button>
+          {isChatLoading ? (
+            <button
+              data-testid="chat-stop-btn"
+              onClick={cancelChatStream}
+              aria-label="停止生成"
+              className="p-2 bg-fin-danger text-white rounded-lg hover:bg-red-600 transition-colors"
+              title="停止生成"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              data-testid="chat-send-btn"
+              onClick={() => handleSend()}
+              disabled={!input.trim()}
+              aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
+              className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
+            >
+              <SendHorizontal size={18} />
+            </button>
+          )}
         </div>
       </div>
       <div className="text-center mt-2">
