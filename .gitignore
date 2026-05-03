@@ -129,3 +129,13 @@ docs/DEPLOYMENT.md
 deploy.bat
 deploy*.bat
 deploy*.sh
+
+# --- OMX harness runtime state ---
+.omx/
+
+# --- Local UI audit screenshots (Playwright / manual) ---
+ui-audit-*.png
+ui-playwright-*.png
+
+# --- Conversation store runtime snapshot (not source) ---
+data/conversations.json
