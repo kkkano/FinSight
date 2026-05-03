@@ -753,6 +753,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 title = str(article.get("title") or "").strip()
                 url = str(article.get("url") or "").strip()
                 snippet = str(article.get("snippet") or title).strip()
+                article_text = f"{title} {snippet} {url}".lower()
+                if "cpi" in article_text and (
+                    "london stock exchange:cpi" in article_text
+                    or "lse:cpi" in article_text
+                    or "capita" in article_text
+                ):
+                    continue
                 if not title and not url:
                     continue
                 evidence_pool.append(

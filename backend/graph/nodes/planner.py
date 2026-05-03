@@ -1092,6 +1092,40 @@ async def planner(state: GraphState) -> dict:
         message="Planner started",
     )
 
+    tasks = state.get("tasks")
+    ready_tasks = [task for task in (tasks if isinstance(tasks, list) else []) if isinstance(task, dict)]
+    operation_name = str((state.get("operation") or {}).get("name") or "").strip().lower()
+    if (
+        mode == "llm"
+        and operation_name == "compare"
+        and len(ready_tasks) >= 2
+        and all(str((task.get("operation") or {}).get("name") or "").strip().lower() == "compare" for task in ready_tasks)
+    ):
+        trace.update(
+            {
+                "planner_runtime": {
+                    **build_runtime(mode="stub", fallback=False),
+                    "variant": planner_variant,
+                    "reason": "fast_compare_plan",
+                }
+            }
+        )
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=False,
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
+        return out
+
     if mode != "llm":
         trace.update({"planner_runtime": {**build_runtime(mode="stub", fallback=False), "variant": planner_variant}})
         out = {**planner_stub(state), "trace": trace}

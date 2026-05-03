@@ -66,6 +66,38 @@ def test_macro_query_without_ticker_is_executable():
     assert (result.get("clarify") or {}).get("needed") is False
 
 
+def test_macro_tech_query_does_not_add_duplicate_theme_task():
+    from backend.graph import GraphRunner
+
+    result = _run(
+        GraphRunner.create().ainvoke(
+            thread_id="u-macro-tech-theme",
+            query="CPI 对科技股有什么影响",
+            ui_context={},
+        )
+    )
+
+    tasks = result.get("tasks") or []
+    assert [task.get("subject_type") for task in tasks] == ["macro"]
+    assert tasks[0].get("subject_label") == "CPI / 科技股"
+
+
+def test_compare_risk_query_does_not_expand_to_per_ticker_impact_tasks():
+    from backend.graph import GraphRunner
+
+    result = _run(
+        GraphRunner.create().ainvoke(
+            thread_id="u-compare-risk-only",
+            query="对比 AAPL 和 MSFT 最新表现，哪个风险更高",
+            ui_context={},
+        )
+    )
+
+    ops = _task_ops(result)
+    assert ("company", ("AAPL", "MSFT"), "compare") in ops
+    assert not any(row[2] == "analyze_impact" for row in ops)
+
+
 def test_mixed_social_company_news_price_and_portfolio_blocked_locally():
     from backend.graph import GraphRunner
 

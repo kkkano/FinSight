@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta, date
 from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -17,6 +17,7 @@ from .env import ALPHA_VANTAGE_API_KEY, finnhub_client
 from .http import _http_get
 from .search import search
 from .utils import _normalize_published_date
+from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,63 @@ def _headline_is_useful(title: str, snippet: str = "") -> bool:
     if min_chars > 0:
         return len(compact) >= min_chars
     return True
+
+
+def _company_news_keywords(ticker: str) -> List[str]:
+    symbol = str(ticker or "").strip().upper()
+    if not symbol:
+        return []
+    keywords: list[str] = [symbol]
+    mapped = COMPANY_MAP.get(symbol)
+    if isinstance(mapped, str) and mapped.strip() and mapped.upper() != symbol:
+        keywords.append(mapped)
+    for alias, value in COMPANY_MAP.items():
+        if str(value or "").strip().upper() == symbol:
+            keywords.append(str(alias))
+    for alias, value in CN_TO_TICKER.items():
+        if str(value or "").strip().upper() == symbol:
+            keywords.append(str(alias))
+    if symbol == "NVDA":
+        keywords.extend(["Nvidia", "英伟达"])
+    if symbol == "XIACY":
+        keywords.extend(["Xiaomi", "小米"])
+    if symbol == "LI":
+        keywords.extend(["Li Auto", "理想", "理想汽车"])
+    result: list[str] = []
+    seen: set[str] = set()
+    for keyword in keywords:
+        text = str(keyword or "").strip()
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            result.append(text)
+    return result
+
+
+def _company_news_is_relevant(ticker: str, title: str, snippet: str = "") -> bool:
+    keywords = _company_news_keywords(ticker)
+    if not keywords:
+        return True
+    title_text = str(title or "")
+    snippet_text = str(snippet or "")
+    combined = f"{title_text} {snippet_text}".lower()
+    negative_context = re.compile(r"\b(unrelated|not related|irrelevant)\s+(?:to\s+)?(?:nvidia|nvda|英伟达|xiaomi|li auto|tesla|microsoft|apple)\b", re.IGNORECASE)
+    if negative_context.search(snippet_text):
+        snippet_text = ""
+        combined = title_text.lower()
+    for keyword in keywords:
+        kw = keyword.lower()
+        if not kw:
+            continue
+        if _contains_cjk(kw):
+            if kw in combined:
+                return True
+        elif len(kw) <= 5 and kw.replace(".", "").replace("-", "").isalnum():
+            if re.search(rf"\b{re.escape(kw)}\b", combined, re.IGNORECASE):
+                return True
+        elif kw in combined:
+            return True
+    return False
 
 
 # NOTE: NEWS_TAG_RULES is defined once at module top level (line ~55).
@@ -305,6 +363,8 @@ def _build_news_item(
     normalized_url = (url or "").strip()
     if "finnhub.io/api/news" in normalized_url.lower():
         normalized_url = ""
+    if not normalized_url:
+        normalized_url = _fallback_news_search_url(title, source)
     published_date = _normalize_published_date(published_at)
     # Compute tags from headline + snippet for structured output
     tags = _headline_tags(f"{title} {snippet}".strip())
@@ -320,6 +380,90 @@ def _build_news_item(
         "confidence": confidence,
         "tags": tags,
     }
+
+
+def _fallback_news_search_url(title: str, source: str = "") -> str:
+    clean_title = str(title or "").strip()
+    if not clean_title:
+        return ""
+    source_text = str(source or "").strip().lower()
+    encoded = quote_plus(clean_title)
+    if "yahoo" in source_text:
+        return f"https://finance.yahoo.com/search?p={encoded}"
+    if "benzinga" in source_text:
+        return f"https://www.benzinga.com/search?search={encoded}"
+    if "reuters" in source_text:
+        return f"https://www.reuters.com/site-search/?query={encoded}"
+    if "cnbc" in source_text:
+        return f"https://www.cnbc.com/search/?query={encoded}"
+    if "marketwatch" in source_text:
+        return f"https://www.marketwatch.com/search?q={encoded}"
+    return f"https://www.google.com/search?q={encoded}"
+
+
+def _nested_get(mapping: Dict[str, Any], *keys: str) -> Any:
+    current: Any = mapping
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _extract_article_title(article: Dict[str, Any]) -> str:
+    return str(
+        article.get("title")
+        or article.get("headline")
+        or _nested_get(article, "content", "title")
+        or _nested_get(article, "content", "headline")
+        or "No title"
+    ).strip()
+
+
+def _extract_article_source(article: Dict[str, Any]) -> str:
+    return str(
+        article.get("publisher")
+        or article.get("source")
+        or _nested_get(article, "content", "provider", "displayName")
+        or _nested_get(article, "content", "provider", "name")
+        or "Unknown source"
+    ).strip()
+
+
+def _extract_article_url(article: Dict[str, Any]) -> str:
+    candidates = [
+        article.get("link"),
+        article.get("url"),
+        _nested_get(article, "content", "canonicalUrl", "url"),
+        _nested_get(article, "content", "clickThroughUrl", "url"),
+        _nested_get(article, "content", "previewUrl"),
+    ]
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text.startswith(("http://", "https://")):
+            return text
+    return ""
+
+
+def _extract_article_snippet(article: Dict[str, Any]) -> str:
+    return str(
+        article.get("summary")
+        or article.get("description")
+        or _nested_get(article, "content", "summary")
+        or _nested_get(article, "content", "description")
+        or ""
+    ).strip()
+
+
+def _extract_article_published_at(article: Dict[str, Any]) -> Any:
+    return (
+        article.get("providerPublishTime")
+        or article.get("published_at")
+        or article.get("datetime")
+        or _nested_get(article, "content", "pubDate")
+        or _nested_get(article, "content", "displayTime")
+        or 0
+    )
 
 
 
@@ -746,13 +890,13 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
             if news:
                 items = []
                 for article in news:
-                    title = article.get('title', 'No title')
-                    snippet = article.get('summary') or article.get('description') or ""
+                    title = _extract_article_title(article)
+                    snippet = _extract_article_snippet(article)
                     if not _headline_is_useful(title, snippet):
                         continue
-                    publisher = article.get('publisher', 'Unknown source')
-                    pub_time = article.get('providerPublishTime', 0)
-                    url = article.get('link') or article.get('url') or ''
+                    publisher = _extract_article_source(article)
+                    pub_time = _extract_article_published_at(article)
+                    url = _extract_article_url(article)
                     item = _build_news_item(
                         title=title,
                         source=publisher,
@@ -783,13 +927,15 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
         if news:
             items = []
             for article in news:
-                title = article.get('title', 'No title')
-                snippet = article.get('summary') or article.get('description') or ""
+                title = _extract_article_title(article)
+                snippet = _extract_article_snippet(article)
                 if not _headline_is_useful(title, snippet):
                     continue
-                publisher = article.get('publisher', 'Unknown source')
-                pub_time = article.get('providerPublishTime', 0)
-                url = article.get('link') or article.get('url') or ''
+                if not _company_news_is_relevant(ticker, title, snippet):
+                    continue
+                publisher = _extract_article_source(article)
+                pub_time = _extract_article_published_at(article)
+                url = _extract_article_url(article)
                 item = _build_news_item(
                     title=title,
                     source=publisher,
@@ -821,6 +967,8 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
                     title = article.get('headline', 'No title')
                     snippet = article.get('summary') or ""
                     if not _headline_is_useful(title, snippet):
+                        continue
+                    if not _company_news_is_relevant(ticker, title, snippet):
                         continue
                     source = article.get('source', 'Unknown')
                     pub_time = article.get('datetime', 0)
@@ -861,6 +1009,8 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
                 snippet = article.get('summary') or ""
                 if not _headline_is_useful(title, snippet):
                     continue
+                if not _company_news_is_relevant(ticker, title, snippet):
+                    continue
                 url = article.get('url') or article.get('link') or ''
                 item = _build_news_item(
                     title=title,
@@ -885,10 +1035,15 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     fallback_text = search(f"{ticker} company latest news stock")
     items = _build_search_news_items(fallback_text, limit=limit, max_age_days=7)
     if items:
+        relevant_items = []
         for item in items:
             if isinstance(item, dict):
+                if not _company_news_is_relevant(ticker, str(item.get("title") or item.get("headline") or ""), str(item.get("snippet") or "")):
+                    continue
                 item.setdefault("ticker", ticker)
-        return items
+                relevant_items.append(item)
+        if relevant_items:
+            return relevant_items
     return []
 
 

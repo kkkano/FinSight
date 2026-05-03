@@ -981,11 +981,11 @@ git clone https://github.com/kkkano/FinSight.git
 cd FinSight
 
 # 2. Configure environment
-cp .env.example .env
-# Edit .env with your API keys (see "API Keys" section below)
+cp .env.server.example .env.server
+# Edit .env.server with your real API keys (see "API Keys" section below)
 
 # 3. Start all services
-docker compose up -d
+docker compose --env-file .env.server up -d --build
 # Frontend: http://localhost:5173
 # Backend:  http://localhost:8000
 # PostgreSQL: localhost:5432
@@ -997,14 +997,17 @@ docker compose up -d
 
 | API Key | Required? | Purpose | If Not Configured |
 |---------|-----------|---------|-------------------|
-| `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | ✅ **Required** | LLM for analysis & planning | App won't function |
+| `OPENAI_COMPATIBLE_API_KEY` | ✅ **Required** | Default OpenAI-compatible LLM endpoint (`mimo-v2.5-pro` by default) | App won't function |
+| `OPENAI_COMPATIBLE_API_BASE` | ✅ **Required** | OpenAI-compatible base URL (`https://token-plan-cn.xiaomimimo.com/v1` by default) | Uses the code default |
+| `OPENAI_COMPATIBLE_MODEL` | ✅ **Required** | User-facing default model (`mimo-v2.5-pro` by default) | Uses the code default |
+| `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | Optional | Alternative LLM providers | OpenAI-compatible endpoint is used |
 | `FMP_API_KEY` | ⭐ Recommended | Financial data (earnings, ratios) | Falls back to yfinance |
 | `FINNHUB_API_KEY` | Optional | Real-time quotes, news | Falls back to other sources |
 | `TAVILY_API_KEY` | Optional | Web search | Falls back to DuckDuckGo |
 | `FRED_API_KEY` | Optional | Macro economic data | Limited macro features |
 | `ALPHA_VANTAGE_API_KEY` | Optional | Additional price data | Uses other price sources |
 
-> **Minimum Setup**: Only `OPENAI_API_KEY` (or equivalent LLM key) is required. All other APIs have automatic fallbacks.
+> **Minimum Setup**: configure `OPENAI_COMPATIBLE_API_KEY` in `.env.server`. All other APIs have automatic fallbacks.
 
 ### 💾 Database Initialization
 
@@ -1036,8 +1039,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 3. Configure environment
-copy .env.example .env
-# Edit .env with your API keys:
+copy .env.server.example .env.server
+# Edit .env.server with your API keys:
+#   OPENAI_COMPATIBLE_API_KEY=sk-...
+#   OPENAI_COMPATIBLE_API_BASE=https://token-plan-cn.xiaomimimo.com/v1
+#   OPENAI_COMPATIBLE_MODEL=mimo-v2.5-pro
 #   OPENAI_API_KEY=sk-...
 #   GOOGLE_API_KEY=...        (for Gemini)
 #   FMP_API_KEY=...           (Financial Modeling Prep)

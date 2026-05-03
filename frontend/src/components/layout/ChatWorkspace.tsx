@@ -67,7 +67,6 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const traceViewMode = useStore((state) => state.traceViewMode);
   const sessionId = useStore((state) => state.sessionId);
-  const isChatLoading = useStore((state) => state.isChatLoading);
   const conversationSummaries = useStore((state) => state.conversationSummaries);
   const selectConversation = useStore((state) => state.selectConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
@@ -225,11 +224,10 @@ export function ChatWorkspace({
                 >
                   <button
                     type="button"
-                    disabled={isChatLoading && !active}
                     onClick={() => {
                       if (!active) selectConversation(conversation.sessionId);
                     }}
-                    className="min-w-0 flex-1 px-2.5 py-2 text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="min-w-0 flex-1 px-2.5 py-2 text-left"
                   >
                     <div className="min-w-0">
                       <div className="truncate text-xs font-medium">{conversation.title || '新对话'}</div>

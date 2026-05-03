@@ -152,6 +152,8 @@ def _matches_query(item: dict[str, Any], tokens: list[str]) -> bool:
         str(item.get("snippet") or ""),
         str(item.get("url") or ""),
     ]).lower()
+    if "cpi" in tokens and ("london stock exchange:cpi" in haystack or "lse:cpi" in haystack or "capita" in haystack):
+        return False
     return any(token in haystack for token in tokens)
 
 

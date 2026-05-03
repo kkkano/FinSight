@@ -76,3 +76,94 @@ def test_format_news_items_from_structured():
     formatted = tools.format_news_items(items, title="Latest News (AAPL)")
     assert "Latest News (AAPL)" in formatted
     assert "Structured headline" in formatted
+
+
+def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
+    from backend.tools import news as news_mod
+
+    class _Ticker:
+        @property
+        def news(self):
+            return [
+                {
+                    "content": {
+                        "title": "Nvidia nested Yahoo article title",
+                        "provider": {"displayName": "Yahoo"},
+                        "canonicalUrl": {"url": "https://finance.yahoo.com/news/nested-article.html"},
+                        "pubDate": "2026-05-03T12:00:00Z",
+                        "summary": "A nested yfinance article summary about NVDA with enough useful words.",
+                    }
+                }
+            ]
+
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
+
+    items = news_mod.get_company_news("NVDA", limit=1)
+
+    assert items
+    assert items[0]["title"] == "Nvidia nested Yahoo article title"
+    assert items[0]["url"] == "https://finance.yahoo.com/news/nested-article.html"
+
+
+def test_get_company_news_adds_search_url_when_source_has_no_article_url(monkeypatch):
+    from backend.tools import news as news_mod
+
+    class _Ticker:
+        @property
+        def news(self):
+            return [
+                {
+                    "content": {
+                        "title": "Nvidia Yahoo article without canonical url",
+                        "provider": {"displayName": "Yahoo"},
+                        "pubDate": "2026-05-03T12:00:00Z",
+                        "summary": "A yfinance article summary about NVDA with enough useful words.",
+                    }
+                }
+            ]
+
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
+
+    items = news_mod.get_company_news("NVDA", limit=1)
+
+    assert items
+    assert items[0]["url"].startswith("https://finance.yahoo.com/search?p=")
+
+
+def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypatch):
+    from backend.tools import news as news_mod
+
+    class _Ticker:
+        @property
+        def news(self):
+            return [
+                {
+                    "content": {
+                        "title": "SLRC faces rate headwinds yet keeps dividend flat",
+                        "provider": {"displayName": "Yahoo"},
+                        "pubDate": "2026-05-03T12:00:00Z",
+                        "summary": "Solar Capital dividend article unrelated to Nvidia.",
+                    }
+                },
+                {
+                    "content": {
+                        "title": "Nvidia data center demand remains strong",
+                        "provider": {"displayName": "Yahoo"},
+                        "canonicalUrl": {"url": "https://finance.yahoo.com/news/nvidia-data-center.html"},
+                        "pubDate": "2026-05-03T13:00:00Z",
+                        "summary": "NVDA AI chip demand and data center revenue remain in focus.",
+                    }
+                },
+            ]
+
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
+
+    items = news_mod.get_company_news("NVDA", limit=5)
+
+    assert [item["title"] for item in items] == ["Nvidia data center demand remains strong"]

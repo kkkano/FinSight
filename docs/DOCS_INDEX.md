@@ -1,6 +1,6 @@
 # FinSight 文档索引
 
-更新时间：2026-05-03
+更新时间：2026-05-04
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
@@ -31,6 +31,7 @@
 
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
+- `docs/qa/chat_regression_queries_2026_05_03.md`：聊天并发、最终答案格式、新闻链接和复杂 query 回答质量的回归样本；配套 JSON 为 `docs/qa/chat_regression_queries_2026_05_03.json`。
 - `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
 - `docs/REPORT_CHART_SPEC.md`：报告图表规范。
 - `docs/rag-evaluation-guide.md`：RAG 评估方法。

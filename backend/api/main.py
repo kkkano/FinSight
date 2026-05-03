@@ -806,9 +806,9 @@ def _init_default_user_config() -> None:
     if os.path.exists(USER_CONFIG_PATH):
         return
 
-    _DEFAULT_API_BASE = "https://grok.jiuuij.de5.net/v1/chat/completions"
-    _DEFAULT_API_KEY  = "xinniankuaile"
-    _DEFAULT_MODEL    = "grok-4.1-fast"
+    _DEFAULT_API_BASE = os.getenv("OPENAI_COMPATIBLE_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1")
+    _DEFAULT_API_KEY  = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
+    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", "mimo-v2.5-pro")
 
     default_cfg = {
         "llm_provider": "openai_compatible",

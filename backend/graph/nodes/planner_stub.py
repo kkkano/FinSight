@@ -59,6 +59,12 @@ def planner_stub(state: GraphState) -> dict:
     def _contains_any(tokens: tuple[str, ...]) -> bool:
         return any(token in query_lower for token in tokens)
 
+    def _macro_query_for_task(task: dict) -> str:
+        label = str(task.get("subject_label") or "").strip()
+        if label and label != "宏观环境":
+            return label
+        return query
+
     deep_financial_tokens = (
         "deep report",
         "deep research",
@@ -198,7 +204,7 @@ def planner_stub(state: GraphState) -> dict:
                 )
 
     def _append_macro_task_steps(task: dict, *, group: str) -> None:
-        task_query = str(task.get("subject_label") or query).strip() or query
+        task_query = _macro_query_for_task(task)
         _append_tool_step(
             "get_current_datetime",
             {},

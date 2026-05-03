@@ -143,6 +143,115 @@ def test_render_company_fetch_uses_company_news_template():
     assert "### 公司快讯" in md
     assert "### 最新新闻" in md
 
+
+def test_render_multitask_markdown_is_final_answer_with_links():
+    from backend.graph.nodes.render_stub import render_stub
+
+    state = {
+        "query": "小米和理想汽车，CPI 影响吗",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["XIACY", "LI"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "LI",
+                "tickers": ["LI"],
+                "operation": {"name": "analyze_impact"},
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "subject_label": "XIACY",
+                "tickers": ["XIACY"],
+                "operation": {"name": "analyze_impact"},
+            },
+            {
+                "id": "task_3",
+                "subject_type": "macro",
+                "subject_label": "CPI",
+                "tickers": [],
+                "operation": {"name": "analyze_impact"},
+            },
+        ],
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "name": "get_company_news", "inputs": {"ticker": "LI"}, "task_ids": ["task_1"]},
+                {"id": "s2", "name": "get_company_news", "inputs": {"ticker": "XIACY"}, "task_ids": ["task_2"]},
+                {"id": "s3", "name": "get_official_macro_releases", "inputs": {"query": "CPI"}, "task_ids": ["task_3"]},
+            ]
+        },
+        "artifacts": {
+            "step_results": {
+                "s1": {
+                    "output": '[{"title":"Li Auto delivery update","url":"https://example.com/li","source":"TestNews","published_at":"2026-05-03"}]',
+                },
+                "s2": {
+                    "output": [{"title": "Xiaomi EV margin watch", "url": "https://example.com/xiaomi", "source": "TestNews"}],
+                },
+                "s3": {
+                    "output": {"releases": [{"title": "CPI release", "url": "https://example.com/cpi", "source": "BLS"}]},
+                },
+            },
+            "evidence_pool": [],
+        },
+    }
+
+    out = render_stub(state)
+    md = (out.get("artifacts") or {}).get("draft_markdown") or ""
+
+    assert "## 最终答案" in md
+    assert "我把这轮问题拆成" not in md
+    assert "结论：" in md
+    assert "LI" in md and "XIACY" in md and "CPI" in md
+    assert "[Li Auto delivery update](https://example.com/li)" in md
+    assert "[Xiaomi EV margin watch](https://example.com/xiaomi)" in md
+    assert "[CPI release](https://example.com/cpi)" in md
+
+
+def test_render_multitask_search_output_adds_source_link():
+    from backend.graph.nodes.render_stub import render_stub
+
+    state = {
+        "query": "小米和理想汽车，CPI 影响吗",
+        "output_mode": "brief",
+        "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["XIACY", "LI"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "LI",
+                "tickers": ["LI"],
+                "operation": {"name": "analyze_impact"},
+            },
+            {
+                "id": "task_2",
+                "subject_type": "macro",
+                "subject_label": "CPI",
+                "tickers": [],
+                "operation": {"name": "analyze_impact"},
+            },
+        ],
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "name": "search", "inputs": {"query": "LI CPI impact"}, "task_ids": ["task_1"]},
+            ]
+        },
+        "artifacts": {
+            "step_results": {
+                "s1": {"output": "AI摘要:\nCPI may affect EV demand."},
+            },
+            "evidence_pool": [],
+        },
+    }
+
+    out = render_stub(state)
+    md = (out.get("artifacts") or {}).get("draft_markdown") or ""
+
+    assert "[搜索来源](https://www.google.com/search?q=LI+CPI+impact)" in md
+
 def test_render_two_tickers_qa_does_not_use_compare_template():
     """Regression: 2 tickers + operation=qa should use company_brief, NOT compare template.
 

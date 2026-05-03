@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import os
 import re
+import json
 from pathlib import Path
 from string import Template
+from urllib.parse import quote_plus
 
 from langchain_core.messages import AIMessage
 
@@ -76,6 +78,65 @@ def _format_evidence_links(evidence_pool: list[dict] | None) -> str:
     return "\n".join(lines)
 
 
+def _parse_jsonish_output(output: object) -> object:
+    if not isinstance(output, str):
+        return output
+    text = output.strip()
+    if not text:
+        return output
+    if not (text.startswith("[") or text.startswith("{")):
+        return output
+    try:
+        return json.loads(text)
+    except Exception:
+        return output
+
+
+def _format_source_item(item: dict) -> str:
+    title = str(
+        item.get("title")
+        or item.get("headline")
+        or item.get("summary")
+        or item.get("name")
+        or "(untitled)"
+    ).strip()
+    url = str(item.get("url") or item.get("link") or item.get("article_url") or "").strip()
+    source = str(item.get("source") or item.get("publisher") or "").strip()
+    published = str(
+        item.get("published_at")
+        or item.get("published_date")
+        or item.get("datetime")
+        or item.get("date")
+        or ""
+    ).strip()
+    meta = " / ".join(part for part in (source, published[:10] if published else "") if part)
+    label = f"[{title}]({url})" if url.startswith(("http://", "https://")) else title
+    return label + (f"（{meta}）" if meta else "")
+
+
+def _extract_source_lines(output: object, limit: int = 5) -> list[str]:
+    parsed = _parse_jsonish_output(output)
+    rows: list[object]
+    if isinstance(parsed, list):
+        rows = parsed
+    elif isinstance(parsed, dict):
+        nested = parsed.get("articles") or parsed.get("items") or parsed.get("news") or parsed.get("results") or parsed.get("releases")
+        rows = nested if isinstance(nested, list) else [parsed]
+    else:
+        return []
+
+    lines: list[str] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        line = _format_source_item(item)
+        if line and line not in lines:
+            lines.append(line)
+        if len(lines) >= limit:
+            break
+    return lines
+
+
 def _append_evidence_section_if_missing(markdown: str, evidence_md: str) -> str:
     if not isinstance(markdown, str) or not markdown.strip():
         return markdown
@@ -110,7 +171,33 @@ def _task_tickers(task: dict) -> list[str]:
     return tickers
 
 
+def _impact_takeaway(task: dict, related: list[str]) -> str:
+    op_name = _task_operation_name(task)
+    if op_name != "analyze_impact":
+        return ""
+
+    subject_type = str(task.get("subject_type") or "").strip().lower()
+    label = str(task.get("subject_label") or ", ".join(_task_tickers(task)) or subject_type or "该对象").strip()
+    joined = " ".join(related)
+
+    if subject_type == "macro":
+        if related:
+            return f"结论：{label} 对市场的影响主要看通胀读数是否改变降息/利率预期；当前证据不足以给出单边判断。"
+        return f"结论：{label} 需要先补充官方发布时间和实际读数，才能判断对估值和风险偏好的方向。"
+
+    if re.search(r"\b(price|current price|change:|涨|跌|deliveries|delivery|交付|margin|earnings|guidance)\b", joined, re.IGNORECASE):
+        return f"结论：{label} 当前更适合按“事件驱动 + 价格反应”跟踪；已有新闻/价格信号可用于判断短线情绪，但还不能单独构成投资结论。"
+
+    if related:
+        return f"结论：{label} 已找到相关新闻线索，下一步应确认事件是否影响交付、利润率、监管风险或估值预期。"
+
+    return f"结论：{label} 暂无足够证据判断影响方向，需要补充最新新闻、价格和财报/交付数据。"
+
+
 def _summarize_step_output(output: object) -> list[str]:
+    source_lines = _extract_source_lines(output, limit=3)
+    if source_lines:
+        return source_lines
     if isinstance(output, dict) and output.get("skipped"):
         reason = str(output.get("reason") or "skipped")
         return [f"已规划，当前执行环境未运行实时工具（{reason}）。"]
@@ -156,11 +243,26 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     step_index = {str(step.get("id")): step for step in steps if isinstance(step, dict) and step.get("id")}
 
+    explicit_task_binding = any(
+        isinstance(step, dict)
+        and any(str(value or "").strip() for value in (step.get("task_ids") or []))
+        for step in steps
+    )
+
     def _related_outputs(task: dict) -> list[str]:
         task_id = str(task.get("id") or "").strip()
         tickers = set(_task_tickers(task))
         subject_type = str(task.get("subject_type") or "").strip().lower()
         related: list[str] = []
+        def _format_related_line(step: dict, fallback_step_id: str, line: str) -> str:
+            name = str(step.get("name") or fallback_step_id).strip()
+            if name == "search" and not _contains_markdown_link(line):
+                inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+                search_query = str(inputs.get("query") or state.get("query") or line[:120]).strip()
+                if search_query:
+                    line = f"{line} ([搜索来源](https://www.google.com/search?q={quote_plus(search_query)}))"
+            return f"{name}: {line}"
+
         for step_id, result in step_results.items():
             if not isinstance(result, dict):
                 continue
@@ -170,9 +272,11 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
             step_task_ids = [str(value or "").strip() for value in (step.get("task_ids") or []) if str(value or "").strip()]
             if task_id and task_id in step_task_ids:
                 for line in _summarize_step_output(result.get("output")):
-                    related.append(f"{step.get('name') or step_id}: {line}")
+                    related.append(_format_related_line(step, str(step_id), line))
                     if len(related) >= 3:
                         return related
+                continue
+            if explicit_task_binding and step_task_ids:
                 continue
             inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
             ticker = str(inputs.get("ticker") or "").strip().upper()
@@ -185,16 +289,16 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
             if not is_related:
                 continue
             for line in _summarize_step_output(result.get("output")):
-                related.append(f"{name}: {line}")
+                related.append(_format_related_line(step, str(step_id), line))
                 if len(related) >= 3:
                     return related
         return related
 
     lines = [
-        "## 本轮简报",
+        "## 最终答案",
         "",
-        f"我把这轮问题拆成 {len(ready_tasks)} 个可执行任务。"
-        + (f"另有 {len(blocked)} 个任务需要补充信息。" if blocked else ""),
+        f"本轮问题包含 {len(ready_tasks)} 个分析对象，下面直接给出每项结论。"
+        + (f"另有 {len(blocked)} 个对象需要补充信息。" if blocked else ""),
         "",
     ]
 
@@ -205,12 +309,15 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
         time_scope = task.get("time_scope") if isinstance(task.get("time_scope"), dict) else {}
         scope_label = str(time_scope.get("label") or time_scope.get("kind") or "").strip()
         title_suffix = f"（{scope_label}）" if scope_label else ""
-        lines.extend([f"### {idx}. {label} / {op_name}{title_suffix}", ""])
+        lines.extend([f"### {idx}. {label}{title_suffix}", ""])
         related = _related_outputs(task)
+        takeaway = _impact_takeaway(task, related)
+        if takeaway:
+            lines.append(f"- {takeaway}")
         if related:
             lines.extend(f"- {item}" for item in related)
         else:
-            lines.append("- 已识别为可执行任务；当前没有可展示的工具结果。")
+            lines.append(f"- 暂无足够证据形成结论；已识别的分析类型为 `{op_name}`。")
         lines.append("")
 
     if blocked:

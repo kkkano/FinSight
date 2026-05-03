@@ -75,6 +75,60 @@ describe('useStore conversation lifecycle', () => {
     expect(restored.messages.some((message) => message.content === 'TSLA news')).toBe(true);
   });
 
+  it('keeps an in-flight conversation alive when switching to another chat', () => {
+    const state = useStore.getState();
+    const controller = new AbortController();
+    const originalSession = state.sessionId;
+    state.addMessage({ id: 'user-1', role: 'user', content: 'NVDA news', timestamp: 10 });
+    state.addMessageToSession(originalSession, {
+      id: 'ai-1',
+      role: 'assistant',
+      content: '',
+      timestamp: 11,
+      isLoading: true,
+    });
+    state.setSessionLoading(originalSession, true);
+    state.setSessionAbortController(originalSession, controller);
+
+    state.startNewChat();
+
+    const afterNew = useStore.getState();
+    expect(controller.signal.aborted).toBe(false);
+    expect(afterNew.sessionId).not.toBe(originalSession);
+    expect(afterNew.isChatLoading).toBe(false);
+
+    afterNew.updateMessageInSession(originalSession, 'ai-1', {
+      content: 'Final NVDA answer',
+      isLoading: false,
+    });
+
+    useStore.getState().selectConversation(originalSession);
+    const restored = useStore.getState();
+    expect(restored.messages.some((message) => message.content === 'Final NVDA answer')).toBe(true);
+    expect(restored.isChatLoading).toBe(true);
+
+    restored.setSessionLoading(originalSession, false);
+    expect(useStore.getState().isChatLoading).toBe(false);
+  });
+
+  it('keeps draft text isolated per conversation while switching', () => {
+    const state = useStore.getState();
+    const originalSession = state.sessionId;
+    state.setDraft('分析这两张图 [Image #1] [Image #2]');
+
+    state.startNewChat();
+    const newSession = useStore.getState().sessionId;
+    expect(newSession).not.toBe(originalSession);
+    expect(useStore.getState().draft).toBe('');
+
+    useStore.getState().setDraft('NVDA news');
+    useStore.getState().selectConversation(originalSession);
+    expect(useStore.getState().draft).toBe('分析这两张图 [Image #1] [Image #2]');
+
+    useStore.getState().selectConversation(newSession);
+    expect(useStore.getState().draft).toBe('NVDA news');
+  });
+
   it('deletes a stored conversation from the switcher', () => {
     const state = useStore.getState();
     state.addMessage({ id: 'user-1', role: 'user', content: 'AAPL outlook', timestamp: 10 });

@@ -8,7 +8,7 @@ in_scope / out_of_scope / ambiguous 三分类，把"无法泛化"的开放式闲
 
 设计要点：
   * 独立 config：不走主 LLM 池的 endpoint rotation，专用 token-plan 代理
-  * 配置优先级：user_config.json -> env -> 硬编码默认（mimo-v2.5）
+  * 配置优先级：user_config.json -> env -> 主 LLM env -> 默认模型名
   * 失败兜底：超时/异常 → 返回 None，放行到业务管道（fail-open）
   * 限流防护：仅在规则未命中且无金融意图时触发（每会话最多调用 1 次）
 """
@@ -27,10 +27,10 @@ from backend.llm_config import _load_user_config
 logger = logging.getLogger(__name__)
 
 
-# ==================== 默认 Endpoint（小米 token-plan 代理 / mimo-v2.5）====================
+# ==================== 默认 Endpoint（小米 token-plan 代理 / mimo-v2.5-pro）====================
 _DEFAULT_API_BASE = "https://token-plan-cn.xiaomimimo.com/v1"
-_DEFAULT_API_KEY = "tp-choncq0uagapsjpu8sbngu7fnpvnwmpiy9a0nm82bmpg5mco"
-_DEFAULT_MODEL = "mimo-v2.5"
+_DEFAULT_API_KEY = ""
+_DEFAULT_MODEL = "mimo-v2.5-pro"
 
 
 IntentCategory = Literal["in_scope", "out_of_scope", "ambiguous"]
@@ -49,7 +49,7 @@ class IntentClassifierConfig:
     api_key: str = _DEFAULT_API_KEY
     model: str = _DEFAULT_MODEL
     temperature: float = 0.0
-    # mimo-v2.5 是 reasoning-style 模型，会先消耗 reasoning_tokens 再吐内容；
+    # mimo-v2.5-pro 是 reasoning-style 模型，会先消耗 reasoning_tokens 再吐内容；
     # 200 token 不够留出 JSON 回复空间，这里给 1500 ≈ 1000 reasoning + 500 answer。
     max_tokens: int = 1500
     # 推理 + 网络往返通常 3-7s，2.5s 几乎必超时；放宽到 8s 同时仍是 fail-open。
@@ -118,6 +118,7 @@ def get_classifier_config() -> IntentClassifierConfig:
         api_key=_coalesce(
             section.get("api_key"),
             os.getenv("INTENT_CLASSIFIER_API_KEY"),
+            os.getenv("OPENAI_COMPATIBLE_API_KEY"),
             _DEFAULT_API_KEY,
         ) or _DEFAULT_API_KEY,
         model=_coalesce(

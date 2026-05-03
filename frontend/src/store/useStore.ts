@@ -166,11 +166,15 @@ applyThemeClass(initialTheme);
 interface AppState {
   messages: Message[];
   addMessage: (message: Message) => void;
+  addMessageToSession: (sessionId: string, message: Message) => void;
   updateMessage: (id: string, patch: Partial<Message>) => void;
+  updateMessageInSession: (sessionId: string, id: string, patch: Partial<Message>) => void;
   updateLastMessage: (content: string) => void;
   removeMessage: (id: string) => void;
   setLoading: (loading: boolean) => void;
+  setSessionLoading: (sessionId: string, loading: boolean) => void;
   isChatLoading: boolean;
+  chatLoadingBySession: Record<string, boolean>;
   statusMessage: string | null;
   statusSince: number | null;
   executionProgress: number | null;
@@ -179,7 +183,9 @@ interface AppState {
   setExecutionState: (step: string | null, progress?: number | null) => void;
   resetExecutionState: () => void;
   abortController: AbortController | null;
+  abortControllersBySession: Record<string, AbortController | null>;
   setAbortController: (controller: AbortController | null) => void;
+  setSessionAbortController: (sessionId: string, controller: AbortController | null) => void;
   cancelChatStream: () => void;
   clearConversationContext: () => void;
   startNewChat: () => void;
@@ -194,6 +200,7 @@ interface AppState {
   setLayoutMode: (mode: LayoutMode) => void;
   setDraft: (text: string) => void;
   draft: string;
+  draftBySession: Record<string, string>;
   subscriptionEmail: string;
   setSubscriptionEmail: (email: string) => void;
   entryMode: EntryMode;
@@ -455,6 +462,18 @@ const persistMessages = (messages: Message[], sessionId: string) => {
   }
 };
 
+const appendMessageForSession = (messages: Message[], message: Message): Message[] => {
+  return [...messages, message];
+};
+
+const patchMessageForSession = (
+  messages: Message[],
+  id: string,
+  patch: Partial<Message>,
+): Message[] => {
+  return messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
+};
+
 const clearPersistedMessages = (sessionId: string) => {
   const sid = String(sessionId || '').trim();
   if (!sid) return;
@@ -502,13 +521,16 @@ export const useStore = create<AppState>((set) => ({
   messages: getInitialMessages(initialSessionId),
   conversationSummaries: loadConversationSummaries(initialSessionId, getInitialMessages(initialSessionId)),
   isChatLoading: false,
+  chatLoadingBySession: {},
   statusMessage: null,
   statusSince: null,
   executionProgress: null,
   currentStep: null,
   currentTicker: null,
   abortController: null,
+  abortControllersBySession: {},
   draft: '',
+  draftBySession: {},
   theme: initialTheme,
   layoutMode: initialLayout,
   subscriptionEmail: initialSubscriptionEmail,
@@ -536,7 +558,7 @@ export const useStore = create<AppState>((set) => ({
 
   addMessage: (message) =>
     set((state) => {
-      const next = [...state.messages, message];
+      const next = appendMessageForSession(state.messages, message);
       persistMessages(next, state.sessionId);
       return {
         messages: next,
@@ -544,15 +566,47 @@ export const useStore = create<AppState>((set) => ({
       };
     }),
 
+  addMessageToSession: (sessionId, message) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const baseMessages = normalized === state.sessionId
+        ? state.messages
+        : loadMessagesForSession(normalized);
+      const next = appendMessageForSession(baseMessages, message);
+      persistMessages(next, normalized);
+      return {
+        messages: normalized === state.sessionId ? next : state.messages,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, next),
+      };
+    }),
+
   updateMessage: (id, patch) =>
     set((state) => {
-      const next = state.messages.map((m) => (m.id === id ? { ...m, ...patch } : m));
+      const next = patchMessageForSession(state.messages, id, patch);
       // Only persist when message finishes loading (avoid thrashing during streaming)
       if (patch.isLoading === false) persistMessages(next, state.sessionId);
       return {
         messages: next,
         conversationSummaries: patch.isLoading === false
           ? upsertConversationSummary(state.conversationSummaries, state.sessionId, next)
+          : state.conversationSummaries,
+      };
+    }),
+
+  updateMessageInSession: (sessionId, id, patch) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      const baseMessages = normalized === state.sessionId
+        ? state.messages
+        : loadMessagesForSession(normalized);
+      const next = patchMessageForSession(baseMessages, id, patch);
+      if (patch.isLoading === false) persistMessages(next, normalized);
+      return {
+        messages: normalized === state.sessionId ? next : state.messages,
+        conversationSummaries: patch.isLoading === false
+          ? upsertConversationSummary(state.conversationSummaries, normalized, next)
           : state.conversationSummaries,
       };
     }),
@@ -576,7 +630,26 @@ export const useStore = create<AppState>((set) => ({
       };
     }),
 
-  setLoading: (loading) => set({ isChatLoading: loading }),
+  setLoading: (loading) =>
+    set((state) => ({
+      isChatLoading: loading,
+      chatLoadingBySession: {
+        ...state.chatLoadingBySession,
+        [state.sessionId]: loading,
+      },
+    })),
+  setSessionLoading: (sessionId, loading) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      return {
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [normalized]: loading,
+        },
+        isChatLoading: normalized === state.sessionId ? loading : state.isChatLoading,
+      };
+    }),
   setStatus: (message) =>
     set(() => ({
       statusMessage: message,
@@ -593,13 +666,41 @@ export const useStore = create<AppState>((set) => ({
       executionProgress: null,
     })),
   setTicker: (ticker) => set({ currentTicker: ticker }),
-  setAbortController: (controller) => set({ abortController: controller }),
+  setAbortController: (controller) =>
+    set((state) => ({
+      abortController: controller,
+      abortControllersBySession: {
+        ...state.abortControllersBySession,
+        [state.sessionId]: controller,
+      },
+    })),
+  setSessionAbortController: (sessionId, controller) =>
+    set((state) => {
+      const normalized = String(sessionId || '').trim();
+      if (!normalized) return {};
+      return {
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [normalized]: controller,
+        },
+        abortController: normalized === state.sessionId ? controller : state.abortController,
+      };
+    }),
   cancelChatStream: () =>
     set((state) => {
       const progress = state.executionProgress;
-      state.abortController?.abort();
+      const activeController = state.abortControllersBySession[state.sessionId] || state.abortController;
+      activeController?.abort();
       return {
         abortController: null,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [state.sessionId]: null,
+        },
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [state.sessionId]: false,
+        },
         isChatLoading: false,
         statusMessage: STOPPED_GENERATION_MESSAGE,
         statusSince: Date.now(),
@@ -609,7 +710,8 @@ export const useStore = create<AppState>((set) => ({
     }),
   clearConversationContext: () =>
     set((state) => {
-      state.abortController?.abort();
+      const activeController = state.abortControllersBySession[state.sessionId] || state.abortController;
+      activeController?.abort();
       clearPersistedMessages(state.sessionId);
       createBackendConversation(state.sessionId, [WELCOME_MESSAGE]);
       const conversationSummaries = upsertConversationSummary(
@@ -621,13 +723,25 @@ export const useStore = create<AppState>((set) => ({
         messages: [WELCOME_MESSAGE],
         conversationSummaries,
         isChatLoading: false,
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [state.sessionId]: false,
+        },
         statusMessage: null,
         statusSince: null,
         executionProgress: null,
         currentStep: null,
         abortController: null,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [state.sessionId]: null,
+        },
         currentTicker: null,
         draft: '',
+        draftBySession: {
+          ...state.draftBySession,
+          [state.sessionId]: '',
+        },
         agentLogs: [],
         agentStatuses: createInitialAgentStatuses(),
         rawEvents: [],
@@ -640,7 +754,6 @@ export const useStore = create<AppState>((set) => ({
     }),
   startNewChat: () =>
     set((state) => {
-      state.abortController?.abort();
       const nextSessionId = buildNewConversationSessionId(state.authIdentity);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', nextSessionId);
@@ -655,14 +768,14 @@ export const useStore = create<AppState>((set) => ({
         sessionId: nextSessionId,
         messages: [WELCOME_MESSAGE],
         conversationSummaries,
-        isChatLoading: false,
+        isChatLoading: Boolean(state.chatLoadingBySession[nextSessionId]),
         statusMessage: null,
         statusSince: null,
         executionProgress: null,
         currentStep: null,
-        abortController: null,
+        abortController: state.abortControllersBySession[nextSessionId] || null,
         currentTicker: null,
-        draft: '',
+        draft: state.draftBySession[nextSessionId] || '',
         agentLogs: [],
         agentStatuses: createInitialAgentStatuses(),
         rawEvents: [],
@@ -718,12 +831,14 @@ export const useStore = create<AppState>((set) => ({
         sessionId: normalized,
         messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
+        isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
+        abortController: state.abortControllersBySession[normalized] || null,
+        draft: state.draftBySession[normalized] || '',
       };
     }),
 
   selectConversation: (sessionId) =>
     set((state) => {
-      state.abortController?.abort();
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
       const messages = loadMessagesForSession(normalized);
@@ -734,14 +849,14 @@ export const useStore = create<AppState>((set) => ({
         sessionId: normalized,
         messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
-        isChatLoading: false,
+        isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
         statusMessage: null,
         statusSince: null,
         executionProgress: null,
         currentStep: null,
-        abortController: null,
+        abortController: state.abortControllersBySession[normalized] || null,
         currentTicker: null,
-        draft: '',
+        draft: state.draftBySession[normalized] || '',
         agentLogs: [],
         agentStatuses: createInitialAgentStatuses(),
         rawEvents: [],
@@ -758,7 +873,8 @@ export const useStore = create<AppState>((set) => ({
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
       if (normalized === state.sessionId) {
-        state.abortController?.abort();
+        const activeController = state.abortControllersBySession[normalized] || state.abortController;
+        activeController?.abort();
       }
       deleteBackendConversation(normalized);
       clearPersistedConversation(normalized);
@@ -785,14 +901,26 @@ export const useStore = create<AppState>((set) => ({
         sessionId: nextSessionId,
         messages: nextMessages,
         conversationSummaries: nextSummaries,
-        isChatLoading: normalized === state.sessionId ? false : state.isChatLoading,
+        isChatLoading: normalized === state.sessionId ? Boolean(state.chatLoadingBySession[nextSessionId]) : state.isChatLoading,
+        chatLoadingBySession: {
+          ...state.chatLoadingBySession,
+          [normalized]: false,
+        },
         statusMessage: normalized === state.sessionId ? null : state.statusMessage,
         statusSince: normalized === state.sessionId ? null : state.statusSince,
         executionProgress: normalized === state.sessionId ? null : state.executionProgress,
         currentStep: normalized === state.sessionId ? null : state.currentStep,
-        abortController: normalized === state.sessionId ? null : state.abortController,
+        abortController: normalized === state.sessionId ? (state.abortControllersBySession[nextSessionId] || null) : state.abortController,
+        abortControllersBySession: {
+          ...state.abortControllersBySession,
+          [normalized]: null,
+        },
         currentTicker: normalized === state.sessionId ? null : state.currentTicker,
-        draft: normalized === state.sessionId ? '' : state.draft,
+        draft: normalized === state.sessionId ? (state.draftBySession[nextSessionId] || '') : state.draft,
+        draftBySession: {
+          ...state.draftBySession,
+          [normalized]: '',
+        },
         agentLogs: normalized === state.sessionId ? [] : state.agentLogs,
         agentStatuses: normalized === state.sessionId ? createInitialAgentStatuses() : state.agentStatuses,
         rawEvents: normalized === state.sessionId ? [] : state.rawEvents,
@@ -828,7 +956,13 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setDraft: (text) =>
-    set(() => ({ draft: text })),
+    set((state) => ({
+      draft: text,
+      draftBySession: {
+        ...state.draftBySession,
+        [state.sessionId]: text,
+      },
+    })),
 
   // Agent Logs Actions
   addAgentLog: (log) =>

@@ -967,12 +967,12 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
 
         lines: list[str] = []
         for item in items[:6]:
-            title = item.get("title") or item.get("headline") or "(untitled)"
-            url = item.get("url")
-            source = item.get("source")
-            ts = item.get("published_date") or item.get("published_at") or item.get("datetime")
-            meta = " / ".join([x for x in [source, ts] if isinstance(x, str) and x.strip()])
-            if isinstance(url, str) and url.strip():
+            title = str(item.get("title") or item.get("headline") or "(untitled)").strip()
+            url = str(item.get("url") or item.get("link") or item.get("article_url") or "").strip()
+            source = str(item.get("source") or item.get("publisher") or "").strip()
+            ts = str(item.get("published_date") or item.get("published_at") or item.get("datetime") or item.get("date") or "").strip()
+            meta = " / ".join([x for x in [source, ts[:10] if ts else ""] if x])
+            if url.startswith(("http://", "https://")):
                 lines.append(f"- [{title}]({url})" + (f"（{meta}）" if meta else ""))
             else:
                 lines.append(f"- {title}" + (f"（{meta}）" if meta else ""))
@@ -1008,6 +1008,19 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             out = _get_tool_output(tool_name)
             if out is None:
                 return []
+            if tool_name == "get_authoritative_media_news" and isinstance(out, dict):
+                rows = []
+                for item in out.get("articles") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    text = " ".join(
+                        str(item.get(key) or "")
+                        for key in ("title", "snippet", "url")
+                    ).lower()
+                    if "cpi" in text and ("lse:cpi" in text or "london stock exchange:cpi" in text or "capita" in text):
+                        continue
+                    rows.append(item)
+                out = {**out, "articles": rows, "count": len(rows)}
             if isinstance(out, (dict, list)):
                 text = json_dumps_safe(out, ensure_ascii=False)[:900]
             else:

@@ -128,6 +128,32 @@ def _macro_operation(query: str) -> dict[str, Any]:
     return _operation("macro_brief", 0.68)
 
 
+def _macro_subject_label(query: str) -> str:
+    q = str(query or "").lower()
+    indicators = [
+        ("cpi", "CPI"),
+        ("ppi", "PPI"),
+        ("fomc", "FOMC"),
+        ("fed", "美联储"),
+        ("美联储", "美联储"),
+        ("联储", "美联储"),
+        ("降息", "利率路径"),
+        ("加息", "利率路径"),
+        ("利率", "利率路径"),
+        ("通胀", "通胀"),
+        ("收益率", "国债收益率"),
+        ("国债", "国债收益率"),
+        ("纳指", "纳指"),
+        ("大型科技股", "大型科技股"),
+        ("科技股", "科技股"),
+    ]
+    labels: list[str] = []
+    for token, label in indicators:
+        if token in q and label not in labels:
+            labels.append(label)
+    return " / ".join(labels[:3]) if labels else "宏观环境"
+
+
 def _social_prefix(query: str) -> str:
     match = _SOCIAL_PREFIX_RE.match(query or "")
     return match.group(0).strip(" ，,。") if match else ""
@@ -385,7 +411,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 extra_operations.append(_operation("price", 0.82))
             if _contains_any(query, _NEWS_HINTS):
                 extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
-            if _contains_any(query, _IMPACT_HINTS):
+            if _contains_any(query, _IMPACT_HINTS) and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE):
                 extra_operations.append(_operation("analyze_impact", 0.78))
             for ticker in tickers:
                 subject_type = _subject_type_for_ticker(ticker)
@@ -420,14 +446,14 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         _add_task(
             tasks,
             subject_type="macro",
-            subject_label="宏观环境",
+            subject_label=_macro_subject_label(query),
             operation=_macro_operation(query),
             query=query,
             priority=30,
             reason="macro_hint",
         )
 
-    if _contains_any(query, _THEME_HINTS):
+    if _contains_any(query, _THEME_HINTS) and not has_macro:
         if not any(task.get("subject_type") == "theme" for task in tasks):
             _add_task(
                 tasks,

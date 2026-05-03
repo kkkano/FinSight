@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { ThinkingStep, AgentLogSource } from '../types/index';
+import type { Message, ThinkingStep, AgentLogSource } from '../types/index';
 import { SendHorizontal, Paperclip, Square, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -246,15 +246,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
   const {
-    addMessage,
-    updateMessage,
-    setLoading,
+    addMessageToSession,
+    updateMessageInSession,
+    setSessionLoading,
     isChatLoading,
     setTicker,
     setStatus,
     setExecutionState,
     resetExecutionState,
-    setAbortController,
+    setSessionAbortController,
     cancelChatStream,
     draft,
     setDraft,
@@ -273,6 +273,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSessionIdRef = useRef(sessionId);
 
   const shouldGenerateChart = async (
     query: string,
@@ -332,13 +333,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     })();
 
     if (isFuzzyAnalyze && !guessedTickerForGuard && !hasContextSelection) {
-      addMessage({
+      const activeSessionId = sessionId || useStore.getState().sessionId;
+      addMessageToSession(activeSessionId, {
         id: uuidv4(),
         role: 'user',
         content: userMsgContent,
         timestamp: Date.now(),
       });
-      addMessage({
+      addMessageToSession(activeSessionId, {
         id: uuidv4(),
         role: 'assistant',
         content:
@@ -361,6 +363,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     if (guessedTicker) {
       setTicker(guessedTicker);
     }
+    const requestSessionId = sessionId || useStore.getState().sessionId;
+    const isRequestSessionActive = () => useStore.getState().sessionId === requestSessionId;
+    const updateScopedMessage = (id: string, patch: Partial<Message>) => {
+      updateMessageInSession(requestSessionId, id, patch);
+    };
     setInput('');
     setDraft('');
     if (inputRef.current) {
@@ -375,7 +382,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       .slice(-DEFAULT_HISTORY_LIMIT)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: uuidv4(),
       role: 'user',
       content: userMsgContent,
@@ -383,7 +390,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     });
 
     const aiMsgId = uuidv4();
-    addMessage({
+    addMessageToSession(requestSessionId, {
       id: aiMsgId,
       role: 'assistant',
       content: '',
@@ -391,11 +398,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       isLoading: true,
     });
 
-    setLoading(true);
-    setStatus('Streaming response...');
-    setExecutionState('Preparing request', 0);
+    setSessionLoading(requestSessionId, true);
+    if (isRequestSessionActive()) {
+      setStatus('Streaming response...');
+      setExecutionState('Preparing request', 0);
+    }
     const streamController = new AbortController();
-    setAbortController(streamController);
+    setSessionAbortController(requestSessionId, streamController);
 
     addAgentLog({
       id: uuidv4(),
@@ -413,7 +422,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     const requestStartedAt = Date.now();
 
     const recoverReportIfAvailable = async (): Promise<boolean> => {
-      const session = sessionId || useStore.getState().sessionId;
+      const session = requestSessionId;
       if (!session) return false;
       try {
         const index = await apiClient.listReportIndex({
@@ -439,14 +448,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         });
         if (!replay?.report) return false;
 
-        updateMessage(aiMsgId, {
+        updateScopedMessage(aiMsgId, {
           content: replay.report.summary || fullContent || 'Report recovered after stream interruption.',
           isLoading: false,
           report: replay.report,
           evidence_pool: replay.citations,
         });
-        setExecutionState('Recovered report', 100);
-        setStatus(null);
+        if (isRequestSessionActive()) {
+          setExecutionState('Recovered report', 100);
+          setStatus(null);
+        }
         toast({
           type: 'success',
           title: '已恢复报告',
@@ -462,13 +473,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       if (!thinkingSteps.some((step) => step.stage === 'cancelled')) {
         thinkingSteps = [...thinkingSteps, buildCancelledThinkingStep()];
       }
-      updateMessage(aiMsgId, {
+      updateScopedMessage(aiMsgId, {
         content: fullContent || STOPPED_GENERATION_MESSAGE,
         isLoading: false,
         thinking: thinkingSteps,
       });
-      setStatus(STOPPED_GENERATION_MESSAGE);
-      setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+      if (isRequestSessionActive()) {
+        setStatus(STOPPED_GENERATION_MESSAGE);
+        setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+      }
       addAgentLog({
         id: uuidv4(),
         timestamp: new Date().toISOString(),
@@ -491,12 +504,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           if (safeToken) {
             fullContent += safeToken;
           }
-          updateMessage(aiMsgId, { content: fullContent, isLoading: true });
+          updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
         (name) => {
-          setStatus(`Calling tool: ${name}...`);
           const current = useStore.getState().executionProgress ?? 0;
-          setExecutionState(`Tool: ${name}`, Math.max(current, 72));
+          if (isRequestSessionActive()) {
+            setStatus(`Calling tool: ${name}...`);
+            setExecutionState(`Tool: ${name}`, Math.max(current, 72));
+          }
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -507,9 +522,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           });
         },
         () => {
-          setStatus('Generating response...');
           const current = useStore.getState().executionProgress ?? 0;
-          setExecutionState('Synthesizing response', Math.max(current, 80));
+          if (isRequestSessionActive()) {
+            setStatus('Generating response...');
+            setExecutionState('Synthesizing response', Math.max(current, 80));
+          }
           addAgentLog({
             id: uuidv4(),
             timestamp: new Date().toISOString(),
@@ -528,7 +545,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             });
           }
 
-          if (typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== sessionId) {
+          if (isRequestSessionActive() && typeof meta?.session_id === 'string' && meta.session_id.trim() && meta.session_id !== requestSessionId) {
             setSessionId(meta.session_id);
           }
 
@@ -584,30 +601,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             }
           }
 
-          updateMessage(aiMsgId, {
+          updateScopedMessage(aiMsgId, {
             content: fullContent,
             isLoading: false,
             report,
             thinking: thinkingSteps,
             evidence_pool: evidencePool,
           });
-          setExecutionState('Completed', 100);
-          setStatus(null);
+          if (isRequestSessionActive()) {
+            setExecutionState('Completed', 100);
+            setStatus(null);
+          }
         },
         (error) => {
           const handleFailure = async () => {
             const recovered = await recoverReportIfAvailable();
             if (recovered) return;
 
-            updateMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
-            setStatus('Stream interrupted');
+            updateScopedMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
+            if (isRequestSessionActive()) {
+              setStatus('Stream interrupted');
+            }
             toast({
               type: 'error',
               title: '流式连接中断',
               message: '连接被中断或服务暂不可用，请重试',
             });
             const current = useStore.getState().executionProgress ?? 0;
-            setExecutionState('Execution failed', current);
+            if (isRequestSessionActive()) {
+              setExecutionState('Execution failed', current);
+            }
             addAgentLog({
               id: uuidv4(),
               timestamp: new Date().toISOString(),
@@ -622,11 +645,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         },
         (step) => {
           thinkingSteps = [...thinkingSteps, step];
-          updateMessage(aiMsgId, { thinking: thinkingSteps });
+          updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
           const current = useStore.getState().executionProgress ?? 0;
           const progress = estimateProgress(step.stage, current);
           const stepLabel = formatExecutionStep(step.stage, step.message);
-          setExecutionState(stepLabel, progress);
+          if (isRequestSessionActive()) {
+            setExecutionState(stepLabel, progress);
+          }
 
           const source = mapStageToSource(step.stage);
           const isError = step.stage.includes('error');
@@ -685,7 +710,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
             }
           : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
-        sessionId || undefined,
+        requestSessionId || undefined,
         traceRawEnabled,
         { signal: streamController.signal },
       );
@@ -697,18 +722,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         finishAbortedStream();
         return;
       }
-      updateMessage(aiMsgId, {
+      updateScopedMessage(aiMsgId, {
         content: 'Network request failed. Please confirm the backend service is running.',
         isLoading: false,
       });
-      setStatus('Request failed');
+      if (isRequestSessionActive()) {
+        setStatus('Request failed');
+      }
       toast({
         type: 'error',
         title: '请求失败',
         message: '网络异常或服务不可用，请稍后重试',
       });
       const current = useStore.getState().executionProgress ?? 0;
-      setExecutionState('Request failed', current);
+      if (isRequestSessionActive()) {
+        setExecutionState('Request failed', current);
+      }
       addAgentLog({
         id: uuidv4(),
         timestamp: new Date().toISOString(),
@@ -718,15 +747,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       });
     } finally {
       const wasAborted = streamController.signal.aborted;
-      setLoading(false);
-      if (wasAborted) {
-        setStatus(STOPPED_GENERATION_MESSAGE);
-        setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
-      } else {
-        setStatus(null);
-        resetExecutionState();
+      setSessionLoading(requestSessionId, false);
+      if (isRequestSessionActive()) {
+        if (wasAborted) {
+          setStatus(STOPPED_GENERATION_MESSAGE);
+          setExecutionState('已停止生成', useStore.getState().executionProgress ?? null);
+        } else {
+          setStatus(null);
+          resetExecutionState();
+        }
       }
-      setAbortController(null);
+      setSessionAbortController(requestSessionId, null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
@@ -735,12 +766,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput(draft || '');
     if (draft && inputRef.current) {
       inputRef.current.focus();
-      setDraft('');
     }
-  }, [draft, setDraft]);
+  }, [draft]);
 
   useEffect(() => {
-    setInput('');
+    if (lastSessionIdRef.current !== sessionId) {
+      lastSessionIdRef.current = sessionId;
+      const nextDraft = useStore.getState().draft || '';
+      setInput(nextDraft);
+    }
     setOutputMode('brief');
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
@@ -829,6 +863,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           value={input}
           onChange={(e) => {
             setInput(e.target.value);
+            setDraft(e.target.value);
             const el = e.target;
             el.style.height = 'auto';
             el.style.height = `${Math.min(el.scrollHeight, 160)}px`;

@@ -248,7 +248,7 @@ async def chat_respond(state: GraphState) -> dict[str, Any]:
         → pick from template pool by hash(query) and short-circuit.
 
     Tier 2 (LLM classifier): only when Tier-1 misses AND query lacks financial intent
-        → call mimo-v2.5 to classify in_scope/out_of_scope/ambiguous,
+        → call mimo-v2.5-pro to classify in_scope/out_of_scope/ambiguous,
         accept OOS only if confidence ≥ threshold (default 70).
 
     Otherwise → pass through to business pipeline (chat_responded=False).

@@ -976,11 +976,11 @@ git clone https://github.com/kkkano/FinSight.git
 cd FinSight
 
 # 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入 API Key（见下方"API 密钥说明"）
+cp .env.server.example .env.server
+# 编辑 .env.server，填入真实 API Key（见下方"API 密钥说明"）
 
 # 3. 启动所有服务
-docker compose up -d
+docker compose --env-file .env.server up -d --build
 # 前端: http://localhost:5173
 # 后端: http://localhost:8000
 # PostgreSQL: localhost:5432
@@ -992,14 +992,17 @@ docker compose up -d
 
 | API Key | 是否必填 | 用途 | 不配置会怎样 |
 |---------|---------|------|-------------|
-| `GEMINI_PROXY_API_KEY` 或 `OPENAI_API_KEY` | ✅ **必填** | LLM 分析与规划 | 应用无法运行 |
+| `OPENAI_COMPATIBLE_API_KEY` | ✅ **必填** | 默认 OpenAI-compatible LLM 端点（默认 `mimo-v2.5-pro`） | 应用无法运行 |
+| `OPENAI_COMPATIBLE_API_BASE` | ✅ **必填** | OpenAI-compatible base URL（默认 `https://token-plan-cn.xiaomimimo.com/v1`） | 使用代码默认值 |
+| `OPENAI_COMPATIBLE_MODEL` | ✅ **必填** | 用户侧默认模型（默认 `mimo-v2.5-pro`） | 使用代码默认值 |
+| `GEMINI_PROXY_API_KEY` 或 `OPENAI_API_KEY` | 选填 | 备用 LLM 提供商 | 使用 OpenAI-compatible 端点 |
 | `FMP_API_KEY` | ⭐ 推荐 | 财务数据（财报、指标） | 回退到 yfinance |
 | `FINNHUB_API_KEY` | 选填 | 实时行情、新闻 | 回退到其他数据源 |
 | `TAVILY_API_KEY` | 选填 | 网页搜索 | 回退到 DuckDuckGo |
 | `FRED_API_KEY` | 选填 | 宏观经济数据 | 宏观功能受限 |
 | `ALPHA_VANTAGE_API_KEY` | 选填 | 额外价格数据 | 使用其他价格源 |
 
-> **最小化配置**：只需配置 `OPENAI_API_KEY`（或等效 LLM Key）即可运行。其他 API 均有自动回退机制。
+> **最小化配置**：在 `.env.server` 中配置 `OPENAI_COMPATIBLE_API_KEY` 即可运行。其他 API 均有自动回退机制。
 
 ### 💾 数据库初始化
 
@@ -1031,8 +1034,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 3. 配置环境变量
-copy .env.example .env
-# 编辑 .env，填入 API Key：
+copy .env.server.example .env.server
+# 编辑 .env.server，填入 API Key：
+#   OPENAI_COMPATIBLE_API_KEY=sk-...
+#   OPENAI_COMPATIBLE_API_BASE=https://token-plan-cn.xiaomimimo.com/v1
+#   OPENAI_COMPATIBLE_MODEL=mimo-v2.5-pro
 #   OPENAI_API_KEY=sk-...
 #   GOOGLE_API_KEY=...        (Gemini)
 #   FMP_API_KEY=...           (Financial Modeling Prep)
