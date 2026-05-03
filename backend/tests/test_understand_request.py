@@ -24,16 +24,18 @@ def test_pure_greeting_routes_direct_without_research_pipeline():
 
     result = _run(GraphRunner.create().ainvoke(thread_id="u-direct", query="你好", ui_context={}))
 
-    understanding = result.get("understanding") or {}
-    assert understanding.get("route") == "direct"
+    # 2026-05-03: chat_respond is now wired into the main flow and intercepts
+    # pure greetings via Tier-1 rule whitelist before understand_request runs,
+    # so the run terminates at chat_respond. understanding/tasks are never
+    # populated (left as the reset_turn_state default of None).
     assert result.get("chat_responded") is True
-    assert result.get("tasks") == []
+    assert not result.get("tasks")
     nodes = [s.get("node") for s in (result.get("trace") or {}).get("spans") or []]
     assert nodes == [
         "build_initial_state",
         "reset_turn_state",
         "prepare_context",
-        "understand_request",
+        "chat_respond",
     ]
 
 

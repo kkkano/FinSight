@@ -30,6 +30,17 @@ COMPANY_MAP: Dict[str, str] = {
     'NIO': 'NIO', 'nio': 'NIO',
     'XPEV': 'XPeng', 'xpeng': 'XPEV',
     'LI': 'Li Auto', 'li auto': 'LI',
+    # P1 expansion (2026-05-03): China ADR / HK names missing pre-P1
+    'TSM': 'TSMC', 'tsmc': 'TSM',
+    'TCEHY': 'Tencent', 'tencent': 'TCEHY',
+    'NTES': 'NetEase', 'netease': 'NTES',
+    'MPNGY': 'Meituan', 'meituan': 'MPNGY',
+    'XIACY': 'Xiaomi', 'xiaomi': 'XIACY',
+    # P1 expansion: cryptocurrencies via yfinance suffix `-USD`
+    'BTC-USD': 'Bitcoin', 'bitcoin': 'BTC-USD',
+    'ETH-USD': 'Ethereum', 'ethereum': 'ETH-USD',
+    'SOL-USD': 'Solana', 'solana': 'SOL-USD',
+    'DOGE-USD': 'Dogecoin', 'dogecoin': 'DOGE-USD',
     # ETFs
     'SPY': 'S&P 500 ETF',
     'QQQ': 'Nasdaq 100 ETF',
@@ -46,6 +57,21 @@ CN_TO_TICKER: Dict[str, str] = {
     '拼多多': 'PDD', '百度': 'BIDU', '英特尔': 'INTC',
     '蔚来': 'NIO', '小鹏': 'XPEV', '理想': 'LI',
     '凯捷': 'CAP.PA', '奈飞': 'NFLX', '脸书': 'META',
+    # P1 expansion (2026-05-03): missing China ADR / HK names + crypto.
+    # Discovered via mixed-complex query probe: "台积电" / "腾讯" not detected,
+    # "黄金还是比特币" lost the BTC half. Adding mappings is data-only, no
+    # routing change.
+    '台积电': 'TSM', '台湾积体电路': 'TSM', '台积': 'TSM',
+    '腾讯': 'TCEHY', '腾讯控股': 'TCEHY',
+    '网易': 'NTES',
+    '美团': 'MPNGY',
+    '小米': 'XIACY', '小米集团': 'XIACY',
+    '理想汽车': 'LI', '小鹏汽车': 'XPEV',
+    # Cryptocurrencies — yfinance accepts `BTC-USD` etc. as quote tickers
+    '比特币': 'BTC-USD', 'BTC': 'BTC-USD', 'btc': 'BTC-USD',
+    '以太坊': 'ETH-USD', '以太币': 'ETH-USD', 'ETH': 'ETH-USD', 'eth': 'ETH-USD',
+    '索拉纳': 'SOL-USD', 'SOL': 'SOL-USD',
+    '狗狗币': 'DOGE-USD', 'DOGE': 'DOGE-USD',
     # Market indices
     '纳斯达克': '^IXIC', '纳斯达克指数': '^IXIC', '纳指': '^IXIC',
     '道琼斯': '^DJI', '道琼斯指数': '^DJI', '道指': '^DJI',
@@ -85,7 +111,10 @@ INDEX_ALIASES: Dict[str, str] = {
 KNOWN_TICKERS = {
     'AAPL', 'GOOGL', 'GOOG', 'MSFT', 'AMZN', 'META', 'TSLA', 'NVDA', 'AMD', 'INTC',
     'NFLX', 'CRM', 'BABA', 'JD', 'PDD', 'BIDU', 'NIO', 'XPEV', 'LI',
-    'SPY', 'QQQ', 'DIA', 'IWM', 'VTI'
+    'SPY', 'QQQ', 'DIA', 'IWM', 'VTI',
+    # P1 additions
+    'TSM', 'TCEHY', 'NTES', 'MPNGY', 'XIACY',
+    'BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD',
 }
 
 # Common words to filter out (not tickers)
