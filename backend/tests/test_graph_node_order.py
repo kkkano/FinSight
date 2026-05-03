@@ -23,10 +23,7 @@ def _run(coro):
 _FULL_HAPPY_PATH = [
     "build_initial_state",
     "reset_turn_state",
-    "trim_history",
-    "summarize_history",
-    "normalize_ui_context",
-    "decide_output_mode",
+    "prepare_context",
     "understand_request",
     "policy_gate",
     "planner",
@@ -40,10 +37,7 @@ _FULL_HAPPY_PATH = [
 _CLARIFY_STOP_PATH = [
     "build_initial_state",
     "reset_turn_state",
-    "trim_history",
-    "summarize_history",
-    "normalize_ui_context",
-    "decide_output_mode",
+    "prepare_context",
     "understand_request",
 ]
 
@@ -51,10 +45,7 @@ _CLARIFY_STOP_PATH = [
 _INVARIANT_PREFIX = [
     "build_initial_state",
     "reset_turn_state",
-    "trim_history",
-    "summarize_history",
-    "normalize_ui_context",
-    "decide_output_mode",
+    "prepare_context",
     "understand_request",
 ]
 
@@ -78,7 +69,7 @@ class TestGraphNodeOrderInvariant:
     """Ensure the graph pipeline node ordering is stable."""
 
     def test_full_happy_path_order(self):
-        """Full execution path must match the expected 16-node sequence."""
+        """Full execution path must match the expected runtime sequence."""
         from backend.graph import GraphRunner
 
         runner = GraphRunner.create()
@@ -95,7 +86,7 @@ class TestGraphNodeOrderInvariant:
         )
 
     def test_clarify_stop_path_order(self):
-        """Clarify early-stop must match the expected 9-node sequence."""
+        """Clarify early-stop must match the expected runtime sequence."""
         from backend.graph import GraphRunner
 
         runner = GraphRunner.create()
@@ -173,6 +164,7 @@ class TestGraphNodeOrderInvariant:
         node_names = set(graph.nodes.keys()) - {"__start__", "__end__"}
         expected_nodes = {
             "build_initial_state", "reset_turn_state",
+            "prepare_context",
             "trim_history", "summarize_history",
             "normalize_ui_context", "decide_output_mode",
             "chat_respond", "resolve_subject", "clarify",

@@ -32,10 +32,7 @@ def test_pure_greeting_routes_direct_without_research_pipeline():
     assert nodes == [
         "build_initial_state",
         "reset_turn_state",
-        "trim_history",
-        "summarize_history",
-        "normalize_ui_context",
-        "decide_output_mode",
+        "prepare_context",
         "understand_request",
     ]
 

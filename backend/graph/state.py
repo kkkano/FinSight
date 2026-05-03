@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Graph state contract (SSOT):
-docs/06_LANGGRAPH_REFACTOR_GUIDE.md
+docs/06a_LANGGRAPH_DESIGN_SPEC.md
+docs/plans/2026-05-03_request_understanding_task_graph_spec.md
 """
 
 from __future__ import annotations

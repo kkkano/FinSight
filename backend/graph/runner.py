@@ -23,6 +23,7 @@ from backend.graph.nodes import (
     normalize_ui_context,
     parse_operation,
     policy_gate,
+    prepare_context,
     planner,
     render_stub,
     reset_turn_state,
@@ -50,6 +51,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph = StateGraph(GraphState)
     graph.add_node("build_initial_state", with_node_trace("build_initial_state", build_initial_state))
     graph.add_node("reset_turn_state", with_node_trace("reset_turn_state", reset_turn_state))
+    graph.add_node("prepare_context", with_node_trace("prepare_context", prepare_context))
     graph.add_node("trim_history", with_node_trace("trim_history", trim_conversation_history))
     graph.add_node("summarize_history", with_node_trace("summarize_history", summarize_history))
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
@@ -70,11 +72,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
 
     graph.add_edge(START, "build_initial_state")
     graph.add_edge("build_initial_state", "reset_turn_state")
-    graph.add_edge("reset_turn_state", "trim_history")
-    graph.add_edge("trim_history", "summarize_history")
-    graph.add_edge("summarize_history", "normalize_ui_context")
-    graph.add_edge("normalize_ui_context", "decide_output_mode")
-    graph.add_edge("decide_output_mode", "understand_request")
+    graph.add_edge("reset_turn_state", "prepare_context")
+    graph.add_edge("prepare_context", "understand_request")
 
     def _route_after_understand_request(state: GraphState) -> str:
         understanding = state.get("understanding") or {}

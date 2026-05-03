@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.event_bus import emit_event
+from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
 from backend.graph.state import GraphState
@@ -244,7 +245,7 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
 async def understand_request(state: GraphState) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
     ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
-    output_mode = state.get("output_mode") or "brief"
+    output_mode = (decide_output_mode(state).get("output_mode") or "brief")
 
     tasks: list[dict[str, Any]] = []
     blocked_tasks: list[dict[str, Any]] = []
