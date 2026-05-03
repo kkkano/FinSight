@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-05-03 - Conversation lifecycle and cancellation UX
+
+- 新增 `backend/api/conversation_router.py` 并挂载 `/api/conversations`：支持 list/create/get/delete 会话生命周期。
+- 删除会话时清理 session context、report index、thread memory/working-set RAG collections，并按 collection 批量软删除 RAG observability runs，避免旧 ticker/风险点泄露到新会话。
+- 停止生成链路补齐：前端 AbortController、后端 `CancelledError` trace/pipeline 事件、前端 cancelled thinking step 和停止状态提示。
+- MiniChat 与主 Chat 的 Deep/Brief 启用逻辑保持一致：只判断是否有 actionable input/context，不在前端维护 ticker/company 字典。
+- 验证：conversation/cancel/RAG cleanup targeted pytest 15 passed；前端 unit 15 passed；Playwright chat smoke 4 passed；frontend build passed。
+
 ## 2026-05-03 - Docs governance cleanup
 
 - 移除 active docs 对已不存在的旧 sprint todo、旧 LangGraph guide 和旧团队记忆文件的事实源依赖。

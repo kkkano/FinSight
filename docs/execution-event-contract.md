@@ -10,6 +10,7 @@
 - `synthesizing`
 - `rendering`
 - `done`
+- `cancelled`
 
 ## 关键事件（Raw OFF 仍保留）
 - `token`
@@ -39,14 +40,20 @@
 ```json
 {
   "type": "pipeline_stage",
-  "stage": "planning|executing|synthesizing|rendering|done",
-  "status": "start|running|done|error|resume",
+  "stage": "planning|executing|synthesizing|rendering|done|cancelled",
+  "status": "start|running|done|error|resume|cancelled",
   "message": "human readable summary",
   "duration_ms": 1234,
   "error": "optional",
   "timestamp": "ISO-8601"
 }
 ```
+
+取消语义：
+
+- 前端点击停止后使用 `AbortController.abort()` 断开当前 SSE。
+- 后端 producer 捕获 `asyncio.CancelledError` 后发出 `pipeline_stage.stage="cancelled"` 和用户可见 `trace.stage="cancelled"`。
+- 取消不是错误；已经产出的 token、trace 和 report partial 保留在当前会话。
 
 ### `plan_ready`
 ```json
@@ -88,7 +95,7 @@
 {
   "type": "trace",
   "visibility": "user",
-  "stage": "understanding|planning|retrieval|tool|agent|synthesis",
+  "stage": "understanding|planning|retrieval|tool|agent|synthesis|cancelled",
   "status": "start|running|done|error|cancelled",
   "title": "已理解请求",
   "summary": "识别 4 个任务，其中 1 个需要补充信息",
@@ -121,6 +128,7 @@
 - `executing:start/done/error`：`backend/graph/executor.py`
 - `synthesizing:start/done/error`：`backend/graph/nodes/synthesize.py`
 - `rendering:start/done`（run + resume）：`backend/services/execution_service.py`
+- `cancelled`（run + resume）：`backend/services/execution_service.py`
 - `done`：`backend/services/execution_service.py`
 
 ## 前端消费与降级

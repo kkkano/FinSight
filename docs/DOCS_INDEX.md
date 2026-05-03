@@ -16,7 +16,7 @@
 
 ## 当前实现 Spec
 
-- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。Phase 1/2 已接入 `understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace，以及 planner stub 多任务消费；后续剩余项是 `prepare_context` 合并、planner/executor/synthesize 全量多任务原生化和后端 conversation API。
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace、planner stub 多任务消费、后端 `/api/conversations` 生命周期 API 和停止生成闭环；后续剩余项是 `prepare_context` 合并、planner/executor/synthesize 全量多任务原生化，以及服务端消息持久化/PATCH 标题能力。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
@@ -30,7 +30,7 @@
 ## 质量与报告
 
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
-- `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用和用户可见 trace 的 Playwright 验证记录。
+- `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
 - `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
 - `docs/REPORT_CHART_SPEC.md`：报告图表规范。
 - `docs/rag-evaluation-guide.md`：RAG 评估方法。

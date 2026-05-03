@@ -5,7 +5,7 @@
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
-> 2026-05-03 修订说明：聊天主链路已接入 `understand_request`。旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍注册为兼容节点，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+> 2026-05-03 修订说明：聊天主链路已接入 `understand_request`。旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍注册为兼容节点，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供最小后端 API，停止生成已形成前端 abort + 后端 cancelled trace 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
 
 ---
 
@@ -41,6 +41,7 @@
 ```mermaid
 flowchart TD
   UI[Chat / MiniChat / Workbench] --> CHAT["/chat/supervisor*"]
+  UI --> CONV["/api/conversations<br/>list/create/get/delete"]
   CHAT --> RUNNER[LangGraph Runner]
   RUNNER --> INIT[build_initial_state]
   INIT --> RESET[reset_turn_state]
@@ -58,6 +59,7 @@ flowchart TD
   EXEC --> TOOLS[Tool / Agent Adapters]
   TOOLS --> LIVE[Live Tools]
   TOOLS --> RAG[RAG / Evidence]
+  CONV --> CTX[Session Context + Report Index + Thread RAG Cleanup]
 ```
 
 #### 0.4.2 目标（最终态）
@@ -244,7 +246,7 @@ class ChatRequest(BaseModel):
 ```python
 from typing import TypedDict, Literal, NotRequired
 
-SubjectType = Literal["news_item","news_set","company","filing","research_doc","portfolio","unknown"]
+SubjectType = Literal["news_item","news_set","company","filing","research_doc","portfolio","macro","index","commodity","theme","unknown"]
 OutputMode = Literal["chat","brief","investment_report"]
 
 class Subject(TypedDict):
@@ -486,6 +488,8 @@ SUBJECT_SUBGRAPHS = {
 - 在 Chat 和 MiniChat 间切换 session_id 下，历史对话一致，但 UI selection 是上下文而非偏向用户积累。
 - 「生成投资报告」按钮只改变 output_mode，不改变用户输入（别注入「生成 研报」等关键词到输入框）。
 - Deep/Brief 控件不依赖前端 ticker/company 字典；无 ticker 宏观问题也可提交，由后端生成 `macro/theme/index` task。
+- 会话栏的新建/切换/删除只管理交互状态和 `session_id`；删除动作会调用 `/api/conversations/{id}`，后端负责清理该 thread 的 session context、report index、RAG working set 和 RAG observability runs。
+- 流式运行中点击停止必须保留 partial answer 和 trace；前端不把取消伪装成失败，后端应发出 `stage=cancelled` 的用户可见事件。
 
 ---
 

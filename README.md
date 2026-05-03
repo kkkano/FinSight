@@ -252,6 +252,8 @@ The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_re
 
 Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
+Conversation UX is now split deliberately: the frontend stores MVP message history locally, while `/api/conversations` owns backend thread lifecycle. Deleting a conversation clears session context, report/citation index rows, thread RAG memory/working-set collections, and matching RAG observability runs. Stream stop uses `AbortController` plus backend `cancelled` trace/pipeline events, preserving partial answers instead of treating cancellation as an error.
+
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
@@ -319,7 +321,7 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 | `understanding` | `dict` | Request understanding result for the current turn |
 | `tasks` | `list[dict]` | Ready task decomposition for multi-task requests |
 | `blocked_tasks` | `list[dict]` | Local missing-context tasks that should not block the whole turn |
-| `output_mode` | `str` | `"chat"` / `"quick_report"` / `"investment_report"` |
+| `output_mode` | `str` | `"chat"` / `"brief"` / `"investment_report"` |
 | `plan_ir` | `dict` | Execution plan with steps, groups, dependencies, cost estimates |
 | `step_results` | `dict` | Raw outputs from each agent/tool execution |
 | `evidence_pool` | `list[dict]` | Collected evidence items with source attribution |
@@ -1067,7 +1069,7 @@ npm run build --prefix frontend
 cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
 ```
 
-The chat UX Playwright smoke covers Deep/Brief enablement, new/switch/delete conversations, user-visible trace summaries, and stream stop behavior. The request-understanding query matrix is recorded in `docs/reports/2026-05-03_request_understanding_query_results.md`.
+The chat UX Playwright smoke covers Deep/Brief enablement, new/switch/delete conversations, user-visible trace summaries, and stream stop behavior. The request-understanding query matrix is recorded in `docs/reports/2026-05-03_request_understanding_query_results.md`; the latest smoke log is `docs/reports/2026-05-03_playwright_chat_smoke.md`.
 
 ### Optional: PostgreSQL for RAG
 

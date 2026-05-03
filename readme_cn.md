@@ -249,6 +249,8 @@ FinSight 的聊天主链路已经把旧的 `chat_respond / resolve_subject / cla
 
 仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于聊天 LangGraph 主链路。
 
+会话体验现在分层处理：前端 localStorage 暂时保存消息历史；后端 `/api/conversations` 负责 thread 生命周期。删除会话会清理 session context、report/citation index、thread RAG memory/working-set collections 以及对应 RAG observability runs。停止生成走前端 `AbortController` + 后端 `cancelled` trace/pipeline 事件，保留 partial answer，不当成失败。
+
 ```mermaid
 flowchart TD
     START((开始)) --> INIT["① build_initial_state<br/><i>解析输入，加载记忆</i>"]
@@ -314,7 +316,7 @@ flowchart TD
 |------|------|------|
 | `messages` | `Annotated[list, add_messages]` | 对话历史（LangGraph reducer 仅追加） |
 | `subject` | `dict` | 解析后的实体 — `{type, ticker, name, market}` |
-| `output_mode` | `str` | `"chat"` / `"quick_report"` / `"investment_report"` |
+| `output_mode` | `str` | `"chat"` / `"brief"` / `"investment_report"` |
 | `plan_ir` | `dict` | 执行计划（步骤、分组、依赖、成本估算） |
 | `step_results` | `dict` | 各智能体/工具的原始输出 |
 | `evidence_pool` | `list[dict]` | 收集的证据条目（带来源归因） |
@@ -1062,7 +1064,7 @@ npm run build --prefix frontend
 cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
 ```
 
-聊天 UX Playwright smoke 覆盖 Deep/Brief 启用、新建/切换/删除会话、用户可见 trace 摘要和停止生成。20 条 request-understanding query 矩阵记录在 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+聊天 UX Playwright smoke 覆盖 Deep/Brief 启用、新建/切换/删除会话、用户可见 trace 摘要和停止生成。20 条 request-understanding query 矩阵记录在 `docs/reports/2026-05-03_request_understanding_query_results.md`；最新浏览器验证记录在 `docs/reports/2026-05-03_playwright_chat_smoke.md`。
 
 ### 可选：PostgreSQL（RAG 后端）
 

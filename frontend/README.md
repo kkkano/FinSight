@@ -25,6 +25,13 @@ Those decisions belong to the backend LangGraph request understanding layer. The
 ../docs/plans/2026-05-03_request_understanding_task_graph_spec.md
 ```
 
+Conversation boundary:
+
+- frontend localStorage is the MVP source for message history and conversation summaries
+- `/api/conversations` owns backend session lifecycle and cleanup
+- deleting a conversation should call the backend API, then clear local persisted messages
+- stop generation should keep partial content and cancelled thinking steps
+
 ## Main Files
 
 - `src/components/ChatInput.tsx`: chat composer, output mode controls, streaming lifecycle.

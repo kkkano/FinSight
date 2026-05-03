@@ -5,6 +5,7 @@
 > 主链实现：`backend/graph/runner.py`
 
 > 2026-05-03 运行时事实：聊天前半段已接入 `understand_request`，旧 `chat_respond / resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+> 同日增量：后端已提供 `/api/conversations` 最小会话生命周期 API；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件并保留已完成内容。
 
 ## 1. 系统总览
 
@@ -21,6 +22,7 @@ flowchart LR
     EXEC_EP[/api/execute*]
     DASH_EP[/api/dashboard*]
     REPORT_EP[/api/reports/*]
+    CONV_EP[/api/conversations/*]
     AGENT_PREF_EP[/api/agents/preferences]
   end
 
@@ -44,6 +46,7 @@ flowchart LR
   RUNNER --> NODES --> EXECUTOR --> ANALYSIS --> SYNTH
   DASH_EP --> FE
   REPORT_EP --> FE
+  CONV_EP --> FE
   AGENT_PREF_EP --> FE
 ```
 
@@ -141,6 +144,32 @@ sequenceDiagram
 ```
 
 前端事件解析位置：`frontend/src/api/client.ts`
+
+取消语义：
+
+- 前端通过 `AbortController.abort()` 停止当前 SSE。
+- `backend/services/execution_service.py` 捕获取消后发送 `trace.stage="cancelled"` 和 `pipeline_stage.stage="cancelled"`。
+- 前端消息保留已收到 token、thinking steps 和“已停止生成，保留已完成的结果。”提示。
+
+## 4.1 会话生命周期链路
+
+```mermaid
+flowchart LR
+  RAIL[Conversation Rail] --> CREATE[POST /api/conversations]
+  RAIL --> LIST[GET /api/conversations]
+  RAIL --> GET[GET /api/conversations/{id}]
+  RAIL --> DELETE[DELETE /api/conversations/{id}]
+  DELETE --> CTX[Clear session context]
+  DELETE --> RPT[Delete report/citation index rows]
+  DELETE --> RAG[Delete thread RAG collections]
+  DELETE --> OBS[Soft-delete RAG observability runs]
+```
+
+边界：
+
+- 前端 localStorage 仍是当前消息历史 MVP 真相源。
+- 后端 conversation API 负责 thread context 隔离和删除清理。
+- 下一阶段服务端 conversation store 需要补 messages/title/pinned/archive/PATCH。
 
 ## 5. Dashboard / Workbench 数据链路
 

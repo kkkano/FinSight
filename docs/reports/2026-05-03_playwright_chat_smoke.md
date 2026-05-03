@@ -16,7 +16,7 @@ npx playwright test e2e/request-understanding-chat.spec.ts
 | P01 | `GOOGL`、`Apple`、`谷歌`、`微软`、`苹果`、无 ticker 宏观问题均能启用 Deep 模式 | 通过 |
 | P02 | 新建会话、切回旧会话、恢复旧消息、删除会话 | 通过 |
 | P03 | 用户视图展开后展示后端 `trace` 事件携带的具体请求拆解摘要 | 通过 |
-| P04 | 流式生成中出现停止按钮，点击后保留“已停止本次响应。” | 通过 |
+| P04 | 流式生成中出现停止按钮，点击后保留“已停止生成，保留已完成的结果。”，状态条显示“本次生成已停止（结果已保留）” | 通过 |
 
 ## 运行结果
 
@@ -38,7 +38,13 @@ pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_
 182 passed
 
 npm run test:unit --prefix frontend -- --run src/api/client.sse.test.ts src/store/executionStore.reducer.test.ts src/store/useStore.conversation.test.ts
-3 files / 11 tests passed
+3 files / 15 tests passed
+
+pytest -q backend/tests/test_conversation_router.py backend/tests/test_report_index_delete_session.py backend/tests/test_execution_cancel.py backend/tests/test_plan_ir_validation.py backend/tests/test_executor.py backend/tests/test_understand_request.py backend/tests/test_live_tools_evidence.py
+37 passed
+
+pytest -q backend/tests/test_rag_observability_store.py backend/tests/test_conversation_router.py backend/tests/test_execution_cancel.py backend/tests/test_report_index_delete_session.py
+15 passed
 
 npm run build --prefix frontend
 build passed

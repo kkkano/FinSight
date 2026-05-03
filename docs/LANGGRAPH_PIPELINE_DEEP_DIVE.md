@@ -2,7 +2,7 @@
 
 > 版本：v1.2.0-request-understanding | 更新时间：2026-05-03 | 当前运行时以 `backend/graph/runner.py` 为准 | Agent 数：7
 
-> 2026-05-03 状态说明：主聊天路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 内容保留为兼容与历史细节，不再代表主路径。
+> 2026-05-03 状态说明：主聊天路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 内容保留为兼容与历史细节，不再代表主路径。会话生命周期与删除清理走 `/api/conversations`；停止生成保留 partial answer 并发出 cancelled trace/pipeline 事件。
 
 ---
 
@@ -29,13 +29,16 @@
 graph TB
     subgraph "前端 (React + Vite)"
         UI[用户界面] --> ChatInput[ChatInput 组件]
+        UI --> ConversationRail[会话栏<br/>新建/切换/删除]
         ChatInput --> SSE[SSE 流式连接]
         SSE --> ReportView[ReportView 渲染]
     end
 
     subgraph "API 层 (FastAPI)"
         SSE --> ChatRouter[chat_router.py]
+        ConversationRail --> ConversationRouter[conversation_router.py]
         ChatRouter --> GraphRunner[GraphRunner]
+        ConversationRouter --> Cleanup[session/report/RAG 清理]
     end
 
     subgraph "LangGraph 管道（当前主路径）"
@@ -94,6 +97,8 @@ graph TB
 | **故障隔离** | 每个 Agent 独立断路器 + 缓存 + 降级 |
 | **端点轮转** | LLM 调用失败自动切换到下一个 API 端点 |
 | **可观测** | 全量 trace 事件 + timing + failure 记录 |
+| **会话隔离** | `/api/conversations` 清理 session context、report index、thread RAG collections 和 observability runs |
+| **可停止** | 前端 abort + 后端 cancelled trace；partial answer 不回滚 |
 
 ---
 
@@ -1138,6 +1143,27 @@ flowchart TD
 | `LLM_RATE_LIMIT_RETRY_MAX_ATTEMPTS` | 6 | LLM 最大重试次数 |
 | `LLM_ENDPOINT_DEFAULT_COOLDOWN_SEC` | 90 | 端点冷却时间 |
 
+### 12.4 会话删除与取消
+
+```mermaid
+flowchart TD
+    DEL[DELETE /api/conversations/{session_id}] --> CTX[移除 ContextManager]
+    DEL --> REPORT[删除 report_index / citation_index]
+    DEL --> RAG[删除 thread memory + working-set collections]
+    DEL --> OBS[按 collection 软删除 RAG observability runs]
+
+    STOP[用户点击停止] --> ABORT[AbortController.abort]
+    ABORT --> CANCEL[后端 CancelledError]
+    CANCEL --> TRACE[trace: stage=cancelled]
+    CANCEL --> PIPE[pipeline_stage: stage=cancelled]
+    TRACE --> UI[前端保留 partial answer + thinking steps]
+```
+
+约束：
+
+- 删除会话不能只删前端消息；必须同步隔离后端 thread context 和 RAG 临时材料。
+- 取消不是失败；不能触发 missing done 错误，也不能清空已收到的 token 和 trace。
+
 ---
 
-> 文档由 FinSight AI 工程团队维护 | 最后更新：2026-02-11
+> 文档由 FinSight AI 工程团队维护 | 最后更新：2026-05-03

@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> 2026-05-03 状态说明：当前主路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 章节保留为兼容节点说明，不再代表主聊天路径。
+> 2026-05-03 状态说明：当前主路径已接入 `understand_request`。旧 `resolve_subject / clarify / parse_operation` 章节保留为兼容节点说明，不再代表主聊天路径。会话生命周期走 `/api/conversations`，停止生成会产生 `cancelled` trace/pipeline 事件。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
@@ -383,6 +383,10 @@ Supports 3 backends (configured via `LANGGRAPH_CHECKPOINTER_BACKEND`):
 - 前端消费：
   - `frontend/src/api/client.ts` 透传 `runId/sessionId` 到 `onThinking/onRawEvent`
   - `frontend/src/store/executionStore.ts` 按 `runId` 过滤并写入 `timeline`
+- 取消语义：
+  - 前端点击停止后调用 `AbortController.abort()`。
+  - 后端在 `run_graph_pipeline` / `resume_graph_pipeline` 中捕获 `asyncio.CancelledError`，发送 `trace.stage="cancelled"` 与 `pipeline_stage.stage="cancelled"`。
+  - 前端保留 partial answer、thinking steps 和停止提示，不报 missing done。
 
 ```mermaid
 flowchart LR
@@ -392,6 +396,22 @@ flowchart LR
   SSE --> PARSE[parseSSEStream]
   PARSE --> STORE[executionStore timeline]
   STORE --> PANEL[AgentTimeline UI]
+```
+
+### A2) Conversation lifecycle contract
+
+- `GET /api/conversations`：列出当前后端 session context 摘要。
+- `POST /api/conversations`：创建或触达会话，返回规范化 `session_id`。
+- `GET /api/conversations/{id}`：读取会话摘要。
+- `DELETE /api/conversations/{id}`：清理 session context、report/citation index、thread RAG collections 和对应 RAG observability runs。
+
+```mermaid
+flowchart LR
+  FE[Conversation Rail] --> API[/api/conversations]
+  API --> SESSION[ContextManager by thread_id]
+  API --> REPORT[ReportIndexStore.delete_session]
+  API --> RAG[HybridRAGService.delete_collections]
+  API --> OBS[RAG observability soft delete by collection]
 ```
 
 ### B) Alert feed contract
