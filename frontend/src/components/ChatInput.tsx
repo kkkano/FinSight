@@ -244,7 +244,7 @@ interface ChatInputProps {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDashboardRequest }) => {
   const [input, setInput] = useState('');
-  const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
+  const [outputMode, setOutputMode] = useState<'chat' | 'investment_report'>('chat');
   const {
     addMessageToSession,
     updateMessageInSession,
@@ -709,7 +709,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               confirmation_mode: 'skip' as const,
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
             }
-          : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
+          : { output_mode: 'chat', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         requestSessionId || undefined,
         traceRawEnabled,
         { signal: streamController.signal },
@@ -775,7 +775,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       const nextDraft = useStore.getState().draft || '';
       setInput(nextDraft);
     }
-    setOutputMode('brief');
+    setOutputMode('chat');
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
       inputRef.current.style.overflowY = 'hidden';
@@ -798,7 +798,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
   useEffect(() => {
     if (!canGenerateReport && outputMode === 'investment_report') {
-      setOutputMode('brief');
+      setOutputMode('chat');
     }
   }, [canGenerateReport, outputMode]);
 
@@ -826,34 +826,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           </span>
         </div>
       )}
-      <div className="max-w-5xl mx-auto mb-2 flex items-center gap-2 text-xs">
-        <span className="text-fin-muted">输出模式</span>
+      <div className="max-w-5xl mx-auto mb-2 flex items-center justify-end gap-2 text-xs">
         <button
           type="button"
-          data-testid="chat-mode-brief-btn"
-          onClick={() => setOutputMode('brief')}
-          disabled={isChatLoading}
-          className={`px-2 py-1 rounded border transition-colors ${
-            outputMode === 'brief'
-              ? 'border-fin-primary text-fin-primary bg-fin-primary/10'
-              : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50'
-          }`}
-        >
-          简报
-        </button>
-        <button
-          type="button"
-          data-testid="chat-mode-deep-btn"
-          onClick={() => setOutputMode('investment_report')}
+          data-testid="chat-report-toggle-btn"
+          onClick={() => setOutputMode(outputMode === 'investment_report' ? 'chat' : 'investment_report')}
           disabled={isChatLoading || !canGenerateReport}
           className={`px-2 py-1 rounded border transition-colors ${
             outputMode === 'investment_report'
               ? 'border-amber-500 text-amber-500 bg-amber-500/10'
               : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
-          title={canGenerateReport ? '切换到深度分析模式' : '输入可研究的问题、选择标的或引用内容后启用深度分析'}
+          title={canGenerateReport ? '生成结构化长报告' : '输入可研究的问题、选择标的或引用内容后启用报告'}
         >
-          深度
+          报告
         </button>
       </div>
       <div className="relative flex items-end max-w-5xl mx-auto">
@@ -893,9 +879,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               data-testid="chat-send-btn"
               onClick={() => handleSend()}
               disabled={!input.trim()}
-              aria-label={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送消息'}
+              aria-label={outputMode === 'investment_report' ? '发送并生成报告' : '发送消息'}
               className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
+              title={outputMode === 'investment_report' ? '发送并生成报告' : '发送'}
             >
               <SendHorizontal size={18} />
             </button>

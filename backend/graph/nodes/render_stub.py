@@ -10,6 +10,7 @@ from urllib.parse import quote_plus
 
 from langchain_core.messages import AIMessage
 
+from backend.graph.nodes.chat_renderer import render_chat_markdown
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
 
@@ -354,6 +355,14 @@ def render_stub(state: GraphState) -> dict:
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
+    if output_mode == "chat":
+        if isinstance(existing_draft, str) and existing_draft.strip():
+            markdown = existing_draft
+        else:
+            markdown = render_chat_markdown(state)
+        result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
+        return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
+
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
         # synthesize already wrote a rich draft; keep it, but inject citations for brief mode if needed.
         if output_mode == "brief":

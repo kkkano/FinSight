@@ -83,11 +83,11 @@ test.beforeEach(async ({ page }) => {
   await installCommonRoutes(page);
 });
 
-test('deep mode is enabled for aliases, ticker text, and macro questions without frontend alias dictionary', async ({ page }) => {
+test('report toggle is enabled for aliases, ticker text, and macro questions without frontend alias dictionary', async ({ page }) => {
   await page.goto('/chat');
 
   const input = page.locator('#chat-input');
-  const deepButton = page.getByTestId('chat-mode-deep-btn');
+  const reportButton = page.getByTestId('chat-report-toggle-btn');
   const queries = [
     'GOOGL',
     'Apple',
@@ -99,7 +99,7 @@ test('deep mode is enabled for aliases, ticker text, and macro questions without
 
   for (const query of queries) {
     await input.fill(query);
-    await expect(deepButton, `query should enable deep mode: ${query}`).toBeEnabled();
+    await expect(reportButton, `query should enable report mode: ${query}`).toBeEnabled();
   }
 });
 

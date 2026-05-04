@@ -111,6 +111,31 @@ describe('useStore conversation lifecycle', () => {
     expect(useStore.getState().isChatLoading).toBe(false);
   });
 
+  it('restores execution status per conversation instead of leaking global progress', () => {
+    const state = useStore.getState();
+    const originalSession = state.sessionId;
+    state.setSessionLoading(originalSession, true);
+    state.setStatus('Streaming response...');
+    state.setExecutionState('Searching news', 42);
+
+    state.startNewChat();
+    const nextSession = useStore.getState().sessionId;
+    expect(nextSession).not.toBe(originalSession);
+    expect(useStore.getState().statusMessage).toBeNull();
+    expect(useStore.getState().currentStep).toBeNull();
+    expect(useStore.getState().executionProgress).toBeNull();
+
+    useStore.getState().selectConversation(originalSession);
+    expect(useStore.getState().statusMessage).toBe('Streaming response...');
+    expect(useStore.getState().currentStep).toBe('Searching news');
+    expect(useStore.getState().executionProgress).toBe(42);
+
+    useStore.getState().setSessionLoading(originalSession, false);
+    expect(useStore.getState().statusMessage).toBeNull();
+    expect(useStore.getState().currentStep).toBeNull();
+    expect(useStore.getState().executionProgress).toBeNull();
+  });
+
   it('keeps draft text isolated per conversation while switching', () => {
     const state = useStore.getState();
     const originalSession = state.sessionId;

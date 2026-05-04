@@ -46,6 +46,35 @@ def test_persist_and_load_memory_snapshot(tmp_path):
     assert len(context["recent_focuses"]) >= 1
 
 
+def test_persist_memory_snapshot_keeps_last_report_context(tmp_path):
+    service = MemoryService(storage_path=str(tmp_path))
+    thread_id = "public:test_user:thread-report"
+
+    report = {
+        "report_id": "rpt-ctx-001",
+        "ticker": "AAPL",
+        "title": "Apple investment report",
+        "summary": "Apple report summary for follow-up chat.",
+        "sentiment": "neutral",
+        "generated_at": "2026-05-04T00:00:00Z",
+        "sections": [{"title": "Risks"}, {"title": "Valuation"}],
+        "risks": ["Valuation remains sensitive to rates.", "China demand can pressure revenue."],
+    }
+
+    assert persist_memory_snapshot(
+        thread_id=thread_id,
+        state={"query": "Build Apple report", "subject": {"tickers": ["AAPL"]}},
+        report=report,
+        memory_service=service,
+    )
+
+    context = load_memory_context(thread_id=thread_id, memory_service=service)
+    last_report = context["last_report"]
+    assert last_report["report_id"] == "rpt-ctx-001"
+    assert last_report["summary"] == "Apple report summary for follow-up chat."
+    assert last_report["risks"][0] == "Valuation remains sensitive to rates."
+
+
 def test_memory_service_init_failure_only_warn_once(monkeypatch, caplog):
     def _raise_init(*args, **kwargs):
         raise RuntimeError("init failed")

@@ -73,7 +73,15 @@ def _format_memory_context_for_synth(state: GraphState) -> str:
         return ""
 
     payload: dict[str, Any] = {}
-    for key in ("user_id", "risk_tolerance", "investment_style", "watchlist", "last_focus", "recent_focuses"):
+    for key in (
+        "user_id",
+        "risk_tolerance",
+        "investment_style",
+        "watchlist",
+        "last_focus",
+        "last_report",
+        "recent_focuses",
+    ):
         value = memory_context.get(key)
         if value is None:
             continue

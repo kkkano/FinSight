@@ -84,7 +84,7 @@ graph TD
 |-------|-----------|-------------|
 | `messages` | Read/Write | 修剪超预算历史，并在需要时写入摘要 |
 | `ui_context` | Read/Write | 规范化 selections、active_symbol、view 等前端上下文 |
-| `output_mode` | Write | 合并 UI 显式模式和默认 brief/deep hints |
+| `output_mode` | Write | 合并 UI 显式模式和默认 chat/report hints；普通聊天默认 `chat`，只有报告按钮或报告词进入 `investment_report` |
 
 `prepare_context` 是当前主路径的上下文准备入口。它承接旧 `trim_history`、`summarize_history`、`normalize_ui_context`、`decide_output_mode` 的职责，减少图上前半段节点数量，并保证 `understand_request` 获取的是同一份规范化上下文。
 
@@ -421,12 +421,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  FE[Conversation Rail] --> API[/api/conversations]
-  API --> STORE[conversation_store snapshot]
-  API --> SESSION[ContextManager by thread_id]
-  API --> REPORT[ReportIndexStore.delete_session]
-  API --> RAG[HybridRAGService.delete_collections]
-  API --> OBS[RAG observability soft delete by collection]
+  FE["Conversation Rail"] --> API["/api/conversations"]
+  API --> STORE["conversation_store snapshot"]
+  API --> SESSION["ContextManager by thread_id"]
+  API --> REPORT["ReportIndexStore.delete_session"]
+  API --> RAG["HybridRAGService.delete_collections"]
+  API --> OBS["RAG observability soft delete by collection"]
 ```
 
 ### B) Alert feed contract
@@ -441,12 +441,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  S1[Price Scheduler] --> EVT[record_alert_event]
+  S1["Price Scheduler"] --> EVT["record_alert_event"]
   S2[News Scheduler] --> EVT
   S3[Risk Scheduler] --> EVT
-  EVT --> STORE[(subscriptions.json recent_events)]
-  STORE --> API[/api/alerts/feed]
-  API --> RP[RightPanel Alerts]
+  EVT --> STORE[("subscriptions.json recent_events")]
+  STORE --> API["/api/alerts/feed"]
+  API --> RP["RightPanel Alerts"]
 ```
 
 ### B2) Alert feed contract（更新版，2026-02-18）

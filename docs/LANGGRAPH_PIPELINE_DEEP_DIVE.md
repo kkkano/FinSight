@@ -138,13 +138,13 @@ flowchart LR
 
     DM -->|"含 '投资报告/研报/report'"| IR[investment_report]
     DM -->|"UI 显式设定"| EXPLICIT[UI 指定模式]
-    DM -->|"默认"| BRIEF[brief]
+    DM -->|"默认"| CHAT[chat]
 
     IR --> FULL[完整研报<br/>6 Agent + 模板 + ReportIR]
-    BRIEF --> QUICK[快速回答<br/>最小工具集 + 简洁模板]
+    CHAT --> QUICK[对话式回答<br/>最小工具集 + 无模板泄露]
 
     style IR fill:#ee5a24,color:#fff
-    style BRIEF fill:#4a9eff,color:#fff
+    style CHAT fill:#4a9eff,color:#fff
     style FULL fill:#ff6348,color:#fff
     style QUICK fill:#54a0ff,color:#fff
 ```
@@ -302,10 +302,10 @@ flowchart TD
     CHECK1 -->|是| USE_UI[使用 UI 值]
     CHECK1 -->|否| CHECK2{query 含<br/>report 触发词?}
     CHECK2 -->|"投资报告/研报/report<br/>(排除含 analysis)"| IR[investment_report]
-    CHECK2 -->|否| BRIEF[brief]
+    CHECK2 -->|否| CHAT[chat]
 
     style IR fill:#ee5a24,color:#fff
-    style BRIEF fill:#4a9eff,color:#fff
+    style CHAT fill:#4a9eff,color:#fff
 ```
 
 **report 触发词完整列表：**
@@ -1146,21 +1146,21 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    POST[POST /api/conversations] --> STORE[conversation_store snapshot]
-    PATCH[PATCH /api/conversations/{session_id}] --> STORE
-    GET[GET /api/conversations/{session_id}] --> STORE
-    DEL[DELETE /api/conversations/{session_id}] --> STORE
-    DEL --> CTX[移除 ContextManager]
-    DEL --> REPORT[删除 report_index / citation_index]
-    DEL --> RAG[删除 thread memory + working-set collections]
-    DEL --> OBS[按 collection 软删除 RAG observability runs]
+    POST["POST /api/conversations"] --> STORE["conversation_store snapshot"]
+    PATCH["PATCH /api/conversations/{session_id}"] --> STORE
+    GET["GET /api/conversations/{session_id}"] --> STORE
+    DEL["DELETE /api/conversations/{session_id}"] --> STORE
+    DEL --> CTX["移除 ContextManager"]
+    DEL --> REPORT["删除 report_index / citation_index"]
+    DEL --> RAG["删除 thread memory + working-set collections"]
+    DEL --> OBS["按 collection 软删除 RAG observability runs"]
 
-    STOP[用户点击停止] --> ABORT[AbortController.abort]
-    ABORT --> CANCEL[后端 CancelledError]
-    CANCEL --> TRACE[trace: stage=cancelled]
-    CANCEL --> PIPE[pipeline_stage: stage=cancelled]
-    CANCEL --> TOKEN[executor/agent cancellation token]
-    TRACE --> UI[前端保留 partial answer + thinking steps]
+    STOP["用户点击停止"] --> ABORT["AbortController.abort"]
+    ABORT --> CANCEL["后端 CancelledError"]
+    CANCEL --> TRACE["trace: stage=cancelled"]
+    CANCEL --> PIPE["pipeline_stage: stage=cancelled"]
+    CANCEL --> TOKEN["executor/agent cancellation token"]
+    TRACE --> UI["前端保留 partial answer + thinking steps"]
 ```
 
 约束：

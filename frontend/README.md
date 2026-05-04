@@ -34,7 +34,7 @@ Conversation boundary:
 
 ## Main Files
 
-- `src/components/ChatInput.tsx`: chat composer, output mode controls, streaming lifecycle.
+- `src/components/ChatInput.tsx`: chat composer, report toggle, streaming lifecycle.
 - `src/components/layout/ChatWorkspace.tsx`: chat layout and conversation rail.
 - `src/store/useStore.ts`: chat messages, session id, conversation summaries.
 - `src/store/executionStore.ts`: SSE execution state, timeline, streamed content.
@@ -57,7 +57,8 @@ Playwright starts Vite on `127.0.0.1:4273` from `playwright.config.ts`.
 For frontend behavior changes, verify with Playwright against the running app. Chat UX changes must cover:
 
 - empty input and normal input states
-- brief/deep mode selection
+- default conversational chat payload (`output_mode=chat`)
+- report toggle payload (`output_mode=investment_report`)
 - stream abort
 - new/switch/delete conversation
 - SSE thinking events and final answer rendering

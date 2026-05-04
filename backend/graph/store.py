@@ -14,6 +14,7 @@ _DEFAULT_USER_ID = "default_user"
 _RECENT_FOCUS_LIMIT = 10
 _RECENT_FOCUS_LOAD_LIMIT = 3
 _SUMMARY_MAX_LEN = 600
+_REPORT_CONTEXT_MAX_LEN = 1200
 _MEMORY_INIT_FAILED = object()
 
 _memory_service: MemoryService | object | None = None
@@ -116,6 +117,51 @@ def _extract_ticker(state: dict[str, Any], report: dict[str, Any] | None) -> str
     return None
 
 
+def _extract_report_context(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(report, dict):
+        return None
+    report_id = str(report.get("report_id") or "").strip()
+    if not report_id:
+        return None
+
+    sections = report.get("sections")
+    section_titles: list[str] = []
+    if isinstance(sections, list):
+        for item in sections:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if title:
+                section_titles.append(title)
+            if len(section_titles) >= 8:
+                break
+
+    risks_raw = report.get("risks")
+    risks: list[str] = []
+    if isinstance(risks_raw, list):
+        for item in risks_raw:
+            text = str(item or "").strip()
+            if text:
+                risks.append(text[:240])
+            if len(risks) >= 6:
+                break
+
+    synthesis = str(report.get("synthesis_report") or "").strip()
+    summary = str(report.get("summary") or "").strip()
+    context_text = " ".join((summary or synthesis[:_REPORT_CONTEXT_MAX_LEN]).split())
+
+    return {
+        "report_id": report_id,
+        "ticker": str(report.get("ticker") or "").strip().upper() or None,
+        "title": str(report.get("title") or "").strip() or report_id,
+        "summary": context_text[:_REPORT_CONTEXT_MAX_LEN],
+        "sentiment": str(report.get("sentiment") or "").strip() or None,
+        "generated_at": str(report.get("generated_at") or "").strip() or None,
+        "section_titles": section_titles,
+        "risks": risks,
+    }
+
+
 def load_memory_context(
     *,
     thread_id: str | None,
@@ -136,6 +182,9 @@ def load_memory_context(
     last_focus = preferences.get("last_focus")
     if not isinstance(last_focus, dict):
         last_focus = None
+    last_report = last_focus.get("last_report") if isinstance(last_focus, dict) else None
+    if not isinstance(last_report, dict):
+        last_report = None
 
     recent_focuses_raw = preferences.get("recent_focuses")
     recent_focuses: list[dict[str, Any]] = []
@@ -152,6 +201,7 @@ def load_memory_context(
         "investment_style": profile.investment_style,
         "watchlist": _normalize_watchlist(profile.watchlist),
         "last_focus": last_focus,
+        "last_report": last_report,
         "recent_focuses": recent_focuses,
     }
 
@@ -195,6 +245,9 @@ def persist_memory_snapshot(
         sentiment = report.get("sentiment")
         if isinstance(sentiment, str) and sentiment.strip():
             focus_entry["sentiment"] = sentiment.strip()
+        report_context = _extract_report_context(report)
+        if report_context:
+            focus_entry["last_report"] = report_context
 
     dedup_recent: list[dict[str, Any]] = [focus_entry]
     for item in existing_list:

@@ -172,6 +172,10 @@ test.beforeEach(async ({ page }) => {
   });
 
   await page.addInitScript(() => {
+    localStorage.clear();
+    sessionStorage.setItem('finsight-welcome-gate-passed', '1');
+    localStorage.setItem('finsight-entry-mode', 'anonymous');
+    localStorage.setItem('finsight-session-id', E2E_SESSION_ID);
     localStorage.setItem(
       'fs_dashboard_active_v1',
       JSON.stringify({ symbol: 'AAPL', type: 'equity', display_name: 'Apple' }),
@@ -179,7 +183,6 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem('fs_dashboard_layout_v1', JSON.stringify({ hidden_widgets: [], order: [] }));
     localStorage.setItem('fs_dashboard_news_mode_v1', JSON.stringify('market'));
     localStorage.setItem('finsight-portfolio-positions', JSON.stringify({ AAPL: 10 }));
-    localStorage.removeItem('finsight-session-id');
   });
 
   await page.route('**/chat/supervisor/stream', async (route) => {
@@ -246,9 +249,10 @@ test.beforeEach(async ({ page }) => {
 
 });
 
-test('ChatInput: deep mode + send uses options.output_mode=investment_report', async ({ page }) => {
+test('ChatInput: report toggle + send uses options.output_mode=investment_report', async ({ page }) => {
   let captured: any = null;
 
+  await page.unroute('**/chat/supervisor/stream');
   await page.route('**/chat/supervisor/stream', async (route) => {
     captured = parseRequestBody(route);
     await fulfillSSE(route);
@@ -256,17 +260,18 @@ test('ChatInput: deep mode + send uses options.output_mode=investment_report', a
 
   await page.goto('/chat');
 
-  await page.locator('#chat-input').fill('分析影响');
-  await page.getByTestId('chat-mode-deep-btn').click();
+  await page.locator('#chat-input').fill('分析 AAPL 影响');
+  await page.getByTestId('chat-report-toggle-btn').click();
   await page.getByTestId('chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();
   expect(captured?.options?.output_mode).toBe('investment_report');
 });
 
-test('MiniChat: deep mode + send uses options.output_mode=investment_report', async ({ page }) => {
+test('MiniChat: report toggle + send uses options.output_mode=investment_report', async ({ page }) => {
   let captured: any = null;
 
+  await page.unroute('**/chat/supervisor/stream');
   await page.route('**/chat/supervisor/stream', async (route) => {
     captured = parseRequestBody(route);
     await fulfillSSE(route);
@@ -275,7 +280,7 @@ test('MiniChat: deep mode + send uses options.output_mode=investment_report', as
   await page.goto('/dashboard/AAPL');
 
   await page.getByTestId('mini-chat-input').fill('分析影响');
-  await page.getByTestId('mini-chat-mode-deep-btn').click();
+  await page.getByTestId('mini-chat-report-toggle-btn').click();
   await page.getByTestId('mini-chat-send-btn').click();
 
   await expect.poll(() => captured).not.toBeNull();

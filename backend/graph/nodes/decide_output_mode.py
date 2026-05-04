@@ -22,7 +22,7 @@ def decide_output_mode(state: GraphState) -> dict:
     Decide output_mode with priority:
     1) UI explicit (runner sets state.output_mode)
     2) explicit words in query (strong triggers only)
-    3) default: brief
+    3) default: chat
     """
     explicit: OutputMode | None = state.get("output_mode")
     if explicit in ("chat", "brief", "investment_report"):
@@ -37,5 +37,4 @@ def decide_output_mode(state: GraphState) -> dict:
         if re.search(r"\b(report)\b", lowered) and "analysis" not in lowered:
             return {"output_mode": "investment_report"}
 
-    return {"output_mode": "brief"}
-
+    return {"output_mode": "chat"}

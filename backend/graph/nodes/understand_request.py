@@ -283,7 +283,7 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
 async def understand_request(state: GraphState) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
     ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
-    output_mode = (decide_output_mode(state).get("output_mode") or "brief")
+    output_mode = (decide_output_mode(state).get("output_mode") or "chat")
 
     tasks: list[dict[str, Any]] = []
     blocked_tasks: list[dict[str, Any]] = []

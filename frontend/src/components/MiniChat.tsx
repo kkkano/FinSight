@@ -71,7 +71,7 @@ export const MiniChat: React.FC = () => {
   const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const [input, setInput] = useState('');
-  const [outputMode, setOutputMode] = useState<'brief' | 'investment_report'>('brief');
+  const [outputMode, setOutputMode] = useState<'chat' | 'investment_report'>('chat');
   // 本地 loading 状态（不影响主 Chat 的全局 loading）
   const [isLoading, setIsLoading] = useState(false);
   // 用户是否关闭了 context pill
@@ -112,7 +112,7 @@ export const MiniChat: React.FC = () => {
 
   useEffect(() => {
     if (!canGenerateReport && outputMode === 'investment_report') {
-      setOutputMode('brief');
+      setOutputMode('chat');
     }
   }, [canGenerateReport, outputMode]);
 
@@ -297,7 +297,7 @@ export const MiniChat: React.FC = () => {
             confirmation_mode: 'skip' as const,
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
           }
-          : { output_mode: 'brief', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
+          : { output_mode: 'chat', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
         requestSessionId || undefined,
         traceRawEnabled,
         { signal: streamController.signal },
@@ -464,33 +464,19 @@ export const MiniChat: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-2xs text-fin-muted">深度</span>
           <button
             type="button"
-            data-testid="mini-chat-mode-brief-btn"
-            onClick={() => setOutputMode('brief')}
-            disabled={isLoading}
-            className={`px-1.5 py-0.5 rounded border text-2xs transition-colors ${
-              outputMode === 'brief'
-                ? 'border-fin-primary text-fin-primary bg-fin-primary/10'
-                : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50'
-            }`}
-          >
-            简报
-          </button>
-          <button
-            type="button"
-            data-testid="mini-chat-mode-deep-btn"
-            onClick={() => setOutputMode('investment_report')}
+            data-testid="mini-chat-report-toggle-btn"
+            onClick={() => setOutputMode(outputMode === 'investment_report' ? 'chat' : 'investment_report')}
             disabled={isLoading || !canGenerateReport}
             className={`px-1.5 py-0.5 rounded border text-2xs transition-colors ${
               outputMode === 'investment_report'
                 ? 'border-amber-500 text-amber-500 bg-amber-500/10'
                 : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={canGenerateReport ? '切换到深度分析模式' : '请选择标的或引用内容后启用深度分析'}
+            title={canGenerateReport ? '生成结构化长报告' : '请选择标的或引用内容后启用报告'}
           >
-            深度
+            报告
           </button>
         </div>
 
@@ -529,7 +515,7 @@ export const MiniChat: React.FC = () => {
               onClick={() => handleSend()}
               disabled={!input.trim()}
               className="p-2 bg-fin-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              title={outputMode === 'investment_report' ? '发送（深度分析模式）' : '发送'}
+              title={outputMode === 'investment_report' ? '发送并生成报告' : '发送'}
             >
               <Send size={14} />
             </button>

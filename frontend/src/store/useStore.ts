@@ -20,6 +20,13 @@ export interface ConversationSummary {
   updatedAt: number;
 }
 
+interface ChatSessionStatus {
+  statusMessage: string | null;
+  statusSince: number | null;
+  executionProgress: number | null;
+  currentStep: string | null;
+}
+
 const DEFAULT_USER_ID = 'default_user';
 const SESSION_PART_PATTERN = /[^A-Za-z0-9._-]/g;
 const normalizeSessionPart = (value: string, fallback: string): string => {
@@ -175,6 +182,7 @@ interface AppState {
   setSessionLoading: (sessionId: string, loading: boolean) => void;
   isChatLoading: boolean;
   chatLoadingBySession: Record<string, boolean>;
+  chatStatusBySession: Record<string, ChatSessionStatus>;
   statusMessage: string | null;
   statusSince: number | null;
   executionProgress: number | null;
@@ -517,11 +525,24 @@ const buildNewConversationSessionId = (identity: AuthIdentity | null): string =>
   return buildAnonymousSessionId();
 };
 
+const EMPTY_CHAT_SESSION_STATUS: ChatSessionStatus = {
+  statusMessage: null,
+  statusSince: null,
+  executionProgress: null,
+  currentStep: null,
+};
+
+const statusForSession = (
+  statuses: Record<string, ChatSessionStatus>,
+  sessionId: string,
+): ChatSessionStatus => statuses[sessionId] || EMPTY_CHAT_SESSION_STATUS;
+
 export const useStore = create<AppState>((set) => ({
   messages: getInitialMessages(initialSessionId),
   conversationSummaries: loadConversationSummaries(initialSessionId, getInitialMessages(initialSessionId)),
   isChatLoading: false,
   chatLoadingBySession: {},
+  chatStatusBySession: {},
   statusMessage: null,
   statusSince: null,
   executionProgress: null,
@@ -642,29 +663,74 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
+      const nextStatuses = loading
+        ? state.chatStatusBySession
+        : {
+            ...state.chatStatusBySession,
+            [normalized]: EMPTY_CHAT_SESSION_STATUS,
+          };
       return {
         chatLoadingBySession: {
           ...state.chatLoadingBySession,
           [normalized]: loading,
         },
+        chatStatusBySession: nextStatuses,
         isChatLoading: normalized === state.sessionId ? loading : state.isChatLoading,
+        statusMessage: normalized === state.sessionId && !loading ? null : state.statusMessage,
+        statusSince: normalized === state.sessionId && !loading ? null : state.statusSince,
+        executionProgress: normalized === state.sessionId && !loading ? null : state.executionProgress,
+        currentStep: normalized === state.sessionId && !loading ? null : state.currentStep,
       };
     }),
   setStatus: (message) =>
-    set(() => ({
-      statusMessage: message,
-      statusSince: message ? Date.now() : null,
-    })),
+    set((state) => {
+      const nextStatus = {
+        ...statusForSession(state.chatStatusBySession, state.sessionId),
+        statusMessage: message,
+        statusSince: message ? Date.now() : null,
+      };
+      return {
+        statusMessage: nextStatus.statusMessage,
+        statusSince: nextStatus.statusSince,
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [state.sessionId]: nextStatus,
+        },
+      };
+    }),
   setExecutionState: (step, progress = null) =>
-    set(() => ({
-      currentStep: step,
-      executionProgress: progress === null ? null : Math.max(0, Math.min(100, progress)),
-    })),
+    set((state) => {
+      const nextProgress = progress === null ? null : Math.max(0, Math.min(100, progress));
+      const nextStatus = {
+        ...statusForSession(state.chatStatusBySession, state.sessionId),
+        currentStep: step,
+        executionProgress: nextProgress,
+      };
+      return {
+        currentStep: step,
+        executionProgress: nextProgress,
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [state.sessionId]: nextStatus,
+        },
+      };
+    }),
   resetExecutionState: () =>
-    set(() => ({
-      currentStep: null,
-      executionProgress: null,
-    })),
+    set((state) => {
+      const nextStatus = {
+        ...statusForSession(state.chatStatusBySession, state.sessionId),
+        currentStep: null,
+        executionProgress: null,
+      };
+      return {
+        currentStep: null,
+        executionProgress: null,
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [state.sessionId]: nextStatus,
+        },
+      };
+    }),
   setTicker: (ticker) => set({ currentTicker: ticker }),
   setAbortController: (controller) =>
     set((state) => ({
@@ -706,6 +772,15 @@ export const useStore = create<AppState>((set) => ({
         statusSince: Date.now(),
         currentStep: '已停止生成',
         executionProgress: progress,
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [state.sessionId]: {
+            statusMessage: STOPPED_GENERATION_MESSAGE,
+            statusSince: Date.now(),
+            currentStep: '已停止生成',
+            executionProgress: progress,
+          },
+        },
       };
     }),
   clearConversationContext: () =>
@@ -726,6 +801,10 @@ export const useStore = create<AppState>((set) => ({
         chatLoadingBySession: {
           ...state.chatLoadingBySession,
           [state.sessionId]: false,
+        },
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [state.sessionId]: EMPTY_CHAT_SESSION_STATUS,
         },
         statusMessage: null,
         statusSince: null,
@@ -764,15 +843,16 @@ export const useStore = create<AppState>((set) => ({
         nextSessionId,
         [WELCOME_MESSAGE],
       );
+      const sessionStatus = statusForSession(state.chatStatusBySession, nextSessionId);
       return {
         sessionId: nextSessionId,
         messages: [WELCOME_MESSAGE],
         conversationSummaries,
         isChatLoading: Boolean(state.chatLoadingBySession[nextSessionId]),
-        statusMessage: null,
-        statusSince: null,
-        executionProgress: null,
-        currentStep: null,
+        statusMessage: sessionStatus.statusMessage,
+        statusSince: sessionStatus.statusSince,
+        executionProgress: sessionStatus.executionProgress,
+        currentStep: sessionStatus.currentStep,
         abortController: state.abortControllersBySession[nextSessionId] || null,
         currentTicker: null,
         draft: state.draftBySession[nextSessionId] || '',
@@ -827,11 +907,16 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-session-id', normalized);
       }
       createBackendConversation(normalized, messages);
+      const sessionStatus = statusForSession(state.chatStatusBySession, normalized);
       return {
         sessionId: normalized,
         messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
         isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
+        statusMessage: sessionStatus.statusMessage,
+        statusSince: sessionStatus.statusSince,
+        executionProgress: sessionStatus.executionProgress,
+        currentStep: sessionStatus.currentStep,
         abortController: state.abortControllersBySession[normalized] || null,
         draft: state.draftBySession[normalized] || '',
       };
@@ -845,15 +930,16 @@ export const useStore = create<AppState>((set) => ({
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
+      const sessionStatus = statusForSession(state.chatStatusBySession, normalized);
       return {
         sessionId: normalized,
         messages,
         conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, messages),
         isChatLoading: Boolean(state.chatLoadingBySession[normalized]),
-        statusMessage: null,
-        statusSince: null,
-        executionProgress: null,
-        currentStep: null,
+        statusMessage: sessionStatus.statusMessage,
+        statusSince: sessionStatus.statusSince,
+        executionProgress: sessionStatus.executionProgress,
+        currentStep: sessionStatus.currentStep,
         abortController: state.abortControllersBySession[normalized] || null,
         currentTicker: null,
         draft: state.draftBySession[normalized] || '',
@@ -897,6 +983,7 @@ export const useStore = create<AppState>((set) => ({
       if (normalized === state.sessionId && nextSessionId !== normalized) {
         createBackendConversation(nextSessionId, nextMessages);
       }
+      const nextSessionStatus = statusForSession(state.chatStatusBySession, nextSessionId);
       return {
         sessionId: nextSessionId,
         messages: nextMessages,
@@ -906,10 +993,14 @@ export const useStore = create<AppState>((set) => ({
           ...state.chatLoadingBySession,
           [normalized]: false,
         },
-        statusMessage: normalized === state.sessionId ? null : state.statusMessage,
-        statusSince: normalized === state.sessionId ? null : state.statusSince,
-        executionProgress: normalized === state.sessionId ? null : state.executionProgress,
-        currentStep: normalized === state.sessionId ? null : state.currentStep,
+        chatStatusBySession: {
+          ...state.chatStatusBySession,
+          [normalized]: EMPTY_CHAT_SESSION_STATUS,
+        },
+        statusMessage: normalized === state.sessionId ? nextSessionStatus.statusMessage : state.statusMessage,
+        statusSince: normalized === state.sessionId ? nextSessionStatus.statusSince : state.statusSince,
+        executionProgress: normalized === state.sessionId ? nextSessionStatus.executionProgress : state.executionProgress,
+        currentStep: normalized === state.sessionId ? nextSessionStatus.currentStep : state.currentStep,
         abortController: normalized === state.sessionId ? (state.abortControllersBySession[nextSessionId] || null) : state.abortController,
         abortControllersBySession: {
           ...state.abortControllersBySession,
