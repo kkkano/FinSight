@@ -356,10 +356,7 @@ def render_stub(state: GraphState) -> dict:
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
     if output_mode == "chat":
-        if isinstance(existing_draft, str) and existing_draft.strip():
-            markdown = existing_draft
-        else:
-            markdown = render_chat_markdown(state)
+        markdown = render_chat_markdown(state)
         result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
         return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
 

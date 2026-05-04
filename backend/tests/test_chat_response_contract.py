@@ -86,6 +86,47 @@ def test_price_chat_answer_does_not_leak_tool_or_template_terms() -> None:
     assert "912.34" in markdown
 
 
+def test_chat_renderer_uses_tool_data_instead_of_existing_fallback_draft() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA 今天多少钱？",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "price"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "price"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "draft_markdown": "我理解你的问题是：NVDA 今天多少钱。",
+                "step_results": {
+                    "s1": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "price": 912.34,
+                            "change": 8.12,
+                            "change_percent": 0.9,
+                            "currency": "USD",
+                        }
+                    }
+                },
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "912.34" in markdown
+    assert "我理解你的问题是" not in markdown
+
+
 def test_news_chat_answer_uses_clean_citations() -> None:
     markdown = _render_chat(
         {
