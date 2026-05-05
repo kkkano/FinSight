@@ -1,0 +1,138 @@
+[
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-url-focus-render"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-url-focus-render",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 109748,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "research_doc",
+        "tickers": [
+          "MSFT",
+          "URL"
+        ],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户请求实时价格、URL内容分析、概念解释和总结，需要工具支持",
+      "reply_guidance": "先获取AAPL价格和读取URL内容，然后解释高估值与利率的关系，最后基于结果给出一句话总结建议",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求AAPL价格"
+        },
+        {
+          "subject_type": "research_doc",
+          "subject_label": "URL内容",
+          "tickers": [
+            "MSFT",
+            "URL"
+          ],
+          "operation": "qa",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "用户要求分析URL对MSFT的相关性"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "高估值与利率关系",
+          "tickers": [],
+          "operation": "analyze_impact",
+          "params": {},
+          "reason": "用户请求解释为什么高估值怕利率"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "总结建议",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "用户要求用一句话总结关注点"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "compound query missed final focus sentence"
+    ]
+  }
+]

@@ -1,0 +1,99 @@
+[
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-url-fast-taskgraph"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-url-fast-taskgraph",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 105029,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户请求涉及实时价格获取和URL内容分析，需要工具支持",
+      "reply_guidance": "先查询AAPL当前价格，然后读取URL内容评估对MSFT的相关性，接着解释高估值股票对利率敏感的原因，最后基于分析给出一句话关注点。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求AAPL价格"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "https://example.com/msft-rates",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "qa",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "用户要求分析URL内容对MSFT的相关性"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "compound query missed MSFT URL research task",
+      "compound URL query did not plan fetch_url_content as an agent/planner tool",
+      "compound query missed high-valuation/rates explanation",
+      "compound query missed final focus sentence"
+    ]
+  }
+]

@@ -29,6 +29,47 @@ def test_alert_extractor_falls_back_to_active_symbol():
     assert params["direction"] == "below"
 
 
+def test_alert_extractor_under_price_target_phrase():
+    state = {
+        "query": "AAPL 跌破 180 的时候提醒我",
+        "subject": {"tickers": ["AAPL"]},
+        "ui_context": {},
+    }
+    result = alert_extractor(state)
+    assert result["alert_valid"] is True
+    params = result["alert_params"]
+    assert params["alert_mode"] == "price_target"
+    assert params["price_target"] == 180.0
+    assert params["direction"] == "below"
+    assert "remaining_query" not in params
+
+
+def test_alert_extractor_preserves_compound_followup_text():
+    state = {
+        "query": "TSLA 跌破 180 提醒我，顺便说说最近新闻。",
+        "subject": {"tickers": ["TSLA"]},
+        "ui_context": {},
+    }
+    result = alert_extractor(state)
+    assert result["alert_valid"] is True
+    params = result["alert_params"]
+    assert params["alert_mode"] == "price_target"
+    assert params["remaining_query"] == "说说最近新闻"
+
+
+def test_alert_extractor_missing_trigger_prompt_is_natural():
+    state = {
+        "query": "AAPL 提醒我",
+        "subject": {"tickers": ["AAPL"]},
+        "ui_context": {},
+    }
+    result = alert_extractor(state)
+    assert result["alert_valid"] is False
+    markdown = (result.get("artifacts") or {}).get("draft_markdown") or ""
+    assert "问题：" not in markdown
+    assert "缺少提醒阈值" in markdown
+
+
 def test_alert_extractor_missing_ticker_returns_clarify():
     state = {
         "query": "涨到 20 元提醒我",

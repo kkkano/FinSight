@@ -1,0 +1,52 @@
+[
+  {
+    "case": {
+      "id": "Q09",
+      "type": "macro",
+      "session": "eval-macro",
+      "query": "美联储降息预期变化会怎么影响大型科技股？",
+      "expect": "宏观影响自然说明，不把它说成多个分析对象。",
+      "eval_session": "eval-macro-20260505132833-4598bc"
+    },
+    "payload": {
+      "query": "美联储降息预期变化会怎么影响大型科技股？",
+      "session_id": "tenant1:eval_user:eval-macro-20260505132833-4598bc",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 51078,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "没有可用的上下文，这是一个新话题",
+        "subject_hint": "大型科技股"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户询问宏观政策对行业的影响，需要实时数据和分析工具来提供准确信息",
+      "reply_guidance": "提供基于最新数据的分析，解释美联储降息预期变化对大型科技股的潜在影响，包括利率敏感性、估值因素和历史表现"
+    },
+    "response": "相关信息 这次先看这几条消息：\n- [Major Economic Indicators Latest Numbers](https://www.bls.gov/bls/)（BLS / 2026-04-30）\n\n对股价的影响要看两点：第一，事件是否会改变收入、利润率、交付或监管预期；第二，价格是否已经提前反映。短线更看情绪和成交量，中期还是要回到业绩指引和估值。\n\n来源：\n- [Major Economic Indicators Latest Numbers](https://www.bls.gov/bls/)（BLS / 2026-04-30）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

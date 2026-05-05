@@ -1,0 +1,382 @@
+[
+  {
+    "case": {
+      "id": "Q06",
+      "type": "multi_simple",
+      "session": "eval-multi-simple",
+      "query": "苹果、微软、谷歌现在分别多少？",
+      "expect": "多标的自然分组，不输出“本轮问题包含”。",
+      "eval_session": "eval-multi-simple-smoke-fixed-artifact-render"
+    },
+    "payload": {
+      "query": "苹果、微软、谷歌现在分别多少？",
+      "session_id": "tenant1:eval_user:eval-multi-simple-smoke-fixed-artifact-render",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 44516,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT, GOOGL"
+      },
+      "relation": "new_topic",
+      "domain_intent": "quote",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户要求获取苹果、微软、谷歌的当前价格，需要实时行情数据",
+      "reply_guidance": "获取三个股票的实时价格后，以简洁列表形式回复，例如：AAPL: $xxx, MSFT: $xxx, GOOGL: $xxx",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户查询苹果当前价格"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户查询微软当前价格"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户查询谷歌当前价格"
+        }
+      ]
+    },
+    "response": "AAPL 最新价格约为 276.83 USD，变动 -3.42 / -1.22%。\nMSFT 最新价格约为 413.62 USD，变动 -0.57 / -0.14%。\nGOOGL 最新价格约为 383.25 USD，变动 -2.44 / -0.63%。\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  },
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-fixed-artifact-render"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-fixed-artifact-render",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 106168,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "news_impact"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "news_impact"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户要求实时比较GOOGL和MSFT的新闻、涨跌幅和风险点，需要工具获取最新行情和新闻数据。",
+      "reply_guidance": "获取GOOGL和MSFT的实时涨跌幅和最新新闻，基于数据简要分析风险点，以简洁格式（各一句）回答。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "获取GOOGL今日涨跌幅"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "news_impact",
+          "params": {},
+          "reason": "获取GOOGL最新新闻以分析风险点"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "获取MSFT今日涨跌幅"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "news_impact",
+          "params": {},
+          "reason": "获取MSFT最新新闻以分析风险点"
+        }
+      ]
+    },
+    "response": "GOOGL 我找到几条比较相关的消息：\n- [Tokio Marine Asset Management Co. Ltd. Trims Stock Position in Alphabet Inc. $GOOGL](https://www.marketbeat.com/instant-alerts/filing-tokio-marine-asset-management-co-ltd-trims-stock-position-in-alphabet-inc-googl-2026-05-05/)（MarketBeat / 2026-05-05）\n- [Celestica and Ethan Allen have been highlighted as Zacks Bull and Bear of the Day](https://www.tradingview.com/news/zacks:3eea71cc0094b:0-celestica-and-ethan-allen-have-been-highlighted-as-zacks-bull-and-bear-of-the-day/)（TradingView / 2026-05-05）\n- [Bosman Wealth Management LLC Has $9.38 Million Stock Holdings in Alphabet Inc. $GOOGL](https://www.marketbeat.com/instant-alerts/filing-bosman-wealth-management-llc-has-938-million-stock-holdings-in-alphabet-inc-googl-2026-05-05/)（MarketBeat / 2026-05-05）\n- GOOGL 最新价格约为 383.25 USD，变动 -2.44 / -0.63%。\n\nMSFT 我找到几条比较相关的消息：\n- [1 Unstoppable Stock to Buy Before It Joins Nvidia, Alphabet, Microsoft, and Apple in the $3 Trillion Club](https://finance.yahoo.com/search?p=1+Unstoppable+Stock+to+Buy+Before+It+Joins+Nvidia%2C+Alphabet%2C+Microsoft%2C+and+Apple+in+the+%243+Trillion+Club)（Yahoo / 2026-05-05）\n- [Here’s What RBC Capital Thinks About Microsoft (MSFT) After Amended Deal With OpenAI](https://finance.yahoo.com/search?p=Here%E2%80%99s+What+RBC+Capital+Thinks+About+Microsoft+%28MSFT%29+After+Amended+Deal+With+OpenAI)（Yahoo / 2026-05-05）\n- [Market Chatter: OpenAI Discussed Spinoff of Robotics, Consumer-Hardware Divisions](https://finance.yahoo.com/search?p=Market+Chatter%3A+OpenAI+Discussed+Spinoff+of+Robotics%2C+Consumer-Hardware+Divisions)（Yahoo / 2026-05-05）\n- MSFT 最新价格约为 413.62 USD，变动 -0.57 / -0.14%。\n- 关注下一财报季的营收指引和利润率变化\n- 跟踪行业政策和竞争格局变化\n\n来源：\n- [Tokio Marine Asset Management Co. Ltd. Trims Stock Position in Alphabet Inc. $GOOGL](https://www.marketbeat.com/instant-alerts/filing-tokio-marine-asset-management-co-ltd-trims-stock-position-in-alphabet-inc-googl-2026-05-05/)（MarketBeat / 2026-05-05）\n- [Celestica and Ethan Allen have been highlighted as Zacks Bull and Bear of the Day](https://www.tradingview.com/news/zacks:3eea71cc0094b:0-celestica-and-ethan-allen-have-been-highlighted-as-zacks-bull-and-bear-of-the-day/)（TradingView / 2026-05-05）\n- [Bosman Wealth Management LLC Has $9.38 Million Stock Holdings in Alphabet Inc. $GOOGL](https://www.marketbeat.com/instant-alerts/filing-bosman-wealth-management-llc-has-938-million-stock-holdings-in-alphabet-inc-googl-2026-05-05/)（MarketBeat / 2026-05-05）\n- [Alphabet Inc. $GOOGL Shares Sold by First Horizon Corp](https://www.marketbeat.com/instant-alerts/filing-alphabet-inc-googl-shares-sold-by-first-horizon-corp-2026-05-05/)（MarketBeat / 2026-05-05）\n- [Graphene Investments SAS Decreases Stock Position in Alphabet Inc. $GOOGL](https://www.marketbeat.com/instant-alerts/filing-graphene-investments-sas-decreases-stock-position-in-alphabet-inc-googl-2026-05-05/)（MarketBeat / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "quick brief exceeded 60000ms latency budget"
+    ]
+  },
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-fixed-artifact-render"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-fixed-artifact-render",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 171989,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.6,
+        "reason": "",
+        "subject_hint": ""
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.62,
+      "needs_tools": true,
+      "reason": "explicit subject context",
+      "reply_guidance": "",
+      "task_hints": []
+    },
+    "response": "AAPL, MSFT 这次先看这些来源：\n- [https://example.com/msft-rates](https://example.com/msft-rates)（url）\n\n- 高估值股票怕利率上升，主要因为：利率上升会提高贴现率，降低未来现金流的现值，从而压低估值；同时增加借贷成本，影响公司融资和资本开支；并可能降低风险偏好，导致资金从成长股流出。\n\nAAPL, MSFT 最新价格约为 276.83 USD，变动 -3.42 / -1.22%。\n\nMSFT 相关链接这次没有拿到可读正文（fetch_failed）：https://example.com/msft-rates。所以我先不把它当作支持证据，只能说需要换成可访问正文后再判断。\n\n来源：\n- [https://example.com/msft-rates](https://example.com/msft-rates)（url）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "compound query missed MSFT URL research task",
+      "compound query missed final focus sentence"
+    ]
+  }
+]

@@ -62,6 +62,208 @@ def test_planner_no_selection_no_summary_step():
     assert "summarize_selection" not in names
 
 
+def test_planner_plain_chat_qa_does_not_auto_expand_live_company_tools():
+    state = {
+        "query": "那它的风险主要在哪？",
+        "output_mode": "chat",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+                "status": "ready",
+            }
+        ],
+        "policy": {
+            "budget": {"max_rounds": 3, "max_tools": 4},
+            "allowed_tools": ["get_stock_price", "get_company_news", "get_company_info"],
+        },
+    }
+    plan = (planner_stub(state).get("plan_ir") or {})
+    names = [s.get("name") for s in (plan.get("steps") or [])]
+    assert "get_stock_price" not in names
+    assert "get_company_news" not in names
+    assert "get_company_info" not in names
+
+
+def test_planner_lightweight_representative_qa_does_not_fetch_performance_compare():
+    state = {
+        "query": "先别长篇，半导体 ETF 能不能看？如果不知道就按 NVDA、AMD、TSM 这几个代表说。",
+        "output_mode": "chat",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA", "AMD", "TSM"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["NVDA", "AMD", "TSM"],
+                "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+                "status": "ready",
+            }
+        ],
+        "policy": {
+            "budget": {"max_rounds": 3, "max_tools": 4},
+            "allowed_tools": ["get_performance_comparison", "get_stock_price", "get_company_news"],
+        },
+    }
+    plan = (planner_stub(state).get("plan_ir") or {})
+    names = [s.get("name") for s in (plan.get("steps") or [])]
+    assert "get_performance_comparison" not in names
+    assert "get_stock_price" not in names
+    assert "get_company_news" not in names
+
+
+def test_planner_multiticker_quote_uses_parallel_price_steps_not_performance_compare():
+    state = {
+        "query": "苹果、微软、谷歌现在分别多少？",
+        "output_mode": "chat",
+        "operation": {"name": "price", "confidence": 0.9, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "GOOGL", "MSFT"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "operation": {"name": "price", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "tickers": ["GOOGL"],
+                "operation": {"name": "price", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_3",
+                "subject_type": "company",
+                "tickers": ["MSFT"],
+                "operation": {"name": "price", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            },
+        ],
+        "policy": {
+            "budget": {"max_rounds": 3, "max_tools": 4},
+            "allowed_tools": ["get_performance_comparison", "get_stock_price", "get_company_news"],
+        },
+    }
+    plan = (planner_stub(state).get("plan_ir") or {})
+    steps = plan.get("steps") or []
+    names = [s.get("name") for s in steps]
+    assert "get_performance_comparison" not in names
+    assert names.count("get_stock_price") == 3
+    assert {(s.get("inputs") or {}).get("ticker") for s in steps if s.get("name") == "get_stock_price"} == {
+        "AAPL",
+        "GOOGL",
+        "MSFT",
+    }
+    assert {s.get("parallel_group") for s in steps if s.get("name") == "get_stock_price"} == {"price_quotes"}
+
+
+def test_planner_chat_compare_with_current_subtasks_skips_historical_performance_compare():
+    state = {
+        "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+        "output_mode": "brief",
+        "operation": {"name": "compare", "confidence": 0.86, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["GOOGL", "MSFT"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["GOOGL", "MSFT"],
+                "operation": {"name": "compare", "confidence": 0.86, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "tickers": ["GOOGL"],
+                "operation": {"name": "price", "confidence": 0.82, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_3",
+                "subject_type": "company",
+                "tickers": ["GOOGL"],
+                "operation": {"name": "fetch", "confidence": 0.78, "params": {"topic": "news"}},
+                "status": "ready",
+            },
+            {
+                "id": "task_4",
+                "subject_type": "company",
+                "tickers": ["MSFT"],
+                "operation": {"name": "price", "confidence": 0.82, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_5",
+                "subject_type": "company",
+                "tickers": ["MSFT"],
+                "operation": {"name": "fetch", "confidence": 0.78, "params": {"topic": "news"}},
+                "status": "ready",
+            },
+        ],
+        "policy": {
+            "budget": {"max_rounds": 3, "max_tools": 8},
+            "allowed_tools": ["get_performance_comparison", "get_stock_price", "get_company_news"],
+        },
+    }
+    plan = (planner_stub(state).get("plan_ir") or {})
+    steps = plan.get("steps") or []
+    names = [s.get("name") for s in steps]
+    assert "get_performance_comparison" not in names
+    assert names.count("get_stock_price") == 2
+    assert names.count("get_company_news") == 2
+
+
+def test_understand_lightweight_representative_query_keeps_single_basket_task():
+    import asyncio
+
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = asyncio.run(
+        understand_request(
+            {
+                "query": "先别长篇，半导体 ETF 能不能看？如果不知道就按 NVDA、AMD、TSM 这几个代表说。",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+    tasks = result.get("tasks") or []
+    assert len(tasks) == 1
+    assert tasks[0].get("tickers") == ["NVDA", "AMD", "TSM"]
+    assert (tasks[0].get("operation") or {}).get("name") == "qa"
+
+
 def test_planner_stub_report_analysis_depth_excludes_deep_search(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_REPORT_MAX_AGENTS", "4")
     monkeypatch.setenv("LANGGRAPH_REPORT_MIN_AGENTS", "2")

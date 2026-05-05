@@ -4,7 +4,7 @@ import { Brain, Cpu, Target, Wrench, Sparkles, AlertCircle } from 'lucide-react'
 // ========== 阶段标签映射 ==========
 export const stageLabels: Record<string, string> = {
   reference_resolution: '理解上下文',
-  intent_classification: '意图分类',
+  intent_classification: '请求理解',
   agent_gate: 'Agent 闸门',
   data_collection: '数据收集',
   processing: '处理中',

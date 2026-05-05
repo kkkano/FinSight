@@ -20,7 +20,7 @@ def test_synthesize_llm_mode_handles_datetime_in_inputs(monkeypatch):
 
     import backend.llm_config as llm_config_mod
 
-    monkeypatch.setattr(llm_config_mod, "create_llm", lambda temperature=0.2: _FakeLLM())
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda *args, **kwargs: _FakeLLM())
 
     from backend.graph.nodes.synthesize import synthesize
 
@@ -105,7 +105,7 @@ def test_synthesize_llm_mode_includes_compare_keys_and_preserves_stub_defaults(m
 
     import backend.llm_config as llm_config_mod
 
-    monkeypatch.setattr(llm_config_mod, "create_llm", lambda temperature=0.2: _FakeLLM())
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda *args, **kwargs: _FakeLLM())
 
     from backend.graph.nodes.synthesize import synthesize
 
@@ -286,7 +286,7 @@ def test_synthesize_llm_mode_formats_risks_dict(monkeypatch):
 
     import backend.llm_config as llm_config_mod
 
-    monkeypatch.setattr(llm_config_mod, "create_llm", lambda temperature=0.2: _FakeLLM())
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda *args, **kwargs: _FakeLLM())
 
     from backend.graph.nodes.synthesize import synthesize
 
@@ -468,9 +468,9 @@ def test_compute_unresolved_unsupported_claims_returns_residual_claims():
 # ========================================================================
 # 2026-05-03 — Regression tests for "答非所问" fix.
 # Mode-resolution rules in synthesize() entry:
-#   - env=narrative + output_mode=brief         → downgrade to stub
+#   - env=narrative + output_mode=brief         → downgrade to llm
 #   - env=narrative + output_mode=investment_report → keep narrative
-#   - tasks >= 2 (not pure compare)             → force stub regardless of env
+#   - report-mode tasks >= 2 (not pure compare) → force stub instead of narrative
 # ========================================================================
 
 def test_synthesize_narrative_downgraded_when_output_mode_brief(monkeypatch):
@@ -487,6 +487,23 @@ def test_synthesize_narrative_downgraded_when_output_mode_brief(monkeypatch):
         return ("## should not be called\n\nbody", None)
 
     monkeypatch.setattr(synth_mod, "_generate_narrative_draft", _fake_generate)
+    monkeypatch.setattr(synth_mod, "_run_deep_report_verifier", lambda **_kwargs: {"enabled": False, "checked": False})
+
+    class _Resp:
+        content = '{"conclusion":"MSFT 这次没有拿到实时价格证据，先按数据有限处理。"}'
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp()
+
+    async def _fake_retry(llm, messages, **_kwargs):
+        return await llm.ainvoke(messages)
+
+    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    import backend.llm_config as llm_config
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda **_kwargs: _FakeLLM())
 
     state = {
         "query": "今天微软什么价格",
@@ -500,12 +517,146 @@ def test_synthesize_narrative_downgraded_when_output_mode_brief(monkeypatch):
     out = _run(synth_mod.synthesize(state))
     assert narrative_called["flag"] is False, (
         "narrative LLM should NOT run for brief output_mode; "
-        "expected stub render_vars instead"
+        "expected compact LLM synthesis instead"
     )
     artifacts = out.get("artifacts") or {}
-    # stub mode populates render_vars but does NOT pre-write draft_markdown.
     assert "render_vars" in artifacts
     assert "draft_markdown" not in artifacts
+    assert (out.get("trace") or {}).get("synthesize_runtime", {}).get("mode") == "llm"
+
+
+def test_synthesize_llm_mode_uses_llm_for_non_price_chat_tasks(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+    called = {"llm": False}
+
+    class _FakeResp:
+        content = '{"conclusion":"AAPL 最近新闻需要结合价格反应看。","impact_analysis":"先看新闻是否改变业绩预期。","risks":"- 数据有限"}'
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        return object()
+
+    async def _fake_retry(*_args, **_kwargs):
+        return _FakeResp()
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    state = {
+        "query": "AAPL 最近新闻怎么看？",
+        "output_mode": "chat",
+        "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+                "status": "ready",
+            }
+        ],
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
+    assert called["llm"] is True
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+    assert "render_vars" in (out.get("artifacts") or {})
+
+
+def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    class _FakeResp:
+        content = "AAPL 先看价格；高估值怕利率，是因为折现率上行会压低远期现金流现值。最后关注利率预期和 MSFT 新闻是否影响云业务利润率。"
+
+    async def _fake_retry(*_args, **_kwargs):
+        return _FakeResp()
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    state = {
+        "query": "AAPL 价格、MSFT 新闻、再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+        "output_mode": "chat",
+        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"]},
+        "tasks": [
+            {"id": "task_1", "subject_type": "company", "tickers": ["AAPL"], "operation": {"name": "price"}},
+            {"id": "task_2", "subject_type": "company", "tickers": ["MSFT"], "operation": {"name": "fetch"}},
+            {"id": "task_3", "subject_type": "macro", "tickers": [], "operation": {"name": "analyze_impact"}},
+        ],
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    render_vars = (out.get("artifacts") or {}).get("render_vars") or {}
+    runtime = (out.get("trace") or {}).get("synthesize") or {}
+    assert runtime.get("natural_text") is True
+    assert "折现率" in str(render_vars.get("conclusion") or "")
+    assert "关注" in str(render_vars.get("conclusion") or "")
+
+
+def test_synthesize_brief_router_task_graph_skips_llm_for_latency(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("brief router task graph should not call synthesis LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    state = {
+        "query": "30秒告诉我 GOOGL 和 MSFT 今天谁更强",
+        "output_mode": "brief",
+        "operation": {"name": "compare", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["GOOGL", "MSFT"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["GOOGL"],
+                "operation": {"name": "price"},
+                "reason": "conversation_router_task_hint",
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "tickers": ["MSFT"],
+                "operation": {"name": "fetch"},
+                "reason": "conversation_router_task_hint",
+            },
+        ],
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "stub"
+    assert "render_vars" in (out.get("artifacts") or {})
 
 
 def test_synthesize_narrative_kept_for_investment_report(monkeypatch):
@@ -589,4 +740,3 @@ def test_synthesize_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
     )
     artifacts = out.get("artifacts") or {}
     assert "render_vars" in artifacts
-

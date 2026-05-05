@@ -1,0 +1,111 @@
+[
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_and_complex",
+      "session": "eval-nested",
+      "query": "AAPL 价格、MSFT 新闻、再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌复杂解释，完整覆盖。",
+      "eval_session": "eval-nested-20260505151608-37ebf6"
+    },
+    "payload": {
+      "query": "AAPL 价格、MSFT 新闻、再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-20260505151608-37ebf6",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 160751,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "theme",
+        "tickers": [],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "macro_brief"
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户请求实时价格和新闻数据，以及金融概念解释和总结。",
+      "reply_guidance": "先获取 AAPL 实时价格和 MSFT 最新新闻，然后解释高估值股票对利率敏感的机制，最后用一句话总结用户应关注的要点。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求 AAPL 当前价格。"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "fetch",
+          "params": {
+            "topic": "news"
+          },
+          "reason": "用户请求 MSFT 最新新闻。"
+        },
+        {
+          "subject_type": "theme",
+          "subject_label": "高估值与利率关系",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "用户请求解释为什么高估值股票怕利率上升。"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "用户关注点总结",
+          "tickers": [],
+          "operation": "macro_brief",
+          "params": {},
+          "reason": "用户请求用一句话总结应关注的点。"
+        }
+      ]
+    },
+    "response": "MSFT 我找到几条比较相关的消息：\n- [Microsoft: The Market Is Pricing AI Costs, Not AI Returns](https://www.google.com/search?q=Microsoft%3A+The+Market+Is+Pricing+AI+Costs%2C+Not+AI+Returns)（SeekingAlpha / 2026-05-05）\n- [Microsoft: Continued AI And Software Concerns](https://www.google.com/search?q=Microsoft%3A+Continued+AI+And+Software+Concerns)（SeekingAlpha / 2026-05-04）\n- [Adeia Announces First Quarter 2026 Financial Results](https://finance.yahoo.com/search?p=Adeia+Announces+First+Quarter+2026+Financial+Results)（Yahoo / 2026-05-04）\n\nAAPL 最新价格约为 276.83 USD，变动 -3.42 / -1.22%。\n\n- 高估值股票（如大型科技股）的价值高度依赖未来现金流的折现。当利率上升时，折现率增加，导致未来现金流的现值下降，因此股价对利率变化特别敏感。反之，降息预期升温则会提升估值。\n\n一句话：重点关注价格是否守住关键位置、新闻是否改变业绩预期，以及利率预期是否继续压制估值。\n\n来源：\n- [Microsoft: The Market Is Pricing AI Costs, Not AI Returns](https://www.google.com/search?q=Microsoft%3A+The+Market+Is+Pricing+AI+Costs%2C+Not+AI+Returns)（SeekingAlpha / 2026-05-05）\n- [Microsoft: Continued AI And Software Concerns](https://www.google.com/search?q=Microsoft%3A+Continued+AI+And+Software+Concerns)（SeekingAlpha / 2026-05-04）\n- [Adeia Announces First Quarter 2026 Financial Results](https://finance.yahoo.com/search?p=Adeia+Announces+First+Quarter+2026+Financial+Results)（Yahoo / 2026-05-04）\n- [Microsoft, Netflix, and 10 More Stocks Unfairly Punished On Earnings](https://finance.yahoo.com/search?p=Microsoft%2C+Netflix%2C+and+10+More+Stocks+Unfairly+Punished+On+Earnings)（Yahoo / 2026-05-04）\n- [Microsoft (MSFT): Most Promising AI Stock to Invest In](https://finance.yahoo.com/search?p=Microsoft+%28MSFT%29%3A+Most+Promising+AI+Stock+to+Invest+In)（Yahoo / 2026-05-04）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

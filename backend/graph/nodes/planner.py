@@ -46,6 +46,143 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
+    output_mode = str(state.get("output_mode") or "chat").strip().lower()
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+    is_deep = output_mode == "investment_report" or analysis_depth == "deep_research"
+
+    if is_deep:
+        return {
+            "request_timeout": _env_int("LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC", 240),
+            "max_tokens": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_TOKENS", 6000),
+            "max_attempts": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_ATTEMPTS", 3),
+            "acquire_timeout": float(_env_int("LANGGRAPH_PLANNER_REPORT_ACQUIRE_TIMEOUT_SEC", 180)),
+            "sleep_seconds": 2.0,
+            "jitter_seconds": 1.0,
+        }
+
+    return {
+        "request_timeout": _env_int("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", 150),
+        "max_tokens": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_TOKENS", 3000),
+        "max_attempts": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_ATTEMPTS", 2),
+        "acquire_timeout": float(_env_int("LANGGRAPH_PLANNER_CHAT_ACQUIRE_TIMEOUT_SEC", 120)),
+        "sleep_seconds": 1.0,
+        "jitter_seconds": 0.5,
+    }
+
+
+def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str, Any]]) -> bool:
+    """Use the deterministic task graph when the LLM router already did the planning.
+
+    The conversation router remains the semantic gate before planning. If it has
+    already decomposed a chat/brief turn into a small evidence graph, a second
+    planner LLM call mostly adds latency and JSON failure risk without expanding
+    the tool frontier. Deep research and under-specified research still keep the
+    LLM planner path.
+    """
+    if not ready_tasks:
+        return False
+    output_mode = str(state.get("output_mode") or "chat").strip().lower()
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+    if output_mode not in {"chat", "brief"} or analysis_depth == "deep_research":
+        return False
+
+    operation_names = {
+        str((task.get("operation") or {}).get("name") or "").strip().lower()
+        for task in ready_tasks
+        if isinstance(task.get("operation"), dict)
+    }
+    operation_names.discard("")
+    if operation_names != {"price"}:
+        simple_task_graph_ops = {
+            "compare",
+            "price",
+            "fetch",
+            "technical",
+            "analyze_impact",
+            "news_impact",
+            "daily_brief",
+            "fact_check",
+            "macro_brief",
+            "qa",
+        }
+        has_url_task = any(
+            isinstance(op.get("params"), dict)
+            and str(op.get("params", {}).get("url") or "").startswith("http")
+            for task in ready_tasks
+            for op in [task.get("operation") if isinstance(task.get("operation"), dict) else {}]
+        )
+        if operation_names.issubset(simple_task_graph_ops) and (
+            has_url_task
+            or len(ready_tasks) >= 2
+            or bool(operation_names & {"price", "fetch", "technical", "analyze_impact", "news_impact", "daily_brief"})
+        ):
+            return all(
+                str(task.get("subject_type") or "").strip().lower()
+                in {
+                    "company",
+                    "index",
+                    "crypto",
+                    "fund",
+                    "macro",
+                    "theme",
+                    "news_item",
+                    "news_set",
+                    "research_doc",
+                    "filing",
+                    "portfolio",
+                    "unknown",
+                }
+                for task in ready_tasks
+            )
+
+        router_decomposed = all(
+            str(task.get("reason") or "").strip()
+            in {"conversation_router_task_hint", "conversation_router_task_hint_support", "explicit_url_reference"}
+            for task in ready_tasks
+        )
+        router_evidence_graph = (
+            router_decomposed
+            and operation_names.issubset(
+                {"compare", "price", "fetch", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa"}
+            )
+            and (
+                bool(operation_names & {"compare", "analyze_impact", "news_impact", "daily_brief"})
+                or len(operation_names) >= 2
+            )
+        )
+        url_evidence_graph = (
+            has_url_task
+            and operation_names.issubset(
+                {"compare", "price", "fetch", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa", "macro_brief"}
+            )
+            and len(ready_tasks) >= 2
+        )
+        if not router_evidence_graph and not url_evidence_graph:
+            return False
+
+    return all(
+        str(task.get("subject_type") or "").strip().lower()
+        in {
+            "company",
+            "index",
+            "crypto",
+            "fund",
+            "macro",
+            "theme",
+            "news_item",
+            "news_set",
+            "research_doc",
+            "filing",
+            "portfolio",
+            "unknown",
+        }
+        for task in ready_tasks
+    )
+
+
 def _resolve_planner_variant(state: GraphState) -> str:
     if not _env_bool("LANGGRAPH_PLANNER_AB_ENABLED", False):
         return "A"
@@ -1081,7 +1218,8 @@ async def planner(state: GraphState) -> dict:
     - LANGGRAPH_PLANNER_MODE=stub (default): deterministic plan (no network)
     - LANGGRAPH_PLANNER_MODE=llm: ask LLM for PlanIR JSON; validate + enforce policy; fallback to stub
     """
-    mode = _env_str("LANGGRAPH_PLANNER_MODE", "stub").lower()
+    mode = _env_str("LANGGRAPH_PLANNER_MODE", "llm").lower()
+    llm_limits = _planner_llm_limits(state)
     trace = state.get("trace") or {}
     planner_variant = _resolve_planner_variant(state)
     planner_started_at = time.perf_counter()
@@ -1095,6 +1233,32 @@ async def planner(state: GraphState) -> dict:
     tasks = state.get("tasks")
     ready_tasks = [task for task in (tasks if isinstance(tasks, list) else []) if isinstance(task, dict)]
     operation_name = str((state.get("operation") or {}).get("name") or "").strip().lower()
+    if mode == "llm" and _should_use_task_graph_planner(state, ready_tasks):
+        trace.update(
+            {
+                "planner_runtime": {
+                    **build_runtime(mode="task_graph", fallback=False),
+                    "variant": planner_variant,
+                    "reason": "router_decomposed_short_task_graph",
+                }
+            }
+        )
+        out = {**planner_stub(state), "trace": trace}
+        steps = len(((out.get("plan_ir") or {}).get("steps") or []))
+        _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
+        await _emit_plan_ready(
+            state=state,
+            plan_dict=(out.get("plan_ir") or {}),
+            fallback=False,
+        )
+        await _emit_pipeline_stage(
+            stage="planning",
+            status="done",
+            message="Planner completed",
+            duration_ms=int((time.perf_counter() - planner_started_at) * 1000),
+        )
+        return out
+
     if (
         mode == "llm"
         and operation_name == "compare"
@@ -1148,8 +1312,16 @@ async def planner(state: GraphState) -> dict:
         from backend.llm_config import create_llm
 
         _planner_temp = float(os.getenv("LANGGRAPH_PLANNER_TEMPERATURE", "0.2"))
-        llm = create_llm(temperature=_planner_temp)
-        llm_factory = lambda: create_llm(temperature=_planner_temp)  # noqa: E731
+        llm = create_llm(
+            temperature=_planner_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
+        )
+        llm_factory = lambda: create_llm(  # noqa: E731
+            temperature=_planner_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
+        )
     except Exception as exc:
         append_failure(
             trace,
@@ -1209,6 +1381,10 @@ async def planner(state: GraphState) -> dict:
             llm,
             [HumanMessage(content=prompt)],
             llm_factory=llm_factory,
+            max_attempts=int(llm_limits["max_attempts"]),
+            sleep_seconds=float(llm_limits["sleep_seconds"]),
+            jitter_seconds=float(llm_limits["jitter_seconds"]),
+            acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
             acquire_token=True,
             on_retry=_on_retry,
         )
@@ -1260,6 +1436,10 @@ async def planner(state: GraphState) -> dict:
                 llm,
                 [HumanMessage(content=repair_prompt)],
                 llm_factory=llm_factory,
+                max_attempts=1,
+                sleep_seconds=float(llm_limits["sleep_seconds"]),
+                jitter_seconds=float(llm_limits["jitter_seconds"]),
+                acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
                 acquire_token=True,
                 on_retry=_on_retry,
             )
@@ -1309,6 +1489,7 @@ async def planner(state: GraphState) -> dict:
                     "variant": planner_variant,
                     "steps": len(plan.steps),
                     "budget_assertions": budget_assertions,
+                    "llm_limits": llm_limits,
                     "json_parse": parse_meta,
                 }
             }
@@ -1365,6 +1546,7 @@ async def planner(state: GraphState) -> dict:
                 )
                 | {
                     "variant": planner_variant,
+                    "llm_limits": llm_limits,
                     "json_parse_error": parse_error_info or {},
                 }
             }

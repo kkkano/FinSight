@@ -47,6 +47,9 @@ class ChatContext(BaseModel):
     selection: Optional[SelectionContext] = Field(None, description="single selection")
     selections: Optional[list[SelectionContext]] = Field(None, description="multi selection")
     user_email: Optional[str] = Field(None, description="user email for alert actions")
+    positions: Optional[list[dict[str, Any]]] = Field(None, description="portfolio positions")
+    holdings: Optional[list[dict[str, Any]]] = Field(None, description="portfolio holdings")
+    portfolio: Optional[dict[str, Any] | list[dict[str, Any]]] = Field(None, description="portfolio context")
 
 
 class ChatOptions(BaseModel):

@@ -198,7 +198,7 @@ const estimateProgress = (stage: string, current: number): number => {
     classifying: 8,
     classified: 15,
     reference_resolution: 20,
-    intent_classification: 26,
+    intent_classification: 18,
     agent_gate: 35,
     agent_selected: 38,
     tool_selected: 45,

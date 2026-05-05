@@ -307,12 +307,18 @@ const deleteBackendConversation = (sessionId: string) => {
 const messageStorageKey = (sessionId: string): string =>
   `${MESSAGES_STORAGE_PREFIX}${String(sessionId || '').trim()}`;
 
-const normalizePersistedMessages = (raw: string | null): Message[] => {
+const normalizePersistedMessages = (
+  raw: string | null,
+  options: { preserveLoading?: boolean } = {},
+): Message[] => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as Message[];
     if (!Array.isArray(parsed) || parsed.length === 0) return [];
-    return parsed.map((m) => ({ ...m, isLoading: false }));
+    return parsed.map((m) => ({
+      ...m,
+      isLoading: options.preserveLoading ? Boolean(m.isLoading) : false,
+    }));
   } catch {
     return [];
   }
@@ -433,16 +439,19 @@ const upsertConversationSummary = (
   return next;
 };
 
-const loadMessagesForSession = (sessionId: string): Message[] => {
+const loadMessagesForSession = (
+  sessionId: string,
+  options: { preserveLoading?: boolean } = {},
+): Message[] => {
   const sid = String(sessionId || '').trim();
   if (!sid) return [WELCOME_MESSAGE];
   if (typeof window === 'undefined') {
-    const scoped = normalizePersistedMessages(memoryMessageStore.get(messageStorageKey(sid)) || null);
+    const scoped = normalizePersistedMessages(memoryMessageStore.get(messageStorageKey(sid)) || null, options);
     if (scoped.length > 0) return scoped;
     return [WELCOME_MESSAGE];
   }
 
-  const scoped = normalizePersistedMessages(window.localStorage.getItem(messageStorageKey(sid)));
+  const scoped = normalizePersistedMessages(window.localStorage.getItem(messageStorageKey(sid)), options);
   if (scoped.length > 0) return scoped;
   return [WELCOME_MESSAGE];
 };
@@ -451,20 +460,25 @@ const getInitialMessages = (sessionId: string): Message[] => {
   return loadMessagesForSession(sessionId);
 };
 
-const persistMessages = (messages: Message[], sessionId: string) => {
+const persistMessages = (
+  messages: Message[],
+  sessionId: string,
+  options: { syncBackend?: boolean } = {},
+) => {
   const sid = String(sessionId || '').trim();
   if (!sid) return;
+  const syncBackend = options.syncBackend !== false;
   try {
     const toSave = messages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(-MAX_PERSISTED_MESSAGES);
     if (typeof window === 'undefined') {
       memoryMessageStore.set(messageStorageKey(sid), JSON.stringify(toSave));
-      createBackendConversation(sid, toSave);
+      if (syncBackend) createBackendConversation(sid, toSave);
       return;
     }
     window.localStorage.setItem(messageStorageKey(sid), JSON.stringify(toSave));
-    createBackendConversation(sid, toSave);
+    if (syncBackend) createBackendConversation(sid, toSave);
   } catch {
     // localStorage full or unavailable — silently ignore
   }
@@ -605,13 +619,10 @@ export const useStore = create<AppState>((set) => ({
   updateMessage: (id, patch) =>
     set((state) => {
       const next = patchMessageForSession(state.messages, id, patch);
-      // Only persist when message finishes loading (avoid thrashing during streaming)
-      if (patch.isLoading === false) persistMessages(next, state.sessionId);
+      persistMessages(next, state.sessionId, { syncBackend: patch.isLoading === false });
       return {
         messages: next,
-        conversationSummaries: patch.isLoading === false
-          ? upsertConversationSummary(state.conversationSummaries, state.sessionId, next)
-          : state.conversationSummaries,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, state.sessionId, next),
       };
     }),
 
@@ -621,14 +632,12 @@ export const useStore = create<AppState>((set) => ({
       if (!normalized) return {};
       const baseMessages = normalized === state.sessionId
         ? state.messages
-        : loadMessagesForSession(normalized);
+        : loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       const next = patchMessageForSession(baseMessages, id, patch);
-      if (patch.isLoading === false) persistMessages(next, normalized);
+      persistMessages(next, normalized, { syncBackend: patch.isLoading === false });
       return {
         messages: normalized === state.sessionId ? next : state.messages,
-        conversationSummaries: patch.isLoading === false
-          ? upsertConversationSummary(state.conversationSummaries, normalized, next)
-          : state.conversationSummaries,
+        conversationSummaries: upsertConversationSummary(state.conversationSummaries, normalized, next),
       };
     }),
 
@@ -902,7 +911,7 @@ export const useStore = create<AppState>((set) => ({
   setSessionId: (sessionId) =>
     set((state) => {
       const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
-      const messages = loadMessagesForSession(normalized);
+      const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }
@@ -926,7 +935,7 @@ export const useStore = create<AppState>((set) => ({
     set((state) => {
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
-      const messages = loadMessagesForSession(normalized);
+      const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
       }

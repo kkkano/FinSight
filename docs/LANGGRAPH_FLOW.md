@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> 2026-05-03 状态说明：当前主路径已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单 + Tier-2 LLM 分类器 sidecar），命中即 END。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。会话生命周期走 `/api/conversations` + `conversation_store` snapshot；停止生成会产生 `cancelled` trace/pipeline 事件，并通过 executor/agent cancellation token 尽量中止后续工作。
+> 2026-05-06 状态说明：当前主路径为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候/感谢/确认/再见；开放闲聊、非金融请求、能力问题、URL/网页/文章请求、指代追问和普通金融问题都进入 `understand_request` 的 LLM conversation router。Router 在 planner 前决定 direct/research/alert/clarify/out_of_scope，只有 research/alert 才继续进入工具规划；URL 读取是 planner/agent 工具 `fetch_url_content`，不是理解层预抓取。只有显式报告按钮/`investment_report` 进入报告模板。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
@@ -14,14 +14,18 @@ graph TD
     build_initial_state --> reset_turn_state
     reset_turn_state --> prepare_context
     prepare_context --> chat_respond
-    chat_respond -->|chat_responded=true| END_CASUAL([END: 闲聊/OOS 短路])
-    chat_respond -->|chat_responded=false| understand_request
-    understand_request -->|direct/clarify| END_CHAT([END: 直接回复/澄清])
-    understand_request -->|alert| alert_extractor
+    chat_respond -->|pure social| END_CASUAL([END: 纯社交短路])
+    chat_respond -->|all other turns| understand_request
+    understand_request --> router_decision{LLM conversation router}
+    router_decision -->|direct_answer/out_of_scope| END_CHAT([END: 自然回复])
+    router_decision -->|clarify| END_CLARIFY([END: 澄清])
+    router_decision -->|research/alert/URL fetch| understand_projection[task projection]
+    understand_projection -->|direct/clarify| END_CHAT
+    understand_projection -->|alert| alert_extractor
+    understand_projection -->|research| policy_gate
     alert_extractor -->|valid| alert_action
     alert_action --> END_ALERT([END: 保存提醒])
     alert_extractor -->|invalid| END_ALERT_INVALID([END: 参数无效])
-    understand_request -->|research| policy_gate
     policy_gate --> planner
     planner --> confirmation_gate
     confirmation_gate -->|cancel_execution| END_CANCEL([END: 用户取消])
@@ -84,7 +88,7 @@ graph TD
 |-------|-----------|-------------|
 | `messages` | Read/Write | 修剪超预算历史，并在需要时写入摘要 |
 | `ui_context` | Read/Write | 规范化 selections、active_symbol、view 等前端上下文 |
-| `output_mode` | Write | 合并 UI 显式模式和默认 chat/report hints；普通聊天默认 `chat`，只有报告按钮或报告词进入 `investment_report` |
+| `output_mode` | Write | 合并 UI 显式模式和默认 chat/report hints；普通聊天默认 `chat`，只有报告按钮或显式 `investment_report` 进入报告模板 |
 
 `prepare_context` 是当前主路径的上下文准备入口。它承接旧 `trim_history`、`summarize_history`、`normalize_ui_context`、`decide_output_mode` 的职责，减少图上前半段节点数量，并保证 `understand_request` 获取的是同一份规范化上下文。
 
@@ -159,10 +163,7 @@ graph TD
 | `ui_context` | Read | 规范化后的上下文 |
 | `output_mode` | Write | `"brief"` \| `"investment_report"` \| `"chat"` |
 
-基于查询意图和上下文决定输出模式:
-- 简单价格查询 → `brief`
-- 深度分析/比较 → `investment_report`
-- 日常对话 → `chat`
+历史 helper 的输出模式推断仅供兼容入口使用。当前主路径中普通发送默认 `chat`，简单价格/新闻可以由合成层自然短答；只有显式报告按钮或 `output_mode=investment_report` 才进入报告模板。
 
 ---
 
@@ -176,13 +177,19 @@ graph TD
 | `tasks` | Write | 可执行任务列表 |
 | `blocked_tasks` | Write | 局部阻塞任务列表 |
 | `subject` / `operation` | Write | primary task 的兼容投影 |
-| `artifacts.draft_markdown` | Write | direct/clarify route 的短回复 |
-| `trace` | Write | understanding 用户可见 trace |
+| `artifacts.draft_markdown` | Write | direct/out_of_scope/clarify route 的短回复 |
+| `artifacts.conversation_decision` | Write | LLM router 的执行路径、上下文绑定、关系和领域意图 |
+| `trace` | Write | conversation_router / understanding 用户可见 trace |
 
 **条件边**:
 - `route=direct/clarify` → **END**
 - `route=alert` 或 primary operation=`alert_set` → `alert_extractor`
 - `route=research` → `policy_gate`
+
+**Planner 前 gate**:
+- `direct_answer` / `out_of_scope`：直接由 LLM 生成自然对话回复，不进入 planner。
+- `research`：投影成 ready task，进入 `policy_gate -> planner`。
+- `clarify`：缺少必要上下文时结束并提示补充。
 
 **Source**: `backend/graph/nodes/understand_request.py`
 
@@ -342,10 +349,10 @@ graph TD
 | `output_mode` | Read | 输出模式 |
 | `messages` | Write | 最终响应消息 |
 
-根据 `output_mode` 选择模板渲染最终输出:
-- `brief`: 简短价格/摘要回复
-- `investment_report`: 完整投资研报 (Markdown)
-- `chat`: 对话式回复
+根据 `output_mode` 选择最终输出:
+- `chat`: 默认对话式回复，可短可长，按 query 和上下文决定
+- `brief`: 兼容轻量摘要模式，不作为主 UI 的“深度/简报”切换心智模型
+- `investment_report`: 完整投资研报 (Markdown)，只由报告按钮或显式选项触发
 
 **Source**: `backend/graph/nodes/__init__.py` → `render_stub`
 
@@ -403,7 +410,7 @@ Supports 3 backends (configured via `LANGGRAPH_CHECKPOINTER_BACKEND`):
 
 ```mermaid
 flowchart LR
-  REQ[POST /api/execute run_id] --> PIPE[run_graph_pipeline]
+  REQ["POST /api/execute run_id"] --> PIPE[run_graph_pipeline]
   PIPE --> STAMP[_stamp_ids]
   STAMP --> SSE[SSE events]
   SSE --> PARSE[parseSSEStream]

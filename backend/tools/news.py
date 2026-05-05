@@ -838,7 +838,35 @@ def _get_index_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     return news_items
 
 
-def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
+def _fast_company_news_links(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
+    symbol = str(ticker or "").strip().upper()
+    if not symbol:
+        return []
+    today = date.today().isoformat()
+    rows = [
+        {
+            "title": f"{symbol} Yahoo Finance news",
+            "source": "Yahoo Finance",
+            "url": f"https://finance.yahoo.com/quote/{quote_plus(symbol)}/news",
+            "published_at": today,
+            "snippet": "Fast linked news entry for latency-sensitive brief answers.",
+            "ticker": symbol,
+            "confidence": 0.5,
+        },
+        {
+            "title": f"{symbol} latest stock news search",
+            "source": "Search",
+            "url": f"https://www.google.com/search?q={quote_plus(symbol + ' latest stock news')}",
+            "published_at": today,
+            "snippet": "Fast search fallback when live headline APIs are slow or rate-limited.",
+            "ticker": symbol,
+            "confidence": 0.45,
+        },
+    ]
+    return rows[: max(1, min(limit, len(rows)))]
+
+
+def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> List[Dict[str, Any]]:
     """
     智能获取新闻：自动识别是公司股票还是市场指数（结构化输出）。
     - 公司股票：使用 API (yfinance, Finnhub, Alpha Vantage)
@@ -849,6 +877,8 @@ def get_company_news(ticker: str, limit: int = 5) -> List[Dict[str, Any]]:
     except Exception:
         limit = 5
     limit = max(1, min(limit, 20))
+    if fast:
+        return _fast_company_news_links(ticker, limit=limit)
     # 🔍 关键判断：这是指数还是公司股票？
     if _is_market_index(ticker):
         # 优先用 alert_scheduler 的新闻抓取（含48h过滤）

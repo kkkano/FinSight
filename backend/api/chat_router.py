@@ -33,6 +33,59 @@ class ChatRouterDeps:
     sse_event_schema_version: str
 
 
+def _session_history_for_context(manager: Any, *, limit: int = 6) -> list[dict[str, str]]:
+    """Return compact same-session turns for graph-level contextual routing."""
+    try:
+        turns = manager.get_last_n_turns(limit)
+    except Exception:
+        return []
+    history: list[dict[str, str]] = []
+    for turn in turns or []:
+        query = str(getattr(turn, "query", "") or "").strip()
+        response = str(getattr(turn, "response", "") or "").strip()
+        metadata = getattr(turn, "metadata", None)
+        if query:
+            row: dict[str, str] = {"role": "user", "content": query[:600]}
+            if isinstance(metadata, dict) and metadata.get("tickers"):
+                row["tickers"] = ", ".join(str(t).upper() for t in metadata.get("tickers") or [])[:120]
+            history.append(row)
+        if response:
+            history.append({"role": "assistant", "content": " ".join(response.split())[:900]})
+    return history[-(limit * 2):]
+
+
+def _attach_session_history(ui_context: dict[str, Any], manager: Any) -> dict[str, Any]:
+    history = _session_history_for_context(manager)
+    if not history:
+        return ui_context
+    enriched = dict(ui_context or {})
+    enriched["session_history"] = history
+    return enriched
+
+
+def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    markdown = str(artifacts.get("draft_markdown") or "")
+    if markdown.strip():
+        return markdown, state
+    try:
+        from backend.graph.nodes.render_stub import render_stub
+
+        rendered = render_stub(state)
+        rendered_artifacts = rendered.get("artifacts") if isinstance(rendered, dict) else None
+        if isinstance(rendered_artifacts, dict):
+            state = {**state, "artifacts": rendered_artifacts}
+            markdown = str(rendered_artifacts.get("draft_markdown") or "")
+            if markdown.strip():
+                return markdown, state
+    except Exception as exc:
+        logging.getLogger("chat_router").warning("[chat/supervisor] final render fallback failed: %s", exc)
+    query = str(state.get("query") or "这个问题").strip()
+    markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query}\n"
+    state = {**state, "artifacts": {**artifacts, "draft_markdown": markdown}}
+    return markdown, state
+
+
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
     _logger = logging.getLogger("chat_router")
@@ -48,6 +101,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
 
             ui_context = deps.build_ui_context(request)
+            ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
 
             output_mode = None
             strict_selection = None
@@ -65,7 +119,12 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 else:
                     confirmation_mode = "skip"
 
-            resolved_query = deps.resolve_query_reference(request.query, thread_id)
+            # Keep the original user turn intact for LangGraph. Context binding
+            # now happens inside conversation_router using thread messages,
+            # UI anchors, report context, and portfolio context. Pre-rewriting
+            # "it/that/second point" here caused cross-session focus leakage
+            # because the legacy ContextManager is user-memory scoped.
+            resolved_query = request.query
 
             from backend.graph.runner import run_graph_traced
             state = await run_graph_traced(
@@ -77,7 +136,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 strict_selection=strict_selection,
                 confirmation_mode=confirmation_mode,
             )
-            markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
+            markdown, state = _ensure_deliverable_markdown(state)
 
             report = None
             try:
@@ -113,6 +172,10 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     )
                 except Exception as exc:
                     _logger.warning("[chat/supervisor] persist memory snapshot failed: %s", exc)
+
+            if not str(markdown or "").strip():
+                query_preview = str(resolved_query or "这个问题").strip()
+                markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
 
             _elapsed_ms = int((_time.perf_counter() - _t0) * 1000)
             return {
@@ -153,6 +216,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
         trace_raw_enabled = deps.resolve_trace_raw_enabled(request)
         ui_context = deps.build_ui_context(request)
+        ui_context = _attach_session_history(ui_context, deps.get_session_context(thread_id))
 
         output_mode = None
         strict_selection = None
@@ -170,7 +234,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             else:
                 confirmation_mode = "skip"
 
-        resolved_query = deps.resolve_query_reference(request.query, thread_id)
+        # Keep the original user turn intact; see sync endpoint note above.
+        resolved_query = request.query
 
         exec_deps = ExecutionDeps(
             get_graph_runner=deps.get_graph_runner,

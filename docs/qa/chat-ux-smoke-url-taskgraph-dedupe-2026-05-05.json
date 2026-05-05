@@ -1,0 +1,258 @@
+[
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-url-taskgraph-dedupe"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-url-taskgraph-dedupe",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 137650,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户要求快速比较 GOOGL 和 MSFT 的实时表现，需要获取最新行情、新闻和风险数据",
+      "reply_guidance": "提供简洁的比较：先判断谁更强，然后分别用一句话描述 GOOGL 和 MSFT 的新闻、涨跌幅和风险点。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "fetch",
+          "params": {
+            "topic": "news"
+          },
+          "reason": "用户要求 GOOGL 的新闻、涨跌幅和风险点"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "fetch",
+          "params": {
+            "topic": "news"
+          },
+          "reason": "用户要求 MSFT 的新闻、涨跌幅和风险点"
+        }
+      ]
+    },
+    "response": "GOOGL 我找到几条比较相关的消息：\n- [GOOGL Yahoo Finance news](https://finance.yahoo.com/quote/GOOGL/news)（Yahoo Finance / 2026-05-05）\n- [GOOGL latest stock news search](https://www.google.com/search?q=GOOGL+latest+stock+news)（Search / 2026-05-05）\n\nMSFT 我找到几条比较相关的消息：\n- [MSFT Yahoo Finance news](https://finance.yahoo.com/quote/MSFT/news)（Yahoo Finance / 2026-05-05）\n- [MSFT latest stock news search](https://www.google.com/search?q=MSFT+latest+stock+news)（Search / 2026-05-05）\n\n我先只列出可引用消息；这轮没有足够证据支撑进一步影响判断。\n\n- 关注：后续公告/财报指引、交付数据、监管与诉讼进展。\n- 验证：价格反应/成交量/波动是否与叙事一致。\n\n来源：\n- [GOOGL Yahoo Finance news](https://finance.yahoo.com/quote/GOOGL/news)（Yahoo Finance / 2026-05-05）\n- [GOOGL latest stock news search](https://www.google.com/search?q=GOOGL+latest+stock+news)（Search / 2026-05-05）\n- [MSFT Yahoo Finance news](https://finance.yahoo.com/quote/MSFT/news)（Yahoo Finance / 2026-05-05）\n- [MSFT latest stock news search](https://www.google.com/search?q=MSFT+latest+stock+news)（Search / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "quick brief exceeded 60000ms latency budget"
+    ]
+  },
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-url-taskgraph-dedupe"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-url-taskgraph-dedupe",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 129604,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "research_doc",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_current_datetime",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_official_macro_releases",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_authoritative_media_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户需要实时价格、URL 内容分析和金融概念解释，涉及多个工具调用",
+      "reply_guidance": "先获取 AAPL 实时价格，然后读取 URL 内容评估其对 MSFT 的相关性，接着解释高估值股票对利率敏感的原因，最后总结用户应关注的关键点。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "获取 AAPL 实时价格"
+        },
+        {
+          "subject_type": "research_doc",
+          "subject_label": "MSFT 相关文档",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "qa",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "评估 URL 内容对 MSFT 的用处"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "利率与高估值",
+          "tickers": [],
+          "operation": "analyze_impact",
+          "params": {},
+          "reason": "解释为什么高估值股票怕利率上升"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "投资关注点",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "总结用户应关注什么"
+        }
+      ]
+    },
+    "response": "利率与高估值 我找到几条比较相关的消息：\n- [Major Economic Indicators Latest Numbers](https://www.bls.gov/bls/)（BLS / 2026-05-05）\n\nAAPL 最新价格约为 279.49 USD，变动 2.62 / 0.95%。\n\nMSFT 相关链接这次没有拿到可读正文（fetch_failed）：https://example.com/msft-rates。所以我先不把它当作支持证据，只能说需要换成可访问正文后再判断。\n\n- 高估值股票对利率敏感，主要因为未来现金流的折现率上升会直接压低估值。当前宏观数据显示，2026年3月美国CPI环比上涨0.9%，通胀压力可能支撑利率维持高位，这对高估值成长股构成挑战。市场分析也指出，高利率与高估值同现时，投资者风险偏好易受抑制。\n\n- 一句话关注：接下来重点观察美联储政策信号及 AAPL 基本面能否匹配当前估值水平。\n\n来源：\n- [Major Economic Indicators Latest Numbers](https://www.bls.gov/bls/)（BLS / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

@@ -64,6 +64,8 @@ export const MiniChat: React.FC = () => {
     setSessionId,
     draft,
     setDraft,
+    setSessionLoading,
+    setSessionAbortController,
     addRawEvent,
     traceRawEnabled,
     setRequestMetrics,
@@ -160,6 +162,8 @@ export const MiniChat: React.FC = () => {
     const effectiveOutputMode = outputMode;
     const streamController = new AbortController();
     streamControllerRef.current = streamController;
+    setSessionLoading(requestSessionId, true);
+    setSessionAbortController(requestSessionId, streamController);
 
     const requestStartedAt = Date.now();
 
@@ -236,7 +240,7 @@ export const MiniChat: React.FC = () => {
           accumulatedContentRef.current += token;
           updateScopedMessage(aiMsgId, {
             content: accumulatedContentRef.current,
-            isLoading: false,
+            isLoading: true,
           });
         },
         undefined, // onToolStart
@@ -339,6 +343,8 @@ export const MiniChat: React.FC = () => {
       if (streamControllerRef.current === streamController) {
         streamControllerRef.current = null;
       }
+      setSessionLoading(requestSessionId, false);
+      setSessionAbortController(requestSessionId, null);
       setIsLoading(false);
     }
   };

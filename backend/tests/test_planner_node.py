@@ -65,6 +65,681 @@ def test_planner_runtime_contains_variant_when_llm_init_fails(monkeypatch):
     assert runtime.get("variant") in {"A", "B"}
 
 
+def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", "47")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_MAX_TOKENS", "1700")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_ACQUIRE_TIMEOUT_SEC", "46")
+
+    class _Resp:
+        content = """
+        {
+          "goal": "quote AAPL",
+          "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+          "output_mode": "chat",
+          "steps": [],
+          "budget": {"max_rounds": 4, "max_tools": 4},
+          "synthesis": {"style": "concise", "sections": []}
+        }
+        """
+
+    captured: dict[str, object] = {}
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp()
+
+    def _fake_create_llm(*_args, **kwargs):
+        captured["create_kwargs"] = kwargs
+        return _FakeLLM()
+
+    async def _fake_retry(llm, messages, **kwargs):
+        captured["retry_kwargs"] = kwargs
+        return await llm.ainvoke(messages)
+
+    import importlib
+
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+    monkeypatch.setattr(planner_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "AAPL 现在多少钱？",
+                "output_mode": "chat",
+                "operation": {"name": "price", "confidence": 0.7, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+                "policy": {"budget": {"max_rounds": 4, "max_tools": 4}, "allowed_tools": ["get_stock_price"], "allowed_agents": []},
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+    assert (captured["create_kwargs"] or {})["request_timeout"] == 47
+    assert (captured["create_kwargs"] or {})["max_tokens"] == 1700
+    assert (captured["retry_kwargs"] or {})["max_attempts"] == 2
+    assert (captured["retry_kwargs"] or {})["acquire_timeout_seconds"] == 46.0
+
+
+def test_planner_llm_mode_uses_task_graph_only_for_price_chat_tasks(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("price-only chat task graph should not call planner LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "AAPL 现在多少钱？",
+                "output_mode": "chat",
+                "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                    }
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 4},
+                    "allowed_tools": ["get_company_news", "get_stock_price"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    assert any(step.get("name") == "get_stock_price" for step in steps)
+
+
+def test_planner_llm_mode_uses_task_graph_for_router_decomposed_news_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("router-decomposed news chat should not call planner LLM")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "AAPL 最近新闻怎么看？",
+                "output_mode": "chat",
+                "operation": {"name": "news_impact", "confidence": 0.8, "params": {"topic": "news"}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_price",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint_support",
+                    },
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint_support",
+                    },
+                    {
+                        "id": "task_impact",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "news_impact", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 4},
+                    "allowed_tools": ["get_company_news", "get_stock_price"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    assert any(step.get("name") == "get_stock_price" for step in steps)
+    assert any(step.get("name") == "get_company_news" for step in steps)
+
+
+def test_planner_llm_mode_uses_task_graph_for_brief_compare_snapshot(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("brief compare snapshot should use router-supplied short task graph")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    tasks = [
+        {
+            "id": "task_price_googl",
+            "subject_type": "company",
+            "tickers": ["GOOGL"],
+            "operation": {"name": "price", "confidence": 0.8, "params": {}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint_support",
+        },
+        {
+            "id": "task_news_googl",
+            "subject_type": "company",
+            "tickers": ["GOOGL"],
+            "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint_support",
+        },
+        {
+            "id": "task_price_msft",
+            "subject_type": "company",
+            "tickers": ["MSFT"],
+            "operation": {"name": "price", "confidence": 0.8, "params": {}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint_support",
+        },
+        {
+            "id": "task_news_msft",
+            "subject_type": "company",
+            "tickers": ["MSFT"],
+            "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint_support",
+        },
+        {
+            "id": "task_compare",
+            "subject_type": "company",
+            "tickers": ["GOOGL", "MSFT"],
+            "operation": {"name": "compare", "confidence": 0.8, "params": {"aspects": ["news", "price_change", "risk"]}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint",
+        },
+    ]
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+                "output_mode": "brief",
+                "operation": {"name": "compare", "confidence": 0.8, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["GOOGL", "MSFT"], "selection_payload": []},
+                "tasks": tasks,
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 8},
+                    "allowed_tools": ["get_company_news", "get_stock_price", "get_performance_comparison"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    names = [step.get("name") for step in steps]
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert names.count("get_stock_price") >= 2
+    assert names.count("get_company_news") >= 2
+
+
+def test_planner_llm_mode_uses_task_graph_for_router_decomposed_mixed_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("router-decomposed mixed chat should not call planner LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    tasks = [
+        {
+            "id": "task_aapl_price",
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "operation": {"name": "price", "confidence": 0.8, "params": {}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint",
+        },
+        {
+            "id": "task_msft_news",
+            "subject_type": "company",
+            "tickers": ["MSFT"],
+            "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint",
+        },
+        {
+            "id": "task_rates",
+            "subject_type": "macro",
+            "tickers": [],
+            "operation": {"name": "qa", "confidence": 0.8, "params": {}},
+            "status": "ready",
+            "reason": "conversation_router_task_hint",
+        },
+    ]
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "AAPL 价格、MSFT 新闻、再解释一下为什么高估值怕利率。",
+                "output_mode": "chat",
+                "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"], "selection_payload": []},
+                "tasks": tasks,
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 8},
+                    "allowed_tools": [
+                        "get_stock_price",
+                        "get_company_news",
+                        "get_official_macro_releases",
+                        "search",
+                        "get_current_datetime",
+                    ],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    names = [step.get("name") for step in ((out.get("plan_ir") or {}).get("steps") or [])]
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert "get_stock_price" in names
+    assert "get_company_news" in names
+
+
+def test_planner_llm_mode_uses_task_graph_for_url_mixed_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("router-decomposed URL chat should use structured task graph")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "看下这个 https://example.com/msft-rates 顺便给 MSFT 价格，再说利率为什么影响它",
+                "output_mode": "chat",
+                "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["MSFT"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_url",
+                        "subject_type": "unknown",
+                        "tickers": [],
+                        "operation": {
+                            "name": "qa",
+                            "confidence": 0.8,
+                            "params": {"url": "https://example.com/msft-rates"},
+                        },
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                    {
+                        "id": "task_price",
+                        "subject_type": "company",
+                        "tickers": ["MSFT"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                    {
+                        "id": "task_focus",
+                        "subject_type": "unknown",
+                        "tickers": [],
+                        "operation": {"name": "qa", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 8},
+                    "allowed_tools": ["fetch_url_content", "get_stock_price", "search"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    names = [step.get("name") for step in ((out.get("plan_ir") or {}).get("steps") or [])]
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    assert "fetch_url_content" in names
+    assert "get_stock_price" in names
+
+
+def test_planner_llm_mode_uses_task_graph_for_explicit_url_fallback(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+
+    def _fake_create_llm(*_args, **_kwargs):
+        raise AssertionError("explicit URL fallback task should not call planner LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "AAPL price and read https://example.com/msft-rates for MSFT",
+                "output_mode": "chat",
+                "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_url",
+                        "subject_type": "research_doc",
+                        "tickers": ["AAPL", "MSFT"],
+                        "operation": {
+                            "name": "qa",
+                            "confidence": 0.68,
+                            "params": {"url": "https://example.com/msft-rates"},
+                        },
+                        "status": "ready",
+                        "reason": "explicit_url_reference",
+                    },
+                    {
+                        "id": "task_price",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "ticker_or_alias",
+                    },
+                    {
+                        "id": "task_macro",
+                        "subject_type": "macro",
+                        "tickers": [],
+                        "operation": {"name": "analyze_impact", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "macro_hint",
+                    },
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 8},
+                    "allowed_tools": ["fetch_url_content", "get_stock_price", "search"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    names = [step.get("name") for step in ((out.get("plan_ir") or {}).get("steps") or [])]
+    assert runtime.get("mode") == "task_graph"
+    assert "fetch_url_content" in names
+    assert "get_stock_price" in names
+
+
+def test_planner_llm_mode_uses_task_graph_for_brief_fetch_tasks(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+
+    def _fake_create_llm(*_args, **_kwargs):
+        raise AssertionError("structured brief fetch tasks should not call planner LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+                "output_mode": "brief",
+                "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+                "subject": {"subject_type": "company", "tickers": ["GOOGL", "MSFT"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_g_news",
+                        "subject_type": "company",
+                        "tickers": ["GOOGL"],
+                        "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                    {
+                        "id": "task_m_news",
+                        "subject_type": "company",
+                        "tickers": ["MSFT"],
+                        "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    },
+                    {
+                        "id": "task_g_price",
+                        "subject_type": "company",
+                        "tickers": ["GOOGL"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint_support",
+                    },
+                    {
+                        "id": "task_m_price",
+                        "subject_type": "company",
+                        "tickers": ["MSFT"],
+                        "operation": {"name": "price", "confidence": 0.8, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint_support",
+                    },
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 8},
+                    "allowed_tools": ["get_company_news", "get_stock_price", "search"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    names = [step.get("name") for step in steps]
+    assert runtime.get("mode") == "task_graph"
+    assert names.count("get_company_news") == 2
+    assert names.count("get_stock_price") == 2
+    assert all(
+        (step.get("inputs") or {}).get("fast") is True
+        for step in steps
+        if step.get("name") == "get_company_news"
+    )
+
+
+def test_planner_llm_mode_keeps_llm_for_investment_report_tasks(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        content = """
+        {
+          "goal": "AAPL report",
+          "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+          "output_mode": "investment_report",
+          "steps": [],
+          "budget": {"max_rounds": 4, "max_tools": 4},
+          "synthesis": {"style": "structured", "sections": []}
+        }
+        """
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp()
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        return _FakeLLM()
+
+    async def _fake_retry(llm, messages, **kwargs):
+        return await llm.ainvoke(messages)
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+    monkeypatch.setattr(planner_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "生成 AAPL 投资报告",
+                "output_mode": "investment_report",
+                "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["AAPL"],
+                        "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+                        "status": "ready",
+                    }
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 4, "max_tools": 4},
+                    "allowed_tools": ["search"],
+                    "allowed_agents": [],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is True
+    assert runtime.get("mode") == "llm"
+    assert runtime.get("fallback") is False
+
+
+def test_planner_stub_multiticker_report_compare_collects_per_ticker_support(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "分析 GOOGL 和 MSFT，生成报告。",
+        "output_mode": "investment_report",
+        "operation": {"name": "compare", "confidence": 0.86, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["GOOGL", "MSFT"], "selection_payload": []},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["GOOGL", "MSFT"],
+                "operation": {"name": "compare", "confidence": 0.86, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_2",
+                "subject_type": "company",
+                "tickers": ["GOOGL"],
+                "operation": {"name": "price", "confidence": 0.82, "params": {}},
+                "status": "ready",
+            },
+            {
+                "id": "task_3",
+                "subject_type": "company",
+                "tickers": ["MSFT"],
+                "operation": {"name": "fetch", "confidence": 0.78, "params": {"topic": "news"}},
+                "status": "ready",
+            },
+        ],
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 12},
+            "allowed_tools": [
+                "get_performance_comparison",
+                "get_stock_price",
+                "get_company_news",
+                "get_company_info",
+            ],
+            "allowed_agents": [],
+        },
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    names = [step.get("name") for step in steps]
+    assert "get_performance_comparison" in names
+    assert names.count("get_stock_price") >= 2
+    assert names.count("get_company_news") >= 2
+
+
 def test_planner_llm_mode_retries_on_invalid_json_then_recovers(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 
 from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.state import GraphState
@@ -35,6 +36,7 @@ def planner_stub(state: GraphState) -> dict:
     ready_task_id_set = {str(task.get("id") or "").strip() for task in ready_tasks if str(task.get("id") or "").strip()}
 
     steps: list[dict] = []
+    step_index: dict[tuple[str, str, str], dict] = {}
     step_id = 1
 
     selection_payload = subject.get("selection_payload") if isinstance(subject, dict) else None
@@ -50,6 +52,8 @@ def planner_stub(state: GraphState) -> dict:
             }
         )
         step_id += 1
+    else:
+        selection_payload = []
 
     tickers = subject.get("tickers") if isinstance(subject, dict) else None
     primary_ticker = (tickers or [None])[0] if isinstance(tickers, list) else None
@@ -58,6 +62,36 @@ def planner_stub(state: GraphState) -> dict:
 
     def _contains_any(tokens: tuple[str, ...]) -> bool:
         return any(token in query_lower for token in tokens)
+
+    def _qa_needs_live_context() -> bool:
+        if output_mode == "investment_report":
+            return True
+        return _contains_any(
+            (
+                "最新",
+                "最近",
+                "新闻",
+                "消息",
+                "今天",
+                "现在",
+                "实时",
+                "股价",
+                "价格",
+                "涨跌",
+                "财报",
+                "指引",
+                "latest",
+                "recent",
+                "news",
+                "today",
+                "current",
+                "real-time",
+                "realtime",
+                "price",
+                "earnings",
+                "guidance",
+            )
+        )
 
     def _macro_query_for_task(task: dict) -> str:
         label = str(task.get("subject_label") or "").strip()
@@ -95,6 +129,34 @@ def planner_stub(state: GraphState) -> dict:
         nonlocal step_id
         if name not in allowed_tools:
             return
+        try:
+            inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            inputs_key = str(sorted(inputs.items())) if isinstance(inputs, dict) else str(inputs)
+        group_key = str(parallel_group or "")
+        key = (name, inputs_key, group_key)
+        normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
+        if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ready_task_id_set:
+            normalized_task_ids = [parallel_group]
+        existing = step_index.get(key)
+        if existing is not None:
+            if optional is False:
+                existing["optional"] = False
+            if normalized_task_ids:
+                merged = [
+                    str(task_id).strip()
+                    for task_id in (existing.get("task_ids") or [])
+                    if str(task_id).strip()
+                ]
+                seen = set(merged)
+                for task_id in normalized_task_ids:
+                    if task_id in seen:
+                        continue
+                    seen.add(task_id)
+                    merged.append(task_id)
+                existing["task_ids"] = merged
+                existing["task_id"] = merged[0]
+            return
         step = {
             "id": f"s{step_id}",
             "kind": "tool",
@@ -103,15 +165,13 @@ def planner_stub(state: GraphState) -> dict:
             "why": why,
             "optional": optional,
         }
-        normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
-        if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ready_task_id_set:
-            normalized_task_ids = [parallel_group]
         if normalized_task_ids:
             step["task_ids"] = normalized_task_ids
             step["task_id"] = normalized_task_ids[0]
         if parallel_group:
             step["parallel_group"] = parallel_group
         steps.append(step)
+        step_index[key] = step
         step_id += 1
 
     def _task_id(task: dict) -> str:
@@ -126,6 +186,13 @@ def planner_stub(state: GraphState) -> dict:
                 return name.strip()
         return "qa"
 
+    def _task_operation_params(task: dict) -> dict:
+        op = task.get("operation")
+        if not isinstance(op, dict):
+            return {}
+        params = op.get("params")
+        return params if isinstance(params, dict) else {}
+
     def _task_tickers(task: dict) -> list[str]:
         values = task.get("tickers")
         if not isinstance(values, list):
@@ -139,6 +206,25 @@ def planner_stub(state: GraphState) -> dict:
             seen.add(ticker)
             result.append(ticker)
         return result
+
+    def _task_urls(task: dict) -> list[str]:
+        params = _task_operation_params(task)
+        candidates: list[object] = [
+            params.get("url"),
+            task.get("url"),
+        ]
+        raw_urls = params.get("urls")
+        if isinstance(raw_urls, list):
+            candidates.extend(raw_urls)
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in candidates:
+            url = str(value or "").strip().rstrip(".,，。;；:：!?！？")
+            if not url.startswith(("http://", "https://")) or url in seen:
+                continue
+            seen.add(url)
+            result.append(url)
+        return result[:3]
 
     def _plan_task_summary() -> list[dict]:
         rows: list[dict] = []
@@ -155,28 +241,84 @@ def planner_stub(state: GraphState) -> dict:
             )
         return rows
 
+    def _compare_has_current_support(task: dict) -> bool:
+        compare_tickers = set(_task_tickers(task))
+        if not compare_tickers:
+            return False
+        current_ops = {"price", "fetch", "analyze_impact", "daily_brief", "technical"}
+        for other in ready_tasks:
+            if other is task:
+                continue
+            if _task_operation_name(other) not in current_ops:
+                continue
+            if compare_tickers.intersection(_task_tickers(other)):
+                return True
+        return False
+
+    def _should_use_performance_compare(task: dict | None = None) -> bool:
+        if output_mode == "investment_report":
+            return True
+        params = _task_operation_params(task or {})
+        data_profile = str(params.get("data_profile") or params.get("comparison_data_profile") or "").strip().lower()
+        if data_profile in {"performance", "historical_performance"}:
+            return True
+        if task is not None and _compare_has_current_support(task):
+            return False
+        return task is not None
+
     def _append_company_task_steps(task: dict, *, group: str) -> None:
         op_name = _task_operation_name(task)
         tickers_for_task = _task_tickers(task)
+        task_ids = [_task_id(task)]
         if op_name == "compare" and len(tickers_for_task) >= 2:
-            mapping = {ticker: ticker for ticker in tickers_for_task[:6]}
-            _append_tool_step(
-                "get_performance_comparison",
-                {"tickers": mapping},
-                why="多标的对比任务：先取标准化表现数据。",
-                optional=False,
-                parallel_group=group,
-            )
+            if _should_use_performance_compare(task):
+                mapping = {ticker: ticker for ticker in tickers_for_task[:6]}
+                _append_tool_step(
+                    "get_performance_comparison",
+                    {"tickers": mapping},
+                    why="多标的对比任务：取标准化历史表现数据。",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            if output_mode == "investment_report":
+                for ticker in tickers_for_task[:6]:
+                    _append_tool_step(
+                        "get_stock_price",
+                        {"ticker": ticker},
+                        why=f"{ticker} 对比研报：补充当前价格作为报告锚点。",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_company_news",
+                        {"ticker": ticker},
+                        why=f"{ticker} 对比研报：补充近期新闻用于事件解释。",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_company_info",
+                        {"ticker": ticker},
+                        why=f"{ticker} 对比研报：补充公司基础信息。",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
             return
 
         for ticker in tickers_for_task[:6]:
-            if op_name in {"price", "technical", "qa", "analyze_impact", "daily_brief"}:
+            live_qa = op_name == "qa" and _qa_needs_live_context()
+            if op_name in {"price", "technical", "analyze_impact", "daily_brief"} or live_qa:
                 _append_tool_step(
                     "get_stock_price",
                     {"ticker": ticker},
                     why=f"{ticker} 任务：获取价格/涨跌幅作为回答锚点。",
                     optional=op_name not in {"price", "technical"},
                     parallel_group=group,
+                    task_ids=task_ids,
                 )
             if op_name == "technical":
                 _append_tool_step(
@@ -185,25 +327,42 @@ def planner_stub(state: GraphState) -> dict:
                     why=f"{ticker} 技术面任务：获取技术指标快照。",
                     optional=False,
                     parallel_group=group,
+                    task_ids=task_ids,
                 )
-            if op_name in {"fetch", "qa", "analyze_impact", "daily_brief"}:
+            if op_name in {"fetch", "analyze_impact", "daily_brief"} or live_qa:
+                news_inputs = {"ticker": ticker}
+                if output_mode == "brief":
+                    news_inputs.update({"fast": True, "limit": 3})
                 _append_tool_step(
                     "get_company_news",
-                    {"ticker": ticker},
+                    news_inputs,
                     why=f"{ticker} 任务：获取相关新闻用于事件解释。",
                     optional=op_name not in {"fetch", "analyze_impact"},
                     parallel_group=group,
+                    task_ids=task_ids,
                 )
-            if op_name in {"qa", "analyze_impact"}:
+            fast_brief_router_task = (
+                output_mode == "brief"
+                and str(task.get("reason") or "").strip()
+                in {"conversation_router_task_hint", "conversation_router_task_hint_support"}
+            )
+            if (op_name == "analyze_impact" and not fast_brief_router_task) or (
+                op_name == "qa" and output_mode == "investment_report"
+            ):
                 _append_tool_step(
                     "get_company_info",
                     {"ticker": ticker},
                     why=f"{ticker} 任务：补充公司基础信息，避免只看新闻标题。",
                     optional=True,
                     parallel_group=group,
+                    task_ids=task_ids,
                 )
 
     def _append_macro_task_steps(task: dict, *, group: str) -> None:
+        op_name = _task_operation_name(task)
+        if op_name == "qa" and output_mode != "investment_report":
+            return
+        task_ids = [_task_id(task)]
         task_query = _macro_query_for_task(task)
         _append_tool_step(
             "get_current_datetime",
@@ -211,6 +370,7 @@ def planner_stub(state: GraphState) -> dict:
             why="宏观任务：获取当前日期，防止把旧政策当成当前事实。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
         _append_tool_step(
             "get_official_macro_releases",
@@ -218,6 +378,7 @@ def planner_stub(state: GraphState) -> dict:
             why="宏观任务：优先检查官方宏观/央行发布。",
             optional=False,
             parallel_group=group,
+            task_ids=task_ids,
         )
         _append_tool_step(
             "get_authoritative_media_news",
@@ -225,6 +386,7 @@ def planner_stub(state: GraphState) -> dict:
             why="宏观任务：用权威媒体交叉验证市场影响。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
         _append_tool_step(
             "search",
@@ -232,19 +394,30 @@ def planner_stub(state: GraphState) -> dict:
             why="宏观任务：补充开放搜索证据。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
 
     def _append_portfolio_task_steps(task: dict, *, group: str) -> None:
+        task_ids = [_task_id(task)]
         tickers_for_task = _task_tickers(task)
-        if tickers_for_task:
+        params = task.get("params") if isinstance(task.get("params"), dict) else {}
+        raw_positions = params.get("positions") if isinstance(params.get("positions"), list) else []
+        positions = [
+            item
+            for item in raw_positions
+            if isinstance(item, dict) and str(item.get("ticker") or "").strip()
+        ]
+        if not positions and tickers_for_task:
             weight = round(1.0 / len(tickers_for_task), 4)
             positions = [{"ticker": ticker, "weight": weight} for ticker in tickers_for_task[:8]]
+        if positions:
             _append_tool_step(
                 "get_factor_exposure",
                 {"positions": positions, "lookback_days": 252},
                 why="组合任务：估算持仓因子暴露。",
                 optional=True,
                 parallel_group=group,
+                task_ids=task_ids,
             )
             _append_tool_step(
                 "run_portfolio_stress_test",
@@ -252,6 +425,7 @@ def planner_stub(state: GraphState) -> dict:
                 why="组合任务：估算压力情景下的组合敏感性。",
                 optional=True,
                 parallel_group=group,
+                task_ids=task_ids,
             )
         _append_tool_step(
             "search",
@@ -259,9 +433,11 @@ def planner_stub(state: GraphState) -> dict:
             why="组合任务：检索影响持仓的近期市场事件。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
 
     def _append_theme_task_steps(task: dict, *, group: str) -> None:
+        task_ids = [_task_id(task)]
         task_query = str(task.get("subject_label") or query).strip() or query
         _append_tool_step(
             "get_current_datetime",
@@ -269,6 +445,7 @@ def planner_stub(state: GraphState) -> dict:
             why="主题任务：获取当前日期，限定近期事件语境。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
         _append_tool_step(
             "get_authoritative_media_news",
@@ -276,6 +453,7 @@ def planner_stub(state: GraphState) -> dict:
             why="主题任务：优先用权威媒体验证行业事件。",
             optional=True,
             parallel_group=group,
+            task_ids=task_ids,
         )
         _append_tool_step(
             "search",
@@ -283,15 +461,54 @@ def planner_stub(state: GraphState) -> dict:
             why="主题任务：检索行业/主题的近期事件与影响。",
             optional=False,
             parallel_group=group,
+            task_ids=task_ids,
+        )
+
+    def _append_document_task_steps(task: dict, *, group: str) -> None:
+        urls = _task_urls(task)
+        for url in urls:
+            _append_tool_step(
+                "fetch_url_content",
+                {"url": url, "max_length": 6000},
+                why="文档任务已给出 URL：读取页面正文后再作为证据使用。",
+                optional=False,
+                parallel_group=group,
+                task_ids=[_task_id(task)],
+            )
+        if urls:
+            return
+        task_query = str(task.get("subject_label") or query).strip() or query
+        _append_tool_step(
+            "search",
+            {"query": task_query},
+            why="文档/新闻任务缺少可抓取 URL：用搜索补足来源线索。",
+            optional=True,
+            parallel_group=group,
+            task_ids=[_task_id(task)],
         )
 
     def _append_understanding_task_steps() -> bool:
         if len(ready_tasks) <= 1:
             return False
+        if all(
+            _task_subject_type in {"company", "index", "commodity"}
+            and _task_operation_name(task) == "price"
+            for task in ready_tasks
+            for _task_subject_type in [str(task.get("subject_type") or "unknown").strip().lower()]
+        ):
+            for task in ready_tasks[:12]:
+                _append_company_task_steps(task, group="price_quotes")
+            return True
         for idx, task in enumerate(ready_tasks[:12], 1):
             subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
-            group = _task_id(task) or f"task_{idx}"
-            if subject_for_task in {"company", "index", "commodity"}:
+            group = (
+                "brief_data"
+                if output_mode == "brief" and subject_for_task in {"company", "index", "commodity"}
+                else (_task_id(task) or f"task_{idx}")
+            )
+            if _task_urls(task):
+                _append_document_task_steps(task, group=group)
+            elif subject_for_task in {"company", "index", "commodity"}:
                 _append_company_task_steps(task, group=group)
             elif subject_for_task == "macro":
                 _append_macro_task_steps(task, group=group)
@@ -299,6 +516,8 @@ def planner_stub(state: GraphState) -> dict:
                 _append_portfolio_task_steps(task, group=group)
             elif subject_for_task == "theme":
                 _append_theme_task_steps(task, group=group)
+            elif subject_for_task in {"research_doc", "filing", "news_item", "news_set"}:
+                _append_document_task_steps(task, group=group)
         return True
 
     used_understanding_task_plan = _append_understanding_task_steps()
@@ -402,7 +621,7 @@ def planner_stub(state: GraphState) -> dict:
                         "id": f"s{step_id}",
                         "kind": "tool",
                         "name": "get_company_news",
-                        "inputs": {"ticker": ticker},
+                        "inputs": {"ticker": ticker, "fast": True, "limit": 3},
                         "parallel_group": "brief_data",
                         "why": f"晨报：获取 {ticker} 最新新闻",
                         "optional": False,
@@ -508,7 +727,7 @@ def planner_stub(state: GraphState) -> dict:
     if operation == "compare":
         tickers_list = tickers if isinstance(tickers, list) else []
         tickers_list = [t for t in tickers_list if isinstance(t, str) and t.strip()]
-        if len(tickers_list) >= 2 and "get_performance_comparison" in allowed_tools:
+        if len(tickers_list) >= 2 and "get_performance_comparison" in allowed_tools and _should_use_performance_compare(None):
             mapping = {t: t for t in tickers_list[:6]}
             steps.append(
                 {
@@ -521,6 +740,26 @@ def planner_stub(state: GraphState) -> dict:
                 }
             )
             step_id += 1
+        if output_mode == "investment_report":
+            for ticker in tickers_list[:6]:
+                _append_tool_step(
+                    "get_stock_price",
+                    {"ticker": ticker},
+                    why=f"{ticker} 对比研报：补充当前价格作为报告锚点。",
+                    optional=True,
+                )
+                _append_tool_step(
+                    "get_company_news",
+                    {"ticker": ticker},
+                    why=f"{ticker} 对比研报：补充近期新闻用于事件解释。",
+                    optional=True,
+                )
+                _append_tool_step(
+                    "get_company_info",
+                    {"ticker": ticker},
+                    why=f"{ticker} 对比研报：补充公司基础信息。",
+                    optional=True,
+                )
 
     if operation in ("price", "technical") and primary_ticker and "get_stock_price" in allowed_tools:
         steps.append(
@@ -551,7 +790,6 @@ def planner_stub(state: GraphState) -> dict:
     if subject_type in ("company",) and primary_ticker and "get_company_info" in allowed_tools and operation in (
         "summarize",
         "analyze_impact",
-        "qa",
         "generate_report",
     ):
         steps.append(

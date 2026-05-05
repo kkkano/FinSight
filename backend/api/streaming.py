@@ -51,7 +51,7 @@ class ThinkingStream:
         流式输出 Agent 的思考过程
         
         Args:
-            agent: ConversationAgent 实例
+            agent: legacy ConversationAgent 实例
             query: 用户查询
             include_tools: 是否包含工具调用信息
             include_reasoning: 是否包含推理过程
@@ -60,11 +60,11 @@ class ThinkingStream:
             JSON 格式的思考过程片段
         """
         try:
-            # 1. 意图识别阶段
+            # 1. 理解阶段（legacy ThinkingStream 兼容路径）
             yield json.dumps({
                 "type": "thinking",
-                "stage": "intent_classification",
-                "message": "正在分析您的查询意图...",
+                "stage": "understanding",
+                "message": "正在理解你的问题...",
                 "timestamp": datetime.now().isoformat()
             }, ensure_ascii=False) + "\n"
             
@@ -76,7 +76,7 @@ class ThinkingStream:
             
             yield json.dumps({
                 "type": "thinking",
-                "stage": "intent_classification",
+                "stage": "understanding",
                 "result": {
                     "intent": intent.value,
                     "tickers": metadata.get('tickers', []),

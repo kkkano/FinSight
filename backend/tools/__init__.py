@@ -79,7 +79,7 @@ from .macro_official import (
     get_official_macro_releases,
 )
 from .utils import get_current_datetime
-from .web import fetch_url_content
+from .web import fetch_url_content, fetch_url_document
 from .sec import (
     get_sec_filings,
     get_sec_material_events,
@@ -173,6 +173,7 @@ __all__ = [
     "get_official_macro_releases",
     "get_current_datetime",
     "fetch_url_content",
+    "fetch_url_document",
     "get_sec_filings",
     "get_sec_material_events",
     "get_sec_risk_factors",

@@ -59,7 +59,7 @@
 | 类别 | 亮点 |
 |------|------|
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
-| **LangGraph 管线** | 聊天前半段已收敛到 `understand_request`：一次性识别多任务、局部阻塞项和用户可见 trace |
+| **LangGraph 管线** | 支持类 GPT 的上下文对话、提醒、URL/文章分析、快速行情问答和显式报告生成。普通聊天先进 LLM conversation router，只有报告按钮进入结构化报告模板。 |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
 | **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |
@@ -243,9 +243,13 @@ graph TB
 
 ---
 
-## 🔄 LangGraph 管线（请求理解运行时）
+## 🔄 LangGraph 管线（对话运行时）
 
-FinSight 的聊天主链路已经把旧的 `chat_respond / resolve_subject / clarify / parse_operation` 前半段收敛到 `understand_request`。它会输出 `understanding`、`tasks[]`、`blocked_tasks[]`，并通过 `type="trace"`、`visibility="user"` 的 SSE 事件把“系统识别了什么”展示给前端。
+FinSight 的聊天主链路现在是 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候、感谢、确认和再见；普通聊天、追问、非金融边界、URL/网页/文章请求、提醒、行情问题和报告请求都会进入 `understand_request` 内部的 LLM conversation router。
+
+Router 会先判断本轮应该自然直接回答、澄清、设置提醒，还是进入研究规划。进入研究时才输出 `understanding`、`tasks[]`、`blocked_tasks[]`，并通过 `type="trace"`、`visibility="user"` 的 SSE 事件把“系统识别了什么”展示给前端。URL/网页/文章读取以 planner/agent 工具 `fetch_url_content` 暴露，`understand_request` 不做 URL 预抓取。
+
+当前实现 spec 见 [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md)。最新 40-query 聊天 UX 验收完整问题和答案见 [`docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`](docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md)，定向修复验证见 [`docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`](docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md)。
 
 仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于聊天 LangGraph 主链路。
 
@@ -256,28 +260,27 @@ flowchart TD
     START((开始)) --> INIT["① build_initial_state<br/><i>解析输入，加载记忆</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>清除临时字段 + trace 运行时</i>"]
     RESET --> PREPARE["③ prepare_context<br/><i>限制历史、摘要、合并 UI 提示</i>"]
-    PREPARE --> UNDERSTAND{"④ understand_request<br/><i>多任务 + 局部阻塞 + trace</i>"}
+    PREPARE --> CHATRESP["④ chat_respond<br/><i>只处理纯社交</i>"]
+    CHATRESP -->|"问候 / 感谢 / 再见"| END_CHAT((结束))
+    CHATRESP -->|"其他所有 turn"| UNDERSTAND{"⑤ understand_request<br/><i>LLM router + 多任务 + trace</i>"}
 
-    UNDERSTAND -->|"direct / clarify"| RENDER
-    UNDERSTAND -->|"alert"| ALERT_EX["⑤ alert_extractor<br/><i>提取提醒参数</i>"]
-    ALERT_EX -->|"有效"| ALERT_ACT["⑦b alert_action<br/><i>保存并调度</i>"]
+    UNDERSTAND -->|"direct / clarify / out_of_scope"| END_CHAT
+    UNDERSTAND -->|"alert"| ALERT_EX["⑥ alert_extractor<br/><i>提取提醒参数</i>"]
+    ALERT_EX -->|"有效"| ALERT_ACT["⑥b alert_action<br/><i>保存并调度</i>"]
     ALERT_EX -->|"无效"| RENDER
     ALERT_ACT --> RENDER
-    UNDERSTAND -->|"research"| POLICY["⑥ policy_gate<br/><i>能力评分 + task 工具并集</i>"]
-    POLICY --> PLAN["⑦ planner_node<br/><i>LLM 规划 或 Stub 回退</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑦ policy_gate<br/><i>能力评分 + task 工具并集</i>"]
+    POLICY --> PLAN["⑧ planner_node<br/><i>LLM 规划或 Stub 回退</i>"]
 
-    PLAN --> CONFIRM{"⑧ confirmation_gate<br/><i>人工审批？</i>"}
+    PLAN --> CONFIRM{"⑨ confirmation_gate<br/><i>人工审批？</i>"}
     CONFIRM -->|"拒绝"| RENDER
-    CONFIRM -->|"批准"| EXEC["⑨ execute_plan<br/><i>并行智能体组</i>"]
+    CONFIRM -->|"批准"| EXEC["⑩ execute_plan<br/><i>工具、智能体、URL fetch</i>"]
 
-    EXEC --> SYNTH["⑩ synthesize<br/><i>合并输出 + compare_gate + 冲突检查</i>"]
-    SYNTH --> SCRUB["⑪ 幻觉洗涤<br/><i>正则 + 证据验证</i>"]
-    SCRUB --> BUILD["⑫ report_builder<br/><i>构建 ReportIR 结构</i>"]
-    BUILD --> RENDER["⑬ render_response<br/><i>格式化输出</i>"]
-    RENDER --> SAVE["⑭ save_memory<br/><i>持久化记忆</i>"]
-    SAVE --> END((结束))
+    EXEC --> SYNTH["⑪ synthesize<br/><i>合并输出 + 冲突/证据检查</i>"]
+    SYNTH --> RENDER["⑫ render<br/><i>对话或报告输出</i>"]
+    RENDER --> END((结束))
 
-    subgraph "执行引擎 (⑨)"
+    subgraph "执行引擎 (⑩)"
         direction LR
         EG1["组 1<br/>price · news"] --> EG2["组 2<br/>fundamental · technical"]
         EG2 --> EG3["组 3<br/>macro · risk · deep_search"]
@@ -287,9 +290,10 @@ flowchart TD
 
     style RESET fill:#a855f7,color:#fff
     style SYNTH fill:#ff9800,color:#000
-    style SCRUB fill:#f44336,color:#fff
     style POLICY fill:#2196f3,color:#fff
 ```
+
+`report_builder` 和幻觉/证据检查是 graph runtime 内部 helper，不是 `backend/graph/runner.py` 中的独立图节点。
 
 ### 请求理解（`understand_request`）
 
@@ -303,7 +307,7 @@ flowchart TD
 | 兼容 `subject` / `operation` | 将 primary task 投影给现有 policy/planner/executor |
 | `trace` 事件 | `type="trace"`、`visibility="user"`、`stage="understanding"`，供前端过程 UI 展示 |
 
-旧 `chat_respond`、`resolve_subject`、`clarify`、`parse_operation` 仍保留为兼容节点和单元测试对象，但主运行路径已经跳过它们。
+`chat_respond` 仍在主路径上，但只作为纯社交快速通道。旧 `resolve_subject`、`clarify`、`parse_operation` 是兼容 helper 或历史路径，不再是主路由表面。
 
 ### GraphState 字段
 
@@ -313,7 +317,7 @@ flowchart TD
 |------|------|------|
 | `messages` | `Annotated[list, add_messages]` | 对话历史（LangGraph reducer 仅追加） |
 | `subject` | `dict` | 解析后的实体 — `{type, ticker, name, market}` |
-| `output_mode` | `str` | `"chat"` / `"brief"` / `"investment_report"` |
+| `output_mode` | `str` | `"chat"` / 兼容 `"brief"` / 显式 `"investment_report"` |
 | `plan_ir` | `dict` | 执行计划（步骤、分组、依赖、成本估算） |
 | `step_results` | `dict` | 各智能体/工具的原始输出 |
 | `evidence_pool` | `list[dict]` | 收集的证据条目（带来源归因） |
@@ -1067,7 +1071,7 @@ npm run build --prefix frontend
 cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
 ```
 
-聊天 UX Playwright smoke 覆盖 Deep/Brief 启用、新建/切换/删除会话、用户可见 trace 摘要和停止生成。20 条 request-understanding query 矩阵记录在 `docs/reports/2026-05-03_request_understanding_query_results.md`；最新浏览器验证记录在 `docs/reports/2026-05-03_playwright_chat_smoke.md`。
+当前聊天 UX 验收集把完整 query 和完整答案保留在 `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`：全量 40 条中 39 条通过，唯一 portfolio/context review 用例已在 `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md` 的定向回归中通过（4/4）。剩余已知风险记录在那里：上游 LLM/工具延迟或额度失败、不可访问 URL 的正确降级、复合“设置提醒+顺便看新闻”当前先完成提醒并保留追问上下文。
 
 ### 可选：PostgreSQL（RAG 后端）
 
@@ -1109,10 +1113,11 @@ FinSight/
 │   │   └── nodes/              # 各节点实现
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn 临时字段 + trace 运行时清除
+│   │       ├── conversation_router.py # planner 前的 LLM 上下文路由
 │   │       ├── understand_request.py # 当前请求理解主节点
-│   │       ├── chat_respond.py       # legacy 兼容节点
+│   │       ├── chat_respond.py       # 仅纯社交快速通道
 │   │       ├── resolve_subject.py    # legacy 兼容节点
-│   │       ├── parse_operation.py    # legacy 兼容节点
+│   │       ├── parse_operation.py    # legacy 入口兼容 helper
 │   │       ├── compare_gate.py      # 对比证据门控（3 个谓词函数）
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

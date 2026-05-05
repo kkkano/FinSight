@@ -1,0 +1,212 @@
+[
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-fast-url-macro-local"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-fast-url-macro-local",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 72458,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL",
+          "MSFT"
+        ],
+        "operation": "compare"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "brief turn has explicit current-turn subject and no prior context to bind",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.72,
+      "needs_tools": true,
+      "reason": "explicit brief request can be decomposed by request understanding without context binding",
+      "reply_guidance": "",
+      "task_hints": []
+    },
+    "response": "我先按 GOOGL, MSFT 这组代表标的看。\n\nGOOGL:\n- GOOGL 最新价格约为 387.83 USD，变动 4.58 / 1.20%。\n- 相关消息：[GOOGL Yahoo Finance news](https://finance.yahoo.com/quote/GOOGL/news)（Yahoo Finance / 2026-05-05）；[GOOGL latest stock news search](https://www.google.com/search?q=GOOGL+latest+stock+news)（Search / 2026-05-05）\n\nMSFT:\n- MSFT 最新价格约为 410.80 USD，变动 -2.82 / -0.68%。\n- 相关消息：[MSFT Yahoo Finance news](https://finance.yahoo.com/quote/MSFT/news)（Yahoo Finance / 2026-05-05）；[MSFT latest stock news search](https://www.google.com/search?q=MSFT+latest+stock+news)（Search / 2026-05-05）\n\n按这次拿到的涨跌幅，GOOGL 暂时更强（1.20% vs MSFT -0.68%）。\n风险上先看新闻标题能不能落实到收入、利润率或指引；只靠标题还不能证明基本面已经变化。\n\n来源：\n- [GOOGL Yahoo Finance news](https://finance.yahoo.com/quote/GOOGL/news)（Yahoo Finance / 2026-05-05）\n- [GOOGL latest stock news search](https://www.google.com/search?q=GOOGL+latest+stock+news)（Search / 2026-05-05）\n- [MSFT Yahoo Finance news](https://finance.yahoo.com/quote/MSFT/news)（Yahoo Finance / 2026-05-05）\n- [MSFT latest stock news search](https://www.google.com/search?q=MSFT+latest+stock+news)（Search / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "quick brief exceeded 60000ms latency budget"
+    ]
+  },
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-fast-url-macro-local"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-fast-url-macro-local",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 68704,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "research_doc",
+        "tickers": [
+          "AAPL",
+          "MSFT"
+        ],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "brief turn has explicit current-turn subject and no prior context to bind",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.72,
+      "needs_tools": true,
+      "reason": "explicit brief request can be decomposed by request understanding without context binding",
+      "reply_guidance": "",
+      "task_hints": []
+    },
+    "response": "AAPL 最新价格约为 280.44 USD，变动 3.57 / 1.29%。\nMSFT 最新价格约为 411.36 USD，变动 -2.26 / -0.55%。\n\nAAPL 相关链接这次没有拿到可读正文（fetch_failed）：https://example.com/msft-rates。所以我先不把它当作支持证据，只能说需要换成可访问正文后再判断。\n\n利率影响估值，核心是折现率和机会成本：利率上行会降低远期现金流的现值，也会让无风险收益率更有吸引力。\n所以 AAPL, MSFT 更敏感，后面要看利率预期是否继续压低估值倍数，以及业绩指引能不能抵消这部分压力。\n\n一句话：先关注利率和通胀预期是否继续压估值，再看 AAPL/MSFT 的业绩指引和价格反应能不能抵消压力。\n\n来源：\n- [https://example.com/msft-rates](https://example.com/msft-rates)（url）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

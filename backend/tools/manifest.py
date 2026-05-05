@@ -305,6 +305,16 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
         cache_ttl_s=60,
     ),
     ToolManifestEntry(
+        name="fetch_url_content",
+        group="web",
+        markets=("US", "CN", "HK"),
+        operations=("fetch", "qa", "analyze_impact", "generate_report"),
+        depths=("quick", "report", "deep_research"),
+        risk_level="medium",
+        timeout_ms=15000,
+        cache_ttl_s=300,
+    ),
+    ToolManifestEntry(
         name="search",
         group="search",
         markets=("US", "CN", "HK"),
@@ -385,6 +395,7 @@ def select_tools(
         candidate_names = ["run_strategy_backtest", "search", "get_current_datetime"]
     elif subject in {"news_item", "news_set"}:
         candidate_names = [
+            "fetch_url_content",
             "get_company_news",
             "get_event_calendar",
             "score_news_source_reliability",
@@ -396,6 +407,19 @@ def select_tools(
         candidate_names = [
             "get_official_macro_releases",
             "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
+    elif subject in {"theme", "unknown"}:
+        candidate_names = [
+            "fetch_url_content",
+            "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
+    elif subject in {"filing", "research_doc"}:
+        candidate_names = [
+            "fetch_url_content",
             "search",
             "get_current_datetime",
         ]
@@ -443,7 +467,7 @@ def select_tools(
                 "search",
             ]
     else:
-        candidate_names = ["search", "get_current_datetime"]
+        candidate_names = ["fetch_url_content", "search", "get_current_datetime"]
 
     selected: list[str] = []
     for name in candidate_names:

@@ -192,7 +192,10 @@ export const ChatList: React.FC = () => {
     updateMessage(messageId, { isLoading: true, content: '' });
 
     try {
-      const response = await apiClient.sendMessage(query);
+      const response = await apiClient.sendMessage(query, undefined, {
+        output_mode: 'chat',
+        confirmation_mode: 'skip',
+      });
 
       const chartInfo = await shouldGenerateChart(query, response.current_focus ?? null);
       const tickerToChart = chartInfo.tickers[0] || null;

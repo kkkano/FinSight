@@ -86,13 +86,13 @@ def test_chat_supervisor_output_mode_option_overrides_default(client):
     assert data.get("graph", {}).get("output_mode") == "investment_report"
 
 
-def test_chat_supervisor_default_output_mode_is_brief_and_trace_present(client):
+def test_chat_supervisor_default_output_mode_is_chat_and_trace_present(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析影响"})
     assert resp.status_code == 200
     data = resp.json()
 
-    assert data.get("graph", {}).get("output_mode") == "brief"
+    assert data.get("graph", {}).get("output_mode") == "chat"
 
     trace = data.get("graph", {}).get("trace")
     assert isinstance(trace, dict)
@@ -131,6 +131,75 @@ def test_chat_supervisor_sync_persists_memory_snapshot(client, monkeypatch):
     assert isinstance(captured['report'], dict) or captured['report'] is None
 
 
+def test_chat_supervisor_keeps_original_query_for_langgraph_context_router(client, monkeypatch):
+    import backend.api.main as main
+
+    manager = main._get_session_context("tenant1:test_api_user:thread-no-pre-rewrite")
+    manager.clear()
+    manager.add_turn(
+        query="NVDA 最近新闻",
+        intent="chat",
+        response="NVDA answer",
+        metadata={"tickers": ["NVDA"]},
+    )
+
+    captured = {}
+
+    async def _fake_run_graph_traced(
+        _runner,
+        *,
+        thread_id,
+        query,
+        ui_context,
+        output_mode,
+        strict_selection,
+        confirmation_mode,
+    ):
+        captured["query"] = query
+        return {
+            "query": query,
+            "subject": {"subject_type": "unknown", "tickers": []},
+            "output_mode": "chat",
+            "trace": {"routing_chain": ["langgraph"]},
+            "artifacts": {"draft_markdown": "请告诉我你想展开哪一点。"},
+            "skip_session_context": True,
+        }
+
+    monkeypatch.setattr("backend.graph.runner.run_graph_traced", _fake_run_graph_traced)
+
+    resp = client.post(
+        "/chat/supervisor",
+        json={"query": "第二点展开一下。", "session_id": "tenant1:test_api_user:thread-no-pre-rewrite"},
+    )
+
+    assert resp.status_code == 200
+    assert captured["query"] == "第二点展开一下。"
+
+
+def test_chat_context_preserves_portfolio_positions(client):
+    resp = client.post(
+        "/chat/supervisor",
+        json={
+            "query": "这些新闻对我的持仓影响大吗？",
+            "session_id": "tenant1:test_api_user:thread-portfolio-context",
+            "context": {
+                "positions": [
+                    {"ticker": "AAPL", "weight": 0.35},
+                    {"ticker": "MSFT", "weight": 0.25},
+                    {"ticker": "NVDA", "weight": 0.15},
+                ],
+                "view": "portfolio",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    graph = resp.json().get("graph") or {}
+    subject = graph.get("subject") or {}
+    assert subject.get("subject_type") == "portfolio"
+    assert subject.get("tickers") == ["AAPL", "MSFT", "NVDA"]
+
+
 def test_chat_supervisor_trace_planner_runtime_contains_variant_field(client):
 
     resp = client.post("/chat/supervisor", json={"query": "分析苹果影响"})
@@ -164,7 +233,7 @@ def test_chat_supervisor_stream_done_event_contains_graph_output_mode(client):
     assert done is not None
     assert done.get("schema_version") == SSE_EVENT_SCHEMA_VERSION
     assert isinstance(done.get("contracts"), dict)
-    assert done.get("graph", {}).get("output_mode") == "brief"
+    assert done.get("graph", {}).get("output_mode") == "chat"
     trace = done.get("graph", {}).get("trace")
     assert isinstance(trace, dict)
     assert trace.get("routing_chain") == ["langgraph"]

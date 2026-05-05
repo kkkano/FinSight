@@ -1540,6 +1540,18 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 risks=base_risks,
             ).model_dump()
 
+        if len(tickers) >= 2 and operation == "qa":
+            tickers_list = [str(t).strip().upper() for t in tickers if isinstance(t, str) and str(t).strip()]
+            return RenderVars(
+                comparison_conclusion="\n".join(
+                    [
+                        f"- 我先按 {' / '.join(tickers_list[:6])} 这组代表标的理解。",
+                        "- 这轮没有足够的实时证据支撑进一步判断，先不硬给排序或投资结论。",
+                    ]
+                ),
+                risks=base_risks,
+            ).model_dump()
+
         # --- Build conclusion from agent insights ---
         def _build_conclusion_from_agents() -> str:
             """
@@ -2178,7 +2190,8 @@ async def synthesize(state: GraphState) -> dict:
     Phase 4.4 Synthesize node.
 
     Modes:
-    - LANGGRAPH_SYNTHESIZE_MODE=stub (default): deterministic render_vars
+    - LANGGRAPH_SYNTHESIZE_MODE=llm (default): LLM fills render_vars JSON; validate; fallback to stub
+    - LANGGRAPH_SYNTHESIZE_MODE=stub: deterministic render_vars
     - LANGGRAPH_SYNTHESIZE_MODE=llm: LLM fills render_vars JSON; validate; fallback to stub
     - LANGGRAPH_SYNTHESIZE_MODE=narrative: LLM writes full markdown report; render_vars kept for cards
 
@@ -2187,23 +2200,45 @@ async def synthesize(state: GraphState) -> dict:
       applies when ``output_mode == 'investment_report'`` (user explicitly
       asked for a report, e.g. clicked 「生成研报」or said 「研报」).
     - For ``brief`` / ``chat`` output modes (the default for casual Q&A like
-      「今天微软什么价格」), narrative is downgraded to ``stub`` so a single
-      short template renders instead of the full narrative LLM report.
+      「今天微软什么价格」), narrative is downgraded to ``llm`` so the answer
+      remains natural without triggering a full report.
     - ``stub`` and ``llm`` modes are NOT downgraded — both already produce
       compact ``render_vars`` for the brief template, no length explosion.
-    - For multi-task plans (``len(tasks) >= 2`` that are not a pure compare),
-      we also force ``stub`` so ``render_stub._build_multitask_markdown`` can
-      render per-task sections.  ``narrative`` cannot disambiguate multiple
-      independent tickers and tends to drop all-but-one (the C20 bug).
+    - Multi-task chat/brief plans stay in compact LLM synthesis unless the
+      caller explicitly sets ``LANGGRAPH_SYNTHESIZE_MODE=stub``. Report mode
+      can still choose narrative for explicit reports.
     """
-    env_mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "stub").lower()
+    env_mode = _env_str("LANGGRAPH_SYNTHESIZE_MODE", "llm").lower()
     output_mode = state.get("output_mode") or "brief"
     _ready_tasks_raw = state.get("tasks")
     _ready_tasks = _ready_tasks_raw if isinstance(_ready_tasks_raw, list) else []
     _op_dict = state.get("operation") if isinstance(state.get("operation"), dict) else {}
     _op_name_for_mode = str(_op_dict.get("name") or "").strip().lower()
     _is_pure_compare = _op_name_for_mode == "compare" and len(_ready_tasks) <= 2
-    _multi_task_force_stub = len(_ready_tasks) >= 2 and not _is_pure_compare
+    _multi_task_force_stub = (
+        output_mode == "investment_report"
+        and env_mode == "narrative"
+        and len(_ready_tasks) >= 2
+        and not _is_pure_compare
+    )
+    _brief_router_task_graph = (
+        output_mode == "brief"
+        and env_mode == "llm"
+        and bool(_ready_tasks)
+        and all(
+            isinstance(task, dict)
+            and str(task.get("reason") or "").strip()
+            in {
+                "conversation_router_task_hint",
+                "conversation_router_task_hint_support",
+                "multi_ticker_compare",
+                "compare_subtask",
+                "ticker_or_alias",
+                "representative_basket_qa",
+            }
+            for task in _ready_tasks
+        )
+    )
 
     if _multi_task_force_stub:
         mode = "stub"
@@ -2215,10 +2250,15 @@ async def synthesize(state: GraphState) -> dict:
             env_mode,
             output_mode,
         )
-    elif env_mode == "narrative" and output_mode != "investment_report":
+    elif _brief_router_task_graph:
         mode = "stub"
         logger.info(
-            "[Synthesize] narrative downgraded to stub (output_mode=%s ≠ investment_report); "
+            "[Synthesize] brief router task graph detected; using deterministic render_vars for latency"
+        )
+    elif env_mode == "narrative" and output_mode != "investment_report":
+        mode = "llm"
+        logger.info(
+            "[Synthesize] narrative downgraded to llm (output_mode=%s ≠ investment_report); "
             "narrative reserved for explicit deep-report requests only",
             output_mode,
         )
@@ -2339,6 +2379,34 @@ async def synthesize(state: GraphState) -> dict:
         return {"artifacts": artifacts, "trace": trace}
 
     # ── stub mode (default): deterministic render_vars ──
+    raw_tasks = state.get("tasks")
+    ready_tasks = [
+        task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
+        if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
+    ]
+    ready_task_operations = {
+        str((task.get("operation") or {}).get("name") or "").strip().lower()
+        for task in ready_tasks
+        if isinstance(task.get("operation"), dict)
+    }
+    chat_brief_price_only = bool(ready_task_operations) and ready_task_operations == {"price"} and all(
+        str(task.get("subject_type") or "").strip().lower() in {"company", "index", "crypto", "fund"}
+        for task in ready_tasks
+    )
+    if mode == "llm" and output_mode in {"chat", "brief"} and ready_tasks and chat_brief_price_only:
+        render_vars = _stub_render_vars(state)
+        trace.update(
+            {
+                "synthesize_runtime": {
+                    **build_runtime(mode="task_graph_stub", fallback=False),
+                    "reason": "pure_quote_uses_short_task_graph_renderer",
+                    "keys": sorted(render_vars.keys()),
+                }
+            }
+        )
+        await _emit_synth_stage_done(status="done", message="Synthesize completed in task-graph mode")
+        return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
+
     if mode != "llm":
         logger.info("[Synthesize] Running in STUB mode (set LANGGRAPH_SYNTHESIZE_MODE=llm for LLM synthesis)")
         render_vars = _stub_render_vars(state)
@@ -2354,12 +2422,33 @@ async def synthesize(state: GraphState) -> dict:
         return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
 
     # ── llm mode: LLM fills render_vars JSON ──
+    llm_limits = {
+        "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_TIMEOUT_SEC", 150),
+        "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_MAX_TOKENS", 3000),
+        "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_MAX_ATTEMPTS", 2),
+        "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_ACQUIRE_TIMEOUT_SEC", 120),
+    }
+    if output_mode == "investment_report":
+        llm_limits = {
+            "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", 800),
+            "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS", 6000),
+            "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 3),
+            "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 180),
+        }
     try:
         from backend.llm_config import create_llm
 
         _synth_temp = float(os.getenv("LANGGRAPH_SYNTHESIZE_TEMPERATURE", "0.2"))
-        llm = create_llm(temperature=_synth_temp)
-        llm_factory = lambda: create_llm(temperature=_synth_temp)  # noqa: E731
+        llm = create_llm(
+            temperature=_synth_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
+        )
+        llm_factory = lambda: create_llm(  # noqa: E731
+            temperature=_synth_temp,
+            max_tokens=int(llm_limits["max_tokens"]),
+            request_timeout=int(llm_limits["request_timeout"]),
+        )
     except Exception as exc:
         render_vars = _stub_render_vars(state)
         append_failure(
@@ -2378,6 +2467,7 @@ async def synthesize(state: GraphState) -> dict:
                     reason=f"llm_unavailable: {exc}",
                     retry_attempts=0,
                 )
+                | {"llm_limits": llm_limits}
             }
         )
         await _emit_synth_stage_done(
@@ -2404,6 +2494,7 @@ async def synthesize(state: GraphState) -> dict:
         "subject": subject,
         "operation": operation,
         "output_mode": output_mode,
+        "conversation_router": (state.get("trace") or {}).get("conversation_router") if isinstance(state.get("trace"), dict) else {},
         "step_results": step_results if isinstance(step_results, dict) else {},
     }
 
@@ -2436,11 +2527,13 @@ async def synthesize(state: GraphState) -> dict:
         ] if part
     )
 
-    prompt = f"""<role>FinSight 报告合成引擎 — 将原始数据转化为高质量中文分析内容</role>
+    prompt = f"""<role>FinSight 对话/报告合成引擎 — 将原始数据转化为自然、可引用的中文分析内容</role>
 
 <task>
 根据输入数据填充报告模板变量。仅返回 JSON 对象，禁止 markdown 或注释。
 所有文本值必须为简体中文。
+如果 output_mode 是 chat 或 brief，字段内容要像正常对话里的分析段落：简洁、直接、有上下文感，不要套“问题/后续关注/分析对象/本轮包含”模板。
+如果 inputs.conversation_router.reply_guidance 提到多个子需求或最后的收束问题，必须覆盖完整；需要一句话收束时放入 next_watch 或 conclusion。
 </task>
 
 <time_anchor>
@@ -2484,6 +2577,8 @@ summary, highlights, analysis.
 8) 禁止使用"待实现"、"暂无数据"等占位短语；无数据时输出"[数据缺失]"。
 9) 输出必须为合法 JSON 对象。
 10) 禁止开场白、寒暄。直接输出 JSON。
+11) chat/brief 模式下必须产出 conclusion 和 impact_analysis；用 2-5 条自然要点回答用户真正问的问题，报告结构只用于 investment_report。
+12) chat/brief 模式下不要漏掉用户的最后一个明确请求；如果用户要求“最后/一句话/关注什么/怎么做”，用 next_watch 给出自然收束句。
 </constraints>
 """
 
@@ -2507,6 +2602,8 @@ summary, highlights, analysis.
             [HumanMessage(content=prompt)],
             llm_factory=llm_factory,
             acquire_token=True,
+            max_attempts=int(llm_limits["max_attempts"]),
+            acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
             on_retry=_on_retry,
         )
         await emit_event(
@@ -2518,7 +2615,30 @@ summary, highlights, analysis.
             }
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
-        payload = json.loads(_extract_json_object(str(content)))
+        raw_content = str(content or "").strip()
+        try:
+            payload = json.loads(_extract_json_object(raw_content))
+        except Exception:
+            if output_mode in {"chat", "brief"} and raw_content and "{" not in raw_content[:120]:
+                natural_text = re.sub(r"^```(?:markdown)?\s*", "", raw_content, flags=re.IGNORECASE)
+                natural_text = re.sub(r"\s*```$", "", natural_text).strip()
+                render_vars = _stub_render_vars(state)
+                render_vars["conclusion"] = natural_text
+                render_vars.setdefault("impact_analysis", natural_text)
+                trace.update(
+                    {
+                        "synthesize": {
+                            "mode": "llm",
+                            "fallback": False,
+                            "natural_text": True,
+                            "keys": sorted(render_vars.keys()),
+                            "chat_brief": True,
+                            "retry_attempts": retry_attempts,
+                        }
+                    }
+                )
+                return {"artifacts": {**(state.get("artifacts") or {}), "render_vars": render_vars}, "trace": trace}
+            raise
         if not isinstance(payload, dict):
             raise ValueError("render_vars payload must be a JSON object")
 
@@ -2574,28 +2694,37 @@ summary, highlights, analysis.
         if any("待实现" in str(v) for v in render_vars.values()):
             raise ValueError("render_vars contains placeholder tokens")
 
-        verifier_result = await _run_deep_report_verifier(
-            state=state,
-            generated_text="\n".join(
-                [
-                    section
-                    for section in (
-                        str(render_vars.get("summary") or ""),
-                        str(render_vars.get("highlights") or ""),
-                        str(render_vars.get("analysis") or ""),
-                        str(render_vars.get("investment_summary") or ""),
-                        str(render_vars.get("investment_thesis") or ""),
-                        str(render_vars.get("valuation") or ""),
-                        str(render_vars.get("conclusion") or ""),
-                        str(render_vars.get("impact_analysis") or ""),
-                        str(render_vars.get("next_watch") or ""),
-                        str(render_vars.get("risks") or ""),
-                    )
-                    if section.strip()
-                ]
-            ),
-            grounding_text=llm_grounding_text,
-        )
+        verifier_result: dict[str, Any]
+        if output_mode == "investment_report":
+            verifier_result = await _run_deep_report_verifier(
+                state=state,
+                generated_text="\n".join(
+                    [
+                        section
+                        for section in (
+                            str(render_vars.get("summary") or ""),
+                            str(render_vars.get("highlights") or ""),
+                            str(render_vars.get("analysis") or ""),
+                            str(render_vars.get("investment_summary") or ""),
+                            str(render_vars.get("investment_thesis") or ""),
+                            str(render_vars.get("valuation") or ""),
+                            str(render_vars.get("conclusion") or ""),
+                            str(render_vars.get("impact_analysis") or ""),
+                            str(render_vars.get("next_watch") or ""),
+                            str(render_vars.get("risks") or ""),
+                        )
+                        if section.strip()
+                    ]
+                ),
+                grounding_text=llm_grounding_text,
+            )
+        else:
+            verifier_result = {
+                "enabled": False,
+                "checked": False,
+                "reason": "chat_brief_synthesis_skips_deep_report_verifier",
+                "unsupported_claims": [],
+            }
         verifier_claims = (
             verifier_result.get("unsupported_claims")
             if isinstance(verifier_result, dict)
@@ -2643,6 +2772,7 @@ summary, highlights, analysis.
         synth_runtime: dict[str, Any] = {
             **build_runtime(mode="llm", fallback=False, retry_attempts=retry_attempts),
             "keys": sorted(render_vars.keys()),
+            "llm_limits": llm_limits,
         }
         if isinstance(verifier_result, dict):
             synth_runtime["verifier_enabled"] = bool(verifier_result.get("enabled"))

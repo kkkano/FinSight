@@ -99,3 +99,29 @@ async def test_alert_action_infers_direction_for_target_mode(monkeypatch):
     assert result["alert_valid"] is True
     payload = svc.last_subscribe_kwargs or {}
     assert payload.get("direction") == "above"
+
+
+@pytest.mark.asyncio
+async def test_alert_action_does_not_silently_drop_compound_request(monkeypatch):
+    svc = StubSubscriptionService()
+    monkeypatch.setattr(alert_action_module, "get_subscription_service", lambda: svc)
+    monkeypatch.setattr(alert_action_module, "fetch_price_snapshot", lambda _ticker: PriceSnapshot(ticker=_ticker, price=100.0, change_percent=0.0))
+
+    result = await alert_action_module.alert_action(
+        {
+            "user_email": "user@example.com",
+            "alert_params": {
+                "ticker": "TSLA",
+                "alert_mode": "price_target",
+                "price_target": 180.0,
+                "direction": "below",
+                "remaining_query": "说说最近新闻",
+            },
+            "subject": {"tickers": ["TSLA"]},
+        }
+    )
+
+    markdown = (result.get("artifacts") or {}).get("draft_markdown") or ""
+    assert result["alert_valid"] is True
+    assert "说说最近新闻" in markdown
+    assert "保留在当前上下文" in markdown

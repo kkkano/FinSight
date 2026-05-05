@@ -1,0 +1,155 @@
+[
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-url-no-empty"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-url-no-empty",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 214305,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "research_doc",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_current_datetime",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_official_macro_releases",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_authoritative_media_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户需要实时 AAPL 价格数据和读取外部 URL 内容以评估对 MSFT 的用处，同时涉及金融概念解释",
+      "reply_guidance": "先查询 AAPL 当前价格，然后读取 URL 内容分析其对 MSFT 的相关性，接着解释高估值股票对利率敏感的原因，最后基于分析总结用户应关注的关键点。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求 AAPL 价格"
+        },
+        {
+          "subject_type": "research_doc",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "qa",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "用户要求评估 URL 内容对 MSFT 的用处"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "利率/高估值",
+          "tickers": [],
+          "operation": "analyze_impact",
+          "params": {},
+          "reason": "用户请求解释为什么高估值怕利率"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "总结关注点",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "用户要求用一句话总结应关注什么"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

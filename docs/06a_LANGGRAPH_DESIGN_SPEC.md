@@ -1,11 +1,11 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-05-03
+> **更新日期**：2026-05-06
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
-> 2026-05-03 修订说明：聊天主链路已接入 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 是闲聊/OOS 短路层，采用两层防御：Tier-1 规则白名单（greeting/thanks/bye/meta，零延迟，每类 ≥10 模板 hash 轮换）+ Tier-2 LLM 分类器 sidecar（mimo-v2.5，2.5s 超时，置信度阈值 70）。Tier-1/Tier-2 任一命中则 `chat_responded=True` → END，不进入 understand_request。Tier-2 sidecar 用独立 `intent_classifier.py`，配置走 `user_config.json["intent_classifier"]` → `INTENT_CLASSIFIER_*` env → 默认值三级覆盖，不影响主 LLM 轮换池。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象，但主路径已由 `understand_request` 输出 `understanding/tasks/blocked_tasks` 并投影到旧 `subject/operation`。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。目标 spec 与查询矩阵见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+> 2026-05-06 修订说明：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见这类零理解成本 turn；能力问题、闲聊、非金融请求、URL/网页/文章请求、指代追问和普通金融问答都进入 `understand_request` 的 LLM conversation router。该 router 在 planner 之前判断 `direct_answer / research / alert / clarify / out_of_scope`：direct/out_of_scope 由 LLM 自然回复并结束；只有需要行情、新闻、报告、组合、文档证据、URL fetch 或工具执行时才进入 `policy_gate -> planner`。只有显式 `output_mode=investment_report`（报告按钮）使用报告模板；普通 chat/brief 走对话式自然回答。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。
 
 ---
 
@@ -36,7 +36,7 @@
 
 ### 0.4 当前项目架构图（简明代码）
 
-#### 0.4.1 当前（2026-05-03）
+#### 0.4.1 当前（2026-05-06）
 
 ```mermaid
 flowchart TD
@@ -46,12 +46,15 @@ flowchart TD
   RUNNER --> INIT[build_initial_state]
   INIT --> RESET[reset_turn_state]
   RESET --> PREPARE[prepare_context]
-  PREPARE --> CHATRESP[chat_respond<br/>Tier-1 规则 + Tier-2 LLM]
-  CHATRESP -->|chat_responded=true| ENDNODE[END]
-  CHATRESP -->|chat_responded=false| UNDERSTAND[understand_request]
-  UNDERSTAND -->|direct / clarify| ENDNODE[END]
-  UNDERSTAND -->|alert| ALERT[alert_extractor -> alert_action]
-  UNDERSTAND -->|research / mixed| POLICY[policy_gate]
+  PREPARE --> CHATRESP[chat_respond<br/>pure social only]
+  CHATRESP -->|pure greeting/thanks/bye| ENDNODE[END]
+  CHATRESP -->|all other turns| UNDERSTAND[understand_request]
+  UNDERSTAND --> ROUTER[LLM conversation router<br/>before planner]
+  ROUTER -->|direct / out_of_scope / clarify| ENDNODE
+  ROUTER -->|research / alert / URL fetch| TASKS[task projection]
+  TASKS -->|deterministic direct / clarify| ENDNODE[END]
+  TASKS -->|alert| ALERT[alert_extractor -> alert_action]
+  TASKS -->|research / mixed| POLICY[policy_gate]
   POLICY --> PLAN[planner]
   PLAN --> EXEC[execute_plan]
   EXEC --> SYNTH[synthesize]
@@ -172,8 +175,8 @@ flowchart LR
 
 | OutputMode | 说明 | UI |
 |---|---|---|
-| `chat` | 普通对话（极短） | 默认返回 |
-| `brief` | 结构化摘要（推荐默认） | 默认返回 |
+| `chat` | 普通对话式回答，可短可长，由 query 和上下文决定 | 普通发送默认 |
+| `brief` | 兼容轻量摘要模式；不作为主 UI 的“简报/深度”切换心智模型 | 兼容旧入口或内部策略 |
 | `investment_report` | 研报（完整，需拉多 agent） | **按钮触发专用** |
 
 ---
@@ -313,11 +316,12 @@ class GraphState(TypedDict):
 | `BuildInitialState` | request | `thread_id,messages,query,ui_context` | 无 |
 | `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留长期 memory |
 | `PrepareContext` | history + `ui_context` | 修剪历史、摘要长上下文、规范化 selections、合并输出模式 hints | 已接入主路径；旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 作为兼容 helper 保留 |
-| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `understanding,tasks,blocked_tasks,subject,operation,output_mode,route` | direct/clarify 可直接结束；低置信度进入 blocked task |
+| `ChatRespond` | `query,messages` | 仅纯问候/感谢/确认/再见的 `artifacts.draft_markdown,chat_responded` | 非纯社交一律放行 |
+| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `conversation_decision,understanding,tasks,blocked_tasks,subject,operation,output_mode,route` | LLM router 在 planner 前决定 direct/research/clarify/alert/out_of_scope；direct/out_of_scope 直接自然回复 |
 | `AlertExtractor` | alert task | alert 参数 | invalid 时返回澄清 |
 | `AlertAction` | alert 参数 | alert 结果 | 写入失败时返回错误 |
 | `PolicyGate` | `tasks,output_mode,ui_context,budget/preferences` | `policy/budget/allowed_tools/allowed_agents` | 降级到最小 allowlist |
-| `Planner` | `tasks,policy,output_mode` | `plan_ir` | LLM 失败 fallback 到 `planner_stub` |
+| `Planner` | `tasks,policy,output_mode` | `plan_ir` | LLM 失败 fallback 到 `planner_stub`；URL/网页/文章分析通过 `fetch_url_content` 工具计划，不在理解层预抓取 |
 | `ConfirmationGate` | `plan_ir,policy` | continue / interrupt | 默认继续 |
 | `ExecutePlan` | `plan_ir` | `artifacts` | optional step 失败不中止；required step 记录错误 |
 | `Synthesize` | `artifacts,understanding` | `draft_answer` | 多任务 fallback 简报 |
@@ -407,6 +411,7 @@ SUBJECT_SUBGRAPHS = {
 | `portfolio` | 持仓摘要 Brief 模板 | 持仓全面报告模板 |
 
 > 关键：**不要用一套通用 8 章模板覆盖所有 subject**。
+> 普通 `chat` 输出不套这些模板；它优先使用对话式合成和证据引用，只在用户点报告按钮或显式传入 `investment_report` 时使用报告结构。
 
 ### 7.2 示例：`news_item` Brief 模板（结构化）
 
@@ -463,7 +468,7 @@ SUBJECT_SUBGRAPHS = {
 #### 发送差异
 
 - 按钮点击时使用同一个消息发送方法，但在 payload 中强制：`options.output_mode="investment_report"`。
-- 普通发送按钮保持默认，`output_mode` 不传时服务端默认 `brief`。
+- 普通发送按钮保持默认，`output_mode` 不传时服务端默认 `chat`，后端可根据 query 自行决定是否需要短计划、工具或自然直接回答。
 
 ### 8.3 前端发送示例（SSE）
 
@@ -489,7 +494,7 @@ SUBJECT_SUBGRAPHS = {
 
 - 在 Chat 和 MiniChat 间切换 session_id 下，历史对话一致，但 UI selection 是上下文而非偏向用户积累。
 - 「生成投资报告」按钮只改变 output_mode，不改变用户输入（别注入「生成 研报」等关键词到输入框）。
-- Deep/Brief 控件不依赖前端 ticker/company 字典；无 ticker 宏观问题也可提交，由后端生成 `macro/theme/index` task。
+- 主 UI 不再用 Deep/Brief 作为主要输出切换；报告按钮只传 `output_mode=investment_report`，普通发送由后端根据 query 决定是否短计划、直接回答或研究。
 - 会话栏的新建/切换/删除只管理交互状态和 `session_id`；新建/触达走 `POST /api/conversations`，标题/messages/置顶/归档 snapshot 走 `PATCH /api/conversations/{id}`，删除动作会调用 `DELETE /api/conversations/{id}`，后端负责清理该 thread 的 session context、report index、RAG working set 和 RAG observability runs。
 - 流式运行中点击停止必须保留 partial answer 和 trace；前端不把取消伪装成失败，后端应发出 `stage=cancelled` 的用户可见事件，executor/agent adapter 应读取 cancellation token 并停止后续输出。
 
@@ -509,9 +514,9 @@ SUBJECT_SUBGRAPHS = {
 | T-P1 | 「对比AAPL和MSFT」 | none | `company`/`portfolio` | `brief` | operation=compare；计划包含对比所需信息 |
 | T-T1 | 「NVDA 最新股价和技术面分析」 | active_symbol=GOOGL | `company` | `brief` | subject 应为 NVDA；operation=technical；计划含 price+technical |
 | T-M1 | 「美联储利率路径对大型科技股估值有什么影响」 | none | `macro/theme` | `brief` | 无 ticker 也可执行，不要求用户先选公司 |
-| T-X1 | 混合闲聊 + 谷歌/微软 + 宏观 + 持仓 | none/optional portfolio | `mixed` | `brief` | 可执行 task 与 blocked portfolio task 分离 |
+| T-X1 | 混合闲聊 + 谷歌/微软 + 宏观 + 持仓 | none/optional portfolio | `mixed` | `chat` | 可执行 task 与 blocked portfolio task 分离 |
 
-完整复杂 Query Golden Set 与 20 条 probe 结果见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`。
+完整复杂 Query Golden Set 与 20 条 probe 结果见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`；当前聊天 UX 40-query 完整答案验收见 `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`，定向修复验收见 `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`。
 
 ### 9.2 测试建议（审查）
 

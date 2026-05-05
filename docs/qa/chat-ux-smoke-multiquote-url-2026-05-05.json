@@ -1,0 +1,410 @@
+[
+  {
+    "case": {
+      "id": "Q06",
+      "type": "multi_simple",
+      "session": "eval-multi-simple",
+      "query": "苹果、微软、谷歌现在分别多少？",
+      "expect": "多标的自然分组，不输出“本轮问题包含”。",
+      "eval_session": "eval-multi-simple-smoke-multiquote-url"
+    },
+    "payload": {
+      "query": "苹果、微软、谷歌现在分别多少？",
+      "session_id": "tenant1:eval_user:eval-multi-simple-smoke-multiquote-url",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 46989,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "quote",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户直接询问三个股票的当前价格，需要实时行情数据",
+      "reply_guidance": "获取 AAPL、MSFT、GOOGL 的当前价格并呈现给用户",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户询问苹果当前价格"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户询问微软当前价格"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户询问谷歌当前价格"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  },
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-multiquote-url"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-multiquote-url",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 71504,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL",
+          "MSFT"
+        ],
+        "operation": "compare"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_company_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户要求实时比较 GOOGL 和 MSFT 的新闻、涨跌幅和风险点，需要工具获取最新数据",
+      "reply_guidance": "简洁回答：先比较谁更强，然后各给一句新闻、涨跌幅、风险点。避免长篇大论。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL vs MSFT",
+          "tickers": [
+            "GOOGL",
+            "MSFT"
+          ],
+          "operation": "compare",
+          "params": {},
+          "reason": "用户要求快速比较两者今日表现，包括新闻、涨跌幅和风险点"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  },
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-multiquote-url"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-multiquote-url",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 106041,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "research_doc",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "qa"
+      },
+      {
+        "subject_type": "portfolio",
+        "tickers": [],
+        "operation": "qa"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_current_datetime",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_official_macro_releases",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_authoritative_media_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "需要获取实时行情、读取外部文档并解释金融概念",
+      "reply_guidance": "分步处理：1. 获取 AAPL 当前价格；2. 读取 URL 内容并评估对 MSFT 的用处；3. 解释高估值股票为什么怕利率上升；4. 基于以上给出一句话关注建议。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求 AAPL 价格"
+        },
+        {
+          "subject_type": "research_doc",
+          "subject_label": "MSFT rates document",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "qa",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "用户要求评估 URL 内容对 MSFT 的用处"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "利率与估值关系",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "用户请求解释高估值怕利率的原因"
+        },
+        {
+          "subject_type": "portfolio",
+          "subject_label": "投资关注点",
+          "tickers": [],
+          "operation": "qa",
+          "params": {},
+          "reason": "用户要求一句话总结该关注什么"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "compound query missed high-valuation/rates explanation",
+      "compound query missed final focus sentence"
+    ]
+  }
+]

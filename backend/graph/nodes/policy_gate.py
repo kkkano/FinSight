@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.state import GraphState
@@ -86,6 +87,21 @@ def _ready_understanding_tasks(state: GraphState) -> list[dict]:
     return ready
 
 
+def _state_contains_url_reference(state: GraphState, ui_context: dict) -> bool:
+    query = str(state.get("query") or "")
+    if re.search(r"https?://[^\s<>\]\)\"']+", query, re.IGNORECASE):
+        return True
+    raw_selections = ui_context.get("selections")
+    if not raw_selections and isinstance(ui_context.get("selection"), dict):
+        raw_selections = [ui_context["selection"]]
+    if not isinstance(raw_selections, list):
+        return False
+    for item in raw_selections:
+        if isinstance(item, dict) and str(item.get("url") or "").startswith(("http://", "https://")):
+            return True
+    return False
+
+
 def _task_operation_name(task: dict) -> str:
     operation = task.get("operation")
     if isinstance(operation, dict):
@@ -132,6 +148,7 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
         return ["get_stock_price", "get_company_news", "get_current_datetime"]
     if subject_type in ("news_item", "news_set"):
         return [
+            "fetch_url_content",
             "get_company_news",
             "get_event_calendar",
             "score_news_source_reliability",
@@ -139,9 +156,18 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "search",
             "get_current_datetime",
         ]
+    if subject_type in ("filing", "research_doc"):
+        return ["fetch_url_content", "search", "get_current_datetime"]
     if subject_type == "macro":
         return [
             "get_official_macro_releases",
+            "get_authoritative_media_news",
+            "search",
+            "get_current_datetime",
+        ]
+    if subject_type in ("theme", "unknown"):
+        return [
+            "fetch_url_content",
             "get_authoritative_media_news",
             "search",
             "get_current_datetime",
@@ -163,7 +189,14 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
                 "search",
             ]
         if op_name == "compare":
-            return ["get_performance_comparison", "get_current_datetime", "search"]
+            return [
+                "get_performance_comparison",
+                "get_stock_price",
+                "get_company_news",
+                "get_company_info",
+                "get_current_datetime",
+                "search",
+            ]
         return [
             "get_stock_price",
             "get_technical_snapshot",
@@ -183,7 +216,7 @@ def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
             "get_current_datetime",
             "search",
         ]
-    return ["search", "get_current_datetime"]
+    return ["fetch_url_content", "search", "get_current_datetime"]
 
 
 def policy_gate(state: GraphState) -> dict:
@@ -307,6 +340,10 @@ def policy_gate(state: GraphState) -> dict:
                     seen_tools.add(tool_name)
                     union_tools.append(tool_name)
             allowed_tools = union_tools
+
+    if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
+        allowed_tools = ["fetch_url_content", *allowed_tools]
+        budget["max_tools"] = max(int(budget.get("max_tools", 0)), 1)
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection

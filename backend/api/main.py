@@ -496,6 +496,12 @@ def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
         ui_context["selections"] = selections
     if request.context.user_email:
         ui_context["user_email"] = request.context.user_email
+
+    raw_context = request.context.model_dump(exclude_none=True)
+    for key in ("portfolio", "positions", "holdings"):
+        value = raw_context.get(key)
+        if value:
+            ui_context[key] = value
     return ui_context
 
 
@@ -1194,5 +1200,4 @@ app.include_router(morning_brief_router)
 # 閸氼垰濮╅崗銉ュ經
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
-
 

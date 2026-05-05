@@ -1,0 +1,125 @@
+[
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-brief-takeaway"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-brief-takeaway",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 62251,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "analyze_impact"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "analyze_impact"
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.9,
+      "needs_tools": true,
+      "reason": "用户需要最新行情、新闻和风险点来比较 GOOGL 和 MSFT 的今天表现。",
+      "reply_guidance": "获取 GOOGL 和 MSFT 的最新价格、涨跌幅、相关新闻和风险点，然后简洁比较谁更强，各用一句话总结。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL",
+          "tickers": [
+            "GOOGL"
+          ],
+          "operation": "analyze_impact",
+          "params": {
+            "info": [
+              "news",
+              "price_change",
+              "risk"
+            ]
+          },
+          "reason": "获取 GOOGL 的新闻、涨跌幅和风险点。"
+        },
+        {
+          "subject_type": "company",
+          "subject_label": "MSFT",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "analyze_impact",
+          "params": {
+            "info": [
+              "news",
+              "price_change",
+              "risk"
+            ]
+          },
+          "reason": "获取 MSFT 的新闻、涨跌幅和风险点。"
+        }
+      ]
+    },
+    "response": "GOOGL 我找到几条比较相关的消息：\n- [Move Over Nvidia: Why Alphabet's Surprising Decision to Sell Custom AI Chips Changes Everything.](https://finance.yahoo.com/search?p=Move+Over+Nvidia%3A+Why+Alphabet%27s+Surprising+Decision+to+Sell+Custom+AI+Chips+Changes+Everything.)（Yahoo / 2026-05-05）\n- [Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n- [Will Ulta’s (ULTA) Gemini-Powered “Ulta AI” and NielsenIQ Tie-Up Change Its Digital Narrative?](https://finance.yahoo.com/search?p=Will+Ulta%E2%80%99s+%28ULTA%29+Gemini-Powered+%E2%80%9CUlta+AI%E2%80%9D+and+NielsenIQ+Tie-Up+Change+Its+Digital+Narrative%3F)（Yahoo / 2026-05-05）\n- GOOGL 最新价格约为 383.25 USD，变动 -2.44 / -0.63%。\n\nMSFT 我找到几条比较相关的消息：\n- [Market Chatter: OpenAI Discussed Spinoff of Robotics, Consumer-Hardware Divisions](https://finance.yahoo.com/search?p=Market+Chatter%3A+OpenAI+Discussed+Spinoff+of+Robotics%2C+Consumer-Hardware+Divisions)（Yahoo / 2026-05-05）\n- [Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n- [Nscale to Deliver 66,000+ NVIDIA Rubin GPUs to Microsoft at Start Campus' Site in Portugal](https://finance.yahoo.com/search?p=Nscale+to+Deliver+66%2C000%2B+NVIDIA+Rubin+GPUs+to+Microsoft+at+Start+Campus%27+Site+in+Portugal)（Yahoo / 2026-05-05）\n- MSFT 最新价格约为 413.62 USD，变动 -0.57 / -0.14%。\n- 关注下一财报季的营收指引和利润率变化\n- 跟踪行业政策和竞争格局变化\n\n来源：\n- [Move Over Nvidia: Why Alphabet's Surprising Decision to Sell Custom AI Chips Changes Everything.](https://finance.yahoo.com/search?p=Move+Over+Nvidia%3A+Why+Alphabet%27s+Surprising+Decision+to+Sell+Custom+AI+Chips+Changes+Everything.)（Yahoo / 2026-05-05）\n- [Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n- [Will Ulta’s (ULTA) Gemini-Powered “Ulta AI” and NielsenIQ Tie-Up Change Its Digital Narrative?](https://finance.yahoo.com/search?p=Will+Ulta%E2%80%99s+%28ULTA%29+Gemini-Powered+%E2%80%9CUlta+AI%E2%80%9D+and+NielsenIQ+Tie-Up+Change+Its+Digital+Narrative%3F)（Yahoo / 2026-05-05）\n- [Alphabet Returns to Euro Debt Market for Latest AI Megabond Deal](https://finance.yahoo.com/search?p=Alphabet+Returns+to+Euro+Debt+Market+for+Latest+AI+Megabond+Deal)（Yahoo / 2026-05-05）\n- [Why Alphabet Stock Soared 34% in April -- One Catalyst Is Its Move to Challenge Data Center AI Chip Leader Nvidia](https://finance.yahoo.com/search?p=Why+Alphabet+Stock+Soared+34%25+in+April+--+One+Catalyst+Is+Its+Move+to+Challenge+Data+Center+AI+Chip+Leader+Nvidia)（Yahoo / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "REVIEW",
+    "issues": [
+      "quick brief exceeded 60000ms latency budget"
+    ]
+  }
+]

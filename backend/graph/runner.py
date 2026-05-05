@@ -73,9 +73,10 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_edge(START, "build_initial_state")
     graph.add_edge("build_initial_state", "reset_turn_state")
     graph.add_edge("reset_turn_state", "prepare_context")
-    # 把 chat_respond 接到主链路：prepare_context → chat_respond → (chat_responded? END : understand_request)
-    # 之前 chat_respond 是孤儿节点（注册了但没接进主路径），导致两层闲聊兜底里的
-    # Tier-1 规则池 + Tier-2 LLM 分类器 都不会触发。修复后真正生效。
+    # chat_respond is intentionally narrow: only pure greetings/thanks/bye
+    # terminate here. Open-ended chat and out-of-scope requests continue to
+    # understand_request, where the LLM conversation router can answer before
+    # the planner is considered.
     graph.add_edge("prepare_context", "chat_respond")
 
     def _route_after_chat_respond(state: GraphState) -> str:

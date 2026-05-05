@@ -22,6 +22,7 @@ def _force_langgraph_deterministic_defaults(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
     monkeypatch.setenv("ENABLE_LANGSMITH", "false")
 
 

@@ -3,7 +3,11 @@
 
 import pytest
 
-from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
+from backend.graph.nodes.query_intent import (
+    has_financial_intent,
+    is_casual_chat,
+    is_greeting,
+)
 
 
 class TestIsGreeting:
@@ -68,12 +72,6 @@ class TestIsCasualChat:
             "再见",
             "拜拜",
             "bye",
-            "你是谁",
-            "你叫什么",
-            "你能做什么？",
-            "你几岁了",
-            "who are you?",
-            "what can you do",
             "",
             "   ",
             "测试",
@@ -93,6 +91,15 @@ class TestIsCasualChat:
             "特斯拉和比亚迪对比",
             "最近美股大盘怎么样",
             "黄金价格分析",
+            "你是谁",
+            "你叫什么",
+            "你能做什么？",
+            "你好，你能帮我做什么？",
+            "你几岁了",
+            "who are you?",
+            "what can you do",
+            "推荐一首适合睡前听的歌。",
+            "tell me a joke",
         ],
     )
     def test_casual_not_detected(self, query: str):
@@ -100,45 +107,24 @@ class TestIsCasualChat:
 
 
 class TestHasFinancialIntent:
-    """P0 expansion: high-frequency Chinese tickers / macros / ops should
-    trigger early-pruning so chat_respond skips the slow Tier-2 LLM call.
+    """Only high-precision financial action hints should be local.
+
+    Company-name-only and open-ended requests now go through the contextual LLM
+    router before any planner work. This prevents local keyword piles from
+    becoming the real agent.
     """
 
     @pytest.mark.parametrize(
         "query",
         [
-            # Top US equities (Chinese names) — pre-P0 missed all of these
-            "帮我看看苹果",
-            "谷歌今天怎么样",
-            "微软 AI 进展如何",
-            "特斯拉要不要跑",
-            "英伟达涨了多少",
-            "奈飞财报",
-            "台积电封测",
-            # China ADR / HK
+            "谷歌今天股价怎么样",
+            "微软 AI 对市值有什么影响",
+            "苹果财报怎么看？",
             "阿里巴巴股价",
-            "腾讯怎么看",
-            "京东最新动态",
             "拼多多季报",
-            "网易游戏业务",
             "美团外卖业务对市值影响",
             "百度自动驾驶估值",
-            "小米汽车销量",
-            "蔚来交付",
-            "理想汽车",
-            "小鹏汽车",
-            # Indices
-            "纳指今天涨跌",
-            "标普500 走势",
-            "道指收盘",
-            "上证指数",
-            "恒指今天",
-            # Sectors
             "科技股要不要加仓",
-            "中概股最近怎么样",
-            "半导体板块走势",
-            "新能源板块",
-            "医药板块",
             # Macro
             "CPI 数据出了吗",
             "PPI 影响哪些板块",
@@ -159,9 +145,36 @@ class TestHasFinancialIntent:
             "踏空了",
         ],
     )
-    def test_p0_expansion_detected(self, query: str):
-        """All P0-expansion vocabulary must trigger has_financial_intent=True."""
+    def test_action_hints_detected(self, query: str):
+        """Financial action wording can still trigger the narrow hint."""
         assert has_financial_intent(query) is True, f"missed: {query!r}"
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "帮我看看苹果",
+            "谷歌今天怎么样",
+            "腾讯怎么看",
+            "京东最新动态",
+            "网易游戏业务",
+            "理想汽车",
+            "小鹏汽车",
+            "英伟达涨了多少",
+            "小米汽车销量",
+            "蔚来交付",
+            "纳指今天涨跌",
+            "标普500 走势",
+            "道指收盘",
+            "上证指数",
+            "恒指今天",
+            "中概股最近怎么样",
+            "半导体板块走势",
+            "新能源板块",
+            "医药板块",
+        ],
+    )
+    def test_subject_or_theme_goes_to_llm_router(self, query: str):
+        assert has_financial_intent(query) is False
 
     @pytest.mark.parametrize(
         "query",
@@ -187,4 +200,3 @@ class TestHasFinancialIntent:
         assert is_casual_chat("你好。") is True
         assert is_casual_chat("ok!") is True
         assert is_casual_chat("再见！") is True
-

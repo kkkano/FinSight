@@ -7,6 +7,13 @@ from typing import Any
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.event_bus import emit_event
+from backend.graph.nodes.conversation_router import (
+    ContextBinding,
+    ConversationDecision,
+    _effective_current_turn_tickers,
+    generate_contextual_reply,
+    route_conversation,
+)
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
@@ -16,7 +23,7 @@ from backend.graph.state import GraphState
 _INDEX_TICKERS = {"SPY", "QQQ", "DIA", "IWM", "VTI", "^IXIC", "^DJI", "^GSPC", "^RUT", "^VIX"}
 _NON_ASSET_TOKENS = {"PDF", "DOC", "DOCX", "PPT", "PPTX", "CSV", "TXT", "HTML"}
 _NEWS_HINTS = ("新闻", "消息", "大新闻", "发生什么", "快讯", "news", "headline", "latest")
-_PRICE_HINTS = ("股价", "涨了多少", "跌了多少", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
+_PRICE_HINTS = ("价格", "股价", "涨了多少", "跌了多少", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
 _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "impact", "affect", "risk")
 _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi", "technical")
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁更强", "哪个好", "哪个", "compare")
@@ -28,6 +35,7 @@ _MACRO_HINTS = (
 )
 _THEME_HINTS = ("半导体", "芯片", "ai", "人工智能", "大型科技股", "科技股")
 _FALLBACK_HINTS = ("如果不知道", "不知道就", "没持仓就", "没有持仓就", "按等权", "按大型科技股", "fallback")
+_LIGHTWEIGHT_COMPARE_HINTS = ("如果不知道", "不知道就", "按", "代表", "先别长篇", "别长篇", "不要长篇", "简单说", "短一点")
 # P2 (2026-05-03) — vague subject deixis: when the user says "this stock"
 # without naming it AND ui_context.active_symbol is present, do a transparent
 # weak fallback (bind active_symbol + warn user it can be corrected).
@@ -36,16 +44,137 @@ _FALLBACK_HINTS = ("如果不知道", "不知道就", "没持仓就", "没有持
 _VAGUE_SUBJECT_HINTS = (
     "这只票", "这个票", "那只票", "这只股", "这个股", "那只股",
     "这家公司", "那家公司", "这家", "那家",
+    "它", "他", "那它", "那他",
     "这只", "这个", "这支",
     "刚才那个", "刚才说的", "之前那个",
     "this stock", "that stock", "this one", "the company",
 )
+_ASSET_DEICTIC_HINTS = (
+    "这只票", "这个票", "那只票", "这只股", "这个股", "那只股",
+    "这家公司", "那家公司", "this stock", "that stock", "the company",
+)
 _SOCIAL_PREFIX_RE = re.compile(r"^\s*(你好|您好|早|早上好|嗨|哈喽|hello|hi)[，,。\s]*(今天天气不错[，,。\s]*)?", re.IGNORECASE)
+_GLOBAL_CHAT_VIEWS = {"chat", "main", "global", "conversation"}
+_URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+", re.IGNORECASE)
 
 
 def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(h.lower() in lowered for h in hints)
+
+
+def _is_lightweight_representative_compare(query: str) -> bool:
+    return _contains_any(query, _THEME_HINTS) and _contains_any(query, _LIGHTWEIGHT_COMPARE_HINTS)
+
+
+def _is_explicit_brief_request(query: str) -> bool:
+    text = str(query or "")
+    return any(token in text for token in ("30秒", "先别做长报告", "不要长篇", "快速"))
+
+
+def _extract_urls(text: str) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for match in _URL_RE.finditer(str(text or "")):
+        url = match.group(0).rstrip(".,，。;；:：!?！？")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    return urls[:3]
+
+
+def _strip_urls(text: str) -> str:
+    return _URL_RE.sub(" ", str(text or ""))
+
+
+def _is_scoped_active_symbol_context(ui_context: dict[str, Any]) -> bool:
+    view = str((ui_context or {}).get("view") or "").strip().lower()
+    return bool(view) and view not in _GLOBAL_CHAT_VIEWS
+
+
+def _has_conversation_subject_anchor(memory_context: dict[str, Any]) -> bool:
+    if not isinstance(memory_context, dict):
+        return False
+    if isinstance(memory_context.get("last_report"), dict):
+        return True
+    last_focus = memory_context.get("last_focus")
+    if isinstance(last_focus, dict) and (last_focus.get("ticker") or last_focus.get("query")):
+        return True
+    recent_focuses = memory_context.get("recent_focuses")
+    return isinstance(recent_focuses, list) and any(isinstance(item, dict) and item for item in recent_focuses)
+
+
+def _has_prior_dialogue(state: GraphState, current_query: str) -> bool:
+    messages = state.get("messages")
+    if not isinstance(messages, list):
+        return False
+    current = str(current_query or "").strip()
+    for msg in messages:
+        content = getattr(msg, "content", None)
+        if content is None and isinstance(msg, dict):
+            content = msg.get("content")
+        text = str(content or "").strip()
+        if text and text != current:
+            return True
+    return False
+
+
+def _can_use_active_symbol_fallback(ui_context: dict[str, Any], memory_context: dict[str, Any]) -> bool:
+    if not isinstance(ui_context.get("active_symbol"), str) or not ui_context["active_symbol"].strip():
+        return False
+    if _is_scoped_active_symbol_context(ui_context):
+        return True
+    return not _has_conversation_subject_anchor(memory_context)
+
+
+def _direct_conversation_result(
+    *,
+    query: str,
+    decision: ConversationDecision,
+    reply: str,
+    context_refs: list[dict[str, Any]],
+    artifacts: dict[str, Any],
+    trace: dict[str, Any],
+) -> dict[str, Any]:
+    artifacts["draft_markdown"] = reply
+    artifacts["conversation_decision"] = decision.model_dump()
+    understanding = {
+        "route": "direct",
+        "original_query": query,
+        "cleaned_query": query,
+        "language": "zh" if re.search(r"[\u4e00-\u9fff]", query) else "en",
+        "social_prefix": "",
+        "user_visible_summary": decision.reason or "直接回答",
+        "confidence": decision.confidence,
+        "tasks": [],
+        "blocked_tasks": [],
+        "context_refs": context_refs,
+        "fallback_assumptions": [],
+    }
+    trace["understanding"] = understanding
+    trace["conversation_router"] = decision.model_dump()
+    result: dict[str, Any] = {
+        "understanding": understanding,
+        "tasks": [],
+        "blocked_tasks": [],
+        "context_refs": context_refs,
+        "subject": _build_subject(None, []),
+        "operation": _operation("chat", decision.confidence),
+        "clarify": {"needed": False, "reason": "", "question": "", "suggestions": []},
+        "chat_responded": True,
+        "artifacts": artifacts,
+        "trace": trace,
+    }
+    if decision.execution_route == "out_of_scope":
+        result["skip_session_context"] = True
+    return result
+
+
+def _explicit_report_mode(state: GraphState, output_mode: str) -> bool:
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    analysis_depth = str((ui_context or {}).get("analysis_depth") or "").strip().lower()
+    return output_mode == "investment_report" or analysis_depth == "deep_research"
 
 
 def _subject_type_for_ticker(ticker: str) -> str:
@@ -68,6 +197,8 @@ def _selection_subject_type(selection_types: list[str]) -> str:
             return "news_item"
         if first == "filing":
             return "filing"
+        if first in {"url", "web", "article"}:
+            return "research_doc"
         return "research_doc"
     if all(t == "news" for t in selection_types):
         return "news_set"
@@ -95,8 +226,15 @@ def _operation(name: str, confidence: float = 0.75, params: dict[str, Any] | Non
     return {"name": name, "confidence": confidence, "params": params or {}}
 
 
-def _company_operations(query: str, *, tickers: list[str]) -> list[dict[str, Any]]:
+def _company_operations(
+    query: str,
+    *,
+    tickers: list[str],
+    allow_multi_ticker_default_compare: bool = True,
+) -> list[dict[str, Any]]:
     operations: list[dict[str, Any]] = []
+    if len(tickers) >= 2 and _is_lightweight_representative_compare(query):
+        return [_operation("qa", 0.7)]
     if len(tickers) >= 2 and _contains_any(query, _COMPARE_HINTS):
         operations.append(_operation("compare", 0.86))
         return operations
@@ -115,10 +253,385 @@ def _company_operations(query: str, *, tickers: list[str]) -> list[dict[str, Any
 
     subject = {"subject_type": "company", "tickers": tickers}
     parsed = parse_operation({"query": query, "subject": subject})
-    return [parsed.get("operation") or _operation("qa", 0.45)]
+    operation = parsed.get("operation") or _operation("qa", 0.45)
+    decision_trace = (parsed.get("trace") or {}).get("operation_decision") or {}
+    if (
+        len(tickers) >= 2
+        and not allow_multi_ticker_default_compare
+        and decision_trace.get("source") == "multi_ticker_default"
+    ):
+        return [_operation("price", max(float(operation.get("confidence") or 0.0), 0.62))]
+    return [operation]
+
+
+def _domain_intent_operation(domain_intent: str, confidence: float) -> dict[str, Any]:
+    mapping = {
+        "quote": "price",
+        "news": "fetch",
+        "analysis": "qa",
+        "report_discussion": "qa",
+        "doc_qa": "qa",
+        "portfolio": "portfolio_impact",
+    }
+    return _operation(mapping.get(str(domain_intent or ""), "qa"), confidence)
+
+
+def _router_guided_analysis_operation(decision: ConversationDecision) -> dict[str, Any]:
+    """Use the LLM router's typed decision as the source of truth for analysis.
+
+    Generic new-topic analysis with an explicit company is not automatically a
+    long research plan. If the router says the answer needs tools, gather the
+    light current context that a conversational user expects; if it says tools
+    are not needed, keep it as contextual QA.
+    """
+    if decision.needs_tools:
+        return _operation("daily_brief", max(decision.confidence, 0.7))
+    return _operation("qa", max(decision.confidence, 0.68))
+
+
+def _router_directed_company_operations(
+    decision: ConversationDecision | None,
+    *,
+    fallback_operations: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]] | None:
+    """Project the LLM router's typed intent into executable company tasks.
+
+    The router already evaluates the full current turn and context. This small
+    bridge keeps later legacy fallbacks from turning "quote these tickers" into
+    a generic multi-ticker comparison.
+    """
+    if decision is None:
+        return None
+    if decision.execution_route == "alert" or decision.domain_intent == "alert":
+        return [_operation("alert_set", max(decision.confidence, 0.78))]
+    if decision.context_binding.source not in {"none", ""}:
+        return None
+    if decision.domain_intent in {"quote", "news", "report_discussion", "doc_qa", "portfolio"}:
+        return [_domain_intent_operation(decision.domain_intent, decision.confidence)]
+    if decision.domain_intent == "analysis":
+        fallback_names = {
+            str((operation or {}).get("name") or "").strip()
+            for operation in (fallback_operations or [])
+            if isinstance(operation, dict)
+        }
+        if fallback_names - {"", "qa"}:
+            return None
+        if decision.relation == "compare":
+            return None
+        return [_router_guided_analysis_operation(decision)]
+    return None
+
+
+def _context_router_clarify_block(decision: ConversationDecision) -> dict[str, Any]:
+    return {
+        "id": "blocked_1",
+        "subject_type": "unknown",
+        "subject_label": decision.context_binding.subject_hint,
+        "operation": _operation("qa", 0.0),
+        "reason": "context_router_clarify",
+        "question": decision.reply_guidance or "我需要你补充想看的对象或上下文。",
+        "suggestions": ["补充公司、股票代码、宏观主题、持仓，或说明你指的是哪条消息/哪份报告"],
+        "fallback_allowed": False,
+    }
+
+
+def _add_per_ticker_company_tasks(
+    tasks: list[dict[str, Any]],
+    *,
+    tickers: list[str],
+    operations: list[dict[str, Any]],
+    query: str,
+    priority: int,
+    reason: str,
+) -> None:
+    for ticker in tickers:
+        subject_type = _subject_type_for_ticker(ticker)
+        for operation in operations:
+            _add_task(
+                tasks,
+                subject_type=subject_type,
+                operation=operation,
+                query=query,
+                tickers=[ticker],
+                subject_label=ticker,
+                priority=priority,
+                reason=reason,
+            )
+
+
+def _subject_type_for_decision(decision: ConversationDecision) -> str:
+    if decision.context_binding.source == "portfolio":
+        return "portfolio"
+    if decision.context_binding.source == "selection":
+        return "research_doc"
+    if decision.domain_intent in {"news", "analysis"}:
+        return "theme"
+    return "unknown"
+
+
+def _add_unbound_research_task(
+    *,
+    tasks: list[dict[str, Any]],
+    decision: ConversationDecision,
+    query: str,
+) -> None:
+    """Convert an LLM research decision without a ticker into a generic task.
+
+    This keeps the planner gate generic. The LLM router decides that evidence or
+    tools are needed; the task only carries that intent forward without adding a
+    new keyword table.
+    """
+    subject_type = _subject_type_for_decision(decision)
+    subject_label = decision.context_binding.subject_hint or query[:80]
+    _add_task(
+        tasks,
+        subject_type=subject_type,
+        subject_label=subject_label,
+        operation=_domain_intent_operation(decision.domain_intent, decision.confidence),
+        query=query,
+        priority=50,
+        reason="conversation_router_unbound_research",
+        params={"context_binding": decision.context_binding.model_dump()},
+    )
+
+
+def _add_explicit_url_tasks(
+    *,
+    tasks: list[dict[str, Any]],
+    query: str,
+    current_tickers: list[str],
+) -> bool:
+    urls = _extract_urls(query)
+    if not urls:
+        return False
+    existing_urls: set[str] = set()
+    for task in tasks:
+        op = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = op.get("params") if isinstance(op.get("params"), dict) else {}
+        value = str(params.get("url") or "").strip()
+        if value:
+            existing_urls.add(value)
+        raw_urls = params.get("urls")
+        if isinstance(raw_urls, list):
+            existing_urls.update(str(item or "").strip() for item in raw_urls if str(item or "").strip())
+    added = False
+    scoped_tickers = dedup_tickers(list(current_tickers or []))
+    for idx, url in enumerate(urls, 1):
+        if url in existing_urls:
+            continue
+        _add_task(
+            tasks,
+            subject_type="research_doc",
+            subject_label=url,
+            operation=_operation("qa", 0.68, {"url": url}),
+            query=query,
+            tickers=scoped_tickers,
+            priority=17 + idx,
+            reason="explicit_url_reference",
+            params={"url": url},
+        )
+        added = True
+    return added
+
+
+def _add_router_task_hints(
+    *,
+    tasks: list[dict[str, Any]],
+    context_refs: list[dict[str, Any]],
+    decision: ConversationDecision,
+    query: str,
+    current_tickers: list[str],
+    selection_ids: list[str] | None = None,
+    selection_types: list[str] | None = None,
+) -> bool:
+    """Project LLM-decomposed atomic requests into tasks.
+
+    This is the generic path for compound turns. The LLM router owns the
+    semantic split; this function only validates enum-like fields and preserves
+    explicit ticker/subject payloads.
+    """
+    added = False
+    bound_tickers: list[str] = []
+    if decision.context_binding.source != "selection":
+        for task in tasks:
+            raw_tickers = task.get("tickers")
+            if not isinstance(raw_tickers, list):
+                continue
+            bound_tickers.extend(normalize_ticker(str(ticker)) for ticker in raw_tickers if str(ticker).strip())
+    scoped_current_tickers = dedup_tickers(list(current_tickers or []) + bound_tickers)
+
+    def _has_task(operation_name: str, ticker: str) -> bool:
+        wanted = normalize_ticker(str(ticker))
+        for task in tasks:
+            op = (task.get("operation") or {}).get("name") if isinstance(task.get("operation"), dict) else None
+            if str(op or "").strip().lower() != operation_name:
+                continue
+            if wanted in [normalize_ticker(str(item)) for item in (task.get("tickers") or [])]:
+                return True
+        return False
+
+    def _add_support_task(
+        *,
+        ticker: str,
+        subject_type: str,
+        operation_name: str,
+        params: dict[str, Any] | None,
+        priority: int,
+    ) -> None:
+        if _has_task(operation_name, ticker):
+            return
+        _add_task(
+            tasks,
+            subject_type=subject_type,
+            subject_label=ticker,
+            operation=_operation(operation_name, max(decision.confidence, 0.68), params or {}),
+            query=query,
+            tickers=[ticker],
+            priority=priority,
+            reason="conversation_router_task_hint_support",
+            params=params or {},
+        )
+
+    for idx, hint in enumerate(decision.task_hints or (), 1):
+        if not isinstance(hint, dict):
+            continue
+        operation_name = str(hint.get("operation") or "qa").strip().lower()
+        if operation_name == "alert_set":
+            continue
+        subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
+        subject_label = str(hint.get("subject_label") or "").strip()
+        hint_tickers = [
+            normalize_ticker(str(ticker))
+            for ticker in (hint.get("tickers") if isinstance(hint.get("tickers"), list) else [])
+            if str(ticker).strip()
+        ]
+        if not hint_tickers and subject_label:
+            hint_tickers = [
+                normalize_ticker(str(ticker))
+                for ticker in (extract_tickers(subject_label).get("tickers") or [])
+                if str(ticker).strip()
+            ]
+        if not hint_tickers and subject_type in {"company", "index", "crypto", "fund"} and len(scoped_current_tickers) == 1:
+            hint_tickers = [scoped_current_tickers[0]]
+        if (
+            decision.context_binding.source
+            in {"active_symbol", "last_turn", "recent_focus", "last_report", "unresolved_clarification"}
+            and scoped_current_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            if hint_tickers:
+                scoped = [ticker for ticker in hint_tickers if ticker in set(scoped_current_tickers)]
+                if not scoped:
+                    continue
+                hint_tickers = scoped
+            else:
+                hint_tickers = list(scoped_current_tickers)
+
+        params = dict(hint.get("params") or {}) if isinstance(hint.get("params"), dict) else {}
+        if operation_name == "fetch" and not params.get("topic"):
+            params["topic"] = "news"
+        if decision.context_binding.source != "none":
+            params.setdefault("context_binding", decision.context_binding.model_dump())
+        task_selection_ids = list(selection_ids or []) if subject_type in {"news_item", "news_set", "filing", "research_doc"} else []
+        task_selection_types = list(selection_types or []) if task_selection_ids else []
+
+        if (
+            operation_name == "fetch"
+            and decision.domain_intent == "analysis"
+            and hint_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            for ticker in dedup_tickers(hint_tickers):
+                _add_support_task(
+                    ticker=ticker,
+                    subject_type=subject_type,
+                    operation_name="price",
+                    params={},
+                    priority=15,
+                )
+                added = True
+
+        if (
+            operation_name in {"analyze_impact", "news_impact", "daily_brief"}
+            and hint_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            for ticker in dedup_tickers(hint_tickers):
+                _add_support_task(
+                    ticker=ticker,
+                    subject_type=subject_type,
+                    operation_name="price",
+                    params={},
+                    priority=15,
+                )
+                _add_support_task(
+                    ticker=ticker,
+                    subject_type=subject_type,
+                    operation_name="fetch",
+                    params={"topic": "news"},
+                    priority=16,
+                )
+                added = True
+
+        if operation_name == "compare" and len(hint_tickers) >= 2:
+            aspects = {
+                str(item).strip().lower()
+                for item in (params.get("aspects") if isinstance(params.get("aspects"), list) else [])
+                if str(item).strip()
+            }
+            wants_price = not aspects or bool(aspects & {"price", "quote", "price_change", "change", "涨跌幅", "价格"})
+            wants_news = not aspects or bool(aspects & {"news", "headline", "latest_news", "新闻", "消息"})
+            for ticker in dedup_tickers(hint_tickers):
+                if wants_price:
+                    _add_support_task(
+                        ticker=ticker,
+                        subject_type=subject_type,
+                        operation_name="price",
+                        params={},
+                        priority=15,
+                    )
+                    added = True
+                if wants_news:
+                    _add_support_task(
+                        ticker=ticker,
+                        subject_type=subject_type,
+                        operation_name="fetch",
+                        params={"topic": "news"},
+                        priority=16,
+                    )
+                    added = True
+
+        _add_task(
+            tasks,
+            subject_type=subject_type,
+            subject_label=subject_label or ", ".join(hint_tickers) or subject_type,
+            operation=_operation(operation_name, max(decision.confidence, 0.68), params),
+            query=query,
+            tickers=dedup_tickers(hint_tickers),
+            selection_ids=task_selection_ids,
+            selection_types=task_selection_types,
+            priority=18 + idx,
+            reason="conversation_router_task_hint",
+            params=params,
+        )
+        added = True
+
+    if added:
+        context_refs.append(
+            {
+                "source": "conversation_router",
+                "key": "task_hints",
+                "label": "LLM拆分的原子请求",
+                "value": len([hint for hint in (decision.task_hints or ()) if isinstance(hint, dict)]),
+            }
+        )
+    return added
 
 
 def _macro_operation(query: str) -> dict[str, Any]:
+    q = str(query or "").lower()
+    if any(token in q for token in ("为什么", "为何", "怎么", "如何", "why", "mechanism")):
+        return _operation("qa", 0.72)
     if any(h in query for h in ("降息没", "有没有降息", "概率", "变了吗", "事实", "核查")):
         return _operation("fact_check", 0.76)
     if _contains_any(query, _IMPACT_HINTS) or "估值" in query:
@@ -163,6 +676,42 @@ def _direct_reply(query: str) -> str:
     if is_greeting(query):
         return "你好！你可以直接告诉我股票、公司、宏观主题或持仓问题，我会先识别任务再开始分析。"
     return "我主要负责金融投研问题。你可以输入股票代码、公司名称、宏观主题，或让我比较多只股票。"
+
+
+def _natural_clarify_question(query: str, fallback: str) -> str:
+    """Convert router guidance into user-facing clarification copy."""
+    text = str(fallback or "").strip()
+    if not text:
+        text = "我还不能确定你想接着看哪一部分。"
+
+    lower_text = text.lower()
+    guidance_like = (
+        text.startswith(("询问用户", "请询问用户", "请向用户", "向用户询问"))
+        or "询问用户" in text[:40]
+        or "ask the user" in lower_text[:80]
+    )
+    if guidance_like:
+        if "持仓" in text or "portfolio" in lower_text or "holding" in lower_text:
+            return "要判断你今天的持仓风险，我需要你的持仓列表和大致权重；如果不方便，也可以只给主要股票或基金，我先按大类估算。"
+        if "报告" in text or "report" in lower_text:
+            return "我还不能确定你指的是哪份报告或哪一段结论。把报告标题、结论片段或对应标的发我，我就可以接着聊。"
+        if "新闻" in text or "消息" in text or "news" in lower_text:
+            return "我还不能确定你指的是哪条新闻。把新闻标题、链接、摘要或对应标的发我，我再判断影响。"
+        return "我还不能确定你指的是哪一部分。把前一段结论、报告标题、新闻标题或标的发我，我就可以接着展开。"
+
+    if re.search(r"(第二|第[一二三四五六七八九十0-9]+|继续|展开|上面|刚才|上一条|前面|那它|它|this|that|it)", query, re.IGNORECASE):
+        return "我这边没有足够的当前会话上下文，不能确定你指的是哪一点。把那段内容或对应标的发我，我再接着讲。"
+
+    return text
+
+
+def _sanitize_blocked_task_questions(query: str, blocked_tasks: list[dict[str, Any]]) -> None:
+    for task in blocked_tasks:
+        if not isinstance(task, dict):
+            continue
+        task["question"] = _natural_clarify_question(query, str(task.get("question") or ""))
+
+
 
 
 def _normalize_selection(ui_context: dict[str, Any]) -> tuple[list[str], list[str], list[dict[str, Any]]]:
@@ -232,7 +781,11 @@ def _add_task(
     )
 
 
-def _build_subject(primary: dict[str, Any] | None, selection_payload: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_subject(
+    primary: dict[str, Any] | None,
+    selection_payload: list[dict[str, Any]],
+    tasks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     if not primary:
         return {
             "subject_type": "unknown",
@@ -242,15 +795,220 @@ def _build_subject(primary: dict[str, Any] | None, selection_payload: list[dict[
             "selection_payload": [],
             "binding_tier": "understanding_none",
         }
+    merged_tickers = dedup_tickers(
+        [
+            str(ticker)
+            for task in (tasks or [])
+            if isinstance(task, dict)
+            for ticker in (task.get("tickers") or [])
+            if str(ticker or "").strip()
+        ]
+    )
+    if not merged_tickers:
+        merged_tickers = list(primary.get("tickers") or [])
     return {
         "subject_type": primary.get("subject_type") or "unknown",
-        "tickers": list(primary.get("tickers") or []),
+        "tickers": merged_tickers,
         "selection_ids": list(primary.get("selection_ids") or []),
         "selection_types": list(primary.get("selection_types") or []),
         "selection_payload": selection_payload if primary.get("selection_ids") else [],
         "binding_tier": "understanding",
         "is_comparison": (primary.get("operation") or {}).get("name") == "compare",
     }
+
+
+def _extract_tickers_from_text(text: str) -> list[str]:
+    if not str(text or "").strip():
+        return []
+    return dedup_tickers(
+        [str(t) for t in (extract_tickers(str(text)).get("tickers") or []) if str(t).strip()]
+    )
+
+
+def _portfolio_tickers_from_context(ui_context: dict[str, Any]) -> list[str]:
+    raw_items: list[Any] = []
+    for key in ("portfolio", "positions", "holdings"):
+        value = ui_context.get(key)
+        if isinstance(value, dict):
+            raw_items.extend(value.keys())
+            raw_items.extend(value.values())
+        elif isinstance(value, (list, tuple)):
+            raw_items.extend(value)
+
+    candidates: list[str] = []
+    for item in raw_items:
+        if isinstance(item, dict):
+            candidates.extend(
+                str(item.get(key) or "")
+                for key in ("ticker", "symbol", "asset", "id")
+                if item.get(key)
+            )
+        elif isinstance(item, str):
+            candidates.append(item)
+
+    tickers: list[str] = []
+    for candidate in candidates:
+        tickers.extend(_extract_tickers_from_text(candidate) or [normalize_ticker(candidate)])
+    return dedup_tickers([ticker for ticker in tickers if ticker])
+
+
+def _positions_from_ui_context(ui_context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized visible portfolio positions without inventing holdings."""
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for key in ("positions", "holdings", "portfolio"):
+        value = ui_context.get(key)
+        if isinstance(value, dict):
+            iterable: list[Any] = []
+            for raw_key, raw_value in value.items():
+                if isinstance(raw_value, dict):
+                    item = dict(raw_value)
+                    item.setdefault("ticker", raw_key)
+                    iterable.append(item)
+                else:
+                    iterable.append({"ticker": raw_key, "weight": raw_value})
+        elif isinstance(value, (list, tuple)):
+            iterable = list(value)
+        else:
+            continue
+
+        for item in iterable:
+            if isinstance(item, dict):
+                ticker = normalize_ticker(str(item.get("ticker") or item.get("symbol") or item.get("asset") or item.get("id") or ""))
+                if not ticker or ticker in seen:
+                    continue
+                normalized = dict(item)
+                normalized["ticker"] = ticker
+                rows.append(normalized)
+                seen.add(ticker)
+            elif isinstance(item, str):
+                ticker = normalize_ticker(item)
+                if ticker and ticker not in seen:
+                    rows.append({"ticker": ticker})
+                    seen.add(ticker)
+    return rows
+
+
+def _binding_context_ref(binding: Any, *, value: Any = "") -> dict[str, Any]:
+    return {
+        "source": "conversation_context",
+        "key": getattr(binding, "source", "none"),
+        "label": getattr(binding, "subject_hint", "") or getattr(binding, "source", "conversation_context"),
+        "value": value or getattr(binding, "reason", ""),
+    }
+
+
+def _context_tickers_from_binding(
+    *,
+    binding: Any,
+    ui_context: dict[str, Any],
+    memory_context: dict[str, Any],
+) -> list[str]:
+    source = str(getattr(binding, "source", "") or "")
+    candidates: list[str] = []
+    subject_hint = str(getattr(binding, "subject_hint", "") or "")
+    if subject_hint:
+        candidates.append(subject_hint)
+
+    if source == "active_symbol":
+        candidates.append(str(ui_context.get("active_symbol") or ""))
+    elif source == "last_report":
+        report = memory_context.get("last_report") if isinstance(memory_context.get("last_report"), dict) else {}
+        candidates.append(str(report.get("ticker") or ""))
+        candidates.append(str(report.get("title") or ""))
+
+    tickers: list[str] = []
+    for candidate in candidates:
+        if not candidate.strip():
+            continue
+        extracted = _extract_tickers_from_text(candidate)
+        tickers.extend(extracted or [normalize_ticker(candidate)])
+    return dedup_tickers([ticker for ticker in tickers if re.match(r"^[A-Z0-9^][A-Z0-9.\-=]{0,14}$", ticker)])
+
+
+def _add_context_bound_research_task(
+    *,
+    tasks: list[dict[str, Any]],
+    context_refs: list[dict[str, Any]],
+    decision: ConversationDecision,
+    query: str,
+    ui_context: dict[str, Any],
+    memory_context: dict[str, Any],
+    selection_ids: list[str],
+    selection_types: list[str],
+) -> bool:
+    """Map a contextual router decision into executable work.
+
+    The switch is by context source, not by bespoke follow-up kind. A follow-up
+    can bind to a report, active symbol, selected document, portfolio, or recent
+    focus while still sharing one route schema.
+    """
+    binding = decision.context_binding
+    source = binding.source
+
+    if source == "selection" and selection_ids:
+        subject_type = _selection_subject_type(selection_types)
+        if subject_type == "research_doc" and decision.domain_intent == "news":
+            subject_type = "news_item" if len(selection_ids) == 1 else "news_set"
+        operation_name = "summarize" if decision.relation == "summarize" else "qa"
+        if decision.domain_intent in {"news", "analysis"} and decision.relation != "summarize":
+            operation_name = "analyze_impact" if decision.needs_tools else "qa"
+        _add_task(
+            tasks,
+            subject_type=subject_type,
+            operation=_operation(operation_name, decision.confidence),
+            query=query,
+            selection_ids=selection_ids,
+            selection_types=selection_types,
+            priority=15,
+            reason="context_router_binding",
+            params={"context_binding": binding.model_dump()},
+        )
+        context_refs.append(_binding_context_ref(binding, value=selection_ids))
+        return True
+
+    if source == "portfolio":
+        portfolio_tickers = _portfolio_tickers_from_context(ui_context)
+        positions = _positions_from_ui_context(ui_context)
+        if portfolio_tickers or _portfolio_context_available(query, ui_context):
+            _add_task(
+                tasks,
+                subject_type="portfolio",
+                subject_label="当前持仓",
+                operation=_domain_intent_operation(decision.domain_intent, decision.confidence),
+                query=query,
+                tickers=portfolio_tickers,
+                priority=20,
+                reason="context_router_binding",
+                params={"context_binding": binding.model_dump(), "positions": positions},
+            )
+            context_refs.append(_binding_context_ref(binding, value=portfolio_tickers or "portfolio"))
+            return True
+        return False
+
+    tickers = _context_tickers_from_binding(
+        binding=binding,
+        ui_context=ui_context,
+        memory_context=memory_context,
+    )
+    if tickers:
+        for ticker in tickers[:3]:
+            _add_task(
+                tasks,
+                subject_type=_subject_type_for_ticker(ticker),
+                operation=_domain_intent_operation(decision.domain_intent, decision.confidence),
+                query=query,
+                tickers=[ticker],
+                subject_label=ticker,
+                priority=25,
+                reason="context_router_binding",
+                params={"context_binding": binding.model_dump()},
+            )
+        context_refs.append(_binding_context_ref(binding, value=tickers))
+        return True
+
+    return False
 
 
 async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
@@ -282,23 +1040,165 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
 
 async def understand_request(state: GraphState) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
-    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    ui_context = dict(state.get("ui_context") or {}) if isinstance(state.get("ui_context"), dict) else {}
     output_mode = (decide_output_mode(state).get("output_mode") or "chat")
 
     tasks: list[dict[str, Any]] = []
     blocked_tasks: list[dict[str, Any]] = []
     context_refs: list[dict[str, Any]] = []
     fallback_assumptions: list[str] = []
+    memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
     artifacts = dict(state.get("artifacts") or {})
+    state = {**state, "ui_context": ui_context, "artifacts": artifacts}
     trace = dict(state.get("trace") or {})
-
     selection_ids, selection_types, selection_payload = _normalize_selection(ui_context)
     social_prefix = _social_prefix(query)
-    ticker_meta = extract_tickers(query)
+    query_for_tickers = _strip_urls(query)
+    ticker_meta = extract_tickers(query_for_tickers)
     tickers = dedup_tickers(
         [str(t) for t in (ticker_meta.get("tickers") or []) if str(t).strip().upper() not in _NON_ASSET_TOKENS]
     )
-    if not tickers and isinstance(ui_context.get("active_symbol"), str) and has_financial_intent(query):
+    conversation_decision: ConversationDecision | None = None
+    context_router_research_bound = False
+
+    if not query:
+        blocked_tasks.append(
+            {
+                "id": "blocked_1",
+                "subject_type": "unknown",
+                "subject_label": "",
+                "operation": _operation("qa", 0.0),
+                "reason": "empty_query",
+                "question": "请先输入你的问题。",
+                "suggestions": ["输入股票代码、公司名称、宏观主题，或选择新闻/财报后提问"],
+                "fallback_allowed": False,
+            }
+        )
+
+    if query and not blocked_tasks and is_casual_chat(query):
+        # Keep this local path only for obvious social turns. Broader open-chat
+        # questions still go through the LLM router before planner.
+        decision = ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(),
+            relation="new_topic",
+            domain_intent="smalltalk",
+            confidence=1.0,
+            needs_tools=False,
+            reason="纯社交问候，直接回答",
+        )
+        result = _direct_conversation_result(
+            query=query,
+            decision=decision,
+            reply=_direct_reply(query),
+            context_refs=context_refs,
+            artifacts=artifacts,
+            trace=trace,
+        )
+        await _emit_understanding_trace(result["understanding"])
+        return result
+
+    if (
+        query
+        and not blocked_tasks
+        and not _explicit_report_mode(state, output_mode)
+        and (output_mode == "brief" or _is_explicit_brief_request(query) or bool(_extract_urls(query)))
+        and tickers
+        and not selection_ids
+        and not _has_prior_dialogue(state, query)
+    ):
+        conversation_decision = ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="brief turn has explicit current-turn subject and no prior context to bind",
+                subject_hint=", ".join(tickers[:3]),
+            ),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.72,
+            needs_tools=True,
+            reason="explicit brief request can be decomposed by request understanding without context binding",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+
+    if query and not blocked_tasks and not _explicit_report_mode(state, output_mode) and conversation_decision is None:
+        conversation_decision = await route_conversation(state, tickers=tickers, selection_ids=selection_ids)
+        if conversation_decision is not None:
+            if tickers and conversation_decision.context_binding.source == "none":
+                tickers = _effective_current_turn_tickers(query, tickers, conversation_decision)
+            trace["conversation_router"] = conversation_decision.model_dump()
+            if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
+                direct_context_refs = list(context_refs)
+                binding = conversation_decision.context_binding
+                if binding.source != "none":
+                    direct_context_refs.append(
+                        {
+                            "source": "conversation_context",
+                            "key": binding.source,
+                            "label": binding.subject_hint or binding.source,
+                            "value": binding.reason,
+                        }
+                    )
+                reply = await generate_contextual_reply(state, conversation_decision)
+                result = _direct_conversation_result(
+                    query=query,
+                    decision=conversation_decision,
+                    reply=reply,
+                    context_refs=direct_context_refs,
+                    artifacts=artifacts,
+                    trace=trace,
+                )
+                await _emit_understanding_trace(result["understanding"])
+                return result
+            if (
+                conversation_decision.execution_route == "research"
+            ):
+                if conversation_decision.context_binding.source != "none":
+                    context_router_research_bound = _add_context_bound_research_task(
+                        tasks=tasks,
+                        context_refs=context_refs,
+                        decision=conversation_decision,
+                        query=query,
+                        ui_context=ui_context,
+                        memory_context=memory_context,
+                        selection_ids=selection_ids,
+                        selection_types=selection_types,
+                    )
+                if conversation_decision.task_hints:
+                    hint_bound = _add_router_task_hints(
+                        tasks=tasks,
+                        context_refs=context_refs,
+                        decision=conversation_decision,
+                        query=query,
+                        current_tickers=tickers,
+                        selection_ids=selection_ids,
+                        selection_types=selection_types,
+                    )
+                    context_router_research_bound = context_router_research_bound or hint_bound
+            if conversation_decision.execution_route == "clarify":
+                blocked_tasks.append(_context_router_clarify_block(conversation_decision))
+                tickers = []
+                selection_ids = []
+
+    context_binding_source = (
+        conversation_decision.context_binding.source
+        if conversation_decision is not None
+        else "none"
+    )
+
+    if not blocked_tasks and context_binding_source != "selection":
+        _add_explicit_url_tasks(tasks=tasks, query=query, current_tickers=tickers)
+
+    if (
+        not blocked_tasks
+        and
+        (not context_router_research_bound or context_binding_source == "selection")
+        and not tickers
+        and _can_use_active_symbol_fallback(ui_context, memory_context)
+        and has_financial_intent(query)
+    ):
         tickers = [normalize_ticker(str(ui_context["active_symbol"]))]
         context_refs.append({"source": "ui_context", "key": "active_symbol", "label": "当前标的", "value": tickers[0]})
 
@@ -307,10 +1207,18 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     # ui_context.active_symbol is present. Bind the active symbol and surface
     # the assumption to the user so they can correct it in one turn.
     if (
+        not blocked_tasks
+        and
+        (not context_router_research_bound or context_binding_source == "selection")
+        and
         not tickers
-        and isinstance(ui_context.get("active_symbol"), str)
-        and ui_context["active_symbol"].strip()
+        and _can_use_active_symbol_fallback(ui_context, memory_context)
         and _contains_any(query, _VAGUE_SUBJECT_HINTS)
+        and (
+            _contains_any(query, _ASSET_DEICTIC_HINTS)
+            or has_financial_intent(query)
+            or _contains_any(query, _NEWS_HINTS + _PRICE_HINTS + _IMPACT_HINTS + _TECHNICAL_HINTS)
+        )
     ):
         active = normalize_ticker(str(ui_context["active_symbol"]))
         if active:
@@ -327,57 +1235,21 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 f"按你正在看的 {active} 处理，如不是请告诉我具体哪只。"
             )
 
-    if not query:
-        blocked_tasks.append(
-            {
-                "id": "blocked_1",
-                "subject_type": "unknown",
-                "subject_label": "",
-                "operation": _operation("qa", 0.0),
-                "reason": "empty_query",
-                "question": "请先输入你的问题。",
-                "suggestions": ["输入股票代码、公司名称、宏观主题，或选择新闻/财报后提问"],
-                "fallback_allowed": False,
-            }
-        )
-    elif is_casual_chat(query) and not tickers and not _contains_any(query, _MACRO_HINTS) and not selection_ids:
-        artifacts["draft_markdown"] = _direct_reply(query)
-        understanding = {
-            "route": "direct",
-            "original_query": query,
-            "cleaned_query": query,
-            "language": "zh" if re.search(r"[\u4e00-\u9fff]", query) else "en",
-            "social_prefix": query,
-            "user_visible_summary": "识别为普通对话，不进入投研流水线。",
-            "confidence": 0.86,
-            "tasks": [],
-            "blocked_tasks": [],
-            "context_refs": context_refs,
-            "fallback_assumptions": [],
-        }
-        trace["understanding"] = understanding
-        await _emit_understanding_trace(understanding)
-        return {
-            "understanding": understanding,
-            "tasks": [],
-            "blocked_tasks": [],
-            "context_refs": context_refs,
-            "subject": _build_subject(None, []),
-            "operation": _operation("chat", 0.86),
-            "clarify": {"needed": False, "reason": "", "question": "", "suggestions": []},
-            "chat_responded": True,
-            "artifacts": artifacts,
-            "trace": trace,
-        }
-
-    if selection_ids:
+    if not blocked_tasks and not context_router_research_bound and selection_ids and context_binding_source != "selection":
+        selection_tickers = tickers
+        if (
+            not selection_tickers
+            and isinstance(ui_context.get("active_symbol"), str)
+            and ui_context["active_symbol"].strip()
+        ):
+            selection_tickers = [normalize_ticker(str(ui_context["active_symbol"]))]
         subject_type = _selection_subject_type(selection_types)
         parsed = parse_operation(
             {
                 "query": query,
                 "subject": {
                     "subject_type": subject_type,
-                    "tickers": tickers,
+                    "tickers": selection_tickers,
                     "selection_ids": selection_ids,
                     "selection_types": selection_types,
                 },
@@ -388,15 +1260,23 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             subject_type=subject_type,
             operation=parsed.get("operation") or _operation("summarize", 0.65),
             query=query,
-            tickers=tickers,
+            tickers=selection_tickers,
             selection_ids=selection_ids,
             selection_types=selection_types,
             priority=10,
             reason="ui_selection",
         )
 
-    if tickers:
-        if len(tickers) >= 2 and _contains_any(query, _COMPARE_HINTS):
+    if not blocked_tasks and (not context_router_research_bound or context_binding_source == "selection") and tickers:
+        multi_ticker_report = len(tickers) >= 2 and _explicit_report_mode(state, output_mode)
+        multi_ticker_compare = len(tickers) >= 2 and (
+            (
+                _contains_any(query, _COMPARE_HINTS)
+                and not _is_lightweight_representative_compare(query)
+            )
+            or multi_ticker_report
+        )
+        if multi_ticker_compare:
             _add_task(
                 tasks,
                 subject_type="company",
@@ -404,14 +1284,18 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 query=query,
                 tickers=tickers,
                 priority=20,
-                reason="multi_ticker_compare",
+                reason="multi_ticker_report" if multi_ticker_report and not _contains_any(query, _COMPARE_HINTS) else "multi_ticker_compare",
             )
             extra_operations: list[dict[str, Any]] = []
-            if _contains_any(query, _PRICE_HINTS):
+            if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
                 extra_operations.append(_operation("price", 0.82))
-            if _contains_any(query, _NEWS_HINTS):
+            if _contains_any(query, _NEWS_HINTS) or multi_ticker_report:
                 extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
-            if _contains_any(query, _IMPACT_HINTS) and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE):
+            if (
+                _contains_any(query, _IMPACT_HINTS)
+                and (multi_ticker_report or len(tickers) == 1)
+                and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
+            ):
                 extra_operations.append(_operation("analyze_impact", 0.78))
             for ticker in tickers:
                 subject_type = _subject_type_for_ticker(ticker)
@@ -427,22 +1311,59 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         reason="compare_subtask",
                     )
         else:
-            for ticker in tickers:
-                subject_type = _subject_type_for_ticker(ticker)
-                for operation in _company_operations(query, tickers=tickers):
-                    _add_task(
-                        tasks,
-                        subject_type=subject_type,
-                        operation=operation,
-                        query=query,
-                        tickers=[ticker],
-                        subject_label=ticker,
-                        priority=25,
-                        reason="ticker_or_alias",
+            fallback_operations = _company_operations(
+                query,
+                tickers=tickers,
+                allow_multi_ticker_default_compare=(
+                    multi_ticker_report
+                    or (
+                        conversation_decision is not None
+                        and conversation_decision.relation == "compare"
                     )
+                ),
+            )
+            router_operations = _router_directed_company_operations(
+                conversation_decision,
+                fallback_operations=fallback_operations,
+            )
+            operations = router_operations or fallback_operations
+            if len(tickers) >= 2 and _is_lightweight_representative_compare(query):
+                _add_task(
+                    tasks,
+                    subject_type="company",
+                    operation=_operation("qa", 0.7),
+                    query=query,
+                    tickers=tickers,
+                    subject_label=", ".join(tickers),
+                    priority=25,
+                    reason="representative_basket_qa",
+                )
+            elif (
+                router_operations is None
+                and len(tickers) >= 2
+                and any((operation.get("name") or "") == "compare" for operation in operations)
+            ):
+                _add_task(
+                    tasks,
+                    subject_type="company",
+                    operation=_operation("compare", 0.7),
+                    query=query,
+                    tickers=tickers,
+                    priority=25,
+                    reason="multi_ticker_operation",
+                )
+            else:
+                _add_per_ticker_company_tasks(
+                    tasks,
+                    tickers=tickers,
+                    operations=operations,
+                    query=query,
+                    priority=25,
+                    reason="conversation_router_intent" if router_operations else "ticker_or_alias",
+                )
 
     has_macro = _contains_any(query, _MACRO_HINTS)
-    if has_macro:
+    if not blocked_tasks and not context_router_research_bound and has_macro:
         _add_task(
             tasks,
             subject_type="macro",
@@ -453,12 +1374,12 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             reason="macro_hint",
         )
 
-    if _contains_any(query, _THEME_HINTS) and not has_macro:
+    if not blocked_tasks and not context_router_research_bound and _contains_any(query, _THEME_HINTS) and not has_macro and not tickers:
         if not any(task.get("subject_type") == "theme" for task in tasks):
             _add_task(
                 tasks,
                 subject_type="theme",
-                subject_label="主题/行业",
+                subject_label=conversation_decision.context_binding.subject_hint if conversation_decision else "主题/行业",
                 operation=_operation("news_impact" if _contains_any(query, _IMPACT_HINTS) else "fetch", 0.7),
                 query=query,
                 priority=35,
@@ -466,17 +1387,20 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             )
 
     has_portfolio = _contains_any(query, _PORTFOLIO_HINTS)
-    if has_portfolio:
+    if not blocked_tasks and not context_router_research_bound and has_portfolio:
         if _portfolio_context_available(query, ui_context):
+            portfolio_tickers = tickers or _portfolio_tickers_from_context(ui_context)
+            positions = _positions_from_ui_context(ui_context)
             _add_task(
                 tasks,
                 subject_type="portfolio",
                 subject_label="当前持仓",
                 operation=_operation("rebalance_check" if "调仓" in query else "portfolio_impact", 0.74),
                 query=query,
-                tickers=tickers,
+                tickers=portfolio_tickers,
                 priority=40,
                 reason="portfolio_context_available",
+                params={"positions": positions},
             )
         elif _contains_any(query, _FALLBACK_HINTS):
             fallback_assumptions.append("用户允许在缺少持仓明细时使用查询中的替代假设。")
@@ -505,6 +1429,95 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 }
             )
 
+    if not tasks and not blocked_tasks:
+        if conversation_decision is None:
+            conversation_decision = await route_conversation(state, tickers=tickers, selection_ids=selection_ids)
+        if conversation_decision is not None:
+            trace["conversation_router"] = conversation_decision.model_dump()
+            if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
+                direct_context_refs = list(context_refs)
+                binding = conversation_decision.context_binding
+                if binding.source != "none":
+                    direct_context_refs.append(
+                        {
+                            "source": "conversation_context",
+                            "key": binding.source,
+                            "label": binding.subject_hint or binding.source,
+                            "value": binding.reason,
+                        }
+                    )
+                reply = await generate_contextual_reply(state, conversation_decision)
+                result = _direct_conversation_result(
+                    query=query,
+                    decision=conversation_decision,
+                    reply=reply,
+                    context_refs=direct_context_refs,
+                    artifacts=artifacts,
+                    trace=trace,
+                )
+                await _emit_understanding_trace(result["understanding"])
+                return result
+            if conversation_decision.execution_route == "research":
+                if conversation_decision.task_hints:
+                    hint_bound = _add_router_task_hints(
+                        tasks=tasks,
+                        context_refs=context_refs,
+                        decision=conversation_decision,
+                        query=query,
+                        current_tickers=tickers,
+                        selection_ids=selection_ids,
+                        selection_types=selection_types,
+                    )
+                    context_router_research_bound = context_router_research_bound or hint_bound
+                if not tasks:
+                    _add_context_bound_research_task(
+                        tasks=tasks,
+                        context_refs=context_refs,
+                        decision=conversation_decision,
+                        query=query,
+                        ui_context=ui_context,
+                        memory_context=memory_context,
+                        selection_ids=selection_ids,
+                        selection_types=selection_types,
+                    )
+                if not tasks:
+                    if conversation_decision.context_binding.source == "none":
+                        _add_unbound_research_task(
+                            tasks=tasks,
+                            decision=conversation_decision,
+                            query=query,
+                        )
+                    else:
+                        blocked_tasks.append(
+                            {
+                                "id": "blocked_1",
+                                "subject_type": "unknown",
+                                "subject_label": conversation_decision.context_binding.subject_hint,
+                                "operation": _domain_intent_operation(
+                                    conversation_decision.domain_intent,
+                                    conversation_decision.confidence,
+                                ),
+                                "reason": "context_binding_unresolved",
+                                "question": conversation_decision.reply_guidance
+                                or "我理解这是接着上下文问，但还不能确定要绑定哪个对象。",
+                                "suggestions": ["补充具体公司、股票代码、选中文档、持仓，或说明你指的是哪份报告"],
+                                "fallback_allowed": False,
+                            }
+                        )
+            if not tasks and conversation_decision.execution_route == "clarify":
+                blocked_tasks.append(
+                    {
+                        "id": "blocked_1",
+                        "subject_type": "unknown",
+                        "subject_label": conversation_decision.context_binding.subject_hint,
+                        "operation": _operation("qa", 0.0),
+                        "reason": "context_router_clarify",
+                        "question": conversation_decision.reply_guidance or "我需要你补充想看的对象或上下文。",
+                        "suggestions": ["补充公司、股票代码、宏观主题、持仓，或说明你指的是哪条消息/哪份报告"],
+                        "fallback_allowed": False,
+                    }
+                )
+
     if not tasks and blocked_tasks:
         route = "clarify"
     elif tasks and all((task.get("operation") or {}).get("name") == "alert_set" for task in tasks):
@@ -526,18 +1539,26 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             }
         )
 
+    if blocked_tasks:
+        _sanitize_blocked_task_questions(query, blocked_tasks)
+
     if route == "clarify":
         first_blocked = blocked_tasks[0] if blocked_tasks else {}
         suggestions = list(first_blocked.get("suggestions") or [])
         question = str(first_blocked.get("question") or "请补充分析对象。")
-        artifacts["draft_markdown"] = "\n".join([question, "", "你可以这样做：", *[f"- {s}" for s in suggestions]]).strip()
+        if conversation_decision is not None and conversation_decision.execution_route == "clarify":
+            suggestions = suggestions[:2]
+        if suggestions:
+            artifacts["draft_markdown"] = "\n".join([question, "", "可以补充：", *[f"- {s}" for s in suggestions]]).strip()
+        else:
+            artifacts["draft_markdown"] = question
 
-    if "30秒" in query or "先别做长报告" in query or "不要长篇" in query or "快速" in query:
+    if _is_explicit_brief_request(query):
         output_mode = "brief"
 
     primary = tasks[0] if tasks else None
     operation = (primary or {}).get("operation") or _operation("qa", 0.0)
-    subject = _build_subject(primary, selection_payload)
+    subject = _build_subject(primary, selection_payload, tasks)
     clarify = {
         "needed": route == "clarify",
         "reason": str((blocked_tasks[0] if blocked_tasks else {}).get("reason") or ""),

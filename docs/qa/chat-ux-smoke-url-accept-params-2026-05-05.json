@@ -1,0 +1,161 @@
+[
+  {
+    "case": {
+      "id": "Q39",
+      "type": "multiple_simple_complex_url",
+      "session": "eval-nested",
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "expect": "多个简单问题嵌 URL 抓取和复杂解释，fetch 作为可用工具由 planner/agent 自己选择。",
+      "eval_session": "eval-nested-smoke-url-accept-params"
+    },
+    "payload": {
+      "query": "AAPL 价格、看下这个 https://example.com/msft-rates 对 MSFT 有没有用，再解释一下为什么高估值怕利率，最后用一句话说我该关注什么。",
+      "session_id": "tenant1:eval_user:eval-nested-smoke-url-accept-params",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 144199,
+    "status_code": 200,
+    "output_mode": "chat",
+    "intent": null,
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "AAPL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "macro",
+        "tickers": [],
+        "operation": "analyze_impact"
+      },
+      {
+        "subject_type": "unknown",
+        "tickers": [
+          "AAPL",
+          "MSFT"
+        ],
+        "operation": "analyze_impact"
+      }
+    ],
+    "plan_steps": [
+      {
+        "kind": "tool",
+        "name": "get_stock_price",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "fetch_url_content",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_current_datetime",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_official_macro_releases",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "get_authoritative_media_news",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      },
+      {
+        "kind": "tool",
+        "name": "search",
+        "inputs": null,
+        "task_ids": null,
+        "optional": null
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "AAPL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 0.8,
+      "needs_tools": true,
+      "reason": "用户需要实时价格、URL 内容分析、金融概念解释和总结建议，涉及多个工具调用",
+      "reply_guidance": "先获取 AAPL 实时价格，然后读取 URL 内容评估对 MSFT 的相关性，接着解释高估值与利率的关系机制，最后用一句话总结用户应关注的投资要点",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "AAPL",
+          "tickers": [
+            "AAPL"
+          ],
+          "operation": "price",
+          "params": {},
+          "reason": "用户请求 AAPL 实时价格"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "https://example.com/msft-rates",
+          "tickers": [
+            "MSFT"
+          ],
+          "operation": "fetch",
+          "params": {
+            "url": "https://example.com/msft-rates"
+          },
+          "reason": "用户要求分析 URL 内容对 MSFT 的相关性，需先读取内容"
+        },
+        {
+          "subject_type": "macro",
+          "subject_label": "利率与估值",
+          "tickers": [],
+          "operation": "analyze_impact",
+          "params": {},
+          "reason": "用户请求解释为什么高估值怕利率的金融机制"
+        },
+        {
+          "subject_type": "unknown",
+          "subject_label": "投资关注点",
+          "tickers": [
+            "AAPL",
+            "MSFT"
+          ],
+          "operation": "analyze_impact",
+          "params": {},
+          "reason": "基于前面分析给出总结建议"
+        }
+      ]
+    },
+    "response": "",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

@@ -79,6 +79,29 @@ def _annotate_report_source(
     return report
 
 
+def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    markdown = str(artifacts.get("draft_markdown") or "")
+    if markdown.strip():
+        return markdown, state
+    try:
+        from backend.graph.nodes.render_stub import render_stub
+
+        rendered = render_stub(state)
+        rendered_artifacts = rendered.get("artifacts") if isinstance(rendered, dict) else None
+        if isinstance(rendered_artifacts, dict):
+            state = {**state, "artifacts": rendered_artifacts}
+            markdown = str(rendered_artifacts.get("draft_markdown") or "")
+            if markdown.strip():
+                return markdown, state
+    except Exception as exc:
+        logger.warning("[execution_service] final render fallback failed: %s", exc)
+    query = str(state.get("query") or "这个问题").strip()
+    markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query}\n"
+    state = {**state, "artifacts": {**artifacts, "draft_markdown": markdown}}
+    return markdown, state
+
+
 def _apply_quality_gate(
     *,
     report: dict[str, Any] | None,
@@ -352,7 +375,7 @@ async def run_graph_pipeline(
                 await queue.put(_END)
                 return
 
-            markdown = ((state.get("artifacts") or {}).get("draft_markdown")) or ""
+            markdown, state = _ensure_deliverable_markdown(state)
 
             # 3. Build report payload
             report: dict[str, Any] | None = None
@@ -380,7 +403,15 @@ async def run_graph_pipeline(
             blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
             # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
             soft_blocked = quality_blocked and blocked_report_preview is not None
-            response_markdown = markdown if soft_blocked else ("" if quality_blocked else markdown)
+            is_report_mode = str(state.get("output_mode") or "").strip().lower() == "investment_report"
+            response_markdown = (
+                markdown
+                if (soft_blocked or not is_report_mode)
+                else ("" if quality_blocked else markdown)
+            )
+            if not str(response_markdown or "").strip():
+                query_preview = str(query or "这个问题").strip()
+                response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
             persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
             if quality_blocked:
@@ -666,7 +697,7 @@ async def resume_graph_pipeline(
                     final_state = event["data"]["output"]
 
             # Build report from final state
-            markdown = ((final_state.get("artifacts") or {}).get("draft_markdown")) or ""
+            markdown, final_state = _ensure_deliverable_markdown(final_state)
             report: dict[str, Any] | None = None
             try:
                 from backend.graph.report_builder import build_report_payload
@@ -683,7 +714,15 @@ async def resume_graph_pipeline(
             blocked_report_preview = report if quality_blocked and isinstance(report, dict) else None
             # 软阻断：质量门控 blocked 但报告已生成时，仍然交付内容并附带警告
             soft_blocked = quality_blocked and blocked_report_preview is not None
-            response_markdown = markdown if soft_blocked else ("" if quality_blocked else markdown)
+            is_report_mode = str(final_state.get("output_mode") or "").strip().lower() == "investment_report"
+            response_markdown = (
+                markdown
+                if (soft_blocked or not is_report_mode)
+                else ("" if quality_blocked else markdown)
+            )
+            if not str(response_markdown or "").strip():
+                query_preview = str(final_state.get("query") or "这个问题").strip()
+                response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
             persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
             if quality_blocked:

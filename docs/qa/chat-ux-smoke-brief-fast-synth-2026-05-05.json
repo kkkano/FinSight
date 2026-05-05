@@ -1,0 +1,103 @@
+[
+  {
+    "case": {
+      "id": "Q20",
+      "type": "quick_brief",
+      "session": "eval-quick-brief",
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "expect": "快速回答可用 brief，但仍应自然，不输出奇怪模板。",
+      "eval_session": "eval-quick-brief-smoke-brief-fast-synth"
+    },
+    "payload": {
+      "query": "先别做长报告，30秒告诉我 GOOGL 和 MSFT 今天谁更强，新闻、涨跌幅、风险点各一句。",
+      "session_id": "tenant1:eval_user:eval-quick-brief-smoke-brief-fast-synth",
+      "context": {},
+      "options": {
+        "confirmation_mode": "skip"
+      }
+    },
+    "elapsed_ms": 51446,
+    "status_code": 200,
+    "output_mode": "brief",
+    "intent": "chat",
+    "route": "research",
+    "tasks": [
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "price"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "MSFT"
+        ],
+        "operation": "fetch"
+      },
+      {
+        "subject_type": "company",
+        "tickers": [
+          "GOOGL",
+          "MSFT"
+        ],
+        "operation": "compare"
+      }
+    ],
+    "conversation_router": {
+      "execution_route": "research",
+      "context_binding": {
+        "source": "none",
+        "confidence": 0.0,
+        "reason": "current user turn contains explicit subject(s), so implicit history was ignored",
+        "subject_hint": "GOOGL, MSFT"
+      },
+      "relation": "new_topic",
+      "domain_intent": "analysis",
+      "confidence": 1.0,
+      "needs_tools": true,
+      "reason": "需要实时获取新闻、涨跌幅和风险点数据来比较两个股票",
+      "reply_guidance": "提供简洁比较：新闻各一句，涨跌幅各一句，风险点各一句，并基于数据指出谁更强。",
+      "task_hints": [
+        {
+          "subject_type": "company",
+          "subject_label": "GOOGL vs MSFT",
+          "tickers": [
+            "GOOGL",
+            "MSFT"
+          ],
+          "operation": "compare",
+          "params": {
+            "aspects": [
+              "news",
+              "price_change",
+              "risk"
+            ],
+            "output_format": "brief"
+          },
+          "reason": "用户要求快速比较两个股票的新闻、涨跌幅和风险点，需要综合数据"
+        }
+      ]
+    },
+    "response": "我先按 GOOGL, MSFT 这组代表标的看。\n\nGOOGL:\n- GOOGL 最新价格约为 383.25 USD，变动 -2.44 / -0.63%。\n- 相关消息：[Move Over Nvidia: Why Alphabet's Surprising Decision to Sell Custom AI Chips Changes Everything.](https://finance.yahoo.com/search?p=Move+Over+Nvidia%3A+Why+Alphabet%27s+Surprising+Decision+to+Sell+Custom+AI+Chips+Changes+Everything.)（Yahoo / 2026-05-05）；[Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n\nMSFT:\n- MSFT 最新价格约为 413.62 USD，变动 -0.57 / -0.14%。\n- 相关消息：[Market Chatter: OpenAI Discussed Spinoff of Robotics, Consumer-Hardware Divisions](https://finance.yahoo.com/search?p=Market+Chatter%3A+OpenAI+Discussed+Spinoff+of+Robotics%2C+Consumer-Hardware+Divisions)（Yahoo / 2026-05-05）；[Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n\n来源：\n- [Move Over Nvidia: Why Alphabet's Surprising Decision to Sell Custom AI Chips Changes Everything.](https://finance.yahoo.com/search?p=Move+Over+Nvidia%3A+Why+Alphabet%27s+Surprising+Decision+to+Sell+Custom+AI+Chips+Changes+Everything.)（Yahoo / 2026-05-05）\n- [Zacks Investment Ideas feature highlights: Meta Platforms, Amazon, Alphabet, Microsoft and Nebius](https://finance.yahoo.com/search?p=Zacks+Investment+Ideas+feature+highlights%3A+Meta+Platforms%2C+Amazon%2C+Alphabet%2C+Microsoft+and+Nebius)（Yahoo / 2026-05-05）\n- [Will Ulta’s (ULTA) Gemini-Powered “Ulta AI” and NielsenIQ Tie-Up Change Its Digital Narrative?](https://finance.yahoo.com/search?p=Will+Ulta%E2%80%99s+%28ULTA%29+Gemini-Powered+%E2%80%9CUlta+AI%E2%80%9D+and+NielsenIQ+Tie-Up+Change+Its+Digital+Narrative%3F)（Yahoo / 2026-05-05）\n- [Alphabet Returns to Euro Debt Market for Latest AI Megabond Deal](https://finance.yahoo.com/search?p=Alphabet+Returns+to+Euro+Debt+Market+for+Latest+AI+Megabond+Deal)（Yahoo / 2026-05-05）\n- [Why Alphabet Stock Soared 34% in April -- One Catalyst Is Its Move to Challenge Data Center AI Chip Leader Nvidia](https://finance.yahoo.com/search?p=Why+Alphabet+Stock+Soared+34%25+in+April+--+One+Catalyst+Is+Its+Move+to+Challenge+Data+Center+AI+Chip+Leader+Nvidia)（Yahoo / 2026-05-05）\n",
+    "report_title": "",
+    "stream_done_summary": null,
+    "verdict": "PASS",
+    "issues": []
+  }
+]

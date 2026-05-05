@@ -1,10 +1,10 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-05-03
-> 适用分支：`feat/p0-p2-quality-orchestration-productization`
+> 更新时间：2026-05-06
+> 适用分支：`main`
 > 主链实现：`backend/graph/runner.py`
 
-> 2026-05-03 运行时事实：聊天前半段已接入 `chat_respond -> understand_request` 双节点串联。`chat_respond` 提供两层闲聊/OOS 防御（Tier-1 规则白名单零延迟、Tier-2 mimo-v2.5 LLM 分类器 sidecar），命中即短路至 END，不进入语义理解；旧 `resolve_subject / clarify / parse_operation` 仅作为兼容节点保留。若本文与代码冲突，以 `backend/graph/runner.py` 和测试为准。
+> 2026-05-06 运行时事实：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见；普通聊天、追问、非金融边界、URL/文章分析、提醒、行情和报告请求都进入 `understand_request` 内部的 LLM conversation router。只有显式 `output_mode=investment_report`（报告按钮）进入报告模板；普通 chat/brief 不套报告结构。URL 读取通过 planner/agent 工具 `fetch_url_content`，不在请求理解层预抓取。若本文与代码冲突，以 `backend/graph/runner.py`、`backend/graph/nodes/understand_request.py` 和测试为准。
 > 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 
 ## 1. 系统总览
@@ -18,12 +18,12 @@ flowchart LR
   end
 
   subgraph API[FastAPI]
-    CHAT_EP[/chat/supervisor*]
-    EXEC_EP[/api/execute*]
-    DASH_EP[/api/dashboard*]
-    REPORT_EP[/api/reports/*]
-    CONV_EP[/api/conversations/*]
-    AGENT_PREF_EP[/api/agents/preferences]
+    CHAT_EP["/chat/supervisor*"]
+    EXEC_EP["/api/execute*"]
+    DASH_EP["/api/dashboard*"]
+    REPORT_EP["/api/reports/*"]
+    CONV_EP["/api/conversations/*"]
+    AGENT_PREF_EP["/api/agents/preferences"]
   end
 
   subgraph GRAPH[LangGraph Pipeline]
@@ -58,11 +58,13 @@ flowchart TD
   build_initial_state --> reset_turn_state
   reset_turn_state --> prepare_context
   prepare_context --> chat_respond
-  chat_respond -->|chat_responded=true| END
-  chat_respond -->|chat_responded=false| understand_request
-  understand_request -->|direct/clarify| END
-  understand_request -->|alert| alert_extractor
-  understand_request -->|research| policy_gate
+  chat_respond -->|pure social| END
+  chat_respond -->|all other turns| understand_request
+  understand_request --> conversation_router
+  conversation_router -->|direct/out_of_scope/clarify| END
+  conversation_router -->|research/alert| task_projection
+  task_projection -->|alert| alert_extractor
+  task_projection -->|research| policy_gate
   alert_extractor -->|valid| alert_action
   alert_extractor -->|invalid| END
   alert_action --> END
@@ -78,14 +80,16 @@ flowchart TD
 
 `understand_request` 是聊天前半段的语义事实源，一次性处理：
 
-- 普通寒暄 / 非金融对话：`route=direct`，直接结束。
+- 纯寒暄由 `chat_respond` 快速结束；其他直接回复、非金融边界和澄清由 LLM conversation router 自然生成，不走本地模板。
 - 公司、ticker、中文别名、index、commodity、macro、theme、selection、portfolio。
+- URL/网页/文章任务作为可规划的 `fetch_url_content` 工具步骤进入执行层。
 - 复合请求拆成 `tasks[]`，例如 `company/GOOGL/price` + `company/MSFT/fetch` + `macro/fact_check`。
 - 局部缺信息写入 `blocked_tasks[]`，例如缺持仓只阻塞 portfolio task，不阻塞公司/宏观任务。
+- 当前 query 明说的 ticker 优先于 UI `active_symbol`；UI 选择、MiniChat 当前标的和持仓只作为上下文候选。
 - 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
 - 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
 
-旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
+旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
 
 ## 3. 规划与执行策略
 
@@ -155,11 +159,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-  RAIL[Conversation Rail] --> CREATE[POST /api/conversations]
-  RAIL --> LIST[GET /api/conversations]
-  RAIL --> GET[GET /api/conversations/{id}]
-  RAIL --> PATCH[PATCH /api/conversations/{id}]
-  RAIL --> DELETE[DELETE /api/conversations/{id}]
+  RAIL[Conversation Rail] --> CREATE["POST /api/conversations"]
+  RAIL --> LIST["GET /api/conversations"]
+  RAIL --> GET["GET /api/conversations/{id}"]
+  RAIL --> PATCH["PATCH /api/conversations/{id}"]
+  RAIL --> DELETE["DELETE /api/conversations/{id}"]
   CREATE --> STORE[conversation_store.json]
   GET --> STORE
   PATCH --> STORE
@@ -182,17 +186,17 @@ flowchart LR
 ```mermaid
 flowchart LR
   DSH[Dashboard Page] --> DS[useDashboardData]
-  DS --> DAPI[/api/dashboard]
+  DS --> DAPI["/api/dashboard"]
   DSH --> INS[useDashboardInsights]
-  INS --> IAPI[/api/dashboard/insights]
+  INS --> IAPI["/api/dashboard/insights"]
   DAPI --> DATA_SERVICE[dashboard.data_service]
   IAPI --> INS_ENGINE[dashboard.insights_engine]
   INS_ENGINE --> DIGEST[Overview/Financial/Technical/News/Peers Digests]
 
   WB[Workbench Page] --> TASK[TaskSection]
   WB --> REPORT[ReportSection]
-  TASK --> EXEC[/api/execute]
-  REPORT --> RINDEX[/api/reports/index]
+  TASK --> EXEC["/api/execute"]
+  REPORT --> RINDEX["/api/reports/index"]
 ```
 
 ## 6. Agent/Tool 边界
@@ -247,7 +251,7 @@ flowchart LR
   NEWS -->|record_alert_event| SUBS
   RISK -->|record_alert_event| SUBS
 
-  SUBS --> FEED[/GET /api/alerts/feed]
+  SUBS --> FEED["GET /api/alerts/feed"]
   FEED --> RP_HOOK[useRightPanelData]
   RP_HOOK --> RP_TAB[RightPanelAlertsTab]
   RP_TAB --> USER[事件列表 + 订阅配置 + 未读数]

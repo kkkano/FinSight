@@ -800,6 +800,24 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 )
             return
 
+        if tool_name == "fetch_url_content" and isinstance(output, dict):
+            title = str(output.get("title") or output.get("url") or "URL content").strip()
+            url = str(output.get("final_url") or output.get("url") or "").strip()
+            snippet = str(output.get("description") or output.get("content") or output.get("error") or "").strip()
+            evidence_pool.append(
+                {
+                    "title": title,
+                    "url": url or None,
+                    "snippet": snippet[:1200],
+                    "source": output.get("source") or "url",
+                    "published_date": None,
+                    "confidence": 0.75 if output.get("content") else 0.45,
+                    "type": "url",
+                    "id": output.get("id") or f"{tool_name}:{step_id}",
+                }
+            )
+            return
+
         if isinstance(output, list):
             for i, item in enumerate(output[:10]):
                 if not isinstance(item, dict):
@@ -1923,4 +1941,3 @@ async def execute_plan_stub(state: GraphState) -> dict:
     )
     trace["rag"] = rag_trace
     return {"artifacts": artifacts, "trace": trace}
-

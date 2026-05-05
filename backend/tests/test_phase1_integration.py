@@ -209,39 +209,24 @@ def test_fallback_mechanism():
     return True
 
 
-def test_conversation_router():
-    """测试对话路由器"""
-    print("\n🧭 测试对话路由器...")
+def test_langgraph_request_understanding():
+    """测试当前 LangGraph 请求理解入口"""
+    print("\n🧭 测试 LangGraph 请求理解...")
     print("-" * 50)
     
-    from backend.conversation import ConversationRouter, Intent
-    
-    router = ConversationRouter()
-    
-    test_cases = [
-        ("AAPL 股价多少", Intent.CHAT),
-        ("分析苹果公司股票", Intent.REPORT),
-        ("帮我盯着 NVDA", Intent.ALERT),
-        ("为什么呢", Intent.FOLLOWUP),
-    ]
-    
-    passed = 0
-    for query, expected_intent in test_cases:
-        intent, metadata = router.classify_intent(query)
-        is_correct = intent == expected_intent
-        status = "✅" if is_correct else "❌"
-        print(f"  {status} '{query}' -> {intent.value} (期望: {expected_intent.value})")
-        if is_correct:
-            passed += 1
-    
-    success_rate = passed / len(test_cases)
-    
-    if success_rate >= 0.75:
-        print(f"✅ 对话路由器测试通过 ({passed}/{len(test_cases)})")
-        return True
-    else:
-        print(f"❌ 对话路由器测试失败 ({passed}/{len(test_cases)})")
-        return False
+    import asyncio
+    from backend.graph.nodes.understand_request import understand_request
+
+    async def _run():
+        return await understand_request({"query": "AAPL 股价多少", "ui_context": {}, "trace": {}})
+
+    result = asyncio.run(_run())
+    assert result["understanding"]["route"] == "research"
+    assert result["subject"]["tickers"] == ["AAPL"]
+    assert result["operation"]["name"] == "price"
+
+    print("✅ LangGraph 请求理解测试通过")
+    return True
 
 
 def test_context_manager():
@@ -285,7 +270,7 @@ def run_phase1_integration_tests():
         ("5 个代表性股票", test_five_representative_stocks),
         ("缓存有效性", test_cache_effectiveness),
         ("回退机制", test_fallback_mechanism),
-        ("对话路由器", test_conversation_router),
+        ("LangGraph 请求理解", test_langgraph_request_understanding),
         ("上下文管理器", test_context_manager),
     ]
     
@@ -329,4 +314,3 @@ def run_phase1_integration_tests():
 if __name__ == "__main__":
     success = run_phase1_integration_tests()
     sys.exit(0 if success else 1)
-

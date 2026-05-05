@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage
 from backend.graph.nodes.chat_renderer import render_chat_markdown
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
+from backend.utils.quote import parse_quote_payload
 
 
 def _build_ai_reply_message(artifacts: dict) -> AIMessage:
@@ -195,15 +196,36 @@ def _impact_takeaway(task: dict, related: list[str]) -> str:
     return f"结论：{label} 暂无足够证据判断影响方向，需要补充最新新闻、价格和财报/交付数据。"
 
 
+def _sanitize_user_facing_snippet(text: object) -> str:
+    cleaned = str(text or "").strip()
+    cleaned = re.sub(r"\s*\|\s*Suggested ladder:.*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("Suggested ladder", "")
+    return cleaned.strip()
+
+
 def _summarize_step_output(output: object) -> list[str]:
     source_lines = _extract_source_lines(output, limit=3)
     if source_lines:
         return source_lines
+
+    if _looks_like_quote_output(output):
+        quote = parse_quote_payload(output)
+        if quote:
+            price = quote.get("price")
+            change = quote.get("change")
+            change_percent = quote.get("change_percent")
+            parts = [f"最新价格约为 {float(price):.2f} USD"]
+            if change is not None:
+                parts.append(f"变动 {float(change):+.2f}")
+            if change_percent is not None:
+                parts.append(f"{float(change_percent):+.2f}%")
+            return ["，".join(parts) + "。"]
+
     if isinstance(output, dict) and output.get("skipped"):
         reason = str(output.get("reason") or "skipped")
         return [f"已规划，当前执行环境未运行实时工具（{reason}）。"]
     if isinstance(output, str):
-        text = output.strip()
+        text = _sanitize_user_facing_snippet(output)
         if not text:
             return []
         return [text[:220]]
@@ -216,19 +238,81 @@ def _summarize_step_output(output: object) -> list[str]:
                 if title:
                     lines.append(title + (f"（{source}）" if source else ""))
             elif isinstance(item, str) and item.strip():
-                lines.append(item.strip()[:180])
+                lines.append(_sanitize_user_facing_snippet(item)[:180])
         return lines
     if isinstance(output, dict):
         for key in ("summary", "title", "headline", "snippet", "raw"):
             value = output.get(key)
             if isinstance(value, str) and value.strip():
-                return [value.strip()[:220]]
+                return [_sanitize_user_facing_snippet(value)[:220]]
         articles = output.get("articles") or output.get("items") or output.get("news") or output.get("results")
         if isinstance(articles, list):
             return _summarize_step_output(articles)
         compact = ", ".join(f"{key}={value}" for key, value in list(output.items())[:5] if value is not None)
-        return [compact[:220]] if compact else []
+        return [_sanitize_user_facing_snippet(compact)[:220]] if compact else []
     return []
+
+
+def _looks_like_quote_output(output: object) -> bool:
+    if isinstance(output, dict):
+        return "price" in output or (isinstance(output.get("data"), dict) and "price" in output["data"])
+    if not isinstance(output, str):
+        return False
+    text = output.strip()
+    if text.startswith(("{", "[")):
+        return False
+    return bool(re.search(r"\b(Current Price|Change:)\b", text, re.IGNORECASE))
+
+
+def _user_facing_step_label(step: dict, fallback_step_id: str) -> str:
+    name = str(step.get("name") or fallback_step_id).strip()
+    labels = {
+        "get_stock_price": "价格",
+        "get_company_news": "新闻",
+        "get_company_info": "公司信息",
+        "get_technical_snapshot": "技术面",
+        "get_performance_comparison": "表现对比",
+        "get_official_macro_releases": "官方宏观发布",
+        "get_authoritative_media_news": "权威新闻",
+        "get_factor_exposure": "组合暴露",
+        "run_portfolio_stress_test": "组合压力测试",
+        "search": "搜索",
+        "price_agent": "价格分析",
+        "news_agent": "新闻分析",
+        "fundamental_agent": "基本面分析",
+        "technical_agent": "技术分析",
+        "macro_agent": "宏观分析",
+        "risk_agent": "风险分析",
+    }
+    return labels.get(name, "证据")
+
+
+def _empty_task_line(task: dict, *, is_report_mode: bool) -> str:
+    op_name = _task_operation_name(task)
+    tickers = ", ".join(_task_tickers(task))
+    target = str(task.get("subject_label") or tickers or task.get("subject_type") or "这部分").strip()
+    if op_name == "compare":
+        return f"{target} 的直接对比证据还不够完整；先结合下方价格、新闻和基本面线索阅读。"
+    if op_name == "price":
+        return f"{target} 暂时没有拿到可用的实时价格数据。"
+    if op_name in {"fetch", "news"}:
+        return f"{target} 暂时没有拿到可引用的最新新闻来源。"
+    if op_name in {"company_info", "fundamental"}:
+        return f"{target} 暂时没有拿到可用的公司信息补充。"
+    if op_name == "technical":
+        return f"{target} 暂时没有拿到可用的技术面数据。"
+    if is_report_mode:
+        return f"{target} 仍需要更多证据补充，当前不强行下结论。"
+    return f"{target} 这部分证据还不够，我先不硬编结论。"
+
+
+def _display_time_scope_label(raw_label: object) -> str:
+    label = str(raw_label or "").strip()
+    if not label:
+        return ""
+    if label.lower() in {"unspecified", "unknown", "none", "default"}:
+        return ""
+    return label
 
 
 def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
@@ -257,12 +341,13 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
         related: list[str] = []
         def _format_related_line(step: dict, fallback_step_id: str, line: str) -> str:
             name = str(step.get("name") or fallback_step_id).strip()
+            label = _user_facing_step_label(step, fallback_step_id)
             if name == "search" and not _contains_markdown_link(line):
                 inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
                 search_query = str(inputs.get("query") or state.get("query") or line[:120]).strip()
                 if search_query:
                     line = f"{line} ([搜索来源](https://www.google.com/search?q={quote_plus(search_query)}))"
-            return f"{name}: {line}"
+            return f"{label}: {line}"
 
         for step_id, result in step_results.items():
             if not isinstance(result, dict):
@@ -295,22 +380,32 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
                     return related
         return related
 
-    lines = [
-        "## 最终答案",
-        "",
-        f"本轮问题包含 {len(ready_tasks)} 个分析对象，下面直接给出每项结论。"
-        + (f"另有 {len(blocked)} 个对象需要补充信息。" if blocked else ""),
-        "",
-    ]
+    output_mode = str(state.get("output_mode") or "brief").strip().lower()
+    is_report_mode = output_mode == "investment_report"
+    if is_report_mode:
+        subject = state.get("subject") if isinstance(state.get("subject"), dict) else {}
+        tickers = subject.get("tickers") if isinstance(subject.get("tickers"), list) else []
+        ticker_label = " vs ".join(str(t).strip().upper() for t in tickers if str(t).strip()) or "多主题"
+        lines = [f"## {ticker_label} 研究报告", ""]
+        if blocked:
+            lines.extend([f"有 {len(blocked)} 个信息点还需要补充，先基于已拿到的证据给出可用结论。", ""])
+    else:
+        lines = [
+            "我先按不同对象分开说：",
+            "",
+        ]
 
     for idx, task in enumerate(ready_tasks[:8], 1):
         tickers = _task_tickers(task)
         label = str(task.get("subject_label") or ", ".join(tickers) or task.get("subject_type") or f"任务 {idx}")
         op_name = _task_operation_name(task)
         time_scope = task.get("time_scope") if isinstance(task.get("time_scope"), dict) else {}
-        scope_label = str(time_scope.get("label") or time_scope.get("kind") or "").strip()
+        scope_label = _display_time_scope_label(time_scope.get("label") or time_scope.get("kind"))
         title_suffix = f"（{scope_label}）" if scope_label else ""
-        lines.extend([f"### {idx}. {label}{title_suffix}", ""])
+        if is_report_mode:
+            lines.extend([f"### {idx}. {label}{title_suffix}", ""])
+        else:
+            lines.extend([f"{label}{title_suffix}：", ""])
         related = _related_outputs(task)
         takeaway = _impact_takeaway(task, related)
         if takeaway:
@@ -318,11 +413,11 @@ def _build_multitask_markdown(state: GraphState, artifacts: dict) -> str:
         if related:
             lines.extend(f"- {item}" for item in related)
         else:
-            lines.append(f"- 暂无足够证据形成结论；已识别的分析类型为 `{op_name}`。")
+            lines.append(f"- {_empty_task_line(task, is_report_mode=is_report_mode)}")
         lines.append("")
 
     if blocked:
-        lines.extend(["### 需要补充的信息", ""])
+        lines.extend(["### 需要补充的信息" if is_report_mode else "还缺的信息：", ""])
         for item in blocked[:5]:
             reason = str(item.get("reason") or "blocked")
             question = str(item.get("question") or "").strip()
@@ -355,8 +450,12 @@ def render_stub(state: GraphState) -> dict:
     _NARRATIVE_MIN_CHARS = int(os.getenv("RENDER_NARRATIVE_MIN_CHARS", "500"))
     output_mode = state.get("output_mode", "brief")
     existing_draft = artifacts.get("draft_markdown") if isinstance(artifacts, dict) else None
-    if output_mode == "chat":
+    if output_mode in {"chat", "brief"}:
         markdown = render_chat_markdown(state)
+        if not str(markdown or "").strip():
+            markdown = _build_multitask_markdown(state, artifacts if isinstance(artifacts, dict) else {})
+        if not str(markdown or "").strip():
+            markdown = "这轮没有合成出可用文字，但上下文已经保留。你可以直接重试这句，我会继续按当前问题处理。\n"
         result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
         return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}
 

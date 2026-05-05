@@ -158,6 +158,77 @@ def test_compare_query_keeps_price_news_and_risk_subtasks():
     assert ("company", ("MSFT",), "fetch") in ops
 
 
+def test_multiticker_fail_open_chat_defaults_to_quotes_not_history_compare():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "AAPL MSFT GOOGL now?",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    ops = _task_ops(result)
+    assert ("company", ("AAPL",), "price") in ops
+    assert ("company", ("MSFT",), "price") in ops
+    assert ("company", ("GOOGL",), "price") in ops
+    assert not any(row[2] == "compare" for row in ops)
+
+
+def test_explicit_url_is_preserved_as_tool_task_without_prefetch():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "AAPL price and read https://example.com/msft-rates for MSFT",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    tasks = result.get("tasks") or []
+    url_tasks = [
+        task
+        for task in tasks
+        if isinstance((task.get("operation") or {}).get("params"), dict)
+        and (task.get("operation") or {}).get("params", {}).get("url") == "https://example.com/msft-rates"
+    ]
+    assert url_tasks
+    assert "MSFT" in [str(t).upper() for t in (url_tasks[0].get("tickers") or [])]
+    assert not (result.get("artifacts") or {}).get("url_context")
+
+
+def test_multi_ticker_report_keeps_compare_context_and_supporting_tasks():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "分析 GOOGL 和 MSFT，生成报告。",
+                "output_mode": "investment_report",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    ops = _task_ops(result)
+    assert ("company", ("GOOGL", "MSFT"), "compare") in ops
+    assert ("company", ("GOOGL",), "price") in ops
+    assert ("company", ("GOOGL",), "fetch") in ops
+    assert ("company", ("MSFT",), "price") in ops
+    assert ("company", ("MSFT",), "fetch") in ops
+    assert (result.get("subject") or {}).get("tickers") == ["GOOGL", "MSFT"]
+    assert (result.get("operation") or {}).get("name") == "compare"
+
+
 def test_alert_below_price_routes_to_alert_extractor():
     from backend.graph import GraphRunner
 
@@ -289,9 +360,9 @@ def test_planner_stub_builds_multitask_steps_from_understanding_tasks():
     tool_inputs = [(step["name"], step["inputs"]) for step in steps]
 
     assert ("get_stock_price", {"ticker": "GOOGL"}) in tool_inputs
-    assert ("get_company_news", {"ticker": "GOOGL"}) in tool_inputs
+    assert ("get_company_news", {"ticker": "GOOGL", "fast": True, "limit": 3}) in tool_inputs
     assert ("get_stock_price", {"ticker": "MSFT"}) in tool_inputs
-    assert ("get_company_news", {"ticker": "MSFT"}) in tool_inputs
+    assert ("get_company_news", {"ticker": "MSFT", "fast": True, "limit": 3}) in tool_inputs
     assert any(step["name"] == "get_official_macro_releases" for step in steps)
     assert len(plan["tasks"]) == 5
     assert all(step.get("task_ids") for step in steps)
@@ -356,7 +427,8 @@ def test_multitask_render_mentions_blocked_portfolio_without_hiding_ready_tasks(
     assert "MSFT" in draft
     assert "Google headline" in draft
     assert "Microsoft headline" in draft
-    assert "missing_portfolio_holdings" in draft
+    assert "missing_portfolio_holdings" not in draft
+    assert "持仓" in draft
 
 
 

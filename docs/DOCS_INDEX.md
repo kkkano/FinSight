@@ -1,6 +1,6 @@
-# FinSight 文档索引
+﻿# FinSight 文档索引
 
-更新时间：2026-05-04
+更新时间：2026-05-06
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
@@ -16,7 +16,7 @@
 
 ## 当前实现 Spec
 
-- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、`understand_request`、`tasks[]`、`blocked_tasks[]`、用户可见 trace、planner stub 多任务消费、executor `task_results`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
@@ -31,7 +31,9 @@
 
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
-- `docs/qa/chat_regression_queries_2026_05_03.md`：聊天并发、最终答案格式、新闻链接和复杂 query 回答质量的回归样本；配套 JSON 为 `docs/qa/chat_regression_queries_2026_05_03.json`。
+- `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`：当前聊天 UX 40-query 全量验收，保留完整 query 和答案；配套 JSON 为同名 `.json`。结果 39/40 PASS，达到 80-90% 发布线。
+- `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`：Q16/Q26/Q27/Q39 定向回归，验证 portfolio context、alert 文案、URL 失败文案和复合任务 polish；结果 4/4 PASS。
+- `docs/qa/chat-ux-40-query-live-eval-2026-05-04.md` 与 `docs/qa/chat_regression_queries_2026_05_03.*` 是历史回归样本，保留作对比。
 - `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
 - `docs/REPORT_CHART_SPEC.md`：报告图表规范。
 - `docs/rag-evaluation-guide.md`：RAG 评估方法。

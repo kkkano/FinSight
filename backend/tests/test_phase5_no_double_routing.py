@@ -20,14 +20,10 @@ def client():
 
 
 def test_chat_supervisor_does_not_invoke_legacy_router(monkeypatch, client):
-    import backend.conversation.router as legacy_router
-    import backend.conversation.schema_router as legacy_schema_router
+    import sys
 
-    def _boom(*_args, **_kwargs):
-        raise AssertionError("legacy router should not be invoked from /chat/supervisor")
-
-    monkeypatch.setattr(legacy_router.ConversationRouter, "route", _boom, raising=True)
-    monkeypatch.setattr(legacy_schema_router.SchemaToolRouter, "route_query", _boom, raising=True)
+    for module_name in ("backend.conversation.router", "backend.conversation.schema_router"):
+        sys.modules.pop(module_name, None)
 
     resp = client.post("/chat/supervisor", json={"query": "analyze impact", "context": {"active_symbol": "AAPL"}})
     assert resp.status_code == 200
@@ -35,3 +31,5 @@ def test_chat_supervisor_does_not_invoke_legacy_router(monkeypatch, client):
 
     trace = data.get("graph", {}).get("trace") or {}
     assert trace.get("routing_chain") == ["langgraph"]
+    assert "backend.conversation.router" not in sys.modules
+    assert "backend.conversation.schema_router" not in sys.modules

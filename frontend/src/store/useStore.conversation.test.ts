@@ -111,6 +111,36 @@ describe('useStore conversation lifecycle', () => {
     expect(useStore.getState().isChatLoading).toBe(false);
   });
 
+  it('restores streamed partial content when returning to an in-flight conversation', () => {
+    const state = useStore.getState();
+    const originalSession = state.sessionId;
+
+    state.addMessage({ id: 'user-stream', role: 'user', content: '今天 NVDA 有什么新闻', timestamp: 20 });
+    state.addMessageToSession(originalSession, {
+      id: 'ai-stream',
+      role: 'assistant',
+      content: '',
+      timestamp: 21,
+      isLoading: true,
+    });
+    state.setSessionLoading(originalSession, true);
+    state.updateMessageInSession(originalSession, 'ai-stream', {
+      content: 'NVDA 今天主要消息是',
+      isLoading: true,
+    });
+
+    state.startNewChat();
+    expect(useStore.getState().sessionId).not.toBe(originalSession);
+
+    useStore.getState().selectConversation(originalSession);
+
+    const restored = useStore.getState();
+    const streamingMessage = restored.messages.find((message) => message.id === 'ai-stream');
+    expect(streamingMessage?.content).toBe('NVDA 今天主要消息是');
+    expect(streamingMessage?.isLoading).toBe(true);
+    expect(restored.isChatLoading).toBe(true);
+  });
+
   it('restores execution status per conversation instead of leaking global progress', () => {
     const state = useStore.getState();
     const originalSession = state.sessionId;

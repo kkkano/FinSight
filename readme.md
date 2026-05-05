@@ -59,7 +59,7 @@
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | Stateful LangGraph runtime for chat, quick analysis, alerts, and deep reports. The chat front-half now routes through `understand_request`, a multi-task request understanding layer with user-visible trace events. |
+| **LangGraph Pipeline** | Stateful LangGraph runtime for GPT-like chat, alerts, URL/article analysis, quick market answers, and explicit report generation. Ordinary chat uses the LLM conversation router before planning; only the report button enters the structured report template path. |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |
@@ -244,11 +244,13 @@ graph TB
 
 ---
 
-## 🔄 LangGraph Pipeline (Request Understanding Runtime)
+## 🔄 LangGraph Pipeline (Conversational Runtime)
 
-The FinSight chat runtime is a LangGraph stateful graph. Its main chat path now consolidates the old subject/intent front-half into `understand_request`, which produces `understanding`, `tasks[]`, `blocked_tasks[]`, and a compatibility projection for the existing policy/planner/executor boundary.
+The FinSight chat runtime is a LangGraph stateful graph. The current path is `prepare_context -> chat_respond -> understand_request`: `chat_respond` only short-circuits pure social turns, while ordinary chat, follow-ups, non-financial boundaries, URL/page requests, alerts, market questions, and report requests go through the LLM conversation router inside `understand_request`.
 
-The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The 20-query probe output is in [`docs/reports/2026-05-03_request_understanding_query_results.md`](docs/reports/2026-05-03_request_understanding_query_results.md).
+The router decides whether the turn should be answered directly, clarified, turned into an alert, or planned as research. Research turns produce `understanding`, `tasks[]`, `blocked_tasks[]`, and a compatibility projection for the existing policy/planner/executor boundary. URL/page/article work is exposed as the planner/agent tool `fetch_url_content`; the request-understanding layer does not pre-fetch URLs.
+
+The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The latest full chat UX acceptance run is [`docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`](docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md) with JSON next to it; targeted post-acceptance polish is recorded in [`docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`](docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md).
 
 Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
@@ -259,26 +261,28 @@ flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
     INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
     RESET --> PREPARE["③ prepare_context<br/><i>Bound history, summarize, normalize UI hints</i>"]
-    PREPARE --> UNDERSTAND{"④ understand_request<br/><i>Tasks + blocked tasks + trace</i>"}
+    PREPARE --> CHATRESP["④ chat_respond<br/><i>Pure social only</i>"]
+    CHATRESP -->|"pure greeting / thanks / bye"| END_CHAT((End))
+    CHATRESP -->|"all other turns"| UNDERSTAND{"⑤ understand_request<br/><i>LLM router + tasks + trace</i>"}
 
-    UNDERSTAND -->|"direct / clarify"| END_CHAT((End))
-    UNDERSTAND -->|"alert"| ALERT_EX["⑤ alert_extractor<br/><i>Extract alert params</i>"]
-    ALERT_EX -->|"valid"| ALERT_ACT["⑤b alert_action<br/><i>Save & schedule</i>"]
+    UNDERSTAND -->|"direct / clarify / out_of_scope"| END_CHAT
+    UNDERSTAND -->|"alert"| ALERT_EX["⑥ alert_extractor<br/><i>Extract alert params</i>"]
+    ALERT_EX -->|"valid"| ALERT_ACT["⑥b alert_action<br/><i>Save & schedule</i>"]
     ALERT_EX -->|"invalid"| END_ALERT_INVALID((End))
     ALERT_ACT --> END_ALERT((End))
-    UNDERSTAND -->|"research"| POLICY["⑥ policy_gate<br/><i>Capability scoring + task tool union</i>"]
-    POLICY --> PLAN["⑦ planner<br/><i>LLM Planner or Stub Fallback</i>"]
+    UNDERSTAND -->|"research"| POLICY["⑦ policy_gate<br/><i>Capability scoring + task tool union</i>"]
+    POLICY --> PLAN["⑧ planner<br/><i>LLM Planner or Stub Fallback</i>"]
 
-    PLAN --> CONFIRM{"⑧ confirmation_gate<br/><i>HITL approval?</i>"}
+    PLAN --> CONFIRM{"⑨ confirmation_gate<br/><i>HITL approval?</i>"}
     CONFIRM -->|"cancel"| END_CANCEL((End))
     CONFIRM -->|"adjust"| PLAN
-    CONFIRM -->|"confirm"| EXEC["⑨ execute_plan<br/><i>Parallel agent groups</i>"]
+    CONFIRM -->|"confirm"| EXEC["⑩ execute_plan<br/><i>Tools, agents, URL fetch</i>"]
 
-    EXEC --> SYNTH["⑩ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
-    SYNTH --> RENDER["⑪ render<br/><i>Format for frontend</i>"]
+    EXEC --> SYNTH["⑪ synthesize<br/><i>Merge outputs + conflict/evidence checks</i>"]
+    SYNTH --> RENDER["⑫ render<br/><i>Chat or report output</i>"]
     RENDER --> END((End))
 
-    subgraph "Execution Engine (⑨)"
+    subgraph "Execution Engine (⑩)"
         direction LR
         EG1["Group 1<br/>price · news"] --> EG2["Group 2<br/>fundamental · technical"]
         EG2 --> EG3["Group 3<br/>macro · risk · deep_search"]
@@ -305,7 +309,7 @@ flowchart TD
 | compatibility `subject` / `operation` | Primary-task projection so the existing policy/planner/executor path remains stable |
 | `trace` event | `type="trace"`, `visibility="user"`, `stage="understanding"` for frontend process UI |
 
-Legacy `chat_respond`, `resolve_subject`, `clarify`, and `parse_operation` remain registered for compatibility and focused tests, but the main runtime path skips them.
+`chat_respond` remains in the main path only as a pure-social fast path. Legacy subject/operation nodes such as `resolve_subject`, `clarify`, and `parse_operation` are compatibility helpers or archived history; they are not the main routing surface.
 
 ### GraphState Fields
 
@@ -318,7 +322,7 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 | `understanding` | `dict` | Request understanding result for the current turn |
 | `tasks` | `list[dict]` | Ready task decomposition for multi-task requests |
 | `blocked_tasks` | `list[dict]` | Local missing-context tasks that should not block the whole turn |
-| `output_mode` | `str` | `"chat"` / `"brief"` / `"investment_report"` |
+| `output_mode` | `str` | `"chat"` / compatibility `"brief"` / explicit `"investment_report"` |
 | `plan_ir` | `dict` | Execution plan with steps, groups, dependencies, cost estimates |
 | `step_results` | `dict` | Raw outputs from each agent/tool execution |
 | `evidence_pool` | `list[dict]` | Collected evidence items with source attribution |
@@ -1072,7 +1076,7 @@ npm run build --prefix frontend
 cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
 ```
 
-The chat UX Playwright smoke covers Deep/Brief enablement, new/switch/delete conversations, user-visible trace summaries, and stream stop behavior. The request-understanding query matrix is recorded in `docs/reports/2026-05-03_request_understanding_query_results.md`; the latest smoke log is `docs/reports/2026-05-03_playwright_chat_smoke.md`.
+The current chat UX acceptance set keeps full prompts and full answers in `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`: 39/40 passed in the full run, and the one reviewed portfolio/context case passed in the targeted polish run `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md` (4/4 targeted pass). Known residuals are recorded there: upstream LLM/tool latency or quota failures, inaccessible URLs that correctly degrade, and compound alert+news turns that set the alert first while preserving follow-up context.
 
 ### Optional: PostgreSQL for RAG
 
@@ -1114,10 +1118,11 @@ FinSight/
 │   │   └── nodes/              # Individual node implementations
 │   │       ├── build_initial_state.py
 │   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
+│   │       ├── conversation_router.py # LLM contextual router before planner
 │   │       ├── understand_request.py # current request understanding runtime
-│   │       ├── chat_respond.py      # legacy compatibility node
+│   │       ├── chat_respond.py      # pure-social fast path only
 │   │       ├── resolve_subject.py   # legacy compatibility node
-│   │       ├── parse_operation.py   # legacy compatibility node
+│   │       ├── parse_operation.py   # compatibility helper for legacy entry points
 │   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
 │   │       ├── policy_gate.py
 │   │       ├── planner.py

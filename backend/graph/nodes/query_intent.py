@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Lightweight, rule-based query intent detection.
+"""Lightweight social-turn and high-precision finance signal detection.
 
-No LLM call here: only token and regex matching.
-Used by `chat_respond` to short-circuit greetings/casual chat
-before `resolve_subject` processes the query.
+No LLM call here. Social detection is intentionally narrow: only pure
+greetings, thanks, acknowledgements, goodbyes, empty input, and smoke-test
+tokens are short-circuited locally. Open-ended chat and capability questions
+go to the contextual LLM router before the planner.
 """
 
 from __future__ import annotations
@@ -83,10 +84,7 @@ _CASUAL_EXACT: frozenset[str] = frozenset(
 
 _CASUAL_PATTERNS = re.compile(
     r"^("
-    r"你是谁|你叫什么|你是做什么的|你能做什么|你会什么|你几岁了|你多大了"
-    r"|who\s+are\s+you|what\s+can\s+you\s+do|what\s+are\s+you|how\s+old\s+are\s+you"
-    r"|今天天气|天气怎么样|几点了|现在几点"
-    r"|测试|test"
+    r"测试|test"
     r")[？?!。！，,\s]*$",
     re.IGNORECASE,
 )
@@ -106,9 +104,11 @@ def is_greeting(query: str) -> bool:
 
 
 def is_casual_chat(query: str) -> bool:
-    """Detect casual/non-analytical queries.
+    """Detect pure local social turns.
 
-    This is a superset of greeting detection.
+    This is a narrow superset of greeting detection. It must not absorb
+    questions like "你能做什么" or "推荐一首歌"; those need the LLM router's
+    context and system identity.
     """
     if is_greeting(query):
         return True
@@ -123,13 +123,14 @@ def is_casual_chat(query: str) -> bool:
 
     return bool(_CASUAL_PATTERNS.fullmatch(cleaned))
 
+# ==================== Financial intent hinting ====================
+# This is not a classifier. It is only a high-precision hint used after the
+# contextual LLM router, mainly to bind an already active symbol when the
+# router is disabled or unavailable. Do not grow this into a company/theme
+# dictionary; company names belong in ticker_mapping and intent belongs in the
+# LLM router.
 
-# ==================== Financial intent detection (Tier 2) ====================
-# Precision > Recall:
-# - False negative: acceptable (route to clarify)
-# - False positive: unacceptable (binds wrong active_symbol)
-
-_FINANCIAL_TOKENS_HP: frozenset[str] = frozenset(
+_FINANCIAL_ACTION_TOKENS_HP: frozenset[str] = frozenset(
     {
         # Chinese
         "股票",
@@ -187,53 +188,7 @@ _FINANCIAL_TOKENS_HP: frozenset[str] = frozenset(
         "目标价",
         "评级",
         "研报",
-        # ----- P0 expansion (2026-05-03): high-frequency Chinese tickers/macros/ops -----
-        # Top US equities (Chinese names) — 跑测发现「苹果/谷歌/微软/英伟达」等
-        # 高频中文公司名缺席导致 has_financial_intent 不命中，让 chat_respond
-        # 误进 Tier-2 LLM 跑 5-12s。这些词进白名单后 0ms 直通业务管道。
-        # 风险评估：「苹果」「小米」等有水果/粮食歧义，但下游 understand_request
-        # 仍会做 LLM 语义判别，误命中至多让正常闲聊多走一次 LLM，不绑错 ticker。
-        "苹果",
-        "谷歌",
-        "微软",
-        "特斯拉",
-        "英伟达",
-        "奈飞",
-        "台积电",
-        # Top China ADR / HK
-        "阿里巴巴",
-        "阿里",
-        "腾讯",
-        "京东",
-        "拼多多",
-        "网易",
-        "美团",
-        "百度",
-        "小米",
-        "蔚来",
-        "理想汽车",
-        "小鹏汽车",
-        # US indices (Chinese names)
-        "纳指",
-        "标普",
-        "标普500",
-        "道指",
-        "道琼斯",
-        "罗素",
-        # A-share / HK indices
-        "上证",
-        "深证",
-        "恒指",
-        "恒生",
-        # Sectors / themes
-        "科技股",
-        "白马股",
-        "蓝筹股",
-        "中概股",
-        "半导体板块",
-        "新能源板块",
-        "医药板块",
-        # Macro indicators (high-frequency abbreviations)
+        # Macro indicators and operations are still safe, action-like signals.
         "cpi",
         "ppi",
         "pmi",
@@ -246,7 +201,6 @@ _FINANCIAL_TOKENS_HP: frozenset[str] = frozenset(
         "衰退",
         "qe",
         "缩表",
-        # Trading operations
         "建仓",
         "清仓",
         "补仓",
@@ -283,7 +237,7 @@ _FINANCIAL_PATTERN_HP = re.compile(
     r"|earnings\s*report|revenue\s*growth|profit\s*margin"
     r"|dividend|portfolio|hedge\s*fund"
     # Standalone uppercase ticker-like token (2~5 chars)
-    r"|(?:^|\s)(?-i:[A-Z]{2,5})(?:\s|$)"
+    r"|(?<![A-Za-z0-9])(?-i:[A-Z]{2,5})(?![A-Za-z0-9])"
     # Chinese structure patterns
     r"|(?:分析|研究|看看|查看|查一下|帮我看).*(?:股票|股价|行情|财报|基本面|k线|走势)"
     r"|(?:股票|股价|行情|财报|基本面|k线|走势).*(?:分析|怎么看|如何看)"
@@ -295,7 +249,11 @@ _FINANCIAL_PATTERN_HP = re.compile(
 
 
 def has_financial_intent(query: str) -> bool:
-    """High-precision financial intent detection."""
+    """Return a narrow financial-action hint.
+
+    Open-ended chat, company-name-only requests, and follow-ups should be
+    resolved by the contextual LLM router, not by extending this token list.
+    """
     if not query:
         return False
 
@@ -304,11 +262,10 @@ def has_financial_intent(query: str) -> bool:
         return False
 
     lower = cleaned.lower()
-    if any(token in lower for token in _FINANCIAL_TOKENS_HP):
+    if any(token in lower for token in _FINANCIAL_ACTION_TOKENS_HP):
         return True
 
     return bool(_FINANCIAL_PATTERN_HP.search(cleaned))
 
 
 __all__ = ["is_greeting", "is_casual_chat", "has_financial_intent"]
-

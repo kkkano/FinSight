@@ -27,6 +27,7 @@ try:  # pragma: no cover - import guard
         get_stock_price as _get_stock_price,
         get_stock_historical_data as _get_stock_historical_data,
         search as _search,
+        fetch_url_document as _fetch_url_document,
     )
 except ImportError:  # pragma: no cover - backwards compatibility
     from tools import (  # type: ignore
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover - backwards compatibility
         get_stock_price as _get_stock_price,
         get_stock_historical_data as _get_stock_historical_data,
         search as _search,
+        fetch_url_document as _fetch_url_document,
     )
 
 try:  # pragma: no cover - optional tools
@@ -131,10 +133,25 @@ class StockTickerInput(BaseModel):
     )
 
 
+class NewsTickerInput(BaseModel):
+    """Ticker news input."""
+
+    ticker: str = Field(description="Ticker or index symbol, e.g. 'AAPL', 'TSLA', '^GSPC'")
+    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of headlines")
+    fast: bool = Field(default=False, description="Use fast linked fallback for latency-sensitive brief answers")
+
+
 class SearchQueryInput(BaseModel):
     """Free-form search query."""
 
     query: str = Field(description="Natural language finance/market search query")
+
+
+class UrlFetchInput(BaseModel):
+    """Safe URL fetch inputs."""
+
+    url: str = Field(description="HTTP(S) URL to fetch")
+    max_length: int = Field(default=6000, ge=500, le=20000, description="Maximum extracted text length")
 
 
 class TickerComparisonInput(BaseModel):
@@ -298,12 +315,12 @@ def get_stock_price(ticker: str) -> str:
         return f"get_stock_price failed: {exc}"
 
 
-@tool("get_company_news", args_schema=StockTickerInput, return_direct=False)
-def get_company_news(ticker: str) -> str:
+@tool("get_company_news", args_schema=NewsTickerInput, return_direct=False)
+def get_company_news(ticker: str, limit: int = 5, fast: bool = False) -> str:
     """Retrieve the latest company or index headlines, ordered by recency."""
 
     try:
-        news = _get_company_news(ticker)
+        news = _get_company_news(ticker, limit=limit, fast=fast)
         if isinstance(news, list):
             return json.dumps(news, ensure_ascii=False)
         return str(news)
@@ -329,6 +346,19 @@ def search(query: str) -> str:
         return _search(query)
     except Exception as exc:  # pragma: no cover - runtime data issues
         return f"search failed: {exc}"
+
+
+@tool("fetch_url_content", args_schema=UrlFetchInput, return_direct=False)
+def fetch_url_content(url: str, max_length: int = 6000) -> str:
+    """Fetch a safe HTTP(S) URL and extract title, source and readable page text."""
+
+    try:
+        payload = _fetch_url_document(url, max_length=max_length)
+        if not isinstance(payload, dict):
+            return json.dumps({"url": url, "error": "fetch_failed"}, ensure_ascii=False)
+        return json.dumps(payload, ensure_ascii=False)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"fetch_url_content failed: {exc}"
 
 
 @tool("get_market_sentiment", args_schema=EmptyInput, return_direct=False)
@@ -858,6 +888,7 @@ FINANCIAL_TOOLS = [
     get_earnings_call_transcripts,
     score_news_source_reliability,
     get_local_market_filings,
+    fetch_url_content,
     search,
     get_market_sentiment,
     get_economic_events,
@@ -921,6 +952,7 @@ __all__ = [
     "score_news_source_reliability",
     "get_local_market_filings",
     "get_company_info",
+    "fetch_url_content",
     "search",
     "get_market_sentiment",
     "get_economic_events",

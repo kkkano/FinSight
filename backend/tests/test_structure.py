@@ -50,7 +50,7 @@ def test_orchestration_module():
 def test_conversation_module():
     """测试 conversation 模块"""
     try:
-        from backend.conversation import ContextManager, ConversationTurn, ConversationRouter, Intent
+        from backend.conversation import ContextManager, ConversationTurn, MessageRole
         
         # 测试 ContextManager 实例化
         context = ContextManager()
@@ -61,41 +61,13 @@ def test_conversation_module():
         assert turn is not None
         assert turn.query == "测试查询"
         
-        # 测试 Intent 枚举
-        assert Intent.CHAT.value == "chat"
-        assert Intent.REPORT.value == "report"
-        
-        # 测试 ConversationRouter 实例化（不带 LLM）
-        router = ConversationRouter()
-        assert router is not None
-        
-        # 测试意图分类
-        intent, metadata = router.classify_intent("AAPL 股价多少")
-        assert intent == Intent.CHAT
-        assert "AAPL" in metadata.get('tickers', [])
+        # 旧 ConversationRouter / Intent 已归档，conversation 包只导出会话上下文。
+        assert ConversationTurn is not None
+        assert MessageRole.USER.value == "user"
         
         print("✅ conversation 模块测试通过")
     except Exception as e:
         pytest.fail(f"conversation 模块测试失败: {e}")
-
-
-def test_handlers_module():
-    """测试 handlers 模块"""
-    try:
-        from backend.handlers import ChatHandler, FollowupHandler
-        
-        # 测试实例化
-        chat_handler = ChatHandler()
-        assert chat_handler is not None
-        
-        # NOTE: ReportHandler 已废弃，移除测试
-        
-        followup_handler = FollowupHandler()
-        assert followup_handler is not None
-        
-        print("✅ handlers 模块测试通过")
-    except Exception as e:
-        pytest.fail(f"handlers 模块测试失败: {e}")
 
 
 def test_prompts_module():
@@ -103,15 +75,12 @@ def test_prompts_module():
     try:
         from backend.prompts import (
             FORUM_SYNTHESIS_PROMPT,
-            FOLLOWUP_SYSTEM_PROMPT,
         )
         
         # 验证提示词不为空
         assert len(FORUM_SYNTHESIS_PROMPT) > 100
-        assert len(FOLLOWUP_SYSTEM_PROMPT) > 100
         
         # 验证包含关键占位符
-        assert "{query}" in FOLLOWUP_SYSTEM_PROMPT
         assert "{risk_tolerance}" in FORUM_SYNTHESIS_PROMPT
         
         print("✅ prompts 模块测试通过")
@@ -125,7 +94,6 @@ def test_directory_structure():
         "backend",
         "backend/orchestration",
         "backend/conversation", 
-        "backend/handlers",
         "backend/prompts",
         "backend/tests",
         "backend/api",
@@ -193,4 +161,3 @@ def run_all_tests():
 if __name__ == "__main__":
     success = run_all_tests()
     sys.exit(0 if success else 1)
-

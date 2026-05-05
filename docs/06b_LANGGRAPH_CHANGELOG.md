@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-05-06 - Conversational chat UX acceptance and URL tool routing
+
+- 普通聊天默认保持对话感：`chat_respond` 只做纯社交快速通道，其余 turn 统一进入 `understand_request` 的 LLM conversation router，由 LLM 根据上下文决定 direct/research/alert/clarify/out_of_scope。
+- 报告结构收口到显式 `output_mode=investment_report`（报告按钮）路径；普通 chat/brief 不再输出“问题 / 后续关注 / N 个分析对象”等机械模板。
+- URL/网页/文章分析改为 planner/agent 可用工具 `fetch_url_content`，并在 `planner_prompt`、tool manifest、LangChain tools、policy allowlist 和 planner stub 中注册；请求理解层只保留 URL 意图和上下文，不预抓正文。
+- 删除/归档旧 conversation stack：`backend/conversation/agent.py`、`backend/conversation/router.py`、`backend/conversation/schema_router.py`、旧 handler 与旧 router 测试归档到 `docs/archive/2026-05-04_legacy_conversation_stack/`；当前主路径以 `backend/graph/nodes/conversation_router.py` 和 `understand_request.py` 为准。
+- 组合/上下文绑定：query 中明确 ticker 优先于 UI `active_symbol`；MiniChat/selection/portfolio 作为上下文候选，portfolio 可见持仓不再被误判为缺上下文澄清。
+- 延迟策略改为给 LLM/router/planner/synthesize 更宽松预算，报告合成 `LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC=800` 保持不回退。
+- 验收：`python scripts/chat_ux_40_query_eval.py --run-id full-url-agent-2026-05-05 ...` -> 39/40 PASS，唯一 Q16 portfolio/context REVIEW 已在 `python scripts/chat_ux_40_query_eval.py --ids Q16,Q26,Q27,Q39 --run-id post-acceptance-polish-2026-05-06 ...` 中通过（4/4 PASS）。
+- 已知剩余风险：上游 LLM 端点偶发空/坏 JSON 和重试导致延迟；Yahoo/Exa/Tavily/Finnhub 存在限流、额度或 403；不可访问 URL 会自然降级为“未读到正文”；复合 alert+news turn 当前优先落库提醒并保留后续上下文。
+- 代码验证：`pytest -q backend/tests/test_contextual_conversation_router.py backend/tests/test_planner_node.py backend/tests/test_synthesize_node.py backend/tests/test_chat_response_contract.py backend/tests/test_understand_request.py backend/tests/test_templates_render.py backend/tests/test_langgraph_api_stub.py` -> 160 passed；`pytest -q backend/tests/test_alert_extractor.py backend/tests/test_alert_action.py backend/tests/test_understand_request.py::test_portfolio_context_available_from_visible_positions` -> targeted pass。
+
+## 2026-05-04 - LLM conversation router before planner
+
+- `backend/graph/nodes/chat_respond.py` 收窄为纯社交短路：只处理问候、感谢、确认、再见、空输入和 smoke-test token；能力问题、开放闲聊、非金融请求不再本地模板化。
+- 删除 `backend/graph/nodes/intent_classifier.py`，废弃旧的 Tier-2 OOS sidecar；旧 two-tier 探针脚本归档到 `docs/archive/2026-05-04_legacy_conversation_stack/scripts/`。
+- `backend/graph/nodes/understand_request.py` 在 planner 前优先调用 `conversation_router`：
+  - `direct_answer` / `out_of_scope`：由 LLM 根据金融助手身份自然回复并结束。
+  - `research` / `alert`：投影成 task 后进入 `policy_gate -> planner`。
+  - `clarify`：缺少必要上下文时直接澄清。
+- LLM 预算改为可配置且更宽松：chat planner 默认 `90s/2400 tokens/2 attempts/90s acquire`，report planner 默认 `180s/4096 tokens/3 attempts/90s acquire`；direct reply 默认 `90s/2400 tokens`。
+- 验证：`python -m pytest backend/tests/test_query_intent.py backend/tests/test_greeting_shortcircuit.py backend/tests/test_contextual_conversation_router.py backend/tests/test_planner_node.py::test_planner_llm_mode_uses_chat_budget_for_chat_turns` -> 140 passed。
+
 ## 2026-05-03 - chat_respond 接入主链路 + 两层闲聊/OOS 防御
 
 - `backend/graph/runner.py`：修复 `chat_respond` orphan-node 问题。新拓扑 `prepare_context -> chat_respond -> (END | understand_request)`，通过 `_route_after_chat_respond(state)` 按 `state["chat_responded"]` 路由。

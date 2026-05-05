@@ -9,7 +9,7 @@ from backend.graph.state import GraphState
 _PRICE_TARGET_RE = re.compile(
     r"(?:"
     # Chinese patterns
-    r"涨到|跌到|到达|到|达到|至|"
+    r"涨到|跌到|跌破|突破|低于|高于|小于|大于|到达|到|达到|至|"
     # English patterns - price target
     r"price\s+(?:of|at|to)|target\s+price|reaches?|hits?|"
     # English patterns - directional
@@ -60,6 +60,16 @@ def _extract_direction(query: str) -> str | None:
     return None
 
 
+def _remaining_non_alert_query(query: str, match: re.Match[str], ticker: str | None) -> str:
+    remaining = (query[: match.start()] + query[match.end() :]).strip(" ，,。；;")
+    if ticker:
+        remaining = re.sub(rf"\b{re.escape(ticker)}\b", "", remaining, flags=re.IGNORECASE)
+    remaining = re.sub(r"(提醒我|通知我|帮我|顺便|另外|alert\s+me|notify\s+me)", "", remaining, flags=re.IGNORECASE)
+    remaining = re.sub(r"(的时候|时|\bwhen\b)", "", remaining, flags=re.IGNORECASE)
+    remaining = re.sub(r"\s+", " ", remaining).strip(" ，,。；;")
+    return remaining[:240]
+
+
 def alert_extractor(state: GraphState) -> dict[str, Any]:
     query = str(state.get("query") or "").strip()
     ticker = _pick_ticker(state)
@@ -79,9 +89,15 @@ def alert_extractor(state: GraphState) -> dict[str, Any]:
         alert_params["alert_mode"] = "price_target"
         alert_params["price_target"] = float(price_target_match.group("price"))
         alert_params["direction"] = _extract_direction(query)
+        remaining = _remaining_non_alert_query(query, price_target_match, ticker)
+        if remaining:
+            alert_params["remaining_query"] = remaining
     elif pct_match:
         alert_params["alert_mode"] = "price_change_pct"
         alert_params["price_threshold"] = float(pct_match.group("pct"))
+        remaining = _remaining_non_alert_query(query, pct_match, ticker)
+        if remaining:
+            alert_params["remaining_query"] = remaining
 
     missing: list[str] = []
     if not ticker:
@@ -93,11 +109,14 @@ def alert_extractor(state: GraphState) -> dict[str, Any]:
         reason = "缺少标的代码" if "ticker" in missing else "缺少提醒阈值"
         if "ticker" in missing and "trigger" in missing:
             reason = "缺少标的代码和提醒阈值"
-        draft = (
-            "我可以帮你设置提醒，但还缺少必要信息。\n"
-            f"- 问题：{reason}\n"
-            "- 示例1：`AAPL 涨到 220 美元提醒我` / `Alert me when AAPL hits 220`\n"
-            "- 示例2：`平安银行 涨跌超过 3% 提醒我` / `Notify me if TSLA moves 5%`"
+        draft = "\n".join(
+            [
+                f"我可以帮你设置提醒，但还缺 {reason}。",
+                "",
+                "你可以这样补一句：",
+                "- `AAPL 涨到 220 美元提醒我` / `Alert me when AAPL hits 220`",
+                "- `平安银行 涨跌超过 3% 提醒我` / `Notify me if TSLA moves 5%`",
+            ]
         )
         return {
             "alert_valid": False,

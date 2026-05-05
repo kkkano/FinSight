@@ -132,6 +132,15 @@ async def alert_action(state: GraphState) -> dict[str, Any]:
         price_threshold=price_threshold,
         alert_types=merged_alert_types,
     )
+    remaining_query = str(alert_params.get("remaining_query") or "").strip()
+    if remaining_query:
+        markdown = "\n".join(
+            [
+                markdown,
+                "",
+                f"提醒已设好。你还问到“{remaining_query}”，这部分需要继续走实时研究，我会把它保留在当前上下文里。",
+            ]
+        )
 
     return {
         "alert_valid": True,
