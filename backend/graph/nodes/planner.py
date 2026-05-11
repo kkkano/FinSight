@@ -16,6 +16,7 @@ from backend.graph.failure import append_failure, build_runtime, utc_now_iso
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.plan_ir import PlanIR, PlanBudget
 from backend.graph.planner_prompt import build_planner_prompt
+from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
 from backend.graph.nodes.planner_stub import planner_stub
@@ -53,7 +54,7 @@ def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
     is_deep = output_mode == "investment_report" or analysis_depth == "deep_research"
 
     if is_deep:
-        return {
+        limits: dict[str, float | int] = {
             "request_timeout": _env_int("LANGGRAPH_PLANNER_REPORT_TIMEOUT_SEC", 240),
             "max_tokens": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_TOKENS", 6000),
             "max_attempts": _env_int("LANGGRAPH_PLANNER_REPORT_MAX_ATTEMPTS", 3),
@@ -61,8 +62,13 @@ def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
             "sleep_seconds": 2.0,
             "jitter_seconds": 1.0,
         }
+        preferred_timeout = timeout_seconds_from_state(state)
+        if preferred_timeout is not None:
+            limits["request_timeout"] = int(preferred_timeout)
+            limits["acquire_timeout"] = float(min(float(limits["acquire_timeout"]), preferred_timeout))
+        return limits
 
-    return {
+    limits = {
         "request_timeout": _env_int("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", 150),
         "max_tokens": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_TOKENS", 3000),
         "max_attempts": _env_int("LANGGRAPH_PLANNER_CHAT_MAX_ATTEMPTS", 2),
@@ -70,6 +76,11 @@ def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:
         "sleep_seconds": 1.0,
         "jitter_seconds": 0.5,
     }
+    preferred_timeout = timeout_seconds_from_state(state)
+    if preferred_timeout is not None:
+        limits["request_timeout"] = int(preferred_timeout)
+        limits["acquire_timeout"] = float(min(float(limits["acquire_timeout"]), preferred_timeout))
+    return limits
 
 
 def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str, Any]]) -> bool:

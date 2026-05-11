@@ -765,6 +765,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       agents: override?.agents ?? prefs.agents,
       maxRounds: override?.maxRounds ?? prefs.maxRounds,
       concurrentMode: override?.concurrentMode ?? prefs.concurrentMode,
+      timeoutSeconds: override?.timeoutSeconds ?? prefs.timeoutSeconds,
     };
     const request: ExecuteRequest = {
       query: params.query,

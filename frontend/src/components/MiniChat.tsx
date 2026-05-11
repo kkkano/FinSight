@@ -15,6 +15,7 @@ import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { ReportView } from './report';
 import { useToast } from './ui';
+import { getAgentPreferences } from './settings/AgentControlPanel';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -211,6 +212,7 @@ export const MiniChat: React.FC = () => {
     };
 
     try {
+      const agentPreferences = getAgentPreferences();
       // 构建统一的历史记录（取 messages，排除 welcome 和 loading）
       const history = messages
         .filter(m => m.id !== 'welcome' && !m.isLoading)
@@ -300,8 +302,14 @@ export const MiniChat: React.FC = () => {
             strict_selection: false,
             confirmation_mode: 'skip' as const,
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
+            agent_preferences: agentPreferences,
           }
-          : { output_mode: 'chat', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
+          : {
+            output_mode: 'chat',
+            confirmation_mode: 'skip' as const,
+            trace_raw_override: traceRawEnabled ? 'on' : 'off',
+            agent_preferences: agentPreferences,
+          },
         requestSessionId || undefined,
         traceRawEnabled,
         { signal: streamController.signal },

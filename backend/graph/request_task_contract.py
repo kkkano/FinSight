@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from typing import Any, Literal, TypedDict
 
+from backend.graph.memory_scope import current_report_context
+
 Lane = Literal["chat_answer", "source_grounded_answer", "report_generation"]
 CitationPolicy = Literal["none", "cite_if_available", "must_cite_or_disclose_unavailable"]
 
@@ -316,8 +318,11 @@ def build_reply_contract(
         binding = dict(raw_binding)
 
     continuation_target: dict[str, Any] = {}
-    if isinstance(memory_context, dict) and isinstance(memory_context.get("last_report"), dict):
-        last_report = memory_context["last_report"]
+    if str(binding.get("source") or "").strip() == "last_report":
+        last_report = current_report_context(memory_context)
+    else:
+        last_report = None
+    if isinstance(last_report, dict):
         continuation_target = {
             "type": "last_report",
             "report_id": last_report.get("report_id"),

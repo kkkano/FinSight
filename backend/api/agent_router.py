@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES
+from backend.graph.preference_timeouts import normalize_timeout_seconds
 
 _VALID_DEPTHS = {"standard", "deep", "off"}
 _MAX_ROUNDS_MIN = 1
@@ -23,6 +24,7 @@ def _default_preferences() -> dict[str, Any]:
         "agents": {name: "standard" for name in REPORT_AGENT_CANDIDATES},
         "maxRounds": _MAX_ROUNDS_DEFAULT,
         "concurrentMode": True,
+        "timeoutSeconds": 0,
     }
 
 
@@ -52,10 +54,14 @@ def _normalize_preferences(raw: Any) -> dict[str, Any]:
     if not isinstance(concurrent_mode, bool):
         concurrent_mode = defaults["concurrentMode"]
 
+    timeout = normalize_timeout_seconds(raw.get("timeoutSeconds", raw.get("timeout_seconds")))
+    timeout_seconds = int(timeout) if timeout is not None else 0
+
     return {
         "agents": normalized_agents,
         "maxRounds": max_rounds_value,
         "concurrentMode": concurrent_mode,
+        "timeoutSeconds": timeout_seconds,
     }
 
 

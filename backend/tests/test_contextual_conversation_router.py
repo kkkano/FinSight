@@ -449,7 +449,7 @@ def test_context_router_report_refresh_followup_uses_last_report_when_router_unb
             "query": "用最新新闻更新这个风险判断",
             "ui_context": {},
             "memory_context": {
-                "last_report": {
+                "current_report": {
                     "ticker": "AAPL",
                     "title": "AAPL risk report",
                     "summary": "估值和供应链风险",
@@ -462,6 +462,47 @@ def test_context_router_report_refresh_followup_uses_last_report_when_router_unb
 
     assert normalized.context_binding.source == "last_report"
     assert normalized.context_binding.subject_hint == "AAPL risk report"
+
+
+def test_context_router_historical_last_report_without_current_thread_clarifies():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="last_report", confidence=0.86, subject_hint="AAPL old report"),
+        relation="follow_up",
+        domain_intent="report_discussion",
+        confidence=0.82,
+        needs_tools=True,
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Continue expanding point three.",
+            "ui_context": {},
+            "memory_context": {
+                "historical_focus_memory": {
+                    "last_report": {
+                        "ticker": "AAPL",
+                        "title": "AAPL old report",
+                        "summary": "This report belongs to another thread.",
+                    }
+                }
+            },
+            "messages": [],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "clarify"
+    assert normalized.context_binding.source == "none"
+    assert normalized.needs_tools is False
 
 
 def test_context_router_current_turn_ticker_overrides_last_report_followup():
@@ -485,7 +526,7 @@ def test_context_router_current_turn_ticker_overrides_last_report_followup():
         {
             "query": "NVDA 最新新闻怎么看？",
             "ui_context": {},
-            "memory_context": {"last_report": {"ticker": "AAPL", "title": "AAPL report"}},
+            "memory_context": {"current_report": {"ticker": "AAPL", "title": "AAPL report"}},
         },
         tickers=["NVDA"],
         selection_ids=[],
@@ -516,7 +557,7 @@ def test_context_router_current_turn_ticker_overrides_all_inherited_contexts():
         {
             "query": "TSLA 最近新闻怎么看？",
             "ui_context": {"active_symbol": "NVDA", "view": "dashboard"},
-            "memory_context": {"last_report": {"ticker": "AAPL", "title": "AAPL report"}},
+            "memory_context": {"current_report": {"ticker": "AAPL", "title": "AAPL report"}},
         },
         tickers=["TSLA"],
         selection_ids=[],
@@ -551,7 +592,11 @@ def test_context_router_does_not_bind_user_level_recent_focus_without_thread_his
         decision,
         {
             "query": "第二点展开一下。",
-            "memory_context": {"last_focus": {"ticker": "NVDA", "query": "NVDA 新闻"}},
+            "memory_context": {
+                "historical_focus_memory": {
+                    "last_focus": {"ticker": "NVDA", "query": "NVDA 新闻"}
+                }
+            },
             "messages": [],
         },
         tickers=[],
@@ -1569,7 +1614,7 @@ def test_understand_request_global_active_symbol_does_not_bypass_history_when_ro
             {
                 "query": "那它最近有什么新闻？",
                 "ui_context": {"active_symbol": "NVDA", "view": "chat"},
-                "memory_context": {"last_focus": {"ticker": "AAPL", "query": "AAPL 最近新闻"}},
+                "memory_context": {"current_thread_focus": {"ticker": "AAPL", "query": "AAPL 最近新闻"}},
                 "output_mode": "chat",
                 "trace": {},
             }
@@ -1666,7 +1711,11 @@ def test_understand_request_can_bind_recent_focus_to_research(monkeypatch):
                     AIMessage(content="MSFT 主要看 Azure 和 AI 资本开支。"),
                     HumanMessage(content="那这个继续展开，为什么市场这么看？"),
                 ],
-                "memory_context": {"recent_focuses": [{"ticker": "NVDA", "query": "别的会话英伟达新闻"}]},
+                "memory_context": {
+                    "historical_focus_memory": {
+                        "recent_focuses": [{"ticker": "NVDA", "query": "别的会话英伟达新闻"}]
+                    }
+                },
                 "trace": {},
             }
         )

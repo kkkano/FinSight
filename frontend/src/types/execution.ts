@@ -199,5 +199,6 @@ export interface StartExecutionParams {
     agents?: Record<string, AgentPreferenceDepth>;
     maxRounds?: number;
     concurrentMode?: boolean;
+    timeoutSeconds?: number;
   };
 }

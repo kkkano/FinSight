@@ -66,7 +66,7 @@ class ExecuteRequest(BaseModel):
     )
     agent_preferences: dict | None = Field(
         None,
-        description="Per-agent depth + budget preferences from frontend UI",
+        description="Per-agent depth, budget, and timeout preferences from frontend UI",
     )
 
 

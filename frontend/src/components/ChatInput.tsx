@@ -9,6 +9,7 @@ import type { ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useToast } from './ui';
+import { getAgentPreferences } from './settings/AgentControlPanel';
 
 const TICKER_STOPWORDS = new Set([
   'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
@@ -493,6 +494,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     };
 
     try {
+      const agentPreferences = getAgentPreferences();
       await apiClient.sendMessageStream(
         userMsgContent,
         (token) => {
@@ -704,8 +706,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               strict_selection: false,
               confirmation_mode: 'skip' as const,
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
+              agent_preferences: agentPreferences,
             }
-          : { output_mode: 'chat', confirmation_mode: 'skip' as const, trace_raw_override: traceRawEnabled ? 'on' : 'off' },
+          : {
+              output_mode: 'chat',
+              confirmation_mode: 'skip' as const,
+              trace_raw_override: traceRawEnabled ? 'on' : 'off',
+              agent_preferences: agentPreferences,
+            },
         requestSessionId || undefined,
         traceRawEnabled,
         { signal: streamController.signal },

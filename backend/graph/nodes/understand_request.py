@@ -20,6 +20,7 @@ from backend.graph.nodes.conversation_router import (
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
+from backend.graph.memory_scope import current_report_context, current_thread_focus
 from backend.graph.request_task_contract import (
     build_reply_contract,
     query_explicitly_requests_links,
@@ -114,13 +115,12 @@ def _is_scoped_active_symbol_context(ui_context: dict[str, Any]) -> bool:
 def _has_conversation_subject_anchor(memory_context: dict[str, Any]) -> bool:
     if not isinstance(memory_context, dict):
         return False
-    if isinstance(memory_context.get("last_report"), dict):
+    if current_report_context(memory_context):
         return True
-    last_focus = memory_context.get("last_focus")
+    last_focus = current_thread_focus(memory_context)
     if isinstance(last_focus, dict) and (last_focus.get("ticker") or last_focus.get("query")):
         return True
-    recent_focuses = memory_context.get("recent_focuses")
-    return isinstance(recent_focuses, list) and any(isinstance(item, dict) and item for item in recent_focuses)
+    return False
 
 
 def _has_prior_dialogue(state: GraphState, current_query: str) -> bool:
@@ -1222,7 +1222,7 @@ def _context_tickers_from_binding(
     if source == "active_symbol":
         candidates.append(str(ui_context.get("active_symbol") or ""))
     elif source == "last_report":
-        report = memory_context.get("last_report") if isinstance(memory_context.get("last_report"), dict) else {}
+        report = current_report_context(memory_context) or {}
         candidates.append(str(report.get("ticker") or ""))
         candidates.append(str(report.get("title") or ""))
 

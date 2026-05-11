@@ -112,7 +112,7 @@ def _apply_quality_gate(
     return quality, blocked
 
 
-def _execution_timeout_seconds(output_mode: str | None = None) -> float:
+def _execution_timeout_seconds(output_mode: str | None = None, ui_context: dict[str, Any] | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
 
@@ -129,9 +129,18 @@ def _execution_timeout_seconds(output_mode: str | None = None) -> float:
         else os.getenv("LANGGRAPH_EXECUTION_TIMEOUT_SECONDS", default_base)
     )
     try:
-        return max(60.0, float(raw))
+        default_timeout = max(60.0, float(raw))
     except Exception:
-        return 900.0 if mode == "investment_report" else 500.0
+        default_timeout = 900.0 if mode == "investment_report" else 500.0
+    try:
+        from backend.graph.preference_timeouts import timeout_seconds_from_ui_context
+
+        preferred_timeout = timeout_seconds_from_ui_context(ui_context)
+        if preferred_timeout is not None:
+            return preferred_timeout
+    except Exception:
+        pass
+    return default_timeout
 
 
 def _cancelled_trace_payload() -> dict[str, Any]:
@@ -320,7 +329,7 @@ async def run_graph_pipeline(
             runner = await deps.get_graph_runner()
 
             from backend.graph.runner import run_graph_traced
-            timeout_seconds = _execution_timeout_seconds(output_mode)
+            timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=ui_context)
             try:
                 state = await asyncio.wait_for(
                     run_graph_traced(

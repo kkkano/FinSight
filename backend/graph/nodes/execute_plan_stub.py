@@ -16,6 +16,7 @@ from backend.graph.adapters import (
 from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.memory_scope import current_thread_focus, user_profile_memory
 from backend.graph.request_task_contract import build_tool_diagnostic, output_is_error_like
 from backend.graph.state import GraphState
 from backend.rag.layering import (
@@ -206,13 +207,14 @@ def _build_memory_context_specs(*, memory_context: dict[str, Any], user_id: str)
     if not isinstance(memory_context, dict) or not memory_context:
         return []
 
-    risk_tolerance = str(memory_context.get("risk_tolerance") or "").strip().lower()
-    investment_style = str(memory_context.get("investment_style") or "").strip().lower()
-    watchlist = _normalize_watchlist_items(memory_context.get("watchlist"))
-    last_focus_raw = memory_context.get("last_focus") if isinstance(memory_context.get("last_focus"), dict) else None
+    profile = user_profile_memory(memory_context)
+    risk_tolerance = str(profile.get("risk_tolerance") or "").strip().lower()
+    investment_style = str(profile.get("investment_style") or "").strip().lower()
+    watchlist = _normalize_watchlist_items(profile.get("watchlist"))
+    last_focus_raw = current_thread_focus(memory_context)
     last_focus_list = _normalize_memory_focus_list([last_focus_raw] if last_focus_raw else [], limit=1)
     last_focus = last_focus_list[0] if last_focus_list else None
-    recent_focuses = _normalize_memory_focus_list(memory_context.get("recent_focuses"), limit=3)
+    recent_focuses: list[dict[str, Any]] = []
 
     specs: list[dict[str, Any]] = []
     if watchlist or risk_tolerance not in {"", "medium"} or investment_style not in {"", "balanced"}:

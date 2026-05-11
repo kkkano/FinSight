@@ -6,6 +6,7 @@ import re
 from typing import Any
 from urllib.parse import quote_plus
 
+from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
 from backend.utils.quote import parse_quote_payload
 
@@ -918,7 +919,7 @@ def render_chat_markdown(state: GraphState) -> str:
     ticker_label = ", ".join(_tickers(state)) or "这个标的"
     operations = _operation_names(state)
     memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
-    last_report = memory_context.get("last_report") if isinstance(memory_context.get("last_report"), dict) else None
+    last_report = current_report_context(memory_context)
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     decision = artifacts.get("conversation_decision") if isinstance(artifacts.get("conversation_decision"), dict) else {}
     binding = decision.get("context_binding") if isinstance(decision.get("context_binding"), dict) else {}

@@ -701,7 +701,7 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
                 }
             },
             "memory_context": {
-                "last_report": {
+                "current_report": {
                     "report_id": "rpt-ctx-001",
                     "title": "Apple investment report",
                     "summary": "Apple report summary.",

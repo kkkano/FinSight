@@ -110,6 +110,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 output_mode = request.options.output_mode
                 strict_selection = request.options.strict_selection
                 confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
+                if isinstance(request.options.agent_preferences, dict):
+                    ui_context["agent_preferences"] = request.options.agent_preferences
 
             # Chat entry point defaults to skip — Chat UI has no InterruptCard.
             # Exception: investment_report mode always requires confirmation (auto).
@@ -225,6 +227,8 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             output_mode = request.options.output_mode
             strict_selection = request.options.strict_selection
             confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
+            if isinstance(request.options.agent_preferences, dict):
+                ui_context["agent_preferences"] = request.options.agent_preferences
 
         # Chat entry point defaults to skip — Chat UI has no InterruptCard.
         # Exception: investment_report mode always requires confirmation (auto).

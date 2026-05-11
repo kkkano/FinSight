@@ -5,8 +5,8 @@
 
 ## 当前必读
 
-- `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane 和 evidence/tool diagnostics 边界。
-- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/request_task_contract.py` 与 `understand_request` 测试为准。
+- `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、作用域化记忆和 evidence/tool diagnostics 边界。
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/request_task_contract.py`、`backend/graph/memory_scope.py` 与 `understand_request` 测试为准。
 - `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。
 - `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
 - `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
@@ -16,7 +16,7 @@
 
 ## 当前实现 Spec
 
-- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
+- `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、作用域化 `memory_context`、用户 `timeoutSeconds` 偏好、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
@@ -32,6 +32,7 @@
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
 - `docs/qa/chat-router-100-final100-current-state.md`：当前聊天 UX 最终 current-state 验收；配套 JSON 为同名 `.json`。`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 100/100 PASS、0 REVIEW、0 FAIL。
+- `backend/tests/test_graph_store_memory.py`、`backend/tests/test_contextual_conversation_router.py`、`backend/tests/test_user_timeout_preferences.py`：当前连续对话记忆隔离与用户可调超时的 targeted 回归入口。
 - `docs/qa/chat-ux-40-query-final40-post-context-binding.md`：旧 40-query 回归证据，结果 39 PASS、1 REVIEW、0 FAIL；Q10 渲染标记定向修复另见 `docs/qa/chat-ux-40-query-targeted-q10-render-marker-fix.md`。
 - `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`：Q16/Q26/Q27/Q39 定向回归，验证 portfolio context、alert 文案、URL 失败文案和复合任务 polish；结果 4/4 PASS。
 - `tests/eval/chat_router_100.json` + `scripts/chat_ux_router_eval.py`：100 条聊天 UX 路由/答案质量/证据红线数据集，覆盖普通解释、不要新闻纠偏、新闻链接、报价、工具失败、上下文绑定、会话隔离、复合意图、混乱纠正、报告追问、组合/提醒、URL/文章、宏观传导、UI selection、安全边界、语言风格、上下文连续性和报告按钮追问。

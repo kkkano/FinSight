@@ -4,6 +4,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, HumanMessage
 
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.memory_scope import prompt_memory_context
 from backend.graph.state import GraphState
 
 # Maximum number of recent messages to include in planner context.
@@ -109,8 +110,9 @@ def build_planner_prompt(state: GraphState, variant: str = "A") -> str:
         "tasks": tasks,
         "blocked_tasks": blocked_tasks,
     }
-    if memory_context:
-        inputs["memory_context"] = memory_context
+    safe_memory_context = prompt_memory_context(memory_context)
+    if safe_memory_context:
+        inputs["memory_context"] = safe_memory_context
 
     variant_guidance = (
         "- Variant A: 优先最小化步骤数，强确定性，低执行成本。\n"

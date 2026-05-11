@@ -1,5 +1,5 @@
 /**
- * AgentControlPanel — user preferences for agent depth, budget, and concurrency.
+ * AgentControlPanel — user preferences for agent depth, budget, timeout, and concurrency.
  *
  * Persisted to localStorage (`finsight-agent-preferences`) and synced to backend.
  * Backend performs whitelist validation; frontend values are only input.
@@ -26,6 +26,7 @@ export interface AgentPreferences {
   agents: Record<string, AgentDepth>;
   maxRounds: number;
   concurrentMode: boolean;
+  timeoutSeconds: number;
 }
 
 const STORAGE_KEY = 'finsight-agent-preferences';
@@ -36,6 +37,7 @@ const DEFAULT_PREFS: AgentPreferences = {
   ),
   maxRounds: 3,
   concurrentMode: true,
+  timeoutSeconds: 0,
 };
 
 const normalizePreferences = (raw: unknown): AgentPreferences => {
@@ -63,7 +65,12 @@ const normalizePreferences = (raw: unknown): AgentPreferences => {
       ? parsed.concurrentMode
       : DEFAULT_PREFS.concurrentMode;
 
-  return { agents, maxRounds, concurrentMode };
+  const timeoutRaw = Number(parsed.timeoutSeconds);
+  const timeoutSeconds = Number.isFinite(timeoutRaw) && timeoutRaw > 0
+    ? Math.max(30, Math.min(1200, Math.trunc(timeoutRaw)))
+    : 0;
+
+  return { agents, maxRounds, concurrentMode, timeoutSeconds };
 };
 
 function loadPreferences(): AgentPreferences {
@@ -184,6 +191,16 @@ export const AgentControlPanel: React.FC = () => {
     [persist],
   );
 
+  const setTimeoutSeconds = useCallback(
+    (value: number) => {
+      persist((previous) => ({
+        ...previous,
+        timeoutSeconds: value > 0 ? Math.max(30, Math.min(1200, Math.trunc(value))) : 0,
+      }));
+    },
+    [persist],
+  );
+
   return (
     <Card className="p-4 bg-fin-bg/40">
       <h3 className="text-sm font-medium text-fin-text mb-3">
@@ -243,8 +260,30 @@ export const AgentControlPanel: React.FC = () => {
         Agent 并发执行
       </label>
 
+      <div className="mt-4">
+        <div className="flex items-center justify-between text-xs mb-1">
+          <span className="text-fin-muted">超时时间（秒）</span>
+          <span className="text-fin-text font-medium">
+            {prefs.timeoutSeconds > 0 ? prefs.timeoutSeconds : '系统默认'}
+          </span>
+        </div>
+        <input
+          type="number"
+          min={0}
+          max={1200}
+          step={30}
+          value={prefs.timeoutSeconds}
+          onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
+          className="w-full rounded-md border border-fin-border bg-fin-bg px-2 py-1 text-xs text-fin-text outline-none focus:border-fin-primary"
+          data-testid="agent-timeout-seconds"
+        />
+        <div className="mt-1 text-2xs text-fin-muted">
+          0 使用系统默认；正数会限制在 30-1200 秒。
+        </div>
+      </div>
+
       <p className="text-2xs text-fin-muted mt-3">
-        设置仅影响投资报告生成时的 Agent 选择。后端会对设置做白名单校验。
+        设置会影响 Agent 选择、预算上限和请求超时。后端会对设置做白名单校验。
       </p>
     </Card>
   );

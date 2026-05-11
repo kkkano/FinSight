@@ -8,6 +8,7 @@
 > 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 > 2026-05-10 增量：`understand_request` 现在写入 `ReplyContract`，将默认聊天、取证回答、报告生成拆成 `chat_answer / source_grounded_answer / report_generation` 三条 lane；`brief` 仅作为长度偏好保留。工具失败、403、rejected、empty、timeout 等只能进入 `artifacts.tool_diagnostics`，不能进入 `evidence_pool` 或被渲染为来源/结论。
 > 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
+> 2026-05-11 增量：`memory_context` 改为作用域化结构，区分 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；只有当前线程焦点/报告可绑定“刚才那份报告/第三点”等指代。前端偏好新增 `agent_preferences.timeoutSeconds`，`0` 使用系统默认，正数限制在 `30-1200s` 并应用到 chat/planner/synthesize/graph 执行预算。
 
 ## 1. 系统总览
 
@@ -17,6 +18,7 @@ flowchart LR
     CHAT_UI[Chat]
     DASH_UI[Dashboard]
     WB_UI[Workbench]
+    PREF_UI[Settings timeoutSeconds]
   end
 
   subgraph API[FastAPI]
@@ -30,6 +32,7 @@ flowchart LR
 
   subgraph GRAPH[LangGraph Pipeline]
     RUNNER[GraphRunner]
+    MEM_SCOPE[memory_scope.py]
     NODES[StateGraph Nodes]
     EXECUTOR[executor.py]
     SYNTH[synthesize + render]
@@ -43,9 +46,11 @@ flowchart LR
   end
 
   FE --> API
+  PREF_UI --> CHAT_EP
+  PREF_UI --> EXEC_EP
   CHAT_EP --> RUNNER
   EXEC_EP --> RUNNER
-  RUNNER --> NODES --> EXECUTOR --> ANALYSIS --> SYNTH
+  RUNNER --> MEM_SCOPE --> NODES --> EXECUTOR --> ANALYSIS --> SYNTH
   DASH_EP --> FE
   REPORT_EP --> FE
   CONV_EP --> FE
@@ -57,7 +62,9 @@ flowchart LR
 ```mermaid
 flowchart TD
   START --> build_initial_state
-  build_initial_state --> reset_turn_state
+  build_initial_state --> load_memory_context
+  load_memory_context --> memory_scope
+  memory_scope --> reset_turn_state
   reset_turn_state --> prepare_context
   prepare_context --> chat_respond
   chat_respond -->|pure social| END
@@ -101,6 +108,37 @@ flowchart TD
 | `chat_answer` | 普通解释、追问、纠偏、安全边界、明确“不要新闻/不要链接/直接说” | 不强制查新闻，不套报告结构，`citation_policy=none` |
 | `source_grounded_answer` | 明确要新闻/链接/引用/实时价格/URL/数据证据 | 规划取证工具；有可用来源则引用，没有则披露不可用 |
 | `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报 | 使用报告模板和报告级引用约束 |
+
+### 2.2 记忆作用域与连续对话边界
+
+`build_initial_state` 读取长期 JSON 记忆后，会通过 `backend/graph/memory_scope.py` 和 `backend/graph/store.py` 投影成四个明确字段：
+
+| 字段 | 作用 | 能否绑定当前追问 |
+|---|---|---|
+| `user_profile_memory` | 用户级偏好、风险偏好、自选列表等稳定信息 | 否，只能个性化 |
+| `historical_focus_memory` | 用户历史 `last_focus / last_report / recent_focuses` 兼容载荷 | 否，不能当成当前线程上下文 |
+| `current_thread_focus` | 当前 `thread_id` 下的最近主体、报告和焦点 | 是 |
+| `current_report` | 当前线程最后一份报告 artifact | 是 |
+
+因此 conversation router、planner prompt、synthesize prompt 只通过 helper 读取安全投影：普通“它/刚才/第三点”这类指代必须来自当前线程；用户其他会话的 `last_report` 不会混入当前线程。
+
+```mermaid
+flowchart LR
+  STORE[(data/memory/{user}.json)] --> LOAD[load_memory_context]
+  LOAD --> PROFILE[user_profile_memory]
+  LOAD --> HISTORY[historical_focus_memory]
+  LOAD --> THREAD[current_thread_focus by thread_id]
+  THREAD --> REPORT[current_report]
+  PROFILE --> PROMPT[prompt_memory_context]
+  THREAD --> PROMPT
+  REPORT --> PROMPT
+  HISTORY -. not current referent .-> AUDIT[history only]
+  PROMPT --> ROUTER[conversation_router / planner / synthesize]
+```
+
+### 2.3 用户可调超时
+
+前端 Settings 写入 `agent_preferences.timeoutSeconds` 并随 `ChatOptions` / execute payload 进入 `ui_context`。后端通过 `backend/graph/preference_timeouts.py` 统一校验：`0`、空值、`auto/default/system` 使用系统默认；正数按 `30-1200s` clamp。该偏好被 chat direct reply、planner、synthesize、agent adapter 和 `execution_service` 的整体执行超时读取。
 
 ## 3. 规划与执行策略
 
@@ -222,7 +260,7 @@ flowchart LR
 
 ## 7. 已知约束（当前版本）
 
-- `GraphState` 尚未显式定义 `agent_preferences` 字段（偏好仍走 `ui_context`）
+- `agent_preferences` 仍通过 `ui_context` 传递；其中 `timeoutSeconds` 已接入预算控制，后续可再显式化为 `GraphState` 字段
 - `confirmation_gate` 目前是 run 级中断，非逐 step 人工确认
 - `synthesize` 仍保留 `stub/llm` 双模式，需要按环境切换
 

@@ -205,12 +205,14 @@ graph TB
     subgraph "Frontend (React + Vite)"
         UI[Dashboard / Chat / Workbench]
         STORE[Zustand Stores<br/>dashboardStore · executionStore · useStore]
+        PREFS[Settings<br/>agent_preferences.timeoutSeconds]
         API_CLIENT[API Client<br/>SSE parseSSEStream]
     end
 
     subgraph "Backend (FastAPI)"
         ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
         GRAPH[LangGraph Pipeline<br/>Stateful Graph Runtime]
+        MEM_SCOPE[Memory Scope<br/>user profile · current thread focus]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
         TOOLS[Tool Layer<br/>32 Registered Tools]
         SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
@@ -219,7 +221,7 @@ graph TB
     subgraph "Data Layer"
         RAG[Hybrid RAG<br/>bge-m3 · Reranker]
         CACHE[Dashboard Cache<br/>16 TTL Categories]
-        MEMORY[Memory Store<br/>Per-user JSON]
+        MEMORY[Scoped Memory Store<br/>Per-user JSON + thread focus]
         DB[(SQLite / PostgreSQL<br/>Checkpoints · Reports · Portfolio)]
     end
 
@@ -233,13 +235,15 @@ graph TB
         LLM_API[LLM Provider<br/>OpenAI / Gemini / DeepSeek / Anthropic]
     end
 
+    UI --> STORE --> PREFS
     UI --> API_CLIENT --> ROUTER
     ROUTER --> GRAPH --> AGENTS --> TOOLS
+    GRAPH --> MEM_SCOPE --> MEMORY
     GRAPH --> SYNTH
     TOOLS --> YFINANCE & FMP & FINNHUB & TAVILY & FRED & SEC
     AGENTS --> LLM_API
     AGENTS --> RAG
-    GRAPH --> CACHE & MEMORY & DB
+    GRAPH --> CACHE & DB
 ```
 
 ---
@@ -266,10 +270,15 @@ Dashboard Scorers are served by `/api/dashboard/insights` and are not graph node
 
 Conversation UX is now split deliberately: the frontend keeps the active browser runtime in localStorage, while `/api/conversations` owns backend thread lifecycle and a lightweight server snapshot store for `messages`, `title`, `pinned`, and `archive` metadata. Creating, switching, renaming, and deleting conversations go through the backend API; deletion clears session context, report/citation index rows, thread RAG memory/working-set collections, and matching RAG observability runs. Stream stop uses `AbortController` plus backend cancellation events and executor/agent cancellation tokens, preserving partial answers instead of treating cancellation as an error.
 
+Memory is scoped before routing. Durable user preferences and historical focus are loaded for personalization, but only `current_thread_focus` and `current_report` from the active `thread_id` can bind deictic follow-ups such as "that report" or "the third point". Legacy user-level `last_report`, `last_focus`, and `recent_focuses` are kept as historical memory and are not exposed to the conversation router as current referents.
+
+Runtime preferences are passed with chat options as `agent_preferences`. `timeoutSeconds=0` means system default; positive values are clamped to `30-1200` seconds and applied to chat, planner, synthesis, and graph execution budgets.
+
 ```mermaid
 flowchart TD
     START((Start)) --> INIT["① build_initial_state<br/><i>Parse input, load memory</i>"]
-    INIT --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
+    INIT --> MEMSCOPE["memory_scope<br/><i>user profile + current thread only</i>"]
+    MEMSCOPE --> RESET["② reset_turn_state<br/><i>Clear ephemeral fields + trace runtime</i>"]
     RESET --> PREPARE["③ prepare_context<br/><i>Bound history, summarize, normalize UI hints</i>"]
     PREPARE --> CHATRESP["④ chat_respond<br/><i>Pure social only</i>"]
     CHATRESP -->|"pure greeting / thanks / bye"| END_CHAT((End))
@@ -314,6 +323,7 @@ flowchart TD
 | Output | Purpose |
 |--------|---------|
 | `understanding` | Route, summary, confidence, assumptions, and user-visible task explanation |
+| `memory_context` | Scoped memory: `user_profile_memory`, `historical_focus_memory`, `current_thread_focus`, `current_report` |
 | `tasks[]` | Ready tasks such as `company/GOOGL/price`, `macro/analyze_impact`, `portfolio/rebalance_check` |
 | `blocked_tasks[]` | Locally blocked tasks, e.g. missing portfolio holdings, without blocking ready tasks |
 | compatibility `subject` / `operation` | Primary-task projection so the existing policy/planner/executor path remains stable |
@@ -328,6 +338,7 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 | Field | Type | Description |
 |-------|------|-------------|
 | `messages` | `Annotated[list, add_messages]` | Conversation history (append-only via LangGraph reducer) |
+| `memory_context` | `dict` | Scoped memory payload; only `current_thread_focus` / `current_report` can bind current follow-ups |
 | `subject` | `dict` | Resolved entity — `{type, ticker, name, market}` |
 | `understanding` | `dict` | Request understanding result for the current turn |
 | `reply_contract` | `dict` | Structured UX contract: lane, style, length preference, context binding, source constraints, citation policy, continuation target |
@@ -341,8 +352,8 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 | `rag_context` | `list[dict]` | Retrieved documents from hybrid RAG search |
 | `artifacts` | `dict` | Synthesized report, citations, charts |
 | `trace` | `dict` | Observability: latencies, token counts, failures |
-| `agent_preferences` | `dict` | UI-injected agent toggles (on/off/deep) from AgentControlPanel |
-| `ui_context` | `dict` | Frontend hints: active_tab, selection_context, news_mode |
+| `agent_preferences` | `dict` | UI-injected agent toggles and runtime preferences such as `timeoutSeconds` |
+| `ui_context` | `dict` | Frontend hints: active_tab, selection_context, news_mode, agent_preferences |
 
 ### LangChain / LangGraph APIs Used
 
@@ -892,7 +903,14 @@ Per-user memory stored as JSON files in `data/memory/{user_id}.json`:
   "preferences": {
     "language": "zh-CN",
     "risk_tolerance": "moderate",
-    "default_depth": "report"
+    "default_depth": "report",
+    "timeoutSeconds": 0,
+    "thread_focuses": {
+      "thread_abc": {
+        "primary_subject": {"type": "company", "ticker": "NVDA"},
+        "last_report": {"report_id": "rpt_123", "title": "NVDA report"}
+      }
+    }
   },
   "interaction_history": [
     {"ticker": "AAPL", "action": "deep_research", "timestamp": "2026-02-18T10:30:00Z"}
@@ -900,9 +918,11 @@ Per-user memory stored as JSON files in `data/memory/{user_id}.json`:
 }
 ```
 
+`timeoutSeconds=0` keeps the system default. User-specified positive values are validated and clamped to `30-1200` seconds.
+
 The memory system integrates with:
 - **Watchlist API**: `POST /api/user/watchlist/add` / `remove` — persisted and used by alert schedulers
-- **LangGraph Memory**: Loaded at `build_initial_state`; checkpoints are handled by the LangGraph checkpointer, and long-term snapshots are persisted best-effort by the execution service.
+- **LangGraph Memory**: Loaded at `build_initial_state` as scoped memory. Durable user profile can personalize answers, while report/focus follow-ups bind only to the active thread's focus.
 - **Dashboard Store**: Frontend `dashboardStore` syncs watchlist via API on init
 
 ---
@@ -913,7 +933,7 @@ FinSight is designed for production reliability with multiple fallback layers:
 
 | Component | Primary | Fallback | Behavior |
 |-----------|---------|----------|----------|
-| **Planner** | LLM Planner (structured output) | `planner_stub` (keyword → tool mapping) | Auto-switch on LLM timeout (8s) |
+| **Planner** | LLM Planner (structured output) | `planner_stub` (contract/task projection fallback) | Auto-switch on timeout; user `timeoutSeconds` can extend the budget |
 | **Embedding** | `BAAI/bge-m3` (1024-dim) | SHA1 hash embedding (96-dim) | Graceful degradation if model not loaded |
 | **Reranker** | `bge-reranker-v2-m3` | Skip reranking, use RRF scores directly | Silent passthrough |
 | **Price Data** | yfinance | 10 fallback sources (FMP → Finnhub → ...) | 11-level cascade |

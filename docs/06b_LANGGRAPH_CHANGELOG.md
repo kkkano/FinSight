@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-05-11 - Scoped conversation memory and user timeout preference
+
+- `memory_context` 改为作用域化结构：`user_profile_memory` 用于长期偏好，`historical_focus_memory` 只作为历史背景，`current_thread_focus` 和 `current_report` 才能绑定当前线程里的“刚才/第三点/那份报告”等指代。
+- 当前线程焦点写入 `preferences.thread_focuses[thread_id]`；保留 legacy `last_focus/last_report/recent_focuses` 兼容读写，但不再把它们作为 conversation router 的当前可指代上下文。
+- 新增 `backend/graph/memory_scope.py` 作为 prompt/context 读取 helper，router、planner、synthesize、renderer、executor 侧统一读取安全投影，避免跨会话 last_report 泄漏。
+- Settings 增加 `timeoutSeconds`，通过 `agent_preferences` 随 chat/execution payload 进入 `ui_context`；`0` 表示系统默认，正数由 `backend/graph/preference_timeouts.py` 限制在 `30-1200s` 并应用到 chat direct reply、planner、synthesize、agent adapter 和整体 graph execution。
+- 文档同步：`readme.md`、`readme_cn.md`、`docs/01_ARCHITECTURE.md`、`docs/06a_LANGGRAPH_DESIGN_SPEC.md`、`docs/DOCS_INDEX.md` 已补充作用域图、状态字段和用户偏好说明。
+- 验证：`python -m pytest backend/tests/test_user_timeout_preferences.py backend/tests/test_graph_store_memory.py backend/tests/test_contextual_conversation_router.py backend/tests/test_reply_contract_lanes.py backend/tests/test_chat_response_contract.py backend/tests/test_rag_observability_execute_plan.py` -> 119 passed；`npm run build --prefix frontend` -> passed；`git diff --check` -> passed。
+
 ## 2026-05-11 - Final 100-query chat UX acceptance
 
 - 将当前聊天 UX 验收线从旧 96-query weird 数据集校准到 `tests/eval/chat_router_100.json`；新增连续上下文与报告按钮追问覆盖，合计 100 条、18 类、95 个 hard 红线用例。

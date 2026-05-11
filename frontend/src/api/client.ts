@@ -24,6 +24,7 @@ export interface ChatOptions {
   confirmation_mode?: 'auto' | 'required' | 'skip';
   locale?: string;
   trace_raw_override?: 'on' | 'off' | 'inherit';
+  agent_preferences?: AgentPreferencesPayload;
 }
 
 export interface ReportIndexItem {
@@ -101,6 +102,7 @@ export interface AgentPreferencesPayload {
   agents?: Record<string, string>;
   maxRounds?: number;
   concurrentMode?: boolean;
+  timeoutSeconds?: number;
 }
 
 export interface AlertFeedEvent {

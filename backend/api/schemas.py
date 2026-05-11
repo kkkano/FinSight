@@ -70,6 +70,10 @@ class ChatOptions(BaseModel):
         None,
         description="raw trace visibility override",
     )
+    agent_preferences: Optional[dict[str, Any]] = Field(
+        None,
+        description="validated agent/runtime preferences from the frontend",
+    )
 
 
 class ChatRequest(BaseModel):

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_USER_ID = "default_user"
 _RECENT_FOCUS_LIMIT = 10
 _RECENT_FOCUS_LOAD_LIMIT = 3
+_THREAD_FOCUS_LIMIT = 25
 _SUMMARY_MAX_LEN = 600
 _REPORT_CONTEXT_MAX_LEN = 1200
 _MEMORY_INIT_FAILED = object()
@@ -162,6 +163,42 @@ def _extract_report_context(report: dict[str, Any] | None) -> dict[str, Any] | N
     }
 
 
+def _thread_key(thread_id: str | None) -> str:
+    return str(thread_id or "").strip()
+
+
+def _load_thread_focus(preferences: dict[str, Any], thread_id: str | None) -> dict[str, Any] | None:
+    key = _thread_key(thread_id)
+    if not key:
+        return None
+    thread_focuses = preferences.get("thread_focuses")
+    if not isinstance(thread_focuses, dict):
+        return None
+    focus = thread_focuses.get(key)
+    return focus if isinstance(focus, dict) else None
+
+
+def _store_thread_focus(
+    *,
+    preferences: dict[str, Any],
+    thread_id: str | None,
+    focus_entry: dict[str, Any],
+) -> None:
+    key = _thread_key(thread_id)
+    if not key:
+        return
+    existing = preferences.get("thread_focuses")
+    thread_focuses = existing if isinstance(existing, dict) else {}
+    next_focuses: dict[str, Any] = {key: focus_entry}
+    for existing_key, existing_focus in thread_focuses.items():
+        if existing_key == key or not isinstance(existing_focus, dict):
+            continue
+        next_focuses[str(existing_key)] = existing_focus
+        if len(next_focuses) >= _THREAD_FOCUS_LIMIT:
+            break
+    preferences["thread_focuses"] = next_focuses
+
+
 def load_memory_context(
     *,
     thread_id: str | None,
@@ -195,14 +232,40 @@ def load_memory_context(
             if len(recent_focuses) >= _RECENT_FOCUS_LOAD_LIMIT:
                 break
 
+    current_thread_focus = _load_thread_focus(preferences, thread_id)
+    current_report = (
+        current_thread_focus.get("last_report")
+        if isinstance(current_thread_focus, dict) and isinstance(current_thread_focus.get("last_report"), dict)
+        else None
+    )
+
+    user_profile_memory = {
+        "scope": "user_profile",
+        "user_id": user_id,
+        "risk_tolerance": profile.risk_tolerance,
+        "investment_style": profile.investment_style,
+        "watchlist": _normalize_watchlist(profile.watchlist),
+    }
+
+    historical_focus_memory: dict[str, Any] = {
+        "scope": "user_profile_history",
+    }
+    if last_focus is not None:
+        historical_focus_memory["last_focus"] = last_focus
+    if last_report is not None:
+        historical_focus_memory["last_report"] = last_report
+    if recent_focuses:
+        historical_focus_memory["recent_focuses"] = recent_focuses
+
     return {
         "user_id": user_id,
         "risk_tolerance": profile.risk_tolerance,
         "investment_style": profile.investment_style,
         "watchlist": _normalize_watchlist(profile.watchlist),
-        "last_focus": last_focus,
-        "last_report": last_report,
-        "recent_focuses": recent_focuses,
+        "user_profile_memory": user_profile_memory,
+        "historical_focus_memory": historical_focus_memory,
+        "current_thread_focus": current_thread_focus,
+        "current_report": current_report,
     }
 
 
@@ -261,6 +324,7 @@ def persist_memory_snapshot(
 
     preferences["last_focus"] = focus_entry
     preferences["recent_focuses"] = dedup_recent
+    _store_thread_focus(preferences=preferences, thread_id=thread_id, focus_entry=focus_entry)
     profile.preferences = preferences
 
     try:

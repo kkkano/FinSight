@@ -10,6 +10,7 @@ from typing import Any, Iterable, Mapping
 
 from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
+from backend.graph.preference_timeouts import timeout_seconds_from_state
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +298,13 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
             init_errors[name] = f"init_failed:{exc.__class__.__name__}"
 
     invokers: dict[str, Any] = {}
-    timeout_seconds = max(15.0, _env_float("LANGGRAPH_AGENT_INVOKER_TIMEOUT_SECONDS", 180.0))
+    preferred_timeout = timeout_seconds_from_state(state)
+    timeout_seconds = max(
+        15.0,
+        preferred_timeout
+        if preferred_timeout is not None
+        else _env_float("LANGGRAPH_AGENT_INVOKER_TIMEOUT_SECONDS", 180.0),
+    )
     deep_search_timeout_seconds = max(
         timeout_seconds,
         _env_float("LANGGRAPH_DEEP_SEARCH_AGENT_TIMEOUT_SECONDS", timeout_seconds),

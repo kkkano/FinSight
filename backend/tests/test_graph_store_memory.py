@@ -38,12 +38,20 @@ def test_persist_and_load_memory_snapshot(tmp_path):
 
     context = load_memory_context(thread_id=thread_id, memory_service=service)
     assert context["user_id"] == "test_user"
-    assert context["last_focus"]["ticker"] == "AAPL"
-    assert context["last_focus"]["query"] == "请分析 AAPL 的投资机会"
-    assert context["last_focus"]["summary"]
-    assert context["last_focus"]["sentiment"] == "bullish"
-    assert isinstance(context["recent_focuses"], list)
-    assert len(context["recent_focuses"]) >= 1
+    assert "last_focus" not in context
+    assert "last_report" not in context
+    assert "recent_focuses" not in context
+
+    current_focus = context["current_thread_focus"]
+    assert current_focus["ticker"] == "AAPL"
+    assert current_focus["query"] == state["query"]
+    assert current_focus["summary"]
+    assert current_focus["sentiment"] == "bullish"
+
+    historical = context["historical_focus_memory"]
+    assert historical["last_focus"]["ticker"] == "AAPL"
+    assert isinstance(historical["recent_focuses"], list)
+    assert len(historical["recent_focuses"]) >= 1
 
 
 def test_persist_memory_snapshot_keeps_last_report_context(tmp_path):
@@ -69,10 +77,21 @@ def test_persist_memory_snapshot_keeps_last_report_context(tmp_path):
     )
 
     context = load_memory_context(thread_id=thread_id, memory_service=service)
-    last_report = context["last_report"]
+    last_report = context["current_report"]
     assert last_report["report_id"] == "rpt-ctx-001"
     assert last_report["summary"] == "Apple report summary for follow-up chat."
     assert last_report["risks"][0] == "Valuation remains sensitive to rates."
+
+    assert context["current_thread_focus"]["last_report"]["report_id"] == "rpt-ctx-001"
+    assert context["historical_focus_memory"]["last_report"]["report_id"] == "rpt-ctx-001"
+
+    other_thread_context = load_memory_context(
+        thread_id="public:test_user:different-thread",
+        memory_service=service,
+    )
+    assert other_thread_context["current_thread_focus"] is None
+    assert other_thread_context["current_report"] is None
+    assert other_thread_context["historical_focus_memory"]["last_report"]["report_id"] == "rpt-ctx-001"
 
 
 def test_memory_service_init_failure_only_warn_once(monkeypatch, caplog):

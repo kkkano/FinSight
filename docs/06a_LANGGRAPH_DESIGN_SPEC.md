@@ -8,6 +8,7 @@
 > 2026-05-06 修订说明：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见这类零理解成本 turn；能力问题、闲聊、非金融请求、URL/网页/文章请求、指代追问和普通金融问答都进入 `understand_request` 的 LLM conversation router。该 router 在 planner 之前判断 `direct_answer / research / alert / clarify / out_of_scope`：direct/out_of_scope 由 LLM 自然回复并结束；只有需要行情、新闻、报告、组合、文档证据、URL fetch 或工具执行时才进入 `policy_gate -> planner`。只有显式 `output_mode=investment_report`（报告按钮）使用报告模板；普通 chat/brief 走对话式自然回答。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。
 > 2026-05-10 修订说明：新增 `ReplyContract` 作为请求理解后的 UX 契约，三条 lane 为 `chat_answer`、`source_grounded_answer`、`report_generation`；`brief` 降级为长度偏好，不再是独立产品模式。`EvidenceItem` 与 `ToolError` 分离，工具失败、403、rejected、empty、timeout 只能进入 `artifacts.tool_diagnostics`，不能作为证据或来源渲染。
 > 2026-05-11 验收说明：`tests/eval/chat_router_100.json` 已成为当前聊天 UX 验收集；最终 current-state 产物为 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，含 `95` 个 hard 红线用例。
+> 2026-05-11 修订说明：连续对话上下文改为作用域化记忆，`memory_context` 明确拆分为 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；当前线程以外的历史 `last_report/last_focus/recent_focuses` 只能作为历史背景，不能绑定“刚才那份报告/第三点”。Settings 新增用户可调 `agent_preferences.timeoutSeconds`，`0` 为系统默认，正数限制在 `30-1200s` 并进入 chat/planner/synthesize/execution 预算。
 
 ---
 
@@ -46,7 +47,8 @@ flowchart TD
   UI --> CONV["/api/conversations<br/>list/create/get/patch/delete"]
   CHAT --> RUNNER[LangGraph Runner]
   RUNNER --> INIT[build_initial_state]
-  INIT --> RESET[reset_turn_state]
+  INIT --> MEMSCOPE[memory_scope<br/>scoped memory projection]
+  MEMSCOPE --> RESET[reset_turn_state]
   RESET --> PREPARE[prepare_context]
   PREPARE --> CHATRESP[chat_respond<br/>pure social only]
   CHATRESP -->|pure greeting/thanks/bye| ENDNODE[END]
@@ -247,6 +249,7 @@ class ChatOptions(BaseModel):
     output_mode: Literal["chat", "brief", "investment_report"] | None = None
     strict_selection: bool | None = None  # 默认 False（用户要松散一些）
     locale: str | None = None             # e.g. "zh-CN"
+    agent_preferences: dict | None = None # UI runtime prefs, including timeoutSeconds
 
 class ChatContext(BaseModel):
     active_symbol: str | None = None
@@ -287,7 +290,8 @@ class GraphState(TypedDict):
     messages: list[dict]              # LangChain messages
     query: str
 
-    ui_context: NotRequired[dict]     # view/active_symbol/selections（ephemeral）
+    ui_context: NotRequired[dict]     # view/active_symbol/selections/agent_preferences（ephemeral）
+    memory_context: NotRequired[dict] # scoped memory: user_profile, historical_focus, current_thread_focus, current_report
     subject: NotRequired[Subject]
     operation: NotRequired[Operation]
     output_mode: NotRequired[OutputMode]
@@ -312,7 +316,7 @@ class GraphState(TypedDict):
 
 | 层 | 职责 | 典型字段 | 禁止事项 |
 |---|---|---|---|
-| Memory | 用户偏好与会话记忆 | `risk_profile, locale, session_summary` | 不保存持仓真相数据 |
+| Memory | 用户偏好与作用域化会话记忆 | `risk_profile, locale, user_profile_memory, current_thread_focus, current_report` | 不保存持仓真相数据；历史 `last_report` 不得作为当前线程指代 |
 | Portfolio | 持仓/交易/自选主数据 | `ticker, quantity, avg_cost, watchlist` | 不作为语义检索语料 |
 | RAG | 文档证据检索与引用 | `doc/chunk/embedding/citation` | 不长期存 LLM 研报正文 |
 | Live | 实时行情与新闻快照 | `price/news snapshot` | 不替代长期证据库 |
@@ -322,6 +326,19 @@ class GraphState(TypedDict):
 - `history/filing/details`：RAG first，必要时补充实时数据校验。
 - Portfolio 相关问题先读 Portfolio，再决定是否拼接 RAG 证据。
 
+### 4.5 记忆作用域与超时偏好
+
+后端 `backend/graph/store.py` 保留用户级历史字段用于兼容，但对主链只输出结构化 `memory_context`：
+
+- `user_profile_memory`：用户稳定偏好，可用于语气、风险偏好、自选列表等个性化。
+- `historical_focus_memory`：用户历史关注点，只能作为背景或审计信息，不得让 router 把它当成本轮“它/刚才/上一份报告”。
+- `current_thread_focus`：按 `thread_id` 从 `preferences.thread_focuses` 读取，是连续对话的当前指代来源。
+- `current_report`：当前线程最近报告 artifact，可用于报告后追问、展开、改写和要求证据。
+
+所有 prompt 侧读取应通过 `backend/graph/memory_scope.py` 的 helper；不要直接读取 legacy `memory_context.last_report`、`last_focus` 或 `recent_focuses` 来做当前上下文绑定。
+
+用户超时偏好通过 `agent_preferences.timeoutSeconds` 传入 `ui_context`。`backend/graph/preference_timeouts.py` 是唯一校验入口：`0`/空值/`auto`/`default` 使用系统默认，正数 clamp 到 `30-1200s`。chat direct reply、planner、synthesize、agent adapter 与 `execution_service` 共享该偏好，避免某个节点仍用短超时抢跑。
+
 ---
 
 ## 5. Node/子图设计（常量映射消灭 if-else 蔓延）
@@ -330,11 +347,11 @@ class GraphState(TypedDict):
 
 | Node | 输入（读取字段） | 输出（写入字段） | 失败/回退 |
 |---|---|---|---|
-| `BuildInitialState` | request | `thread_id,messages,query,ui_context` | 无 |
-| `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留长期 memory |
+| `BuildInitialState` | request | `thread_id,messages,query,ui_context,memory_context` | 加载并作用域化用户记忆 |
+| `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留 scoped memory |
 | `PrepareContext` | history + `ui_context` | 修剪历史、摘要长上下文、规范化 selections、合并输出模式 hints | 已接入主路径；旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 作为兼容 helper 保留 |
 | `ChatRespond` | `query,messages` | 仅纯问候/感谢/确认/再见的 `artifacts.draft_markdown,chat_responded` | 非纯社交一律放行 |
-| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `conversation_decision,understanding,reply_contract,tasks,blocked_tasks,subject,operation,output_mode,route` | LLM router 在 planner 前决定 direct/research/clarify/alert/out_of_scope；同时生成 UX lane 契约；direct/out_of_scope 直接自然回复 |
+| `UnderstandRequest` | `query,ui_context,memory_context,options` | `conversation_decision,understanding,reply_contract,tasks,blocked_tasks,subject,operation,output_mode,route` | LLM router 在 planner 前决定 direct/research/clarify/alert/out_of_scope；同时生成 UX lane 契约；direct/out_of_scope 直接自然回复 |
 | `AlertExtractor` | alert task | alert 参数 | invalid 时返回澄清 |
 | `AlertAction` | alert 参数 | alert 结果 | 写入失败时返回错误 |
 | `PolicyGate` | `tasks,reply_contract,output_mode,ui_context,budget/preferences` | `policy/budget/allowed_tools/allowed_agents` | 降级到最小 allowlist；本轮 `disallow_news` 时移除新闻工具 |

@@ -16,6 +16,8 @@ from backend.graph.executor import summarize_selection
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.memory_scope import prompt_memory_context
+from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.graph.state import GraphState
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
 
@@ -79,21 +81,7 @@ def _format_memory_context_for_synth(state: GraphState) -> str:
     if not isinstance(memory_context, dict) or not memory_context:
         return ""
 
-    payload: dict[str, Any] = {}
-    for key in (
-        "user_id",
-        "risk_tolerance",
-        "investment_style",
-        "watchlist",
-        "last_focus",
-        "last_report",
-        "recent_focuses",
-    ):
-        value = memory_context.get(key)
-        if value is None:
-            continue
-        payload[key] = value
-
+    payload = prompt_memory_context(memory_context)
     if not payload:
         return ""
 
@@ -2443,6 +2431,10 @@ async def synthesize(state: GraphState) -> dict:
             "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 3),
             "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 180),
         }
+    preferred_timeout = timeout_seconds_from_state(state)
+    if preferred_timeout is not None:
+        llm_limits["request_timeout"] = int(preferred_timeout)
+        llm_limits["acquire_timeout"] = int(min(float(llm_limits["acquire_timeout"]), preferred_timeout))
     try:
         from backend.llm_config import create_llm
 

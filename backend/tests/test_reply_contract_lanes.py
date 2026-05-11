@@ -403,6 +403,65 @@ def test_no_sources_constraint_overrides_source_word():
     assert contract["source_constraints"]["requires_sources"] is False
 
 
+def test_historical_report_does_not_become_continuation_target():
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.request_task_contract import build_reply_contract
+
+    contract = build_reply_contract(
+        query="Continue point three.",
+        output_mode="chat",
+        tasks=[],
+        conversation_decision=ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="last_report", subject_hint="AAPL old report"),
+            relation="follow_up",
+            domain_intent="report_discussion",
+        ),
+        memory_context={
+            "historical_focus_memory": {
+                "last_report": {
+                    "report_id": "old-rpt",
+                    "ticker": "AAPL",
+                    "title": "AAPL old report",
+                }
+            }
+        },
+    )
+
+    assert contract["continuation_target"] == {}
+
+
+def test_current_report_populates_continuation_target():
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.request_task_contract import build_reply_contract
+
+    contract = build_reply_contract(
+        query="Continue point three.",
+        output_mode="chat",
+        tasks=[],
+        conversation_decision=ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="last_report", subject_hint="AAPL report"),
+            relation="follow_up",
+            domain_intent="report_discussion",
+        ),
+        memory_context={
+            "current_report": {
+                "report_id": "current-rpt",
+                "ticker": "AAPL",
+                "title": "AAPL report",
+            }
+        },
+    )
+
+    assert contract["continuation_target"] == {
+        "type": "last_report",
+        "report_id": "current-rpt",
+        "ticker": "AAPL",
+        "title": "AAPL report",
+    }
+
+
 def test_compound_alert_news_preserves_research_after_alert(monkeypatch):
     import importlib
 

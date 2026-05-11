@@ -25,6 +25,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from backend.config.ticker_mapping import extract_tickers
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.memory_scope import current_report_context
+from backend.graph.preference_timeouts import apply_preferred_timeout
 from backend.graph.request_task_contract import query_explicitly_requests_sources, wants_no_news_or_links
 from backend.graph.state import GraphState
 
@@ -341,7 +343,7 @@ def _bound_context_is_resolved(
     if source == "portfolio":
         return _has_portfolio_context(ui_context) or bool(binding.subject_hint)
     if source == "last_report":
-        return bool(_compact_last_report(memory_context) or binding.subject_hint)
+        return bool(_compact_last_report(memory_context))
     if source == "active_symbol":
         active_symbol = ui_context.get("active_symbol")
         return bool(binding.subject_hint or (isinstance(active_symbol, str) and active_symbol.strip()))
@@ -607,6 +609,25 @@ def normalize_context_decision(
             ),
             confidence=max(decision.confidence, 0.72),
             needs_tools=True,
+        )
+
+    if source == "last_report" and not _compact_last_report(memory_context):
+        return replace(
+            decision,
+            execution_route="clarify" if decision.relation != "new_topic" else decision.execution_route,
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="no current-session report is available for this context binding",
+                subject_hint="",
+            ),
+            confidence=min(decision.confidence, 0.45) if decision.relation != "new_topic" else decision.confidence,
+            needs_tools=False if decision.relation != "new_topic" else decision.needs_tools,
+            reply_guidance=(
+                "I do not have a report in the current conversation to continue from. Send or select the report, or say which previous report you mean."
+                if decision.relation != "new_topic"
+                else decision.reply_guidance
+            ),
         )
 
     if (
@@ -950,7 +971,7 @@ def _history_subject_hint(recent_history: list[dict[str, str]]) -> str:
 
 
 def _compact_last_report(memory_context: dict[str, Any]) -> dict[str, Any] | None:
-    report = memory_context.get("last_report") if isinstance(memory_context, dict) else None
+    report = current_report_context(memory_context)
     if not isinstance(report, dict):
         return None
     compact: dict[str, Any] = {}
@@ -959,24 +980,6 @@ def _compact_last_report(memory_context: dict[str, Any]) -> dict[str, Any] | Non
         if value is not None:
             compact[key] = value
     return compact or None
-
-
-def _compact_recent_focuses(memory_context: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = memory_context.get("recent_focuses") if isinstance(memory_context, dict) else None
-    rows = raw if isinstance(raw, list) else []
-    compact: list[dict[str, Any]] = []
-    for item in rows[:3]:
-        if not isinstance(item, dict):
-            continue
-        compact.append(
-            {
-                "ticker": item.get("ticker"),
-                "query": str(item.get("query") or "")[:160],
-                "summary": str(item.get("summary") or "")[:500],
-                "updated_at": item.get("updated_at"),
-            }
-        )
-    return compact
 
 
 def _portfolio_summary(ui_context: dict[str, Any]) -> dict[str, Any] | None:
@@ -1064,7 +1067,7 @@ def _router_inputs(
         "portfolio": _portfolio_summary(ui_context),
         "last_report": _compact_last_report(memory_context),
         "last_focus": None,
-        "recent_focuses": _compact_recent_focuses(memory_context),
+        "recent_focuses": [],
         "recent_history": recent_history,
     }
 
@@ -1226,7 +1229,13 @@ async def route_conversation(
         )
 
     inputs = _router_inputs(state, tickers=tickers, selection_ids=selection_ids)
-    timeout_sec = max(2.0, _env_float("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", 90.0))
+    timeout_sec = max(
+        2.0,
+        apply_preferred_timeout(
+            _env_float("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", 90.0),
+            state=state,
+        ),
+    )
     max_tokens = int(max(512, _env_float("FINSIGHT_CONTEXT_ROUTER_MAX_TOKENS", 2200.0)))
 
     system = """你是 FinSight 的会话上下文路由器。请根据当前用户问题、最近对话、UI 状态、最近报告和最近关注对象，判断本轮应该怎么处理。
@@ -1382,7 +1391,13 @@ async def generate_contextual_reply(
     decision: ConversationDecision,
 ) -> str:
     """Generate a natural direct-answer reply."""
-    timeout_sec = max(2.0, _env_float("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", 120.0))
+    timeout_sec = max(
+        2.0,
+        apply_preferred_timeout(
+            _env_float("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", 120.0),
+            state=state,
+        ),
+    )
     max_tokens = int(max(512, _env_float("FINSIGHT_CONTEXT_REPLY_MAX_TOKENS", 3000.0)))
     inputs = _router_inputs(state, tickers=[], selection_ids=[])
     inputs["decision"] = decision.model_dump()
