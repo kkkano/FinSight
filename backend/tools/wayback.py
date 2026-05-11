@@ -11,14 +11,18 @@ from urllib.parse import quote_plus, urlparse
 
 from bs4 import BeautifulSoup
 
-from .http import _http_get
+from .http import _http_get_no_retry
+
+# Compatibility hook for tests and callers that monkeypatch the Wayback HTTP
+# boundary.  The implementation intentionally uses the no-retry transport.
+_http_get = _http_get_no_retry
 
 logger = logging.getLogger(__name__)
 
 _WAYBACK_AVAILABLE_API = "https://archive.org/wayback/available"
 _WAYBACK_CDX_API = "https://web.archive.org/cdx/search/cdx"
 _WAYBACK_SNAPSHOT_BASE = "https://web.archive.org/web"
-_WAYBACK_TIMEOUT = int(os.getenv("WAYBACK_TIMEOUT", "15"))
+_WAYBACK_TIMEOUT = int(os.getenv("WAYBACK_TIMEOUT", "6"))
 _WAYBACK_MAX_CHARS = int(os.getenv("WAYBACK_MAX_CHARS", "12000"))
 _WAYBACK_USER_AGENT = os.getenv("WAYBACK_USER_AGENT", "FinSight/1.0")
 

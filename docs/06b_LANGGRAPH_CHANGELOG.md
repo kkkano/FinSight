@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-05-11 - Final 100-query chat UX acceptance
+
+- 将当前聊天 UX 验收线从旧 96-query weird 数据集校准到 `tests/eval/chat_router_100.json`；新增连续上下文与报告按钮追问覆盖，合计 100 条、18 类、95 个 hard 红线用例。
+- 最终 current-state 产物：`docs/qa/chat-router-100-final100-current-state.md` 与同名 `.json`，结果 `100` PASS、`0` REVIEW、`0` FAIL。
+- 重点通过场景：普通聊天不误进报告/新闻、`no news/no links/direct answer` 覆盖上一轮取证惯性、上下文追问绑定 `last_turn` 或 `last_report`、报告后追问回到 `chat_answer`、URL/新闻/报价请求进入 `source_grounded_answer`、工具 403/rejected/empty/timeout 不进入 evidence。
+- 完整验证快照：`python -m pytest` -> `1305 passed, 8 skipped`；`npm run build --prefix frontend` -> passed；`npm run test:e2e --prefix frontend` -> `37 passed`。
+- 已知剩余风险：上游 LLM 或外部工具仍可能出现延迟、额度、403、URL 不可访问；当前约束是失败输出只进 diagnostics，不作为新闻、来源或结论渲染。
+
+## 2026-05-10 - ReplyContract lanes and evidence diagnostics gate
+
+- 新增 `backend/graph/request_task_contract.py`，把聊天 UX 收敛为三条 lane：`chat_answer`、`source_grounded_answer`、`report_generation`。`brief` 只作为 `length_preference` 保留；报告只由报告按钮、`output_mode=investment_report` 或明确生成报告/研报触发。
+- `understand_request` 写入 `reply_contract` 并在 trace 中记录 contract；本轮“不要新闻/不要链接/直接说原因/像聊天一样讲”会转成 `source_constraints.disallow_news=true`，并在 task projection 后再次归一化。
+- `policy_gate` 和 `planner_stub` 读取 `reply_contract`，普通聊天的 no-news 约束会移除新闻工具并阻止 QA fallback 自动补新闻。
+- `decide_output_mode` 不再把英文任意独立 `report` 视为投资报告触发词，避免 “jobs report / earnings report” 这类普通语义误进 `report_generation`。
+- `execute_plan_stub` 增加 evidence gate：`403/rejected/empty/timeout/failed` 等输出写入 `artifacts.tool_diagnostics`，不进入 `evidence_pool` 或 `evidence_by_task`。
+- `backend/tools/news.py` 不再为缺失真实 URL 的新闻伪造搜索链接；没有可引用 URL 时由回答披露来源不可用。
+- 默认 OpenAI-compatible 配置切到 `https://token-plan-cn.xiaomimimo.com/v1` + `mimo-v2.5-pro`，并同步 `.env.example`、`.env.server.example` 与首启 user config 默认值。
+- 新增验证资产：`backend/tests/test_reply_contract_lanes.py`、`backend/tests/test_evidence_diagnostics_gate.py`、`scripts/chat_ux_router_eval.py`、`tests/eval/chat_router_96.json`。
+- 验证：`python -m pytest backend/tests/test_understand_request.py backend/tests/test_policy_gate.py backend/tests/test_policy_planner_query_regression.py backend/tests/test_planner_node.py backend/tests/test_templates_render.py backend/tests/test_reply_contract_lanes.py backend/tests/test_evidence_diagnostics_gate.py` -> 107 passed；`python -m pytest backend/tests/test_reply_contract_lanes.py backend/tests/test_evidence_diagnostics_gate.py backend/tests/test_llm_rotation.py` -> 24 passed；`npm run build --prefix frontend` -> passed；`scripts/chat_ux_router_eval.py --ids W025,W092` -> 2/2 PASS；`scripts/chat_ux_router_eval.py --ids W002` -> PASS。
+
 ## 2026-05-06 - Conversational chat UX acceptance and URL tool routing
 
 - 普通聊天默认保持对话感：`chat_respond` 只做纯社交快速通道，其余 turn 统一进入 `understand_request` 的 LLM conversation router，由 LLM 根据上下文决定 direct/research/alert/clarify/out_of_scope。

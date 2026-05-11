@@ -50,6 +50,28 @@ def test_trace_raw_override_priority(monkeypatch):
     assert main._resolve_trace_raw_enabled(req_off) is False
 
 
+def test_chat_request_accepts_selected_url_context():
+    req = ChatRequest(
+        query="This selected URL looks important; analyze it.",
+        context={
+            "active_symbol": "GOOGL",
+            "view": "dashboard",
+            "selection": {
+                "type": "url",
+                "id": "goog-url",
+                "title": "Google AI update",
+                "url": "https://example.com/googl-ai",
+                "source": "eval",
+                "snippet": "Google released a model update.",
+            },
+        },
+    )
+
+    assert req.context is not None
+    assert req.context.selection is not None
+    assert req.context.selection.type == "url"
+
+
 def test_is_raw_trace_event_keeps_execution_progress_events():
     main = _load_main_module()
 

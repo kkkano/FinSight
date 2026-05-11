@@ -807,14 +807,14 @@ def _init_default_user_config() -> None:
     persists across container restarts via the named volume.
     """
     import json as _json
-    from backend.llm_config import USER_CONFIG_PATH
+    from backend.llm_config import DEFAULT_OPENAI_COMPATIBLE_MODEL, USER_CONFIG_PATH
 
     if os.path.exists(USER_CONFIG_PATH):
         return
 
     _DEFAULT_API_BASE = os.getenv("OPENAI_COMPATIBLE_API_BASE", "https://token-plan-cn.xiaomimimo.com/v1")
     _DEFAULT_API_KEY  = os.getenv("OPENAI_COMPATIBLE_API_KEY", "")
-    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", "mimo-v2.5-pro")
+    _DEFAULT_MODEL    = os.getenv("OPENAI_COMPATIBLE_MODEL", DEFAULT_OPENAI_COMPATIBLE_MODEL)
 
     default_cfg = {
         "llm_provider": "openai_compatible",
@@ -1200,4 +1200,3 @@ app.include_router(morning_brief_router)
 # 閸氼垰濮╅崗銉ュ經
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
-

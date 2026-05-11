@@ -5,6 +5,7 @@ import os
 import re
 
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
+from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
 
 
@@ -15,6 +16,23 @@ _DASHBOARD_CORE_AGENTS: tuple[str, ...] = (
     "technical_agent",
     "macro_agent",
     "risk_agent",
+)
+
+
+_DEEP_RESEARCH_HINTS: tuple[str, ...] = (
+    "deep report",
+    "deep research",
+    "deep dive",
+    "longform",
+    "filing",
+    "10-k",
+    "10-q",
+    "earnings call",
+    "transcript",
+    "深度",
+    "深度研报",
+    "深度研究",
+    "财报电话会",
 )
 
 
@@ -44,6 +62,11 @@ def _is_truthy(value: object) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return False
+
+
+def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
+    lowered = str(text or "").lower()
+    return any(str(needle or "").lower() in lowered for needle in needles)
 
 
 def _infer_market_from_ticker(ticker: str) -> str | None:
@@ -249,6 +272,9 @@ def policy_gate(state: GraphState) -> dict:
     )
     if analysis_depth not in {"quick", "report", "deep_research"}:
         analysis_depth = None
+    if analysis_depth is None and output_mode == "investment_report":
+        query_text = str(state.get("query") or "")
+        analysis_depth = "deep_research" if _contains_any(query_text, _DEEP_RESEARCH_HINTS) else "report"
     raw_prefs = ui_context.get("agent_preferences") or {}
     agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
 
@@ -345,6 +371,9 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = ["fetch_url_content", *allowed_tools]
         budget["max_tools"] = max(int(budget.get("max_tools", 0)), 1)
 
+    if output_mode != "investment_report" and reply_contract_disallows_news(state):
+        allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
+
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
     allowed_agents: list[str] = []
@@ -419,7 +448,11 @@ def policy_gate(state: GraphState) -> dict:
                 if removed_by_prefs:
                     agent_selection["removed_by_prefs"] = removed_by_prefs
 
-        if analysis_depth == "report" and "deep_search_agent" in allowed_agents:
+        if (
+            analysis_depth == "report"
+            and not bool(agent_selection.get("force_all_agents"))
+            and "deep_search_agent" in allowed_agents
+        ):
             allowed_agents.remove("deep_search_agent")
             removed = list(agent_selection.get("removed_by_analysis_depth") or [])
             removed.append("deep_search_agent")

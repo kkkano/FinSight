@@ -19,7 +19,7 @@ class ChatMessage(BaseModel):
 
 
 class SelectionContext(BaseModel):
-    type: Literal["news", "filing", "doc", "report", "risk", "insight"] = Field(
+    type: Literal["news", "filing", "doc", "report", "risk", "insight", "url", "web", "article"] = Field(
         ...,
         description="selection type",
     )

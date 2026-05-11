@@ -203,6 +203,15 @@ def _sanitize_user_facing_snippet(text: object) -> str:
     return cleaned.strip()
 
 
+def _sanitize_preserved_markdown(markdown: str) -> str:
+    cleaned = str(markdown or "")
+    cleaned = re.sub(r"\s*\|\s*Suggested ladder:.*$", "", cleaned, flags=re.IGNORECASE | re.MULTILINE)
+    cleaned = cleaned.replace("Suggested ladder", "")
+    cleaned = cleaned.replace("**后续关注：**", "**后续观察**")
+    cleaned = cleaned.replace("后续关注：", "后续观察：")
+    return cleaned
+
+
 def _summarize_step_output(output: object) -> list[str]:
     source_lines = _extract_source_lines(output, limit=3)
     if source_lines:
@@ -461,6 +470,8 @@ def render_stub(state: GraphState) -> dict:
 
     if isinstance(existing_draft, str) and len(existing_draft.strip()) >= _NARRATIVE_MIN_CHARS:
         # synthesize already wrote a rich draft; keep it, but inject citations for brief mode if needed.
+        existing_draft = _sanitize_preserved_markdown(existing_draft)
+        artifacts = {**artifacts, "draft_markdown": existing_draft}
         if output_mode == "brief":
             evidence_md = _format_evidence_links((artifacts or {}).get("evidence_pool"))
             patched = _append_evidence_section_if_missing(existing_draft, evidence_md)
@@ -711,6 +722,6 @@ def render_stub(state: GraphState) -> dict:
             if isinstance(value, str) and value.strip():
                 values[key] = value
 
-    markdown = note_prefix + tpl.safe_substitute(values)
+    markdown = _sanitize_preserved_markdown(note_prefix + tpl.safe_substitute(values))
     result_artifacts = {**(state.get("artifacts") or {}), "draft_markdown": markdown}
     return {"artifacts": result_artifacts, "messages": [_build_ai_reply_message(result_artifacts)]}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Brain, Cpu, Target, Wrench, Sparkles, AlertCircle } from 'lucide-react';
+import { resolveUserMessage } from '../../utils/userMessageMapper';
 
 // ========== 阶段标签映射 ==========
 export const stageLabels: Record<string, string> = {
@@ -39,17 +40,13 @@ export const stageLabels: Record<string, string> = {
 // ========== LangGraph 阶段格式化 ==========
 export const formatLangGraphStage = (stage: string) => {
   if (!stage.startsWith('langgraph_')) return null;
-  if (stage === 'langgraph_start') return stageLabels.langgraph_start;
+  const mapped = resolveUserMessage(stage);
+  if (mapped) return mapped;
+  if (stage === 'langgraph_start') return '开始分析';
 
   const suffix = stage.endsWith('_start') ? 'start' : stage.endsWith('_done') ? 'done' : null;
   if (!suffix) return null;
-
-  const node = stage
-    .replace(/^langgraph_/, '')
-    .replace(/_(start|done)$/, '');
-  return suffix === 'start'
-    ? `▶️ LangGraph 节点开始：${node}`
-    : `✅ LangGraph 节点完成：${node}`;
+  return suffix === 'start' ? '正在处理请求...' : '处理完成';
 };
 
 // ========== 阶段图标选择 ==========

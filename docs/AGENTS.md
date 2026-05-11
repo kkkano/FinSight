@@ -24,7 +24,7 @@
 - 架构入口：`01_ARCHITECTURE.md`、`06a_LANGGRAPH_DESIGN_SPEC.md`
 - 请求理解实现 spec：`plans/2026-05-03_request_understanding_task_graph_spec.md`
 - 请求理解查询矩阵：`reports/2026-05-03_request_understanding_query_results.md`
-- 当前聊天 UX 验收：`qa/chat-ux-40-query-full-url-agent-2026-05-05.md`、`qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`
+- 当前聊天 UX 验收：`qa/chat-router-100-final100-current-state.md` / `.json`（`tests/eval/chat_router_100.json`，100/100 PASS）；旧 40-query 回归证据见 `qa/chat-ux-40-query-final40-post-context-binding.md`
 - 当前聊天主路径：`backend/graph/runner.py` 中的 `build_initial_state -> reset_turn_state -> prepare_context -> chat_respond -> understand_request`
 - 当前对话路由：`backend/graph/nodes/conversation_router.py`；URL/网页读取通过 planner/agent 工具 `fetch_url_content`
 - 会话生命周期：`backend/api/conversation_router.py`、`backend/services/conversation_store.py` 与 `plans/2026-05-03_request_understanding_task_graph_spec.md`

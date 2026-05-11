@@ -104,6 +104,7 @@ def test_context_router_preserves_extractable_alert_when_llm_picks_news(monkeypa
         async def ainvoke(self, _messages):
             return _Resp()
 
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
     monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: _FakeLLM())
 
     decision = _run(
@@ -149,8 +150,8 @@ def test_context_router_empty_llm_output_uses_explicit_subject_fallback(monkeypa
 
     assert fake.calls == 1
     assert decision is not None
-    assert decision.execution_route == "research"
-    assert decision.needs_tools is True
+    assert decision.execution_route == "direct_answer"
+    assert decision.needs_tools is False
 
 
 def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkeypatch):
@@ -182,8 +183,8 @@ def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkey
 
     assert fake.calls == 1
     assert decision is not None
-    assert decision.execution_route == "research"
-    assert decision.needs_tools is True
+    assert decision.execution_route == "direct_answer"
+    assert decision.needs_tools is False
 
 
 def test_finance_concept_fallback_answers_macro_mechanism():
@@ -295,7 +296,7 @@ def test_context_router_keeps_global_chat_history_over_active_symbol():
         selection_ids=[],
     )
 
-    assert normalized.context_binding.source == "recent_focus"
+    assert normalized.context_binding.source == "last_turn"
     assert normalized.context_binding.subject_hint == "AAPL"
 
 
@@ -590,6 +591,43 @@ def test_context_router_deictic_none_binding_without_thread_history_clarifies():
     assert normalized.needs_tools is False
 
 
+def test_context_router_unbound_clarify_uses_same_thread_history():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="clarify",
+        context_binding=ContextBinding(source="none", confidence=0.0),
+        relation="follow_up",
+        domain_intent="unknown",
+        confidence=0.32,
+        needs_tools=False,
+        reply_guidance="Need to know which point.",
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Can you expand that?",
+            "messages": [
+                HumanMessage(content="AAPL latest news, short answer."),
+                AIMessage(content="AAPL has three watch points: product cycle, AI capex, and China demand."),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.context_binding.source == "last_turn"
+    assert normalized.context_binding.subject_hint == "AAPL"
+    assert normalized.needs_tools is False
+
+
 def test_context_router_accepts_session_history_as_thread_history():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,
@@ -627,9 +665,297 @@ def test_context_router_accepts_session_history_as_thread_history():
         selection_ids=[],
     )
 
-    assert normalized.execution_route == "research"
+    assert normalized.execution_route == "direct_answer"
     assert normalized.context_binding.source == "last_turn"
     assert normalized.context_binding.subject_hint == "AAPL"
+    assert normalized.needs_tools is False
+
+
+def test_context_router_resolved_bound_clarify_continues_conversation():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="clarify",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.82,
+            subject_hint="GOOGL",
+            reason="the follow-up is anchored to the previous turn",
+        ),
+        relation="follow_up",
+        domain_intent="unknown",
+        confidence=0.7,
+        needs_tools=False,
+        reply_guidance="Need the referenced object.",
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "帮我算一下这个",
+            "messages": [
+                HumanMessage(content="GOOGL current price, short answer."),
+                AIMessage(content="GOOGL 最新价格约为 400.80 USD。"),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.context_binding.source == "last_turn"
+    assert normalized.context_binding.subject_hint == "GOOGL"
+    assert normalized.needs_tools is False
+
+
+def test_route_conversation_normalizes_llm_clarify_when_context_is_bound(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    class _Resp:
+        content = """
+        {
+          "execution_route": "clarify",
+          "context_binding": {
+            "source": "last_turn",
+            "confidence": 0.82,
+            "reason": "The user is continuing from the previous GOOGL answer.",
+            "subject_hint": "GOOGL"
+          },
+          "relation": "follow_up",
+          "domain_intent": "unknown",
+          "confidence": 0.7,
+          "needs_tools": false,
+          "reason": "The action is terse but the object is bound.",
+          "reply_guidance": "Use the recent conversation to infer the requested action."
+        }
+        """
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp()
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: _FakeLLM())
+
+    decision = _run(
+        route_conversation(
+            {
+                "query": "帮我算一下这个",
+                "ui_context": {},
+                "messages": [
+                    HumanMessage(content="GOOGL current price, short answer."),
+                    AIMessage(content="GOOGL 最新价格约为 400.80 USD。"),
+                ],
+            },
+            tickers=[],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "direct_answer"
+    assert decision.context_binding.source == "last_turn"
+    assert decision.context_binding.subject_hint == "GOOGL"
+
+
+def test_route_conversation_deictic_without_context_clarifies_without_llm(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    def fail_create_llm(*_args, **_kwargs):
+        raise AssertionError("unbound deictic follow-up should not spend a router LLM call")
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", fail_create_llm)
+
+    decision = _run(
+        route_conversation(
+            {"query": "Can you expand that?", "ui_context": {}, "messages": []},
+            tickers=[],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "clarify"
+    assert decision.context_binding.source == "none"
+    assert decision.needs_tools is False
+
+
+def test_context_router_single_word_it_prefers_thread_history_over_recent_focus():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(
+            source="recent_focus",
+            confidence=0.82,
+            subject_hint="MSFT",
+            reason="older cross-session focus",
+        ),
+        relation="follow_up",
+        domain_intent="analysis",
+        confidence=0.78,
+        needs_tools=True,
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Does it change the margin risk?",
+            "ui_context": {
+                "view": "chat",
+                "session_history": [
+                    {"role": "user", "content": "AAPL latest news with links.", "tickers": "AAPL"},
+                    {"role": "assistant", "content": "AAPL supplier guidance may affect margins."},
+                ],
+            },
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.context_binding.source == "last_turn"
+    assert normalized.context_binding.subject_hint == "AAPL"
+
+
+def test_context_router_resolved_followup_research_without_grounding_returns_to_chat():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            subject_hint="GOOGL",
+            reason="the user is continuing the previous GOOGL answer",
+        ),
+        relation="follow_up",
+        domain_intent="quote",
+        confidence=0.88,
+        needs_tools=True,
+        task_hints=(
+            {"subject_type": "company", "subject_label": "GOOGL", "operation": "price"},
+            {"subject_type": "company", "subject_label": "GOOGL", "operation": "fetch", "params": {"topic": "news"}},
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Use 307 as my reference level and calculate the gap. Do not ask which stock again.",
+            "messages": [
+                HumanMessage(content="GOOGL current price, short answer."),
+                AIMessage(content="GOOGL latest price is about 400.80 USD."),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.context_binding.source == "last_turn"
+    assert normalized.context_binding.subject_hint == "GOOGL"
+    assert normalized.needs_tools is False
+    assert normalized.task_hints == ()
+
+
+def test_context_router_resolved_quote_request_stays_research_when_query_asks_price():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            subject_hint="GOOGL",
+            reason="the user is continuing the previous GOOGL answer",
+        ),
+        relation="follow_up",
+        domain_intent="quote",
+        confidence=0.88,
+        needs_tools=True,
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "What price is it?",
+            "messages": [
+                HumanMessage(content="Let's talk about GOOGL."),
+                AIMessage(content="Sure, we can discuss GOOGL."),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "research"
+    assert normalized.needs_tools is True
+
+
+def test_context_router_resolved_followup_keeps_user_action_task_hints():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            subject_hint="AAPL",
+            reason="the user is continuing the previous AAPL answer",
+        ),
+        relation="follow_up",
+        domain_intent="unknown",
+        confidence=0.82,
+        needs_tools=True,
+        task_hints=(
+            {"subject_type": "company", "subject_label": "AAPL", "operation": "alert_set", "params": {"threshold": 180}},
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Also remind me below 180.",
+            "messages": [
+                HumanMessage(content="AAPL current price."),
+                AIMessage(content="AAPL is trading around 293.32 USD."),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "research"
+    assert normalized.needs_tools is True
+    assert normalized.task_hints == decision.task_hints
 
 
 def test_context_router_current_query_ticker_overrides_session_history():
@@ -846,6 +1172,165 @@ def test_understand_request_uses_context_binding_for_direct_report_discussion(mo
     decision = result["artifacts"]["conversation_decision"]
     assert decision["execution_route"] == "direct_answer"
     assert decision["context_binding"]["source"] == "last_report"
+
+
+def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["NVDA", "AMD", "TSM"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="NVDA, AMD, TSM"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=False,
+            reason="direct conceptual comparison can answer from context",
+        )
+
+    async def fake_reply(_state, _decision):
+        return "The core 问题：semiconductor ETFs are a concentrated AI-cycle bet.\n后续关注：valuation and demand."
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "Use NVDA, AMD, and TSM as proxies. Keep it short.",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    markdown = result["artifacts"]["draft_markdown"]
+    assert result["understanding"]["route"] == "direct"
+    assert "问题：" not in markdown
+    assert "后续关注：" not in markdown
+    assert "关键点：" in markdown
+    assert "后续观察：" in markdown
+    assert markdown.startswith("Using NVDA, AMD, TSM as the representative set:")
+    assert result["messages"][-1].content == markdown
+
+
+def test_understand_request_direct_followup_keeps_last_turn_binding(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == []
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="last_turn",
+                confidence=0.84,
+                subject_hint="GOOGL",
+                reason="the current turn continues the previous GOOGL answer",
+            ),
+            relation="follow_up",
+            domain_intent="unknown",
+            confidence=0.82,
+            needs_tools=False,
+            reason="same-session context is sufficient for a natural reply",
+        )
+
+    async def fake_reply(state, decision):
+        assert decision.context_binding.source == "last_turn"
+        assert decision.context_binding.subject_hint == "GOOGL"
+        history = [
+            getattr(message, "content", "")
+            for message in (state.get("messages") or [])
+            if getattr(message, "content", "")
+        ]
+        assert any("GOOGL" in str(item) for item in history)
+        return "按刚才 GOOGL 的上下文继续算，不需要你再重复标的。"
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "帮我算一下这个",
+                "ui_context": {},
+                "output_mode": "chat",
+                "messages": [
+                    HumanMessage(content="GOOGL current price, short answer."),
+                    AIMessage(content="GOOGL 最新价格约为 400.80 USD。"),
+                ],
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["chat_responded"] is True
+    assert result["understanding"]["route"] == "direct"
+    assert result["clarify"]["needed"] is False
+    assert "不需要你再重复标的" in ((result.get("artifacts") or {}).get("draft_markdown") or "")
+    decision = result["artifacts"]["conversation_decision"]
+    assert decision["context_binding"]["source"] == "last_turn"
+    assert decision["context_binding"]["subject_hint"] == "GOOGL"
+
+
+def test_understand_request_quote_label_without_price_request_stays_chat(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == []
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="last_turn",
+                confidence=0.9,
+                subject_hint="GOOGL",
+                reason="the user is continuing the previous GOOGL answer",
+            ),
+            relation="follow_up",
+            domain_intent="quote",
+            confidence=0.86,
+            needs_tools=False,
+            reason="the label is quote-like but the user asked for a contextual calculation",
+        )
+
+    async def fake_reply(_state, decision):
+        assert decision.domain_intent == "quote"
+        return "Using the prior GOOGL context, 400.80 minus 307 is 93.80."
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "Use 307 as my reference level and calculate the gap. Do not ask which stock again.",
+                "ui_context": {},
+                "output_mode": "chat",
+                "messages": [
+                    HumanMessage(content="GOOGL current price, short answer."),
+                    AIMessage(content="GOOGL latest price is about 400.80 USD."),
+                ],
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["chat_responded"] is True
+    assert result["understanding"]["route"] == "direct"
+    assert result["tasks"] == []
+    assert result["reply_contract"]["lane"] == "chat_answer"
 
 
 def test_understand_request_leaves_url_fetch_to_tools(monkeypatch):
@@ -1266,6 +1751,54 @@ def test_understand_request_router_quote_intent_overrides_multi_ticker_compare(m
     assert [(task.get("operation") or {}).get("name") for task in result["tasks"]] == ["price", "price", "price"]
 
 
+def test_understand_request_splits_multi_ticker_router_price_hint(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"AAPL", "MSFT", "GOOGL"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL, MSFT, GOOGL"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router decomposed a quote request into one multi-symbol price hint",
+            task_hints=(
+                {
+                    "subject_type": "company",
+                    "subject_label": "AAPL, MSFT, GOOGL",
+                    "tickers": ["AAPL", "MSFT", "GOOGL"],
+                    "operation": "price",
+                    "params": {},
+                },
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "What are AAPL, MSFT, and GOOGL trading at now?",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "research"
+    assert result["subject"]["tickers"] == ["AAPL", "MSFT", "GOOGL"]
+    assert (result["operation"] or {})["name"] == "price"
+    assert [task["tickers"] for task in result["tasks"]] == [["AAPL"], ["MSFT"], ["GOOGL"]]
+    assert all((task.get("operation") or {}).get("name") == "price" for task in result["tasks"])
+    assert all(task.get("reason") == "conversation_router_task_hint" for task in result["tasks"])
+
+
 def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatch):
     from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
 
@@ -1524,6 +2057,53 @@ def test_understand_request_router_analysis_new_topic_uses_light_current_snapsho
     assert result["subject"]["tickers"] == ["AAPL"]
     assert (result["operation"] or {}).get("name") == "daily_brief"
     assert [(task.get("operation") or {}).get("name") for task in result["tasks"]] == ["daily_brief"]
+
+
+def test_understand_request_reconciles_quote_intent_with_generic_qa_hint(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["AAPL"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL"),
+            relation="new_topic",
+            domain_intent="quote",
+            confidence=0.82,
+            needs_tools=True,
+            reason="router says this current company look needs a quote",
+            task_hints=(
+                {
+                    "subject_type": "company",
+                    "subject_label": "AAPL",
+                    "tickers": ["AAPL"],
+                    "operation": "qa",
+                    "params": {},
+                    "reason": "generic model wording for a current snapshot",
+                },
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "Give me a quick look at AAPL, short.",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "research"
+    assert result["subject"]["tickers"] == ["AAPL"]
+    assert (result["operation"] or {}).get("name") == "price"
+    assert [(task.get("operation") or {}).get("name") for task in result["tasks"]] == ["price"]
 
 
 def test_understand_request_can_bind_portfolio_context_to_research(monkeypatch):

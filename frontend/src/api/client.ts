@@ -418,7 +418,7 @@ export async function parseSSEStream(
           } else if (data.type === 'trace') {
             onThinking?.({
               stage: data.stage || 'trace',
-              message: data.summary || data.title || data.message || 'trace',
+              message: data.summary || data.title || data.userMessage || data.message || 'trace',
               result: data,
               timestamp: data.timestamp || new Date().toISOString(),
               eventType: 'trace',
@@ -428,7 +428,7 @@ export async function parseSSEStream(
           } else if (data.type === 'thinking') {
             onThinking?.({
               stage: data.stage || 'any',
-              message: data.message,
+              message: data.userMessage || data.message,
               result: data.result,
               timestamp: data.timestamp || new Date().toISOString(),
               eventType: 'thinking',

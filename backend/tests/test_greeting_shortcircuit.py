@@ -138,14 +138,14 @@ class TestGreetingShortCircuit:
 
 
 class TestAnalyticalQueryPassThrough:
-    """Analytical queries must NOT short-circuit — they pass through to resolve_subject."""
+    """Explicit grounded analytical queries must reach the tool/planner path."""
 
     @pytest.mark.parametrize(
         "query",
         [
-            "分析 AAPL",
+            "AAPL 最新股价",
             "NVDA 最新股价和技术面分析",
-            "帮我看看特斯拉",
+            "特斯拉最新新闻带链接",
         ],
     )
     def test_analytical_not_short_circuited(self, query: str):

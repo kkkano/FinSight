@@ -18,7 +18,8 @@ COPY requirements.txt .
 # BGE_M3_DEVICE=cpu so we never need CUDA at runtime
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Slow domestic links can stall large wheel downloads; keep the main dependency layer retryable.
+RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 -r requirements.txt
 
 # Copy full project
 COPY . .

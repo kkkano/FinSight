@@ -243,7 +243,7 @@ def test_planner_chat_compare_with_current_subtasks_skips_historical_performance
     assert names.count("get_company_news") == 2
 
 
-def test_understand_lightweight_representative_query_keeps_single_basket_task():
+def test_understand_lightweight_representative_query_stays_chat_without_current_data_request():
     import asyncio
 
     from backend.graph.nodes.understand_request import understand_request
@@ -259,9 +259,9 @@ def test_understand_lightweight_representative_query_keeps_single_basket_task():
         )
     )
     tasks = result.get("tasks") or []
-    assert len(tasks) == 1
-    assert tasks[0].get("tickers") == ["NVDA", "AMD", "TSM"]
-    assert (tasks[0].get("operation") or {}).get("name") == "qa"
+    assert tasks == []
+    assert (result.get("understanding") or {}).get("route") == "direct"
+    assert (result.get("reply_contract") or {}).get("lane") == "chat_answer"
 
 
 def test_planner_stub_report_analysis_depth_excludes_deep_search(monkeypatch):

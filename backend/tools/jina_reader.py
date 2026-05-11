@@ -4,12 +4,12 @@ import logging
 import os
 from typing import Optional
 
-from .http import _http_get
+from .http import _http_get_no_retry
 
 logger = logging.getLogger(__name__)
 
 _JINA_BASE = os.getenv("JINA_READER_BASE_URL", "https://r.jina.ai/")
-_JINA_TIMEOUT = int(os.getenv("JINA_READER_TIMEOUT", "30"))
+_JINA_TIMEOUT = int(os.getenv("JINA_READER_TIMEOUT", "6"))
 _JINA_MAX_CHARS = int(os.getenv("JINA_READER_MAX_CHARS", "12000"))
 _JINA_MIN_CHARS = int(os.getenv("JINA_READER_MIN_CHARS", "50"))
 
@@ -28,7 +28,7 @@ def fetch_via_jina(url: str, *, timeout: int | None = None) -> Optional[str]:
         return None
 
     try:
-        resp = _http_get(
+        resp = _http_get_no_retry(
             f"{_JINA_BASE}{target}",
             headers={
                 "Accept": "text/plain",

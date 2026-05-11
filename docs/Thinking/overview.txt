@@ -92,7 +92,7 @@ flowchart TD
 **证据 A：硬编码 API Key（安全与环境隔离问题）**
 来源：[backend/tools.py](backend/tools.py#L64-L72)
 ```python
-EXA_API_KEY = os.getenv("EXA_API_KEY", "096d2363-4811-42c0-84ed-b0d312a4c77e").strip('"')  # Exa Search API
+EXA_API_KEY = os.getenv("EXA_API_KEY", "<example-exa-api-key>").strip('"')  # Exa Search API
 ```
 
 **证据 B：不可达代码（维护负担）**

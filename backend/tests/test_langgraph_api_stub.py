@@ -202,7 +202,7 @@ def test_chat_context_preserves_portfolio_positions(client):
 
 def test_chat_supervisor_trace_planner_runtime_contains_variant_field(client):
 
-    resp = client.post("/chat/supervisor", json={"query": "分析苹果影响"})
+    resp = client.post("/chat/supervisor", json={"query": "苹果最新股价和新闻"})
     assert resp.status_code == 200
     data = resp.json()
 

@@ -25,6 +25,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from backend.config.ticker_mapping import extract_tickers
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.request_task_contract import query_explicitly_requests_sources, wants_no_news_or_links
 from backend.graph.state import GraphState
 
 logger = logging.getLogger(__name__)
@@ -59,9 +60,15 @@ _TASK_HINT_OPERATIONS: set[str] = {
     "fact_check",
 }
 _STRUCTURAL_DEIXIS_RE = re.compile(
-    r"(第二|第[一二三四五六七八九十0-9]+|继续|展开|上面|刚才|上一条|前面|那它|它|this|that|it)",
+    r"("
+    r"第二|第[一二三四五六七八九十0-9]+|继续|展开|上面|刚才|上一条|前面|那它|它"
+    r"|\b(?:this|that|its)\b"
+    r"|\b(?:do|does|did|can|could|would|will|should|is|was|were|has|have|had)\s+it\b"
+    r"|\bit\s+(?:mean|means|imply|implies|change|changes|affect|affects|impact|impacts|matter|matters)\b"
+    r")",
     re.IGNORECASE,
 )
+_URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+", re.IGNORECASE)
 ExecutionRoute = Literal["direct_answer", "research", "alert", "clarify", "out_of_scope"]
 ContextSource = Literal[
     "none",
@@ -164,6 +171,34 @@ def _coerce_confidence(value: Any, default: float = 0.0) -> float:
     if confidence > 1:
         confidence = confidence / 100.0
     return max(0.0, min(1.0, confidence))
+
+
+def _query_explicitly_requests_grounding(query: str) -> bool:
+    text = str(query or "")
+    if wants_no_news_or_links(text):
+        return False
+    lowered = text.lower()
+    return (
+        bool(_URL_RE.search(text))
+        or query_explicitly_requests_sources(text)
+        or bool(re.search(r"\b(?:what|which)\s+(?:is\s+)?(?:the\s+)?(?:current\s+)?(?:price|quote)\b", lowered))
+        or bool(re.search(r"\bhow\s+much\s+(?:is|are)\b", lowered))
+        or any(
+            token in lowered
+            for token in (
+                "url",
+                "urls",
+                "headline",
+                "headlines",
+                "news",
+                "latest",
+                "quote",
+                "price now",
+                "stock price",
+                "trading at",
+            )
+        )
+    )
 
 
 def _extract_json_object(raw: str) -> dict[str, Any]:
@@ -283,6 +318,68 @@ def _coerce_decision(payload: dict[str, Any]) -> ConversationDecision:
     )
 
 
+def _bound_context_is_resolved(
+    *,
+    source: ContextSource,
+    binding: ContextBinding,
+    ui_context: dict[str, Any],
+    memory_context: dict[str, Any],
+    recent_history: list[dict[str, str]],
+    selection_ids: list[str],
+) -> bool:
+    """Whether a non-none context binding is concrete enough to continue.
+
+    A clarification is only valid when the missing piece is the conversation
+    anchor itself. Once the router has a concrete anchor, the answer layer can
+    decide whether to calculate, explain, rewrite, or ask a narrower follow-up
+    without losing the already-resolved subject.
+    """
+    if source in {"none", "unresolved_clarification"}:
+        return False
+    if source == "selection":
+        return bool(selection_ids or _selection_summary(ui_context))
+    if source == "portfolio":
+        return _has_portfolio_context(ui_context) or bool(binding.subject_hint)
+    if source == "last_report":
+        return bool(_compact_last_report(memory_context) or binding.subject_hint)
+    if source == "active_symbol":
+        active_symbol = ui_context.get("active_symbol")
+        return bool(binding.subject_hint or (isinstance(active_symbol, str) and active_symbol.strip()))
+    if source in {"last_turn", "recent_focus"}:
+        return bool(recent_history and binding.subject_hint)
+    return bool(binding.subject_hint)
+
+
+def _task_hints_require_execution(task_hints: tuple[dict[str, Any], ...]) -> bool:
+    for hint in task_hints:
+        if not isinstance(hint, dict):
+            continue
+        operation = str(hint.get("operation") or "").strip().lower()
+        if operation in {"alert_set", "portfolio_impact", "rebalance_check"}:
+            return True
+    return False
+
+
+def _research_decision_can_answer_as_chat(decision: ConversationDecision, query: str) -> bool:
+    """Whether a router research decision is actually an ordinary chat answer.
+
+    The LLM router owns the semantic read of the turn, but execution has a hard
+    product boundary: only explicit evidence/data/tool requests should enter the
+    grounded lane. This guard keeps generic mechanism explanations from being
+    promoted into search because a finance term also happens to be a tradable
+    subject.
+    """
+    if decision.execution_route != "research":
+        return False
+    if decision.domain_intent not in {"analysis", "finance_concept"}:
+        return False
+    if _query_explicitly_requests_grounding(query):
+        return False
+    if _task_hints_require_execution(decision.task_hints):
+        return False
+    return True
+
+
 def normalize_context_decision(
     decision: ConversationDecision,
     state: GraphState,
@@ -320,6 +417,32 @@ def normalize_context_decision(
             ),
         )
 
+    can_downgrade_unbound_research = (
+        decision.relation == "new_topic"
+        or (
+            decision.relation == "elaborate"
+            and source == "none"
+            and not _STRUCTURAL_DEIXIS_RE.search(query)
+        )
+    )
+    if (
+        _research_decision_can_answer_as_chat(decision, query)
+        and can_downgrade_unbound_research
+        and not tickers
+        and source not in {"selection", "portfolio"}
+    ):
+        return replace(
+            decision,
+            execution_route="direct_answer",
+            needs_tools=False,
+            task_hints=(),
+            confidence=max(decision.confidence, 0.72),
+            reason=decision.reason
+            or "ordinary financial explanation does not require current data, sources, URL reading, or tools",
+            reply_guidance=decision.reply_guidance
+            or "Answer naturally from financial reasoning; do not fetch news, links, quotes, or sources unless the user asks for them.",
+        )
+
     if (
         tickers
         and decision.execution_route == "research"
@@ -343,10 +466,50 @@ def normalize_context_decision(
             confidence=max(decision.confidence, 0.72),
         )
 
+    if (
+        tickers
+        and not selection_ids
+        and decision.execution_route == "research"
+        and decision.domain_intent in {"analysis", "finance_concept"}
+        and source in {"none", *_IMPLICIT_HISTORY_SOURCES}
+        and not _query_explicitly_requests_grounding(query)
+        and not _has_portfolio_context(ui_context)
+    ):
+        effective_tickers = _effective_current_turn_tickers(query, tickers, decision)
+        label = ", ".join(effective_tickers[:3] or tickers[:3])
+        return replace(
+            decision,
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="explicit ticker analysis did not ask for current data, links, sources, URL reading, or report mode",
+                subject_hint=label,
+            ),
+            needs_tools=False,
+            task_hints=(),
+            confidence=max(decision.confidence, 0.74),
+            reply_guidance=decision.reply_guidance
+            or "Answer naturally from financial reasoning; do not run evidence tools unless current data or sources are requested.",
+        )
+
     if tickers and source not in {"portfolio", "selection"}:
         effective_tickers = _effective_current_turn_tickers(query, tickers, decision)
         if decision.relation == "correct":
             label = ", ".join(effective_tickers[:3] or tickers[:3])
+            if _query_explicitly_requests_grounding(query) or decision.domain_intent in {"quote", "news", "doc_qa"}:
+                return replace(
+                    decision,
+                    execution_route="research",
+                    context_binding=ContextBinding(
+                        source="none",
+                        confidence=0.0,
+                        reason="current user turn corrects the subject but still asks for grounded data",
+                        subject_hint=label,
+                    ),
+                    confidence=max(decision.confidence, 0.74),
+                    needs_tools=True,
+                )
             return replace(
                 decision,
                 execution_route="direct_answer",
@@ -379,6 +542,26 @@ def normalize_context_decision(
                 reason="current UI selection is more explicit than implicit conversation history",
                 subject_hint=", ".join(selection_ids[:3]),
             ),
+        )
+
+    if (
+        not tickers
+        and not selection_ids
+        and source == "recent_focus"
+        and has_thread_history
+        and decision.relation != "new_topic"
+        and _STRUCTURAL_DEIXIS_RE.search(query)
+    ):
+        last_tickers = _last_user_history_tickers(recent_history)
+        return replace(
+            decision,
+            context_binding=ContextBinding(
+                source="last_turn",
+                confidence=max(binding.confidence, 0.76),
+                reason="same-session last turn is stronger than user-level recent focus for deictic follow-ups",
+                subject_hint=", ".join(last_tickers) or binding.subject_hint,
+            ),
+            confidence=max(decision.confidence, 0.72),
         )
 
     portfolio_context_present = _has_portfolio_context(ui_context)
@@ -471,6 +654,44 @@ def normalize_context_decision(
     if (
         not tickers
         and not selection_ids
+        and decision.relation != "new_topic"
+        and (
+            source in {"none", "unresolved_clarification"}
+            or (source in {"last_turn", "recent_focus"} and not binding.subject_hint)
+        )
+        and has_thread_history
+        and (
+            decision.execution_route == "clarify"
+            or _STRUCTURAL_DEIXIS_RE.search(query)
+        )
+    ):
+        subject_hint = _history_subject_hint(recent_history)
+        if subject_hint:
+            should_research = (
+                bool(decision.task_hints and _task_hints_require_execution(decision.task_hints))
+                or (decision.needs_tools and _query_explicitly_requests_grounding(query))
+            )
+            return replace(
+                decision,
+                execution_route="research" if should_research else "direct_answer",
+                context_binding=ContextBinding(
+                    source="last_turn",
+                    confidence=max(binding.confidence, 0.76),
+                    reason="same-thread history provides a concrete anchor for this follow-up",
+                    subject_hint=subject_hint,
+                ),
+                confidence=max(decision.confidence, 0.72),
+                needs_tools=should_research,
+                task_hints=decision.task_hints if should_research else (),
+                reason=decision.reason
+                or "the follow-up was bound to same-thread history before deciding whether tools are needed",
+                reply_guidance=decision.reply_guidance
+                or "Use the recent conversation context to answer naturally; ask for clarification only if the requested action remains impossible.",
+            )
+
+    if (
+        not tickers
+        and not selection_ids
         and source in {"none", *_IMPLICIT_HISTORY_SOURCES}
         and not has_thread_history
         and _STRUCTURAL_DEIXIS_RE.search(query)
@@ -487,6 +708,73 @@ def normalize_context_decision(
             confidence=min(decision.confidence, 0.45),
             needs_tools=False,
             reply_guidance="我这里没有足够的当前会话上下文判断你指的哪一点；请告诉我具体是哪家公司、哪条新闻或哪份报告。",
+        )
+
+    if (
+        decision.execution_route == "clarify"
+        and decision.relation != "new_topic"
+        and _bound_context_is_resolved(
+            source=source,
+            binding=binding,
+            ui_context=ui_context,
+            memory_context=memory_context,
+            recent_history=recent_history,
+            selection_ids=selection_ids,
+        )
+    ):
+        continue_route: ExecutionRoute = "research" if decision.needs_tools or bool(decision.task_hints) else "direct_answer"
+        return replace(
+            decision,
+            execution_route=continue_route,
+            confidence=max(decision.confidence, 0.72),
+            needs_tools=continue_route == "research",
+            reason=decision.reason
+            or "clarify was downgraded because the follow-up already has a resolved context binding",
+            reply_guidance=decision.reply_guidance
+            or "Use the bound conversation context to answer naturally; only ask again if the action itself is still impossible.",
+        )
+
+    if (
+        decision.execution_route == "research"
+        and decision.relation != "new_topic"
+        and decision.domain_intent not in {"news", "doc_qa", "portfolio", "alert"}
+        and not _query_explicitly_requests_grounding(query)
+        and not _task_hints_require_execution(decision.task_hints)
+        and _bound_context_is_resolved(
+            source=source,
+            binding=binding,
+            ui_context=ui_context,
+            memory_context=memory_context,
+            recent_history=recent_history,
+            selection_ids=selection_ids,
+        )
+    ):
+        return replace(
+            decision,
+            execution_route="direct_answer",
+            confidence=max(decision.confidence, 0.72),
+            needs_tools=False,
+            task_hints=(),
+            reason=decision.reason
+            or "research was downgraded because the follow-up already has a resolved context binding and did not request fresh evidence",
+            reply_guidance=decision.reply_guidance
+            or "Use recent conversation context to answer naturally; do not fetch news, links, quotes, or sources unless the user asks for them.",
+        )
+
+    if (
+        decision.execution_route == "clarify"
+        and decision.domain_intent == "finance_concept"
+        and source == "none"
+        and not tickers
+        and not selection_ids
+        and not _STRUCTURAL_DEIXIS_RE.search(query)
+    ):
+        return replace(
+            decision,
+            execution_route="direct_answer",
+            confidence=max(decision.confidence, 0.72),
+            needs_tools=False,
+            reply_guidance=decision.reply_guidance or "Answer the financial concept naturally; no ticker is required.",
         )
 
     if source not in _IMPLICIT_HISTORY_SOURCES:
@@ -610,6 +898,57 @@ def _recent_history(state: GraphState, *, limit: int = 8) -> list[dict[str, str]
     return deduped[-limit:]
 
 
+def _last_user_history_tickers(recent_history: list[dict[str, str]]) -> list[str]:
+    for row in reversed(recent_history or []):
+        if row.get("role") != "user":
+            continue
+        raw = str(row.get("tickers") or "").strip()
+        if not raw:
+            continue
+        tickers: list[str] = []
+        seen: set[str] = set()
+        for item in re.split(r"[,，\s]+", raw):
+            ticker = item.strip().upper()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            tickers.append(ticker)
+        if tickers:
+            return tickers[:3]
+    return []
+
+
+def _history_subject_hint(recent_history: list[dict[str, str]]) -> str:
+    """Return a compact anchor from same-thread history for follow-up binding."""
+    tickers = _last_user_history_tickers(recent_history)
+    if tickers:
+        return ", ".join(tickers[:3])
+
+    for preferred_role in ("user", "assistant"):
+        for row in reversed(recent_history or []):
+            if row.get("role") != preferred_role:
+                continue
+            content = str(row.get("content") or "").strip()
+            if not content:
+                continue
+            extracted = [
+                str(ticker).upper()
+                for ticker in (extract_tickers(content).get("tickers") or [])
+                if str(ticker).strip()
+            ]
+            if extracted:
+                return ", ".join(_dedupe_preserve_order(extracted)[:3])
+
+    for preferred_role in ("assistant", "user"):
+        for row in reversed(recent_history or []):
+            if row.get("role") != preferred_role:
+                continue
+            content = " ".join(str(row.get("content") or "").strip().split())
+            if content:
+                return content[:160]
+    return ""
+
+
 def _compact_last_report(memory_context: dict[str, Any]) -> dict[str, Any] | None:
     report = memory_context.get("last_report") if isinstance(memory_context, dict) else None
     if not isinstance(report, dict):
@@ -730,6 +1069,30 @@ def _router_inputs(
     }
 
 
+def _deictic_query_has_no_available_context(
+    state: GraphState,
+    *,
+    tickers: list[str],
+    selection_ids: list[str],
+) -> bool:
+    """Fast-path truly unbound follow-ups before spending a router LLM call."""
+    query = str(state.get("query") or "").strip()
+    if tickers or selection_ids or not _STRUCTURAL_DEIXIS_RE.search(query):
+        return False
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    memory_context = state.get("memory_context") if isinstance(state.get("memory_context"), dict) else {}
+    if _recent_history(state):
+        return False
+    if _selection_summary(ui_context) or _has_portfolio_context(ui_context):
+        return False
+    if _compact_last_report(memory_context):
+        return False
+    active_symbol = ui_context.get("active_symbol")
+    if isinstance(active_symbol, str) and active_symbol.strip():
+        return False
+    return True
+
+
 def _fallback_decision(
     state: GraphState,
     *,
@@ -756,7 +1119,8 @@ def _fallback_decision(
     alert_decision = _alert_decision_from_extractor(state, tickers=tickers)
     if alert_decision is not None:
         return alert_decision
-    if tickers or selection_ids:
+    query = str(state.get("query") or "").strip()
+    if selection_ids or (tickers and _query_explicitly_requests_grounding(query)):
         source: ContextSource = "selection" if selection_ids else "none"
         return ConversationDecision(
             execution_route="research",
@@ -765,6 +1129,19 @@ def _fallback_decision(
             confidence=0.62,
             needs_tools=True,
             reason="explicit subject context",
+        )
+    if tickers:
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.6,
+                subject_hint=", ".join(tickers[:3]),
+            ),
+            domain_intent="analysis",
+            confidence=0.62,
+            needs_tools=False,
+            reason="explicit subject context without grounded data request",
         )
     return None
 
@@ -830,6 +1207,23 @@ async def route_conversation(
 
     if not _env_bool("FINSIGHT_CONTEXT_ROUTER_ENABLED", True):
         return _fallback_decision(state, tickers=tickers, selection_ids=selection_ids)
+
+    if _deictic_query_has_no_available_context(state, tickers=tickers, selection_ids=selection_ids):
+        return ConversationDecision(
+            execution_route="clarify",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="thread has no prior turns, so this deictic follow-up cannot be bound safely",
+                subject_hint="",
+            ),
+            relation="follow_up",
+            domain_intent="unknown",
+            confidence=0.45,
+            needs_tools=False,
+            reason="deictic follow-up has no same-thread or visible UI context",
+            reply_guidance="I do not have enough current conversation context to know which point you mean. Send the relevant point, company, news item, document, or report and I will continue from there.",
+        )
 
     inputs = _router_inputs(state, tickers=tickers, selection_ids=selection_ids)
     timeout_sec = max(2.0, _env_float("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", 90.0))
@@ -1004,6 +1398,8 @@ async def generate_contextual_reply(
 - 如果 out_of_scope，直接用金融助手身份简短说明不能做该非金融请求，可以自然给一个转成金融视角的方向；不要列模板标题。
 - 如果用户要求保证收益、确定性涨跌或“必涨/稳赚标的”，不要承诺结果，不要假装能预测；自然说明边界，并转成“候选池 + 可验证证据 + 风险控制”的分析方式。
 - 如果 relation=correct，简短确认用户纠正后的对象，之后按纠正后的对象继续；不要要求用户重复确认已经明确的 ticker。
+- 如果用户是省略式追问，优先结合 recent_history 和 context_binding 推断对象与动作；上下文足够时直接回答、计算、改写或展开，不要让用户重复对象。
+- 如果用户给了数字或要求计算，先看最近对话里是否已有可用数值；缺少必要数值时，只说明缺哪一个，不要忘掉已绑定的对象。
 - 不要虚构最新市场事实；需要实时数据时说明要进入研究链路。
 """
     prompt = "<context>\n" + json_dumps_safe(inputs, ensure_ascii=False, indent=2) + "\n</context>"

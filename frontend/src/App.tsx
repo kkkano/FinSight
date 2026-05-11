@@ -114,6 +114,11 @@ function AuthenticatedGuard({ children }: { children: ReactElement }) {
 }
 
 function RootRedirect() {
+  const location = useLocation();
+  const symbol = new URLSearchParams(location.search).get('symbol')?.trim();
+  if (symbol) {
+    return <Navigate to={`/dashboard/${encodeURIComponent(symbol)}${location.search}`} replace />;
+  }
   return <Navigate to={{ pathname: '/welcome', search: '' }} replace />;
 }
 

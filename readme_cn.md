@@ -249,7 +249,17 @@ FinSight 的聊天主链路现在是 `prepare_context -> chat_respond -> underst
 
 Router 会先判断本轮应该自然直接回答、澄清、设置提醒，还是进入研究规划。进入研究时才输出 `understanding`、`tasks[]`、`blocked_tasks[]`，并通过 `type="trace"`、`visibility="user"` 的 SSE 事件把“系统识别了什么”展示给前端。URL/网页/文章读取以 planner/agent 工具 `fetch_url_content` 暴露，`understand_request` 不做 URL 预抓取。
 
-当前实现 spec 见 [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md)。最新 40-query 聊天 UX 验收完整问题和答案见 [`docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`](docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md)，定向修复验证见 [`docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`](docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md)。
+`understand_request` 还会写入结构化 `ReplyContract`，让后续节点不再用原始关键词二次猜 UX 意图。当前三条 lane 是：
+
+| Lane | 触发条件 | 输出规则 |
+|------|----------|----------|
+| `chat_answer` | 普通解释、追问、纠偏，以及“不要新闻 / 不要链接 / 直接回答” | 像聊天一样自然回答；不强制找新闻，也不套报告结构 |
+| `source_grounded_answer` | 明确要新闻、链接、URL/文章读取、实时行情、引用或数据证据 | 使用可取证工具；有可用 URL 就引用，没有则说明未拿到可引用来源 |
+| `report_generation` | 报告按钮、`output_mode=investment_report`，或明确“生成报告/研报” | 进入报告结构和报告引用策略 |
+
+证据与工具诊断分离：`EvidenceItem` / `evidence_pool` 只存可作为来源的材料；`403`、`rejected`、`empty`、`timeout` 等失败输出写入 `artifacts.tool_diagnostics` 的 `ToolError`，不能被渲染成新闻、来源或结论。
+
+当前实现 spec 见 [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md)。当前完整聊天 UX 验收见 [`docs/qa/chat-router-100-final100-current-state.md`](docs/qa/chat-router-100-final100-current-state.md) 及同名 JSON：`100/100 PASS`，其中包含 `95` 个 hard 红线用例，覆盖上下文连续性、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。旧 40-query 运行保留为回归证据：[`docs/qa/chat-ux-40-query-final40-post-context-binding.md`](docs/qa/chat-ux-40-query-final40-post-context-binding.md)。
 
 仪表盘评分器通过 `/api/dashboard/insights` 独立提供，不属于聊天 LangGraph 主链路。
 
@@ -317,10 +327,15 @@ flowchart TD
 |------|------|------|
 | `messages` | `Annotated[list, add_messages]` | 对话历史（LangGraph reducer 仅追加） |
 | `subject` | `dict` | 解析后的实体 — `{type, ticker, name, market}` |
+| `understanding` | `dict` | 当前轮请求理解结果 |
+| `reply_contract` | `dict` | 结构化 UX 契约：lane、风格、长度偏好、上下文绑定、取证约束、引用策略、续问目标 |
+| `tasks` | `list[dict]` | 可执行任务拆解 |
+| `blocked_tasks` | `list[dict]` | 局部缺上下文任务，不阻塞整轮 |
 | `output_mode` | `str` | `"chat"` / 兼容 `"brief"` / 显式 `"investment_report"` |
 | `plan_ir` | `dict` | 执行计划（步骤、分组、依赖、成本估算） |
 | `step_results` | `dict` | 各智能体/工具的原始输出 |
 | `evidence_pool` | `list[dict]` | 收集的证据条目（带来源归因） |
+| `artifacts.tool_diagnostics` | `list[dict]` | 工具失败、空结果、拒绝、超时等诊断，禁止进入 `evidence_pool` |
 | `rag_context` | `list[dict]` | 混合 RAG 检索结果 |
 | `artifacts` | `dict` | 合成后的报告、引用、图表 |
 | `trace` | `dict` | 可观测性：延迟、Token 数、失败 |
@@ -996,9 +1011,9 @@ docker compose --env-file .env.server up -d --build
 
 | API Key | 是否必填 | 用途 | 不配置会怎样 |
 |---------|---------|------|-------------|
-| `OPENAI_COMPATIBLE_API_KEY` | ✅ **必填** | 默认 OpenAI-compatible LLM 端点（默认 `mimo-v2.5-pro`） | 应用无法运行 |
+| `OPENAI_COMPATIBLE_API_KEY` | ✅ **必填** | 默认 OpenAI-compatible LLM 端点（`mimo-v2.5-pro` 服务） | 应用无法运行 |
 | `OPENAI_COMPATIBLE_API_BASE` | ✅ **必填** | OpenAI-compatible base URL（默认 `https://token-plan-cn.xiaomimimo.com/v1`） | 使用代码默认值 |
-| `OPENAI_COMPATIBLE_MODEL` | ✅ **必填** | 用户侧默认模型（默认 `mimo-v2.5-pro`） | 使用代码默认值 |
+| `OPENAI_COMPATIBLE_MODEL` | ✅ **必填** | 默认模型 ID（默认 `mimo-v2.5-pro`） | 使用代码默认值 |
 | `GEMINI_PROXY_API_KEY` 或 `OPENAI_API_KEY` | 选填 | 备用 LLM 提供商 | 使用 OpenAI-compatible 端点 |
 | `FMP_API_KEY` | ⭐ 推荐 | 财务数据（财报、指标） | 回退到 yfinance |
 | `FINNHUB_API_KEY` | 选填 | 实时行情、新闻 | 回退到其他数据源 |
@@ -1067,11 +1082,13 @@ pnpm dev
 
 ```bash
 pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_skeleton.py backend/tests/test_policy_gate.py
+pytest -q backend/tests/test_reply_contract_lanes.py backend/tests/test_evidence_diagnostics_gate.py
+python scripts/chat_ux_router_eval.py --dataset tests/eval/chat_router_100.json --run-id local100
 npm run build --prefix frontend
-cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
+npm run test:e2e --prefix frontend
 ```
 
-当前聊天 UX 验收集把完整 query 和完整答案保留在 `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`：全量 40 条中 39 条通过，唯一 portfolio/context review 用例已在 `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md` 的定向回归中通过（4/4）。剩余已知风险记录在那里：上游 LLM/工具延迟或额度失败、不可访问 URL 的正确降级、复合“设置提醒+顺便看新闻”当前先完成提醒并保留追问上下文。
+当前聊天 UX 验收集位于 `tests/eval/chat_router_100.json`，由 `scripts/chat_ux_router_eval.py` 执行；最终 current-state 产物为 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100` PASS、`0` REVIEW、`0` FAIL。它覆盖 18 类：普通解释、不要新闻纠偏、新闻链接、报价、工具失败边界、上下文绑定、会话隔离、复合意图、混乱纠正、报告追问、组合/提醒、URL/文章、宏观传导、UI selection、安全边界、语言风格、上下文连续性和报告按钮追问。剩余风险是运维层面的上游 LLM/工具延迟、额度、403 或不可访问 URL；失败工具输出会进入 diagnostics，不能作为证据或来源渲染。
 
 ### 可选：PostgreSQL（RAG 后端）
 

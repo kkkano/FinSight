@@ -349,8 +349,9 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
                 "schema_version": TRACE_SCHEMA_VERSION,
                 "type": "thinking",
                 "stage": f"langgraph_{node_name}_start",
-                "message": node_name,
+                "message": user_message or "正在处理请求...",
                 "userMessage": user_message,
+                "internal_node": node_name,
                 "timestamp": _utc_now_iso(),
             }
         )
@@ -400,8 +401,9 @@ def with_node_trace(node_name: str, fn: Callable[[GraphState], Any]) -> Callable
                 "schema_version": TRACE_SCHEMA_VERSION,
                 "type": "thinking",
                 "stage": f"langgraph_{node_name}_done",
-                "message": node_name,
+                "message": user_message or "处理完成",
                 "userMessage": user_message,
+                "internal_node": node_name,
                 "result": {"duration_ms": duration_ms, **(data or {})},
                 "timestamp": _utc_now_iso(),
             }

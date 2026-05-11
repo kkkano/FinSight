@@ -840,6 +840,8 @@ def main() -> None:
     os.environ["LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"] = "true"
     os.environ["LANGGRAPH_SYNTHESIZE_MODE"] = "llm"
     os.environ["LANGFUSE_ENABLED"] = "false"
+    os.environ["OTEL_SDK_DISABLED"] = "true"
+    os.environ["OTEL_TRACES_EXPORTER"] = "none"
     os.environ.setdefault("FINSIGHT_CONTEXT_ROUTER_TIMEOUT_SEC", "90")
     os.environ.setdefault("FINSIGHT_CONTEXT_REPLY_TIMEOUT_SEC", "120")
     os.environ.setdefault("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", "150")

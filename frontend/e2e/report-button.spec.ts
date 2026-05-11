@@ -314,7 +314,7 @@ test('Context panel tabs can switch and panel can collapse/expand', async ({ pag
   await expect(panel.getByText('Market Chart')).toBeVisible();
 
   await page.getByTestId('context-tab-portfolio').click();
-  await expect(panel.getByText('Portfolio')).toBeVisible();
+  await expect(panel.getByText('Portfolio', { exact: true })).toBeVisible();
 
   await panel.locator('button[aria-label="Collapse"]').click();
   await expect(page.getByTestId('context-panel-shell')).toHaveCount(0);

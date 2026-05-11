@@ -107,13 +107,21 @@ def _mask(value: str | None) -> str:
     return f"{raw[:3]}***{raw[-3:]}"
 
 
+DEFAULT_OPENAI_COMPATIBLE_API_BASE = "https://token-plan-cn.xiaomimimo.com/v1"
+DEFAULT_OPENAI_COMPATIBLE_MODEL = "mimo-v2.5-pro"
+
+
 # Compatibility map for modules that still import LLM_CONFIGS directly.
 LLM_CONFIGS = {
     "openai_compatible": {
         "api_key": os.getenv("OPENAI_COMPATIBLE_API_KEY") or os.getenv("GEMINI_PROXY_API_KEY"),
-        "api_base": _normalize_api_base(os.getenv("OPENAI_COMPATIBLE_API_BASE") or os.getenv("GEMINI_PROXY_API_BASE")),
+        "api_base": _normalize_api_base(
+            os.getenv("OPENAI_COMPATIBLE_API_BASE")
+            or os.getenv("GEMINI_PROXY_API_BASE")
+            or DEFAULT_OPENAI_COMPATIBLE_API_BASE
+        ),
         "models": [
-            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or "mimo-v2.5-pro",
+            os.getenv("OPENAI_COMPATIBLE_MODEL", "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL,
             "gemini-2.5-flash",
             "gemini-2.5-pro",
         ],
@@ -252,8 +260,11 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
             if not enabled:
                 continue
 
+            endpoint_provider = _canonical_provider(raw.get("provider") or provider)
             api_key = str(raw.get("api_key") or "").strip()
             raw_api_base = str(raw.get("api_base") or "").strip()
+            if not raw_api_base and endpoint_provider == "openai_compatible":
+                raw_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
             is_raw_url = bool(raw.get("raw_url", False)) or _looks_full_chat_completions_url(raw_api_base)
             api_base = _normalize_api_base(raw_api_base, raw=is_raw_url)
             raw_model = str(raw.get("model") or "").strip()
@@ -262,7 +273,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
             elif model:
                 endpoint_model = str(model).strip()
             else:
-                endpoint_model = "mimo-v2.5-pro"
+                endpoint_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
                 logger.warning(
                     "[LLM Config] endpoint '%s' has empty model field, falling back to '%s'. "
                     "Please set the model name in Settings → Endpoint Pool.",
@@ -271,7 +282,6 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
                 )
             if not api_key:
                 continue
-            endpoint_provider = _canonical_provider(raw.get("provider") or provider)
 
             endpoints.append(
                 EndpointConfig(
@@ -294,10 +304,13 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
     legacy_key = str(user_config.get("llm_api_key") or "").strip()
     if legacy_key:
         legacy_api_base = str(user_config.get("llm_api_base") or "").strip()
+        legacy_provider = _canonical_provider(user_config.get("llm_provider") or provider)
+        if not legacy_api_base and legacy_provider == "openai_compatible":
+            legacy_api_base = DEFAULT_OPENAI_COMPATIBLE_API_BASE
         legacy_raw_url = _looks_full_chat_completions_url(legacy_api_base)
         legacy_model = str(user_config.get("llm_model") or "").strip() or (str(model).strip() if model else "")
         if not legacy_model:
-            legacy_model = "mimo-v2.5-pro"
+            legacy_model = DEFAULT_OPENAI_COMPATIBLE_MODEL
             logger.warning(
                 "[LLM Config] legacy endpoint has empty llm_model, falling back to '%s'. "
                 "Please set the model name in Settings.",
@@ -306,7 +319,7 @@ def _parse_user_endpoints(user_config: dict, provider: str, model: str | None) -
         endpoints.append(
             EndpointConfig(
                 name="legacy-single",
-                provider=_canonical_provider(user_config.get("llm_provider") or provider),
+                provider=legacy_provider,
                 api_base=_normalize_api_base(legacy_api_base, raw=legacy_raw_url),
                 api_key=legacy_key,
                 model=legacy_model,
@@ -323,11 +336,20 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
     endpoint_model = str(model or "").strip()
     endpoints: list[EndpointConfig] = []
 
-    def _try_add(name: str, provider_name: str, key_env: str, base_env: str | None, fallback_model: str) -> None:
+    def _try_add(
+        name: str,
+        provider_name: str,
+        key_env: str,
+        base_env: str | None,
+        fallback_model: str,
+        fallback_base: str | None = None,
+    ) -> None:
         api_key = str(os.getenv(key_env, "") or "").strip()
         if not api_key:
             return
         raw_api_base = str(os.getenv(base_env, "") or "").strip() if base_env else ""
+        if not raw_api_base and fallback_base:
+            raw_api_base = fallback_base
         is_raw_url = _looks_full_chat_completions_url(raw_api_base)
         api_base = _normalize_api_base(raw_api_base, raw=is_raw_url) if base_env else None
         endpoints.append(
@@ -347,8 +369,15 @@ def _parse_env_endpoints(provider: str, model: str | None) -> list[EndpointConfi
     canonical = _canonical_provider(provider)
     if canonical == "openai_compatible":
         # Read OPENAI_COMPATIBLE_MODEL env var; fall back to the production default.
-        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or "mimo-v2.5-pro"
-        _try_add("openai-compatible-primary", "openai_compatible", "OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_API_BASE", _oc_model)
+        _oc_model = str(os.getenv("OPENAI_COMPATIBLE_MODEL", "") or "").strip() or DEFAULT_OPENAI_COMPATIBLE_MODEL
+        _try_add(
+            "openai-compatible-primary",
+            "openai_compatible",
+            "OPENAI_COMPATIBLE_API_KEY",
+            "OPENAI_COMPATIBLE_API_BASE",
+            _oc_model,
+            DEFAULT_OPENAI_COMPATIBLE_API_BASE,
+        )
         _try_add("gemini-proxy", "openai_compatible", "GEMINI_PROXY_API_KEY", "GEMINI_PROXY_API_BASE", "gemini-2.5-flash")
         _try_add("openai-primary", "openai", "OPENAI_API_KEY", "OPENAI_API_BASE", "gpt-4o")
     elif canonical == "openai":

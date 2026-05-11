@@ -19,11 +19,12 @@ def _run(coro):
 # Expected node order for different execution paths
 # ---------------------------------------------------------------------------
 
-# Full happy-path: query with known ticker, no clarification needed
+# Full happy-path: explicit grounded query with known ticker, no clarification needed
 _FULL_HAPPY_PATH = [
     "build_initial_state",
     "reset_turn_state",
     "prepare_context",
+    "chat_respond",
     "understand_request",
     "policy_gate",
     "planner",
@@ -38,6 +39,7 @@ _CLARIFY_STOP_PATH = [
     "build_initial_state",
     "reset_turn_state",
     "prepare_context",
+    "chat_respond",
     "understand_request",
 ]
 
@@ -46,7 +48,7 @@ _INVARIANT_PREFIX = [
     "build_initial_state",
     "reset_turn_state",
     "prepare_context",
-    "understand_request",
+    "chat_respond",
 ]
 
 
@@ -75,7 +77,7 @@ class TestGraphNodeOrderInvariant:
         runner = GraphRunner.create()
         result = _run(runner.ainvoke(
             thread_id="t-order-happy",
-            query="分析 AAPL",
+            query="AAPL 最新股价",
             ui_context={"active_symbol": "AAPL"},
         ))
         nodes = _extract_node_order(result)
@@ -145,7 +147,7 @@ class TestGraphNodeOrderInvariant:
         runner = GraphRunner.create()
         result = _run(runner.ainvoke(
             thread_id="t-parse-pos",
-            query="分析 MSFT 技术面",
+            query="MSFT 最新股价和技术面分析",
             ui_context={"active_symbol": "MSFT"},
         ))
         nodes = _extract_node_order(result)

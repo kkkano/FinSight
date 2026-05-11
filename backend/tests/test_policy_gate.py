@@ -196,6 +196,26 @@ def test_policy_gate_company_report_deep_query_includes_deep_search_agent():
     assert "deep_search_agent" in allowed_agents
 
 
+def test_policy_gate_company_report_button_defaults_to_report_depth_without_deep_search():
+    result = policy_gate(
+        {
+            "query": "Why do higher rates matter for AAPL? I clicked report mode.",
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "operation": {"name": "generate_report", "confidence": 0.9, "params": {}},
+            "output_mode": "investment_report",
+        }
+    )
+    policy = result.get("policy") or {}
+    allowed_agents = policy.get("allowed_agents") or []
+    assert "deep_search_agent" not in allowed_agents
+
+
 def test_policy_gate_macro_report_requires_macro_agent():
     result = policy_gate(
         {

@@ -150,6 +150,23 @@ def _format_number(value: Any, digits: int = 2) -> str:
     return text
 
 
+def _is_citable_url(url: str) -> bool:
+    text = str(url or "").strip()
+    if not text.startswith(("http://", "https://")):
+        return False
+    lowered = text.lower()
+    non_article_markers = (
+        "google.com/search",
+        "finance.yahoo.com/search",
+        "finance.yahoo.com/quote/",
+        "benzinga.com/search",
+        "reuters.com/site-search",
+        "cnbc.com/search",
+        "marketwatch.com/search",
+    )
+    return not any(marker in lowered for marker in non_article_markers)
+
+
 def _format_price_line(ticker: str, price: dict[str, Any]) -> str:
     if not price.get("price"):
         return f"{ticker} 的实时价格这次没有拿到可用报价。可以稍后重试，或切到行情页确认最新成交价。"
@@ -213,8 +230,8 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
         if not title:
             continue
         url = str(row.get("url") or row.get("link") or row.get("article_url") or "").strip()
-        if not url and title:
-            url = f"https://www.google.com/search?q={quote_plus(title)}"
+        if not _is_citable_url(url):
+            url = ""
         source = str(row.get("source") or row.get("publisher") or "").strip()
         published = str(row.get("published_at") or row.get("published_date") or row.get("date") or "").strip()
         items.append({"title": title, "url": url, "source": source, "published": published[:10]})
@@ -322,6 +339,8 @@ def _evidence_items(state: GraphState, limit: int = 5) -> list[dict[str, str]]:
         if not title:
             continue
         url = str(row.get("url") or row.get("link") or row.get("article_url") or "").strip()
+        if not _is_citable_url(url):
+            url = ""
         source = str(row.get("source") or row.get("publisher") or "").strip()
         published = str(row.get("published_at") or row.get("published_date") or row.get("date") or "").strip()
         item = {"title": title, "url": url, "source": source, "published": published[:10]}
@@ -380,6 +399,21 @@ def _news_search_fallback_items(state: GraphState, *, count: int) -> list[dict[s
     return items[:count]
 
 
+def _append_news_source_page_links(lines: list[str], state: GraphState, *, count: int) -> None:
+    tickers = [
+        ticker
+        for ticker in _tickers(state)
+        if re.match(r"^[A-Z][A-Z0-9.\-=]{0,9}$", ticker) and ticker not in {"I", "ME", "YOU"}
+    ]
+    if not tickers or count <= 0:
+        return
+    if lines and lines[-1] != "":
+        lines.append("")
+    lines.append("I did not get per-article URLs for every headline, so I am linking source pages for verification rather than treating them as article citations:")
+    for ticker in tickers[:count]:
+        lines.append(f"- [{ticker} Yahoo Finance news](https://finance.yahoo.com/quote/{quote_plus(ticker)}/news)")
+
+
 def _technical_text(output: Any) -> str:
     parsed = _parse_jsonish(output)
     if isinstance(parsed, str):
@@ -407,7 +441,7 @@ def _technical_text(output: Any) -> str:
 
 
 def _append_sources(lines: list[str], sources: list[dict[str, str]]) -> None:
-    usable = [item for item in sources if item.get("url")]
+    usable = [item for item in sources if _is_citable_url(str(item.get("url") or ""))]
     if not usable:
         return
     lines.extend(["", "来源："])
@@ -420,11 +454,24 @@ def _append_sources(lines: list[str], sources: list[dict[str, str]]) -> None:
 def _format_news_item(item: dict[str, str]) -> str:
     title = item.get("title") or "相关消息"
     url = item.get("url") or ""
+    if not _is_citable_url(url):
+        url = ""
     meta = " / ".join(part for part in (item.get("source"), item.get("published")) if part)
     suffix = f"（{meta}）" if meta else ""
     if url:
         return f"[{title}]({url}){suffix}"
     return f"{title}{suffix}"
+
+
+def _append_missing_article_url_note(lines: list[str], items: list[dict[str, str]]) -> None:
+    if not items:
+        return
+    missing = [item for item in items if not _is_citable_url(str(item.get("url") or ""))]
+    if not missing:
+        return
+    if lines and lines[-1] != "":
+        lines.append("")
+    lines.append("Some returned headlines did not include usable article URLs, so I am not treating search pages as citations.")
 
 
 def _task_index(state: GraphState) -> dict[str, dict[str, Any]]:
@@ -569,7 +616,7 @@ def _append_url_fetch_notes(lines: list[str], state: GraphState) -> None:
     if lines and lines[-1] != "":
         lines.append("")
     for row in rows[:3]:
-        label = row.get("title") or "这个链接"
+        label = row.get("title") or row.get("ticker") or "这个链接"
         url = row.get("url") or ""
         error = row.get("error") or ""
         snippet = row.get("snippet") or ""
@@ -585,6 +632,13 @@ def _append_url_fetch_notes(lines: list[str], state: GraphState) -> None:
         elif snippet:
             linked = f"[{row.get('title') or url}]({url})" if url else (row.get("title") or label)
             lines.append(f"{label} 相关链接我已读到正文，先看这点：{linked}，{snippet}")
+
+
+def _url_fetch_all_failed(state: GraphState) -> bool:
+    rows = _url_fetch_rows(state)
+    if not rows:
+        return False
+    return not any((row.get("snippet") or "").strip() and not (row.get("error") or "").strip() for row in rows)
 
 
 def _technical_by_ticker(state: GraphState) -> dict[str, str]:
@@ -728,6 +782,10 @@ def _sanitize_chat_markdown(text: str) -> str:
 
 
 def _finalize_chat_markdown(lines: list[str], state: GraphState) -> str:
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    alert_markdown = str(artifacts.get("alert_markdown") or "").strip()
+    if alert_markdown and alert_markdown not in "\n".join(lines):
+        lines[:0] = [alert_markdown, ""]
     _append_blocked_notes(lines, state)
     return _sanitize_chat_markdown("\n".join(lines))
 
@@ -924,6 +982,26 @@ def render_chat_markdown(state: GraphState) -> str:
             if ticker_price:
                 lines.append(_format_price_line(ticker, ticker_price))
         _append_url_fetch_notes(lines, state)
+        analysis_block = (
+            _useful_render_var(render_vars, "impact_analysis")
+            or _useful_render_var(render_vars, "conclusion")
+            or _useful_render_var(render_vars, "investment_summary")
+        )
+        has_other_answerable_tasks = bool(
+            prices
+            or analysis_block
+            or next_watch
+            or _has_macro_context(state)
+            or _focus_task_present(state)
+        )
+        if _url_fetch_all_failed(state) and not has_other_answerable_tasks:
+            if not lines:
+                lines.append("URL fetch failed; no readable content was available, so I will not infer from the URL text alone.")
+            return _finalize_chat_markdown(lines, state)
+        if analysis_block:
+            if lines and lines[-1] != "":
+                lines.append("")
+            _append_render_var_block(lines, analysis_block)
         if _has_macro_context(state):
             if lines and lines[-1] != "":
                 lines.append("")
@@ -939,7 +1017,8 @@ def render_chat_markdown(state: GraphState) -> str:
     if "price" in operations and "fetch" not in operations and "technical" not in operations and "analyze_impact" not in operations:
         target_tickers = _tickers(state) or list(prices.keys()) or [ticker_label]
         for ticker in target_tickers[:5]:
-            lines.append(_format_price_line(ticker, prices.get(ticker, price if len(target_tickers) == 1 else {})))
+            ticker_price = prices.get(ticker, price if len(target_tickers) == 1 else {})
+            lines.append(_format_price_line(ticker, ticker_price))
         return _finalize_chat_markdown(lines, state)
 
     if "compare" in operations:
@@ -958,10 +1037,12 @@ def render_chat_markdown(state: GraphState) -> str:
             or _useful_render_var(render_vars, "investment_summary")
         )
         if news_map:
+            listed_news_items: list[dict[str, str]] = []
             for ticker, items in list(news_map.items())[:4]:
-                lines.append(f"{ticker} 我找到几条比较相关的消息：")
+                lines.append(f"{ticker} 我找到几条比较相关的消息（最近新闻）：")
                 for item in items[:3]:
                     lines.append(f"- {_format_news_item(item)}")
+                    listed_news_items.append(item)
                 if ticker in prices and prices[ticker].get("price"):
                     lines.append(f"- {_format_price_line(ticker, prices[ticker])}")
                 lines.append("")
@@ -985,12 +1066,17 @@ def render_chat_markdown(state: GraphState) -> str:
             elif _focus_task_present(state) and "关注" not in "\n".join(lines):
                 lines.append("")
                 lines.append(_focus_line(state))
+            _append_missing_article_url_note(lines, listed_news_items)
+            requested_link_count = _requested_news_link_count(state)
+            if requested_link_count and not any(_is_citable_url(str(item.get("url") or "")) for item in listed_news_items):
+                _append_news_source_page_links(lines, state, count=requested_link_count)
         else:
             fallback_items = evidence_items
             if fallback_items:
                 lines.append(f"{ticker_label} 这次先看这些来源：")
                 for item in fallback_items[:4]:
                     lines.append(f"- {_format_news_item(item)}")
+                _append_missing_article_url_note(lines, fallback_items[:4])
                 if analysis_block:
                     _append_render_var_block(lines, analysis_block)
                 elif _has_macro_context(state):
@@ -1005,11 +1091,7 @@ def render_chat_markdown(state: GraphState) -> str:
             else:
                 requested_link_count = _requested_news_link_count(state)
                 if requested_link_count:
-                    fallback_links = _news_search_fallback_items(state, count=requested_link_count)
-                    lines.append(f"实时新闻源这次没有返回 {ticker_label} 的可用条目，我先给你可点击的检索入口，避免硬编新闻：")
-                    for item in fallback_links:
-                        lines.append(f"- {_format_news_item(item)}")
-                    evidence_items = fallback_links
+                    lines.append(f"Live news sources did not return usable article URLs for {ticker_label}; I will not invent citation links.")
                 else:
                     lines.append(f"我没有拿到 {ticker_label} 的可用新闻列表，所以这次不能硬编影响结论。可以重试或换一个更明确的时间范围。")
         if not news_map and price.get("price"):

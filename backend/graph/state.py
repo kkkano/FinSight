@@ -14,6 +14,7 @@ from langgraph.graph.message import add_messages
 
 from backend.contracts import GRAPH_STATE_SCHEMA_VERSION
 from backend.graph.confirmation_policy import ConfirmationMode
+from backend.graph.request_task_contract import ReplyContract
 
 SubjectType = Literal[
     "news_item",
@@ -201,6 +202,7 @@ class GraphState(MessagesState):
     operation: NotRequired[Operation]
     alert_params: NotRequired[dict[str, Any]]
     alert_valid: NotRequired[bool]
+    pending_research_after_alert: NotRequired[bool]
     skip_session_context: NotRequired[bool]
     output_mode: NotRequired[OutputMode]
     strict_selection: NotRequired[bool]
@@ -208,6 +210,7 @@ class GraphState(MessagesState):
     chat_responded: NotRequired[bool]
     memory_context: NotRequired[dict[str, Any]]
     understanding: NotRequired[Understanding]
+    reply_contract: NotRequired[ReplyContract]
     tasks: NotRequired[list[UnderstandingTask]]
     blocked_tasks: NotRequired[list[BlockedTask]]
     context_refs: NotRequired[list[ContextRef]]
@@ -237,6 +240,7 @@ __all__ = [
     "UnderstandingTask",
     "BlockedTask",
     "Understanding",
+    "ReplyContract",
     "Clarify",
     "Policy",
     "PlanIR",

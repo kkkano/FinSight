@@ -116,6 +116,8 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
+    sessionStorage.setItem('finsight-welcome-gate-passed', '1');
+    localStorage.setItem('finsight-entry-mode', 'anonymous');
     localStorage.setItem(
       'fs_dashboard_active_v1',
       JSON.stringify({ symbol: 'AAPL', type: 'equity', display_name: 'Apple' }),

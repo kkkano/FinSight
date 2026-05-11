@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('phase-labs screener panel can render result rows', async ({ page }) => {
   await page.addInitScript(() => {
+    sessionStorage.setItem('finsight-welcome-gate-passed', '1');
     localStorage.setItem('finsight-entry-mode', 'anonymous');
     localStorage.setItem('finsight-session-id', 'public:anonymous:e2e-phase-labs');
   });

@@ -1,11 +1,13 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-05-06
+> 更新时间：2026-05-11
 > 适用分支：`main`
 > 主链实现：`backend/graph/runner.py`
 
 > 2026-05-06 运行时事实：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见；普通聊天、追问、非金融边界、URL/文章分析、提醒、行情和报告请求都进入 `understand_request` 内部的 LLM conversation router。只有显式 `output_mode=investment_report`（报告按钮）进入报告模板；普通 chat/brief 不套报告结构。URL 读取通过 planner/agent 工具 `fetch_url_content`，不在请求理解层预抓取。若本文与代码冲突，以 `backend/graph/runner.py`、`backend/graph/nodes/understand_request.py` 和测试为准。
 > 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
+> 2026-05-10 增量：`understand_request` 现在写入 `ReplyContract`，将默认聊天、取证回答、报告生成拆成 `chat_answer / source_grounded_answer / report_generation` 三条 lane；`brief` 仅作为长度偏好保留。工具失败、403、rejected、empty、timeout 等只能进入 `artifacts.tool_diagnostics`，不能进入 `evidence_pool` 或被渲染为来源/结论。
+> 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
 
 ## 1. 系统总览
 
@@ -87,9 +89,18 @@ flowchart TD
 - 局部缺信息写入 `blocked_tasks[]`，例如缺持仓只阻塞 portfolio task，不阻塞公司/宏观任务。
 - 当前 query 明说的 ticker 优先于 UI `active_symbol`；UI 选择、MiniChat 当前标的和持仓只作为上下文候选。
 - 兼容投影：`subject` / `operation` 从 primary task 写入，保证旧 policy/planner/executor 可继续运行。
+- 结构化回复契约：写入 `reply_contract`，包含 lane、回答风格、长度偏好、上下文绑定、source constraints、citation policy 和续问目标。
 - 用户可见 trace：发出 `type="trace"`、`visibility="user"`、`stage="understanding"`。
 
 旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
+
+当前 `ReplyContract` lane：
+
+| Lane | 触发 | 下游约束 |
+|---|---|---|
+| `chat_answer` | 普通解释、追问、纠偏、安全边界、明确“不要新闻/不要链接/直接说” | 不强制查新闻，不套报告结构，`citation_policy=none` |
+| `source_grounded_answer` | 明确要新闻/链接/引用/实时价格/URL/数据证据 | 规划取证工具；有可用来源则引用，没有则披露不可用 |
+| `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报 | 使用报告模板和报告级引用约束 |
 
 ## 3. 规划与执行策略
 
@@ -104,6 +115,7 @@ flowchart TD
   - `analysis_depth`（`quick/report/deep_research`）
   - `agent_preferences`
 - 在 `investment_report` 模式下，通过 `capability_registry` 做 agent 评分选择
+- 普通聊天若 `reply_contract.source_constraints.disallow_news=true`，会从 allowlist 移除新闻类工具，避免上一轮 research 惯性泄漏。
 
 ### 3.2 Planner / Planner Stub
 
@@ -128,6 +140,7 @@ flowchart TD
 - step 级缓存：`step_cache_key`
 - 支持 optional step 容错与 required step 中断
 - 统一事件输出：`step_start/step_done/step_error/tool_start/tool_end/agent_start/agent_done`
+- `execute_plan_stub` 从工具输出中构建 `evidence_pool` 前先执行 evidence gate；失败/拒绝/空结果/超时输出写入 `artifacts.tool_diagnostics` 的 `ToolError`，不进入 `EvidenceItem`。
 
 ## 4. SSE 事件与前端消费链路
 

@@ -98,6 +98,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
 
     monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
 
     items = news_mod.get_company_news("NVDA", limit=1)
@@ -107,7 +108,7 @@ def test_get_company_news_extracts_yfinance_nested_article_url(monkeypatch):
     assert items[0]["url"] == "https://finance.yahoo.com/news/nested-article.html"
 
 
-def test_get_company_news_adds_search_url_when_source_has_no_article_url(monkeypatch):
+def test_get_company_news_leaves_url_empty_when_source_has_no_article_url(monkeypatch):
     from backend.tools import news as news_mod
 
     class _Ticker:
@@ -126,12 +127,13 @@ def test_get_company_news_adds_search_url_when_source_has_no_article_url(monkeyp
 
     monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
 
     items = news_mod.get_company_news("NVDA", limit=1)
 
     assert items
-    assert items[0]["url"].startswith("https://finance.yahoo.com/search?p=")
+    assert items[0]["url"] == ""
 
 
 def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypatch):
@@ -162,8 +164,113 @@ def test_get_company_news_filters_yfinance_items_not_related_to_ticker(monkeypat
 
     monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
     monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
     monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
 
     items = news_mod.get_company_news("NVDA", limit=5)
 
     assert [item["title"] for item in items] == ["Nvidia data center demand remains strong"]
+
+
+def test_get_company_news_cools_down_yfinance_after_timeout(monkeypatch):
+    from backend.tools import news as news_mod
+
+    attempts = []
+
+    class _Ticker:
+        def __init__(self, ticker):
+            attempts.append(ticker)
+
+        @property
+        def news(self):
+            raise TimeoutError("timed out")
+
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_COOLDOWN_SEC", 900)
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda ticker: _Ticker(ticker))
+    monkeypatch.setattr(news_mod, "finnhub_client", None)
+    monkeypatch.setattr(news_mod, "search_authoritative_feeds", lambda *args, **kwargs: [])
+    monkeypatch.setattr(news_mod, "ALPHA_VANTAGE_API_KEY", "")
+    monkeypatch.setattr(news_mod, "_http_get", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(news_mod, "search", lambda _query: "")
+
+    first = news_mod.get_company_news("NVDA", limit=1)
+    second = news_mod.get_company_news("NVDA", limit=1)
+
+    assert first == []
+    assert second == []
+    assert attempts == ["NVDA"]
+
+
+def test_get_company_news_prefers_finnhub_when_configured(monkeypatch):
+    from backend.tools import news as news_mod
+
+    class _Ticker:
+        @property
+        def news(self):  # pragma: no cover - should not be called
+            raise AssertionError("yfinance should not be called before Finnhub")
+
+    class _Finnhub:
+        def company_news(self, ticker, _from, to):
+            return [
+                {
+                    "headline": f"Nvidia {ticker} data center news remains relevant",
+                    "summary": "NVDA AI chip demand and data center revenue remain in focus.",
+                    "source": "Finnhub",
+                    "datetime": 1770000000,
+                    "url": "https://example.com/nvda",
+                }
+            ]
+
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
+
+    items = news_mod.get_company_news("NVDA", limit=1)
+
+    assert items
+    assert items[0]["source"] == "Finnhub"
+
+
+def test_get_company_news_prefers_authoritative_links_over_unlinked_finnhub(monkeypatch):
+    from backend.tools import news as news_mod
+
+    class _Ticker:
+        @property
+        def news(self):  # pragma: no cover - should not be called when authoritative links exist
+            raise AssertionError("yfinance should not be called before authoritative linked news")
+
+    class _Finnhub:
+        def company_news(self, ticker, _from, to):
+            return [
+                {
+                    "headline": "Apple supply chain update mentions AAPL",
+                    "summary": "Apple AAPL supply chain story without a direct article URL.",
+                    "source": "Finnhub",
+                    "datetime": 1770000000,
+                    "url": "",
+                }
+            ]
+
+    monkeypatch.setattr(news_mod, "_YFINANCE_NEWS_DISABLED_UNTIL", 0.0)
+    monkeypatch.setattr(news_mod.yf, "Ticker", lambda _ticker: _Ticker())
+    monkeypatch.setattr(news_mod, "finnhub_client", _Finnhub())
+    monkeypatch.setattr(
+        news_mod,
+        "search_authoritative_feeds",
+        lambda *args, **kwargs: [
+            {
+                "title": "Apple AAPL supplier story with direct link",
+                "snippet": "Apple and AAPL supply chain details are discussed.",
+                "source": "finance.yahoo.com",
+                "url": "https://finance.yahoo.com/news/apple-supplier-story.html",
+                "published_date": "2026-05-10T12:00:00Z",
+            }
+        ],
+    )
+
+    items = news_mod.get_company_news("AAPL", limit=1)
+
+    assert items
+    assert items[0]["title"] == "Apple AAPL supplier story with direct link"
+    assert items[0]["url"] == "https://finance.yahoo.com/news/apple-supplier-story.html"

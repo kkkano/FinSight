@@ -23,9 +23,26 @@ BASELINES_DIR = os.path.join(os.path.dirname(__file__), "baselines")
 def disable_llm_rate_limit() -> None:
     """Disable global LLM rate limiter for deterministic tests."""
     os.environ["LLM_RATE_LIMIT_ENABLED"] = "false"
+    os.environ["NEWS_STRICT_FINANCE_SOURCES"] = "false"
     try:
         from backend.services.rate_limiter import LLMRateLimiter
         LLMRateLimiter.reset_instance()
+    except Exception:
+        pass
+
+
+@pytest.fixture(scope="session", autouse=True)
+def disable_external_authoritative_feeds() -> None:
+    """Keep the regression suite on mock data and off live RSS/network feeds."""
+    try:
+        import backend.tools.authoritative_feeds as feeds
+
+        feeds.search_authoritative_feeds = lambda *_args, **_kwargs: []
+        feeds.get_authoritative_media_news = lambda *_args, **_kwargs: {
+            "articles": [],
+            "source": "regression_mock",
+            "status": "empty",
+        }
     except Exception:
         pass
 

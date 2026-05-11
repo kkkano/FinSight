@@ -20,6 +20,7 @@ def test_clarify_node_interrupts_when_subject_unknown():
         "build_initial_state",
         "reset_turn_state",
         "prepare_context",
+        "chat_respond",
         "understand_request",
     ]
     assert (result.get("clarify") or {}).get("needed") is True

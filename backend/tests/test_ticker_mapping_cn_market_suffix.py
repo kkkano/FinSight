@@ -13,3 +13,19 @@ def test_extract_tickers_keeps_cn_market_suffix_symbol():
     tickers = meta.get("tickers") if isinstance(meta, dict) else []
     assert "600519.SS" in tickers
     assert "SS" not in tickers
+
+
+def test_ascii_aliases_do_not_match_inside_url_or_words():
+    meta = extract_tickers(
+        "Read https://example.com/msft-rates and tell me whether it matters for MSFT."
+    )
+
+    assert meta["tickers"] == ["MSFT"]
+    assert "ETH-USD" not in meta["tickers"]
+    assert "eth" not in meta["company_names"]
+
+
+def test_crypto_alias_still_matches_as_standalone_token():
+    meta = extract_tickers("Compare ETH with BTC quickly.")
+
+    assert meta["tickers"] == ["ETH-USD", "BTC-USD"]

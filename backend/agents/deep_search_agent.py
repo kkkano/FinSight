@@ -39,6 +39,8 @@ class DeepSearchAgent(BaseFinancialAgent):
     MAX_DOCS = int(os.getenv("DEEPSEARCH_MAX_DOCS", "4"))
     MIN_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MIN_TEXT_CHARS", "400"))
     MAX_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MAX_TEXT_CHARS", "12000"))
+    HTTP_RETRIES = max(0, int(os.getenv("DEEPSEARCH_HTTP_RETRIES", "0")))
+    FETCH_TIMEOUT_SECONDS = max(2.0, float(os.getenv("DEEPSEARCH_FETCH_TIMEOUT_SECONDS", "10")))
     LLM_TOKEN_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_TOKEN_TIMEOUT_SECONDS", "500"))
     _POSITIVE_SIGNAL_TERMS = (
         "beat",
@@ -139,7 +141,7 @@ class DeepSearchAgent(BaseFinancialAgent):
         if self._session:
             return self._session
         retry = Retry(
-            total=3,
+            total=self.HTTP_RETRIES,
             backoff_factor=0.5,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["GET", "HEAD"],
@@ -1033,7 +1035,12 @@ queries 要求：
         }
         try:
             session = self._get_session()
-            response = session.get(url, headers=headers, timeout=30, allow_redirects=True)
+            response = session.get(
+                url,
+                headers=headers,
+                timeout=self.FETCH_TIMEOUT_SECONDS,
+                allow_redirects=True,
+            )
             if response.url and not is_safe_url(response.url):
                 logger.info(f"[DeepSearch] Blocked unsafe redirect: {response.url}")
                 return None

@@ -16,6 +16,7 @@ from backend.graph.adapters import (
 from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
+from backend.graph.request_task_contract import build_tool_diagnostic, output_is_error_like
 from backend.graph.state import GraphState
 from backend.rag.layering import (
     build_kb_vector_source_id,
@@ -37,6 +38,34 @@ def build_tool_invokers(allowed_tools: list[str]) -> dict[str, Any]:
 def build_agent_invokers(allowed_agents: list[str], state: GraphState) -> dict[str, Any]:
     # Backward-compatible wrapper for tests that monkeypatch this symbol.
     return _build_agent_invokers(allowed_agents=allowed_agents or [], state=state)
+
+
+_EXECUTION_OWNED_ARTIFACT_KEYS = {
+    "agent_diagnostics",
+    "brief_data",
+    "draft_markdown",
+    "errors",
+    "evidence_by_task",
+    "evidence_pool",
+    "rag_context",
+    "rag_stats",
+    "render_vars",
+    "response",
+    "signals",
+    "step_results",
+    "task_results",
+    "tool_diagnostics",
+    "verifier_result",
+}
+
+
+def _merge_prior_artifacts(prior: Any, current: Any) -> dict[str, Any]:
+    if not isinstance(prior, dict):
+        prior = {}
+    if not isinstance(current, dict):
+        current = {}
+    preserved = {key: value for key, value in prior.items() if key not in _EXECUTION_OWNED_ARTIFACT_KEYS}
+    return {**preserved, **current}
 
 
 def _env_int(name: str, default: int, *, min_value: int = 0, max_value: int = 10_000) -> int:
@@ -576,11 +605,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
         agent_invokers=agent_invokers,
         dry_run=not live_tools,
     )
+    artifacts = _merge_prior_artifacts(state.get("artifacts"), artifacts)
 
     # Phase 4: build a unified evidence_pool from selection (ephemeral, request-scoped).
     subject = state.get("subject") or {}
     selection_payload = subject.get("selection_payload") if isinstance(subject, dict) else None
     evidence_pool: list[dict[str, Any]] = []
+    tool_diagnostics: list[dict[str, Any]] = []
     if isinstance(selection_payload, list) and selection_payload:
         for item in selection_payload:
             if not isinstance(item, dict):
@@ -631,6 +662,8 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 output = parsed
             except Exception:
                 pass
+        if output_is_error_like(output):
+            return
 
         # Special-case: make technical snapshot readable in evidence list.
         if tool_name == "get_technical_snapshot" and isinstance(output, dict):
@@ -772,6 +805,30 @@ async def execute_plan_stub(state: GraphState) -> dict:
                         "confidence": article.get("confidence", 0.78),
                         "type": "news",
                         "id": article.get("id") or f"{tool_name}:{step_id}:{i+1}",
+                    }
+                )
+            return
+
+        if tool_name == "get_official_macro_releases" and isinstance(output, dict):
+            releases = output.get("releases") or []
+            for i, release in enumerate(releases[:10]):
+                if not isinstance(release, dict):
+                    continue
+                title = str(release.get("title") or "").strip()
+                url = str(release.get("url") or "").strip()
+                snippet = str(release.get("snippet") or title).strip()
+                if not title and not url:
+                    continue
+                evidence_pool.append(
+                    {
+                        "title": title or f"macro release {i+1}",
+                        "url": url or None,
+                        "snippet": snippet[:800],
+                        "source": release.get("source") or "macro_official_feeds",
+                        "published_date": release.get("published_date"),
+                        "confidence": release.get("confidence", 0.82 if release.get("is_official") else 0.65),
+                        "type": release.get("type") or "macro_release",
+                        "id": release.get("id") or f"{tool_name}:{step_id}:{i+1}",
                     }
                 )
             return
@@ -967,8 +1024,19 @@ async def execute_plan_stub(state: GraphState) -> dict:
             tool_name = step.get("name") or ""
             if not tool_name:
                 continue
+            output = item.get("output")
+            if output_is_error_like(output):
+                tool_diagnostics.append(
+                    build_tool_diagnostic(
+                        tool_name=str(tool_name),
+                        step_id=str(step_id),
+                        task_ids=_step_task_ids(step),
+                        output=output,
+                    )
+                )
+                continue
             before_count = len(evidence_pool)
-            _append_tool_evidence(str(tool_name), str(step_id), item.get("output"))
+            _append_tool_evidence(str(tool_name), str(step_id), output)
             for evidence in evidence_pool[before_count:]:
                 if isinstance(evidence, dict):
                     evidence["step_id"] = str(step_id)
@@ -994,6 +1062,8 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 continue
             evidence_by_task.setdefault(task_id, []).append(evidence)
     artifacts["evidence_by_task"] = evidence_by_task
+    if tool_diagnostics:
+        artifacts["tool_diagnostics"] = tool_diagnostics
 
     # Phase P0-3c: collect per-agent fallback diagnostics into artifacts
     # so synthesize/render can surface degradation info to the user.

@@ -110,15 +110,15 @@ const getInitialSessionId = (): string | null => {
 };
 
 const getInitialTraceRawEnabled = (): boolean => {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   const raw = window.localStorage.getItem('finsight-trace-raw-enabled');
-  if (raw === null) return true;
+  if (raw === null) return false;
   return raw === 'true';
 };
 const getInitialTraceRawShowRawJson = (): boolean => {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   const raw = window.localStorage.getItem('finsight-trace-raw-show-json');
-  if (raw === null) return true;
+  if (raw === null) return false;
   return raw === 'true';
 };
 const getInitialTraceViewMode = (): TraceViewMode => {

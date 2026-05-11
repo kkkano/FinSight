@@ -44,6 +44,8 @@ const buildDashboardPayload = (symbol = 'AAPL') => ({
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
+    sessionStorage.setItem('finsight-welcome-gate-passed', '1');
+    localStorage.setItem('finsight-entry-mode', 'anonymous');
     localStorage.setItem('finsight-session-id', 'public:anonymous:e2e-trace');
     localStorage.setItem(
       'fs_dashboard_active_v1',

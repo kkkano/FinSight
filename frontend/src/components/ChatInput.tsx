@@ -228,11 +228,7 @@ const formatExecutionStep = (stage: string, message?: string): string => {
     return message.trim();
   }
   if (stage.startsWith('langgraph_')) {
-    const label = stage
-      .replace(/^langgraph_/, '')
-      .replace(/_(start|done)$/, '')
-      .replace(/_/g, ' ');
-    return `LangGraph: ${label}`;
+    return stage.endsWith('_done') ? '处理完成' : '正在处理请求';
   }
   return stage.replace(/_/g, ' ');
 };

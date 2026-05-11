@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Any
+
+from langchain_core.messages import AIMessage
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.event_bus import emit_event
@@ -17,11 +20,18 @@ from backend.graph.nodes.conversation_router import (
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
+from backend.graph.request_task_contract import (
+    build_reply_contract,
+    query_explicitly_requests_links,
+    query_explicitly_requests_sources,
+    reply_contract_disallows_news,
+    wants_no_news_or_links,
+)
 from backend.graph.state import GraphState
 
 
 _INDEX_TICKERS = {"SPY", "QQQ", "DIA", "IWM", "VTI", "^IXIC", "^DJI", "^GSPC", "^RUT", "^VIX"}
-_NON_ASSET_TOKENS = {"PDF", "DOC", "DOCX", "PPT", "PPTX", "CSV", "TXT", "HTML"}
+_NON_ASSET_TOKENS = {"PDF", "DOC", "DOCX", "PPT", "PPTX", "CSV", "TXT", "HTML", "URL"}
 _NEWS_HINTS = ("新闻", "消息", "大新闻", "发生什么", "快讯", "news", "headline", "latest")
 _PRICE_HINTS = ("价格", "股价", "涨了多少", "跌了多少", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
 _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "impact", "affect", "risk")
@@ -56,6 +66,14 @@ _ASSET_DEICTIC_HINTS = (
 _SOCIAL_PREFIX_RE = re.compile(r"^\s*(你好|您好|早|早上好|嗨|哈喽|hello|hi)[，,。\s]*(今天天气不错[，,。\s]*)?", re.IGNORECASE)
 _GLOBAL_CHAT_VIEWS = {"chat", "main", "global", "conversation"}
 _URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+", re.IGNORECASE)
+_FORBIDDEN_DIRECT_REPLY_MARKERS = (
+    "本轮问题包含",
+    "分析对象：",
+    "问题：",
+)
+
+
+_THEME_HINTS = (*_THEME_HINTS, "semiconductor", "semiconductors", "sector", "chips")
 
 
 def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
@@ -128,15 +146,49 @@ def _can_use_active_symbol_fallback(ui_context: dict[str, Any], memory_context: 
     return not _has_conversation_subject_anchor(memory_context)
 
 
+def _sanitize_direct_chat_reply(reply: str) -> str:
+    """Keep direct LLM answers inside the same user-facing chat contract as rendered answers."""
+    cleaned = str(reply or "").strip()
+    cleaned = re.sub(r"我理解你的问题是[:：]\s*", "", cleaned)
+    cleaned = cleaned.replace("问题：", "关键点：")
+    cleaned = cleaned.replace("后续关注：", "后续观察：")
+    for marker in _FORBIDDEN_DIRECT_REPLY_MARKERS:
+        cleaned = cleaned.replace(marker, "")
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _ensure_direct_reply_names_bound_tickers(reply: str, *, decision: ConversationDecision, query: str) -> str:
+    subject_hint = str(decision.context_binding.subject_hint or "")
+    tickers = dedup_tickers(extract_tickers(subject_hint).get("tickers") or [])
+    if len(tickers) < 2:
+        return reply
+    upper_reply = reply.upper()
+    if all(ticker.upper() in upper_reply for ticker in tickers):
+        return reply
+    ticker_label = ", ".join(tickers[:6])
+    if re.search(r"[\u4e00-\u9fff]", query):
+        prefix = f"按 {ticker_label} 作为代表来看："
+    else:
+        prefix = f"Using {ticker_label} as the representative set:"
+    if reply.startswith(prefix):
+        return reply
+    return f"{prefix}\n\n{reply}".strip()
+
+
 def _direct_conversation_result(
     *,
     query: str,
+    output_mode: str,
     decision: ConversationDecision,
     reply: str,
     context_refs: list[dict[str, Any]],
     artifacts: dict[str, Any],
     trace: dict[str, Any],
+    memory_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    reply = _sanitize_direct_chat_reply(reply)
+    reply = _ensure_direct_reply_names_bound_tickers(reply, decision=decision, query=query)
     artifacts["draft_markdown"] = reply
     artifacts["conversation_decision"] = decision.model_dump()
     understanding = {
@@ -152,23 +204,68 @@ def _direct_conversation_result(
         "context_refs": context_refs,
         "fallback_assumptions": [],
     }
+    reply_contract = build_reply_contract(
+        query=query,
+        output_mode=output_mode,
+        tasks=[],
+        blocked_tasks=[],
+        conversation_decision=decision,
+        memory_context=memory_context,
+    )
     trace["understanding"] = understanding
     trace["conversation_router"] = decision.model_dump()
+    trace["reply_contract"] = reply_contract
     result: dict[str, Any] = {
         "understanding": understanding,
+        "reply_contract": reply_contract,
         "tasks": [],
         "blocked_tasks": [],
         "context_refs": context_refs,
         "subject": _build_subject(None, []),
         "operation": _operation("chat", decision.confidence),
+        "output_mode": output_mode,
         "clarify": {"needed": False, "reason": "", "question": "", "suggestions": []},
         "chat_responded": True,
         "artifacts": artifacts,
+        "messages": [AIMessage(content=reply or "(response completed)")],
         "trace": trace,
     }
     if decision.execution_route == "out_of_scope":
         result["skip_session_context"] = True
     return result
+
+
+def _apply_reply_contract_to_tasks(tasks: list[dict[str, Any]], reply_contract: dict[str, Any]) -> None:
+    """Apply hard UX constraints before policy/planner see the task list."""
+    if not reply_contract_disallows_news({"reply_contract": reply_contract}):
+        return
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        operation = task.get("operation")
+        if not isinstance(operation, dict):
+            continue
+        op_name = str(operation.get("name") or "").strip()
+        if op_name not in {"fetch", "news_impact", "daily_brief", "morning_brief"}:
+            continue
+        params = dict(operation.get("params") or {})
+        topic = str(params.get("topic") or "").strip().lower()
+        if op_name == "fetch" and topic and topic != "news":
+            continue
+        try:
+            confidence = float(operation.get("confidence") or 0.0)
+        except Exception:
+            confidence = 0.0
+        task["operation"] = {
+            **operation,
+            "name": "qa",
+            "confidence": max(confidence, 0.68),
+            "params": {k: v for k, v in params.items() if k not in {"topic", "include_links"}},
+        }
+        constraints = list(task.get("constraints") or [])
+        if "no_news_or_links" not in constraints:
+            constraints.append("no_news_or_links")
+        task["constraints"] = constraints
 
 
 def _explicit_report_mode(state: GraphState, output_mode: str) -> bool:
@@ -241,7 +338,10 @@ def _company_operations(
     if _contains_any(query, _PRICE_HINTS):
         operations.append(_operation("price", 0.82))
     if _contains_any(query, _NEWS_HINTS):
-        operations.append(_operation("fetch", 0.78, {"topic": "news"}))
+        news_params: dict[str, Any] = {"topic": "news"}
+        if query_explicitly_requests_links(query):
+            news_params["include_links"] = True
+        operations.append(_operation("fetch", 0.78, news_params))
     if _contains_any(query, _IMPACT_HINTS):
         operations.append(_operation("analyze_impact", 0.78))
     if _contains_any(query, _TECHNICAL_HINTS):
@@ -303,11 +403,29 @@ def _router_directed_company_operations(
     if decision is None:
         return None
     if decision.execution_route == "alert" or decision.domain_intent == "alert":
+        source_ops = [
+            operation
+            for operation in (fallback_operations or [])
+            if isinstance(operation, dict)
+            and str(operation.get("name") or "").strip()
+            in {"fetch", "price", "news_impact", "analyze_impact", "technical"}
+        ]
+        if source_ops:
+            return [*source_ops, _operation("alert_set", max(decision.confidence, 0.78))]
         return [_operation("alert_set", max(decision.confidence, 0.78))]
     if decision.context_binding.source not in {"none", ""}:
         return None
     if decision.domain_intent in {"quote", "news", "report_discussion", "doc_qa", "portfolio"}:
-        return [_domain_intent_operation(decision.domain_intent, decision.confidence)]
+        primary = _domain_intent_operation(decision.domain_intent, decision.confidence)
+        primary_name = str(primary.get("name") or "").strip()
+        supplemental_ops = [
+            operation
+            for operation in (fallback_operations or [])
+            if isinstance(operation, dict)
+            and str(operation.get("name") or "").strip() in {"price", "fetch", "news_impact", "analyze_impact", "technical"}
+            and str(operation.get("name") or "").strip() != primary_name
+        ]
+        return [primary, *supplemental_ops]
     if decision.domain_intent == "analysis":
         fallback_names = {
             str((operation or {}).get("name") or "").strip()
@@ -527,9 +645,26 @@ def _add_router_task_hints(
             else:
                 hint_tickers = list(scoped_current_tickers)
 
+        if (
+            operation_name == "qa"
+            and decision.needs_tools
+            and hint_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            projected_operation = _domain_intent_operation(decision.domain_intent, decision.confidence)
+            projected_name = str(projected_operation.get("name") or "").strip().lower()
+            if projected_name and projected_name != "qa":
+                operation_name = projected_name
+            elif decision.domain_intent == "analysis":
+                operation_name = str(_router_guided_analysis_operation(decision).get("name") or "qa").strip().lower()
+
         params = dict(hint.get("params") or {}) if isinstance(hint.get("params"), dict) else {}
         if operation_name == "fetch" and not params.get("topic"):
             params["topic"] = "news"
+        if operation_name in {"fetch", "news_impact", "daily_brief"} and query_explicitly_requests_links(query):
+            params.setdefault("include_links", True)
+        if subject_type == "unknown" and _contains_any(f"{subject_label} {query}", _THEME_HINTS):
+            subject_type = "theme"
         if decision.context_binding.source != "none":
             params.setdefault("context_binding", decision.context_binding.model_dump())
         task_selection_ids = list(selection_ids or []) if subject_type in {"news_item", "news_set", "filing", "research_doc"} else []
@@ -548,6 +683,23 @@ def _add_router_task_hints(
                     operation_name="price",
                     params={},
                     priority=15,
+                )
+                added = True
+
+        if (
+            operation_name == "price"
+            and hint_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+            and query_explicitly_requests_links(query)
+            and _contains_any(query, _NEWS_HINTS)
+        ):
+            for ticker in dedup_tickers(hint_tickers):
+                _add_support_task(
+                    ticker=ticker,
+                    subject_type=subject_type,
+                    operation_name="fetch",
+                    params={"topic": "news", "include_links": True},
+                    priority=16,
                 )
                 added = True
 
@@ -601,13 +753,36 @@ def _add_router_task_hints(
                     )
                     added = True
 
+        atomic_tickers = dedup_tickers(hint_tickers)
+        if (
+            operation_name in {"price", "technical"}
+            and len(atomic_tickers) > 1
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            for ticker in atomic_tickers:
+                _add_task(
+                    tasks,
+                    subject_type=subject_type,
+                    subject_label=ticker,
+                    operation=_operation(operation_name, max(decision.confidence, 0.68), params),
+                    query=query,
+                    tickers=[ticker],
+                    selection_ids=task_selection_ids,
+                    selection_types=task_selection_types,
+                    priority=18 + idx,
+                    reason="conversation_router_task_hint",
+                    params=params,
+                )
+            added = True
+            continue
+
         _add_task(
             tasks,
             subject_type=subject_type,
             subject_label=subject_label or ", ".join(hint_tickers) or subject_type,
             operation=_operation(operation_name, max(decision.confidence, 0.68), params),
             query=query,
-            tickers=dedup_tickers(hint_tickers),
+            tickers=atomic_tickers,
             selection_ids=task_selection_ids,
             selection_types=task_selection_types,
             priority=18 + idx,
@@ -678,6 +853,121 @@ def _direct_reply(query: str) -> str:
     return "我主要负责金融投研问题。你可以输入股票代码、公司名称、宏观主题，或让我比较多只股票。"
 
 
+def _query_explicitly_requests_price_data(query: str) -> bool:
+    text = str(query or "")
+    if wants_no_news_or_links(text):
+        return False
+    lowered = text.lower()
+    return bool(
+        re.search(r"\b(?:what|which|where)\s+(?:is|are)?\s*(?:the\s+)?(?:current\s+)?(?:stock\s+)?(?:price|quote)\b", lowered)
+        or re.search(r"\b(?:current|real-time|realtime|latest)\s+(?:stock\s+)?(?:price|quote)\b", lowered)
+        or re.search(r"\b(?:price|prices|quote)\s+now\b", lowered)
+        or re.search(r"\b(?:current|latest|recent|today'?s?)\s+(?:stock\s+)?performance\b", lowered)
+        or re.search(r"\bperformance\s+(?:now|today|recently)\b", lowered)
+        or re.search(r"\bhow\s+much\s+(?:is|are)\b", lowered)
+        or re.search(r"\b(?:trading|trade)\s+at\b", lowered)
+        or _contains_any(
+            text,
+            (
+                "最新股价",
+                "实时股价",
+                "当前股价",
+                "现在股价",
+                "股价多少",
+                "价格多少",
+                "现在多少钱",
+                "当前价格",
+                "实时报价",
+                "报价",
+                "行情",
+                "最新表现",
+                "近期表现",
+                "今天表现",
+                "今日表现",
+                "涨了多少",
+                "跌了多少",
+                "涨幅",
+                "跌幅",
+            ),
+        )
+    )
+
+
+def _direct_decision_must_project_tasks(query: str, decision: ConversationDecision) -> bool:
+    """Prevent an LLM direct route from swallowing explicit tool/data requests."""
+    if wants_no_news_or_links(query):
+        return False
+    return bool(
+        _extract_urls(query)
+        or query_explicitly_requests_sources(query)
+        or _contains_any(query, _NEWS_HINTS)
+        or _query_explicitly_requests_price_data(query)
+        or _contains_any(query, _PORTFOLIO_HINTS)
+        or decision.needs_tools
+        or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
+        or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
+    )
+
+
+def _force_grounded_research_decision(decision: ConversationDecision) -> ConversationDecision:
+    return replace(
+        decision,
+        execution_route="research",
+        needs_tools=True,
+        confidence=max(decision.confidence, 0.74),
+        reason=decision.reason or "explicit current-data/tool request must project tasks",
+    )
+
+
+def _query_requests_company_side_data(query: str) -> bool:
+    text = _strip_urls(str(query or ""))
+    if wants_no_news_or_links(text):
+        return False
+    return bool(
+        _query_explicitly_requests_price_data(text)
+        or _contains_any(text, _NEWS_HINTS)
+        or _contains_any(text, _TECHNICAL_HINTS)
+        or _contains_any(text, _PORTFOLIO_HINTS)
+    )
+
+
+def _prune_url_only_company_context_tasks(
+    tasks: list[dict[str, Any]],
+    *,
+    query: str,
+    explicit_urls: list[str],
+) -> list[dict[str, Any]]:
+    """Keep explicit URL reading focused on the URL unless side data was requested."""
+    if not explicit_urls or _query_requests_company_side_data(query):
+        return tasks
+    has_url_task = any(
+        isinstance((task.get("operation") or {}).get("params"), dict)
+        and (
+            (task.get("operation") or {}).get("params", {}).get("url")
+            or (task.get("operation") or {}).get("params", {}).get("urls")
+        )
+        for task in tasks
+        if isinstance(task, dict)
+    )
+    if not has_url_task:
+        return tasks
+    pruned: list[dict[str, Any]] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        op_name = str((task.get("operation") or {}).get("name") or "").strip()
+        subject_type = str(task.get("subject_type") or "").strip().lower()
+        reason = str(task.get("reason") or "").strip()
+        if (
+            reason == "conversation_router_intent"
+            and subject_type in {"company", "index", "crypto", "fund"}
+            and op_name in {"qa", "daily_brief", "fetch", "analyze_impact", "news_impact"}
+        ):
+            continue
+        pruned.append(task)
+    return pruned
+
+
 def _natural_clarify_question(query: str, fallback: str) -> str:
     """Convert router guidance into user-facing clarification copy."""
     text = str(fallback or "").strip()
@@ -734,6 +1024,24 @@ def _normalize_selection(ui_context: dict[str, Any]) -> tuple[list[str], list[st
         if item_type:
             types.append(item_type)
     return ids, types, payload
+
+
+def _selection_urls(ui_context: dict[str, Any]) -> list[str]:
+    raw = ui_context.get("selections")
+    if not raw and isinstance(ui_context.get("selection"), dict):
+        raw = [ui_context["selection"]]
+    selections = raw if isinstance(raw, list) else []
+    urls: list[str] = []
+    seen: set[str] = set()
+    for item in selections:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip().rstrip(".,，。；;!?！？")
+        if not url.startswith(("http://", "https://")) or url in seen:
+            continue
+        seen.add(url)
+        urls.append(url)
+    return urls[:3]
 
 
 def _portfolio_context_available(query: str, ui_context: dict[str, Any]) -> bool:
@@ -935,6 +1243,7 @@ def _add_context_bound_research_task(
     query: str,
     ui_context: dict[str, Any],
     memory_context: dict[str, Any],
+    current_tickers: list[str] | None,
     selection_ids: list[str],
     selection_types: list[str],
 ) -> bool:
@@ -954,16 +1263,28 @@ def _add_context_bound_research_task(
         operation_name = "summarize" if decision.relation == "summarize" else "qa"
         if decision.domain_intent in {"news", "analysis"} and decision.relation != "summarize":
             operation_name = "analyze_impact" if decision.needs_tools else "qa"
+        params = {"context_binding": binding.model_dump()}
+        urls = _selection_urls(ui_context)
+        if len(urls) == 1:
+            params["url"] = urls[0]
+        elif len(urls) > 1:
+            params["urls"] = urls
+        selection_tickers = dedup_tickers(list(current_tickers or []))
+        if not selection_tickers and isinstance(ui_context.get("active_symbol"), str):
+            active = normalize_ticker(str(ui_context.get("active_symbol") or ""))
+            if active:
+                selection_tickers = [active]
         _add_task(
             tasks,
             subject_type=subject_type,
-            operation=_operation(operation_name, decision.confidence),
+            operation=_operation(operation_name, decision.confidence, params),
             query=query,
+            tickers=selection_tickers,
             selection_ids=selection_ids,
             selection_types=selection_types,
             priority=15,
             reason="context_router_binding",
-            params={"context_binding": binding.model_dump()},
+            params=params,
         )
         context_refs.append(_binding_context_ref(binding, value=selection_ids))
         return True
@@ -1089,11 +1410,13 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         result = _direct_conversation_result(
             query=query,
+            output_mode=output_mode,
             decision=decision,
             reply=_direct_reply(query),
             context_refs=context_refs,
             artifacts=artifacts,
             trace=trace,
+            memory_context=memory_context,
         )
         await _emit_understanding_trace(result["understanding"])
         return result
@@ -1123,6 +1446,30 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         trace["conversation_router"] = conversation_decision.model_dump()
 
+    explicit_urls = _extract_urls(query)
+    if (
+        query
+        and explicit_urls
+        and not blocked_tasks
+        and not _explicit_report_mode(state, output_mode)
+        and conversation_decision is None
+    ):
+        conversation_decision = ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="current user turn contains explicit URL(s), so the URL must be fetched before answering",
+                subject_hint=explicit_urls[0],
+            ),
+            relation="new_topic",
+            domain_intent="doc_qa",
+            confidence=0.9,
+            needs_tools=True,
+            reason="explicit URL reference requires source-grounded document retrieval",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+
     if query and not blocked_tasks and not _explicit_report_mode(state, output_mode) and conversation_decision is None:
         conversation_decision = await route_conversation(state, tickers=tickers, selection_ids=selection_ids)
         if conversation_decision is not None:
@@ -1130,28 +1477,34 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 tickers = _effective_current_turn_tickers(query, tickers, conversation_decision)
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                direct_context_refs = list(context_refs)
-                binding = conversation_decision.context_binding
-                if binding.source != "none":
-                    direct_context_refs.append(
-                        {
-                            "source": "conversation_context",
-                            "key": binding.source,
-                            "label": binding.subject_hint or binding.source,
-                            "value": binding.reason,
-                        }
+                if _direct_decision_must_project_tasks(query, conversation_decision):
+                    conversation_decision = _force_grounded_research_decision(conversation_decision)
+                    trace["conversation_router"] = conversation_decision.model_dump()
+                else:
+                    direct_context_refs = list(context_refs)
+                    binding = conversation_decision.context_binding
+                    if binding.source != "none":
+                        direct_context_refs.append(
+                            {
+                                "source": "conversation_context",
+                                "key": binding.source,
+                                "label": binding.subject_hint or binding.source,
+                                "value": binding.reason,
+                            }
+                        )
+                    reply = await generate_contextual_reply(state, conversation_decision)
+                    result = _direct_conversation_result(
+                        query=query,
+                        output_mode=output_mode,
+                        decision=conversation_decision,
+                        reply=reply,
+                        context_refs=direct_context_refs,
+                        artifacts=artifacts,
+                        trace=trace,
+                        memory_context=memory_context,
                     )
-                reply = await generate_contextual_reply(state, conversation_decision)
-                result = _direct_conversation_result(
-                    query=query,
-                    decision=conversation_decision,
-                    reply=reply,
-                    context_refs=direct_context_refs,
-                    artifacts=artifacts,
-                    trace=trace,
-                )
-                await _emit_understanding_trace(result["understanding"])
-                return result
+                    await _emit_understanding_trace(result["understanding"])
+                    return result
             if (
                 conversation_decision.execution_route == "research"
             ):
@@ -1163,6 +1516,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         query=query,
                         ui_context=ui_context,
                         memory_context=memory_context,
+                        current_tickers=tickers,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
                     )
@@ -1374,7 +1728,15 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             reason="macro_hint",
         )
 
-    if not blocked_tasks and not context_router_research_bound and _contains_any(query, _THEME_HINTS) and not has_macro and not tickers:
+    url_only_doc_turn = bool(explicit_urls) and not _query_requests_company_side_data(query)
+    if (
+        not blocked_tasks
+        and not context_router_research_bound
+        and _contains_any(query, _THEME_HINTS)
+        and not has_macro
+        and not tickers
+        and not url_only_doc_turn
+    ):
         if not any(task.get("subject_type") == "theme" for task in tasks):
             _add_task(
                 tasks,
@@ -1435,28 +1797,34 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         if conversation_decision is not None:
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                direct_context_refs = list(context_refs)
-                binding = conversation_decision.context_binding
-                if binding.source != "none":
-                    direct_context_refs.append(
-                        {
-                            "source": "conversation_context",
-                            "key": binding.source,
-                            "label": binding.subject_hint or binding.source,
-                            "value": binding.reason,
-                        }
+                if _direct_decision_must_project_tasks(query, conversation_decision):
+                    conversation_decision = _force_grounded_research_decision(conversation_decision)
+                    trace["conversation_router"] = conversation_decision.model_dump()
+                else:
+                    direct_context_refs = list(context_refs)
+                    binding = conversation_decision.context_binding
+                    if binding.source != "none":
+                        direct_context_refs.append(
+                            {
+                                "source": "conversation_context",
+                                "key": binding.source,
+                                "label": binding.subject_hint or binding.source,
+                                "value": binding.reason,
+                            }
+                        )
+                    reply = await generate_contextual_reply(state, conversation_decision)
+                    result = _direct_conversation_result(
+                        query=query,
+                        output_mode=output_mode,
+                        decision=conversation_decision,
+                        reply=reply,
+                        context_refs=direct_context_refs,
+                        artifacts=artifacts,
+                        trace=trace,
+                        memory_context=memory_context,
                     )
-                reply = await generate_contextual_reply(state, conversation_decision)
-                result = _direct_conversation_result(
-                    query=query,
-                    decision=conversation_decision,
-                    reply=reply,
-                    context_refs=direct_context_refs,
-                    artifacts=artifacts,
-                    trace=trace,
-                )
-                await _emit_understanding_trace(result["understanding"])
-                return result
+                    await _emit_understanding_trace(result["understanding"])
+                    return result
             if conversation_decision.execution_route == "research":
                 if conversation_decision.task_hints:
                     hint_bound = _add_router_task_hints(
@@ -1477,6 +1845,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         query=query,
                         ui_context=ui_context,
                         memory_context=memory_context,
+                        current_tickers=tickers,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
                     )
@@ -1518,9 +1887,16 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     }
                 )
 
+    tasks = _prune_url_only_company_context_tasks(tasks, query=query, explicit_urls=explicit_urls)
+
+    has_alert_task = any((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)
+    pending_research_after_alert = has_alert_task and any(
+        (task.get("operation") or {}).get("name") != "alert_set" for task in tasks
+    )
+
     if not tasks and blocked_tasks:
         route = "clarify"
-    elif tasks and all((task.get("operation") or {}).get("name") == "alert_set" for task in tasks):
+    elif tasks and has_alert_task and (pending_research_after_alert or all((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)):
         route = "alert"
     elif tasks:
         route = "research"
@@ -1556,6 +1932,24 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     if _is_explicit_brief_request(query):
         output_mode = "brief"
 
+    reply_contract = build_reply_contract(
+        query=query,
+        output_mode=output_mode,
+        tasks=tasks,
+        blocked_tasks=blocked_tasks,
+        conversation_decision=conversation_decision,
+        memory_context=memory_context,
+    )
+    _apply_reply_contract_to_tasks(tasks, reply_contract)
+    reply_contract = build_reply_contract(
+        query=query,
+        output_mode=output_mode,
+        tasks=tasks,
+        blocked_tasks=blocked_tasks,
+        conversation_decision=conversation_decision,
+        memory_context=memory_context,
+    )
+
     primary = tasks[0] if tasks else None
     operation = (primary or {}).get("operation") or _operation("qa", 0.0)
     subject = _build_subject(primary, selection_payload, tasks)
@@ -1589,10 +1983,12 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "fallback_assumptions": fallback_assumptions,
     }
     trace["understanding"] = understanding
+    trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
     return {
         "understanding": understanding,
+        "reply_contract": reply_contract,
         "tasks": tasks,
         "blocked_tasks": blocked_tasks,
         "context_refs": context_refs,
@@ -1601,6 +1997,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "output_mode": output_mode,
         "clarify": clarify,
         "chat_responded": route == "direct",
+        "pending_research_after_alert": pending_research_after_alert,
         "artifacts": artifacts,
         "trace": trace,
     }

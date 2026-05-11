@@ -142,11 +142,14 @@ async def alert_action(state: GraphState) -> dict[str, Any]:
             ]
         )
 
-    return {
+    result: dict[str, Any] = {
         "alert_valid": True,
         "skip_session_context": True,
-        "artifacts": {"draft_markdown": markdown},
+        "artifacts": {"draft_markdown": markdown, "alert_markdown": markdown},
     }
+    if remaining_query:
+        result["query"] = remaining_query
+    return result
 
 
 __all__ = ["alert_action"]

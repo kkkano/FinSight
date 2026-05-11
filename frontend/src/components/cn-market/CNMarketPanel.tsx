@@ -258,6 +258,7 @@ export const CNMarketPanel: React.FC = () => {
           <p className="text-xs">暂无数据，点击立即加载</p>
           <button
             type="button"
+            data-testid="cn-market-load-btn"
             onClick={() => loadTab(activeTab)}
             className="text-xs text-fin-primary hover:underline"
           >

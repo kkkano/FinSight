@@ -1,6 +1,8 @@
 # FinSight LangGraph Flow Documentation
 
 > 2026-05-06 状态说明：当前主路径为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候/感谢/确认/再见；开放闲聊、非金融请求、能力问题、URL/网页/文章请求、指代追问和普通金融问题都进入 `understand_request` 的 LLM conversation router。Router 在 planner 前决定 direct/research/alert/clarify/out_of_scope，只有 research/alert 才继续进入工具规划；URL 读取是 planner/agent 工具 `fetch_url_content`，不是理解层预抓取。只有显式报告按钮/`investment_report` 进入报告模板。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。
+> 2026-05-10 增量：`understand_request` 写入 `reply_contract`，用 `chat_answer/source_grounded_answer/report_generation` 三条 lane 固定 UX 行为；工具失败、403、rejected、empty、timeout 等写入 `artifacts.tool_diagnostics`，不得进入 `evidence_pool`。
+> 2026-05-11 验收：`tests/eval/chat_router_100.json` 的最终 current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，覆盖 18 类连续对话和取证/报告红线。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
@@ -72,7 +74,7 @@ graph TD
 | `plan_ir` | Write (None) | 清除计划 IR |
 | `artifacts` | Write (None) | 清除制品 |
 | `chat_responded` | Write (None) | 清除聊天回复标记 |
-| `understanding/tasks/blocked_tasks/context_refs` | Write (None) | 清除上一轮请求理解结果 |
+| `understanding/reply_contract/tasks/blocked_tasks/context_refs` | Write (None) | 清除上一轮请求理解结果和 UX 契约 |
 | `confirmation_*` (5) | Write (None) | 清除所有确认门控字段 |
 | `trace` | Write | 保留 spans (events/timings/failures)，清除运行时 sub-keys (operation_decision/planner_runtime/synthesize_runtime/executor/rag) |
 
@@ -174,6 +176,7 @@ graph TD
 | `query` | Read | 用户查询 |
 | `ui_context` | Read | selection、active_symbol、portfolio 等上下文 |
 | `understanding` | Write | route、summary、confidence、assumptions |
+| `reply_contract` | Write | lane、answer_style、length_preference、source_constraints、citation_policy、continuation_target |
 | `tasks` | Write | 可执行任务列表 |
 | `blocked_tasks` | Write | 局部阻塞任务列表 |
 | `subject` / `operation` | Write | primary task 的兼容投影 |
@@ -190,6 +193,7 @@ graph TD
 - `direct_answer` / `out_of_scope`：直接由 LLM 生成自然对话回复，不进入 planner。
 - `research`：投影成 ready task，进入 `policy_gate -> planner`。
 - `clarify`：缺少必要上下文时结束并提示补充。
+- `no news/no links/direct answer` 纠偏会写入 `reply_contract.source_constraints.disallow_news=true`，后续 policy/planner 必须遵守。
 
 **Source**: `backend/graph/nodes/understand_request.py`
 
@@ -300,7 +304,7 @@ graph TD
 |-------|-----------|-------------|
 | `plan_ir` | Read | 执行计划 |
 | `subject` | Read | 主体信息 (包含 selection_payload) |
-| `artifacts` | Write | `{evidence_pool, rag_context, step_results}` |
+| `artifacts` | Write | `{evidence_pool, tool_diagnostics, rag_context, step_results}` |
 | `trace` | Write | 执行追踪 |
 
 **双模式**:
@@ -311,7 +315,7 @@ graph TD
 1. 解析 PlanIR steps, 按 `parallel_group` 分组
 2. 同一 parallel_group 内的 steps 并发执行 (`asyncio.gather`)
 3. 收集所有 step_results
-4. 构建 `evidence_pool` (合并 selection_payload + tool outputs + agent outputs)
+4. 构建 `evidence_pool` (合并 selection_payload + 成功 tool outputs + agent outputs)；失败/拒绝/空/超时输出进入 `tool_diagnostics`
 5. RAG v2: ingest evidence → hybrid_search → rag_context
 
 **Source**: `backend/graph/nodes/execute_plan_stub.py`
@@ -322,7 +326,7 @@ graph TD
 
 | Field | Direction | Description |
 |-------|-----------|-------------|
-| `artifacts` | Read | evidence_pool, rag_context, step_results |
+| `artifacts` | Read | evidence_pool, tool_diagnostics, rag_context, step_results |
 | `subject` | Read | 主体信息 |
 | `plan_ir` | Read | 执行计划 (用于模板选择) |
 | `artifacts.render_vars` | Write | 模板渲染变量 (RenderVars) |

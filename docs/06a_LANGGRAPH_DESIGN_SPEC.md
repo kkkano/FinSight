@@ -1,11 +1,13 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-05-06
+> **更新日期**：2026-05-11
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
 > 2026-05-06 修订说明：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见这类零理解成本 turn；能力问题、闲聊、非金融请求、URL/网页/文章请求、指代追问和普通金融问答都进入 `understand_request` 的 LLM conversation router。该 router 在 planner 之前判断 `direct_answer / research / alert / clarify / out_of_scope`：direct/out_of_scope 由 LLM 自然回复并结束；只有需要行情、新闻、报告、组合、文档证据、URL fetch 或工具执行时才进入 `policy_gate -> planner`。只有显式 `output_mode=investment_report`（报告按钮）使用报告模板；普通 chat/brief 走对话式自然回答。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍注册为兼容 helper 或测试对象。会话生命周期已由 `/api/conversations` 提供 list/create/get/patch/delete 与轻量 conversation snapshot store，停止生成已形成前端 abort + 后端 cancelled trace/pipeline + executor/agent cancellation token 的闭环。
+> 2026-05-10 修订说明：新增 `ReplyContract` 作为请求理解后的 UX 契约，三条 lane 为 `chat_answer`、`source_grounded_answer`、`report_generation`；`brief` 降级为长度偏好，不再是独立产品模式。`EvidenceItem` 与 `ToolError` 分离，工具失败、403、rejected、empty、timeout 只能进入 `artifacts.tool_diagnostics`，不能作为证据或来源渲染。
+> 2026-05-11 验收说明：`tests/eval/chat_router_100.json` 已成为当前聊天 UX 验收集；最终 current-state 产物为 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，含 `95` 个 hard 红线用例。
 
 ---
 
@@ -179,6 +181,18 @@ flowchart LR
 | `brief` | 兼容轻量摘要模式；不作为主 UI 的“简报/深度”切换心智模型 | 兼容旧入口或内部策略 |
 | `investment_report` | 研报（完整，需拉多 agent） | **按钮触发专用** |
 
+### 2.5 ReplyContract（UX 契约）
+
+`output_mode` 只表达显式格式，`ReplyContract` 表达本轮用户体验和取证约束。`understand_request` 生成 contract 后，`policy_gate`、`planner_stub`、`execute_plan_stub` 和 renderer 只能读取结构化约束，不应重新用 query 关键词猜模式。
+
+| Lane | 触发 | 约束 |
+|---|---|---|
+| `chat_answer` | 默认普通聊天、解释机制、追问、纠偏、安全边界、明确“不要新闻/不要链接/直接说” | `answer_style=natural_chat`，`citation_policy=none`，不强制取证或报告 |
+| `source_grounded_answer` | 明确要新闻/链接/URL/实时价格/引用/数据证据 | `citation_policy=must_cite_or_disclose_unavailable`，必须引用可用来源或说明不可用 |
+| `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报 | 使用报告结构，可绑定上一份报告 artifact 处理后续追问 |
+
+`source_constraints.disallow_news=true` 是本轮硬约束；除显式报告外，后续策略与规划不得保留新闻类工具。`context_binding` 记录 query、UI selection、active symbol、上一份报告等上下文绑定来源，query 明说 ticker 时优先于 UI hint。
+
 ---
 
 ## 3. 目标架构概览（LangGraph 主图 + 子图）
@@ -190,7 +204,7 @@ flowchart TD
   A["API /chat/*"] --> B[BuildInitialState]
   B --> C[ResetTurnState]
   C --> D[PrepareContext]
-  D --> E["UnderstandRequest<br/>tasks + blocked_tasks + output_mode"]
+  D --> E["UnderstandRequest<br/>tasks + blocked_tasks + reply_contract"]
   E -- direct / clarify --> Z["Return/Stream"]
   E -- alert --> A1[AlertExtractor]
   A1 --> A2[AlertAction]
@@ -253,6 +267,8 @@ from typing import TypedDict, Literal, NotRequired
 
 SubjectType = Literal["news_item","news_set","company","filing","research_doc","portfolio","macro","index","commodity","theme","unknown"]
 OutputMode = Literal["chat","brief","investment_report"]
+ReplyLane = Literal["chat_answer","source_grounded_answer","report_generation"]
+CitationPolicy = Literal["none","cite_if_available","must_cite_or_disclose_unavailable"]
 
 class Subject(TypedDict):
     subject_type: SubjectType
@@ -275,11 +291,12 @@ class GraphState(TypedDict):
     subject: NotRequired[Subject]
     operation: NotRequired[Operation]
     output_mode: NotRequired[OutputMode]
+    reply_contract: NotRequired[dict]  # ReplyContract: lane/style/source constraints/citation policy
     strict_selection: NotRequired[bool]
 
     policy: NotRequired[dict]         # PolicyGate 的输出（budget/allowlist/schema）
     plan_ir: NotRequired[dict]        # Planner 输出的结构化
-    artifacts: NotRequired[dict]      # 执行结果集（news, filings, prices, evidence...）
+    artifacts: NotRequired[dict]      # 执行结果集（news, filings, prices, evidence_pool, tool_diagnostics...）
     trace: NotRequired[dict]          # 路由/计划/执行轨迹
 ```
 
@@ -317,13 +334,13 @@ class GraphState(TypedDict):
 | `ResetTurnState` | per-turn state | 清理本轮 `understanding/tasks/blocked_tasks/trace runtime` | 保留长期 memory |
 | `PrepareContext` | history + `ui_context` | 修剪历史、摘要长上下文、规范化 selections、合并输出模式 hints | 已接入主路径；旧 `trim_history/summarize_history/normalize_ui_context/decide_output_mode` 作为兼容 helper 保留 |
 | `ChatRespond` | `query,messages` | 仅纯问候/感谢/确认/再见的 `artifacts.draft_markdown,chat_responded` | 非纯社交一律放行 |
-| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `conversation_decision,understanding,tasks,blocked_tasks,subject,operation,output_mode,route` | LLM router 在 planner 前决定 direct/research/clarify/alert/out_of_scope；direct/out_of_scope 直接自然回复 |
+| `UnderstandRequest` | `query,ui_context,memory_summary,options` | `conversation_decision,understanding,reply_contract,tasks,blocked_tasks,subject,operation,output_mode,route` | LLM router 在 planner 前决定 direct/research/clarify/alert/out_of_scope；同时生成 UX lane 契约；direct/out_of_scope 直接自然回复 |
 | `AlertExtractor` | alert task | alert 参数 | invalid 时返回澄清 |
 | `AlertAction` | alert 参数 | alert 结果 | 写入失败时返回错误 |
-| `PolicyGate` | `tasks,output_mode,ui_context,budget/preferences` | `policy/budget/allowed_tools/allowed_agents` | 降级到最小 allowlist |
+| `PolicyGate` | `tasks,reply_contract,output_mode,ui_context,budget/preferences` | `policy/budget/allowed_tools/allowed_agents` | 降级到最小 allowlist；本轮 `disallow_news` 时移除新闻工具 |
 | `Planner` | `tasks,policy,output_mode` | `plan_ir` | LLM 失败 fallback 到 `planner_stub`；URL/网页/文章分析通过 `fetch_url_content` 工具计划，不在理解层预抓取 |
 | `ConfirmationGate` | `plan_ir,policy` | continue / interrupt | 默认继续 |
-| `ExecutePlan` | `plan_ir` | `artifacts` | optional step 失败不中止；required step 记录错误 |
+| `ExecutePlan` | `plan_ir,reply_contract` | `artifacts` | optional step 失败不中止；失败/拒绝/空/超时输出进 `tool_diagnostics`，不进 `evidence_pool` |
 | `Synthesize` | `artifacts,understanding` | `draft_answer` | 多任务 fallback 简报 |
 | `Render` | `subject_type,output_mode,draft_answer` | 最终 markdown | 模板缺失回退 |
 | `MemoryWriteback` | `messages,selected_memory` | 持久化 | 只写允许字段 |
@@ -391,11 +408,14 @@ SUBJECT_SUBGRAPHS = {
 - 同一 `parallel_group` 的步骤并行执行，不同 group 串行。
 - 任何 `optional=true` 失败不中止；写入 `artifacts.errors[]` ，合成器会提示「可选信息缺失」。
 - 对同一工具的重复调用去重（key=tool+inputs hash）。
+- 工具失败、403、rejected、empty、timeout、cancelled 等错误输出统一写入 `artifacts.tool_diagnostics[]`；只有可引用、可解释的成功材料才能进入 `artifacts.evidence_pool[]`。
 
 ### 6.4 验收标准（Planner/Executor）
 
 - Planner 的输出须被 Schema 校验（结构化 JSON），失败时走 fallback（见 8.3）。
 - 分析影响时的「默认计划不包含 `fundamental+technical+macro+price` 全桶」除非 query 和 output_mode 明确要求。
+- `ReplyContract.source_constraints.disallow_news=true` 时，Policy/Planner 不得规划新闻类工具；`source_grounded_answer` 与 `report_generation` 必须遵守 `citation_policy`。
+- `tool_diagnostics` 中的错误码、tool name、trace id 只能进入诊断视图或降级说明，不能被合成成新闻、来源或市场结论。
 
 ---
 
@@ -516,11 +536,14 @@ SUBJECT_SUBGRAPHS = {
 | T-M1 | 「美联储利率路径对大型科技股估值有什么影响」 | none | `macro/theme` | `brief` | 无 ticker 也可执行，不要求用户先选公司 |
 | T-X1 | 混合闲聊 + 谷歌/微软 + 宏观 + 持仓 | none/optional portfolio | `mixed` | `chat` | 可执行 task 与 blocked portfolio task 分离 |
 
-完整复杂 Query Golden Set 与 20 条 probe 结果见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`；当前聊天 UX 40-query 完整答案验收见 `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`，定向修复验收见 `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`。
+完整复杂 Query Golden Set 与 20 条 probe 结果见 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md` 和 `docs/reports/2026-05-03_request_understanding_query_results.md`；旧 40-query 聊天 UX 验收保留为回归证据。当前聊天 UX 验收集位于 `tests/eval/chat_router_100.json`，最终 current-state 产物见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`：100 条全 PASS，95 个 hard 红线用例 0 FAIL。
 
 ### 9.2 测试建议（审查）
 
 - `test_understand_request.py`（当前主路径请求理解层 golden cases，2026-05-03 已落地）
+- `test_reply_contract_lanes.py`（`chat_answer/source_grounded_answer/report_generation` lane 与 no-news 硬约束）
+- `test_evidence_diagnostics_gate.py`（工具失败、403、rejected、empty、timeout 不进入 evidence）
+- `scripts/chat_ux_router_eval.py --dataset tests/eval/chat_router_100.json`（100 条聊天 UX 数据集，95 个 hard 红线用例，失败即阻断）
 - `test_output_mode_ui_override.py`
 - `test_planner_planir_schema_validation.py`
 - `test_executor_parallel_groups.py`

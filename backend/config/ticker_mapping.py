@@ -309,6 +309,22 @@ def _is_structured_market_ticker(ticker: str) -> bool:
     return bool(re.match(r"^\d{5,6}\.(SS|SZ|BJ|HK)$", text))
 
 
+def _alias_appears_in_text(query: str, alias: str) -> bool:
+    """Match aliases without letting short ASCII aliases fire inside words/URLs."""
+    raw_alias = str(alias or "").strip()
+    if not raw_alias:
+        return False
+    if re.search(r"[\u4e00-\u9fff]", raw_alias):
+        return raw_alias in query
+    return bool(
+        re.search(
+            rf"(?<![A-Za-z0-9]){re.escape(raw_alias)}(?![A-Za-z0-9])",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def normalize_ticker(raw: str) -> str:
     """
     将任意用户输入（公司名 / 别名 / ticker）规范化为标准 ticker。
@@ -411,7 +427,7 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     # 3. Match Chinese company names
     sorted_cn_names = sorted(CN_TO_TICKER.keys(), key=len, reverse=True)
     for cn_name in sorted_cn_names:
-        if cn_name in query_original:
+        if _alias_appears_in_text(query_original, cn_name):
             ticker = CN_TO_TICKER[cn_name]
             if ticker not in metadata['tickers']:
                 metadata['tickers'].append(ticker)

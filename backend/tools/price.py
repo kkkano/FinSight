@@ -497,8 +497,8 @@ def get_stock_price(ticker: str) -> str:
         # 普通美股
         sources = [
             _fetch_yahoo_api_v8,
-            _scrape_google_finance,
             _fetch_with_stooq_price,
+            _scrape_google_finance,
             _scrape_cnbc,
             _fetch_with_pandas_datareader,
             _fetch_with_yfinance,

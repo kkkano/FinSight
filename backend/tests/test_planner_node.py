@@ -129,6 +129,65 @@ def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
     assert (captured["retry_kwargs"] or {})["acquire_timeout_seconds"] == 46.0
 
 
+def test_planner_policy_enforces_link_required_news_steps():
+    from backend.graph.nodes.planner import _enforce_policy
+
+    payload = {
+        "goal": "news links",
+        "subject": {"subject_type": "company", "tickers": ["TSLA"]},
+        "output_mode": "chat",
+        "steps": [
+            {
+                "id": "s1",
+                "kind": "tool",
+                "name": "get_company_news",
+                "inputs": {"fast": True},
+                "why": "model omitted ticker and used fast mode",
+                "optional": True,
+            }
+        ],
+        "budget": {"max_rounds": 1, "max_tools": 1},
+        "synthesis": {"style": "concise", "sections": []},
+    }
+    state = {
+        "query": "Set an alert if TSLA breaks 180, and also give recent news links.",
+        "output_mode": "chat",
+        "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news", "include_links": True}},
+        "subject": {"subject_type": "company", "tickers": ["TSLA"], "selection_payload": []},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["TSLA"],
+                "operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news", "include_links": True}},
+                "status": "ready",
+            }
+        ],
+        "reply_contract": {
+            "lane": "source_grounded_answer",
+            "source_constraints": {"requires_links": True, "requires_sources": True},
+        },
+        "policy": {
+            "budget": {"max_rounds": 2, "max_tools": 2},
+            "allowed_tools": ["get_company_news", "get_authoritative_media_news"],
+            "allowed_agents": [],
+        },
+        "trace": {},
+    }
+
+    plan, _budget = _enforce_policy(payload, state)
+    steps = plan.get("steps") or []
+    news_step = next(step for step in steps if step.get("name") == "get_company_news")
+    media_step = next(step for step in steps if step.get("name") == "get_authoritative_media_news")
+
+    assert news_step["inputs"]["ticker"] == "TSLA"
+    assert news_step["inputs"]["fast"] is False
+    assert news_step["optional"] is False
+    assert "TSLA" in media_step["inputs"]["query"]
+    assert media_step["inputs"]["authoritative_only"] is False
+    assert media_step["optional"] is False
+
+
 def test_planner_llm_mode_uses_task_graph_only_for_price_chat_tasks(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 

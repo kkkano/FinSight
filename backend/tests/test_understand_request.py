@@ -39,15 +39,14 @@ def test_pure_greeting_routes_direct_without_research_pipeline():
     ]
 
 
-def test_chinese_company_alias_resolves_without_frontend_dictionary():
+def test_chinese_company_alias_question_stays_natural_chat_without_grounding_request():
     from backend.graph import GraphRunner
 
     result = _run(GraphRunner.create().ainvoke(thread_id="u-google", query="谷歌AI业务进展如何", ui_context={}))
 
-    subject = result.get("subject") or {}
-    assert subject.get("subject_type") == "company"
-    assert subject.get("tickers") == ["GOOGL"]
-    assert (result.get("clarify") or {}).get("needed") is False
+    assert (result.get("understanding") or {}).get("route") == "direct"
+    assert (result.get("reply_contract") or {}).get("lane") == "chat_answer"
+    assert result.get("tasks") == []
 
 
 def test_macro_query_without_ticker_is_executable():
@@ -203,6 +202,53 @@ def test_explicit_url_is_preserved_as_tool_task_without_prefetch():
     assert url_tasks
     assert "MSFT" in [str(t).upper() for t in (url_tasks[0].get("tickers") or [])]
     assert not (result.get("artifacts") or {}).get("url_context")
+
+
+def test_url_only_company_question_does_not_spawn_daily_brief():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "Read https://example.com/msft-rates and tell me whether it matters for MSFT.",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    tasks = result.get("tasks") or []
+    assert any(
+        (task.get("operation") or {}).get("params", {}).get("url") == "https://example.com/msft-rates"
+        for task in tasks
+    )
+    assert not any(
+        task.get("reason") == "conversation_router_intent"
+        and (task.get("operation") or {}).get("name") == "daily_brief"
+        for task in tasks
+    )
+
+
+def test_url_only_document_question_does_not_spawn_theme_search_from_text_substrings():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "Read https://example.com/empty and disclose if no usable content is available.",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    tasks = result.get("tasks") or []
+    assert [
+        ((task.get("operation") or {}).get("name"), task.get("reason"))
+        for task in tasks
+    ] == [("qa", "explicit_url_reference")]
 
 
 def test_multi_ticker_report_keeps_compare_context_and_supporting_tasks():

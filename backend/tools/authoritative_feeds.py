@@ -20,13 +20,13 @@ _AUTHORITATIVE_DOMAINS = frozenset({
 })
 
 _GLOBAL_FEEDS = (
-    ("bloomberg", "https://feeds.bloomberg.com/markets/news.rss"),
-    ("wsj", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"),
     ("cnbc", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+    ("wsj", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"),
+    ("bloomberg", "https://feeds.bloomberg.com/markets/news.rss"),
     ("ft", "https://www.ft.com/?format=rss"),
 )
 
-_REQUEST_TIMEOUT = int(os.getenv("AUTHORITATIVE_FEED_TIMEOUT", "10"))
+_REQUEST_TIMEOUT = int(os.getenv("AUTHORITATIVE_FEED_TIMEOUT", "4"))
 _MAX_SOURCES = int(os.getenv("AUTHORITATIVE_FEED_MAX_SOURCES", "3"))
 
 

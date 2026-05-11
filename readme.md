@@ -250,7 +250,17 @@ The FinSight chat runtime is a LangGraph stateful graph. The current path is `pr
 
 The router decides whether the turn should be answered directly, clarified, turned into an alert, or planned as research. Research turns produce `understanding`, `tasks[]`, `blocked_tasks[]`, and a compatibility projection for the existing policy/planner/executor boundary. URL/page/article work is exposed as the planner/agent tool `fetch_url_content`; the request-understanding layer does not pre-fetch URLs.
 
-The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The latest full chat UX acceptance run is [`docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`](docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md) with JSON next to it; targeted post-acceptance polish is recorded in [`docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`](docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md).
+`understand_request` also writes a structured `ReplyContract` so downstream nodes do not infer UX intent from raw keywords again. The current lanes are:
+
+| Lane | Trigger | Output rule |
+|------|---------|-------------|
+| `chat_answer` | Default for ordinary explanations, follow-ups, corrections, and "no news / no links / direct answer" turns | Natural conversational answer; no forced news lookup and no report scaffold |
+| `source_grounded_answer` | Explicit news, links, URL/article reading, real-time quote, citation, or data-evidence request | Use source-capable tools; cite usable URLs or disclose that a usable source was unavailable |
+| `report_generation` | Report button, `output_mode=investment_report`, or explicit "generate report / research report" request | Use report structure and report citation policy |
+
+Evidence is split from tool diagnostics. `EvidenceItem`/`evidence_pool` is reserved for usable source material. Tool failures such as `403`, `rejected`, `empty`, `timeout`, or other failed outputs are recorded as `ToolError` rows in `artifacts.tool_diagnostics` and must not be rendered as news, sources, or conclusions.
+
+The implementation and acceptance spec are tracked in [`docs/plans/2026-05-03_request_understanding_task_graph_spec.md`](docs/plans/2026-05-03_request_understanding_task_graph_spec.md). The current full chat UX acceptance run is [`docs/qa/chat-router-100-final100-current-state.md`](docs/qa/chat-router-100-final100-current-state.md) with JSON next to it: `100/100 PASS`, including `95` hard red-line cases across context continuity, session isolation, report follow-ups, URL/news/quote source grounding, no-news correction, and tool-error evidence boundaries. The older 40-query run remains as legacy regression evidence in [`docs/qa/chat-ux-40-query-final40-post-context-binding.md`](docs/qa/chat-ux-40-query-final40-post-context-binding.md).
 
 Dashboard Scorers are served by `/api/dashboard/insights` and are not graph nodes in the chat pipeline.
 
@@ -320,12 +330,14 @@ The pipeline maintains a rich state object (`GraphState`) across all nodes:
 | `messages` | `Annotated[list, add_messages]` | Conversation history (append-only via LangGraph reducer) |
 | `subject` | `dict` | Resolved entity — `{type, ticker, name, market}` |
 | `understanding` | `dict` | Request understanding result for the current turn |
+| `reply_contract` | `dict` | Structured UX contract: lane, style, length preference, context binding, source constraints, citation policy, continuation target |
 | `tasks` | `list[dict]` | Ready task decomposition for multi-task requests |
 | `blocked_tasks` | `list[dict]` | Local missing-context tasks that should not block the whole turn |
 | `output_mode` | `str` | `"chat"` / compatibility `"brief"` / explicit `"investment_report"` |
 | `plan_ir` | `dict` | Execution plan with steps, groups, dependencies, cost estimates |
 | `step_results` | `dict` | Raw outputs from each agent/tool execution |
 | `evidence_pool` | `list[dict]` | Collected evidence items with source attribution |
+| `artifacts.tool_diagnostics` | `list[dict]` | Tool failures and empty/rejected/timeout diagnostics kept out of `evidence_pool` |
 | `rag_context` | `list[dict]` | Retrieved documents from hybrid RAG search |
 | `artifacts` | `dict` | Synthesized report, citations, charts |
 | `trace` | `dict` | Observability: latencies, token counts, failures |
@@ -1001,9 +1013,9 @@ docker compose --env-file .env.server up -d --build
 
 | API Key | Required? | Purpose | If Not Configured |
 |---------|-----------|---------|-------------------|
-| `OPENAI_COMPATIBLE_API_KEY` | ✅ **Required** | Default OpenAI-compatible LLM endpoint (`mimo-v2.5-pro` by default) | App won't function |
+| `OPENAI_COMPATIBLE_API_KEY` | ✅ **Required** | Default OpenAI-compatible LLM endpoint (`mimo-v2.5-pro` service) | App won't function |
 | `OPENAI_COMPATIBLE_API_BASE` | ✅ **Required** | OpenAI-compatible base URL (`https://token-plan-cn.xiaomimimo.com/v1` by default) | Uses the code default |
-| `OPENAI_COMPATIBLE_MODEL` | ✅ **Required** | User-facing default model (`mimo-v2.5-pro` by default) | Uses the code default |
+| `OPENAI_COMPATIBLE_MODEL` | ✅ **Required** | Default model ID (`mimo-v2.5-pro` by default) | Uses the code default |
 | `GEMINI_PROXY_API_KEY` or `OPENAI_API_KEY` | Optional | Alternative LLM providers | OpenAI-compatible endpoint is used |
 | `FMP_API_KEY` | ⭐ Recommended | Financial data (earnings, ratios) | Falls back to yfinance |
 | `FINNHUB_API_KEY` | Optional | Real-time quotes, news | Falls back to other sources |
@@ -1072,11 +1084,13 @@ pnpm dev
 
 ```bash
 pytest -q backend/tests/test_understand_request.py backend/tests/test_langgraph_skeleton.py backend/tests/test_policy_gate.py
+pytest -q backend/tests/test_reply_contract_lanes.py backend/tests/test_evidence_diagnostics_gate.py
+python scripts/chat_ux_router_eval.py --dataset tests/eval/chat_router_100.json --run-id local100
 npm run build --prefix frontend
-cd frontend && npx playwright test e2e/request-understanding-chat.spec.ts
+npm run test:e2e --prefix frontend
 ```
 
-The current chat UX acceptance set keeps full prompts and full answers in `docs/qa/chat-ux-40-query-full-url-agent-2026-05-05.md`: 39/40 passed in the full run, and the one reviewed portfolio/context case passed in the targeted polish run `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md` (4/4 targeted pass). Known residuals are recorded there: upstream LLM/tool latency or quota failures, inaccessible URLs that correctly degrade, and compound alert+news turns that set the alert first while preserving follow-up context.
+The current chat UX acceptance set lives at `tests/eval/chat_router_100.json` and is executed by `scripts/chat_ux_router_eval.py`; the final current-state artifact is `docs/qa/chat-router-100-final100-current-state.md` / `.json` with `100` PASS, `0` REVIEW, and `0` FAIL. It covers 18 categories: ordinary explanation, no-news correction, news links, quotes, tool-failure boundaries, context binding, session isolation, compound intent, confusion correction, report follow-up, portfolio/alert, URL/article, macro transmission, UI selection, safety boundary, language style, context continuity, and report-button follow-up. Known residual risk is operational rather than semantic: upstream LLM/tool latency, quota, 403, or inaccessible URLs can still occur, but failed tool outputs are kept in diagnostics and must not render as evidence.
 
 ### Optional: PostgreSQL for RAG
 

@@ -10,7 +10,7 @@ def test_langgraph_runner_import_and_invoke():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    result = _run(runner.ainvoke(thread_id="t-basic", query="分析 AAPL", ui_context={"active_symbol": "AAPL"}))
+    result = _run(runner.ainvoke(thread_id="t-basic", query="AAPL 最新股价", ui_context={"active_symbol": "AAPL"}))
 
     assert isinstance(result, dict)
     assert "artifacts" in result
@@ -23,6 +23,7 @@ def test_langgraph_runner_import_and_invoke():
         "build_initial_state",
         "reset_turn_state",
         "prepare_context",
+        "chat_respond",
         "understand_request",
         "policy_gate",
         "planner",
@@ -91,7 +92,7 @@ def test_resolve_subject_active_symbol_fallback():
     from backend.graph import GraphRunner
 
     runner = GraphRunner.create()
-    result = _run(runner.ainvoke(thread_id="t-symbol", query="分析苹果", ui_context={"active_symbol": "aapl"}))
+    result = _run(runner.ainvoke(thread_id="t-symbol", query="这只股票最新股价", ui_context={"active_symbol": "aapl"}))
 
     subject = result.get("subject") or {}
     assert subject.get("subject_type") == "company"
@@ -151,4 +152,4 @@ def test_decide_output_mode_ui_override_and_safe_default():
 
     # Generic analysis should NOT imply investment_report
     result2 = _run(runner.ainvoke(thread_id="t-mode2", query="分析一下", ui_context={}))
-    assert result2.get("output_mode") == "brief"
+    assert result2.get("output_mode") == "chat"

@@ -126,6 +126,8 @@ test.describe('Research tab regressions', () => {
     reportId = 'r-default';
 
     await page.addInitScript((sessionId) => {
+      sessionStorage.setItem('finsight-welcome-gate-passed', '1');
+      localStorage.setItem('finsight-entry-mode', 'anonymous');
       localStorage.setItem('finsight-session-id', String(sessionId));
       localStorage.setItem(
         'fs_dashboard_active_v1',

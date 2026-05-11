@@ -13,7 +13,7 @@ _PRICE_TARGET_RE = re.compile(
     # English patterns - price target
     r"price\s+(?:of|at|to)|target\s+price|reaches?|hits?|"
     # English patterns - directional
-    r"(?:drops?|falls?|goes?|dips?)\s+(?:below|under|to)\s*|"
+    r"(?:drops?|falls?|goes?|dips?|breaks?)\s+(?:below|under|to)?\s*|"
     r"(?:rises?|climbs?|goes?)\s+(?:above|over|to)\s*|"
     r"(?:above|below|over|under|at)\s*"
     r")\s*"
@@ -64,9 +64,11 @@ def _remaining_non_alert_query(query: str, match: re.Match[str], ticker: str | N
     remaining = (query[: match.start()] + query[match.end() :]).strip(" ，,。；;")
     if ticker:
         remaining = re.sub(rf"\b{re.escape(ticker)}\b", "", remaining, flags=re.IGNORECASE)
+    remaining = re.sub(r"\b(set|create)\s+(an?\s+)?alert\s*(if)?\b", "", remaining, flags=re.IGNORECASE)
     remaining = re.sub(r"(提醒我|通知我|帮我|顺便|另外|alert\s+me|notify\s+me)", "", remaining, flags=re.IGNORECASE)
+    remaining = re.sub(r"\b(and\s+also|also|then)\b", "", remaining, flags=re.IGNORECASE)
     remaining = re.sub(r"(的时候|时|\bwhen\b)", "", remaining, flags=re.IGNORECASE)
-    remaining = re.sub(r"\s+", " ", remaining).strip(" ，,。；;")
+    remaining = re.sub(r"\s+", " ", remaining).strip(" ，,。；;.")
     return remaining[:240]
 
 

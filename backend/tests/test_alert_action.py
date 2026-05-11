@@ -123,5 +123,7 @@ async def test_alert_action_does_not_silently_drop_compound_request(monkeypatch)
 
     markdown = (result.get("artifacts") or {}).get("draft_markdown") or ""
     assert result["alert_valid"] is True
+    assert result["query"] == "说说最近新闻"
+    assert (result.get("artifacts") or {}).get("alert_markdown") == markdown
     assert "说说最近新闻" in markdown
     assert "保留在当前上下文" in markdown

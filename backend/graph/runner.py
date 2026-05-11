@@ -164,7 +164,16 @@ def _build_graph(*, checkpointer: Any) -> Any:
         _route_after_alert_extractor,
         {"alert_action": "alert_action", END: END},
     )
-    graph.add_edge("alert_action", END)
+    def _route_after_alert_action(state: GraphState) -> str:
+        if bool(state.get("pending_research_after_alert")):
+            return "policy_gate"
+        return END
+
+    graph.add_conditional_edges(
+        "alert_action",
+        _route_after_alert_action,
+        {"policy_gate": "policy_gate", END: END},
+    )
 
     return graph.compile(checkpointer=checkpointer)
 

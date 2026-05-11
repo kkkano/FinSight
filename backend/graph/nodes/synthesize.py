@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 _MAX_SYNTH_HISTORY_MESSAGES = 8
 
 
+def _sanitize_user_facing_markdown(markdown: str) -> str:
+    cleaned = str(markdown or "")
+    cleaned = cleaned.replace("**后续关注：**", "**后续观察**")
+    cleaned = cleaned.replace("后续关注：", "后续观察：")
+    return cleaned
+
+
 def _format_conversation_history_for_synth(state: GraphState) -> str:
     """
     Extract recent conversation history from state messages for synthesize context.
@@ -2361,6 +2368,7 @@ async def synthesize(state: GraphState) -> dict:
         trace.update({"synthesize_runtime": synth_runtime})
         artifacts = {**(state.get("artifacts") or {}), "render_vars": render_vars}
         if draft_markdown:
+            draft_markdown = _sanitize_user_facing_markdown(draft_markdown)
             artifacts["draft_markdown"] = draft_markdown
         if isinstance(verifier_result, dict):
             artifacts["verifier_result"] = verifier_result

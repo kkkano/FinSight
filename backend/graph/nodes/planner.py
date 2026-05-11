@@ -561,6 +561,14 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
     operation = state.get("operation") or {}
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
+    reply_contract = state.get("reply_contract") if isinstance(state.get("reply_contract"), dict) else {}
+    source_constraints = (
+        reply_contract.get("source_constraints")
+        if isinstance(reply_contract.get("source_constraints"), dict)
+        else {}
+    )
+    requires_links = bool(source_constraints.get("requires_links"))
+    disallow_news = bool(source_constraints.get("disallow_news"))
     has_deep_hint = _is_deep_hint(query, state)
     plan_tasks = _plan_tasks_from_state(state)
     plan_task_ids = {str(task.get("id") or "").strip() for task in plan_tasks if str(task.get("id") or "").strip()}
@@ -663,6 +671,8 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
             elif (not isinstance(ticker_value, str) or not ticker_value.strip()) and primary_ticker:
                 # 非 dashboard 场景仅在 ticker 缺失时回填。
                 inputs = {**inputs, "ticker": primary_ticker}
+            if name == "get_company_news" and requires_links:
+                inputs = {**inputs, "fast": False}
 
         if kind == "agent":
             # Ensure agent steps are runnable and traceable even when the model omits inputs.
@@ -856,6 +866,70 @@ def _enforce_policy(plan_payload: dict[str, Any], state: GraphState) -> tuple[di
                 "get_earnings_call_transcripts",
                 {"ticker": primary_ticker, "limit": 5},
                 "Deep financial report: add free earnings-call transcript evidence.",
+            )
+
+    company_like_subjects = {"company", "index", "commodity", "fund"}
+    link_news_ops = {"fetch", "news_impact", "analyze_impact", "daily_brief", "qa"}
+    link_tickers: list[str] = []
+    if requires_links and not disallow_news:
+        for task in plan_tasks:
+            task_subject = str(task.get("subject_type") or "").strip().lower()
+            task_op = str(task.get("operation") or "").strip().lower()
+            if task_subject not in company_like_subjects or task_op not in link_news_ops:
+                continue
+            for ticker in task.get("tickers") or []:
+                symbol = str(ticker or "").strip().upper()
+                if symbol and symbol not in link_tickers:
+                    link_tickers.append(symbol)
+        if not link_tickers and primary_ticker and subject_type in company_like_subjects and op_name in link_news_ops:
+            link_tickers.append(primary_ticker)
+
+    if link_tickers:
+        target_ticker = link_tickers[0]
+        if "get_company_news" in existing_tool_names:
+            for step in sanitized_steps:
+                if step.get("kind") != "tool" or step.get("name") != "get_company_news":
+                    continue
+                inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+                ticker_value = str(inputs.get("ticker") or "").strip().upper()
+                if not ticker_value:
+                    inputs = {**inputs, "ticker": target_ticker}
+                inputs = {**inputs, "fast": False}
+                step["inputs"] = inputs
+                step["optional"] = False
+            required_tool_names.add("get_company_news")
+        else:
+            _insert_required_tool(
+                "get_company_news",
+                {"ticker": target_ticker, "limit": 5, "fast": False},
+                "Link-required news task: fetch company headlines with article URLs when available.",
+            )
+        if "get_authoritative_media_news" in existing_tool_names:
+            for step in sanitized_steps:
+                if step.get("kind") != "tool" or step.get("name") != "get_authoritative_media_news":
+                    continue
+                inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+                media_query = str(inputs.get("query") or "").strip()
+                if target_ticker not in media_query.upper():
+                    media_query = f"{target_ticker} {query}".strip()
+                try:
+                    max_results = int(inputs.get("max_results") or 6)
+                except Exception:
+                    max_results = 6
+                inputs = {
+                    **inputs,
+                    "query": media_query,
+                    "max_results": max_results,
+                    "authoritative_only": bool(inputs.get("authoritative_only", False)),
+                }
+                step["inputs"] = inputs
+                step["optional"] = False
+            required_tool_names.add("get_authoritative_media_news")
+        else:
+            _insert_required_tool(
+                "get_authoritative_media_news",
+                {"query": f"{target_ticker} {query}".strip(), "max_results": 6, "authoritative_only": False},
+                "Link-required news task: supplement citable article URLs from media/RSS feeds.",
             )
 
     default_agent_order = [

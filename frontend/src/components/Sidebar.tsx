@@ -45,6 +45,17 @@ const RISK_LABELS: Record<string, string> = {
 };
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
+const readStoredDashboardSymbol = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const raw = window.localStorage.getItem('fs_dashboard_active_v1');
+    const parsed = raw ? JSON.parse(raw) : null;
+    return typeof parsed?.symbol === 'string' ? parsed.symbol.trim() : '';
+  } catch {
+    return '';
+  }
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
   onSettingsClick,
   onSubscribeClick,
@@ -303,7 +314,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               if (!onDashboardClick) return;
               const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
               const firstWatchlistSymbol = watchlist[0]?.symbol;
-              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || firstPositionSymbol || firstWatchlistSymbol || '')
+              const storedDashboardSymbol = readStoredDashboardSymbol();
+              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || storedDashboardSymbol || firstPositionSymbol || firstWatchlistSymbol || 'AAPL')
                 .toString()
                 .trim();
               if (!fallbackSymbol) {

@@ -57,6 +57,20 @@ def test_alert_extractor_preserves_compound_followup_text():
     assert params["remaining_query"] == "说说最近新闻"
 
 
+def test_alert_extractor_breaks_price_target_phrase():
+    state = {
+        "query": "Set an alert if TSLA breaks 180, and also give recent news links.",
+        "subject": {"tickers": ["TSLA"]},
+        "ui_context": {},
+    }
+    result = alert_extractor(state)
+    assert result["alert_valid"] is True
+    params = result["alert_params"]
+    assert params["alert_mode"] == "price_target"
+    assert params["price_target"] == 180.0
+    assert params["remaining_query"] == "give recent news links"
+
+
 def test_alert_extractor_missing_trigger_prompt_is_natural():
     state = {
         "query": "AAPL 提醒我",

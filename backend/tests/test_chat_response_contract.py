@@ -41,12 +41,66 @@ def _assert_chat_contract(markdown: str) -> None:
         assert marker not in markdown
 
 
+def test_preserved_report_draft_strips_internal_price_ladder_and_template_marker(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "10")
+    result = render_stub(
+        {
+            "query": "给我生成一份 AAPL 投资报告。",
+            "output_mode": "investment_report",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "qa"},
+            "artifacts": {
+                "draft_markdown": (
+                    "## 投资研报：AAPL\n\n"
+                    "- AAPL Current Price: $293.32 | Suggested ladder: $290.39 / $287.45\n\n"
+                    "**后续关注：**\n- 财报指引\n"
+                )
+            },
+        }
+    )
+
+    markdown = result["artifacts"]["draft_markdown"]
+    assert "Suggested ladder" not in markdown
+    assert "后续关注：" not in markdown
+    assert "后续观察" in markdown
+
+
+def test_report_template_output_strips_template_marker(monkeypatch) -> None:
+    monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "100000")
+    result = render_stub(
+        {
+            "query": "给我生成一份 AAPL 投资报告。",
+            "output_mode": "investment_report",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "qa"},
+            "artifacts": {
+                "render_vars": {
+                    "investment_thesis": "**后续关注：**\n- 财报指引",
+                }
+            },
+        }
+    )
+
+    markdown = result["artifacts"]["draft_markdown"]
+    assert "后续关注：" not in markdown
+    assert "后续观察" in markdown
+
+
 def test_default_output_mode_is_chat_not_brief() -> None:
     assert decide_output_mode({"query": "英伟达（NVDA）今天多少钱"})["output_mode"] == "chat"
 
 
 def test_report_words_still_trigger_investment_report() -> None:
     assert decide_output_mode({"query": "请做 Apple 深度投资报告"})["output_mode"] == "investment_report"
+
+
+def test_generic_economic_report_is_not_investment_report() -> None:
+    assert (
+        decide_output_mode({"query": "Why might US stocks rally after a weak jobs report? Keep it conversational."})[
+            "output_mode"
+        ]
+        == "chat"
+    )
 
 
 def test_price_chat_answer_does_not_leak_tool_or_template_terms() -> None:
@@ -204,6 +258,7 @@ def test_chat_renderer_compound_news_answer_keeps_unrelated_price_and_focus_line
 
     _assert_chat_contract(markdown)
     assert "MSFT 我找到几条比较相关的消息" in markdown
+    assert "最近新闻" in markdown
     assert "AAPL" in markdown and "276.83" in markdown
     assert "折现率" in markdown
     assert "一句话：" not in markdown
@@ -289,7 +344,49 @@ def test_news_chat_answer_uses_clean_citations() -> None:
     assert "[Tesla shares move after delivery update](https://example.com/tesla-delivery)" in markdown
 
 
-def test_news_chat_adds_search_link_when_source_has_no_url() -> None:
+def test_chat_renderer_preserves_alert_markdown_with_followup_news() -> None:
+    markdown = _render_chat(
+        {
+            "query": "give recent news links",
+            "subject": {"subject_type": "company", "tickers": ["TSLA"]},
+            "operation": {"name": "fetch"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["TSLA"],
+                    "operation": {"name": "fetch", "params": {"topic": "news", "include_links": True}},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "TSLA"}},
+                ]
+            },
+            "artifacts": {
+                "alert_markdown": "Created alert for TSLA at 180.",
+                "step_results": {
+                    "s1": {
+                        "output": [
+                            {
+                                "title": "Tesla delivery update",
+                                "url": "https://example.com/tesla-delivery",
+                                "source": "Example News",
+                                "published_at": "2026-05-10",
+                            }
+                        ]
+                    }
+                },
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert markdown.startswith("Created alert for TSLA at 180.")
+    assert "[Tesla delivery update](https://example.com/tesla-delivery)" in markdown
+
+
+def test_news_chat_discloses_missing_article_url_when_source_has_no_url() -> None:
     markdown = _render_chat(
         {
             "query": "小米最新新闻",
@@ -325,10 +422,55 @@ def test_news_chat_adds_search_link_when_source_has_no_url() -> None:
     )
 
     _assert_chat_contract(markdown)
-    assert "[Xiaomi EV delivery update](https://www.google.com/search?q=Xiaomi+EV+delivery+update)" in markdown
+    assert "Xiaomi EV delivery update" in markdown
+    assert "google.com/search" not in markdown
+    assert "not treating search pages as citations" in markdown
 
 
-def test_news_chat_adds_search_links_when_requested_news_source_is_empty() -> None:
+def test_news_chat_links_source_page_when_requested_links_but_articles_have_no_urls() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Give me 3 latest NVDA news items with links.",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "fetch"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "fetch", "params": {"topic": "news", "count": 3, "include_links": True}},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {
+                        "output": [
+                            {
+                                "title": "Nvidia data center demand stays strong",
+                                "source": "Search",
+                                "published_at": "2026-05-10T08:00:00Z",
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Nvidia data center demand stays strong" in markdown
+    assert "not treating search pages as citations" in markdown
+    assert "rather than treating them as article citations" in markdown
+    assert "[NVDA Yahoo Finance news](https://finance.yahoo.com/quote/NVDA/news)" in markdown
+    assert "google.com/search" not in markdown
+
+
+def test_news_chat_does_not_invent_links_when_requested_news_source_is_empty() -> None:
     markdown = _render_chat(
         {
             "query": "给我 3 条 NVDA 最新新闻，要带链接。",
@@ -352,8 +494,10 @@ def test_news_chat_adds_search_links_when_requested_news_source_is_empty() -> No
     )
 
     _assert_chat_contract(markdown)
-    assert "硬编新闻" in markdown
-    assert markdown.count("](") >= 2
+    assert "I will not invent citation links" in markdown
+    assert "google.com/search" not in markdown
+    assert "finance.yahoo.com/search" not in markdown
+    assert markdown.count("](") == 0
     assert "NVDA" in markdown
 
 
@@ -600,6 +744,7 @@ def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:
 
     _assert_chat_contract(markdown)
     assert "我找到几条比较相关的消息" in markdown
+    assert "最近新闻" in markdown
     assert "[Li Auto delivery update](https://example.com/li)" in markdown
     assert "对股价的影响要看两点" not in markdown
 

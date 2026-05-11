@@ -6,6 +6,7 @@ import re
 import json
 
 from backend.graph.capability_registry import select_agents_for_request
+from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 
@@ -20,6 +21,14 @@ def planner_stub(state: GraphState) -> dict:
     output_mode = state.get("output_mode") or "brief"
     query = (state.get("query") or "").strip()
     operation = (state.get("operation") or {}).get("name") or "qa"
+    news_disallowed = reply_contract_disallows_news(state)
+    reply_contract = state.get("reply_contract") if isinstance(state.get("reply_contract"), dict) else {}
+    source_constraints = (
+        reply_contract.get("source_constraints")
+        if isinstance(reply_contract.get("source_constraints"), dict)
+        else {}
+    )
+    requires_links = bool(source_constraints.get("requires_links"))
 
     trace = state.get("trace") or {}
 
@@ -66,6 +75,8 @@ def planner_stub(state: GraphState) -> dict:
     def _qa_needs_live_context() -> bool:
         if output_mode == "investment_report":
             return True
+        if news_disallowed:
+            return False
         return _contains_any(
             (
                 "最新",
@@ -241,6 +252,21 @@ def planner_stub(state: GraphState) -> dict:
             )
         return rows
 
+    def _plan_subject_payload() -> dict:
+        return {
+            "subject_type": str(subject.get("subject_type") or "unknown"),
+            "tickers": [
+                str(ticker).strip().upper()
+                for ticker in (subject.get("tickers") if isinstance(subject.get("tickers"), list) else [])
+                if str(ticker).strip()
+            ],
+            "selection_ids": list(subject.get("selection_ids") or []) if isinstance(subject.get("selection_ids"), list) else [],
+            "selection_types": list(subject.get("selection_types") or []) if isinstance(subject.get("selection_types"), list) else [],
+            "selection_payload": list(subject.get("selection_payload") or []) if isinstance(subject.get("selection_payload"), list) else [],
+            "binding_tier": str(subject.get("binding_tier") or "none"),
+            "is_comparison": subject.get("is_comparison") if isinstance(subject.get("is_comparison"), bool) else None,
+        }
+
     def _compare_has_current_support(task: dict) -> bool:
         compare_tickers = set(_task_tickers(task))
         if not compare_tickers:
@@ -264,10 +290,11 @@ def planner_stub(state: GraphState) -> dict:
             return True
         if task is not None and _compare_has_current_support(task):
             return False
-        return task is not None
+        return True
 
     def _append_company_task_steps(task: dict, *, group: str) -> None:
         op_name = _task_operation_name(task)
+        params = _task_operation_params(task)
         tickers_for_task = _task_tickers(task)
         task_ids = [_task_id(task)]
         if op_name == "compare" and len(tickers_for_task) >= 2:
@@ -329,7 +356,7 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
-            if op_name in {"fetch", "analyze_impact", "daily_brief"} or live_qa:
+            if (op_name in {"fetch", "analyze_impact", "daily_brief"} or live_qa) and not news_disallowed:
                 news_inputs = {"ticker": ticker}
                 if output_mode == "brief":
                     news_inputs.update({"fast": True, "limit": 3})
@@ -341,6 +368,19 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
+                if requires_links or bool(params.get("include_links")):
+                    _append_tool_step(
+                        "get_authoritative_media_news",
+                        {
+                            "query": f"{ticker} {query}".strip(),
+                            "max_results": 6,
+                            "authoritative_only": False,
+                        },
+                        why=f"{ticker} link-required news task: supplement article URLs from media/RSS feeds.",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
             fast_brief_router_task = (
                 output_mode == "brief"
                 and str(task.get("reason") or "").strip()
@@ -488,7 +528,26 @@ def planner_stub(state: GraphState) -> dict:
         )
 
     def _append_understanding_task_steps() -> bool:
-        if len(ready_tasks) <= 1:
+        if not ready_tasks:
+            return False
+        if len(ready_tasks) == 1:
+            task = ready_tasks[0]
+            subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
+            if _task_urls(task) or subject_for_task in {"research_doc", "filing", "news_item", "news_set"}:
+                _append_document_task_steps(task, group=_task_id(task) or "task_1")
+                return True
+            if subject_for_task in {"company", "index", "commodity"}:
+                _append_company_task_steps(task, group=_task_id(task) or "task_1")
+                return True
+            if subject_for_task == "macro":
+                _append_macro_task_steps(task, group=_task_id(task) or "task_1")
+                return True
+            if subject_for_task == "portfolio":
+                _append_portfolio_task_steps(task, group=_task_id(task) or "task_1")
+                return True
+            if subject_for_task == "theme":
+                _append_theme_task_steps(task, group=_task_id(task) or "task_1")
+                return True
             return False
         if all(
             _task_subject_type in {"company", "index", "commodity"}
@@ -529,7 +588,7 @@ def planner_stub(state: GraphState) -> dict:
             task_sections.append(f"{label}:{_task_operation_name(task)}")
         raw_plan = {
             "goal": query or "N/A",
-            "subject": subject or PlanSubject(subject_type="unknown").model_dump(),
+            "subject": _plan_subject_payload(),
             "output_mode": output_mode,
             "tasks": _plan_task_summary(),
             "steps": steps,
@@ -1190,7 +1249,7 @@ def planner_stub(state: GraphState) -> dict:
 
     raw_plan = {
         "goal": query or "N/A",
-        "subject": subject or PlanSubject(subject_type="unknown").model_dump(),
+        "subject": _plan_subject_payload(),
         "output_mode": output_mode,
         "tasks": _plan_task_summary(),
         "steps": steps,

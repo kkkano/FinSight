@@ -638,6 +638,46 @@ def test_fetch_document_uses_wayback_fallback_when_jina_misses(monkeypatch):
     assert len(str(doc.get("content") or "")) >= 1200
     assert bool(doc.get("degraded")) is False
 
+
+def test_fetch_document_uses_bounded_http_budget(monkeypatch):
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+    agent.FETCH_TIMEOUT_SECONDS = 3
+    agent.HTTP_RETRIES = 0
+
+    captured: dict[str, Any] = {}
+
+    class _TimeoutSession:
+        def get(self, *_args, **kwargs):
+            captured.update(kwargs)
+            raise TimeoutError("slow upstream")
+
+    monkeypatch.setattr(agent, "_get_session", lambda: _TimeoutSession())
+
+    doc = agent._fetch_document(
+        {
+            "title": "Reuters Apple note",
+            "url": "https://www.reuters.com/technology/apple-longform-2026-02-18/",
+            "snippet": "short snippet",
+            "source": "search",
+        }
+    )
+
+    assert doc is None
+    assert captured["timeout"] == 3
+
+
+def test_deep_search_http_session_disables_retries_by_default(monkeypatch):
+    mock_cache = MagicMock()
+    mock_tools = MagicMock()
+    monkeypatch.setattr(DeepSearchAgent, "HTTP_RETRIES", 0)
+
+    agent = DeepSearchAgent(None, mock_cache, mock_tools)
+    adapter = agent._get_session().get_adapter("https://")
+
+    assert adapter.max_retries.total == 0
+
 if __name__ == "__main__":
     asyncio.run(test_deep_search_agent())
     asyncio.run(test_macro_agent())

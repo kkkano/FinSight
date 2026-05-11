@@ -34,6 +34,32 @@ _OFFICIAL_DOMAINS = frozenset(
 )
 
 _DEFAULT_QUERY_HINT = "federal reserve bls bea inflation cpi payroll gdp rates"
+_FED_OFFICIAL_FALLBACKS: tuple[dict[str, Any], ...] = (
+    {
+        "title": "Federal Reserve official press releases index",
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases.htm",
+        "snippet": "Official Federal Reserve press releases page. Use when RSS feeds return no matching item.",
+        "published_date": None,
+        "source": "Federal Reserve",
+        "source_key": "federal_reserve",
+        "domain": "federalreserve.gov",
+        "is_official": True,
+        "type": "macro_release",
+        "fallback": True,
+    },
+    {
+        "title": "Federal Reserve monetary policy releases",
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary.htm",
+        "snippet": "Official Federal Reserve monetary policy releases page for FOMC and rate-related updates.",
+        "published_date": None,
+        "source": "Federal Reserve",
+        "source_key": "federal_reserve",
+        "domain": "federalreserve.gov",
+        "is_official": True,
+        "type": "macro_release",
+        "fallback": True,
+    },
+)
 
 
 def _safe_iso8601(value: str) -> str | None:
@@ -106,6 +132,28 @@ def _matches_query(item: dict[str, Any], tokens: list[str]) -> bool:
         ]
     ).lower()
     return any(token in haystack for token in tokens)
+
+
+def _is_fed_query(query: str) -> bool:
+    text = str(query or "").lower()
+    if not text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "fed",
+            "fomc",
+            "federal reserve",
+            "\u7f8e\u8054\u50a8",
+            "\u806f\u5132",
+        )
+    )
+
+
+def _fallback_rows_for_query(query: str, *, limit: int) -> list[dict[str, Any]]:
+    if not _is_fed_query(query):
+        return []
+    return [dict(row) for row in _FED_OFFICIAL_FALLBACKS[: max(1, limit)]]
 
 
 def _fetch_feed(url: str) -> str:
@@ -213,6 +261,8 @@ def get_official_macro_releases(query: str = "", max_results: int = 10) -> dict[
     limit = max(1, min(int(max_results or 10), 30))
     try:
         rows = search_official_macro_releases(query_text, max_results=limit)
+        if not rows:
+            rows = _fallback_rows_for_query(query_text, limit=limit)
         sources = sorted({str(row.get("source") or "").strip() for row in rows if row.get("source")})
         return {
             "query": query_text,

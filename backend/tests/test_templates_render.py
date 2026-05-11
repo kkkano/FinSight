@@ -320,7 +320,8 @@ def test_render_multitask_search_output_adds_source_link():
     out = render_stub(state)
     md = (out.get("artifacts") or {}).get("draft_markdown") or ""
 
-    assert "https://www.google.com/search?q=LI+CPI+impact" in md
+    assert "https://www.google.com/search?q=LI+CPI+impact" not in md
+    assert "not treating search pages as citations" in md
 
 def test_render_two_tickers_qa_does_not_use_compare_template():
     """Regression: 2 tickers + operation=qa should use company_brief, NOT compare template.
