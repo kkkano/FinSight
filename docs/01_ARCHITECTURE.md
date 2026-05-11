@@ -138,7 +138,7 @@ flowchart LR
 
 ### 2.3 用户可调超时
 
-前端 Settings 写入 `agent_preferences.timeoutSeconds` 并随 `ChatOptions` / execute payload 进入 `ui_context`。后端通过 `backend/graph/preference_timeouts.py` 统一校验：`0`、空值、`auto/default/system` 使用系统默认；正数按 `30-1200s` clamp。该偏好被 chat direct reply、planner、synthesize、agent adapter 和 `execution_service` 的整体执行超时读取。
+前端 Settings 写入 `agent_preferences.timeoutSeconds` 并随 `ChatOptions` / execute payload 进入 `ui_context`。后端通过 `backend/graph/preference_timeouts.py` 统一校验：`0`、空值、`auto/default/system` 使用系统默认；正数按 `30-1200s` clamp。该偏好被 chat direct reply、planner、synthesize、agent adapter、同步 `/chat/supervisor` 和流式 `execution_service` 的整体执行超时读取。
 
 ## 3. 规划与执行策略
 

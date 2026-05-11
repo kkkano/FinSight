@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import os
 import json
 
@@ -174,6 +175,42 @@ def test_chat_supervisor_keeps_original_query_for_langgraph_context_router(clien
 
     assert resp.status_code == 200
     assert captured["query"] == "第二点展开一下。"
+
+
+def test_chat_supervisor_sync_respects_execution_timeout(client, monkeypatch):
+    async def _slow_run_graph_traced(
+        _runner,
+        *,
+        thread_id,
+        query,
+        ui_context,
+        output_mode,
+        strict_selection,
+        confirmation_mode,
+    ):
+        await asyncio.sleep(1)
+        return {
+            "query": query,
+            "subject": {"subject_type": "unknown", "tickers": []},
+            "output_mode": "chat",
+            "trace": {"routing_chain": ["langgraph"]},
+            "artifacts": {"draft_markdown": "late"},
+        }
+
+    monkeypatch.setattr("backend.graph.runner.run_graph_traced", _slow_run_graph_traced)
+    monkeypatch.setattr("backend.services.execution_service._execution_timeout_seconds", lambda *args, **kwargs: 0.01)
+
+    resp = client.post(
+        "/chat/supervisor",
+        json={
+            "query": "slow request",
+            "session_id": "tenant1:test_api_user:thread-sync-timeout",
+            "options": {"agent_preferences": {"timeoutSeconds": 30}},
+        },
+    )
+
+    assert resp.status_code == 504
+    assert "timed out" in resp.json().get("detail", "")
 
 
 def test_chat_context_preserves_portfolio_positions(client):

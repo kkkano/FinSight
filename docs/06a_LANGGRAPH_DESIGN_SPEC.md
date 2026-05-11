@@ -337,7 +337,7 @@ class GraphState(TypedDict):
 
 所有 prompt 侧读取应通过 `backend/graph/memory_scope.py` 的 helper；不要直接读取 legacy `memory_context.last_report`、`last_focus` 或 `recent_focuses` 来做当前上下文绑定。
 
-用户超时偏好通过 `agent_preferences.timeoutSeconds` 传入 `ui_context`。`backend/graph/preference_timeouts.py` 是唯一校验入口：`0`/空值/`auto`/`default` 使用系统默认，正数 clamp 到 `30-1200s`。chat direct reply、planner、synthesize、agent adapter 与 `execution_service` 共享该偏好，避免某个节点仍用短超时抢跑。
+用户超时偏好通过 `agent_preferences.timeoutSeconds` 传入 `ui_context`。`backend/graph/preference_timeouts.py` 是唯一校验入口：`0`/空值/`auto`/`default` 使用系统默认，正数 clamp 到 `30-1200s`。chat direct reply、planner、synthesize、agent adapter、同步 `/chat/supervisor` 与流式 `execution_service` 共享该偏好，避免某个节点仍用短超时抢跑。
 
 ---
 

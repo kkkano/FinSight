@@ -272,7 +272,7 @@ Conversation UX is now split deliberately: the frontend keeps the active browser
 
 Memory is scoped before routing. Durable user preferences and historical focus are loaded for personalization, but only `current_thread_focus` and `current_report` from the active `thread_id` can bind deictic follow-ups such as "that report" or "the third point". Legacy user-level `last_report`, `last_focus`, and `recent_focuses` are kept as historical memory and are not exposed to the conversation router as current referents.
 
-Runtime preferences are passed with chat options as `agent_preferences`. `timeoutSeconds=0` means system default; positive values are clamped to `30-1200` seconds and applied to chat, planner, synthesis, and graph execution budgets.
+Runtime preferences are passed with chat options as `agent_preferences`. `timeoutSeconds=0` means system default; positive values are clamped to `30-1200` seconds and applied to chat, planner, synthesis, and both sync/stream graph execution budgets.
 
 ```mermaid
 flowchart TD

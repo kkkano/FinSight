@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import traceback
 import time as _time
@@ -129,15 +130,33 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             resolved_query = request.query
 
             from backend.graph.runner import run_graph_traced
-            state = await run_graph_traced(
-                runner,
-                thread_id=thread_id,
-                query=resolved_query,
-                ui_context=ui_context,
-                output_mode=output_mode,
-                strict_selection=strict_selection,
-                confirmation_mode=confirmation_mode,
-            )
+            from backend.services.execution_service import _execution_timeout_seconds
+
+            timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=ui_context)
+            try:
+                state = await asyncio.wait_for(
+                    run_graph_traced(
+                        runner,
+                        thread_id=thread_id,
+                        query=resolved_query,
+                        ui_context=ui_context,
+                        output_mode=output_mode,
+                        strict_selection=strict_selection,
+                        confirmation_mode=confirmation_mode,
+                    ),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError as exc:
+                _logger.error(
+                    "[chat/supervisor] graph timeout thread_id=%s timeout=%ss query=%s",
+                    thread_id,
+                    timeout_seconds,
+                    (resolved_query or "")[:120],
+                )
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Execution timed out after {int(timeout_seconds)}s; increase the timeout preference or reduce the request scope.",
+                ) from exc
             markdown, state = _ensure_deliverable_markdown(state)
 
             report = None
