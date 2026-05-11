@@ -14,12 +14,16 @@ WORKDIR /app
 # Install Python dependencies first (layer cache)
 COPY requirements.txt .
 
+# Main package index is configurable at build time. The server compose file
+# defaults this to a domestic mirror; Dockerfile fallback stays upstream PyPI.
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
 # Pre-install CPU-only torch to avoid downloading CUDA packages (~3 GB saved on CPU-only servers)
 # BGE_M3_DEVICE=cpu so we never need CUDA at runtime
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Slow domestic links can stall large wheel downloads; keep the main dependency layer retryable.
-RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 -r requirements.txt
+RUN PIP_DEFAULT_TIMEOUT=300 PIP_RETRIES=10 pip install --no-cache-dir --timeout 300 --retries 10 --index-url "$PIP_INDEX_URL" -r requirements.txt
 
 # Copy full project
 COPY . .

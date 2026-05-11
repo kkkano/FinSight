@@ -41,6 +41,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     container_name: finsight-backend
     restart: unless-stopped
     env_file:
