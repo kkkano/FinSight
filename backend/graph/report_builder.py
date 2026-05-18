@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+from backend.research.query_coverage import coverage_warning_text
 from backend.report.quality_engine import evaluate_runtime_report_quality
 from backend.report.validator import ReportValidator
 
@@ -1745,6 +1746,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     render_vars = artifacts.get("render_vars") if isinstance(artifacts.get("render_vars"), dict) else {}
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts.get("evidence_pool"), list) else []
+    query_coverage = artifacts.get("query_coverage") if isinstance(artifacts.get("query_coverage"), dict) else {}
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     errors = artifacts.get("errors") if isinstance(artifacts.get("errors"), list) else []
     draft_markdown = _safe_str(artifacts.get("draft_markdown") or "")
@@ -1996,6 +1998,8 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         market=market_hint,
     )
     report_hints["quality"] = quality_hints
+    if query_coverage:
+        report_hints["query_coverage"] = query_coverage
     if isinstance(verifier_result, dict) and verifier_result:
         report_hints["verifier"] = {
             "enabled": bool(verifier_result.get("enabled")),
@@ -2129,6 +2133,15 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if "verifier_gap" not in report_tags:
             report_tags.append("verifier_gap")
 
+    query_coverage_warning = coverage_warning_text(query_coverage) if query_coverage else ""
+    if query_coverage_warning:
+        if query_coverage_warning not in risks:
+            risks.insert(0, query_coverage_warning)
+        if "query_coverage_gap" not in report_tags:
+            report_tags.append("query_coverage_gap")
+        if confidence_score > 0.5:
+            confidence_score = max(0.5, confidence_score - 0.06)
+
     # Title by subject type
     if subject_type in ("news_item", "news_set"):
         title = f"{ticker_label} 新闻事件研报"
@@ -2148,6 +2161,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         "sentiment": "neutral",
         "confidence_score": confidence_score,
         "grounding_rate": grounding_rate,
+        "query_coverage": query_coverage,
         "generated_at": _now_iso(),
         "sections": sections,
         "citations": citations,
@@ -2182,6 +2196,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         validated["conflict_disclosure"] = conflict_disclosure
         validated["report_hints"] = report_hints
         validated["grounding_rate"] = grounding_rate
+        validated["query_coverage"] = query_coverage
         validated["core_viewpoints"] = _build_core_viewpoints(agent_summaries)
         # P0-3d: structured agent diagnostics for frontend observability
         agent_diagnostics: dict[str, dict[str, Any]] = {}
@@ -2204,6 +2219,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         meta = validated.get("meta") if isinstance(validated.get("meta"), dict) else {}
         meta["report_hints"] = report_hints
         meta["grounding"] = grounding_stats
+        meta["query_coverage"] = query_coverage
         meta["verifier"] = verifier_result
         existing_quality = (
             validated.get("report_quality")

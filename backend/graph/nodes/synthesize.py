@@ -2262,6 +2262,22 @@ async def synthesize(state: GraphState) -> dict:
     trace = state.get("trace") or {}
     synth_started_at = time.perf_counter()
 
+    if os.getenv("QUERY_COVERAGE_ENABLED", "true").lower() in {"1", "true", "yes", "on"}:
+        try:
+            from backend.research.query_coverage import build_answer_targets, evaluate_coverage
+
+            current_artifacts = dict(state.get("artifacts") or {})
+            if not isinstance(current_artifacts.get("query_coverage"), dict):
+                targets = build_answer_targets(state)
+                current_artifacts["query_coverage"] = evaluate_coverage(
+                    current_artifacts.get("evidence_ledger") or {},
+                    targets,
+                )
+                state = {**state, "artifacts": current_artifacts}  # type: ignore[assignment]
+                trace.setdefault("query_coverage", {})["target_count"] = len(targets)
+        except Exception as exc:
+            logger.info("[Synthesize] query coverage skipped: %s", exc)
+
     await emit_event(
         {
             "type": "pipeline_stage",
@@ -2484,6 +2500,8 @@ async def synthesize(state: GraphState) -> dict:
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
     rag_context = artifacts.get("rag_context") if isinstance(artifacts, dict) else None
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
+    evidence_ledger = artifacts.get("evidence_ledger") if isinstance(artifacts, dict) else None
+    query_coverage = artifacts.get("query_coverage") if isinstance(artifacts, dict) else None
 
     # Build separated evidence sections for structured prompt
     evidence_pool_list = evidence_pool if isinstance(evidence_pool, list) else []
@@ -2496,6 +2514,8 @@ async def synthesize(state: GraphState) -> dict:
         "output_mode": output_mode,
         "conversation_router": (state.get("trace") or {}).get("conversation_router") if isinstance(state.get("trace"), dict) else {},
         "step_results": step_results if isinstance(step_results, dict) else {},
+        "evidence_ledger": evidence_ledger if isinstance(evidence_ledger, dict) else {},
+        "query_coverage": query_coverage if isinstance(query_coverage, dict) else {},
     }
 
     # Format evidence sections with XML tags
@@ -2579,6 +2599,7 @@ summary, highlights, analysis.
 10) 禁止开场白、寒暄。直接输出 JSON。
 11) chat/brief 模式下必须产出 conclusion 和 impact_analysis；用 2-5 条自然要点回答用户真正问的问题，报告结构只用于 investment_report。
 12) chat/brief 模式下不要漏掉用户的最后一个明确请求；如果用户要求“最后/一句话/关注什么/怎么做”，用 next_watch 给出自然收束句。
+13) 如 inputs.query_coverage.unanswered_targets 非空，第一段先回答已覆盖目标，并明确披露尚未覆盖的目标。
 </constraints>
 """
 
