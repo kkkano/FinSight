@@ -1,6 +1,6 @@
 ﻿# FinSight 文档索引
 
-更新时间：2026-05-11
+更新时间：2026-05-18
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
@@ -17,6 +17,7 @@
 ## 当前实现 Spec
 
 - `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、作用域化 `memory_context`、用户 `timeoutSeconds` 偏好、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
+- `docs/plans/2026-05-18_evidence_research_agents_goal_plan.md`：Evidence Ledger、query coverage、DeepSearch 工作集、多空辩论、SEC 13F/Form 4 持仓研究、前端证据展示、MCP/A2A 只读协议暴露的可执行 `/goal` 计划。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
