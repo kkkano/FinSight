@@ -1,6 +1,6 @@
 # FinSight Agent & Tool 链路指南
 
-> 更新时间：2026-02-18  
+> 更新时间：2026-05-18  
 > 目标：让「Agent -> Tool -> 输出 -> 消费节点」一目了然。
 
 ## 1. 执行链路概览
@@ -239,3 +239,56 @@ flowchart LR
   - `pytest backend/tests -x` -> `856 passed, 8 skipped`
 - Function-level smoke:
   - `AAPL` / `600519.SS` valuation + financials + technicals + peers all return non-empty payloads.
+
+## 12. Evidence Research Agents Update (2026-05-18)
+
+### 12.1 证据合同与覆盖率
+
+- 证据合同入口：`backend/research/evidence_ledger.py`
+  - `EvidenceLedger` 统一承载 `claims`、`sources`、`uncertainties`、`contradictions`、`coverage_targets`。
+  - `backend/research/ledger_builder.py` 从 `artifacts.step_results`、`artifacts.evidence_pool`、`artifacts.rag_context` 归并出 `artifacts.evidence_ledger`。
+- 查询覆盖入口：`backend/research/query_coverage.py`
+  - `synthesize.py` 生成 `artifacts.query_coverage`。
+  - `report_builder.py` 把 coverage warning、`query_coverage_gap` tag、`query_coverage` payload 写入报告。
+- 默认开关：
+  - `RESEARCH_LEDGER_ENABLED=true`
+  - `QUERY_COVERAGE_ENABLED=true`
+
+### 12.2 Deep Research 与 Debate
+
+- DeepSearch flow facade：`backend/research/deep_research_flow.py`
+  - 稳定阶段：`plan_search -> fetch_sources -> extract_claims -> gap_check -> targeted_followup -> ledger_write`。
+  - 新写入使用 `ws:deepsearch:*` working set，不再新增 `session:deepsearch:*` collection。
+- Debate engine：`backend/research/debate.py`
+  - 输出 `bull_thesis`、`bear_thesis`、`cross_examination`、`judge_scorecard`、`consensus`、`open_questions`。
+- LangGraph 节点：`backend/graph/nodes/research_debate.py`
+  - 节点顺序为 `execute_plan -> research_debate -> synthesize`。
+  - `DEBATE_GRAPH_ENABLED=false` 时节点保持无副作用跳过。
+
+### 12.3 公开持仓与协议暴露
+
+- SEC 持仓工具：`backend/tools/sec_holdings.py`
+  - `get_institutional_holdings`
+  - `get_institution_holdings_by_ticker`
+  - `get_insider_transactions`
+  - `get_holdings_overlap`
+- 边界：
+  - 第一版仅支持 US 市场。
+  - 13F 有季度披露延迟，不能当实时交易信号。
+  - Form 4 是公开披露交易记录，不代表投资建议或隐藏意图。
+  - `SEC_HOLDINGS_ENABLED=false` 时 planner 不主动注入持仓工具。
+- 只读研究 API：`backend/api/research_router.py`
+  - `/api/research/ledger/{report_id}`
+  - `/api/research/debate/{report_id}`
+  - `/api/research/holdings/{ticker}`
+  - `/api/research/run-debate`
+- 协议适配：
+  - MCP：`backend/protocols/mcp_server.py`，默认 `MCP_SERVER_ENABLED=false`。
+  - A2A：`backend/protocols/a2a_server.py` / `a2a_models.py`，默认 `A2A_SERVER_ENABLED=false`，`A2A_PUBLIC_URL` 为空。
+
+### 12.4 前端消费入口
+
+- Evidence 展示：`frontend/src/components/report/EvidenceLedgerPanel.tsx`
+- Debate 展示：`frontend/src/components/report/DebateScorecard.tsx`
+- Holdings 展示：`frontend/src/components/report/HoldingsWatchPanel.tsx`
+- `ReportView.tsx` 负责组合展示 query coverage warning、证据、辩论和持仓披露，不展示原始 trace。

@@ -5,10 +5,18 @@
 
 ---
 
-## [Unreleased] - 2026-02-27
+## [Unreleased] - 2026-05-18
 
 ### 新增
 
+- **Evidence Research Agents**：新增证据驱动研究链路
+  - `EvidenceLedger` / query coverage 合同，统一 `claims`、`sources`、`uncertainties`、`contradictions` 与未覆盖目标。
+  - DeepSearch flow facade，阶段化 `plan_search -> fetch_sources -> extract_claims -> gap_check -> targeted_followup -> ledger_write`，新写入使用 `ws:deepsearch:*` working set。
+  - 多空辩论节点 `research_debate`，输出 Bull/Bear/Judge scorecard、共识、分歧和待补数据。
+  - SEC 13F / Form 4 公开持仓工具，US-only 起步，明确 13F 延迟和 Form 4 披露边界。
+  - 报告页展示 Evidence Ledger、Debate Scorecard、Holdings Watch 和 query coverage warning。
+  - 只读研究 API、MCP server facade、A2A agent card/long-task adapter，默认 feature flag 关闭。
+- **Evidence Research 评估门禁**：新增 `tests/eval/evidence_research_cases.json` 与 `scripts/evidence_research_eval.py`，覆盖深研、辩论、持仓、CN 市场拒绝和 unsafe insider 边界。
 - **README 截图扩充**：Platform Preview 新增两张截图
   - ThinkingBubble 用户视图 — 折叠式推理节点（逻辑查图 / 规划策略 / 执行分析）
   - 执行时间线 + 分析师摘要卡片 — 逐 Agent 步骤追踪、11 智能体完成网格
@@ -21,9 +29,14 @@
 
 ### 修复
 
+- **前端单测入口**：`npm --prefix frontend run test:unit` 限定到 `src`，避免 Vitest 误收集 `frontend/e2e/*.spec.ts` 的 Playwright 测试。
 - **`ReportView.tsx`**：`sections` 变量包裹 `useMemo`，消除 `catalystItems` / `metricItems` 不必要的重复计算
 - **`ErrorBoundary.tsx`**：eslint 禁用注释移至行尾，消除多余空行
 - **`taskStateMachine.ts`**：移除未使用的 `ListTodo` 图标导入
+
+### 文档
+
+- 新增 `docs/release_evidence/2026-05-18_evidence_research_agents.md`，记录本分支验证命令、chat-router eval 环境阻塞、默认关闭 flags 和残余风险。
 
 ---
 

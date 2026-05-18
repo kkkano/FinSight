@@ -33,7 +33,7 @@
 - Agent/Tool：`AGENTS_GUIDE.md`
 - 事件契约：`execution-event-contract.md`
 - RAG：`05_RAG_ARCHITECTURE.md`、`08_RAG_ARCHITECTURE.md`
-- 运维：`11_PRODUCTION_RUNBOOK.md`、`DEPLOYMENT.md`
+- 运维：`11_PRODUCTION_RUNBOOK.md`
 
 ## 过期文档判断
 

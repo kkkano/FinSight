@@ -29,6 +29,7 @@ def test_langgraph_runner_import_and_invoke():
         "planner",
         "confirmation_gate",
         "execute_plan",
+        "research_debate",
         "synthesize",
         "render",
     ]

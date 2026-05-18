@@ -11,13 +11,12 @@
 - `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
 - `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
 - `docs/11_PRODUCTION_RUNBOOK.md`：生产运行和排障手册。
-- `docs/DEPLOYMENT.md`：部署说明。
 - `docs/AGENTS.md`：docs 目录协作规则和归档边界。
 
 ## 当前实现 Spec
 
 - `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、作用域化 `memory_context`、用户 `timeoutSeconds` 偏好、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
-- `docs/plans/2026-05-18_evidence_research_agents_goal_plan.md`：Evidence Ledger、query coverage、DeepSearch 工作集、多空辩论、SEC 13F/Form 4 持仓研究、前端证据展示、MCP/A2A 只读协议暴露的可执行 `/goal` 计划。
+- `docs/plans/2026-05-18_evidence_research_agents_goal_plan.md`：Evidence Ledger、query coverage、DeepSearch 工作集、多空辩论、SEC 13F/Form 4 持仓研究、前端证据展示、MCP/A2A 只读协议暴露的可执行 `/goal` 计划；执行证据见 `docs/release_evidence/2026-05-18_evidence_research_agents.md`。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
 - `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
@@ -30,6 +29,7 @@
 
 ## 质量与报告
 
+- `docs/release_evidence/2026-05-18_evidence_research_agents.md`：Evidence Research Agents 分支收口证据，记录 commit range、验证命令、chat eval 环境阻塞、feature flags 和残余风险。
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
 - `docs/qa/chat-router-100-final100-current-state.md`：当前聊天 UX 最终 current-state 验收；配套 JSON 为同名 `.json`。`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 100/100 PASS、0 REVIEW、0 FAIL。
