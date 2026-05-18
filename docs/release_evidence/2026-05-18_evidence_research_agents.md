@@ -14,6 +14,7 @@
 - 报告页新增 Evidence Ledger、Debate Scorecard、Holdings Watch 与 query coverage warning。
 - 新增只读研究 API、MCP facade、A2A agent card/long-task adapter；协议适配默认关闭。
 - 新增 Evidence Research eval 数据集和 smoke runner。
+- 新增单 Agent 质量合同和自检循环，Fundamental / News / Risk Agent 产出 source-backed native claims，并新增 deterministic agent quality eval gate。
 
 ## 主要提交
 
@@ -32,12 +33,16 @@
 - `e644006` feat: add read-only MCP protocol server
 - `d0c24af` feat: expose read-only research artifacts
 - `a52c346` feat: add protocol-ready A2A adapter
+- `d712c53` feat: add single-agent quality contract
 
 ## 验证记录
 
 | 命令 | 结果 |
 |---|---|
 | `python -m pytest backend\tests\test_evidence_ledger_contract.py backend\tests\test_evidence_ledger_execute_plan.py backend\tests\test_query_coverage_contract.py backend\tests\test_agent_claim_extractor.py backend\tests\test_deep_research_flow.py backend\tests\test_research_debate.py backend\tests\test_sec_holdings_tools.py backend\tests\test_holdings_planning.py backend\tests\test_research_router.py -q` | `37 passed` |
+| `python -m pytest backend\tests\test_agent_quality_contract.py backend\tests\test_agent_research_loop.py backend\tests\test_agent_native_claims.py backend\tests\test_agent_quality_eval_smoke.py -q -p no:cacheprovider` | `15 passed` |
+| `python scripts\agent_quality_eval.py --dataset tests\eval\agent_quality_cases.json --run-id local-agent-quality --out tmp\agent_quality_eval.json` | `3 PASS, 0 FAIL` |
+| `python -m pytest backend\tests\test_evidence_ledger_contract.py backend\tests\test_evidence_ledger_execute_plan.py backend\tests\test_agent_claim_extractor.py backend\tests\test_query_coverage_contract.py backend\tests\test_deep_research_flow.py backend\tests\test_research_debate.py backend\tests\test_research_router.py backend\tests\test_mcp_server_contract.py backend\tests\test_evidence_research_eval_smoke.py backend\tests\test_agent_quality_contract.py backend\tests\test_agent_research_loop.py backend\tests\test_agent_native_claims.py backend\tests\test_agent_quality_eval_smoke.py -q -p no:cacheprovider --basetemp C:\Users\EDY\AppData\Local\Temp\finsight-pytest` | `45 passed` |
 | `python -m pytest backend\tests\test_understand_request.py backend\tests\test_langgraph_skeleton.py backend\tests\test_policy_gate.py backend\tests\test_reply_contract_lanes.py backend\tests\test_evidence_diagnostics_gate.py -q` | `82 passed`；`test_langgraph_skeleton.py` 已更新预期节点顺序，包含 `research_debate` |
 | `python -m pytest tests\rag_qualityV2\test_gate_v2.py -q` | `5 passed` |
 | `npm --prefix frontend run test:unit` | `6 passed` test files，`25 passed` tests |

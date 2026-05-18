@@ -16,6 +16,10 @@
   - SEC 13F / Form 4 公开持仓工具，US-only 起步，明确 13F 延迟和 Form 4 披露边界。
   - 报告页展示 Evidence Ledger、Debate Scorecard、Holdings Watch 和 query coverage warning。
   - 只读研究 API、MCP server facade、A2A agent card/long-task adapter，默认 feature flag 关闭。
+- **单 Agent 质量合同**：新增 `agent_quality_contract`、`agent_research_loop` 和 fixture eval gate
+  - Fundamental / News / Risk Agent 输出 source-backed native claims，并写入 `evidence_quality.agent_quality`。
+  - Agent 自检输出 `agent_self_check`，对缺证据、缺 claims、claim 未挂源、freshness 缺口给出 deterministic gap plan。
+  - `scripts/agent_quality_eval.py` + `tests/eval/agent_quality_cases.json` 提供可重复 before/after 质量门禁。
 - **Evidence Research 评估门禁**：新增 `tests/eval/evidence_research_cases.json` 与 `scripts/evidence_research_eval.py`，覆盖深研、辩论、持仓、CN 市场拒绝和 unsafe insider 边界。
 - **README 截图扩充**：Platform Preview 新增两张截图
   - ThinkingBubble 用户视图 — 折叠式推理节点（逻辑查图 / 规划策略 / 执行分析）
