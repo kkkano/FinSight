@@ -55,6 +55,41 @@ def test_select_tools_us_includes_sec_tools_for_company_qa():
     assert "get_earnings_call_transcripts" in tools
 
 
+def test_manifest_includes_sec_holdings_metadata():
+    entries = {entry.name: entry for entry in TOOL_MANIFEST}
+    expected = {
+        "get_institutional_holdings",
+        "get_institution_holdings_by_ticker",
+        "get_insider_transactions",
+        "get_holdings_overlap",
+    }
+    assert expected.issubset(entries)
+
+    for name in expected:
+        entry = entries[name]
+        assert entry.group == "regulatory"
+        assert entry.markets == ("US",)
+        assert entry.risk_level == "low"
+        assert "SEC_USER_AGENT" in entry.requires_env
+
+    assert "45 days" in entries["get_institutional_holdings"].help_text
+    assert "two business days" in entries["get_insider_transactions"].help_text
+
+
+def test_select_tools_us_includes_sec_holdings_tools_for_deep_company_qa():
+    tools = select_tools(
+        subject_type="company",
+        operation_name="qa",
+        output_mode="investment_report",
+        analysis_depth="deep_research",
+        market="US",
+    )
+    assert "get_institutional_holdings" in tools
+    assert "get_institution_holdings_by_ticker" in tools
+    assert "get_insider_transactions" in tools
+    assert "get_holdings_overlap" in tools
+
+
 def test_select_tools_macro_includes_macro_evidence_sources():
     tools = select_tools(
         subject_type="macro",

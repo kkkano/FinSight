@@ -86,6 +86,12 @@ from .sec import (
     get_sec_risk_factors,
     get_sec_company_facts_quarterly,
 )
+from .sec_holdings import (
+    get_institutional_holdings,
+    get_institution_holdings_by_ticker,
+    get_insider_transactions,
+    get_holdings_overlap,
+)
 from .authoritative_feeds import (
     search_authoritative_feeds,
     get_authoritative_media_news,
@@ -178,6 +184,10 @@ __all__ = [
     "get_sec_material_events",
     "get_sec_risk_factors",
     "get_sec_company_facts_quarterly",
+    "get_institutional_holdings",
+    "get_institution_holdings_by_ticker",
+    "get_insider_transactions",
+    "get_holdings_overlap",
     "search_authoritative_feeds",
     "get_authoritative_media_news",
     "get_earnings_call_transcripts",

@@ -16,6 +16,7 @@ class ToolManifestEntry:
     cache_ttl_s: int
     requires_env: tuple[str, ...] = ()
     default_enabled: bool = True
+    help_text: str = ""
 
 
 TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
@@ -92,6 +93,54 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
         timeout_ms=15000,
         cache_ttl_s=1800,
         requires_env=("SEC_USER_AGENT",),
+    ),
+    ToolManifestEntry(
+        name="get_institutional_holdings",
+        group="regulatory",
+        markets=("US",),
+        operations=("holdings", "qa", "generate_report", "analyze_impact"),
+        depths=("report", "deep_research"),
+        risk_level="low",
+        timeout_ms=20000,
+        cache_ttl_s=3600,
+        requires_env=("SEC_USER_AGENT",),
+        help_text="SEC Form 13F is due within 45 days after each calendar quarter end.",
+    ),
+    ToolManifestEntry(
+        name="get_institution_holdings_by_ticker",
+        group="regulatory",
+        markets=("US",),
+        operations=("holdings", "qa", "generate_report", "analyze_impact"),
+        depths=("report", "deep_research"),
+        risk_level="low",
+        timeout_ms=20000,
+        cache_ttl_s=3600,
+        requires_env=("SEC_USER_AGENT",),
+        help_text="Lookup institutional holders from SEC 13F context; 13F is delayed up to 45 days after quarter end.",
+    ),
+    ToolManifestEntry(
+        name="get_insider_transactions",
+        group="regulatory",
+        markets=("US",),
+        operations=("holdings", "qa", "generate_report", "analyze_impact"),
+        depths=("report", "deep_research"),
+        risk_level="low",
+        timeout_ms=20000,
+        cache_ttl_s=3600,
+        requires_env=("SEC_USER_AGENT",),
+        help_text="In most cases, Form 4 is filed within two business days following the transaction date.",
+    ),
+    ToolManifestEntry(
+        name="get_holdings_overlap",
+        group="regulatory",
+        markets=("US",),
+        operations=("holdings", "qa", "generate_report", "analyze_impact"),
+        depths=("report", "deep_research"),
+        risk_level="low",
+        timeout_ms=20000,
+        cache_ttl_s=3600,
+        requires_env=("SEC_USER_AGENT",),
+        help_text="Compare a portfolio against SEC 13F disclosed institutional holdings; disclosure is delayed.",
     ),
     ToolManifestEntry(
         name="get_local_market_filings",
@@ -450,6 +499,10 @@ def select_tools(
                 "get_sec_material_events",
                 "get_sec_risk_factors",
                 "get_sec_company_facts_quarterly",
+                "get_institutional_holdings",
+                "get_institution_holdings_by_ticker",
+                "get_insider_transactions",
+                "get_holdings_overlap",
                 "get_local_market_filings",
                 "get_company_info",
                 "get_company_news",

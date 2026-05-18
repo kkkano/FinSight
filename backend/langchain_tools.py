@@ -59,6 +59,10 @@ try:  # pragma: no cover - optional tools
         get_sec_company_facts_quarterly as _get_sec_company_facts_quarterly,
         get_sec_material_events as _get_sec_material_events,
         get_sec_risk_factors as _get_sec_risk_factors,
+        get_institutional_holdings as _get_institutional_holdings,
+        get_institution_holdings_by_ticker as _get_institution_holdings_by_ticker,
+        get_insider_transactions as _get_insider_transactions,
+        get_holdings_overlap as _get_holdings_overlap,
         run_portfolio_stress_test as _run_portfolio_stress_test,
         score_news_source_reliability as _score_news_source_reliability,
     )
@@ -78,6 +82,10 @@ except Exception:  # pragma: no cover - optional tools fallback
             get_sec_company_facts_quarterly as _get_sec_company_facts_quarterly,
             get_sec_material_events as _get_sec_material_events,
             get_sec_risk_factors as _get_sec_risk_factors,
+            get_institutional_holdings as _get_institutional_holdings,
+            get_institution_holdings_by_ticker as _get_institution_holdings_by_ticker,
+            get_insider_transactions as _get_insider_transactions,
+            get_holdings_overlap as _get_holdings_overlap,
             run_portfolio_stress_test as _run_portfolio_stress_test,
             score_news_source_reliability as _score_news_source_reliability,
         )
@@ -97,6 +105,10 @@ except Exception:  # pragma: no cover - optional tools fallback
         _get_sec_company_facts_quarterly = None
         _get_sec_material_events = None
         _get_sec_risk_factors = None
+        _get_institutional_holdings = None
+        _get_institution_holdings_by_ticker = None
+        _get_insider_transactions = None
+        _get_holdings_overlap = None
 
 try:  # pragma: no cover - phase 2/3 tools
     from backend.tools import (  # type: ignore
@@ -238,6 +250,39 @@ class SecCompanyFactsInput(BaseModel):
 
     ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
     limit: int = Field(default=8, ge=1, le=12, description="Maximum quarterly periods to return")
+
+
+class InstitutionalHoldingsInput(BaseModel):
+    """SEC 13F institutional holdings inputs."""
+
+    cik_or_name: str = Field(description="SEC CIK, US ticker, or institution name")
+    quarter: Optional[str] = Field(default=None, description="Optional quarter, e.g. 2025Q1")
+    limit: int = Field(default=100, ge=1, le=500, description="Maximum holding rows")
+
+
+class InstitutionHoldingsByTickerInput(BaseModel):
+    """SEC 13F holder lookup inputs."""
+
+    ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
+    limit: int = Field(default=50, ge=1, le=200, description="Maximum holder rows")
+
+
+class InsiderTransactionsInput(BaseModel):
+    """SEC Form 4 insider transaction inputs."""
+
+    ticker: str = Field(description="US ticker symbol, e.g. 'AAPL'")
+    days: int = Field(default=180, ge=1, le=720, description="Lookback window in days")
+    limit: int = Field(default=50, ge=1, le=200, description="Maximum transaction rows")
+
+
+class HoldingsOverlapInput(BaseModel):
+    """Compare portfolio positions to an institution's 13F holdings."""
+
+    positions: list[dict[str, Any]] = Field(
+        description="Portfolio positions, e.g. [{'ticker':'AAPL','weight':0.6}]"
+    )
+    holder_cik_or_name: str = Field(description="SEC CIK, US ticker, or institution name")
+    quarter: Optional[str] = Field(default=None, description="Optional quarter, e.g. 2025Q1")
 
 
 class FactorExposureInput(BaseModel):
@@ -733,6 +778,62 @@ def get_sec_risk_factors(ticker: str) -> str:
         return f"get_sec_risk_factors failed: {exc}"
 
 
+@tool("get_institutional_holdings", args_schema=InstitutionalHoldingsInput, return_direct=False)
+def get_institutional_holdings(cik_or_name: str, quarter: Optional[str] = None, limit: int = 100) -> str:
+    """Get institution-level SEC 13F holdings; 13F data is delayed after quarter end."""
+
+    if not callable(_get_institutional_holdings):
+        return "get_institutional_holdings unavailable: backend.tools function not found"
+    try:
+        payload = _get_institutional_holdings(cik_or_name=cik_or_name, quarter=quarter, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_institutional_holdings failed: {exc}"
+
+
+@tool("get_institution_holdings_by_ticker", args_schema=InstitutionHoldingsByTickerInput, return_direct=False)
+def get_institution_holdings_by_ticker(ticker: str, limit: int = 50) -> str:
+    """Get a read-only SEC 13F holder lookup stub for a US ticker."""
+
+    if not callable(_get_institution_holdings_by_ticker):
+        return "get_institution_holdings_by_ticker unavailable: backend.tools function not found"
+    try:
+        payload = _get_institution_holdings_by_ticker(ticker=ticker, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_institution_holdings_by_ticker failed: {exc}"
+
+
+@tool("get_insider_transactions", args_schema=InsiderTransactionsInput, return_direct=False)
+def get_insider_transactions(ticker: str, days: int = 180, limit: int = 50) -> str:
+    """Get recent SEC Form 4 insider transactions for a US ticker."""
+
+    if not callable(_get_insider_transactions):
+        return "get_insider_transactions unavailable: backend.tools function not found"
+    try:
+        payload = _get_insider_transactions(ticker=ticker, days=days, limit=limit)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_insider_transactions failed: {exc}"
+
+
+@tool("get_holdings_overlap", args_schema=HoldingsOverlapInput, return_direct=False)
+def get_holdings_overlap(
+    positions: list[dict[str, Any]],
+    holder_cik_or_name: str,
+    quarter: Optional[str] = None,
+) -> str:
+    """Compare portfolio tickers against an institution's disclosed SEC 13F holdings."""
+
+    if not callable(_get_holdings_overlap):
+        return "get_holdings_overlap unavailable: backend.tools function not found"
+    try:
+        payload = _get_holdings_overlap(positions=positions, holder_cik_or_name=holder_cik_or_name, quarter=quarter)
+        return json.dumps(payload, ensure_ascii=False) if isinstance(payload, (dict, list)) else str(payload)
+    except Exception as exc:  # pragma: no cover - runtime data issues
+        return f"get_holdings_overlap failed: {exc}"
+
+
 @tool("screen_stocks", args_schema=ScreenerInput, return_direct=False)
 def screen_stocks(
     market: str = "US",
@@ -874,6 +975,10 @@ FINANCIAL_TOOLS = [
     get_sec_material_events,
     get_sec_company_facts_quarterly,
     get_sec_risk_factors,
+    get_institutional_holdings,
+    get_institution_holdings_by_ticker,
+    get_insider_transactions,
+    get_holdings_overlap,
     screen_stocks,
     get_cn_market_fund_flow,
     get_cn_market_northbound,
@@ -938,6 +1043,10 @@ __all__ = [
     "get_sec_material_events",
     "get_sec_company_facts_quarterly",
     "get_sec_risk_factors",
+    "get_institutional_holdings",
+    "get_institution_holdings_by_ticker",
+    "get_insider_transactions",
+    "get_holdings_overlap",
     "screen_stocks",
     "get_cn_market_fund_flow",
     "get_cn_market_northbound",
