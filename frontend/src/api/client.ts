@@ -1,7 +1,7 @@
 ﻿import axios from 'axios';
 // 确保 types/index.ts 文件定义了这些接口
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
-import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType } from '../types/index';
+import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType, ReportIR, ThinkingStep } from '../types/index';
 import type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
 import { API_BASE_URL, buildApiUrl } from '../config/runtime';
 import { getRagInspectorDevAccessToken } from '../auth/devAuth';
@@ -249,7 +249,7 @@ export interface SSECallbacks {
   onToken?: (token: string) => void;
   onToolStart?: (name: string) => void;
   onToolEnd?: () => void;
-  onDone?: (report?: any, thinking?: any[], meta?: any) => void;
+  onDone?: (report?: ReportIR, thinking?: ThinkingStep[], meta?: any) => void;
   onError?: (error: string) => void;
   onThinking?: (step: any) => void;
   onRawEvent?: (event: RawSSEEvent) => void;
@@ -1000,7 +1000,7 @@ export const apiClient = {
     onToken: (token: string) => void,
     onToolStart?: (name: string) => void,
     onToolEnd?: () => void,
-    onDone?: (report?: any, thinking?: any[], meta?: any) => void,
+    onDone?: (report?: ReportIR, thinking?: ThinkingStep[], meta?: any) => void,
     onError?: (error: string) => void,
     onThinking?: (step: any) => void,
     history?: Array<{role: string, content: string}>,

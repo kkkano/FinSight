@@ -25,6 +25,132 @@ export interface EvidenceItem {
   confidence?: number;
 }
 
+export type ResearchStance = 'bull' | 'bear' | 'neutral' | 'risk' | 'unknown';
+
+export interface SourceRef {
+  source_id: string;
+  title?: string;
+  url?: string | null;
+  source?: string;
+  published_date?: string | null;
+  as_of?: string | null;
+  reliability?: number;
+  confidence?: number;
+  freshness_hours?: number | null;
+  layer?: 'memory' | 'ws' | 'kb' | string | null;
+  collection?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ResearchClaim {
+  claim_id: string;
+  claim: string;
+  stance?: ResearchStance;
+  evidence_ids?: string[];
+  confidence?: number;
+  agent_name?: string | null;
+  task_ids?: string[];
+  limitations?: string[];
+  [key: string]: unknown;
+}
+
+export interface EvidenceLedger {
+  ledger_id: string;
+  query?: string;
+  subject?: string | Record<string, unknown>;
+  claims?: ResearchClaim[];
+  sources?: SourceRef[];
+  uncertainties?: string[];
+  contradictions?: Array<Record<string, unknown>>;
+  coverage_targets?: Array<string | Record<string, unknown>>;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface DebateArtifact {
+  enabled?: boolean;
+  status?: 'ready' | 'skipped' | 'error' | 'disabled' | string;
+  reason?: string;
+  bull_score?: number;
+  bear_score?: number;
+  judge_score?: number;
+  winner?: 'bull' | 'bear' | 'balanced' | 'unknown' | string;
+  key_disagreements?: string[];
+  open_questions?: string[];
+  bull_claim_ids?: string[];
+  bear_claim_ids?: string[];
+  summary?: string;
+  [key: string]: unknown;
+}
+
+export interface InstitutionalHoldingRow {
+  issuer_name?: string;
+  ticker?: string;
+  cusip?: string;
+  value_usd_thousands?: number | null;
+  shares?: number | null;
+  share_type?: string | null;
+  investment_discretion?: string | null;
+  voting_authority?: {
+    sole?: number | null;
+    shared?: number | null;
+    none?: number | null;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface Form4TransactionRow {
+  owner_name?: string;
+  reporting_owner_name?: string;
+  security_title?: string;
+  security_type?: string;
+  transaction_date?: string;
+  filing_date?: string;
+  transaction_code?: string;
+  acquired_disposed?: string;
+  shares?: number | null;
+  price_per_share?: number | null;
+  direct_or_indirect_ownership?: string;
+  post_transaction_shares?: number | null;
+  interpretation_note?: string;
+  [key: string]: unknown;
+}
+
+export interface HoldingsInsight {
+  source?: string;
+  ticker?: string;
+  holder_name?: string;
+  holder_cik?: string;
+  cik?: string;
+  quarter?: string;
+  supported_market?: string;
+  market?: string;
+  regulatory_notes?: {
+    form_13f_due?: string;
+    form_4_due?: string;
+    [key: string]: unknown;
+  };
+  holdings?: InstitutionalHoldingRow[];
+  transactions?: Form4TransactionRow[];
+  portfolio_tickers?: string[];
+  overlap_tickers?: string[];
+  portfolio_only_tickers?: string[];
+  institution_only_tickers?: string[];
+  overlap_count?: number;
+  error?: string | null;
+  [key: string]: unknown;
+}
+
+export interface QueryCoverage {
+  coverage_rate?: number;
+  answered_targets?: Array<string | Record<string, unknown>>;
+  unanswered_targets?: Array<string | Record<string, unknown>>;
+  targets?: Array<string | Record<string, unknown>>;
+  notes?: string[];
+  [key: string]: unknown;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -155,6 +281,19 @@ export interface ReportIR {
     has_conflict?: boolean;
     compare_basis?: string[];
     conflict_agents?: string[];
+    query_coverage?: QueryCoverage;
+  };
+  evidence_ledger?: EvidenceLedger;
+  debate?: DebateArtifact;
+  holdings_insight?: HoldingsInsight;
+  query_coverage?: QueryCoverage;
+  artifacts?: {
+    evidence_ledger?: EvidenceLedger;
+    debate?: DebateArtifact;
+    holdings_insight?: HoldingsInsight;
+    holdings?: HoldingsInsight;
+    query_coverage?: QueryCoverage;
+    [key: string]: unknown;
   };
   // Phase 2 扩展字段
   meta?: {

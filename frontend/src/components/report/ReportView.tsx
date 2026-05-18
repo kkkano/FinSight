@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { ReportIR, ReportSection as ReportSectionType } from '../../types/index';
-import { Maximize2, X } from 'lucide-react';
+import type {
+  DebateArtifact,
+  EvidenceLedger,
+  HoldingsInsight,
+  QueryCoverage,
+  ReportIR,
+  ReportSection as ReportSectionType,
+} from '../../types/index';
+import { AlertTriangle, Maximize2, X } from 'lucide-react';
 import { apiClient } from '../../api/client';
 import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import {
@@ -22,11 +29,54 @@ import {
   RiskCatalystMetrics,
   SynthesisReportBlock,
 } from './ReportCharts';
+import { EvidenceLedgerPanel } from './EvidenceLedgerPanel';
+import { DebateScorecard } from './DebateScorecard';
+import { HoldingsWatchPanel } from './HoldingsWatchPanel';
 import { useToast } from '../ui';
 
 export interface ReportViewProps {
   report: ReportIR;
 }
+
+const readObject = (value: unknown): Record<string, any> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, any>;
+};
+
+const firstObject = <T,>(...values: unknown[]): T | null => {
+  for (const value of values) {
+    if (readObject(value)) return value as T;
+  }
+  return null;
+};
+
+const readReportArtifacts = (report: ReportIR): Record<string, any> => {
+  const direct = readObject(report.artifacts);
+  if (direct) return direct;
+
+  const meta = readObject(report.meta);
+  const metaArtifacts = readObject(meta?.artifacts);
+  if (metaArtifacts) return metaArtifacts;
+
+  const dataContext = readObject(meta?.data_context);
+  const contextArtifacts = readObject(dataContext?.artifacts);
+  if (contextArtifacts) return contextArtifacts;
+
+  return {};
+};
+
+const formatCoverageTarget = (target: string | Record<string, unknown>): string => {
+  if (typeof target === 'string') return target;
+  const candidate =
+    target.target ||
+    target.question ||
+    target.query ||
+    target.label ||
+    target.name ||
+    target.id ||
+    '未命名目标';
+  return String(candidate);
+};
 
 export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const { subscriptionEmail, sessionId } = useStore();
@@ -65,6 +115,52 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
   const reportHints = useMemo(() => extractReportHints(report), [report]);
   const agentDetailSections = useMemo(() => extractAgentDetailSections(report), [report]);
+  const researchArtifacts = useMemo(() => {
+    const artifacts = readReportArtifacts(report);
+    const meta = readObject(report.meta);
+    const dataContext = readObject(meta?.data_context);
+    const reportHintsObject = readObject(report.report_hints);
+
+    return {
+      evidenceLedger: firstObject<EvidenceLedger>(
+        report.evidence_ledger,
+        artifacts.evidence_ledger,
+        meta?.evidence_ledger,
+        dataContext?.evidence_ledger,
+      ),
+      debateArtifact: firstObject<DebateArtifact>(
+        report.debate,
+        artifacts.debate,
+        meta?.debate,
+        dataContext?.debate,
+      ),
+      holdingsInsight: firstObject<HoldingsInsight>(
+        report.holdings_insight,
+        artifacts.holdings_insight,
+        artifacts.holdings,
+        meta?.holdings_insight,
+        dataContext?.holdings_insight,
+        dataContext?.holdings,
+      ),
+      queryCoverage: firstObject<QueryCoverage>(
+        report.query_coverage,
+        artifacts.query_coverage,
+        reportHintsObject?.query_coverage,
+        meta?.query_coverage,
+        dataContext?.query_coverage,
+      ),
+    };
+  }, [report]);
+
+  const unansweredTargets = useMemo(
+    () => researchArtifacts.queryCoverage?.unanswered_targets || [],
+    [researchArtifacts.queryCoverage],
+  );
+  const hasResearchArtifacts = Boolean(
+    researchArtifacts.evidenceLedger ||
+    researchArtifacts.debateArtifact ||
+    researchArtifacts.holdingsInsight,
+  );
 
   const { classifiedErrors, warningText, shouldShowWarning, formattedErrors } = useMemo(
     () => normalizeReportErrors(report),
@@ -89,6 +185,31 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           ))}
         </ul>
       )}
+    </div>
+  ) : null;
+
+  const queryCoverageWarningNode = unansweredTargets.length > 0 ? (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200">
+      <div className="flex items-center gap-2 font-semibold">
+        <AlertTriangle size={14} />
+        查询覆盖缺口
+        <span className="ml-auto font-normal tabular-nums">{unansweredTargets.length} pending</span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {unansweredTargets.slice(0, 6).map((target, index) => (
+          <span
+            key={`${formatCoverageTarget(target)}-${index}`}
+            className="rounded border border-amber-200/80 bg-white/70 px-2 py-0.5 text-2xs text-amber-800 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100"
+          >
+            {formatCoverageTarget(target)}
+          </span>
+        ))}
+        {unansweredTargets.length > 6 && (
+          <span className="px-2 py-0.5 text-2xs text-amber-700 dark:text-amber-200">
+            +{unansweredTargets.length - 6}
+          </span>
+        )}
+      </div>
     </div>
   ) : null;
 
@@ -319,6 +440,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               fullscreen
             />
 
+            {queryCoverageWarningNode}
+
             <div className="space-y-4">
               <SynthesisReportBlock
                 synthesisReport={(report as any).synthesis_report || ''}
@@ -333,6 +456,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 expandedSections={expandedSections}
                 onToggleSection={toggleSection}
               />
+
+              {hasResearchArtifacts && (
+                <div className="space-y-3">
+                  <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />
+                  <DebateScorecard debate={researchArtifacts.debateArtifact} />
+                  <HoldingsWatchPanel holdings={researchArtifacts.holdingsInsight} />
+                </div>
+              )}
 
               <ReportEvidencePoolSection
                 citations={report.citations}
@@ -376,6 +507,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
             warningNode={warningNode}
           />
         </div>
+
+        {queryCoverageWarningNode && <div className="mt-4">{queryCoverageWarningNode}</div>}
 
         {/* Agent execution overview + Confidence meter */}
         <div className="mt-5 grid gap-4 md:grid-cols-[1fr_280px]">
@@ -466,6 +599,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               expandedSections={expandedSections}
               onToggleSection={toggleSection}
             />
+
+            {hasResearchArtifacts && (
+              <div className="space-y-3">
+                <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />
+                <DebateScorecard debate={researchArtifacts.debateArtifact} />
+                <HoldingsWatchPanel holdings={researchArtifacts.holdingsInsight} />
+              </div>
+            )}
 
             <ReportEvidencePoolSection
               citations={report.citations}
