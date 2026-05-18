@@ -20,7 +20,6 @@ except ImportError:
 
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
-from backend.agents.search_convergence import SearchConvergence
 from backend.orchestration.trace_schema import create_trace_event
 from backend.security.ssrf import is_safe_url
 from backend.services.circuit_breaker import CircuitBreaker
@@ -154,120 +153,22 @@ class DeepSearchAgent(BaseFinancialAgent):
         self._session = session
         return session
 
+    def _reject_unsafe_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        safe_results: List[Dict[str, Any]] = []
+        for item in results:
+            url = str((item or {}).get("url") or "").strip()
+            if url and not is_safe_url(url):
+                logger.info(f"[DeepSearch] Blocked unsafe search result before fetch: {url}")
+                continue
+            safe_results.append(item)
+        return safe_results
+
     async def research(self, query: str, ticker: str, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> AgentOutput:
-        """
-        Override to merge reflection docs into evidence for Self-RAG.
-        Uses SearchConvergence for info gain scoring and stop conditions.
-        """
-        trace: List[Dict[str, Any]] = []
-        queries = self._build_queries(query, ticker)
-        logger.info(f"[DeepSearch] queries: {queries}")
+        """Run DeepSearch through the deterministic research flow facade."""
+        from backend.research.deep_research_flow import run_deep_research_flow
 
-        def _log_event(event_type: str, details: Dict[str, Any]):
-            event = self._trace_step(event_type, details)
-            trace.append(event)
-            if on_event:
-                try:
-                    on_event({
-                        "event": "agent_execution",
-                        "agent": self.AGENT_NAME,
-                        "details": {"type": event_type, **details},
-                        "timestamp": datetime.now().isoformat()
-                    })
-                except Exception:
-                    pass
-
-        def _notify(msg: str):
-            if on_event:
-                try:
-                    on_event({
-                        "event": "agent_action",
-                        "agent": self.AGENT_NAME,
-                        "details": {"message": msg},
-                        "timestamp": datetime.now().isoformat()
-                    })
-                except Exception:
-                    pass
-
-        # Initialize convergence controller
-        convergence = SearchConvergence()
-
-        _notify(f"开始初始搜索 (Queries: {len(queries)})...")
-        results = await self._initial_search(query, ticker, queries=queries)
-        
-        _notify(f"正在生成初步摘要...")
-        summary = await self._first_summary(results)
-
-        # Process initial results through convergence
-        unique_results, init_metrics = convergence.process_round(results, "")
-        _log_event("initial_search", {
-                **self._build_trace_payload(queries, results),
-                "convergence": {
-                    "round": init_metrics.round_num,
-                    "info_gain": init_metrics.info_gain,
-                    "unique_docs": init_metrics.unique_docs_count
-                }
-            })
-        self._log_documents(results, "initial")
-        _log_event("summary", {"summary_preview": self._trim_text(summary, 400)})
-
-        all_docs: List[Dict[str, Any]] = list(unique_results) if isinstance(unique_results, list) else []
-
-        for i in range(self.MAX_REFLECTIONS):
-            _notify(f"正在分析信息缺口 (Round {i+1})...")
-            gaps = await self._identify_gaps(summary)
-            _log_event("self_rag_gap_detection", {"needs_more": bool(gaps), "queries": gaps})
-            if not gaps:
-                break
-            
-            _notify(f"执行针对性搜索 (Gaps: {len(gaps)})...")
-            new_data = await self._targeted_search(gaps, ticker)
-            if isinstance(new_data, list) and new_data:
-                # Process through convergence for dedup and gain scoring
-                unique_new, metrics = convergence.process_round(new_data, summary)
-                _log_event("targeted_search", {
-                        **self._build_trace_payload(gaps, new_data),
-                        "convergence": {
-                            "round": metrics.round_num,
-                            "info_gain": metrics.info_gain,
-                            "unique_docs": metrics.unique_docs_count,
-                            "should_stop": metrics.should_stop,
-                            "reason": metrics.reason
-                        }
-                    })
-                self._log_documents(unique_new, "targeted")
-                all_docs.extend(unique_new)
-
-                # Check convergence stop condition
-                if metrics.should_stop:
-                    logger.info(f"[DeepSearch] Convergence stop: {metrics.reason}")
-                    break
-            
-            _notify(f"更新摘要整合新信息...")
-            summary = await self._update_summary(summary, new_data)
-            _log_event("summary_update", {"summary_preview": self._trim_text(summary, 400)})
-
-        # Add final convergence stats to trace
-        _log_event("convergence_final", convergence.get_stats())
-
-        evidence_quality = self._compute_evidence_quality(all_docs or results)
-        _log_event("evidence_quality", evidence_quality)
-
-        rag_observability = await self._record_rag_observability(
-            query=query,
-            ticker=ticker,
-            docs=all_docs or results,
-        )
-        if rag_observability:
-            _log_event("rag_observability", rag_observability)
-
-        output = self._format_output(
-            summary,
-            all_docs or results,
-            trace=trace,
-            evidence_quality=evidence_quality,
-        )
-        return output
+        result = await run_deep_research_flow(self, query, ticker, on_event=on_event)
+        return result.output
 
     async def _initial_search(
         self,
@@ -292,6 +193,7 @@ class DeepSearchAgent(BaseFinancialAgent):
                 results.append(enriched)
 
         results = self._dedupe_results(results)
+        results = self._reject_unsafe_results(results)
         results = self._filter_results(results, query=query, ticker=ticker)[:self.MAX_RESULTS]
         docs = await asyncio.to_thread(self._fetch_documents, results)
         if docs:
@@ -380,6 +282,7 @@ queries 要求：
                 enriched["search_rank"] = rank
                 results.append(enriched)
         results = self._dedupe_results(results)
+        results = self._reject_unsafe_results(results)
         synthesized_query = f"{ticker} {' '.join([str(g).strip() for g in gaps if str(g).strip()])}".strip()
         results = self._filter_results(
             results,
@@ -399,6 +302,8 @@ queries 要求：
         raw_data: Any,
         trace: Optional[List[Dict[str, Any]]] = None,
         evidence_quality: Optional[Dict[str, Any]] = None,
+        query: str | None = None,
+        ticker: str | None = None,
     ) -> AgentOutput:
         evidence: List[EvidenceItem] = []
         data_sources: List[str] = []
@@ -450,7 +355,7 @@ queries 要求：
         if has_conflicts:
             risks.append("多源证据信号存在冲突，建议核实原始财报或电话会议。")
 
-        return AgentOutput(
+        output = AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
             evidence=evidence,
@@ -462,6 +367,36 @@ queries 要求：
             risks=risks,
             trace=trace or [],
         )
+        self._attach_evidence_ledger(output, query=query or summary, ticker=ticker)
+        return output
+
+    def _attach_evidence_ledger(self, output: AgentOutput, *, query: str, ticker: str | None = None) -> None:
+        try:
+            from backend.research.claim_extractor import extract_claims_from_agent_output
+            from backend.research.evidence_ledger import from_agent_output
+        except Exception as exc:
+            logger.info("[DeepSearch] Evidence ledger unavailable: %s", exc)
+            return
+
+        subject = {"ticker": ticker} if str(ticker or "").strip() else {}
+        payload = {
+            "agent_name": output.agent_name,
+            "summary": output.summary,
+            "evidence": output.evidence,
+            "confidence": output.confidence,
+            "data_sources": output.data_sources,
+            "as_of": output.as_of,
+            "claims": output.claims,
+            "evidence_quality": output.evidence_quality,
+            "fallback_used": output.fallback_used,
+            "risks": output.risks,
+            "conflict_flags": output.conflict_flags,
+            "conflicting_claims": output.conflicting_claims,
+        }
+        output.claims = extract_claims_from_agent_output(payload, query=query, ticker=ticker or "")
+        ledger = from_agent_output(output, query=query, subject=subject, task_ids=[])
+        output.claims = [claim.model_dump(mode="json") for claim in ledger.claims]
+        output.ledger = ledger.model_dump(mode="json")
 
     def _compute_evidence_quality(self, docs: Any) -> Dict[str, Any]:
         if not isinstance(docs, list) or not docs:
@@ -1220,10 +1155,20 @@ queries 要求：
             return {"enabled": False, "collection": collection, "error": str(exc)}
 
     def _build_rag_collection(self, *, query: str, ticker: str) -> str:
-        normalized_ticker = (ticker or "unknown").strip().lower() or "unknown"
-        seed = f"{normalized_ticker}::{query.strip()}"
-        digest = hashlib.md5(seed.encode("utf-8")).hexdigest()[:16]
-        return f"session:deepsearch:{normalized_ticker}:{digest}"
+        from backend.rag.layering import (
+            build_deepsearch_working_set_collection,
+            build_thread_working_set_collection,
+        )
+
+        thread_id = (
+            getattr(self, "thread_id", None)
+            or getattr(self, "_thread_id", None)
+            or getattr(self, "current_thread_id", None)
+            or getattr(self, "_current_thread_id", None)
+        )
+        if str(thread_id or "").strip():
+            return build_thread_working_set_collection(str(thread_id))
+        return build_deepsearch_working_set_collection(query=query, ticker=ticker)
 
     def _extract_pdf_text(self, data: bytes) -> str:
         if not PdfReader:
