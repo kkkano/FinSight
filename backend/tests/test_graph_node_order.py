@@ -30,6 +30,7 @@ _FULL_HAPPY_PATH = [
     "planner",
     "confirmation_gate",
     "execute_plan",
+    "research_debate",
     "synthesize",
     "render",
 ]
@@ -171,7 +172,7 @@ class TestGraphNodeOrderInvariant:
             "normalize_ui_context", "decide_output_mode",
             "chat_respond", "resolve_subject", "clarify",
             "parse_operation", "policy_gate", "planner",
-            "confirmation_gate", "execute_plan", "synthesize", "render",
+            "confirmation_gate", "execute_plan", "research_debate", "synthesize", "render",
             "alert_extractor", "alert_action", "understand_request",
         }
         assert node_names == expected_nodes, (

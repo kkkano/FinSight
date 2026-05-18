@@ -166,6 +166,7 @@ class Artifacts(TypedDict, total=False):
     evidence_pool: list[dict]
     evidence_by_task: dict[str, list[dict]]
     evidence_ledger: dict[str, Any]
+    debate: dict[str, Any]
     rag_context: list[dict]
     rag_stats: dict[str, Any]
     step_results: dict[str, Any]

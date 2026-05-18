@@ -247,6 +247,42 @@ def test_build_report_payload_adds_compare_and_conflict_hints_and_tags():
     assert meta_hints.get("has_conflict") is True
 
 
+def test_build_report_payload_adds_debate_hints_and_tag():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+        "policy": {"allowed_agents": ["fundamental_agent", "risk_agent"]},
+        "plan_ir": {"steps": []},
+        "artifacts": {
+            "draft_markdown": "## Report\n",
+            "evidence_pool": [],
+            "errors": [],
+            "render_vars": {},
+            "step_results": {},
+            "debate": {
+                "status": "done",
+                "judge_scorecard": {
+                    "bull_score": 0.72,
+                    "bear_score": 0.64,
+                    "evidence_balance": "mixed",
+                    "key_disagreements": ["估值风险与需求韧性冲突"],
+                },
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="NVDA 多空辩论", thread_id="t-debate")
+    assert isinstance(report, dict)
+
+    assert "debate" in (report.get("tags") or [])
+    hints = report.get("report_hints") or {}
+    assert hints.get("has_debate") is True
+    assert hints.get("debate", {}).get("judge_scorecard", {}).get("evidence_balance") == "mixed"
+    meta_hints = ((report.get("meta") or {}).get("report_hints") or {})
+    assert meta_hints.get("has_debate") is True
+
+
 def test_harden_report_payload_flattens_json_like_section_lines():
     state = {
         "output_mode": "investment_report",

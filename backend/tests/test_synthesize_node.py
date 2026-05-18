@@ -49,6 +49,54 @@ def test_synthesize_llm_mode_handles_datetime_in_inputs(monkeypatch):
     assert isinstance(render_vars, dict) and render_vars
 
 
+def test_synthesize_llm_mode_includes_debate_context(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    captured: dict[str, str] = {}
+
+    class _FakeResp:
+        def __init__(self, content: str):
+            self.content = content
+
+    class _FakeLLM:
+        async def ainvoke(self, messages):
+            captured["prompt"] = messages[0].content
+            return _FakeResp('{"summary":"ok","risks":"- r"}')
+
+    import backend.llm_config as llm_config_mod
+
+    monkeypatch.setattr(llm_config_mod, "create_llm", lambda *args, **kwargs: _FakeLLM())
+
+    from backend.graph.nodes.synthesize import synthesize
+
+    state = {
+        "query": "NVDA 多空辩论",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["NVDA"], "selection_payload": []},
+        "artifacts": {
+            "step_results": {},
+            "evidence_pool": [],
+            "debate": {
+                "status": "done",
+                "judge_scorecard": {
+                    "bull_score": 0.72,
+                    "bear_score": 0.64,
+                    "evidence_balance": "mixed",
+                    "key_disagreements": ["估值风险与需求韧性冲突"],
+                },
+            },
+        },
+        "trace": {},
+    }
+
+    _run(synthesize(state))
+
+    assert '"debate"' in captured.get("prompt", "")
+    assert "judge_scorecard" in captured.get("prompt", "")
+    assert "估值风险与需求韧性冲突" in captured.get("prompt", "")
+
+
 def test_synthesize_stub_produces_render_vars_without_placeholders(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
 

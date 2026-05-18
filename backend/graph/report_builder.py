@@ -1747,6 +1747,7 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     render_vars = artifacts.get("render_vars") if isinstance(artifacts.get("render_vars"), dict) else {}
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts.get("evidence_pool"), list) else []
     query_coverage = artifacts.get("query_coverage") if isinstance(artifacts.get("query_coverage"), dict) else {}
+    debate = artifacts.get("debate") if isinstance(artifacts.get("debate"), dict) else {}
     step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
     errors = artifacts.get("errors") if isinstance(artifacts.get("errors"), list) else []
     draft_markdown = _safe_str(artifacts.get("draft_markdown") or "")
@@ -2000,6 +2001,15 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
     report_hints["quality"] = quality_hints
     if query_coverage:
         report_hints["query_coverage"] = query_coverage
+    if debate.get("status") == "done":
+        report_hints["has_debate"] = True
+        report_hints["debate"] = {
+            "judge_scorecard": debate.get("judge_scorecard") if isinstance(debate.get("judge_scorecard"), dict) else {},
+            "consensus": debate.get("consensus"),
+            "open_questions": debate.get("open_questions") if isinstance(debate.get("open_questions"), list) else [],
+        }
+        if "debate" not in report_tags:
+            report_tags.append("debate")
     if isinstance(verifier_result, dict) and verifier_result:
         report_hints["verifier"] = {
             "enabled": bool(verifier_result.get("enabled")),
@@ -2197,6 +2207,8 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         validated["report_hints"] = report_hints
         validated["grounding_rate"] = grounding_rate
         validated["query_coverage"] = query_coverage
+        if debate:
+            validated["debate"] = debate
         validated["core_viewpoints"] = _build_core_viewpoints(agent_summaries)
         # P0-3d: structured agent diagnostics for frontend observability
         agent_diagnostics: dict[str, dict[str, Any]] = {}
@@ -2220,6 +2232,8 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         meta["report_hints"] = report_hints
         meta["grounding"] = grounding_stats
         meta["query_coverage"] = query_coverage
+        if debate:
+            meta["debate"] = debate
         meta["verifier"] = verifier_result
         existing_quality = (
             validated.get("report_quality")

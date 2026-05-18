@@ -17,6 +17,7 @@ from backend.graph.nodes.query_intent import is_casual_chat, is_greeting
 from backend.graph.nodes.render_stub import render_stub
 from backend.graph.nodes.reset_turn_state import reset_turn_state
 from backend.graph.nodes.resolve_subject import resolve_subject
+from backend.graph.nodes.research_debate import research_debate
 from backend.graph.nodes.synthesize import synthesize
 from backend.graph.nodes.compare_gate import (
     has_compare_evidence,
@@ -46,6 +47,7 @@ __all__ = [
     "planner",
     "planner_stub",
     "execute_plan_stub",
+    "research_debate",
     "synthesize",
     "render_stub",
     "reset_turn_state",

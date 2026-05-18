@@ -26,6 +26,7 @@ from backend.graph.nodes import (
     prepare_context,
     planner,
     render_stub,
+    research_debate,
     reset_turn_state,
     resolve_subject,
     synthesize,
@@ -67,6 +68,7 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("planner", with_node_trace("planner", planner))
     graph.add_node("confirmation_gate", with_node_trace("confirmation_gate", confirmation_gate))
     graph.add_node("execute_plan", with_node_trace("execute_plan", execute_plan_stub))
+    graph.add_node("research_debate", with_node_trace("research_debate", research_debate))
     graph.add_node("synthesize", with_node_trace("synthesize", synthesize))
     graph.add_node("render", with_node_trace("render", render_stub))
 
@@ -138,7 +140,8 @@ def _build_graph(*, checkpointer: Any) -> Any:
         _route_after_confirmation,
         {"planner": "planner", "execute_plan": "execute_plan", END: END},
     )
-    graph.add_edge("execute_plan", "synthesize")
+    graph.add_edge("execute_plan", "research_debate")
+    graph.add_edge("research_debate", "synthesize")
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)
 

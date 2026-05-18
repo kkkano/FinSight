@@ -1709,6 +1709,7 @@ async def _generate_narrative_draft(
     artifacts = state.get("artifacts") or {}
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
     evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
+    debate = artifacts.get("debate") if isinstance(artifacts, dict) else None
     query = (state.get("query") or "").strip()
     subject = state.get("subject") or {}
     tickers = subject.get("tickers") if isinstance(subject, dict) else []
@@ -1839,11 +1840,23 @@ async def _generate_narrative_draft(
         if ev_lines:
             evidence_text = "\n".join(ev_lines)
 
+    debate_context = ""
+    if isinstance(debate, dict) and debate.get("status") == "done":
+        debate_context = json_dumps_safe(
+            {
+                "judge_scorecard": debate.get("judge_scorecard") if isinstance(debate.get("judge_scorecard"), dict) else {},
+                "consensus": debate.get("consensus"),
+                "open_questions": debate.get("open_questions") if isinstance(debate.get("open_questions"), list) else [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     conversation_history = _format_conversation_history_for_synth(state)
     memory_context_block = _format_memory_context_for_synth(state)
     current_date = utc_now_iso()[:10]
     narrative_grounding_text = "\n".join(
-        part for part in [evidence_text, conflict_context, "\n".join(agent_sections)] if part
+        part for part in [evidence_text, conflict_context, debate_context, "\n".join(agent_sections)] if part
     )
 
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
@@ -1866,6 +1879,8 @@ async def _generate_narrative_draft(
 {"<evidence_pool>" + chr(10) + evidence_text + chr(10) + "</evidence_pool>" if evidence_text else ""}
 
 {"<cross_agent_conflicts>" + chr(10) + conflict_context + chr(10) + "</cross_agent_conflicts>" if conflict_context else ""}
+
+{"<debate_scorecard>" + chr(10) + debate_context + chr(10) + "</debate_scorecard>" if debate_context else ""}
 
 <report_structure>
 严格按以下结构撰写，使用 Markdown 标题。每个章节必须包含实质性分析段落，禁止仅列出数据点：
@@ -1911,7 +1926,7 @@ async def _generate_narrative_draft(
     - LLM 概览数据：`<chart type="bar" title="标题">{{"labels":["A","B"],"values":[10,20]}}</chart>`
     - 引用前端已有数据：`<chart_ref type="bar" source="peers" fields="trailing_pe" title="PE对比"/>`
     - 支持类型: bar / line / pie / scatter / gauge。规则: 不替代文字分析，仅做辅助展示。
-11) **严格闭卷原则（高优先级）**：你唯一可用的信息来源仅限本提示中的 <agent_outputs>、<evidence_pool>、<cross_agent_conflicts>。
+11) **严格闭卷原则（高优先级）**：你唯一可用的信息来源仅限本提示中的 <agent_outputs>、<evidence_pool>、<cross_agent_conflicts>、<debate_scorecard>。
 12) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
 13) 如需提及行业背景，仅允许使用泛化表述（如"行业竞争加剧"），禁止输出具体日期+事件断言。
 14) 违反闭卷原则视为编造数据，与编造财务数字同级错误。
@@ -2502,6 +2517,7 @@ async def synthesize(state: GraphState) -> dict:
     step_results = artifacts.get("step_results") if isinstance(artifacts, dict) else None
     evidence_ledger = artifacts.get("evidence_ledger") if isinstance(artifacts, dict) else None
     query_coverage = artifacts.get("query_coverage") if isinstance(artifacts, dict) else None
+    debate = artifacts.get("debate") if isinstance(artifacts, dict) else None
 
     # Build separated evidence sections for structured prompt
     evidence_pool_list = evidence_pool if isinstance(evidence_pool, list) else []
@@ -2516,6 +2532,7 @@ async def synthesize(state: GraphState) -> dict:
         "step_results": step_results if isinstance(step_results, dict) else {},
         "evidence_ledger": evidence_ledger if isinstance(evidence_ledger, dict) else {},
         "query_coverage": query_coverage if isinstance(query_coverage, dict) else {},
+        "debate": debate if isinstance(debate, dict) else {},
     }
 
     # Format evidence sections with XML tags
@@ -2544,6 +2561,7 @@ async def synthesize(state: GraphState) -> dict:
             json_dumps_safe(evidence_pool_list[:20], ensure_ascii=False),
             json_dumps_safe(rag_context_list[:20], ensure_ascii=False),
             json_dumps_safe(step_results if isinstance(step_results, dict) else {}, ensure_ascii=False),
+            json_dumps_safe(debate if isinstance(debate, dict) else {}, ensure_ascii=False),
         ] if part
     )
 
@@ -2587,7 +2605,7 @@ summary, highlights, analysis.
 </field_quality_guidelines>
 
 <constraints>
-1) 严格闭卷：仅可使用 <realtime_evidence>、<historical_knowledge>、<inputs.step_results> 中已出现的信息。
+1) 严格闭卷：仅可使用 <realtime_evidence>、<historical_knowledge>、<inputs.step_results>、<inputs.evidence_ledger>、<inputs.debate> 中已出现的信息。
 2) 禁止引用任何未在上述标签中出现的具体事实（尤其是产品发布时间、并购、监管进展、公司战略计划、竞争对手具体动态）。
 3) 如需提及行业背景，仅允许泛化表述，禁止输出具体日期+事件断言。
 4) 数据不足时明确标注"[数据缺失]"或"数据有限"，禁止补写训练知识中的细节。
