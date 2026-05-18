@@ -96,6 +96,14 @@ class EvidenceItem(TypedDict, total=False):
     id: str
     step_id: str
     task_ids: list[str]
+    claim_id: str
+    source_id: str
+    stance: str
+    as_of: str | None
+    reliability: float
+    layer: str
+    collection: str
+    limitations: list[str]
 
 
 class ToolError(TypedDict, total=False):

@@ -44,6 +44,8 @@ class AgentOutput:
     confidence: float
     data_sources: List[str]
     as_of: str
+    claims: list[dict[str, Any]] = field(default_factory=list)
+    ledger: dict[str, Any] | None = None
     evidence_quality: Dict[str, Any] = field(default_factory=dict)
     fallback_used: bool = False
     risks: List[str] = field(default_factory=list)
