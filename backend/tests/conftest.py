@@ -1,9 +1,19 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# Windows sandbox may deny pytest's default AppData temp base. Keep pytest
+# temp files inside the repo-local ignored tmp/ directory for deterministic CI.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PYTEST_TMP = _REPO_ROOT / "tmp" / "pytest"
+_PYTEST_TMP.mkdir(parents=True, exist_ok=True)
+for _name in ("TMP", "TEMP", "TMPDIR"):
+    os.environ.setdefault(_name, str(_PYTEST_TMP))
+tempfile.tempdir = str(_PYTEST_TMP)
 
 # Keep test runtime deterministic and avoid async sqlite destructor noise in
 # short-lived TestClient lifecycles unless a test explicitly overrides backend.

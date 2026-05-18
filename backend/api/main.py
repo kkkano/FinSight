@@ -31,6 +31,7 @@ from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.portfolio_router import portfolio_router
 from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
+from backend.api.research_router import ResearchRouterDeps, create_research_router
 from backend.api.subscription_router import create_subscription_router
 from backend.api.alerts_router import create_alerts_router
 from backend.api.screener_router import screener_router
@@ -1115,6 +1116,13 @@ report_router = create_report_router(
     )
 )
 
+research_router = create_research_router(
+    ResearchRouterDeps(
+        resolve_thread_id=_resolve_thread_id,
+        get_report_index_store=lambda: get_report_index_store(),
+    )
+)
+
 task_router = create_task_router(
     TaskRouterDeps(
         resolve_thread_id=_resolve_thread_id,
@@ -1190,6 +1198,7 @@ app.include_router(cn_market_router)
 app.include_router(backtest_router)
 app.include_router(config_router)
 app.include_router(report_router)
+app.include_router(research_router)
 app.include_router(task_router)
 app.include_router(tools_router)
 app.include_router(execution_router)
