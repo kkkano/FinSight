@@ -164,9 +164,19 @@ class Artifacts(TypedDict, total=False):
     """Executor output artifacts."""
 
     evidence_pool: list[dict]
-    agent_outputs: dict
-    render_vars: dict
-    report: dict
+    evidence_by_task: dict[str, list[dict]]
+    evidence_ledger: dict[str, Any]
+    rag_context: list[dict]
+    rag_stats: dict[str, Any]
+    step_results: dict[str, Any]
+    task_results: dict[str, Any]
+    tool_diagnostics: list[dict]
+    agent_diagnostics: dict[str, dict[str, Any]]
+    agent_outputs: dict[str, Any]
+    render_vars: dict[str, Any]
+    report: dict[str, Any]
+    signals: dict[str, Any]
+    errors: list[Any]
     response: str
 
 

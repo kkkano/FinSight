@@ -47,6 +47,7 @@ _EXECUTION_OWNED_ARTIFACT_KEYS = {
     "draft_markdown",
     "errors",
     "evidence_by_task",
+    "evidence_ledger",
     "evidence_pool",
     "rag_context",
     "rag_stats",
@@ -613,6 +614,9 @@ async def execute_plan_stub(state: GraphState) -> dict:
     subject = state.get("subject") or {}
     selection_payload = subject.get("selection_payload") if isinstance(subject, dict) else None
     evidence_pool: list[dict[str, Any]] = []
+    existing_evidence_pool = artifacts.get("evidence_pool") if isinstance(artifacts, dict) else None
+    if isinstance(existing_evidence_pool, list):
+        evidence_pool.extend([item for item in existing_evidence_pool if isinstance(item, dict)])
     tool_diagnostics: list[dict[str, Any]] = []
     if isinstance(selection_payload, list) and selection_payload:
         for item in selection_payload:
@@ -2000,6 +2004,13 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 _store_call("append_fallback_event", fallback_record)
             if rag_final_update:
                 _store_call("update_query_run", rag_run_id, **rag_final_update)
+    if str(os.getenv("RESEARCH_LEDGER_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from backend.research.ledger_builder import build_ledger_from_artifacts
+
+            artifacts["evidence_ledger"] = build_ledger_from_artifacts(state, artifacts)
+        except Exception as exc:
+            logger.warning("Evidence ledger build failed: %s", exc)
     trace.update(
         {
             "executor": {
