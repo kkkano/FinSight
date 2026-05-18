@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from urllib.parse import parse_qs, unquote, urlparse
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
@@ -611,6 +612,13 @@ class NewsAgent(BaseFinancialAgent):
         output_confidence = 0.8 if evidence else 0.1
         if isinstance(avg_reliability, (int, float)):
             output_confidence = max(0.1, min(0.9, float(avg_reliability)))
+        assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
+        claims = self._build_native_claims(
+            query=self._current_query or "",
+            ticker=str(raw_data[0].get("ticker") or "") if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict) else "",
+            evidence=evidence,
+            confidence=output_confidence,
+        )
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
@@ -619,12 +627,81 @@ class NewsAgent(BaseFinancialAgent):
             confidence=output_confidence,
             data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
+            claims=claims,
             fallback_used=fallback_used,
             trace=trace,
             risks=risks,
             fallback_reason=fallback_reason,
             retryable=True,
         )
+
+    def _build_native_claims(
+        self,
+        *,
+        query: str,
+        ticker: str,
+        evidence: List[EvidenceItem],
+        confidence: float,
+    ) -> List[Dict[str, Any]]:
+        claims: List[Dict[str, Any]] = []
+        for item in evidence[:6]:
+            source_id = str((item.meta or {}).get("source_id") or "").strip()
+            if not source_id:
+                continue
+            source_name = str(item.source or "news")
+            headline = str(item.text or "").strip()
+            if not headline:
+                continue
+
+            if source_name == "event_calendar":
+                claims.append(
+                    build_agent_claim(
+                        agent_name=self.AGENT_NAME,
+                        ticker=ticker,
+                        query=query,
+                        claim=f"{ticker} has upcoming scheduled events that can change the news impact window.",
+                        evidence_ids=[source_id],
+                        stance="risk",
+                        confidence=min(0.85, confidence),
+                        limitations=["Event calendar marks timing risk; it does not prove direction by itself."],
+                        metadata={"claim_type": "event_calendar"},
+                    )
+                )
+                continue
+
+            rel = item.meta.get("source_reliability") if isinstance(item.meta, dict) else {}
+            rel_score = rel.get("reliability_score") if isinstance(rel, dict) else None
+            score = float(rel_score) if isinstance(rel_score, (int, float)) else float(item.confidence or 0.5)
+            lowered = headline.lower()
+            is_primary_catalyst = score >= 0.85 and any(
+                token in lowered
+                for token in ("beat", "beats", "earnings", "revenue", "guidance", "approval", "launch")
+            )
+            if is_primary_catalyst:
+                claim_type = "catalyst_candidate"
+                stance = "bull" if any(token in lowered for token in ("beat", "beats", "strong", "upgrade")) else "neutral"
+                claim_text = f"{ticker} news catalyst candidate: {headline}"
+                limitations = ["Catalyst classification needs confirmation from primary filings or management commentary."]
+            else:
+                claim_type = "noise_or_secondary_signal"
+                stance = "neutral"
+                claim_text = f"{ticker} secondary news signal or potential noise: {headline}"
+                limitations = ["Secondary market-media signal; avoid treating it as standalone investment evidence."]
+
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=claim_text,
+                    evidence_ids=[source_id],
+                    stance=stance,
+                    confidence=max(0.3, min(0.9, score)),
+                    limitations=limitations,
+                    metadata={"claim_type": claim_type, "source_reliability": round(score, 4)},
+                )
+            )
+        return claims[:6]
 
     async def analyze_stream(self, query: str, ticker: str):
         """

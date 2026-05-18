@@ -315,7 +315,7 @@ LANGGRAPH_EXECUTE_LIVE_TOOLS=false
 
 - 任何生产发布都必须附带：测试证据 + 本 Runbook 验收记录
 - API/State/Trace 契约变更必须同步 `backend/contracts.py`
-- 新增配置项必须补充到本 Runbook 与 `readme.md`/`readme_cn.md`
+- 新增配置项必须补充到本 Runbook 与 `README.md`/`readme_cn.md`
 
 ## 10. Checkpointer Cutover Drill (Postgres)
 

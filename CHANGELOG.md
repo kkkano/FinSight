@@ -20,7 +20,7 @@
 - **README 截图扩充**：Platform Preview 新增两张截图
   - ThinkingBubble 用户视图 — 折叠式推理节点（逻辑查图 / 规划策略 / 执行分析）
   - 执行时间线 + 分析师摘要卡片 — 逐 Agent 步骤追踪、11 智能体完成网格
-  - 同步更新 `readme.md`（英文）与 `readme_cn.md`（中文）
+  - 同步更新 `README.md`（英文）与 `readme_cn.md`（中文）
 - **`frontend/docs/DELETION_LOG.md`**：P3-2 死代码清理完整记录
   - 删除 12 个文件、1 个目录（`src/components/cards/`），合计 -2002 行
   - Tier 1：3 个直接孤立文件（alertFeed.ts、DashboardWidgets.tsx、NewsFilterPills.tsx）

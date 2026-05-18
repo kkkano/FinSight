@@ -16,6 +16,12 @@ import re
 from typing import Any, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
+from backend.research.agent_quality_contract import (
+    apply_agent_quality_contract,
+    assign_evidence_source_ids,
+    build_agent_claim,
+)
+from backend.research.agent_research_loop import apply_agent_self_check
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.utils.quote import resolve_live_quote, safe_float
 
@@ -450,7 +456,7 @@ class RiskAgent(BaseFinancialAgent):
         on_event: Optional[Any] = None,
     ) -> AgentOutput:
         """Adapter-compatible entrypoint for report pipeline."""
-        del query  # rule-only agent, does not need user query text today
+        query_text = str(query or "")
         del on_event
 
         clean_ticker = str(ticker or "").strip().upper() or "N/A"
@@ -543,18 +549,101 @@ class RiskAgent(BaseFinancialAgent):
         if not isinstance(stress_payload, dict) or stress_payload.get("error"):
             fallback_used = True
 
-        return AgentOutput(
+        assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
+        claims = self._build_native_claims(
+            ticker=clean_ticker,
+            query=query_text,
+            assessment=assessment,
+            evidence=evidence,
+            factor_payload=factor_payload,
+            stress_payload=stress_payload,
+            confidence=0.75 if quote is not None else 0.45,
+        )
+
+        output = AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=assessment.summary,
             evidence=evidence,
             confidence=0.75 if quote is not None else 0.45,
             data_sources=list(dict.fromkeys(data_sources)),
             as_of=assessment.assessed_at,
+            claims=claims,
             fallback_used=fallback_used,
             risks=[signal.description for signal in assessment.signals],
             fallback_reason="quote_unavailable" if quote is None else None,
             retryable=True,
         )
+        output = apply_agent_quality_contract(output, query=query_text, ticker=clean_ticker)
+        return apply_agent_self_check(output, query=query_text, ticker=clean_ticker)
+
+    def _build_native_claims(
+        self,
+        *,
+        ticker: str,
+        query: str,
+        assessment: RiskAssessment,
+        evidence: list[EvidenceItem],
+        factor_payload: dict[str, Any],
+        stress_payload: dict[str, Any],
+        confidence: float,
+    ) -> list[dict[str, Any]]:
+        source_ids = [
+            str((item.meta or {}).get("source_id") or "").strip()
+            for item in evidence
+            if str((item.meta or {}).get("source_id") or "").strip()
+        ]
+        claims: list[dict[str, Any]] = []
+        if source_ids:
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=f"{ticker} aggregate risk score is {assessment.risk_score:.1f}/100 ({assessment.risk_level.value}).",
+                    evidence_ids=[source_ids[0]],
+                    stance="risk",
+                    confidence=confidence,
+                    limitations=["Rule-based aggregate risk score; validate drivers before portfolio action."],
+                    metadata={"claim_type": "risk_score", "risk_level": assessment.risk_level.value},
+                )
+            )
+
+        if len(source_ids) >= 2 and isinstance(factor_payload.get("factor_beta"), dict):
+            beta = factor_payload.get("factor_beta") or {}
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=(
+                        f"{ticker} factor exposure is elevated: market beta={safe_float(beta.get('market'))}, "
+                        f"growth beta={safe_float(beta.get('growth'))}."
+                    ),
+                    evidence_ids=[source_ids[1]],
+                    stance="risk",
+                    confidence=confidence,
+                    limitations=["Factor exposure uses model snapshot and should be checked against portfolio weights."],
+                    metadata={"claim_type": "factor_exposure"},
+                )
+            )
+
+        if len(source_ids) >= 3 and isinstance(stress_payload.get("scenarios"), list):
+            worst_case = safe_float(stress_payload.get("worst_case_return"))
+            worst_text = f"{worst_case:.1%}" if worst_case is not None else "available"
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=f"{ticker} stress-test downside is {worst_text}, indicating scenario loss sensitivity.",
+                    evidence_ids=[source_ids[2]],
+                    stance="risk",
+                    confidence=confidence,
+                    limitations=["Stress test is scenario based and not a forecast."],
+                    metadata={"claim_type": "stress_test"},
+                )
+            )
+        return claims
 
 
 __all__ = [

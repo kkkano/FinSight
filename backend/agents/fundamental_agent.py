@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictClaim, EvidenceItem
+from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 
 
@@ -353,6 +354,16 @@ class FundamentalAgent(BaseFinancialAgent):
         confidence = quality_score if quality_score is not None else (0.7 if evidence else 0.2)
         confidence = max(0.2, min(0.92, confidence))
         risks = self._build_risks(raw_data, normalized)
+        source_ids = assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
+        claims = self._build_native_claims(
+            query=self._current_query or "",
+            ticker=str(raw_data.get("ticker") or "") if isinstance(raw_data, dict) else "",
+            normalized=normalized,
+            evidence=evidence,
+            risks=risks,
+            confidence=confidence,
+            source_ids=source_ids,
+        )
 
         # --- Conflict detection: revenue growth vs margin direction ---
         conflict_flags: List[str] = []
@@ -404,6 +415,7 @@ class FundamentalAgent(BaseFinancialAgent):
             confidence=confidence,
             data_sources=data_sources or ["yfinance"],
             as_of=datetime.now(timezone.utc).isoformat(),
+            claims=claims,
             evidence_quality=evidence_quality,
             fallback_used=fallback_used,
             risks=risks,
@@ -412,6 +424,144 @@ class FundamentalAgent(BaseFinancialAgent):
             fallback_reason=fallback_reason,
             retryable=True,
         )
+
+    def _build_native_claims(
+        self,
+        *,
+        query: str,
+        ticker: str,
+        normalized: Dict[str, Any],
+        evidence: List[EvidenceItem],
+        risks: List[str],
+        confidence: float,
+        source_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        del source_ids
+        metric_map = normalized.get("metrics") if isinstance(normalized.get("metrics"), dict) else {}
+        if not metric_map:
+            return []
+
+        evidence_by_metric: Dict[str, str] = {}
+        for item in evidence:
+            metric_key = str((item.meta or {}).get("metric_key") or "").strip()
+            source_id = str((item.meta or {}).get("source_id") or "").strip()
+            if metric_key and source_id:
+                evidence_by_metric[metric_key] = source_id
+
+        def _metric(key: str) -> Dict[str, Any]:
+            payload = metric_map.get(key)
+            return payload if isinstance(payload, dict) else {}
+
+        def _metric_evidence(*keys: str) -> List[str]:
+            return [evidence_by_metric[key] for key in keys if evidence_by_metric.get(key)]
+
+        claims: List[Dict[str, Any]] = []
+        revenue = _metric("revenue")
+        net_income = _metric("net_income")
+        operating_income = _metric("operating_income")
+        revenue_yoy = self._safe_float(revenue.get("yoy"))
+        net_income_yoy = self._safe_float(net_income.get("yoy"))
+        growth_evidence = _metric_evidence("revenue", "net_income", "operating_income")
+        if growth_evidence:
+            if revenue_yoy is not None and revenue_yoy > 0 and (net_income_yoy is None or net_income_yoy >= 0):
+                stance = "bull"
+                direction = "positive"
+            elif revenue_yoy is not None and revenue_yoy < 0 and (net_income_yoy is None or net_income_yoy <= 0):
+                stance = "bear"
+                direction = "negative"
+            else:
+                stance = "neutral"
+                direction = "mixed"
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=(
+                        f"{ticker} growth quality is {direction}: revenue YoY "
+                        f"{revenue_yoy:.1%}" if revenue_yoy is not None else f"{ticker} revenue trend is available"
+                    ),
+                    evidence_ids=growth_evidence,
+                    stance=stance,
+                    confidence=confidence,
+                    limitations=["Financial-statement snapshot; validate against primary filings for final investment work."],
+                    metadata={"claim_type": "growth_quality"},
+                )
+            )
+
+        cash_flow = _metric("operating_cash_flow")
+        cash_flow_evidence = _metric_evidence("operating_cash_flow", "net_income")
+        ocf_value = self._safe_float(cash_flow.get("latest"))
+        net_income_value = self._safe_float(net_income.get("latest"))
+        if cash_flow_evidence and ocf_value is not None:
+            if net_income_value is not None and ocf_value >= net_income_value:
+                stance = "bull"
+                claim_text = f"{ticker} operating cash flow covers net income, supporting earnings quality."
+            elif net_income_value is not None and ocf_value < net_income_value * 0.7:
+                stance = "bear"
+                claim_text = f"{ticker} operating cash flow trails net income materially, weakening earnings quality."
+            else:
+                stance = "neutral"
+                claim_text = f"{ticker} operating cash flow is available but needs context versus earnings."
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=claim_text,
+                    evidence_ids=cash_flow_evidence,
+                    stance=stance,
+                    confidence=confidence,
+                    limitations=["Cash-flow quality claim uses available statement rows only."],
+                    metadata={"claim_type": "cash_flow_quality"},
+                )
+            )
+
+        eps_source_id = evidence_by_metric.get("eps_revision_signal")
+        if eps_source_id:
+            eps_signal = ""
+            for item in evidence:
+                if (item.meta or {}).get("metric_key") == "eps_revision_signal":
+                    eps_signal = str((item.meta or {}).get("revision_signal") or "").lower()
+                    break
+            stance = "bull" if eps_signal == "positive" else ("bear" if eps_signal == "negative" else "neutral")
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=f"{ticker} EPS revision signal is {eps_signal or 'available'}, affecting forward earnings confidence.",
+                    evidence_ids=[eps_source_id],
+                    stance=stance,
+                    confidence=min(0.9, confidence),
+                    limitations=["EPS revision data is a forward-estimate signal, not a realized result."],
+                    metadata={"claim_type": "eps_revision"},
+                )
+            )
+
+        assets = _metric("total_assets")
+        liabilities = _metric("total_liabilities")
+        leverage_evidence = _metric_evidence("total_assets", "total_liabilities")
+        assets_value = self._safe_float(assets.get("latest"))
+        liabilities_value = self._safe_float(liabilities.get("latest"))
+        if leverage_evidence and assets_value not in (None, 0) and liabilities_value is not None:
+            leverage = liabilities_value / assets_value
+            stance = "risk" if leverage >= 0.6 else "neutral"
+            claims.append(
+                build_agent_claim(
+                    agent_name=self.AGENT_NAME,
+                    ticker=ticker,
+                    query=query,
+                    claim=f"{ticker} liabilities/assets is {leverage:.1%}, shaping balance-sheet risk.",
+                    evidence_ids=leverage_evidence,
+                    stance=stance,
+                    confidence=confidence,
+                    limitations=risks[:2],
+                    metadata={"claim_type": "balance_sheet_risk", "leverage": round(leverage, 4)},
+                )
+            )
+
+        return claims[:6]
 
     def _build_normalized_metrics(self, financials: Dict[str, Any]) -> Dict[str, Any]:
         income = financials.get("financials") if isinstance(financials, dict) else None

@@ -8,6 +8,15 @@
 - `backend/rag/observability_store.py`、`backend/rag/observability_runtime.py`：把 layer / collection path / hit 元数据落进 observability，供 Inspector 和 DB Browser 回放。
 - `frontend/src/pages/RagInspectorPage.tsx`：Inspector 首屏、run 详情、collection 浏览、DB Browser 直接展示三层语义。
 
+# 2026-05-18 增量架构说明（单 Agent 质量合同）
+
+- `backend/research/agent_quality_contract.py`：单 Agent 质量合同入口，负责给 evidence 分配稳定 `agent_source:*`、构造 claim、计算 `agent_quality` 指标。
+- `backend/agents/base_agent.py`：标准 `research()` 流程会自动挂载 `evidence_quality.agent_quality`；覆盖 `research()` 的 Agent 需要手动调用合同。
+- `backend/agents/fundamental_agent.py`：原生输出 growth_quality / cash_flow_quality / eps_revision / balance_sheet_risk claims。
+- `backend/agents/news_agent.py`：原生输出 catalyst_candidate / noise_or_secondary_signal / event_calendar claims。
+- `backend/agents/risk_agent.py`：原生输出 risk_score / factor_exposure / stress_test claims。
+- `scripts/agent_quality_eval.py` + `tests/eval/agent_quality_cases.json`：确定性 fixture eval gate，用于保存 before/after 结果并审计单 Agent 质量变化。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。
@@ -17,5 +26,6 @@
 ## 当前目录依赖
 
 - `backend/rag/layering.py` -> 被 `hybrid_service.py` / `observability_store.py` / 编排节点调用。
+- `backend/research/agent_quality_contract.py` -> 被 `base_agent.py`、Fundamental / News / Risk Agent 和 `scripts/agent_quality_eval.py` 调用。
 - `frontend/src/pages/RagInspectorPage.tsx` -> 依赖 `frontend/src/api/client.ts` 的 diagnostics API。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md` -> 作为后续持续开发与验收清单。

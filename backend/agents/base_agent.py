@@ -324,6 +324,14 @@ class BaseFinancialAgent:
                 })
 
         output = self._format_output(summary, results)
+        try:
+            from backend.research.agent_quality_contract import apply_agent_quality_contract
+            from backend.research.agent_research_loop import apply_agent_self_check
+
+            output = apply_agent_quality_contract(output, query=query, ticker=ticker)
+            output = apply_agent_self_check(output, query=query, ticker=ticker)
+        except Exception as exc:
+            logger.debug("[%s] agent quality contract failed: %s", self.AGENT_NAME, exc)
         _log_event("agent_end", {
             "confidence": getattr(output, "confidence", None),
             "evidence_count": len(getattr(output, "evidence", []) or []),

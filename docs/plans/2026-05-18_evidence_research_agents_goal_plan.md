@@ -15,7 +15,7 @@
 把下面这段作为 `/goal` 目标即可直接开跑：
 
 ```text
-在 E:\FinSight 的 feature/evidence-research-agents 分支执行 docs/plans/2026-05-18_evidence_research_agents_goal_plan.md。按 Task 0 到 Task 14 顺序推进，遵守 TDD：每个任务先写或更新测试，再实现最小代码，再运行任务指定验证命令。每个任务完成后更新复核记录；不要跳过 README 大小写冲突、Evidence Ledger 合同、query coverage、DeepSearch 工作集、debate node、SEC 13F/Form 4 工具、前端证据展示和 MCP/A2A 只读暴露的验收门槛。
+在 E:\FinSight 的 feature/evidence-research-agents 分支执行 docs/plans/2026-05-18_evidence_research_agents_goal_plan.md。按 Task 0 到 Task 14 顺序推进，遵守 TDD：每个任务先写或更新测试，再实现最小代码，再运行任务指定验证命令。每个任务完成后更新复核记录；不要跳过 README 大小写核查、Evidence Ledger 合同、query coverage、DeepSearch 工作集、debate node、SEC 13F/Form 4 工具、前端证据展示和 MCP/A2A 只读暴露的验收门槛。
 ```
 
 ---
@@ -56,14 +56,14 @@ A2A_SERVER_ENABLED=false
 
 ---
 
-## Task 0: Branch Hygiene and README Collision
+## Task 0: Branch Hygiene and README Casing Check
 
 **Files:**
-- Inspect: `README.md`, `readme.md`, `readme_cn.md`, `.gitattributes`
-- Modify: `.gitattributes`
+- Inspect: `README.md`, `readme_cn.md`, `.gitattributes`
+- Modify: `docs/11_PRODUCTION_RUNBOOK.md` and `CHANGELOG.md` only if they still reference lowercase `readme.md`
 - Modify: `docs/DOCS_INDEX.md` only if a docs entry changes
 
-- [ ] **Step 0.1: Verify branch and clean worktree**
+- [x] **Step 0.1: Verify branch and tracked README files**
 
 Run:
 
@@ -77,74 +77,63 @@ Expected:
 ```text
 ## feature/evidence-research-agents
 README.md
-readme.md
 readme_cn.md
 ```
 
-- [ ] **Step 0.2: Compare duplicate README entries before changing tracked files**
+- [x] **Step 0.2: Confirm there is no tracked lowercase duplicate**
 
 Run:
 
 ```powershell
-git show HEAD:README.md > $env:TEMP\finsight_README_upper.md
-git show HEAD:readme.md > $env:TEMP\finsight_readme_lower.md
-fc $env:TEMP\finsight_README_upper.md $env:TEMP\finsight_readme_lower.md
-```
-
-Expected: no content differences. If differences appear, stop and preserve both contents in a single canonical `README.md` before removing the duplicate.
-
-- [ ] **Step 0.3: Normalize the duplicate on a Windows-safe path**
-
-Preferred canonical file: `README.md`.
-
-Run in a case-aware shell if available. On Windows PowerShell, use a temporary path:
-
-```powershell
-git config core.ignorecase false
-git rm --cached readme.md
-```
-
-Then ensure the working tree has the canonical file:
-
-```powershell
-git checkout HEAD -- README.md
+git ls-files --stage -- README.md readme.md readme_cn.md .gitattributes
+git show HEAD:readme.md
 ```
 
 Expected:
 
-```powershell
-git ls-files README.md readme.md readme_cn.md
-```
+- `README.md`, `readme_cn.md`, and `.gitattributes` are tracked.
+- `git show HEAD:readme.md` fails with `path 'readme.md' exists on disk, but not in 'HEAD'`.
+- On Windows, `Test-Path .\readme.md` may still return true because the filesystem is case-insensitive; do not treat that as a tracked lowercase file.
 
-prints:
+- [x] **Step 0.3: Do not run duplicate-removal commands**
+
+Do not run:
 
 ```text
-README.md
-readme_cn.md
+git rm --cached readme.md
 ```
 
-- [ ] **Step 0.4: Add a case-collision guard note**
+There is no lowercase README entry in the current index, so removal would be unnecessary and risky on a case-insensitive filesystem.
 
-Modify `.gitattributes` to keep text normalization and add a short comment:
+- [ ] **Step 0.4: Align current documentation references**
+
+Update current documentation that still points to lowercase `readme.md`:
+
+- `docs/11_PRODUCTION_RUNBOOK.md`: use `README.md` / `readme_cn.md`.
+- `CHANGELOG.md` current Unreleased entry: use `README.md` / `readme_cn.md`.
+
+Do not bulk-edit historical `docs/feature_logs`, archived changelogs, or old audit records unless they are being actively maintained.
+
+- [ ] **Step 0.5: Keep `.gitattributes` as the casing guard**
+
+`.gitattributes` should keep:
 
 ```gitattributes
 * text=auto eol=lf
 
-# Keep repository docs case-stable on Windows/macOS case-insensitive filesystems.
 README.md text eol=lf
 readme_cn.md text eol=lf
 
 *.bat text eol=crlf
 *.cmd text eol=crlf
-```
-
-- [ ] **Step 0.5: Validate**
+- [ ] **Step 0.6: Validate**
 
 Run:
 
 ```powershell
 git status --short
-git ls-files README.md readme.md readme_cn.md
+git ls-files --stage -- README.md readme.md readme_cn.md .gitattributes
+rg -n "`readme\.md`" docs\11_PRODUCTION_RUNBOOK.md CHANGELOG.md
 ```
 
 Acceptance:
@@ -152,13 +141,7 @@ Acceptance:
 - `README.md` and `readme_cn.md` are tracked.
 - `readme.md` is no longer tracked.
 - `readme_cn.md` English link points to `./README.md`.
-
-Commit:
-
-```powershell
-git add .gitattributes README.md readme_cn.md
-git commit -m "chore: normalize readme casing"
-```
+- Current docs do not instruct future agents to remove `readme.md`.
 
 ---
 

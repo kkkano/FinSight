@@ -1,0 +1,135 @@
+{
+  "schema_version": "2026-05-18.agent-quality.v1",
+  "cases": [
+    {
+      "id": "fundamental-aapl-quality",
+      "agent": "fundamental",
+      "query": "AAPL 估值、风险、未来三个月看什么？",
+      "ticker": "AAPL",
+      "fixture": {
+        "financials": {
+          "financials": {
+            "columns": ["2026-03-31", "2025-03-31"],
+            "index": ["Total Revenue", "Net Income", "Operating Income"],
+            "data": [
+              {"2026-03-31": 92000000000, "2025-03-31": 88000000000},
+              {"2026-03-31": 24000000000, "2025-03-31": 23000000000},
+              {"2026-03-31": 30000000000, "2025-03-31": 28500000000}
+            ]
+          },
+          "balance_sheet": {
+            "columns": ["2026-03-31", "2025-03-31"],
+            "index": ["Total Assets", "Total Liabilities"],
+            "data": [
+              {"2026-03-31": 360000000000, "2025-03-31": 350000000000},
+              {"2026-03-31": 210000000000, "2025-03-31": 205000000000}
+            ]
+          },
+          "cashflow": {
+            "columns": ["2026-03-31", "2025-03-31"],
+            "index": ["Operating Cash Flow"],
+            "data": [
+              {"2026-03-31": 28000000000, "2025-03-31": 26000000000}
+            ]
+          }
+        },
+        "company_info": "- Name: Apple Inc.\n- Sector: Technology\n- Industry: Consumer Electronics\n- Market Cap: $3.0T",
+        "earnings_estimates": {
+          "revision_signal": "positive",
+          "as_of": "2026-05-18T00:00:00Z",
+          "eps_revisions": [{"period": "next_quarter", "direction": "up"}]
+        },
+        "eps_revisions": {
+          "revision_signal": "positive",
+          "as_of": "2026-05-18T00:00:00Z",
+          "eps_revisions": [{"period": "next_quarter", "direction": "up"}]
+        }
+      },
+      "expect": {
+        "min_evidence_count": 4,
+        "min_claim_count": 3,
+        "min_claim_source_ratio": 1.0,
+        "require_agent_quality_status": "pass",
+        "require_self_check_status": "pass"
+      }
+    },
+    {
+      "id": "news-aapl-quality",
+      "agent": "news",
+      "query": "AAPL 最近新闻哪些是真的催化剂，哪些只是噪音？",
+      "ticker": "AAPL",
+      "fixture": {
+        "news": [
+          {
+            "headline": "Apple services revenue beats expectations",
+            "title": "Apple services revenue beats expectations",
+            "url": "https://www.reuters.com/technology/apple-services-revenue",
+            "source": "Reuters",
+            "datetime": "2026-05-17T12:00:00Z",
+            "confidence": 0.9
+          },
+          {
+            "headline": "Apple shares move after analyst target update",
+            "title": "Apple shares move after analyst target update",
+            "url": "https://finance.yahoo.com/news/apple-analyst-target",
+            "source": "Yahoo Finance",
+            "datetime": "2026-05-17T14:00:00Z",
+            "confidence": 0.78
+          },
+          {
+            "headline": "Apple services revenue beats expectations",
+            "title": "Apple services revenue beats expectations",
+            "url": "https://www.reuters.com/technology/apple-services-revenue",
+            "source": "Reuters",
+            "datetime": "2026-05-17T12:00:00Z",
+            "confidence": 0.9
+          }
+        ],
+        "event_calendar": {
+          "as_of": "2026-05-18T00:00:00Z",
+          "earnings_events": [{"date": "2026-07-25", "event": "earnings"}],
+          "dividend_events": [],
+          "macro_events": []
+        }
+      },
+      "expect": {
+        "min_evidence_count": 2,
+        "min_claim_count": 2,
+        "min_claim_source_ratio": 1.0,
+        "require_agent_quality_status": "pass",
+        "require_self_check_status": "pass"
+      }
+    },
+    {
+      "id": "risk-nvda-quality",
+      "agent": "risk_agent",
+      "query": "NVDA 现在主要风险是什么？",
+      "ticker": "NVDA",
+      "fixture": {
+        "quote": {
+          "price": 920.0,
+          "change_percent": -5.4,
+          "volatility": 0.045,
+          "source": "fixture_quote"
+        },
+        "factor_exposure": {
+          "source": "fixture_factor_model",
+          "factor_beta": {"market": 1.35, "growth": 1.55},
+          "annualized_volatility": 0.42
+        },
+        "stress_test": {
+          "source": "fixture_stress_model",
+          "worst_case_return": -0.16,
+          "scenarios": [{"name": "rate shock", "return": -0.16}]
+        }
+      },
+      "expect": {
+        "min_risk_count": 1,
+        "min_claim_count": 3,
+        "min_claim_source_ratio": 1.0,
+        "require_agent_quality_status": "pass",
+        "require_self_check_status": "pass"
+      }
+    }
+  ]
+}
