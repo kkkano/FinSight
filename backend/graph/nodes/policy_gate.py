@@ -35,6 +35,13 @@ _DEEP_RESEARCH_HINTS: tuple[str, ...] = (
     "财报电话会",
 )
 
+_SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
+    "get_institutional_holdings",
+    "get_institution_holdings_by_ticker",
+    "get_insider_transactions",
+    "get_holdings_overlap",
+)
+
 
 def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
     raw = os.getenv(name)
@@ -151,8 +158,34 @@ def _infer_market_from_task(task: dict, fallback: str) -> str:
     return fallback
 
 
+def _with_us_holdings_tools(tools: list[str], *, subject_type: str, op_name: str, market: str) -> list[str]:
+    if market != "US" or op_name != "holdings" or subject_type not in {"company", "portfolio"}:
+        return tools
+    result = list(tools)
+    seen = set(result)
+    for tool_name in _SEC_HOLDINGS_TOOL_NAMES:
+        if tool_name in seen:
+            continue
+        seen.add(tool_name)
+        result.append(tool_name)
+    return result
+
+
+def _without_holdings_tools(tools: list[str]) -> list[str]:
+    return [tool_name for tool_name in tools if tool_name not in _SEC_HOLDINGS_TOOL_NAMES]
+
+
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
+    if op_name == "holdings" and subject_type in {"company", "portfolio"}:
+        return [
+            "get_institutional_holdings",
+            "get_institution_holdings_by_ticker",
+            "get_insider_transactions",
+            "get_holdings_overlap",
+            "get_current_datetime",
+            "search",
+        ]
     if op_name == "screen":
         return ["screen_stocks", "search", "get_current_datetime"]
     if op_name == "cn_market":
@@ -306,8 +339,10 @@ def policy_gate(state: GraphState) -> dict:
     market_raw = ui_context.get("market") if isinstance(ui_context, dict) else None
     if isinstance(market_raw, str) and market_raw.strip():
         market = str(market_raw).strip().upper()
+        market_explicit = True
     else:
         market = _infer_market_from_subject(subject) or "US"
+        market_explicit = False
     fallback_reason: str | None = None
     try:
         from backend.tools.manifest import select_tools
@@ -322,6 +357,12 @@ def policy_gate(state: GraphState) -> dict:
         if not allowed_tools:
             allowed_tools = _legacy_select_tools(subject_type, op_name)
             fallback_reason = "manifest_empty_selection"
+        allowed_tools = _with_us_holdings_tools(
+            list(allowed_tools),
+            subject_type=str(subject_type).strip().lower(),
+            op_name=op_name,
+            market=market,
+        )
         if subject_type in {"index", "commodity"}:
             for tool_name in _legacy_select_tools(subject_type, op_name):
                 if tool_name not in allowed_tools:
@@ -332,7 +373,7 @@ def policy_gate(state: GraphState) -> dict:
             for task in ready_tasks:
                 task_subject_type = _task_subject_type(task)
                 task_op_name = _task_operation_name(task)
-                task_market = _infer_market_from_task(task, market)
+                task_market = market if market_explicit else _infer_market_from_task(task, market)
                 task_tools = select_tools(
                     subject_type=task_subject_type,
                     operation_name=task_op_name,
@@ -342,6 +383,12 @@ def policy_gate(state: GraphState) -> dict:
                 )
                 if not task_tools:
                     task_tools = _legacy_select_tools(task_subject_type, task_op_name)
+                task_tools = _with_us_holdings_tools(
+                    list(task_tools),
+                    subject_type=task_subject_type,
+                    op_name=task_op_name,
+                    market=task_market,
+                )
                 if task_subject_type in {"index", "commodity"}:
                     task_tools = list(task_tools) + [
                         name for name in _legacy_select_tools(task_subject_type, task_op_name)
@@ -356,16 +403,34 @@ def policy_gate(state: GraphState) -> dict:
     except Exception:
         allowed_tools = _legacy_select_tools(subject_type, op_name)
         fallback_reason = "manifest_exception"
+        allowed_tools = _with_us_holdings_tools(
+            list(allowed_tools),
+            subject_type=str(subject_type).strip().lower(),
+            op_name=op_name,
+            market=market,
+        )
         if ready_tasks:
             union_tools = list(allowed_tools)
             seen_tools = set(union_tools)
             for task in ready_tasks:
-                for tool_name in _legacy_select_tools(_task_subject_type(task), _task_operation_name(task)):
+                task_subject_type = _task_subject_type(task)
+                task_op_name = _task_operation_name(task)
+                task_market = market if market_explicit else _infer_market_from_task(task, market)
+                task_tools = _with_us_holdings_tools(
+                    _legacy_select_tools(task_subject_type, task_op_name),
+                    subject_type=task_subject_type,
+                    op_name=task_op_name,
+                    market=task_market,
+                )
+                for tool_name in task_tools:
                     if tool_name in seen_tools:
                         continue
                     seen_tools.add(tool_name)
                     union_tools.append(tool_name)
             allowed_tools = union_tools
+
+    if market != "US":
+        allowed_tools = _without_holdings_tools(list(allowed_tools))
 
     if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
         allowed_tools = ["fetch_url_content", *allowed_tools]

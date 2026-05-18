@@ -11,6 +11,22 @@ from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 
 
+_SEC_HOLDINGS_ENABLED_VALUES = {"1", "true", "yes", "on"}
+
+
+def _sec_holdings_enabled() -> bool:
+    return str(os.getenv("SEC_HOLDINGS_ENABLED") or "").strip().lower() in _SEC_HOLDINGS_ENABLED_VALUES
+
+
+def _holder_cik_or_name_from_query(query: str) -> str:
+    lowered = str(query or "").lower()
+    if any(token in lowered for token in ("buffett", "berkshire")) or any(
+        token in str(query or "") for token in ("巴菲特", "伯克希尔")
+    ):
+        return "Berkshire Hathaway"
+    return ""
+
+
 def planner_stub(state: GraphState) -> dict:
     """
     Phase 1 stub: produce a minimal PlanIR.
@@ -476,6 +492,89 @@ def planner_stub(state: GraphState) -> dict:
             task_ids=task_ids,
         )
 
+    def _append_holdings_task_steps(task: dict, *, group: str) -> None:
+        if not _sec_holdings_enabled():
+            return
+        if _task_operation_name(task) != "holdings":
+            return
+
+        task_ids = [_task_id(task)]
+        tickers_for_task = _task_tickers(task)
+        subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
+        params = {**_task_operation_params(task)}
+        task_params = task.get("params")
+        if isinstance(task_params, dict):
+            params.update(task_params)
+        holder = str(params.get("holder_cik_or_name") or _holder_cik_or_name_from_query(query) or "").strip()
+        quarter = str(params.get("quarter") or "").strip()
+
+        if subject_for_task == "portfolio":
+            raw_positions = params.get("positions") if isinstance(params.get("positions"), list) else []
+            positions = [
+                item
+                for item in raw_positions
+                if isinstance(item, dict) and str(item.get("ticker") or "").strip()
+            ]
+            if not positions and tickers_for_task:
+                weight = round(1.0 / len(tickers_for_task), 4)
+                positions = [{"ticker": ticker, "weight": weight} for ticker in tickers_for_task[:8]]
+            if positions and holder:
+                inputs: dict = {"positions": positions, "holder_cik_or_name": holder}
+                if quarter:
+                    inputs["quarter"] = quarter
+                _append_tool_step(
+                    "get_holdings_overlap",
+                    inputs,
+                    why="持仓重叠任务：用公开 13F 披露对比用户组合与机构持仓。",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif holder:
+                inputs = {"cik_or_name": holder, "limit": 100}
+                if quarter:
+                    inputs["quarter"] = quarter
+                _append_tool_step(
+                    "get_institutional_holdings",
+                    inputs,
+                    why="持仓任务缺少可对比组合：先读取机构公开 13F 持仓。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            return
+
+        if subject_for_task in {"company", "index", "commodity"}:
+            if holder:
+                inputs = {"cik_or_name": holder, "limit": 100}
+                if quarter:
+                    inputs["quarter"] = quarter
+                _append_tool_step(
+                    "get_institutional_holdings",
+                    inputs,
+                    why="持仓任务：读取指定机构的公开 13F 持仓。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            for ticker in tickers_for_task[:6]:
+                _append_tool_step(
+                    "get_insider_transactions",
+                    {"ticker": ticker, "days": 180, "limit": 50},
+                    why=f"{ticker} 持仓任务：读取公开 Form 4 内部人交易披露。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_institution_holdings_by_ticker",
+                    {"ticker": ticker, "limit": 50},
+                    why=f"{ticker} 持仓任务：读取公开 13F 机构持有人线索。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+
     def _append_theme_task_steps(task: dict, *, group: str) -> None:
         task_ids = [_task_id(task)]
         task_query = str(task.get("subject_label") or query).strip() or query
@@ -533,6 +632,9 @@ def planner_stub(state: GraphState) -> dict:
         if len(ready_tasks) == 1:
             task = ready_tasks[0]
             subject_for_task = str(task.get("subject_type") or "unknown").strip().lower()
+            if _task_operation_name(task) == "holdings":
+                _append_holdings_task_steps(task, group=_task_id(task) or "task_1")
+                return True
             if _task_urls(task) or subject_for_task in {"research_doc", "filing", "news_item", "news_set"}:
                 _append_document_task_steps(task, group=_task_id(task) or "task_1")
                 return True
@@ -565,7 +667,9 @@ def planner_stub(state: GraphState) -> dict:
                 if output_mode == "brief" and subject_for_task in {"company", "index", "commodity"}
                 else (_task_id(task) or f"task_{idx}")
             )
-            if _task_urls(task):
+            if _task_operation_name(task) == "holdings":
+                _append_holdings_task_steps(task, group=group)
+            elif _task_urls(task):
                 _append_document_task_steps(task, group=group)
             elif subject_for_task in {"company", "index", "commodity"}:
                 _append_company_task_steps(task, group=group)

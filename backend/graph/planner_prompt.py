@@ -178,6 +178,7 @@ kind 类型说明：
 - "technical" → 必须包含 get_stock_price + get_technical_snapshot（可并行）
 - "fundamental" → 必须包含 fundamental_agent
 - "news"/"fetch" → 优先 get_company_news 或 search（获取时效性信息）
+- "holdings" → 仅使用 allowlist 中的公开 SEC holdings 工具；公司任务覆盖 get_insider_transactions + get_institution_holdings_by_ticker，组合重叠任务优先 get_holdings_overlap；不要把 "insider information" 当成 Form 4 公开披露请求
 - 用户直接给 URL/网页/文章时：如果 fetch_url_content 在 allowed_tools 中，且回答需要页面正文或来源信息，可调用 fetch_url_content；不要只根据 URL 字面内容臆测文章结论
 - "macro" → 必须包含 macro_agent
 - "qa"/"general" → 根据查询内容选择最少量工具

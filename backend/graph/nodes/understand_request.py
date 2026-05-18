@@ -40,6 +40,42 @@ _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi"
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁更强", "哪个好", "哪个", "compare")
 _ALERT_HINTS = ("提醒", "预警", "到达", "触及", "涨到", "跌到", "跌破", "突破", "低于", "高于", "alert", "notify", "remind me")
 _PORTFOLIO_HINTS = ("持仓", "组合", "仓位", "调仓", "portfolio", "holdings", "rebalance")
+_HOLDINGS_HINTS = (
+    "13f",
+    "form 4",
+    "form4",
+    "insider",
+    "institutional holdings",
+    "superinvestor",
+    "buffett",
+    "berkshire",
+    "名义持仓",
+    "机构持仓",
+    "名人持仓",
+    "内部人交易",
+    "增持",
+    "减持",
+    "加仓",
+    "巴菲特",
+    "伯克希尔",
+)
+_PRIVATE_INSIDER_INFO_HINTS = (
+    "insider information",
+    "inside information",
+    "material nonpublic",
+    "mnpi",
+    "内幕消息",
+    "内幕信息",
+    "未公开重大信息",
+)
+_PUBLIC_INSIDER_DISCLOSURE_HINTS = (
+    "form 4",
+    "form4",
+    "insider transaction",
+    "insider transactions",
+    "insider 买卖",
+    "内部人交易",
+)
 _MACRO_HINTS = (
     "美联储", "联储", "降息", "加息", "利率", "fomc", "fed", "cpi", "ppi", "通胀",
     "国债", "收益率", "宏观", "大盘", "纳指", "公告", "大型科技股", "科技股估值", "market",
@@ -80,6 +116,37 @@ _THEME_HINTS = (*_THEME_HINTS, "semiconductor", "semiconductors", "sector", "chi
 def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(h.lower() in lowered for h in hints)
+
+
+def _is_private_insider_information_request(query: str) -> bool:
+    lowered = str(query or "").lower()
+    if not any(token in lowered for token in _PRIVATE_INSIDER_INFO_HINTS):
+        return False
+    return not any(token in lowered for token in _PUBLIC_INSIDER_DISCLOSURE_HINTS)
+
+
+def _has_holdings_intent(query: str) -> bool:
+    if _is_private_insider_information_request(query):
+        return False
+    return _contains_any(query, _HOLDINGS_HINTS)
+
+
+def _holder_cik_or_name_from_query(query: str) -> str:
+    if _contains_any(query, ("buffett", "berkshire", "巴菲特", "伯克希尔")):
+        return "Berkshire Hathaway"
+    return ""
+
+
+def _holdings_intent_params(query: str) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    holder = _holder_cik_or_name_from_query(query)
+    if holder:
+        params["holder_cik_or_name"] = holder
+    if _contains_any(query, ("form 4", "form4", "insider", "内部人交易")):
+        params["focus"] = "insider_transactions"
+    elif _contains_any(query, ("13f", "institutional holdings", "机构持仓", "名人持仓", "名义持仓", "增持", "减持", "加仓")):
+        params["focus"] = "institutional_holdings"
+    return params
 
 
 def _is_lightweight_representative_compare(query: str) -> bool:
@@ -1198,6 +1265,79 @@ def _positions_from_ui_context(ui_context: dict[str, Any]) -> list[dict[str, Any
     return rows
 
 
+def _holdings_portfolio_context_available(
+    query: str,
+    ui_context: dict[str, Any],
+    tickers: list[str],
+) -> bool:
+    if _portfolio_context_available(query, ui_context):
+        return True
+    lowered = str(query or "").lower()
+    if tickers and ("我的" in query or "my " in lowered) and _contains_any(query, ("组合", "portfolio")):
+        return True
+    return False
+
+
+def _add_holdings_intent_tasks(
+    tasks: list[dict[str, Any]],
+    *,
+    query: str,
+    tickers: list[str],
+    ui_context: dict[str, Any],
+) -> bool:
+    if not _has_holdings_intent(query):
+        return False
+
+    params = _holdings_intent_params(query)
+    operation = _operation("holdings", 0.84, params)
+    if _holdings_portfolio_context_available(query, ui_context, tickers):
+        portfolio_tickers = tickers or _portfolio_tickers_from_context(ui_context)
+        _add_task(
+            tasks,
+            subject_type="portfolio",
+            subject_label="当前组合",
+            operation=operation,
+            query=query,
+            tickers=portfolio_tickers,
+            priority=18,
+            reason="holdings_intent_portfolio",
+            params={**params, "positions": _positions_from_ui_context(ui_context)},
+        )
+        return True
+
+    if tickers:
+        for ticker in tickers[:6]:
+            _add_task(
+                tasks,
+                subject_type=_subject_type_for_ticker(ticker),
+                subject_label=ticker,
+                operation=operation,
+                query=query,
+                tickers=[ticker],
+                priority=20,
+                reason="holdings_intent_company",
+                params=params,
+            )
+        return True
+
+    holder = params.get("holder_cik_or_name")
+    if holder:
+        _add_task(
+            tasks,
+            subject_type="company",
+            subject_label=str(holder),
+            operation=operation,
+            query=query,
+            tickers=[],
+            priority=20,
+            reason="holdings_intent_institution",
+            params=params,
+        )
+        return True
+
+    return False
+
+
 def _binding_context_ref(binding: Any, *, value: Any = "") -> dict[str, Any]:
     return {
         "source": "conversation_context",
@@ -1589,6 +1729,15 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 f"按你正在看的 {active} 处理，如不是请告诉我具体哪只。"
             )
 
+    holdings_intent_handled = False
+    if not blocked_tasks and (not context_router_research_bound or context_binding_source == "selection"):
+        holdings_intent_handled = _add_holdings_intent_tasks(
+            tasks,
+            query=query,
+            tickers=tickers,
+            ui_context=ui_context,
+        )
+
     if not blocked_tasks and not context_router_research_bound and selection_ids and context_binding_source != "selection":
         selection_tickers = tickers
         if (
@@ -1621,7 +1770,12 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             reason="ui_selection",
         )
 
-    if not blocked_tasks and (not context_router_research_bound or context_binding_source == "selection") and tickers:
+    if (
+        not blocked_tasks
+        and not holdings_intent_handled
+        and (not context_router_research_bound or context_binding_source == "selection")
+        and tickers
+    ):
         multi_ticker_report = len(tickers) >= 2 and _explicit_report_mode(state, output_mode)
         multi_ticker_compare = len(tickers) >= 2 and (
             (
@@ -1749,7 +1903,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             )
 
     has_portfolio = _contains_any(query, _PORTFOLIO_HINTS)
-    if not blocked_tasks and not context_router_research_bound and has_portfolio:
+    if not blocked_tasks and not holdings_intent_handled and not context_router_research_bound and has_portfolio:
         if _portfolio_context_available(query, ui_context):
             portfolio_tickers = tickers or _portfolio_tickers_from_context(ui_context)
             positions = _positions_from_ui_context(ui_context)
