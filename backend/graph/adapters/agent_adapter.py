@@ -11,6 +11,7 @@ from typing import Any, Iterable, Mapping
 from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
 from backend.graph.preference_timeouts import timeout_seconds_from_state
+from backend.research.claim_extractor import extract_claims_from_agent_output
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,8 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
     trace = payload.get("trace")
     if not isinstance(trace, list):
         payload["trace"] = []
+
+    payload["claims"] = extract_claims_from_agent_output(payload, query=query, ticker=ticker)
 
     return payload
 
