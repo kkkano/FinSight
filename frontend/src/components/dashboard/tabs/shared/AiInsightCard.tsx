@@ -16,6 +16,7 @@ import type { InsightCard, SelectionItem } from '../../../../types/dashboard';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
 import { InsightScoreRing } from './InsightScoreRing';
 import { InsightSkeleton } from './InsightSkeleton';
+import { SourceTrustBadge } from '../../../source/SourceTrustBadge';
 
 // --- Tab display config ---
 
@@ -318,9 +319,12 @@ export function AiInsightCard({
 
       {/* Footer: source + staleness */}
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-fin-border/30">
-        <span className="text-2xs text-fin-muted">
-          {insight.model_generated ? '基于 AI 分析' : '基于规则评分'}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <SourceTrustBadge modelGenerated={insight.model_generated} degraded={stale || Boolean(error)} />
+          <span className="text-2xs text-fin-muted">
+            {insight.model_generated ? '基于 AI 分析' : '基于规则评分'}
+          </span>
+        </div>
         {stale && (
           <span className="text-2xs text-fin-muted flex items-center gap-1">
             <span className="opacity-60">🕐</span>

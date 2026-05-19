@@ -3,6 +3,7 @@ import { AlertTriangle, Info, XCircle } from 'lucide-react';
 
 import { Dialog } from '../ui';
 import type { DataSourceMeta } from '../../types/dashboard';
+import { SourceTrustBadge } from '../source/SourceTrustBadge';
 
 interface DataSourceTraceProps {
   meta?: Record<string, DataSourceMeta>;
@@ -175,7 +176,13 @@ export function DataSourceTrace({ meta }: DataSourceTraceProps) {
             <section key={row.key} className="rounded-lg border border-fin-border bg-fin-bg/60 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-fin-text">{row.label}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium text-fin-text">{row.label}</div>
+                    <SourceTrustBadge
+                      sourceType={row.meta.source_type}
+                      fallbackUsed={row.meta.fallback_used}
+                    />
+                  </div>
                   <div className="text-xs text-fin-muted mt-0.5">
                     {row.meta.provider} / {row.meta.source_type}
                   </div>

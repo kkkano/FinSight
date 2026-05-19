@@ -5,6 +5,7 @@ import { normalizeMarkdown } from '../../utils/markdown';
 import type { ReportIR, Sentiment, CoreViewpoint } from '../../types/index';
 import { TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import type { BadgeInfo, ReportHints } from './ReportUtils';
+import { SourceTrustBadge } from '../source/SourceTrustBadge';
 
 /* ------------------------------------------------------------------ */
 /*  Small badge sub-components                                         */
@@ -241,6 +242,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
           <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.freshness.tone}`}>
             {evidenceBadges.freshness.label}
           </span>
+          <SourceTrustBadge sourceType="report" />
         </div>
         <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
           <CoreViewpointsSection
@@ -280,6 +282,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${evidenceBadges.freshness.tone}`}>
           {evidenceBadges.freshness.label}
         </span>
+        <SourceTrustBadge sourceType="report" />
       </div>
 
       {/* Summary box */}

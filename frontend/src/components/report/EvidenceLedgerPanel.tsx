@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronDown, ExternalLink, FileSearch } from 'lucide-react';
 
 import type { EvidenceLedger, ResearchClaim, SourceRef } from '../../types/index';
+import { SourceTrustBadge } from '../source/SourceTrustBadge';
 
 export interface EvidenceLedgerPanelProps {
   ledger?: EvidenceLedger | null;
@@ -99,6 +100,14 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
                             <span className="truncate font-medium">{source.title || source.source_id}</span>
                           )}
                           {externalUrl && <ExternalLink size={11} className="shrink-0 text-fin-muted" />}
+                          <SourceTrustBadge
+                            sourceId={source.source_id}
+                            sourceType={typeof source.source_type === 'string' ? source.source_type : undefined}
+                            fallbackUsed={Boolean(source.fallback_used)}
+                            degraded={Boolean(source.degraded_mode)}
+                            status={typeof source.status === 'string' ? source.status : undefined}
+                            className="shrink-0"
+                          />
                         </div>
                         <div className="mt-0.5 truncate text-2xs text-fin-muted">{sourceDomain(source)}</div>
                       </div>

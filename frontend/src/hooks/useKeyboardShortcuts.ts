@@ -1,6 +1,20 @@
 import { useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 
+interface KeyboardShortcutEvent {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}
+
+export const isCommandPaletteShortcut = (event: KeyboardShortcutEvent): boolean => {
+  const isMod = Boolean(event.metaKey || event.ctrlKey);
+  return isMod && String(event.key || '').toLowerCase() === 'k';
+};
+
+export const isRightPanelShortcut = (event: KeyboardShortcutEvent): boolean =>
+  Boolean(event.ctrlKey) && ['/', '?'].includes(String(event.key || ''));
+
 /**
  * 全局键盘快捷键 hook
  *
@@ -21,11 +35,8 @@ export function useKeyboardShortcuts(handlers: {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      // 判断是否为 macOS 系统键
-      const isMod = event.metaKey || event.ctrlKey;
-
       // Ctrl+K / Cmd+K: 切换命令面板
-      if (isMod && event.key === 'k') {
+      if (isCommandPaletteShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         handlers.onToggleCommandPalette();
@@ -33,7 +44,7 @@ export function useKeyboardShortcuts(handlers: {
       }
 
       // Ctrl+/ : 切换右侧面板显示
-      if (event.ctrlKey && event.key === '/') {
+      if (isRightPanelShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         toggleRightPanel();

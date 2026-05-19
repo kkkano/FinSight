@@ -7,6 +7,7 @@ import {
   setRagInspectorDevAuthActive,
   verifyRagInspectorDevAccessPassword,
 } from '../../auth/devAuth';
+import { buildRagInspectorAccessDiagnostics } from '../../auth/ragInspectorAccess';
 import { getSupabaseClient, isSupabaseAuthConfigured } from '../../api/supabaseClient';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from '../../store/useStore';
@@ -99,6 +100,14 @@ export function WelcomePage() {
   const redirectPath = resolveFallbackPath(new URLSearchParams(location.search).get('from'));
   const requiresAuthenticatedEntry = isAuthenticatedOnlyPath(redirectPath);
   const devAuthReady = useMemo(() => isRagInspectorDevAuthAvailable(), []);
+  const ragAccessDiagnostics = useMemo(
+    () => buildRagInspectorAccessDiagnostics({
+      requiresAuthenticatedEntry,
+      supabaseReady,
+      devAuthReady,
+    }),
+    [requiresAuthenticatedEntry, supabaseReady, devAuthReady],
+  );
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(formatClock()), 1000);
@@ -466,7 +475,7 @@ export function WelcomePage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold text-[var(--bb-text)]">接入工作台</h2>
-              <p className="mt-1 text-sm text-[var(--bb-text-dim)]">统一使用邮箱验证码登录/注册</p>
+              <p className="mt-1 text-sm text-[var(--bb-text-dim)]">匿名本地会话最快；需要跨设备时再登录</p>
             </div>
             <button
               type="button"
@@ -506,6 +515,25 @@ export function WelcomePage() {
             </div>
           ) : (
             <div className="mt-7 space-y-4">
+              {!requiresAuthenticatedEntry ? (
+                <>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={handleAnonymousEnter}
+                    className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] !text-black font-semibold"
+                  >
+                    匿名体验（本地会话）
+                  </Button>
+
+                  <div className="my-4 flex items-center gap-3 text-xs text-[var(--bb-text-dim)]">
+                    <div className="h-px flex-1 bg-[var(--bb-border)]" />
+                    或用邮箱登录
+                    <div className="h-px flex-1 bg-[var(--bb-border)]" />
+                  </div>
+                </>
+              ) : null}
+
               <Input
                 label="邮箱"
                 type="email"
@@ -553,21 +581,6 @@ export function WelcomePage() {
                 {verifying ? '验证中...' : '验证并登录'}
               </Button>
 
-              <div className="my-4 flex items-center gap-3 text-xs text-[var(--bb-text-dim)]">
-                <div className="h-px flex-1 bg-[var(--bb-border)]" />
-                或
-                <div className="h-px flex-1 bg-[var(--bb-border)]" />
-              </div>
-
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={handleAnonymousEnter}
-                className="w-full !border-[var(--bb-border)] !bg-transparent !text-[var(--bb-text)] hover:!bg-[var(--bb-surface-2)]"
-              >
-                匿名体验（数据仅存本地）
-              </Button>
-
               {false && requiresAuthenticatedEntry && devAuthReady ? (
                 <Button
                   variant="secondary"
@@ -611,8 +624,23 @@ export function WelcomePage() {
               ) : null}
 
               {requiresAuthenticatedEntry ? (
-                <div className="mt-3 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[rgba(255,140,0,0.08)] px-3 py-2 text-xs text-[var(--bb-text-dim)] leading-6">
-                  当前目标页是 RAG Inspector；它默认只对登录用户开放，匿名模式不会放行。
+                <div className="mt-3 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[rgba(255,140,0,0.08)] px-3 py-3 text-xs text-[var(--bb-text-dim)] leading-6">
+                  <div className="flex items-start gap-2">
+                    <CircleAlert size={14} className="mt-1 shrink-0 text-[var(--bb-orange)]" />
+                    <div className="min-w-0">
+                      <div className="font-semibold text-[var(--bb-text)]">{ragAccessDiagnostics.title}</div>
+                      <ul className="mt-1 space-y-1">
+                        {ragAccessDiagnostics.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                      {ragAccessDiagnostics.nextSteps.length > 0 ? (
+                        <div className="mt-2 text-[var(--bb-orange)]">
+                          {ragAccessDiagnostics.nextSteps.join(' ')}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               ) : null}
 

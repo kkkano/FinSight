@@ -33,10 +33,12 @@ const fmtRatio = (v: number | null | undefined): string => {
   return v.toFixed(1);
 };
 
-/** Format a percentage (dividend yield) */
-const fmtPct = (v: number | null | undefined): string => {
+/** Format a dividend yield that may arrive as ratio (0.0036) or percent points (0.36). */
+export const formatDividendYield = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '--';
-  return `${(v * 100).toFixed(2)}%`;
+  if (!Number.isFinite(v)) return '--';
+  const normalized = Math.abs(v) >= 0.2 ? v : v * 100;
+  return `${normalized.toFixed(2)}%`;
 };
 
 /** Format a price (52-week range) */
@@ -71,7 +73,7 @@ function buildMetrics(
     { label: 'P/E', value: fmtRatio(v.trailing_pe) },
     { label: 'P/B', value: fmtRatio(v.price_to_book) },
     { label: 'EPS', value: s.eps !== null && s.eps !== undefined ? `$${s.eps.toFixed(2)}` : '--' },
-    { label: '股息率', value: fmtPct(v.dividend_yield) },
+    { label: '股息率', value: formatDividendYield(v.dividend_yield) },
     { label: '52周范围', value: rangeStr },
     { label: 'Beta', value: fmtRatio(v.beta) },
   ];

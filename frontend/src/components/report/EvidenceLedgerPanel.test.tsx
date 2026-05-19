@@ -20,7 +20,7 @@ describe('EvidenceLedgerPanel', () => {
           claim_id: 'claim:aapl:margin',
           claim: 'Apple margin improved year over year.',
           stance: 'bull',
-          evidence_ids: ['source:sec:aapl'],
+          evidence_ids: ['agent_source:sec:aapl'],
           confidence: 0.81,
           agent_name: 'fundamental_agent',
           task_ids: ['task-1'],
@@ -29,7 +29,7 @@ describe('EvidenceLedgerPanel', () => {
       ],
       sources: [
         {
-          source_id: 'source:sec:aapl',
+          source_id: 'agent_source:sec:aapl',
           title: 'Apple quarterly report',
           url: 'https://www.sec.gov/Archives/edgar/data/aapl.htm',
           source: 'SEC EDGAR',
@@ -54,6 +54,7 @@ describe('EvidenceLedgerPanel', () => {
     expect(text).toContain('2026-05-02T09:30:00');
     expect(text).toContain('92%');
     expect(text).toContain('kb');
+    expect(text).toContain('agent-backed');
   });
 
   it('shows a compact empty state for a missing ledger instead of raw JSON', () => {

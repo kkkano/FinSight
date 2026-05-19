@@ -204,6 +204,14 @@ function App() {
     setIsCommandPaletteOpen(false);
   }, []);
 
+  useEffect(() => {
+    const handleOpenCommandPalette = () => setIsCommandPaletteOpen(true);
+    window.addEventListener('finsight:open-command-palette', handleOpenCommandPalette);
+    return () => {
+      window.removeEventListener('finsight:open-command-palette', handleOpenCommandPalette);
+    };
+  }, []);
+
   useKeyboardShortcuts({
     onToggleCommandPalette: handleToggleCommandPalette,
     isCommandPaletteOpen,

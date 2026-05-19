@@ -2,6 +2,7 @@
 import {
   BarChart2,
   Bell,
+  Command,
   Search,
   FileText,
   LayoutDashboard,
@@ -342,6 +343,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               setActiveTab('workbench');
               onWorkbenchClick?.();
+            }}
+          />
+
+          <NavItem
+            icon={<Command size={18} />}
+            label="命令面板"
+            testId="sidebar-nav-command-palette"
+            active={false}
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('finsight:open-command-palette'));
+              onMobileClose?.();
             }}
           />
 

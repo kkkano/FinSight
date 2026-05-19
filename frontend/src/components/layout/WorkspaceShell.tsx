@@ -1,19 +1,19 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
-import { Menu } from 'lucide-react';
+import { AlertTriangle, Menu, WifiOff } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import { SettingsModal } from '../SettingsModal';
 import { SubscribeModal } from '../SubscribeModal';
 import { useStore } from '../../store/useStore';
 import { useIsMobileLayout } from '../../hooks/useIsMobileLayout';
 import { useMarketQuotes } from '../../hooks/useMarketQuotes';
-import { useToast } from '../ui/Toast';
 import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { WorkbenchWorkspace } from './WorkbenchWorkspace';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
+import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 
 export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
 
@@ -63,28 +63,29 @@ export function WorkspaceShell({
   const isMobile = useIsMobileLayout();
   const { theme, setTheme, showRightPanel, setShowRightPanel } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
-  const { toast } = useToast();
+  const [workspaceHealth, setWorkspaceHealth] = useState<WorkspaceHealthStatus | null>(null);
 
-  // 启动时检查 dry_run 状态并提示用户
+  // 启动时检查 dry_run / 后端可达性，并用状态条持久展示。
   useEffect(() => {
+    let isMounted = true;
     const checkDryRun = async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/health`);
         const data = await res.json();
-        if (data?.components?.live_tools?.status === 'dry_run') {
-          toast({
-            type: 'warning',
-            title: 'Dry-run 模式',
-            message: '当前为模拟模式，不执行实际工具调用。设置 LANGGRAPH_EXECUTE_LIVE_TOOLS=true 启用。',
-            duration: 8000,
-          });
-        }
+        if (isMounted) setWorkspaceHealth(buildWorkspaceHealthStatus(data));
       } catch {
-        // 健康检查失败时静默忽略
+        if (isMounted) setWorkspaceHealth(buildWorkspaceHealthStatus(null));
       }
     };
     checkDryRun();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) setShowRightPanel(false);
+  }, [isMobile, setShowRightPanel]);
   // No AAPL fallback — empty string means "no symbol selected"
   const preferredSymbol = (view === 'workbench' ? (workbenchSymbol || dashboardSymbol) : dashboardSymbol) || '';
 
@@ -207,6 +208,27 @@ export function WorkspaceShell({
 
       <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
         <ExecutionBanner />
+        {workspaceHealth && workspaceHealth.state !== 'ok' ? (
+          <div
+            data-testid="workspace-health-banner"
+            className={[
+              'mx-3 mt-3 shrink-0 rounded-lg border px-3 py-2 text-xs flex items-start gap-2',
+              workspaceHealth.state === 'dry_run'
+                ? 'border-fin-warning/40 bg-fin-warning/10 text-fin-warning'
+                : 'border-fin-danger/40 bg-fin-danger/10 text-fin-danger',
+            ].join(' ')}
+          >
+            {workspaceHealth.state === 'dry_run' ? (
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            ) : (
+              <WifiOff size={14} className="mt-0.5 shrink-0" />
+            )}
+            <div className="min-w-0">
+              <div className="font-semibold">{workspaceHealth.title}</div>
+              <div className="mt-0.5 text-fin-text-secondary">{workspaceHealth.message}</div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {view === 'dashboard' ? (

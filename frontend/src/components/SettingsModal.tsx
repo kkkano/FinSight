@@ -177,12 +177,21 @@ const sanitizeEndpointsForSave = (endpoints: LlmEndpointConfig[] | undefined): L
     .map((item) => item.value);
 };
 
+type SettingsLayer = 'basic' | 'advanced' | 'diagnostics';
+
+const SETTINGS_LAYERS: Array<{ id: SettingsLayer; label: string }> = [
+  { id: 'basic', label: '基础设置' },
+  { id: 'advanced', label: '高级设置' },
+  { id: 'diagnostics', label: '运行诊断' },
+];
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [config, setConfig] = useState<UserConfig>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showLegacyApiKey, setShowLegacyApiKey] = useState(false);
   const [showEndpointApiKeys, setShowEndpointApiKeys] = useState<Record<number, boolean>>({});
+  const [activeLayer, setActiveLayer] = useState<SettingsLayer>('basic');
 
   const {
     theme,
@@ -384,9 +393,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </Button>
         </div>
 
+        <div className="sticky top-[57px] z-10 border-b border-fin-border bg-fin-panel px-4 py-2">
+          <div className="grid grid-cols-3 gap-2">
+            {SETTINGS_LAYERS.map((layer) => (
+              <button
+                key={layer.id}
+                type="button"
+                onClick={() => setActiveLayer(layer.id)}
+                className={[
+                  'rounded-md border px-3 py-2 text-xs font-medium transition-colors',
+                  activeLayer === layer.id
+                    ? 'border-fin-primary bg-fin-primary/10 text-fin-primary'
+                    : 'border-fin-border text-fin-text-secondary hover:border-fin-primary/50 hover:text-fin-text',
+                ].join(' ')}
+              >
+                {layer.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* LLM 配置 — 使用共享 Card 组件 */}
+          {activeLayer === 'basic' ? (
           <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">LLM 配置（可选）</h3>
             <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -450,8 +480,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             </div>
           </Card>
+          ) : null}
 
           {/* LLM 多 Endpoint 轮换 — 使用共享 Card 组件 */}
+          {activeLayer === 'advanced' ? (
           <Card className="p-4 bg-fin-bg/40" data-testid="settings-endpoints-section">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-fin-text">LLM Endpoints（轮换池）</h3>
@@ -614,11 +646,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               保存时会写入 `llm_endpoints[]`。主用 endpoint（优先启用中的第一个）会同步回填到 legacy 字段以保持兼容。
             </p>
           </Card>
+          ) : null}
 
           {/* Agent 控制面板 */}
-          <AgentControlPanel />
+          {activeLayer === 'advanced' ? <AgentControlPanel /> : null}
 
           {/* 界面布局 — 使用共享 Card 组件 */}
+          {activeLayer === 'basic' ? (
           <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">界面布局</h3>
             <div className="flex gap-4 text-sm">
@@ -644,8 +678,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </label>
             </div>
           </Card>
+          ) : null}
 
           {/* 外观 — 使用共享 Card 组件 */}
+          {activeLayer === 'basic' ? (
           <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">外观主题</h3>
             <div className="flex gap-4">
@@ -669,8 +705,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </button>
             </div>
           </Card>
+          ) : null}
 
           {/* Trace 可见性 — 使用共享 Card 组件 */}
+          {activeLayer === 'advanced' ? (
           <Card className="p-4 bg-fin-bg/40">
             <h3 className="text-sm font-medium text-fin-text mb-3">Trace 可见性</h3>
             <div className="grid md:grid-cols-2 gap-3 text-sm">
@@ -747,8 +785,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               默认开启。采集开关会随请求透传到后端，并即时影响当前会话。
             </p>
           </Card>
+          ) : null}
 
           {/* 系统诊断 — 使用共享 Card 组件 */}
+          {activeLayer === 'diagnostics' ? (
           <Card className="p-4 bg-fin-bg/40">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-fin-text flex items-center gap-2">
@@ -808,13 +848,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             </div>
           </Card>
+          ) : null}
 
           {/* 提示 */}
+          {activeLayer === 'basic' ? (
           <div className="p-3 bg-fin-bg border border-fin-border rounded text-xs text-fin-muted">
             💡 <strong>提示</strong>：所有配置项都是可选的。如果不填写，系统将使用后端默认配置。
             <br />
             API Key 仅存储在浏览器本地，不会上传到服务器。
           </div>
+          ) : null}
         </div>
 
         {/* Footer — 使用共享 Button 组件 */}
