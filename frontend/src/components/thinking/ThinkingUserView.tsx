@@ -347,7 +347,12 @@ function extractAgents(steps: ThinkingStep[]): AgentEntry[] {
     }
   }
 
-  return [...map.values()].map(({ _start, _end, ...rest }) => rest);
+  return [...map.values()].map((entry) => {
+    const rest = { ...entry };
+    delete rest._start;
+    delete rest._end;
+    return rest;
+  });
 }
 
 /* ===== Sub Components ===== */

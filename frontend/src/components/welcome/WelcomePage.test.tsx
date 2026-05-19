@@ -1,9 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../ui';
 import { WelcomePage } from './WelcomePage';
+
+vi.mock('../../api/supabaseClient', () => ({
+  getSupabaseClient: () => null,
+  isSupabaseAuthConfigured: () => false,
+}));
+
+vi.mock('../../auth/devAuth', () => ({
+  getRagInspectorDevIdentity: () => null,
+  isRagInspectorDevAuthAvailable: () => false,
+  setRagInspectorDevAuthActive: () => undefined,
+  verifyRagInspectorDevAccessPassword: () => false,
+}));
 
 const renderWelcomeText = (path: string) =>
   renderToStaticMarkup(

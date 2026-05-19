@@ -581,17 +581,6 @@ export function WelcomePage() {
                 {verifying ? '验证中...' : '验证并登录'}
               </Button>
 
-              {false && requiresAuthenticatedEntry && devAuthReady ? (
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={handleDevAuthEnter}
-                  className="mt-3 w-full !border-[rgba(255,140,0,0.35)] !bg-[var(--bb-orange-dim)] !text-[var(--bb-text)] hover:!bg-[rgba(255,140,0,0.18)]"
-                >
-                  开发模式进入 RAG Inspector
-                </Button>
-              ) : null}
-
               {requiresAuthenticatedEntry && devAuthReady ? (
                 <div className="mt-3 space-y-3 rounded-lg border border-[rgba(255,140,0,0.25)] bg-[rgba(255,140,0,0.08)] px-3 py-3">
                   <Input

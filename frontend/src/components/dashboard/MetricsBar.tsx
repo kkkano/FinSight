@@ -34,6 +34,7 @@ const fmtRatio = (v: number | null | undefined): string => {
 };
 
 /** Format a dividend yield that may arrive as ratio (0.0036) or percent points (0.36). */
+// eslint-disable-next-line react-refresh/only-export-components
 export const formatDividendYield = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '--';
   if (!Number.isFinite(v)) return '--';

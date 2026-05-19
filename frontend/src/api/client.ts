@@ -285,6 +285,7 @@ api.interceptors.request.use(async (config) => {
       const { data } = await client.auth.getSession();
       accessToken = data.session?.access_token || null;
     } catch {
+      // Session probing is best-effort; fall back to the local dev token below.
     }
   }
 

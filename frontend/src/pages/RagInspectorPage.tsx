@@ -369,6 +369,7 @@ const copyTextToClipboard = async (value: string): Promise<boolean> => {
       await navigator.clipboard.writeText(nextValue);
       return true;
     } catch {
+      // Clipboard writes can fail under browser permissions; use the textarea fallback.
     }
   }
 

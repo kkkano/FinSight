@@ -31,6 +31,7 @@ const BADGE_TITLES: Record<SourceTrustKind, string> = {
   degraded: '当前来源存在降级、回退或错误',
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const resolveSourceTrustBadge = (input: SourceTrustInput): SourceTrustBadgeInfo => {
   const sourceType = String(input.sourceType || '').toLowerCase();
   const sourceId = String(input.sourceId || '').toLowerCase();
