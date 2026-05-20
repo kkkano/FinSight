@@ -8,6 +8,8 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote_plus, urlparse
 
+from backend.config.ticker_mapping import extract_tickers as _extract_mapped_tickers
+
 from .http import _http_get
 
 _AUTHORITATIVE_DOMAINS = frozenset({
@@ -88,10 +90,12 @@ def _query_tokens(query: str) -> list[str]:
 
 
 def _extract_tickers(query: str) -> list[str]:
-    raw = str(query or "").upper()
-    if not raw:
-        return []
-    tickers = [t for t in re.findall(r"\b[A-Z]{1,5}(?:\.[A-Z]{1,2})?\b", raw) if len(t) <= 8]
+    meta = _extract_mapped_tickers(str(query or ""))
+    tickers = [
+        str(ticker or "").strip().upper()
+        for ticker in (meta.get("tickers") if isinstance(meta, dict) else [])
+        if str(ticker or "").strip()
+    ]
     uniq: list[str] = []
     seen: set[str] = set()
     for ticker in tickers:

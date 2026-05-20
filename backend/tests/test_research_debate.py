@@ -84,6 +84,21 @@ def test_build_debate_artifact_splits_bull_bear_and_judges():
     assert artifact["open_questions"]
 
 
+def test_build_debate_artifact_outputs_read_only_adjudications():
+    from backend.research.debate import build_debate_artifact
+
+    artifact = build_debate_artifact(_ledger(), query="NVDA investment debate")
+
+    adjudications = artifact.get("adjudications") or []
+    assert adjudications
+    first = adjudications[0]
+    assert first["topic"]
+    assert first["supporting_agents"]
+    assert first["opposing_agents"]
+    assert first["adjudication"] in {"bull", "bear", "mixed", "insufficient"}
+    assert first["rationale"]
+
+
 def test_research_debate_node_respects_flag_and_missing_ledger(monkeypatch):
     from backend.graph.nodes.research_debate import research_debate
 

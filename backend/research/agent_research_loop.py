@@ -79,6 +79,14 @@ def _gap_for_reason(reason: str, *, query: str, ticker: str, metrics: dict[str, 
             "description": "Evidence freshness metadata is missing or sparse.",
             "tool_hint": "source_refresh",
         }
+    if reason == "low_source_quality":
+        return {
+            **base,
+            "code": "verify_source_quality",
+            "severity": "medium",
+            "description": "At least one evidence item has explicitly low confidence.",
+            "tool_hint": "authoritative_source_lookup",
+        }
     return None
 
 
@@ -92,6 +100,8 @@ def _action_for_gap(gap: dict[str, Any]) -> dict[str, Any]:
         action = "relink_claims_to_evidence"
     elif code == "refresh_sources":
         action = "refresh_or_timestamp_evidence"
+    elif code == "verify_source_quality":
+        action = "verify_or_replace_low_confidence_source"
     else:
         action = "inspect_agent_output"
     return {

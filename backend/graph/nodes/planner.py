@@ -337,6 +337,11 @@ def _repair_json_text(text: str) -> str:
     repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
     repaired = re.sub(r"([{,]\s*)'([^'\\]+?)'(\s*:)", r'\1"\2"\3', repaired)
     repaired = re.sub(r"([{,]\s*)([A-Za-z_][A-Za-z0-9_\-]*)(\s*:)", r'\1"\2"\3', repaired)
+    repaired = re.sub(
+        r'((?:"(?:[^"\\]|\\.)*"|[\]\}]|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?))(\s*\n\s*)"([^"\n]+)"(\s*:)',
+        r'\1,\2"\3"\4',
+        repaired,
+    )
 
     def _replace_single_quoted_value(match: re.Match[str]) -> str:
         body = match.group(1).replace('\\"', '"').replace("\\'", "'")
@@ -399,6 +404,80 @@ def _build_json_retry_prompt(
     )
 
 
+_PLAN_SHAPE_REQUIRED_KEYS = ("goal", "subject", "output_mode", "steps", "budget", "synthesis")
+
+
+class PlannerSchemaShapeError(ValueError):
+    """Raised when JSON is parseable but is not shaped like a PlanIR payload."""
+
+
+def _parse_planner_json_output(raw_text: str) -> tuple[Any, dict[str, Any]]:
+    json_text = _extract_json_object(raw_text)
+    return _load_json_with_repair(json_text)
+
+
+def _assert_planner_payload_shape(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PlannerSchemaShapeError("PlanIR payload must be a JSON object")
+
+    missing = [key for key in _PLAN_SHAPE_REQUIRED_KEYS if key not in payload]
+    type_errors: list[str] = []
+    if "goal" in payload and not isinstance(payload.get("goal"), str):
+        type_errors.append("goal must be a string")
+    if "subject" in payload and not isinstance(payload.get("subject"), dict):
+        type_errors.append("subject must be an object")
+    if "output_mode" in payload and not isinstance(payload.get("output_mode"), str):
+        type_errors.append("output_mode must be a string")
+    if "steps" in payload and not isinstance(payload.get("steps"), list):
+        type_errors.append("steps must be an array")
+    if "budget" in payload and not isinstance(payload.get("budget"), dict):
+        type_errors.append("budget must be an object")
+    if "synthesis" in payload and not isinstance(payload.get("synthesis"), dict):
+        type_errors.append("synthesis must be an object")
+
+    if missing or type_errors:
+        details = []
+        if missing:
+            details.append("missing keys: " + ", ".join(missing))
+        if type_errors:
+            details.append("type errors: " + "; ".join(type_errors))
+        raise PlannerSchemaShapeError("planner_schema_shape_invalid: " + " | ".join(details))
+
+
+def _build_schema_error_info(raw_output: str, exc: BaseException) -> dict[str, Any]:
+    payload: dict[str, Any] = {"error": str(exc)}
+    payload["output_preview"] = str(raw_output or "")[:1200]
+    payload["required_keys"] = list(_PLAN_SHAPE_REQUIRED_KEYS)
+    return payload
+
+
+def _build_schema_retry_prompt(
+    *,
+    base_prompt: str,
+    schema_error: dict[str, Any],
+    invalid_output: str,
+) -> str:
+    preview = str(invalid_output or "")[:3200]
+    return (
+        f"{base_prompt}\n\n"
+        "[SCHEMA_RECOVERY]\n"
+        "Your previous output was valid JSON, but it was not a valid PlanIR object.\n"
+        f"- Schema error: {schema_error.get('error')}\n\n"
+        "Return ONLY one JSON object with exactly this top-level shape:\n"
+        "{\n"
+        '  "goal": "short objective",\n'
+        '  "subject": {"subject_type": "company|macro|unknown", "tickers": [], "selection_payload": []},\n'
+        '  "output_mode": "chat|brief|investment_report",\n'
+        '  "steps": [],\n'
+        '  "budget": {"max_rounds": 3, "max_tools": 4},\n'
+        '  "synthesis": {"style": "concise", "sections": []}\n'
+        "}\n"
+        "No markdown, no prose, no extra top-level answer/commentary field.\n\n"
+        "[PREVIOUS_INVALID_OUTPUT]\n"
+        f"{preview}\n"
+    )
+
+
 _HIGH_COST_AGENTS: set[str] = {"macro_agent", "deep_search_agent"}
 
 
@@ -409,17 +488,9 @@ def _is_deep_hint(query: str, state: GraphState | None = None) -> bool:
         if analysis_depth == "deep_research":
             return True
     q = (query or "").lower()
-    return any(
-        token in q
-        for token in (
-            "deep",
-            "deepsearch",
-            "report",
-            "filing",
-            "document",
-            "longform",
-        )
-    )
+    if re.search(r"\b(without|no|not|skip|exclude|avoid)\s+(deep\s+research|deep\s+search|deepsearch|deep)\b", q):
+        return False
+    return any(token in q for token in ("deep", "deepsearch", "filing", "document", "longform"))
 
 
 def _is_dashboard_source(state: GraphState) -> bool:
@@ -1224,6 +1295,56 @@ def _build_planner_reasoning_brief(
     )
 
 
+def _skip_reason_for_agent(agent_name: str, *, state: GraphState, selected_agents: list[str]) -> str:
+    if agent_name in selected_agents:
+        return "selected"
+    query = str(state.get("query") or "")
+    output_mode = str(state.get("output_mode") or "brief").strip().lower()
+    if agent_name == "deep_search_agent" and not _is_deep_hint(query, state):
+        return "deepsearch_not_requested"
+    if output_mode != "investment_report":
+        return "not_needed_for_output_mode"
+    if agent_name in _HIGH_COST_AGENTS:
+        return "budget_or_depth_limited"
+    return "not_selected_by_planner"
+
+
+def _build_agent_selection_diagnostics(
+    *,
+    state: GraphState,
+    selected_agents: list[str],
+    skipped_agents: list[str],
+) -> dict[str, Any]:
+    query = str(state.get("query") or "")
+    has_deep_hint = _is_deep_hint(query, state)
+    selected_set = set(selected_agents)
+    budget_priority: list[dict[str, Any]] = []
+    for index, agent in enumerate(selected_agents, start=1):
+        effort, latency_ms = _estimate_step_cost_latency({"kind": "agent", "name": agent})
+        budget_priority.append(
+            {
+                "agent": agent,
+                "rank": index,
+                "estimated_effort": effort,
+                "estimated_latency_ms": latency_ms,
+            }
+        )
+
+    return {
+        "selected_agents": selected_agents,
+        "skipped_agents": [
+            {
+                "agent": agent,
+                "reason": _skip_reason_for_agent(agent, state=state, selected_agents=selected_agents),
+            }
+            for agent in skipped_agents
+            if agent not in selected_set
+        ],
+        "deepsearch_reason": "requested" if has_deep_hint else "not_requested",
+        "budget_priority": budget_priority,
+    }
+
+
 async def _emit_pipeline_stage(
     *,
     stage: str,
@@ -1257,6 +1378,11 @@ async def _emit_plan_ready(
     candidate_agents = _candidate_agents_for_plan(state)
     selected_set = set(selected_agents)
     skipped_agents = [name for name in candidate_agents if name not in selected_set]
+    agent_selection = _build_agent_selection_diagnostics(
+        state=state,
+        selected_agents=selected_agents,
+        skipped_agents=skipped_agents,
+    )
     reasoning_brief = _build_planner_reasoning_brief(
         state=state,
         selected_agents=selected_agents,
@@ -1275,6 +1401,7 @@ async def _emit_plan_ready(
             "agents": selected_agents,
             "selected_agents": selected_agents,
             "skipped_agents": skipped_agents,
+            "agent_selection": agent_selection,
             "has_parallel": has_parallel,
             "reasoning_brief": reasoning_brief,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1290,6 +1417,7 @@ async def _emit_plan_ready(
                 f"selected_agents={len(selected_agents)}; skipped_agents={len(skipped_agents)}; "
                 f"parallel={'yes' if has_parallel else 'no'}"
             ),
+            "details": {"agent_selection": agent_selection},
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
     )
@@ -1485,11 +1613,12 @@ async def planner(state: GraphState) -> dict:
         raw_text = str(content)
         last_output_preview = raw_text[:1200]
         parse_meta: dict[str, Any] = {}
+        json_parse_errors: list[dict[str, Any]] = []
         try:
-            json_text = _extract_json_object(raw_text)
-            payload, parse_meta = _load_json_with_repair(json_text)
+            payload, parse_meta = _parse_planner_json_output(raw_text)
         except Exception as first_parse_exc:
             parse_error_info = _build_parse_error_info(raw_text, first_parse_exc)
+            json_parse_errors.append(parse_error_info)
             logger.warning(
                 "[Planner] invalid JSON from first LLM output: %s (line=%s col=%s)",
                 parse_error_info.get("error"),
@@ -1512,14 +1641,102 @@ async def planner(state: GraphState) -> dict:
                     "timestamp": utc_now_iso(),
                 }
             )
-            repair_prompt = _build_json_retry_prompt(
-                base_prompt=prompt,
-                parse_error=parse_error_info,
-                invalid_output=raw_text,
+            current_error = parse_error_info
+            current_invalid_output = raw_text
+            max_json_repairs = max(1, min(_env_int("LANGGRAPH_PLANNER_JSON_REPAIR_ATTEMPTS", 2), 3))
+            for repair_attempt in range(1, max_json_repairs + 1):
+                repair_prompt = _build_json_retry_prompt(
+                    base_prompt=prompt,
+                    parse_error=current_error,
+                    invalid_output=current_invalid_output,
+                )
+                retry_resp = await ainvoke_with_rate_limit_retry(
+                    llm,
+                    [HumanMessage(content=repair_prompt)],
+                    llm_factory=llm_factory,
+                    max_attempts=1,
+                    sleep_seconds=float(llm_limits["sleep_seconds"]),
+                    jitter_seconds=float(llm_limits["jitter_seconds"]),
+                    acquire_timeout_seconds=float(llm_limits["acquire_timeout"]),
+                    acquire_token=True,
+                    on_retry=_on_retry,
+                )
+                await emit_event(
+                    {
+                        "type": "thinking",
+                        "stage": "llm_call_retry_done",
+                        "message": "planner_json_repair",
+                        "timestamp": utc_now_iso(),
+                    }
+                )
+                retry_content = retry_resp.content if hasattr(retry_resp, "content") else str(retry_resp)
+                retry_text = str(retry_content)
+                last_output_preview = retry_text[:1200]
+                try:
+                    payload, parse_meta = _parse_planner_json_output(retry_text)
+                    parse_meta["json_retry_used"] = True
+                    parse_meta["json_repair_attempts"] = repair_attempt
+                    parse_meta["first_parse_error"] = {
+                        "error": json_parse_errors[0].get("error"),
+                        "line": json_parse_errors[0].get("line"),
+                        "column": json_parse_errors[0].get("column"),
+                        "snippet": json_parse_errors[0].get("snippet"),
+                    }
+                    if len(json_parse_errors) > 1:
+                        parse_meta["repair_parse_errors"] = json_parse_errors[1:]
+                    break
+                except Exception as retry_parse_exc:
+                    retry_error_info = _build_parse_error_info(retry_text, retry_parse_exc)
+                    json_parse_errors.append(retry_error_info)
+                    parse_error_info = {
+                        "json_retry_used": True,
+                        "first_attempt": json_parse_errors[0],
+                        "second_attempt": json_parse_errors[1] if len(json_parse_errors) > 1 else {},
+                    }
+                    if len(json_parse_errors) > 2:
+                        parse_error_info["repair_attempts"] = json_parse_errors[1:]
+                        parse_error_info["third_attempt"] = json_parse_errors[2]
+                    logger.warning(
+                        "[Planner] invalid JSON after retry %s/%s: %s (line=%s col=%s)",
+                        repair_attempt,
+                        max_json_repairs,
+                        retry_error_info.get("error"),
+                        retry_error_info.get("line"),
+                        retry_error_info.get("column"),
+                    )
+                    if repair_attempt >= max_json_repairs:
+                        raise
+                    current_error = retry_error_info
+                    current_invalid_output = retry_text
+                    await emit_event(
+                        {
+                            "type": "thinking",
+                            "stage": "llm_call_retry_start",
+                            "message": "planner_json_repair",
+                            "timestamp": utc_now_iso(),
+                        }
+                    )
+
+        try:
+            _assert_planner_payload_shape(payload)
+        except PlannerSchemaShapeError as schema_exc:
+            schema_error_info = _build_schema_error_info(last_output_preview, schema_exc)
+            await emit_event(
+                {
+                    "type": "thinking",
+                    "stage": "llm_call_retry_start",
+                    "message": "planner_schema_repair",
+                    "timestamp": utc_now_iso(),
+                }
             )
-            retry_resp = await ainvoke_with_rate_limit_retry(
+            schema_prompt = _build_schema_retry_prompt(
+                base_prompt=prompt,
+                schema_error=schema_error_info,
+                invalid_output=last_output_preview,
+            )
+            schema_resp = await ainvoke_with_rate_limit_retry(
                 llm,
-                [HumanMessage(content=repair_prompt)],
+                [HumanMessage(content=schema_prompt)],
                 llm_factory=llm_factory,
                 max_attempts=1,
                 sleep_seconds=float(llm_limits["sleep_seconds"]),
@@ -1532,39 +1749,28 @@ async def planner(state: GraphState) -> dict:
                 {
                     "type": "thinking",
                     "stage": "llm_call_retry_done",
-                    "message": "planner_json_repair",
+                    "message": "planner_schema_repair",
                     "timestamp": utc_now_iso(),
                 }
             )
-            retry_content = retry_resp.content if hasattr(retry_resp, "content") else str(retry_resp)
-            retry_text = str(retry_content)
-            last_output_preview = retry_text[:1200]
+            schema_content = schema_resp.content if hasattr(schema_resp, "content") else str(schema_resp)
+            schema_text = str(schema_content)
+            last_output_preview = schema_text[:1200]
             try:
-                retry_json_text = _extract_json_object(retry_text)
-                payload, parse_meta = _load_json_with_repair(retry_json_text)
-                parse_meta["json_retry_used"] = True
-                parse_meta["first_parse_error"] = {
-                    "error": parse_error_info.get("error"),
-                    "line": parse_error_info.get("line"),
-                    "column": parse_error_info.get("column"),
-                    "snippet": parse_error_info.get("snippet"),
-                }
-            except Exception as second_parse_exc:
-                second_error_info = _build_parse_error_info(retry_text, second_parse_exc)
+                payload, parse_meta = _parse_planner_json_output(schema_text)
+                _assert_planner_payload_shape(payload)
+                parse_meta["schema_retry_used"] = True
+                parse_meta["schema_error"] = schema_error_info
+            except Exception as schema_retry_exc:
+                retry_schema_error = _build_parse_error_info(schema_text, schema_retry_exc)
                 parse_error_info = {
-                    "json_retry_used": True,
-                    "first_attempt": parse_error_info,
-                    "second_attempt": second_error_info,
+                    "schema_retry_used": True,
+                    "first_attempt": schema_error_info,
+                    "second_attempt": retry_schema_error,
                 }
-                logger.warning(
-                    "[Planner] invalid JSON after retry: %s (line=%s col=%s)",
-                    second_error_info.get("error"),
-                    second_error_info.get("line"),
-                    second_error_info.get("column"),
-                )
+                logger.warning("[Planner] invalid PlanIR schema after retry: %s", retry_schema_error.get("error"))
                 raise
-        if not isinstance(payload, dict):
-            raise ValueError("PlanIR payload must be a JSON object")
+
         payload, budget_assertions = _enforce_policy(payload, state)
         plan = PlanIR.model_validate(payload)
         trace.update(

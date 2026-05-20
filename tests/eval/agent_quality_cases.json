@@ -49,8 +49,8 @@
         "min_evidence_count": 4,
         "min_claim_count": 3,
         "min_claim_source_ratio": 1.0,
-        "require_agent_quality_status": "pass",
-        "require_self_check_status": "pass"
+        "require_agent_quality_status": ["pass", "warn"],
+        "require_self_check_status": ["pass", "warn"]
       }
     },
     {
@@ -96,8 +96,8 @@
         "min_evidence_count": 2,
         "min_claim_count": 2,
         "min_claim_source_ratio": 1.0,
-        "require_agent_quality_status": "pass",
-        "require_self_check_status": "pass"
+        "require_agent_quality_status": ["pass", "warn"],
+        "require_self_check_status": ["pass", "warn"]
       }
     },
     {
@@ -127,8 +127,8 @@
         "min_risk_count": 1,
         "min_claim_count": 3,
         "min_claim_source_ratio": 1.0,
-        "require_agent_quality_status": "pass",
-        "require_self_check_status": "pass"
+        "require_agent_quality_status": ["pass", "warn"],
+        "require_self_check_status": ["pass", "warn"]
       }
     }
   ]

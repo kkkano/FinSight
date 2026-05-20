@@ -182,6 +182,15 @@ def _has_url(item: Any) -> bool:
     return bool(_clean_text(_get_value(item, "url")) or _clean_text(meta.get("url")))
 
 
+def _explicit_confidence(item: Any) -> float | None:
+    value = _get_value(item, "confidence", None)
+    if value is None:
+        value = _meta(item).get("confidence")
+    if value is None:
+        return None
+    return _clamp(value)
+
+
 def evaluate_agent_quality(output: Any, *, query: str = "", ticker: str = "") -> dict[str, Any]:
     del query, ticker
     agent_name = _clean_text(_get_value(output, "agent_name")) or "unknown_agent"
@@ -204,6 +213,10 @@ def evaluate_agent_quality(output: Any, *, query: str = "", ticker: str = "") ->
     claim_count = len(claims)
     evidence_with_url_count = sum(1 for item in evidence if _has_url(item))
     evidence_with_freshness_count = sum(1 for item in evidence if _has_freshness(item))
+    low_confidence_evidence_count = sum(
+        1 for item in evidence
+        if (confidence := _explicit_confidence(item)) is not None and confidence < 0.5
+    )
     source_names = {
         _clean_text(_get_value(item, "source") or _meta(item).get("source"))
         for item in evidence
@@ -227,6 +240,8 @@ def evaluate_agent_quality(output: Any, *, query: str = "", ticker: str = "") ->
         reason_codes.append("unsupported_claim")
     if evidence_count and evidence_freshness_rate < 0.5:
         reason_codes.append("low_freshness")
+    if low_confidence_evidence_count:
+        reason_codes.append("low_source_quality")
 
     if "no_evidence" in reason_codes:
         status = "fail"
@@ -254,6 +269,7 @@ def evaluate_agent_quality(output: Any, *, query: str = "", ticker: str = "") ->
         "metrics": {
             "evidence_count": evidence_count,
             "evidence_with_url_count": evidence_with_url_count,
+            "low_confidence_evidence_count": low_confidence_evidence_count,
             "evidence_url_rate": round(evidence_url_rate, 4),
             "evidence_freshness_rate": round(evidence_freshness_rate, 4),
             "source_count": len(source_names),
@@ -265,6 +281,15 @@ def evaluate_agent_quality(output: Any, *, query: str = "", ticker: str = "") ->
             "limitation_count": limitation_count,
             "contradiction_count": contradiction_count,
             "overall_score": overall_score,
+        },
+        "recovery": {
+            "next_actions": [
+                {
+                    "action": "verify_or_replace_low_confidence_source",
+                    "reason": "low_source_quality",
+                    "tool_hint": "authoritative_source_lookup",
+                }
+            ] if low_confidence_evidence_count else []
         },
     }
 

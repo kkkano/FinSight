@@ -81,6 +81,54 @@ def test_agent_quality_eval_fails_when_quality_hard_gates_are_missed():
     assert any("self_check_status" in issue for issue in row["issues"])
 
 
+def test_agent_quality_eval_allows_warn_when_expectation_declares_it():
+    from scripts.agent_quality_eval import _grade_case
+
+    case = {
+        "id": "warn-allowed",
+        "agent": "fixture",
+        "ticker": "AAPL",
+        "expect": {
+            "min_claim_source_ratio": 1.0,
+            "require_agent_quality_status": ["pass", "warn"],
+            "require_self_check_status": ["pass", "warn"],
+        },
+    }
+    output = SimpleNamespace(
+        agent_name="fixture",
+        summary="AAPL has a sourced but weak-quality claim.",
+        evidence=[
+            EvidenceItem(
+                text="Weak source evidence",
+                source="unknown_blog",
+                url="https://example.com/aapl",
+                timestamp="2026-05-18T00:00:00Z",
+                confidence=0.35,
+                meta={"source_id": "source-weak"},
+            )
+        ],
+        claims=[
+            {
+                "claim": "Sourced but weak-quality claim",
+                "evidence_ids": ["source-weak"],
+            }
+        ],
+        risks=[],
+        data_sources=["unknown_blog"],
+        confidence=0.45,
+        fallback_used=False,
+        evidence_quality={
+            "agent_quality": {"status": "warn"},
+            "agent_self_check": {"status": "warn", "gaps": [{"code": "verify_source_quality"}]},
+        },
+    )
+
+    row = _grade_case(case, output)
+
+    assert row["verdict"] == "PASS"
+    assert row["issues"] == []
+
+
 def test_agent_quality_eval_compare_reports_metric_deltas():
     from scripts.agent_quality_eval import compare_runs
 

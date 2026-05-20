@@ -28,6 +28,7 @@ def _render_chat(state: dict) -> str:
             "operation": state.get("operation", {"name": "qa"}),
             "tasks": state.get("tasks", []),
             "memory_context": state.get("memory_context", {}),
+            "reply_contract": state.get("reply_contract", {}),
             "artifacts": state.get("artifacts", {}),
             "plan_ir": state.get("plan_ir", {"steps": []}),
         }
@@ -717,6 +718,51 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
     _assert_chat_contract(markdown)
     assert "Apple investment report" in markdown
     assert "Valuation remains sensitive to rates." in markdown
+
+
+def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkeypatch) -> None:
+    from backend.graph.nodes import chat_renderer
+
+    def fake_get_company_news(ticker: str, limit: int = 5):
+        assert ticker == "NVDA"
+        return [
+            {
+                "title": "Nvidia earnings preview",
+                "url": "https://finance.yahoo.com/markets/stocks/articles/nvidia-earnings-preview-2026-05-18.html",
+                "source": "Yahoo Finance",
+                "published_at": "2026-05-18",
+            }
+        ][:limit]
+
+    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
+
+    markdown = _render_chat(
+        {
+            "query": "NVDA latest news with links.",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "fetch"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "subject_label": "NVDA",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "fetch", "params": {"topic": "news", "include_links": True, "count": 1}},
+                }
+            ],
+            "artifacts": {"step_results": {}},
+            "plan_ir": {"steps": []},
+            "reply_contract": {
+                "lane": "source_grounded_answer",
+                "source_constraints": {"requires_links": True},
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Nvidia earnings preview" in markdown
+    assert "https://finance.yahoo.com/markets/stocks/articles/nvidia-earnings-preview-2026-05-18.html" in markdown
+    assert "finance.yahoo.com/quote/NVDA/news" not in markdown
 
 
 def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:

@@ -141,12 +141,77 @@ def judge_debate(
     }
 
 
+def _claim_agents(claims: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for claim in claims:
+        agent = str(claim.get("agent_name") or "").strip()
+        if not agent or agent in seen:
+            continue
+        seen.add(agent)
+        result.append(agent)
+    return result
+
+
+def build_read_only_adjudications(
+    *,
+    cross_examination: list[dict[str, Any]],
+    bull: dict[str, Any],
+    bear: dict[str, Any],
+    scorecard: dict[str, Any],
+) -> list[dict[str, Any]]:
+    balance = str(scorecard.get("evidence_balance") or "insufficient").strip() or "insufficient"
+    bull_claims = bull.get("claims") if isinstance(bull.get("claims"), list) else []
+    bear_claims = bear.get("claims") if isinstance(bear.get("claims"), list) else []
+    supporting_agents = _claim_agents(bull_claims)
+    opposing_agents = _claim_agents(bear_claims)
+    disagreements = scorecard.get("key_disagreements") if isinstance(scorecard.get("key_disagreements"), list) else []
+    rows: list[dict[str, Any]] = []
+
+    if cross_examination:
+        for item in cross_examination[:4]:
+            topic = str(item.get("question") or "Cross-agent disagreement").strip()
+            rationale = str(item.get("evidence_gap") or "").strip()
+            if not rationale:
+                rationale = "Bull and bear claims need source-level review before the system adopts one side."
+            rows.append(
+                {
+                    "topic": topic,
+                    "supporting_agents": supporting_agents,
+                    "opposing_agents": opposing_agents,
+                    "adjudication": balance,
+                    "rationale": rationale,
+                    "bull_claim_id": item.get("bull_claim_id"),
+                    "bear_claim_id": item.get("bear_claim_id"),
+                }
+            )
+        return rows
+
+    for index, disagreement in enumerate(disagreements[:4], start=1):
+        rows.append(
+            {
+                "topic": f"Disagreement {index}",
+                "supporting_agents": supporting_agents,
+                "opposing_agents": opposing_agents,
+                "adjudication": balance,
+                "rationale": str(disagreement),
+            }
+        )
+    return rows
+
+
 def build_debate_artifact(ledger: Any, query: str = "") -> dict[str, Any]:
     parsed = _as_ledger(ledger)
     bull = build_bull_thesis(parsed)
     bear = build_bear_thesis(parsed)
     cross = cross_examine(bull, bear)
     scorecard = judge_debate(parsed, bull, bear)
+    adjudications = build_read_only_adjudications(
+        cross_examination=cross,
+        bull=bull,
+        bear=bear,
+        scorecard=scorecard,
+    )
     balance = scorecard.get("evidence_balance")
     if balance == "bull":
         consensus = "当前证据略偏看多，但需持续验证主要风险是否缓解。"
@@ -176,6 +241,7 @@ def build_debate_artifact(ledger: Any, query: str = "") -> dict[str, Any]:
         "bull_thesis": bull,
         "bear_thesis": bear,
         "cross_examination": cross,
+        "adjudications": adjudications,
         "judge_scorecard": scorecard,
         "consensus": consensus,
         "open_questions": open_questions,
@@ -187,5 +253,6 @@ __all__ = [
     "build_bull_thesis",
     "build_debate_artifact",
     "cross_examine",
+    "build_read_only_adjudications",
     "judge_debate",
 ]

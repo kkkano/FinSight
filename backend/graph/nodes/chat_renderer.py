@@ -10,6 +10,15 @@ from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
 from backend.utils.quote import parse_quote_payload
 
+try:  # Optional live-news fallback for link-required chat answers.
+    from backend.config.ticker_mapping import COMPANY_MAP
+    from backend.tools.authoritative_feeds import get_authoritative_media_news
+    from backend.tools.news import get_company_news
+except Exception:  # pragma: no cover - renderer must still work without live tool imports.
+    COMPANY_MAP = {}
+    get_authoritative_media_news = None
+    get_company_news = None
+
 
 FORBIDDEN_CHAT_MARKERS = (
     "本轮问题包含",
@@ -373,6 +382,12 @@ def _requested_news_link_count(state: GraphState) -> int:
     return min(max(count, 0), 5)
 
 
+def _reply_contract_requires_links(state: GraphState) -> bool:
+    contract = state.get("reply_contract") if isinstance(state.get("reply_contract"), dict) else {}
+    constraints = contract.get("source_constraints") if isinstance(contract.get("source_constraints"), dict) else {}
+    return bool(constraints.get("requires_links"))
+
+
 def _news_search_fallback_items(state: GraphState, *, count: int) -> list[dict[str, str]]:
     tickers = _tickers(state) or ["相关标的"]
     items: list[dict[str, str]] = []
@@ -413,6 +428,101 @@ def _append_news_source_page_links(lines: list[str], state: GraphState, *, count
     lines.append("I did not get per-article URLs for every headline, so I am linking source pages for verification rather than treating them as article citations:")
     for ticker in tickers[:count]:
         lines.append(f"- [{ticker} Yahoo Finance news](https://finance.yahoo.com/quote/{quote_plus(ticker)}/news)")
+
+
+def _news_map_has_citable_url(news_map: dict[str, list[dict[str, str]]]) -> bool:
+    return any(
+        _is_citable_url(str(item.get("url") or ""))
+        for items in news_map.values()
+        for item in items
+    )
+
+
+def _company_name_for_ticker(ticker: str) -> str:
+    symbol = str(ticker or "").strip().upper()
+    mapped = COMPANY_MAP.get(symbol) if isinstance(COMPANY_MAP, dict) else None
+    return str(mapped or "").strip()
+
+
+def _news_item_matches_subject(item: dict[str, str], ticker: str) -> bool:
+    symbol = str(ticker or "").strip().upper()
+    if not symbol:
+        return True
+    company_name = _company_name_for_ticker(symbol)
+    haystack = " ".join(str(item.get(key) or "") for key in ("title", "source")).lower()
+    if symbol.lower() in haystack:
+        return True
+    return bool(company_name and company_name.lower() in haystack)
+
+
+def _dedupe_news_items(items: list[dict[str, str]], *, limit: int) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, str]] = []
+    for item in items:
+        if not _is_citable_url(str(item.get("url") or "")):
+            continue
+        key = str(item.get("url") or item.get("title") or "").strip()
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        deduped.append(item)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
+def _direct_news_article_fallback_map(state: GraphState, *, count: int) -> dict[str, list[dict[str, str]]]:
+    """Fetch citable article URLs when the planned news path produced no links.
+
+    This is intentionally narrow: it only runs for explicit link-required news
+    turns and only accepts article-like URLs, never search or quote listing pages.
+    """
+    target_count = max(1, min(count, 5))
+    result: dict[str, list[dict[str, str]]] = {}
+    tickers = [
+        ticker
+        for ticker in _tickers(state)
+        if re.match(r"^[A-Z][A-Z0-9.\-=]{0,9}$", ticker) and ticker not in {"I", "ME", "YOU"}
+    ]
+
+    for ticker in tickers[:4]:
+        items: list[dict[str, str]] = []
+        if callable(get_company_news):
+            try:
+                items.extend(_news_items(get_company_news(ticker, limit=max(target_count, 3)), limit=target_count * 2))
+            except Exception:
+                pass
+
+        if len(_dedupe_news_items(items, limit=target_count)) < target_count and callable(get_authoritative_media_news):
+            company_name = _company_name_for_ticker(ticker)
+            query = " ".join(part for part in (ticker, company_name, "news") if part)
+            try:
+                payload = get_authoritative_media_news(query, max_results=max(target_count * 3, 5))
+            except Exception:
+                payload = {}
+            rows = payload.get("articles") if isinstance(payload, dict) else payload
+            authoritative_items = _news_items(rows if isinstance(rows, list) else [], limit=target_count * 3)
+            items.extend(item for item in authoritative_items if _news_item_matches_subject(item, ticker))
+
+        usable = _dedupe_news_items(
+            [item for item in items if not _is_low_value_evidence_item(item, state)],
+            limit=target_count,
+        )
+        if usable:
+            result[ticker] = usable
+
+    if not result and not tickers and callable(get_authoritative_media_news):
+        try:
+            payload = get_authoritative_media_news(str(state.get("query") or "market news"), max_results=max(target_count * 3, 5))
+        except Exception:
+            payload = {}
+        rows = payload.get("articles") if isinstance(payload, dict) else payload
+        usable = _dedupe_news_items(_news_items(rows if isinstance(rows, list) else [], limit=target_count * 3), limit=target_count)
+        if usable:
+            result["相关信息"] = usable
+
+    return result
 
 
 def _technical_text(output: Any) -> str:
@@ -947,6 +1057,12 @@ def render_chat_markdown(state: GraphState) -> str:
 
     prices = _prices_by_ticker(state)
     news_map = _news_by_ticker(state)
+    requested_link_count = _requested_news_link_count(state)
+    if _reply_contract_requires_links(state):
+        requested_link_count = max(requested_link_count, 3)
+    if _reply_contract_requires_links(state) and requested_link_count and not _news_map_has_citable_url(news_map):
+        for ticker, items in _direct_news_article_fallback_map(state, count=requested_link_count).items():
+            news_map[ticker] = _dedupe_news_items(items + news_map.get(ticker, []), limit=5)
     technical_map = _technical_by_ticker(state)
     price = next(iter(prices.values()), {})
     news = [item for items in news_map.values() for item in items]
@@ -1068,7 +1184,6 @@ def render_chat_markdown(state: GraphState) -> str:
                 lines.append("")
                 lines.append(_focus_line(state))
             _append_missing_article_url_note(lines, listed_news_items)
-            requested_link_count = _requested_news_link_count(state)
             if requested_link_count and not any(_is_citable_url(str(item.get("url") or "")) for item in listed_news_items):
                 _append_news_source_page_links(lines, state, count=requested_link_count)
         else:
@@ -1090,7 +1205,6 @@ def render_chat_markdown(state: GraphState) -> str:
             elif risks:
                 lines.extend(_risk_or_qa_fallback_lines(state, risks))
             else:
-                requested_link_count = _requested_news_link_count(state)
                 if requested_link_count:
                     lines.append(f"Live news sources did not return usable article URLs for {ticker_label}; I will not invent citation links.")
                 else:

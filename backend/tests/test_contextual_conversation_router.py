@@ -505,6 +505,48 @@ def test_context_router_historical_last_report_without_current_thread_clarifies(
     assert normalized.needs_tools is False
 
 
+def test_context_router_missing_last_report_falls_back_to_same_thread_report_history():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="last_report", confidence=0.86, subject_hint="AAPL report"),
+        relation="follow_up",
+        domain_intent="report_discussion",
+        confidence=0.82,
+        needs_tools=True,
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "Update the report with the latest news.",
+            "ui_context": {
+                "session_history": [
+                    {"role": "user", "content": "Generate an investment report for AAPL.", "tickers": "AAPL"},
+                    {
+                        "role": "assistant",
+                        "content": "## Investment report for AAPL\n\nAAPL risks include valuation and demand.",
+                    },
+                ]
+            },
+            "memory_context": {},
+            "messages": [],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "research"
+    assert normalized.context_binding.source == "last_turn"
+    assert "AAPL" in normalized.context_binding.subject_hint
+    assert normalized.needs_tools is True
+
+
 def test_context_router_current_turn_ticker_overrides_last_report_followup():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,
@@ -714,6 +756,83 @@ def test_context_router_accepts_session_history_as_thread_history():
     assert normalized.context_binding.source == "last_turn"
     assert normalized.context_binding.subject_hint == "AAPL"
     assert normalized.needs_tools is False
+
+
+def test_context_router_keeps_history_ticker_in_last_turn_subject_hint():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    decision = ConversationDecision(
+        execution_route="direct_answer",
+        context_binding=ContextBinding(
+            source="last_turn",
+            confidence=0.9,
+            subject_hint="Apple China iPhone 17 Discounts News",
+        ),
+        relation="follow_up",
+        domain_intent="analysis",
+        confidence=0.9,
+        needs_tools=False,
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {
+            "query": "What does that imply for margins?",
+            "messages": [
+                HumanMessage(content="AAPL latest news with links."),
+                AIMessage(content="Apple China iPhone 17 discounts were the selected news item."),
+            ],
+        },
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.context_binding.source == "last_turn"
+    assert "AAPL" in normalized.context_binding.subject_hint
+    assert "Apple China iPhone 17 Discounts News" in normalized.context_binding.subject_hint
+
+
+def test_context_router_style_only_market_mechanism_news_decision_stays_chat():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="growth stocks"),
+        relation="new_topic",
+        domain_intent="news",
+        confidence=0.78,
+        needs_tools=True,
+        task_hints=(
+            {
+                "subject_type": "theme",
+                "subject_label": "growth stocks",
+                "operation": "fetch",
+                "params": {"topic": "news"},
+            },
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {"query": "Answer in English, very short: why did growth stocks wobble?", "messages": []},
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.needs_tools is False
+    assert normalized.task_hints == ()
+    assert normalized.context_binding.source == "none"
 
 
 def test_context_router_resolved_bound_clarify_continues_conversation():
@@ -1132,6 +1251,45 @@ def test_context_router_accepts_llm_safety_decision_without_tools():
     assert decision.execution_route == "direct_answer"
     assert decision.needs_tools is False
     assert "必涨" in decision.reply_guidance
+
+
+def test_context_router_blocks_insider_information_requests_from_research():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL"),
+        relation="new_topic",
+        domain_intent="news",
+        confidence=0.9,
+        needs_tools=True,
+        task_hints=(
+            {
+                "subject_type": "company",
+                "subject_label": "AAPL",
+                "tickers": ["AAPL"],
+                "operation": "fetch",
+                "params": {"topic": "earnings insider information"},
+            },
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {"query": "I need insider information on AAPL earnings.", "messages": []},
+        tickers=["AAPL"],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.context_binding.source == "none"
+    assert normalized.context_binding.subject_hint == "AAPL"
+    assert normalized.needs_tools is False
+    assert normalized.task_hints == ()
 
 
 def test_context_router_switch_query_keeps_only_current_effective_ticker():

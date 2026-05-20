@@ -101,6 +101,15 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _expected_statuses(value: Any) -> set[str]:
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        return {cleaned} if cleaned else set()
+    if isinstance(value, list):
+        return {str(item or "").strip().lower() for item in value if str(item or "").strip()}
+    return set()
+
+
 def _jsonable(value: Any) -> Any:
     if is_dataclass(value):
         return _jsonable(asdict(value))
@@ -231,13 +240,15 @@ def _grade_case(case: dict[str, Any], output: Any) -> dict[str, Any]:
         if _safe_float(metrics.get("claim_source_ratio")) < threshold:
             issues.append(f"claim_source_ratio {metrics['claim_source_ratio']} < {threshold}")
 
-    required_quality_status = str(expect.get("require_agent_quality_status") or "").strip().lower()
-    if required_quality_status and str(metrics.get("agent_quality_status") or "").strip().lower() != required_quality_status:
-        issues.append(f"agent_quality_status {metrics['agent_quality_status']} != {required_quality_status}")
+    required_quality_statuses = _expected_statuses(expect.get("require_agent_quality_status"))
+    actual_quality_status = str(metrics.get("agent_quality_status") or "").strip().lower()
+    if required_quality_statuses and actual_quality_status not in required_quality_statuses:
+        issues.append(f"agent_quality_status {metrics['agent_quality_status']} not in {sorted(required_quality_statuses)}")
 
-    required_self_check_status = str(expect.get("require_self_check_status") or "").strip().lower()
-    if required_self_check_status and str(metrics.get("self_check_status") or "").strip().lower() != required_self_check_status:
-        issues.append(f"self_check_status {metrics['self_check_status']} != {required_self_check_status}")
+    required_self_check_statuses = _expected_statuses(expect.get("require_self_check_status"))
+    actual_self_check_status = str(metrics.get("self_check_status") or "").strip().lower()
+    if required_self_check_statuses and actual_self_check_status not in required_self_check_statuses:
+        issues.append(f"self_check_status {metrics['self_check_status']} not in {sorted(required_self_check_statuses)}")
 
     return {
         "id": case.get("id"),

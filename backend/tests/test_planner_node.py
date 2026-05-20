@@ -65,6 +65,47 @@ def test_planner_runtime_contains_variant_when_llm_init_fails(monkeypatch):
     assert runtime.get("variant") in {"A", "B"}
 
 
+def test_plan_ready_event_includes_agent_selection_diagnostics(monkeypatch):
+    import importlib
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    events: list[dict] = []
+
+    async def _fake_emit(payload: dict):
+        events.append(payload)
+
+    monkeypatch.setattr(planner_mod, "emit_event", _fake_emit)
+
+    state = {
+        "query": "AAPL report without deep research",
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {
+            "budget": {"max_rounds": 6, "max_tools": 8},
+            "allowed_agents": ["fundamental_agent", "news_agent", "risk_agent", "deep_search_agent"],
+        },
+        "trace": {},
+    }
+    plan = {
+        "steps": [
+            {"id": "agent_fundamental", "kind": "agent", "name": "fundamental_agent", "inputs": {}, "optional": False},
+            {"id": "agent_news", "kind": "agent", "name": "news_agent", "inputs": {}, "optional": False},
+        ]
+    }
+
+    _run(planner_mod._emit_plan_ready(state=state, plan_dict=plan, fallback=False))
+
+    plan_ready = next(event for event in events if event.get("type") == "plan_ready")
+    diagnostics = plan_ready.get("agent_selection") or {}
+    skipped = {item["agent"]: item for item in diagnostics.get("skipped_agents") or []}
+
+    assert diagnostics["selected_agents"] == ["fundamental_agent", "news_agent"]
+    assert skipped["risk_agent"]["reason"]
+    assert skipped["deep_search_agent"]["reason"] == "deepsearch_not_requested"
+    assert diagnostics["deepsearch_reason"] == "not_requested"
+    assert diagnostics["budget_priority"][0]["agent"] == "fundamental_agent"
+
+
 def test_planner_llm_mode_uses_chat_budget_for_chat_turns(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
     monkeypatch.setenv("LANGGRAPH_PLANNER_CHAT_TIMEOUT_SEC", "47")
@@ -856,6 +897,136 @@ def test_planner_llm_mode_retries_on_invalid_json_then_recovers(monkeypatch):
     assert fake.calls >= 2
 
 
+def test_planner_json_repair_handles_missing_commas_between_fields():
+    from backend.graph.nodes.planner import _load_json_with_repair
+
+    payload, meta = _load_json_with_repair(
+        """
+        {
+          "goal": "demo"
+          "subject": {"subject_type": "company", "tickers": ["AAPL"]}
+          "output_mode": "brief"
+          "steps": []
+          "budget": {"max_rounds": 3, "max_tools": 2}
+          "synthesis": {"style": "concise", "sections": []}
+        }
+        """
+    )
+
+    assert meta.get("parse_mode") == "syntax_repaired"
+    assert payload["goal"] == "demo"
+    assert payload["subject"]["tickers"] == ["AAPL"]
+
+
+def test_planner_llm_mode_uses_second_json_repair_when_first_repair_is_empty(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        async def ainvoke(self, _messages):
+            self.calls += 1
+            if self.calls == 1:
+                return _Resp("{ goal: 'demo', steps: [ }")
+            if self.calls == 2:
+                return _Resp("")
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "brief",
+                  "steps": [],
+                  "budget": {"max_rounds": 3, "max_tools": 2},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    fake = _FakeLLM()
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: fake)
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "Analyze AAPL",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 2}, "allowed_tools": ["search"], "allowed_agents": []},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    parse_info = runtime.get("json_parse") or {}
+
+    assert runtime.get("fallback") is False
+    assert parse_info.get("json_retry_used") is True
+    assert parse_info.get("json_repair_attempts") == 2
+    assert fake.calls == 3
+
+
+def test_planner_llm_mode_schema_retry_recovers_from_non_plan_json(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    class _Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class _FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        async def ainvoke(self, _messages):
+            self.calls += 1
+            if self.calls == 1:
+                return _Resp('{"answer": "AAPL looks interesting, but this is not a PlanIR object."}')
+            return _Resp(
+                """
+                {
+                  "goal": "demo",
+                  "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+                  "output_mode": "brief",
+                  "steps": [],
+                  "budget": {"max_rounds": 3, "max_tools": 2},
+                  "synthesis": {"style": "concise", "sections": []}
+                }
+                """
+            )
+
+    import backend.llm_config as llm_config
+
+    fake = _FakeLLM()
+    monkeypatch.setattr(llm_config, "create_llm", lambda *args, **kwargs: fake)
+
+    from backend.graph.nodes.planner import planner
+
+    state = {
+        "query": "Analyze AAPL",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.7, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "policy": {"budget": {"max_rounds": 3, "max_tools": 2}, "allowed_tools": ["search"], "allowed_agents": []},
+        "trace": {},
+    }
+
+    out = _run(planner(state))
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    parse_info = runtime.get("json_parse") or {}
+
+    assert runtime.get("fallback") is False
+    assert parse_info.get("schema_retry_used") is True
+    assert fake.calls == 2
+
+
 def test_planner_llm_mode_records_json_error_context_when_retry_still_invalid(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 
@@ -1409,6 +1580,7 @@ def test_is_deep_hint_respects_analysis_depth_context():
     from backend.graph.nodes.planner import _is_deep_hint
 
     neutral_query = "Assess AAPL trend and valuation"
+    assert not _is_deep_hint("AAPL report without deep research", {})
     assert _is_deep_hint(
         neutral_query,
         {"ui_context": {"analysis_depth": "deep_research"}},

@@ -122,6 +122,45 @@ def test_apply_agent_quality_contract_merges_existing_quality_and_flags_unsuppor
     assert "unsupported_claim" in result.evidence_quality["agent_quality"]["reason_codes"]
 
 
+def test_agent_quality_contract_flags_explicit_low_quality_source() -> None:
+    output = AgentOutput(
+        agent_name="news_agent",
+        summary="AAPL has a weakly sourced catalyst.",
+        evidence=[
+            EvidenceItem(
+                text="Unverified blog says Apple demand improved.",
+                source="unknown_blog",
+                url="https://example.com/aapl-demand",
+                timestamp="2026-05-18T00:00:00Z",
+                confidence=0.35,
+                meta={"source_id": "agent_source:weak-blog"},
+            )
+        ],
+        claims=[
+            build_agent_claim(
+                agent_name="news_agent",
+                ticker="AAPL",
+                query="AAPL catalyst",
+                claim="AAPL demand has improved according to a weak source.",
+                evidence_ids=["agent_source:weak-blog"],
+                stance="bull",
+                confidence=0.45,
+                limitations=["single low-confidence source"],
+            )
+        ],
+        confidence=0.45,
+        data_sources=["unknown_blog"],
+        as_of="2026-05-18T00:00:00Z",
+    )
+
+    quality = evaluate_agent_quality(output, query="AAPL catalyst", ticker="AAPL")
+
+    assert quality["status"] == "warn"
+    assert "low_source_quality" in quality["reason_codes"]
+    assert quality["metrics"]["low_confidence_evidence_count"] == 1
+    assert quality["recovery"]["next_actions"][0]["action"] == "verify_or_replace_low_confidence_source"
+
+
 @pytest.mark.asyncio
 async def test_base_agent_research_attaches_quality_contract() -> None:
     class _ContractAgent(BaseFinancialAgent):

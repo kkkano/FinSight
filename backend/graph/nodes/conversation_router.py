@@ -71,6 +71,16 @@ _STRUCTURAL_DEIXIS_RE = re.compile(
     re.IGNORECASE,
 )
 _URL_RE = re.compile(r"https?://[^\s<>\]\)\"']+", re.IGNORECASE)
+_STYLE_DIRECTIVE_RE = re.compile(
+    r"\b(?:answer\s+in\s+english|very\s+short|short\s+answer|one\s+sentence\s+only|"
+    r"one\s+short\s+answer|keep\s+it\s+conversational|conversational|like\s+a\s+normal\s+chat|"
+    r"not\s+a\s+report|no\s+report|use\s+bullets|boss-ready)\b",
+    re.IGNORECASE,
+)
+_MECHANISM_EXPLANATION_RE = re.compile(
+    r"\b(?:why|explain|what\s+(?:does|makes|is|would|should)|how\s+(?:does|would|can))\b",
+    re.IGNORECASE,
+)
 ExecutionRoute = Literal["direct_answer", "research", "alert", "clarify", "out_of_scope"]
 ContextSource = Literal[
     "none",
@@ -200,6 +210,28 @@ def _query_explicitly_requests_grounding(query: str) -> bool:
                 "trading at",
             )
         )
+    )
+
+
+def _query_prefers_direct_style_explanation(query: str) -> bool:
+    text = str(query or "").strip()
+    if not text or _query_explicitly_requests_grounding(text):
+        return False
+    return bool(_STYLE_DIRECTIVE_RE.search(text) and _MECHANISM_EXPLANATION_RE.search(text))
+
+
+def _query_requests_illicit_nonpublic_info(query: str) -> bool:
+    text = str(query or "").strip().lower()
+    if not text:
+        return False
+    return bool(
+        re.search(r"\b(?:insider|inside)\s+(?:information|info|tips?|knowledge)\b", text)
+        or re.search(
+            r"\b(?:material\s+)?non[-\s]?public\s+(?:information|info|data|earnings|guidance|numbers|results)\b",
+            text,
+        )
+        or re.search(r"\b(?:confidential|leaked|private)\s+(?:information|info|earnings|guidance|numbers|results)\b", text)
+        or re.search(r"(?:内幕(?:信息|消息|资料)|非公开(?:信息|消息|资料)|未公开(?:业绩|财报|指引|消息))", text)
     )
 
 
@@ -373,7 +405,9 @@ def _research_decision_can_answer_as_chat(decision: ConversationDecision, query:
     """
     if decision.execution_route != "research":
         return False
-    if decision.domain_intent not in {"analysis", "finance_concept"}:
+    ordinary_domain = decision.domain_intent in {"analysis", "finance_concept"}
+    style_explanation = decision.domain_intent in {"news", "unknown"} and _query_prefers_direct_style_explanation(query)
+    if not (ordinary_domain or style_explanation):
         return False
     if _query_explicitly_requests_grounding(query):
         return False
@@ -403,6 +437,45 @@ def normalize_context_decision(
     recent_history = _recent_history(state)
     query = str(state.get("query") or "").strip()
     has_thread_history = bool(recent_history)
+
+    if _query_requests_illicit_nonpublic_info(query):
+        label = ", ".join((_effective_current_turn_tickers(query, tickers, decision) or tickers)[:3])
+        return replace(
+            decision,
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="none",
+                confidence=0.0,
+                reason="request asks for insider or non-public information and must not use research tools",
+                subject_hint=label or binding.subject_hint,
+            ),
+            confidence=max(decision.confidence, 0.8),
+            needs_tools=False,
+            task_hints=(),
+            reply_guidance=decision.reply_guidance
+            or "Decline requests for insider or non-public information, then offer to analyze public filings, news, and risk factors instead.",
+        )
+
+    if (
+        not tickers
+        and not selection_ids
+        and has_thread_history
+        and source in {"last_turn", "recent_focus"}
+        and binding.subject_hint
+    ):
+        augmented_hint = _augment_subject_hint_with_history_ticker(binding.subject_hint, recent_history)
+        if augmented_hint != binding.subject_hint:
+            decision = replace(
+                decision,
+                context_binding=ContextBinding(
+                    source=source,
+                    confidence=binding.confidence,
+                    reason=binding.reason or "same-thread history provided the ticker for this bound subject",
+                    subject_hint=augmented_hint,
+                ),
+            )
+            binding = decision.context_binding
+            source = binding.source
 
     if decision.relation == "new_topic" and source in {
         "last_turn",
@@ -612,6 +685,30 @@ def normalize_context_decision(
         )
 
     if source == "last_report" and not _compact_last_report(memory_context):
+        if decision.relation != "new_topic" and has_thread_history:
+            subject_hint = _history_subject_hint(recent_history) or binding.subject_hint
+            if subject_hint:
+                should_research = (
+                    bool(decision.task_hints and _task_hints_require_execution(decision.task_hints))
+                    or bool(decision.needs_tools)
+                    or _query_explicitly_requests_grounding(query)
+                    or str(state.get("output_mode") or "").strip().lower() == "investment_report"
+                )
+                return replace(
+                    decision,
+                    execution_route="research" if should_research else "direct_answer",
+                    context_binding=ContextBinding(
+                        source="last_turn",
+                        confidence=max(binding.confidence, 0.76),
+                        reason="same-thread report-like history is available, but current_report memory was not persisted",
+                        subject_hint=subject_hint,
+                    ),
+                    confidence=max(decision.confidence, 0.72),
+                    needs_tools=should_research,
+                    task_hints=decision.task_hints if should_research else (),
+                    reply_guidance=decision.reply_guidance
+                    or "Use the recent conversation report context; do not ask for the report again unless the requested action remains impossible.",
+                )
         return replace(
             decision,
             execution_route="clarify" if decision.relation != "new_topic" else decision.execution_route,
@@ -968,6 +1065,32 @@ def _history_subject_hint(recent_history: list[dict[str, str]]) -> str:
             if content:
                 return content[:160]
     return ""
+
+
+def _augment_subject_hint_with_history_ticker(subject_hint: str, recent_history: list[dict[str, str]]) -> str:
+    text = str(subject_hint or "").strip()
+    existing = [
+        str(ticker).upper()
+        for ticker in (extract_tickers(text).get("tickers") or [])
+        if str(ticker).strip()
+    ]
+    if existing and any(re.search(rf"\b{re.escape(ticker)}\b", text.upper()) for ticker in existing):
+        return text
+
+    history_hint = _history_subject_hint(recent_history)
+    tickers = [
+        str(ticker).upper()
+        for ticker in (extract_tickers(history_hint).get("tickers") or [])
+        if str(ticker).strip()
+    ]
+    ticker_label = ", ".join(_dedupe_preserve_order(existing or tickers)[:3])
+    if not ticker_label:
+        return text
+    if not text:
+        return ticker_label
+    if ticker_label.upper() in text.upper():
+        return text
+    return f"{ticker_label} - {text}"[:160]
 
 
 def _compact_last_report(memory_context: dict[str, Any]) -> dict[str, Any] | None:
