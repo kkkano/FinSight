@@ -17,7 +17,7 @@
 ### 0.1 本文档的「小步」更新流程
 
 - 任何与 LangGraph 重构相关的实现、测试、接口、UI 变动，先登记到当前有效 spec 或 `docs/plans/`；本轮请求理解事实源是 `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`。
-- 每完成一个 **小步**（一个可独立合并并验证的单元），须同步更新对应 spec、`06b_LANGGRAPH_CHANGELOG.md` 和验证报告（`docs/reports/` 或 `docs/feature_logs/`）。
+- 每完成一个 **小步**（一个可独立合并并验证的单元），须同步更新对应 spec、`06b_LANGGRAPH_CHANGELOG.md` 和验证报告（优先 `docs/reports/`；发布演练使用 `docs/release_evidence/`；`docs/feature_logs/` 仅保留历史归档，不再新增流水账）。
 - 验证证据必须可复现：命令、关键输出、截图/trace/report 路径至少保留一种。
 - 每新增一项工具（比如：字段、输入、按钮位置、模板章节、预设测试），须同步写入 `06b_LANGGRAPH_CHANGELOG.md` 的 **变更记录**。
 

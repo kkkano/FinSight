@@ -6,7 +6,7 @@
 
 - 根目录只保留当前有效的架构、运行、契约和产品规范文档。
 - `plans/` 放尚未完成或仍可执行的计划、spec、todolist。
-- `feature_logs/` 放已完成工作的流水记录，只作追溯证据。
+- `feature_logs/` 仅作历史兼容目录；新验证报告优先放 `reports/`，发布演练和收口证据放 `release_evidence/`，旧流水记录见 `archive/feature_logs/`。
 - `Thinking/` 放 ADR、探索草稿、问题分析；默认保留，但不作为当前事实源。
 - `archive/` 放过期计划、旧路线图、临时报表和被当前规范取代的文档。
 - `design/`、`prototype/` 放视觉方案、原型和静态资产，不作为运行架构事实源。

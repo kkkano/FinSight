@@ -55,10 +55,10 @@
 
 - `docs/archive/`：过期方案、旧路线图、临时报表和被替代文档。
 - `docs/archive/2026-05-agent-observability-cleanup/`：2026-05 文档清理归档批次。
-- `docs/archive/qa/`：2026-05-20 归档 97 个临时 smoke/targeted/regression eval 文件；保留最终验收和基线。
-- `docs/archive/feature_logs/`：2026-05-20 整批归档历史流水账（2025-12 ~ 2026-05 early）。
-- `docs/archive/Thinking/`：2026-05-20 归档 2026-01 过期架构草稿；保留 ADR 和参考。
-- `docs/archive/plans/`：2026-05-20 归档已完成/已收口的计划文件（2026-03-06, 2026-03-07, 2026-05-18）。
+- `docs/archive/qa/`：2026-05-20 归档 97 个临时 smoke/targeted/regression eval 文件；保留最终验收和基线；批次说明见目录 `README.md`。
+- `docs/archive/feature_logs/`：2026-05-20 整批归档历史流水账（2025-12 ~ 2026-05 early）；批次说明见目录 `README.md`。
+- `docs/archive/Thinking/`：2026-05-20 归档 2026-01 过期架构草稿；保留 ADR 和参考；批次说明见目录 `README.md`。
+- `docs/archive/plans/`：2026-05-20 归档已完成/已收口的计划文件（2026-03-06, 2026-03-07, 2026-05-18）；批次说明见目录 `README.md`。
 - `docs/Thinking/`：ADR、探索草稿和问题分析；默认不作为当前事实源。
 - `docs/release_evidence/`：发布演练和运行证据。
 - `docs/reports/`：生成报告和 trace 报告样本。
@@ -67,6 +67,6 @@
 
 - 根目录只放当前有效、需要长期引用的文档。
 - 新计划放 `docs/plans/`，完成或过期后归档到 `docs/archive/<yyyy-mm-topic>/`。
-- 不直接删除历史文档；归档时在批次 README 记录原路径和原因。
+- 不直接删除历史文档；归档时在批次 README 记录原路径和原因。新验证报告优先进入 `docs/reports/`，发布演练和收口证据进入 `docs/release_evidence/`。
 - 文档新增、移动或归档后，必须同步更新本索引。
 - 如果文档与代码冲突，以代码、测试和运行日志为准，并在文档中标记需校准项。

@@ -723,8 +723,9 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
 def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkeypatch) -> None:
     from backend.graph.nodes import chat_renderer
 
-    def fake_get_company_news(ticker: str, limit: int = 5):
+    def fake_get_company_news(ticker: str, limit: int = 5, fast: bool = False):
         assert ticker == "NVDA"
+        assert fast is True
         return [
             {
                 "title": "Nvidia earnings preview",
@@ -735,6 +736,7 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
         ][:limit]
 
     monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
 
     markdown = _render_chat(
         {
@@ -763,6 +765,54 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
     assert "Nvidia earnings preview" in markdown
     assert "https://finance.yahoo.com/markets/stocks/articles/nvidia-earnings-preview-2026-05-18.html" in markdown
     assert "finance.yahoo.com/quote/NVDA/news" not in markdown
+
+
+def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> None:
+    from backend.graph.nodes import chat_renderer
+
+    calls: list[str] = []
+
+    def fake_get_company_news(ticker: str, limit: int = 5, fast: bool = False):
+        calls.append(ticker)
+        return [
+            {
+                "title": f"{ticker} earnings article",
+                "url": f"https://finance.yahoo.com/markets/stocks/articles/{ticker.lower()}-earnings.html",
+                "source": "Yahoo Finance",
+                "published_at": "2026-05-18",
+            }
+        ][:limit]
+
+    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_MAX_TICKERS", "1")
+    monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_BUDGET_SECONDS", "5")
+
+    markdown = _render_chat(
+        {
+            "query": "NVDA and MSFT latest news with links.",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "MSFT"]},
+            "operation": {"name": "fetch"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "subject_label": "NVDA, MSFT",
+                    "tickers": ["NVDA", "MSFT"],
+                    "operation": {"name": "fetch", "params": {"topic": "news", "include_links": True, "count": 3}},
+                }
+            ],
+            "artifacts": {"step_results": {}},
+            "reply_contract": {
+                "lane": "source_grounded_answer",
+                "source_constraints": {"requires_links": True},
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert calls == ["NVDA"]
+    assert "NVDA earnings article" in markdown
 
 
 def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:

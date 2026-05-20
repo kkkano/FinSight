@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -388,6 +390,20 @@ def _reply_contract_requires_links(state: GraphState) -> bool:
     return bool(constraints.get("requires_links"))
 
 
+def _news_article_fallback_budget_seconds() -> float:
+    try:
+        return max(0.0, float(os.getenv("CHAT_RENDER_NEWS_FALLBACK_BUDGET_SECONDS", "5")))
+    except Exception:
+        return 5.0
+
+
+def _news_article_fallback_max_tickers() -> int:
+    try:
+        return max(0, min(int(os.getenv("CHAT_RENDER_NEWS_FALLBACK_MAX_TICKERS", "1")), 4))
+    except Exception:
+        return 1
+
+
 def _news_search_fallback_items(state: GraphState, *, count: int) -> list[dict[str, str]]:
     tickers = _tickers(state) or ["相关标的"]
     items: list[dict[str, str]] = []
@@ -478,7 +494,13 @@ def _direct_news_article_fallback_map(state: GraphState, *, count: int) -> dict[
     This is intentionally narrow: it only runs for explicit link-required news
     turns and only accepts article-like URLs, never search or quote listing pages.
     """
-    target_count = max(1, min(count, 5))
+    budget_seconds = _news_article_fallback_budget_seconds()
+    max_tickers = _news_article_fallback_max_tickers()
+    if budget_seconds <= 0 or max_tickers <= 0:
+        return {}
+
+    started_at = time.monotonic()
+    target_count = max(1, min(count, 3))
     result: dict[str, list[dict[str, str]]] = {}
     tickers = [
         ticker
@@ -486,23 +508,37 @@ def _direct_news_article_fallback_map(state: GraphState, *, count: int) -> dict[
         if re.match(r"^[A-Z][A-Z0-9.\-=]{0,9}$", ticker) and ticker not in {"I", "ME", "YOU"}
     ]
 
-    for ticker in tickers[:4]:
+    def _has_budget() -> bool:
+        return (time.monotonic() - started_at) < budget_seconds
+
+    for ticker in tickers[:max_tickers]:
+        if not _has_budget():
+            break
         items: list[dict[str, str]] = []
         if callable(get_company_news):
             try:
-                items.extend(_news_items(get_company_news(ticker, limit=max(target_count, 3)), limit=target_count * 2))
+                items.extend(
+                    _news_items(
+                        get_company_news(ticker, limit=max(target_count, 3), fast=True),
+                        limit=target_count * 2,
+                    )
+                )
             except Exception:
                 pass
 
-        if len(_dedupe_news_items(items, limit=target_count)) < target_count and callable(get_authoritative_media_news):
+        if (
+            _has_budget()
+            and len(_dedupe_news_items(items, limit=target_count)) < target_count
+            and callable(get_authoritative_media_news)
+        ):
             company_name = _company_name_for_ticker(ticker)
             query = " ".join(part for part in (ticker, company_name, "news") if part)
             try:
-                payload = get_authoritative_media_news(query, max_results=max(target_count * 3, 5))
+                payload = get_authoritative_media_news(query, max_results=max(target_count * 2, 5))
             except Exception:
                 payload = {}
             rows = payload.get("articles") if isinstance(payload, dict) else payload
-            authoritative_items = _news_items(rows if isinstance(rows, list) else [], limit=target_count * 3)
+            authoritative_items = _news_items(rows if isinstance(rows, list) else [], limit=target_count * 2)
             items.extend(item for item in authoritative_items if _news_item_matches_subject(item, ticker))
 
         usable = _dedupe_news_items(
@@ -512,13 +548,13 @@ def _direct_news_article_fallback_map(state: GraphState, *, count: int) -> dict[
         if usable:
             result[ticker] = usable
 
-    if not result and not tickers and callable(get_authoritative_media_news):
+    if not result and not tickers and _has_budget() and callable(get_authoritative_media_news):
         try:
-            payload = get_authoritative_media_news(str(state.get("query") or "market news"), max_results=max(target_count * 3, 5))
+            payload = get_authoritative_media_news(str(state.get("query") or "market news"), max_results=max(target_count * 2, 5))
         except Exception:
             payload = {}
         rows = payload.get("articles") if isinstance(payload, dict) else payload
-        usable = _dedupe_news_items(_news_items(rows if isinstance(rows, list) else [], limit=target_count * 3), limit=target_count)
+        usable = _dedupe_news_items(_news_items(rows if isinstance(rows, list) else [], limit=target_count * 2), limit=target_count)
         if usable:
             result["相关信息"] = usable
 

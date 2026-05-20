@@ -11,7 +11,7 @@
 - 已完成：`prepare_context` 主链路合并、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`GraphState` 新增理解层字段、URL/网页/文章 planner 工具 `fetch_url_content`、`trace/visibility=user`、前端 trace 消费、policy task 工具并集、planner stub 多任务消费、executor `task_results` 归集、多任务 conversational fallback、100-query 聊天 UX 完整验收、后端 conversation API、服务端 conversation snapshot store、会话标题/messages/PATCH、删除会话时清理 session context/report index/thread RAG collections/RAG observability runs、前后端停止生成闭环、executor/agent cooperative cancellation token。
 - 保留兼容：旧 `resolve_subject / clarify / parse_operation` 仍注册，用于兼容测试和少数回退逻辑；`chat_respond` 仍在主路径上，但只处理纯社交快速通道。
 - 待完成：planner/executor/synthesize 的全量多任务 PlanIR 原生化硬化、长耗时同步外部工具的更细粒度 cooperative cancel 支持、多设备/多用户级 conversation store 迁移。
-- 验收证据：`docs/qa/chat-router-100-final100-current-state.md` / `.json` 记录 `tests/eval/chat_router_100.json` 的最终 current-state 运行，100 条、18 类、95 个 hard 红线用例全部通过（100 PASS / 0 REVIEW / 0 FAIL）。旧 40-query 回归证据保留在 `docs/qa/chat-ux-40-query-final40-post-context-binding.md`（39 PASS / 1 REVIEW / 0 FAIL）和 `docs/qa/chat-ux-40-query-targeted-q10-render-marker-fix.md`。剩余风险为上游 LLM/工具延迟、额度、403 或不可读 URL；这些失败只能进入 diagnostics，不能作为 evidence 渲染。
+- 验收证据：`docs/qa/chat-router-100-final100-current-state.md` / `.json` 记录 `tests/eval/chat_router_100.json` 的最终 current-state 运行，100 条、18 类、95 个 hard 红线用例全部通过（100 PASS / 0 REVIEW / 0 FAIL）。旧 40-query 回归证据保留在 `docs/qa/chat-ux-40-query-final40-post-context-binding.md`（39 PASS / 1 REVIEW / 0 FAIL）和 `docs/archive/qa/chat-ux-40-query-targeted-q10-render-marker-fix.md`。剩余风险为上游 LLM/工具延迟、额度、403 或不可读 URL；这些失败只能进入 diagnostics，不能作为 evidence 渲染。
 
 ## 1. 背景
 
