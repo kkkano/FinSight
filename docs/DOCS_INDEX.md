@@ -1,6 +1,6 @@
-﻿# FinSight 文档索引
+# FinSight 文档索引
 
-更新时间：2026-05-18
+更新时间：2026-05-20
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
@@ -16,11 +16,8 @@
 ## 当前实现 Spec
 
 - `docs/plans/2026-05-03_request_understanding_task_graph_spec.md`：请求理解层重构 spec。已接入 `prepare_context`、纯社交 `chat_respond`、`understand_request` 内 LLM conversation router、`ReplyContract` 三 lane、作用域化 `memory_context`、用户 `timeoutSeconds` 偏好、`tasks[]`、`blocked_tasks[]`、URL 工具 `fetch_url_content`、用户可见 trace、planner stub 多任务消费、executor `task_results` 与 `tool_diagnostics`、后端 `/api/conversations` 生命周期 API、服务端 conversation snapshot store、会话标题/messages/PATCH 和停止生成 cancellation token 闭环；后续剩余项是 planner/executor/synthesize 全量多任务原生化硬化、多设备 conversation store 迁移和同步外部工具 cooperative cancel。
-- `docs/plans/2026-05-18_evidence_research_agents_goal_plan.md`：Evidence Ledger、query coverage、DeepSearch 工作集、多空辩论、SEC 13F/Form 4 持仓研究、前端证据展示、MCP/A2A 只读协议暴露的可执行 `/goal` 计划；执行证据见 `docs/release_evidence/2026-05-18_evidence_research_agents.md`。
 - `docs/plans/2026-05-02_agent_observability_report_quality_spec.md`：Agent 进度可观测、DeepSearch、报告质量和回答契约改造 spec。
 - `docs/plans/2026-03-08_rag_three_layer_architecture_todolist.md`：三层 RAG 架构计划。
-- `docs/plans/2026-03-07_rag_local_pg_observability_validation.md`：本地 PG 可观测验证计划。
-- `docs/plans/2026-03-06_rag_observability_inspector_todolist.md`：RAG inspector 计划。
 
 ## 当前运行链路参考
 
@@ -34,10 +31,9 @@
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
 - `docs/qa/chat-router-100-final100-current-state.md`：当前聊天 UX 最终 current-state 验收；配套 JSON 为同名 `.json`。`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 100/100 PASS、0 REVIEW、0 FAIL。
 - `backend/tests/test_graph_store_memory.py`、`backend/tests/test_contextual_conversation_router.py`、`backend/tests/test_user_timeout_preferences.py`：当前连续对话记忆隔离与用户可调超时的 targeted 回归入口。
-- `docs/qa/chat-ux-40-query-final40-post-context-binding.md`：旧 40-query 回归证据，结果 39 PASS、1 REVIEW、0 FAIL；Q10 渲染标记定向修复另见 `docs/qa/chat-ux-40-query-targeted-q10-render-marker-fix.md`。
+- `docs/qa/chat-ux-40-query-final40-post-context-binding.md`：旧 40-query 回归证据，结果 39 PASS、1 REVIEW、0 FAIL。
 - `docs/qa/chat-ux-targeted-post-acceptance-polish-2026-05-06.md`：Q16/Q26/Q27/Q39 定向回归，验证 portfolio context、alert 文案、URL 失败文案和复合任务 polish；结果 4/4 PASS。
 - `tests/eval/chat_router_100.json` + `scripts/chat_ux_router_eval.py`：100 条聊天 UX 路由/答案质量/证据红线数据集，覆盖普通解释、不要新闻纠偏、新闻链接、报价、工具失败、上下文绑定、会话隔离、复合意图、混乱纠正、报告追问、组合/提醒、URL/文章、宏观传导、UI selection、安全边界、语言风格、上下文连续性和报告按钮追问。
-- `docs/qa/chat-ux-40-query-live-eval-2026-05-04.md` 与 `docs/qa/chat_regression_queries_2026_05_03.*` 是历史回归样本，保留作对比。
 - `docs/HALLUCINATION_MITIGATION.md`：幻觉缓解与证据约束。
 - `docs/REPORT_CHART_SPEC.md`：报告图表规范。
 - `docs/rag-evaluation-guide.md`：RAG 评估方法。
@@ -59,8 +55,10 @@
 
 - `docs/archive/`：过期方案、旧路线图、临时报表和被替代文档。
 - `docs/archive/2026-05-agent-observability-cleanup/`：2026-05 文档清理归档批次。
-- `docs/archive/2026-05-agent-observability-cleanup/ROUTING_ARCHITECTURE_STANDARD.md`：旧 `ConversationRouter` / `SchemaRouter` 标准，已被 LangGraph 单入口和 request understanding spec 取代。
-- `docs/feature_logs/`：已完成工作的流水记录，只作追溯证据。
+- `docs/archive/qa/`：2026-05-20 归档 97 个临时 smoke/targeted/regression eval 文件；保留最终验收和基线。
+- `docs/archive/feature_logs/`：2026-05-20 整批归档历史流水账（2025-12 ~ 2026-05 early）。
+- `docs/archive/Thinking/`：2026-05-20 归档 2026-01 过期架构草稿；保留 ADR 和参考。
+- `docs/archive/plans/`：2026-05-20 归档已完成/已收口的计划文件（2026-03-06, 2026-03-07, 2026-05-18）。
 - `docs/Thinking/`：ADR、探索草稿和问题分析；默认不作为当前事实源。
 - `docs/release_evidence/`：发布演练和运行证据。
 - `docs/reports/`：生成报告和 trace 报告样本。
