@@ -163,6 +163,10 @@ flowchart LR
   - `LANGGRAPH_PLANNER_MODE=stub|llm`
   - A/B 变体与指标（`get_planner_ab_metrics`）
   - LLM 解析失败回退 `planner_stub`
+  - JSON Schema 容错（2026-05-20）：`PlannerSchemaShapeError` + 自动重试 prompt，解析失败时二次修复
+  - `plan_ready` 事件携带 `agent_selection` 诊断——被跳过 Agent 附带原因、预算优先级排序（详见 `execution-event-contract.md`）
+  - 新闻引用兜底：当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL
+  - 对话路由安全边界：`_query_requests_illicit_nonpublic_info` 拦截索取内幕/非公开信息的请求，阻止进入 research
 - `planner_stub.py` 已支持新工具关键词路由：
   - `get_earnings_estimates`, `get_eps_revisions`
   - `get_option_chain_metrics`

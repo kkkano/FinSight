@@ -9,6 +9,13 @@
 
 ### 新增
 
+- **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
+  - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
+  - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。
+  - 对话路由安全边界：识别并拦截索取内幕/非公开信息的请求，阻止进入 research 链路。
+  - 新闻引用兜底：当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL。
+  - 多轮对话上下文延续：用历史 ticker 补全当前轮主题提示。
+  - Research 辩论新增只读裁决产物（`adjudications`）。
 - **Evidence Research Agents**：新增证据驱动研究链路
   - `EvidenceLedger` / query coverage 合同，统一 `claims`、`sources`、`uncertainties`、`contradictions` 与未覆盖目标。
   - DeepSearch flow facade，阶段化 `plan_search -> fetch_sources -> extract_claims -> gap_check -> targeted_followup -> ledger_write`，新写入使用 `ws:deepsearch:*` working set。

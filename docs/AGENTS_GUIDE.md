@@ -261,6 +261,7 @@ flowchart LR
   - 新写入使用 `ws:deepsearch:*` working set，不再新增 `session:deepsearch:*` collection。
 - Debate engine：`backend/research/debate.py`
   - 输出 `bull_thesis`、`bear_thesis`、`cross_examination`、`judge_scorecard`、`consensus`、`open_questions`。
+  - 新增 `build_read_only_adjudications`（2026-05-20）：输出 Bull/Bear/Judge 只读裁决产物，供前端展示和 API 消费。
 - LangGraph 节点：`backend/graph/nodes/research_debate.py`
   - 节点顺序为 `execute_plan -> research_debate -> synthesize`。
   - `DEBATE_GRAPH_ENABLED=false` 时节点保持无副作用跳过。

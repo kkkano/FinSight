@@ -294,6 +294,12 @@ graph TD
 
 **Agent 选择**: 通过 `capability_registry.select_agents_for_request()` 动态选择 2-4 个 agent
 
+**Agent 选择诊断** (2026-05-20)：`plan_ready` 事件新增 `agent_selection` 字段，包含每个被跳过 Agent 的原因枚举（`deepsearch_not_requested` / `not_needed_for_output_mode` / `budget_or_depth_limited` / `not_selected_by_planner`）和已选 Agent 的 `budget_priority` 排序。前端 `pipelineReducer` 消费此字段；`decision_note.details.agent_selection` 同步携带。
+
+**Schema 容错** (2026-05-20)：LLM 返回 PlanIR JSON 解析失败时，先自动修复常见错误（缺逗号、截断等），仍失败则构造含错误上下文的重试 prompt 二次请求 LLM（`PlannerSchemaShapeError` → `_build_schema_retry_prompt`）。
+
+**安全边界** (2026-05-20)：conversation_router 新增内幕/非公开信息请求检测，此类请求被拒绝进入 research 链路。新闻引用兜底确保 `reply_contract` 有可引用 URL。多轮对话中历史 ticker 自动补全主题提示。
+
 **Source**: `backend/graph/nodes/planner.py`
 
 ---

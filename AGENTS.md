@@ -17,6 +17,14 @@
 - `backend/agents/risk_agent.py`：原生输出 risk_score / factor_exposure / stress_test claims。
 - `scripts/agent_quality_eval.py` + `tests/eval/agent_quality_cases.json`：确定性 fixture eval gate，用于保存 before/after 结果并审计单 Agent 质量变化。
 
+# 2026-05-20 增量架构说明（后端 Agent 能力诊断强化）
+
+- `backend/graph/nodes/planner.py`：Planner 输出 `agent_selection` 诊断，`plan_ready` / `decision_note` 事件携带跳过原因、预算优先级、deepsearch 意图。PlanIR Schema 容错增强（`PlannerSchemaShapeError` + retry prompt）。
+- `backend/graph/nodes/conversation_router.py`：新增内幕/非公开信息安全边界（`_query_requests_illicit_nonpublic_info`），多轮对话历史 ticker 补全主题提示。
+- `backend/graph/nodes/chat_renderer.py`：新闻引用兜底——当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL。
+- `backend/research/debate.py`：新增 `build_read_only_adjudications`，输出 Bull/Bear/Judge 只读裁决产物。
+- `backend/research/agent_quality_contract.py`：增强 low_source_quality / recovery action 诊断。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

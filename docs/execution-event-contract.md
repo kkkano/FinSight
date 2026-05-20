@@ -70,13 +70,31 @@
     }
   ],
   "plan_steps_count": 1,
+  "agents": ["news_agent"],
   "selected_agents": ["news_agent"],
   "skipped_agents": ["macro_agent"],
+  "agent_selection": {
+    "selected_agents": ["news_agent"],
+    "skipped_agents": [
+      {"agent": "macro_agent", "reason": "not_needed_for_output_mode"}
+    ],
+    "deepsearch_reason": "requested|not_requested",
+    "budget_priority": [
+      {"agent": "news_agent", "rank": 1, "estimated_effort": "low|medium|high", "estimated_latency_ms": 1200}
+    ]
+  },
   "has_parallel": false,
   "reasoning_brief": "planner summary without chain-of-thought",
   "timestamp": "ISO-8601"
 }
 ```
+
+`agent_selection` 诊断（`backend/graph/nodes/planner.py:_build_agent_selection_diagnostics`）说明：
+
+- `agents`：与 `selected_agents` 等价的别名字段，便于前端统一消费。
+- `agent_selection.skipped_agents[].reason` 枚举：`deepsearch_not_requested`、`not_needed_for_output_mode`、`budget_or_depth_limited`、`not_selected_by_planner`。
+- `agent_selection.deepsearch_reason`：`requested` / `not_requested`，标记是否命中 deep-search 意图。
+- `agent_selection.budget_priority[]`：按预算/延迟排序的已选 agent，含 `rank`、`estimated_effort`、`estimated_latency_ms`。
 
 ### `decision_note`
 ```json
@@ -86,6 +104,9 @@
   "title": "Planner selection summary",
   "reason": "why",
   "impact": "impact scope",
+  "details": {
+    "agent_selection": "同 plan_ready.agent_selection 结构"
+  },
   "next_step": "optional",
   "timestamp": "ISO-8601"
 }
