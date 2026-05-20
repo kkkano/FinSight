@@ -190,26 +190,90 @@ def _query_explicitly_requests_grounding(query: str) -> bool:
     if wants_no_news_or_links(text):
         return False
     lowered = text.lower()
+    grounded_tokens = (
+        "url",
+        "urls",
+        "headline",
+        "headlines",
+        "news",
+        "latest",
+        "recent",
+        "current",
+        "quote",
+        "price now",
+        "stock price",
+        "trading at",
+        "earnings",
+        "financial results",
+        "quarterly results",
+        "guidance",
+        "revenue",
+        "eps",
+        "analyst",
+        "rating",
+        "ratings",
+        "target price",
+        "price target",
+        "competition",
+        "competitive",
+        "competitor",
+        "market share",
+        "valuation",
+        "catalyst",
+        "10-q",
+        "10-k",
+    )
+    grounded_cjk_tokens = (
+        "最新",
+        "最近",
+        "近期",
+        "当前",
+        "现在",
+        "今日",
+        "新闻",
+        "链接",
+        "来源",
+        "引用",
+        "财报",
+        "业绩",
+        "营收",
+        "利润率",
+        "毛利率",
+        "指引",
+        "电话会",
+        "分析师",
+        "评级",
+        "目标价",
+        "上调",
+        "下调",
+        "竞争",
+        "竞品",
+        "同行",
+        "对比",
+        "市占率",
+        "市场份额",
+        "估值",
+        "催化剂",
+    )
+    compound_facet_hits = sum(
+        1
+        for group in (
+            ("earnings", "financial results", "quarterly results", "财报", "业绩", "营收", "指引"),
+            ("analyst", "rating", "target price", "price target", "分析师", "评级", "目标价"),
+            ("competition", "competitive", "competitor", "market share", "竞争", "竞品", "同行", "市占率", "市场份额"),
+            ("valuation", "catalyst", "估值", "催化剂"),
+        )
+        if any(token in lowered or token in text for token in group)
+    )
+    compound_shape = len(text) >= 48 or len(re.findall(r"[,，、;；/]|(?:\bvs\.?\b)|(?:\band\b)", lowered)) >= 2
     return (
         bool(_URL_RE.search(text))
         or query_explicitly_requests_sources(text)
         or bool(re.search(r"\b(?:what|which)\s+(?:is\s+)?(?:the\s+)?(?:current\s+)?(?:price|quote)\b", lowered))
         or bool(re.search(r"\bhow\s+much\s+(?:is|are)\b", lowered))
-        or any(
-            token in lowered
-            for token in (
-                "url",
-                "urls",
-                "headline",
-                "headlines",
-                "news",
-                "latest",
-                "quote",
-                "price now",
-                "stock price",
-                "trading at",
-            )
-        )
+        or any(token in lowered for token in grounded_tokens)
+        or any(token in text for token in grounded_cjk_tokens)
+        or (compound_shape and compound_facet_hits >= 2)
     )
 
 

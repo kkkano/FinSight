@@ -504,6 +504,17 @@ async def run_graph_pipeline(
                     }
                 )
 
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "done",
+                        "status": "done",
+                        "message": "Execution completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+
             # 7. Final "done" event
             llm_total_calls = stream_metrics.get("llm_start", 0)
             if llm_total_calls <= 0:
@@ -802,6 +813,17 @@ async def resume_graph_pipeline(
                         "stage": "rendering",
                         "status": "done",
                         "message": "Rendering stream completed",
+                        "timestamp": _utc_iso_now(),
+                    }
+                )
+
+                await _queue_event(
+                    {
+                        "schema_version": deps.sse_event_schema_version,
+                        "type": "pipeline_stage",
+                        "stage": "done",
+                        "status": "done",
+                        "message": "Execution completed",
                         "timestamp": _utc_iso_now(),
                     }
                 )

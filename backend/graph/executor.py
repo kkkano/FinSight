@@ -4,7 +4,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import time
+from contextlib import suppress
 from typing import Any, Awaitable, Callable, Mapping, MutableMapping
 
 from backend.graph.cancellation import get_cancel_event
@@ -38,6 +40,13 @@ def _as_async_invoker(fn: Callable[[dict[str, Any]], Any]) -> AsyncInvoker:
         return await asyncio.to_thread(fn, inputs)
 
     return _wrapped
+
+
+def _execution_progress_heartbeat_seconds() -> float:
+    try:
+        return max(0.0, float(os.getenv("LANGGRAPH_EXECUTION_PROGRESS_HEARTBEAT_SECONDS", "2.5")))
+    except Exception:
+        return 2.5
 
 
 def group_steps_by_parallel_group(steps: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -145,6 +154,61 @@ async def execute_plan(
         if cancel_event is not None and cancel_event.is_set():
             await _emit_cancelled_stage()
             raise asyncio.CancelledError()
+
+    async def _await_step_output(
+        value: Any,
+        *,
+        kind: str,
+        name: str,
+        step_id: str,
+        task_id: str | None,
+        task_ids: list[str],
+        parallel_group: str | None,
+        started_at: float,
+    ) -> Any:
+        heartbeat_seconds = _execution_progress_heartbeat_seconds()
+        if heartbeat_seconds <= 0:
+            return await _maybe_await(value)
+
+        task = asyncio.create_task(_maybe_await(value))
+        heartbeat_count = 0
+        try:
+            while not task.done():
+                done, _ = await asyncio.wait({task}, timeout=heartbeat_seconds)
+                if done:
+                    break
+                await _raise_if_cancelled()
+                heartbeat_count += 1
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                progress = min(78, 38 + heartbeat_count * 4)
+                payload: dict[str, Any] = {
+                    "type": "pipeline_stage",
+                    "stage": "executing",
+                    "status": "running",
+                    "message": f"{name or kind} still running",
+                    "progress": progress,
+                    "progress_percent": progress,
+                    "elapsed_ms": elapsed_ms,
+                    "step_id": step_id,
+                    "kind": kind,
+                    "name": name,
+                    "task_id": task_id,
+                    "task_ids": task_ids,
+                    "parallel_group": parallel_group,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+                if kind == "agent":
+                    payload["agent"] = name
+                elif kind == "tool":
+                    payload["tool"] = name
+                await emit_event(payload)
+            return await task
+        except asyncio.CancelledError:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            raise
 
     await emit_event(
         {
@@ -371,7 +435,16 @@ async def execute_plan(
                     invoker = async_tools.get(str(name))
                     if not invoker:
                         raise ValueError(f"tool not allowed/registered: {name}")
-                    output = await _maybe_await(invoker(inputs))
+                    output = await _await_step_output(
+                        invoker(inputs),
+                        kind=str(kind),
+                        name=str(name),
+                        step_id=str(step_id),
+                        task_id=task_id,
+                        task_ids=task_ids,
+                        parallel_group=parallel_group,
+                        started_at=start,
+                    )
                     await _raise_if_cancelled()
                     await emit_event({"type": "tool_end", "step_id": step_id, "task_id": task_id, "task_ids": task_ids})
                 elif kind == "agent":
@@ -391,7 +464,16 @@ async def execute_plan(
                     invoker = async_agents.get(str(name))
                     if not invoker:
                         raise ValueError(f"agent not allowed/registered: {name}")
-                    output = await _maybe_await(invoker(inputs))
+                    output = await _await_step_output(
+                        invoker(inputs),
+                        kind=str(kind),
+                        name=str(name),
+                        step_id=str(step_id),
+                        task_id=task_id,
+                        task_ids=task_ids,
+                        parallel_group=parallel_group,
+                        started_at=start,
+                    )
                     await _raise_if_cancelled()
                     await emit_event(
                         {

@@ -74,6 +74,44 @@ def test_executor_emits_executing_stage_events(monkeypatch):
     assert any(event.get("stage") == "executing" and event.get("status") == "done" for event in pipeline_events)
 
 
+def test_executor_emits_progress_heartbeats_during_agent_step(monkeypatch):
+    import backend.graph.executor as executor_mod
+
+    monkeypatch.setenv("LANGGRAPH_EXECUTION_PROGRESS_HEARTBEAT_SECONDS", "0.01")
+    events: list[dict] = []
+
+    async def _fake_emit(payload: dict):
+        events.append(payload)
+
+    async def _slow_agent(_inputs: dict):
+        await asyncio.sleep(0.05)
+        return {"summary": "done"}
+
+    monkeypatch.setattr(executor_mod, "emit_event", _fake_emit)
+
+    artifacts, _trace = _run(
+        executor_mod.execute_plan(
+            {"steps": [{"id": "s1", "kind": "agent", "name": "news_agent", "inputs": {}}]},
+            dry_run=False,
+            tool_invokers={},
+            agent_invokers={"news_agent": _slow_agent},
+            cache={},
+        )
+    )
+
+    assert artifacts["step_results"]["s1"]["status_reason"] == "done"
+    progress_events = [
+        event
+        for event in events
+        if event.get("type") == "pipeline_stage"
+        and event.get("stage") == "executing"
+        and event.get("status") == "running"
+        and isinstance(event.get("progress_percent"), int)
+    ]
+    assert progress_events
+    assert progress_events[0].get("agent") == "news_agent"
+
+
 def test_executor_emits_cancelled_stage_when_cancel_event_is_set(monkeypatch):
     import backend.graph.executor as executor_mod
 

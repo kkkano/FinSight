@@ -350,6 +350,20 @@ def test_explicit_subject_fallback_uses_research_for_quote_request():
     assert decision.needs_tools is True
 
 
+def test_explicit_subject_fallback_uses_research_for_compound_grounded_analysis():
+    from backend.graph.nodes.conversation_router import _fallback_decision
+
+    decision = _fallback_decision(
+        {"query": "请深度分析 INTC 最新财报、Arrow Lake 进展、NVIDIA/AMD/TSMC 竞争、分析师评级和目标价。"},
+        tickers=["INTC", "NVDA", "AMD", "TSMC"],
+        selection_ids=[],
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "research"
+    assert decision.needs_tools is True
+
+
 def test_no_news_constraint_keeps_qa_chat_lane_out_of_news_tools():
     from backend.graph.nodes.planner_stub import planner_stub
     from backend.graph.nodes.policy_gate import policy_gate

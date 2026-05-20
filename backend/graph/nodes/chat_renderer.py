@@ -390,6 +390,26 @@ def _reply_contract_requires_links(state: GraphState) -> bool:
     return bool(constraints.get("requires_links"))
 
 
+def _news_article_fallback_allowed(state: GraphState) -> bool:
+    """Only supplement missing article links after a grounded research path."""
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    decision = artifacts.get("conversation_decision") if isinstance(artifacts.get("conversation_decision"), dict) else {}
+    decision_route = str(decision.get("execution_route") or "").strip().lower()
+    if decision_route:
+        return decision_route == "research"
+
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    understanding_route = str(understanding.get("route") or "").strip().lower()
+    if understanding_route:
+        return understanding_route == "research"
+
+    output_mode = str(state.get("output_mode") or "").strip().lower()
+    if output_mode == "investment_report":
+        return True
+
+    return bool(_tasks(state))
+
+
 def _news_article_fallback_budget_seconds() -> float:
     try:
         return max(0.0, float(os.getenv("CHAT_RENDER_NEWS_FALLBACK_BUDGET_SECONDS", "5")))
@@ -1096,7 +1116,12 @@ def render_chat_markdown(state: GraphState) -> str:
     requested_link_count = _requested_news_link_count(state)
     if _reply_contract_requires_links(state):
         requested_link_count = max(requested_link_count, 3)
-    if _reply_contract_requires_links(state) and requested_link_count and not _news_map_has_citable_url(news_map):
+    if (
+        _reply_contract_requires_links(state)
+        and requested_link_count
+        and _news_article_fallback_allowed(state)
+        and not _news_map_has_citable_url(news_map)
+    ):
         for ticker, items in _direct_news_article_fallback_map(state, count=requested_link_count).items():
             news_map[ticker] = _dedupe_news_items(items + news_map.get(ticker, []), limit=5)
     technical_map = _technical_by_ticker(state)

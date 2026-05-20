@@ -109,6 +109,12 @@ def test_run_graph_pipeline_emits_quality_blocked_and_skips_index(monkeypatch):
     assert blocked_events[0].get("allow_continue_when_blocked") is True
     assert blocked_events[0].get("soft_blocked") is True
 
+    pipeline_events = [event for event in events if isinstance(event, dict) and event.get("type") == "pipeline_stage"]
+    assert any(
+        event.get("stage") == "done" and event.get("status") == "done"
+        for event in pipeline_events
+    )
+
     done_events = [event for event in events if isinstance(event, dict) and event.get("type") == "done"]
     assert done_events, "pipeline should still emit done"
     done = done_events[0]

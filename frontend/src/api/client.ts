@@ -325,6 +325,24 @@ api.interceptors.response.use(
 // Shared SSE parser — used by sendMessageStream() and executeAgent()
 // ---------------------------------------------------------------------------
 
+const sseIdleDoneFallbackMs = (): number => {
+  const raw = Number(import.meta.env.VITE_SSE_IDLE_DONE_FALLBACK_MS ?? 8000);
+  if (!Number.isFinite(raw)) return 8000;
+  return Math.max(0, raw);
+};
+
+const isCompletionProgressSignal = (step: any): boolean => {
+  const stage = String(step?.stage || step?.result?.stage || '').trim().toLowerCase();
+  const eventType = String(step?.eventType || step?.result?.type || '').trim().toLowerCase();
+  const status = String(step?.result?.status || '').trim().toLowerCase();
+  return (
+    eventType === 'done'
+    || stage === 'done'
+    || stage === 'langgraph_render_done'
+    || (stage === 'rendering' && ['done', 'success', 'completed'].includes(status))
+  );
+};
+
 /**
  * Parse an SSE response and dispatch callbacks.
  *
@@ -1030,30 +1048,73 @@ export const apiClient = {
 
     let sawDone = false;
     let sawError = false;
+    let idleDoneTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearIdleDoneFallback = () => {
+      if (idleDoneTimer) {
+        clearTimeout(idleDoneTimer);
+        idleDoneTimer = null;
+      }
+    };
 
     const wrappedOnDone = (report?: any, thinking?: any[], meta?: any) => {
+      if (sawDone || sawError) return;
+      clearIdleDoneFallback();
       sawDone = true;
       onDone?.(report, thinking, meta);
     };
 
     const wrappedOnError = (error: string) => {
+      if (sawDone) return;
+      clearIdleDoneFallback();
       sawError = true;
       onError?.(error);
+    };
+
+    const scheduleIdleDoneFallback = (reason: string) => {
+      const timeoutMs = sseIdleDoneFallbackMs();
+      if (timeoutMs <= 0 || sawDone || sawError || opts.signal?.aborted) return;
+      clearIdleDoneFallback();
+      idleDoneTimer = setTimeout(() => {
+        if (sawDone || sawError || opts.signal?.aborted) return;
+        const timestamp = new Date().toISOString();
+        onThinking?.({
+          stage: 'done',
+          message: 'Execution completed',
+          result: { type: 'done', status: 'done', synthetic_done: true, reason },
+          timestamp,
+          eventType: 'done',
+        });
+        wrappedOnDone(undefined, undefined, { synthetic_done: true, reason, timestamp });
+      }, timeoutMs);
+    };
+
+    const wrappedOnToken = (token: string) => {
+      onToken(token);
+      scheduleIdleDoneFallback('idle_after_token');
+    };
+
+    const wrappedOnThinking = (step: any) => {
+      onThinking?.(step);
+      if (isCompletionProgressSignal(step)) {
+        scheduleIdleDoneFallback('idle_after_completion_signal');
+      }
     };
 
     await parseSSEStream(
       response,
       {
-        onToken,
+        onToken: wrappedOnToken,
         onToolStart,
         onToolEnd,
         onDone: wrappedOnDone,
         onError: wrappedOnError,
-        onThinking,
+        onThinking: wrappedOnThinking,
         onRawEvent,
       },
       { traceRawEnabled, signal: opts.signal },
     );
+    clearIdleDoneFallback();
 
     if (opts.signal?.aborted) {
       return;
@@ -1090,20 +1151,63 @@ export const apiClient = {
 
     let sawDone = false;
     let sawError = false;
+    let idleDoneTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearIdleDoneFallback = () => {
+      if (idleDoneTimer) {
+        clearTimeout(idleDoneTimer);
+        idleDoneTimer = null;
+      }
+    };
+
+    const scheduleIdleDoneFallback = (reason: string) => {
+      const timeoutMs = sseIdleDoneFallbackMs();
+      if (timeoutMs <= 0 || sawDone || sawError || opts.signal?.aborted) return;
+      clearIdleDoneFallback();
+      idleDoneTimer = setTimeout(() => {
+        if (sawDone || sawError || opts.signal?.aborted) return;
+        const timestamp = new Date().toISOString();
+        clearIdleDoneFallback();
+        callbacks.onThinking?.({
+          stage: 'done',
+          message: 'Execution completed',
+          result: { type: 'done', status: 'done', synthetic_done: true, reason },
+          timestamp,
+          eventType: 'done',
+        });
+        sawDone = true;
+        callbacks.onDone?.(undefined, undefined, { synthetic_done: true, reason, timestamp });
+      }, timeoutMs);
+    };
 
     const wrappedCallbacks: SSECallbacks = {
       ...callbacks,
+      onToken: (token) => {
+        callbacks.onToken?.(token);
+        scheduleIdleDoneFallback('idle_after_token');
+      },
+      onThinking: (step) => {
+        callbacks.onThinking?.(step);
+        if (isCompletionProgressSignal(step)) {
+          scheduleIdleDoneFallback('idle_after_completion_signal');
+        }
+      },
       onDone: (report, thinking, meta) => {
+        if (sawDone || sawError) return;
+        clearIdleDoneFallback();
         sawDone = true;
         callbacks.onDone?.(report, thinking, meta);
       },
       onError: (error) => {
+        if (sawDone) return;
+        clearIdleDoneFallback();
         sawError = true;
         callbacks.onError?.(error);
       },
     };
 
     await parseSSEStream(response, wrappedCallbacks, opts);
+    clearIdleDoneFallback();
 
     if (opts.signal?.aborted) {
       return;

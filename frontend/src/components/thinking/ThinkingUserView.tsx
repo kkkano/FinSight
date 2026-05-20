@@ -262,9 +262,11 @@ function computePhases(steps: ThinkingStep[]): ComputedPhase[] {
   // 全局完成态短路：闲聊场景 chat_respond_done / save_memory_done / done 任一触发都强制收尾
   const hasGlobalDone = steps.some((s) => {
     if (s.eventType === 'done') return true;
+    if (s.stage === 'done') return true;
     if (s.stage === 'langgraph_chat_respond_done') return true;
     if (s.stage === 'langgraph_save_memory_done') return true;
     if (s.stage === 'langgraph_render_done') return true;
+    if (s.stage === 'rendering' && s.result?.status === 'done') return true;
     return false;
   });
   if (hasGlobalDone) {

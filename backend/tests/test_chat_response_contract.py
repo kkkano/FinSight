@@ -815,6 +815,49 @@ def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> N
     assert "NVDA earnings article" in markdown
 
 
+def test_news_article_fallback_does_not_run_for_direct_answer_route(monkeypatch) -> None:
+    from backend.graph.nodes import chat_renderer
+
+    calls: list[str] = []
+
+    def fake_get_company_news(ticker: str, limit: int = 5, fast: bool = False):
+        calls.append(ticker)
+        return [
+            {
+                "title": "Direct route should not fetch this article",
+                "url": "https://finance.yahoo.com/markets/stocks/articles/direct-route.html",
+                "source": "Yahoo Finance",
+                "published_at": "2026-05-18",
+            }
+        ]
+
+    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+
+    markdown = _render_chat(
+        {
+            "query": "INTC 最新财报和竞争怎么看？",
+            "subject": {"subject_type": "company", "tickers": ["INTC"]},
+            "operation": {"name": "qa"},
+            "artifacts": {
+                "conversation_decision": {
+                    "execution_route": "direct_answer",
+                    "needs_tools": False,
+                    "reason": "explicit subject context without grounded data request",
+                }
+            },
+            "reply_contract": {
+                "lane": "chat_answer",
+                "source_constraints": {"requires_links": True},
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert calls == []
+    assert "Direct route should not fetch this article" not in markdown
+
+
 def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:
     markdown = _render_chat(
         {

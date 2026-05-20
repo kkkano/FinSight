@@ -198,6 +198,11 @@ const estimateProgress = (stage: string, current: number): number => {
     understanding: 18,
     classifying: 8,
     classified: 15,
+    planning: 12,
+    executing: 72,
+    synthesizing: 88,
+    rendering: 95,
+    done: 100,
     reference_resolution: 20,
     intent_classification: 18,
     agent_gate: 35,
@@ -222,6 +227,12 @@ const estimateProgress = (stage: string, current: number): number => {
     return current;
   }
   return current;
+};
+
+const explicitProgressFromStep = (step: any): number | null => {
+  const raw = step?.result?.progress_percent ?? step?.result?.progress;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
+  return Math.min(100, Math.max(0, Math.round(raw)));
 };
 
 const formatExecutionStep = (stage: string, message?: string): string => {
@@ -534,6 +545,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           });
         },
         async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
+          const doneStep: ThinkingStep = {
+            stage: 'done',
+            message: meta?.synthetic_done ? '已根据流式输出自动完成' : '分析完成',
+            timestamp: new Date().toISOString(),
+            eventType: 'done',
+            result: {
+              type: 'done',
+              status: 'done',
+              synthetic_done: Boolean(meta?.synthetic_done),
+              reason: meta?.reason,
+            },
+          };
+          thinkingSteps = [...thinkingSteps, doneStep];
+
           const metrics = meta?.metrics || {};
           if (metrics && typeof metrics === 'object') {
             setRequestMetrics({
@@ -645,7 +670,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           thinkingSteps = [...thinkingSteps, step];
           updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
           const current = useStore.getState().executionProgress ?? 0;
-          const progress = estimateProgress(step.stage, current);
+          const explicitProgress = explicitProgressFromStep(step);
+          const progress = explicitProgress ?? estimateProgress(step.stage, current);
           const stepLabel = formatExecutionStep(step.stage, step.message);
           if (isRequestSessionActive()) {
             setExecutionState(stepLabel, progress);

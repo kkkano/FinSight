@@ -493,12 +493,13 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       patch.pipelineCurrentStage = stageName;
       patch.currentStep = message || nextStages[stageName].message || run.currentStep;
       const stageProgress = PIPELINE_STAGE_BASE_PROGRESS[stageName];
+      const explicitProgress = clampPercent(result.progress_percent ?? result.progress);
       if (status === 'running') {
-        patch.progress = Math.max(run.progress, Math.max(stageProgress - 3, 0));
+        patch.progress = Math.max(run.progress, explicitProgress ?? Math.max(stageProgress - 3, 0));
       } else if (status === 'done') {
-        patch.progress = Math.max(run.progress, stageProgress);
+        patch.progress = Math.max(run.progress, explicitProgress ?? stageProgress);
       } else if (status === 'error') {
-        patch.progress = Math.max(run.progress, Math.max(stageProgress - 1, 0));
+        patch.progress = Math.max(run.progress, explicitProgress ?? Math.max(stageProgress - 1, 0));
       }
       return mergePatchAndEstimateEta(run, patch);
     }

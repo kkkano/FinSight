@@ -151,6 +151,46 @@ describe('pipelineReducer', () => {
     expect((patch.progress ?? 0) >= 35).toBe(true);
   });
 
+  it('uses explicit pipeline progress heartbeat values', () => {
+    const run = buildRun({ progress: 38 });
+    const step = {
+      eventType: 'pipeline_stage',
+      stage: 'pipeline_stage',
+      message: 'news_agent still running',
+      timestamp: '2026-02-19T00:00:05.000Z',
+      result: {
+        type: 'pipeline_stage',
+        stage: 'executing',
+        status: 'running',
+        progress_percent: 58,
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('pipeline_stage')]);
+    expect(patch.pipelineCurrentStage).toBe('executing');
+    expect(patch.progress).toBe(58);
+  });
+
+  it('maps final pipeline done stage to 100 percent', () => {
+    const run = buildRun({ progress: 95 });
+    const step = {
+      eventType: 'pipeline_stage',
+      stage: 'pipeline_stage',
+      message: 'Execution completed',
+      timestamp: '2026-02-19T00:00:06.000Z',
+      result: {
+        type: 'pipeline_stage',
+        stage: 'done',
+        status: 'done',
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('pipeline_stage')]);
+    expect(patch.pipelineCurrentStage).toBe('done');
+    expect(patch.pipelineStages?.done.status).toBe('done');
+    expect(patch.progress).toBe(100);
+  });
+
   it('maps agent_done metrics into AgentRunInfo', () => {
     const run = buildRun({
       progress: 30,
