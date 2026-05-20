@@ -92,9 +92,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Set to server's public IP so all API calls go through nginx proxy on port 80
+        # Production default uses the HTTPS API domain to avoid mixed-content blocks.
         # Empty string would trigger fallback to http://127.0.0.1:8000 in runtime.ts
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://175.178.159.112}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.finsight-ai.chat}
         # Optional Supabase auth (Magic Link)
         # Must point to the same Supabase project as backend SUPABASE_* runtime env.
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
