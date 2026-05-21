@@ -4,7 +4,7 @@
 > 适用分支：`main`
 > 主链实现：`backend/graph/runner.py`
 
-> 2026-05-06 运行时事实：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见；普通聊天、追问、非金融边界、URL/文章分析、提醒、行情和报告请求都进入 `understand_request` 内部的 LLM conversation router。只有显式 `output_mode=investment_report`（报告按钮）进入报告模板；普通 chat/brief 不套报告结构。URL 读取通过 planner/agent 工具 `fetch_url_content`，不在请求理解层预抓取。若本文与代码冲突，以 `backend/graph/runner.py`、`backend/graph/nodes/understand_request.py` 和测试为准。
+> 2026-05-06 运行时事实：聊天主链路为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只处理纯问候/感谢/确认/再见；普通聊天、追问、非金融边界、URL/文章分析、提醒、行情和报告请求都进入 `understand_request` 内部的 LLM conversation router。显式 `output_mode=investment_report`（报告按钮）或强报告 query（如深度投资报告 / deep report / filing document longform）进入报告模板；普通 chat/brief 不套报告结构。URL 读取通过 planner/agent 工具 `fetch_url_content`，不在请求理解层预抓取。若本文与代码冲突，以 `backend/graph/runner.py`、`backend/graph/nodes/understand_request.py` 和测试为准。
 > 同日增量：后端已提供 `/api/conversations` 会话生命周期 API 与轻量 conversation snapshot store；删除会话会清理 session context、report index、thread RAG collections 和 RAG observability runs。停止生成会发出 `cancelled` trace/pipeline 事件，executor/agent 会读取 cancellation token，并保留已完成内容。
 > 2026-05-10 增量：`understand_request` 现在写入 `ReplyContract`，将默认聊天、取证回答、报告生成拆成 `chat_answer / source_grounded_answer / report_generation` 三条 lane；`brief` 仅作为长度偏好保留。工具失败、403、rejected、empty、timeout 等只能进入 `artifacts.tool_diagnostics`，不能进入 `evidence_pool` 或被渲染为来源/结论。
 > 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
@@ -107,7 +107,7 @@ flowchart TD
 |---|---|---|
 | `chat_answer` | 普通解释、追问、纠偏、安全边界、明确“不要新闻/不要链接/直接说” | 不强制查新闻，不套报告结构，`citation_policy=none` |
 | `source_grounded_answer` | 明确要新闻/链接/引用/实时价格/URL/数据证据 | 规划取证工具；有可用来源则引用，没有则披露不可用 |
-| `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报 | 使用报告模板和报告级引用约束 |
+| `report_generation` | 报告按钮、`output_mode=investment_report`、明确生成报告/研报、`deep report` / `filing document longform` 等强报告 query | 使用报告模板和报告级引用约束 |
 
 ### 2.2 记忆作用域与连续对话边界
 
@@ -174,6 +174,8 @@ flowchart LR
   - `get_factor_exposure`, `run_portfolio_stress_test`
   - `get_event_calendar`
   - `score_news_source_reliability`
+- request-understanding tasks 路径的 `investment_report` 会补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、电话会 transcript 与报告 agent 步骤，不再只保留任务自身的价格/新闻/公司信息步骤。
+- `policy_gate.py` 对显式技术面任务在 chat 模式开放 `technical_agent`，planner 会和 `get_stock_price` / `get_technical_snapshot` 一起执行，避免技术面请求只输出工具摘要。
 - `technical_agent.py` 已将技术分析扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search 的共振证据，而不是单一 K 线判断。
 
 ### 3.3 Executor

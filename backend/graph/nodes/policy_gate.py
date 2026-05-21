@@ -146,6 +146,13 @@ def _task_subject_type(task: dict) -> str:
     return str(value).strip().lower() if isinstance(value, str) and value.strip() else "unknown"
 
 
+def _has_ready_operation(tasks: list[dict], operation_name: str) -> bool:
+    target = str(operation_name or "").strip().lower()
+    if not target:
+        return False
+    return any(_task_operation_name(task).strip().lower() == target for task in tasks)
+
+
 def _infer_market_from_task(task: dict, fallback: str) -> str:
     tickers = task.get("tickers")
     if isinstance(tickers, list):
@@ -531,6 +538,21 @@ def policy_gate(state: GraphState) -> dict:
                 required_list.append("deep_search_agent")
             agent_selection["required"] = required_list
             budget["max_rounds"] = min(max(int(budget.get("max_rounds", 6)), 7), 10)
+    elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
+        allowed_agents = ["technical_agent"]
+        agent_selection = {
+            "selected": ["technical_agent"],
+            "required": ["technical_agent"],
+            "reason": "explicit_technical_indicator_request",
+        }
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
+
+        pref_agents = agent_preferences.get("agents")
+        if isinstance(pref_agents, dict) and str(pref_agents.get("technical_agent") or "").strip().lower() == "off":
+            allowed_agents = []
+            agent_selection["selected"] = []
+            agent_selection["required"] = []
+            agent_selection["removed_by_prefs"] = ["technical_agent"]
 
     # Tool schemas (Pydantic JSON schema) for planner constraints.
     tool_schemas: dict[str, dict] = {}

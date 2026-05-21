@@ -66,14 +66,12 @@ _NEGATED_REPORT_TRIGGERS = (
 def decide_output_mode(state: GraphState) -> dict:
     """
     Decide output_mode with priority:
-    1) UI explicit (runner sets state.output_mode)
-    2) explicit words in query (strong triggers only)
-    3) default: chat
+    1) explicit report negation in query
+    2) explicit report request in query (can override the frontend's default chat mode)
+    3) UI explicit (runner sets state.output_mode)
+    4) default: chat
     """
     explicit: OutputMode | None = state.get("output_mode")
-    if explicit in ("chat", "brief", "investment_report"):
-        return {"output_mode": explicit}
-
     query = (state.get("query") or "").strip()
     if query:
         lowered = query.lower()
@@ -81,4 +79,6 @@ def decide_output_mode(state: GraphState) -> dict:
             return {"output_mode": "chat"}
         if any(token.lower() in lowered for token in _REPORT_TRIGGERS):
             return {"output_mode": "investment_report"}
+    if explicit in ("chat", "brief", "investment_report"):
+        return {"output_mode": explicit}
     return {"output_mode": "chat"}

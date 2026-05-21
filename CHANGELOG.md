@@ -12,6 +12,9 @@
 - **对话执行路由与 TechnicalAgent 能力扩面**（2026-05-21）：
   - `understand_request` 不再允许 `direct_answer` 吞掉结构化可执行 `task_hints`；当前轮有 ticker / URL / selection / 显式取证信号时直接进入 research。
   - direct 聊天答复清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。
+  - 显式深度报告 query（如 `deep report` / `filing document longform` / `10-K/10-Q`）可覆盖前端默认 `chat`，进入 `investment_report` 与 `report_generation` lane。
+  - request-understanding tasks 路径的研报计划补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、业绩电话会 transcript 与报告 agent 步骤，避免只跑价格/新闻/公司信息。
+  - 显式技术面 query 在 chat 模式也会计划 `technical_agent`，与 `get_stock_price`、`get_technical_snapshot` 一起执行。
   - `technical_agent` 工具面从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。

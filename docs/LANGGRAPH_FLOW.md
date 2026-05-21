@@ -1,6 +1,6 @@
 # FinSight LangGraph Flow Documentation
 
-> 2026-05-06 状态说明：当前主路径为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候/感谢/确认/再见；开放闲聊、非金融请求、能力问题、URL/网页/文章请求、指代追问和普通金融问题都进入 `understand_request` 的 LLM conversation router。Router 在 planner 前决定 direct/research/alert/clarify/out_of_scope，只有 research/alert 才继续进入工具规划；URL 读取是 planner/agent 工具 `fetch_url_content`，不是理解层预抓取。只有显式报告按钮/`investment_report` 进入报告模板。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。
+> 2026-05-06 状态说明：当前主路径为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候/感谢/确认/再见；开放闲聊、非金融请求、能力问题、URL/网页/文章请求、指代追问和普通金融问题都进入 `understand_request` 的 LLM conversation router。Router 在 planner 前决定 direct/research/alert/clarify/out_of_scope，只有 research/alert 才继续进入工具规划；URL 读取是 planner/agent 工具 `fetch_url_content`，不是理解层预抓取。显式报告按钮、`investment_report` 或强报告 query（深度投资报告 / deep report / filing document longform）进入报告模板。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。
 > 2026-05-10 增量：`understand_request` 写入 `reply_contract`，用 `chat_answer/source_grounded_answer/report_generation` 三条 lane 固定 UX 行为；工具失败、403、rejected、empty、timeout 等写入 `artifacts.tool_diagnostics`，不得进入 `evidence_pool`。
 > 2026-05-11 验收：`tests/eval/chat_router_100.json` 的最终 current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，覆盖 18 类连续对话和取证/报告红线。
 
@@ -90,7 +90,7 @@ graph TD
 |-------|-----------|-------------|
 | `messages` | Read/Write | 修剪超预算历史，并在需要时写入摘要 |
 | `ui_context` | Read/Write | 规范化 selections、active_symbol、view 等前端上下文 |
-| `output_mode` | Write | 合并 UI 显式模式和默认 chat/report hints；普通聊天默认 `chat`，只有报告按钮或显式 `investment_report` 进入报告模板 |
+| `output_mode` | Write | 合并 UI 显式模式和默认 chat/report hints；普通聊天默认 `chat`，报告按钮、显式 `investment_report` 或强报告 query 进入报告模板 |
 
 `prepare_context` 是当前主路径的上下文准备入口。它承接旧 `trim_history`、`summarize_history`、`normalize_ui_context`、`decide_output_mode` 的职责，减少图上前半段节点数量，并保证 `understand_request` 获取的是同一份规范化上下文。
 
@@ -165,7 +165,7 @@ graph TD
 | `ui_context` | Read | 规范化后的上下文 |
 | `output_mode` | Write | `"brief"` \| `"investment_report"` \| `"chat"` |
 
-历史 helper 的输出模式推断仅供兼容入口使用。当前主路径中普通发送默认 `chat`，简单价格/新闻可以由合成层自然短答；只有显式报告按钮或 `output_mode=investment_report` 才进入报告模板。
+历史 helper 的输出模式推断仅供兼容入口使用。当前主路径中普通发送默认 `chat`，简单价格/新闻可以由合成层自然短答；显式报告按钮、`output_mode=investment_report` 或强报告 query 才进入报告模板；“不要生成报告 / no report” 这类否定词优先保持 chat。
 
 ---
 
@@ -300,6 +300,8 @@ graph TD
 
 **安全边界** (2026-05-20)：conversation_router 新增内幕/非公开信息请求检测，此类请求被拒绝进入 research 链路。新闻引用兜底确保 `reply_contract` 有可引用 URL。多轮对话中历史 ticker 自动补全主题提示。
 
+**报告与技术面执行闭环** (2026-05-21)：强报告 query 可覆盖前端默认 `chat`，进入 `report_generation`；request-understanding tasks 路径的 `investment_report` 会保留 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、电话会 transcript 和报告 agent 步骤。显式技术面 query 在 chat 模式也会计划 `technical_agent`，与价格和技术指标快照共同执行。
+
 **执行闭环守卫** (2026-05-21)：`conversation_router` 对 `task_hints` 做结构化可执行判定；`understand_request` 会把错误的 `direct_answer + 可执行 task_hints` 强制投射为 research，同时保留 no-news、纯机制解释和历史数值追问的 direct 路径。direct 答复层清理“是否启动研究/进入研究链路”类二次确认，避免用户已明确提问时继续绕圈。
 
 **Source**: `backend/graph/nodes/planner.py`
@@ -364,7 +366,7 @@ graph TD
 根据 `output_mode` 选择最终输出:
 - `chat`: 默认对话式回复，可短可长，按 query 和上下文决定
 - `brief`: 兼容轻量摘要模式，不作为主 UI 的“深度/简报”切换心智模型
-- `investment_report`: 完整投资研报 (Markdown)，只由报告按钮或显式选项触发
+- `investment_report`: 完整投资研报 (Markdown)，由报告按钮、显式选项或强报告 query 触发
 
 **Source**: `backend/graph/nodes/__init__.py` → `render_stub`
 

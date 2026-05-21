@@ -185,6 +185,46 @@ def test_report_mode_builds_report_generation_contract():
     assert result.get("output_mode") == "investment_report"
 
 
+def test_query_only_deep_report_upgrades_chat_default_to_report_generation(monkeypatch):
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+    calls = {"router": 0}
+
+    async def fake_route_conversation(_state, *, tickers, selection_ids):
+        calls["router"] += 1
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", subject_hint=", ".join(tickers)),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "请做 INTC 深度投资报告（deep report, filing document longform），重点引用 10-K/10-Q、业绩电话会与权威媒体来源，并给出明确结论与风险清单",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    contract = result.get("reply_contract") or {}
+    assert result.get("output_mode") == "investment_report"
+    assert contract.get("lane") == "report_generation"
+    assert contract.get("answer_style") == "investment_report"
+    assert (result.get("understanding") or {}).get("route") == "research"
+    assert calls["router"] == 0
+
+
 def test_negated_report_trigger_stays_chat_mode():
     from backend.graph.nodes.decide_output_mode import decide_output_mode
 

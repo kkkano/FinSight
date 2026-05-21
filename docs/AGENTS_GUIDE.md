@@ -1,6 +1,6 @@
 # FinSight Agent & Tool 链路指南
 
-> 更新时间：2026-05-18  
+> 更新时间：2026-05-21
 > 目标：让「Agent -> Tool -> 输出 -> 消费节点」一目了然。
 
 ## 1. 执行链路概览
@@ -40,19 +40,39 @@ flowchart LR
 2. `get_stock_price`
 3. `get_technical_snapshot`
 4. `get_option_chain_metrics`
-5. `get_company_info`
-6. `get_company_news`
-7. `get_event_calendar`
-8. `score_news_source_reliability`
-9. `search`
-10. `get_market_sentiment`
-11. `get_economic_events`
-12. `get_earnings_estimates`
-13. `get_eps_revisions`
-14. `get_performance_comparison`
-15. `analyze_historical_drawdowns`
-16. `get_factor_exposure`
-17. `run_portfolio_stress_test`
+5. `get_sec_filings`
+6. `get_sec_material_events`
+7. `get_sec_company_facts_quarterly`
+8. `get_sec_risk_factors`
+9. `get_institutional_holdings`
+10. `get_institution_holdings_by_ticker`
+11. `get_insider_transactions`
+12. `get_holdings_overlap`
+13. `screen_stocks`
+14. `get_cn_market_fund_flow`
+15. `get_cn_market_northbound`
+16. `get_cn_limit_board`
+17. `get_cn_lhb`
+18. `get_cn_concept_map`
+19. `run_strategy_backtest`
+20. `get_company_info`
+21. `get_company_news`
+22. `get_event_calendar`
+23. `get_authoritative_media_news`
+24. `get_earnings_call_transcripts`
+25. `score_news_source_reliability`
+26. `get_local_market_filings`
+27. `fetch_url_content`
+28. `search`
+29. `get_market_sentiment`
+30. `get_economic_events`
+31. `get_official_macro_releases`
+32. `get_earnings_estimates`
+33. `get_eps_revisions`
+34. `get_performance_comparison`
+35. `analyze_historical_drawdowns`
+36. `get_factor_exposure`
+37. `run_portfolio_stress_test`
 
 ### 3.2 allowlist 入口
 
@@ -81,6 +101,9 @@ flowchart LR
 - 风险因子/压力测试 -> `get_factor_exposure`, `run_portfolio_stress_test`
 - 财报/FOMC/CPI/分红日历 -> `get_event_calendar`
 - 信源可信度 -> `score_news_source_reliability`
+- 强报告 query 即使前端默认发 `output_mode=chat`，也会升格为 `investment_report` / `report_generation`。
+- request-understanding tasks 路径的研报会补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、业绩电话会 transcript 与报告 agent 步骤。
+- 显式技术面 query 在 chat 模式会计划 `technical_agent`，和价格、技术快照工具一起执行。
 
 ## 5. 执行与事件可观测性
 

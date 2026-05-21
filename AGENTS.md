@@ -29,6 +29,8 @@
 
 - `backend/graph/nodes/conversation_router.py`：`task_hints` 执行判定改为结构化判断，区分当前轮可执行任务与历史追问残留 hint。
 - `backend/graph/nodes/understand_request.py`：`direct_answer` 若携带可执行任务会被强制投射为 research；direct 回复清理“是否启动研究/进入研究链路”类绕圈 CTA。
+- `backend/graph/nodes/decide_output_mode.py`：显式“深度投资报告 / deep report / filing document longform”等 query 可覆盖前端默认 `chat`，进入 `investment_report` 和 `report_generation` lane；否定报告请求仍保持 chat。
+- `backend/graph/nodes/policy_gate.py`、`backend/graph/nodes/planner_stub.py`：显式技术面任务会开放并计划 `technical_agent`；request-understanding tasks 路径的研报也会补齐 SEC/CompanyFacts/8-K、权威媒体、电话会 transcript 与报告 agent 步骤。
 - `backend/agents/technical_agent.py`：技术 Agent 从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
 
 ## 当前推荐心智模型

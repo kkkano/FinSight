@@ -39,6 +39,43 @@ def test_old_query_technical_path_keeps_technical_snapshot_step():
     assert "get_technical_snapshot" in step_names
 
 
+def test_technical_chat_path_runs_technical_agent_for_indicator_query():
+    state = {
+        "query": "NVDA technical analysis with RSI, MACD, support and resistance",
+        "operation": {"name": "technical", "confidence": 0.9, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "NVDA",
+                "tickers": ["NVDA"],
+                "operation": {"name": "technical", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            }
+        ],
+    }
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    step_agents = [
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        if s.get("kind") == "agent"
+    ]
+    assert "technical_agent" in agents
+    assert "technical_agent" in step_agents
+
+
 def test_old_query_compare_path_keeps_comparison_step():
     policy_out, plan_out = _run_policy_and_planner("AAPL vs MSFT", "compare", ["AAPL", "MSFT"])
     tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))
@@ -226,6 +263,49 @@ def test_investment_report_us_auto_adds_sec_steps():
     assert "get_sec_material_events" in step_names
     assert "get_authoritative_media_news" in step_names
     assert "get_earnings_call_transcripts" in step_names
+
+
+def test_investment_report_understanding_task_path_keeps_filings_transcripts_and_agents():
+    state = {
+        "query": "Generate INTC deep report with filing document longform, 10-K, 10-Q, transcript and authoritative media evidence",
+        "operation": {"name": "analyze_impact", "confidence": 0.78, "params": {}},
+        "output_mode": "investment_report",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["INTC"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "INTC",
+                "tickers": ["INTC"],
+                "operation": {"name": "analyze_impact", "confidence": 0.78, "params": {}},
+                "status": "ready",
+            }
+        ],
+        "ui_context": {"market": "US"},
+    }
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+    step_agents = [
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        if s.get("kind") == "agent"
+    ]
+    assert "get_sec_filings" in step_names
+    assert "get_sec_company_facts_quarterly" in step_names
+    assert "get_authoritative_media_news" in step_names
+    assert "get_earnings_call_transcripts" in step_names
+    assert "fundamental_agent" in step_agents
+    assert "technical_agent" in step_agents
+    assert "deep_search_agent" in step_agents
 
 
 def test_investment_report_non_us_market_does_not_add_sec_steps():

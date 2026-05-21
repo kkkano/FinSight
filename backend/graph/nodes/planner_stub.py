@@ -201,6 +201,66 @@ def planner_stub(state: GraphState) -> dict:
         step_index[key] = step
         step_id += 1
 
+    def _append_agent_step(
+        name: str,
+        inputs: dict,
+        *,
+        why: str,
+        optional: bool = True,
+        parallel_group: str | None = None,
+        task_ids: list[str] | None = None,
+    ) -> None:
+        nonlocal step_id
+        if name not in allowed_agents:
+            return
+        try:
+            inputs_key = json.dumps(inputs, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            inputs_key = str(sorted(inputs.items())) if isinstance(inputs, dict) else str(inputs)
+        group_key = str(parallel_group or "")
+        key = (f"agent:{name}", inputs_key, group_key)
+        normalized_task_ids = [str(task_id).strip() for task_id in (task_ids or []) if str(task_id).strip()]
+        if not normalized_task_ids and isinstance(parallel_group, str) and parallel_group in ready_task_id_set:
+            normalized_task_ids = [parallel_group]
+        existing = step_index.get(key)
+        if existing is not None:
+            if optional is False:
+                existing["optional"] = False
+            if normalized_task_ids:
+                merged = [
+                    str(task_id).strip()
+                    for task_id in (existing.get("task_ids") or [])
+                    if str(task_id).strip()
+                ]
+                seen = set(merged)
+                for task_id in normalized_task_ids:
+                    if task_id in seen:
+                        continue
+                    seen.add(task_id)
+                    merged.append(task_id)
+                existing["task_ids"] = merged
+                existing["task_id"] = merged[0]
+            return
+        step = {
+            "id": f"s{step_id}",
+            "kind": "agent",
+            "name": name,
+            "inputs": inputs,
+            "why": why,
+            "optional": optional,
+        }
+        if normalized_task_ids:
+            step["task_ids"] = normalized_task_ids
+            step["task_id"] = normalized_task_ids[0]
+        if parallel_group:
+            step["parallel_group"] = parallel_group
+        steps.append(step)
+        step_index[key] = step
+        step_id += 1
+
+    def _has_step(kind: str, name: str) -> bool:
+        return any(step.get("kind") == kind and step.get("name") == name for step in steps)
+
     def _task_id(task: dict) -> str:
         value = str(task.get("id") or "").strip()
         return value or f"task_{len(steps) + 1}"
@@ -368,6 +428,14 @@ def planner_stub(state: GraphState) -> dict:
                     "get_technical_snapshot",
                     {"ticker": ticker},
                     why=f"{ticker} 技术面任务：获取技术指标快照。",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "technical_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} 技术面任务：运行 technical_agent 综合 K 线、报价、期权和情绪证据。",
                     optional=False,
                     parallel_group=group,
                     task_ids=task_ids,
@@ -626,6 +694,118 @@ def planner_stub(state: GraphState) -> dict:
             task_ids=[_task_id(task)],
         )
 
+    def _append_report_mode_enrichment_steps() -> None:
+        if output_mode != "investment_report" or not primary_ticker:
+            return
+
+        deep_required = bool(is_deep_financial_report)
+        task_ids = [
+            str(task_id).strip()
+            for task_id in sorted(ready_task_id_set)
+            if str(task_id).strip()
+        ] or None
+
+        if not _has_step("tool", "get_stock_price"):
+            _append_tool_step(
+                "get_stock_price",
+                {"ticker": primary_ticker},
+                why="研报模式：补充当前价格作为估值、风险和结论锚点。",
+                optional=True,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+        _append_tool_step(
+            "analyze_historical_drawdowns",
+            {"ticker": primary_ticker},
+            why="研报模式：补充历史回撤信息用于风险章节。",
+            optional=True,
+            parallel_group="report_evidence",
+            task_ids=task_ids,
+        )
+
+        if "get_local_market_filings" in allowed_tools:
+            _append_tool_step(
+                "get_local_market_filings",
+                {"ticker": primary_ticker, "limit": 8},
+                why="研报模式：补充本地交易所公告/定期报告证据。",
+                optional=not deep_required,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+        else:
+            _append_tool_step(
+                "get_sec_filings",
+                {"ticker": primary_ticker, "forms": "10-K,10-Q", "limit": 6},
+                why="研报模式：补充 SEC EDGAR 10-K/10-Q filing evidence。",
+                optional=not deep_required,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+            _append_tool_step(
+                "get_sec_company_facts_quarterly",
+                {"ticker": primary_ticker, "limit": 8},
+                why="研报模式：补充 SEC CompanyFacts 季度财务指标。",
+                optional=not deep_required,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+            _append_tool_step(
+                "get_sec_material_events",
+                {"ticker": primary_ticker, "limit": 5},
+                why="研报模式：补充 SEC 8-K 重大事件证据。",
+                optional=True,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+
+        if deep_required:
+            _append_tool_step(
+                "get_authoritative_media_news",
+                {"query": f"{primary_ticker} earnings outlook", "max_results": 6, "authoritative_only": True},
+                why="深度研报：强制补充权威媒体交叉验证。",
+                optional=False,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+            _append_tool_step(
+                "get_earnings_call_transcripts",
+                {"ticker": primary_ticker, "limit": 5},
+                why="深度研报：补充业绩电话会 transcript evidence。",
+                optional=False,
+                parallel_group="report_evidence",
+                task_ids=task_ids,
+            )
+
+        policy_agent_selection = policy.get("agent_selection") if isinstance(policy, dict) else {}
+        selected_agents: list[str] = []
+        if isinstance(policy_agent_selection, dict):
+            selected_agents = [
+                str(name)
+                for name in (policy_agent_selection.get("selected") or [])
+                if isinstance(name, str) and name in allowed_agents
+            ]
+        if not selected_agents:
+            ordered_agents = [
+                "price_agent",
+                "news_agent",
+                "fundamental_agent",
+                "technical_agent",
+                "macro_agent",
+                "risk_agent",
+                "deep_search_agent",
+            ]
+            selected_agents = [name for name in ordered_agents if name in allowed_agents]
+        agent_parallel_group = "report_agents" if len(selected_agents) > 1 else None
+        for agent_name in selected_agents:
+            _append_agent_step(
+                agent_name,
+                {"query": query, "ticker": primary_ticker},
+                why=f"研报模式：运行 {agent_name} 产出结构化摘要和证据。",
+                optional=True,
+                parallel_group=agent_parallel_group,
+                task_ids=task_ids,
+            )
+
     def _append_understanding_task_steps() -> bool:
         if not ready_tasks:
             return False
@@ -686,6 +866,7 @@ def planner_stub(state: GraphState) -> dict:
     used_understanding_task_plan = _append_understanding_task_steps()
 
     if used_understanding_task_plan:
+        _append_report_mode_enrichment_steps()
         task_sections = []
         for task in ready_tasks[:8]:
             label = str(task.get("subject_label") or ", ".join(_task_tickers(task)) or task.get("subject_type") or "任务")
