@@ -18,6 +18,7 @@
   - 显式 `investment_report` 与技术面 query 在 `conversation_router` 走 fast path，不再先等待会话路由 LLM，降低报告/技术面请求的首段阻塞。
   - Agent 内部 LLM 分析、gap detection 与 summary update 增加硬超时；LLM 长尾时回退确定性摘要，避免单 Agent 拖垮整轮报告。
   - `technical_agent` 工具面从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search；确定性摘要补支撑/阻力、MA20 偏离、成交量相对均量，并把新增信号写入 evidence。
+  - Docker 后端构建支持可配置 apt 镜像、45 秒下载超时与 5 次重试；生产 compose 默认使用 TUNA Debian 镜像，避免服务器发版卡在 `apt-get update`。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
   - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。

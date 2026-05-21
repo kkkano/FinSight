@@ -3,7 +3,17 @@
 FROM python:3.11-slim
 
 # System deps: build-essential for C extensions, libpq for psycopg
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ARG APT_MIRROR=
+ARG APT_SECURITY_MIRROR=
+RUN set -eux; \
+    if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s|http://deb.debian.org/debian|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    if [ -n "$APT_SECURITY_MIRROR" ]; then \
+        sed -i "s|http://deb.debian.org/debian-security|$APT_SECURITY_MIRROR|g" /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update; \
+    apt-get install -y --no-install-recommends \
         build-essential \
         libpq-dev \
         curl \
