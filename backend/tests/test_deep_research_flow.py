@@ -71,6 +71,35 @@ def test_deepsearch_collection_uses_working_set_names():
     assert agent._build_rag_collection(query="AAPL deep research", ticker="AAPL") == "ws:thread:tenant:user:thread-1"
 
 
+def test_deepsearch_finance_queries_keep_user_specific_report_targets():
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+
+    queries = agent._build_queries(
+        "请做 INTC 深度投资报告，覆盖最新财报、Arrow Lake、NVIDIA/AMD/TSMC 竞争、分析师评级和目标价",
+        "INTC",
+    )
+
+    joined = " ".join(queries)
+    assert any("sec.gov" in query and "10-K" in query and "10-Q" in query for query in queries)
+    assert "Arrow Lake" in joined
+    assert "analyst" in joined.lower() or "rating" in joined.lower()
+    assert "AMD" in joined and "NVDA" in joined and "TSM" in joined
+    assert len(queries) <= 4
+
+
+@pytest.mark.asyncio
+async def test_deepsearch_gap_queries_are_budget_limited(monkeypatch):
+    agent = DeepSearchAgent(MagicMock(), MagicMock(), MagicMock())
+    monkeypatch.setattr(agent, "MAX_GAP_QUERIES", 1)
+
+    async def fake_call_llm(_prompt):
+        return '{"needs_more": true, "queries": ["margin risk", "analyst rating", "Arrow Lake roadmap"]}'
+
+    agent._call_llm = fake_call_llm
+
+    assert await agent._identify_gaps("summary") == ["margin risk"]
+
+
 @pytest.mark.asyncio
 async def test_deep_research_flow_rejects_unsafe_urls_before_fetch():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())

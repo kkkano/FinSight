@@ -178,6 +178,57 @@ def test_multiticker_fail_open_chat_defaults_to_quotes_not_history_compare():
     assert not any(row[2] == "compare" for row in ops)
 
 
+def test_single_company_deep_report_keeps_competitors_as_context_not_subjects():
+    from backend.graph.nodes.understand_request import understand_request
+
+    query = (
+        "请给我一份 INTC 英特尔深度投资报告，覆盖最新财报、Arrow Lake、"
+        "NVIDIA/AMD/TSMC 竞争、分析师评级、估值和未来6-12个月风险机会。"
+        "不要问我要不要启动研究，直接给报告。"
+    )
+    result = _run(
+        understand_request(
+            {
+                "query": query,
+                "output_mode": "investment_report",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    assert (result.get("subject") or {}).get("tickers") == ["INTC"]
+    assert (result.get("operation") or {}).get("name") != "compare"
+    tasks = result.get("tasks") or []
+    assert tasks
+    assert all(task.get("tickers") == ["INTC"] for task in tasks)
+    assert not any((task.get("operation") or {}).get("name") == "compare" for task in tasks)
+    peer_sets = [
+        set(((task.get("operation") or {}).get("params") or {}).get("peer_tickers") or [])
+        for task in tasks
+    ]
+    assert any({"AMD", "TSM", "NVDA"}.issubset(peers) for peers in peer_sets)
+
+
+def test_explicit_compare_deep_report_still_uses_compare_subject():
+    from backend.graph.nodes.understand_request import understand_request
+
+    result = _run(
+        understand_request(
+            {
+                "query": "请比较 INTC、AMD、NVDA、TSMC 谁未来一年更值得买，并输出深度报告。",
+                "output_mode": "investment_report",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    assert (result.get("subject") or {}).get("is_comparison") is True
+    assert (result.get("operation") or {}).get("name") == "compare"
+    assert any((task.get("operation") or {}).get("name") == "compare" for task in result.get("tasks") or [])
+
+
 def test_explicit_url_is_preserved_as_tool_task_without_prefetch():
     from backend.graph.nodes.understand_request import understand_request
 

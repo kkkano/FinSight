@@ -43,6 +43,19 @@ _PRICE_HINTS = ("价格", "股价", "涨了多少", "跌了多少", "涨幅", "�
 _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "impact", "affect", "risk")
 _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi", "technical")
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁更强", "哪个好", "哪个", "compare")
+_REPORT_PEER_CONTEXT_HINTS = (
+    "覆盖",
+    "包括",
+    "结合",
+    "竞争",
+    "竞品",
+    "对手",
+    "同业",
+    "competitive",
+    "competitor",
+    "peer",
+    "cover",
+)
 _ALERT_HINTS = ("提醒", "预警", "到达", "触及", "涨到", "跌到", "跌破", "突破", "低于", "高于", "alert", "notify", "remind me")
 _PORTFOLIO_HINTS = ("持仓", "组合", "仓位", "调仓", "portfolio", "holdings", "rebalance")
 _HOLDINGS_HINTS = (
@@ -410,6 +423,31 @@ def _explicit_report_mode(state: GraphState, output_mode: str) -> bool:
     return output_mode == "investment_report" or analysis_depth == "deep_research"
 
 
+def _explicit_multi_ticker_compare_requested(query: str) -> bool:
+    return _contains_any(query, _COMPARE_HINTS) and not _is_lightweight_representative_compare(query)
+
+
+def _query_frames_extra_tickers_as_report_context(query: str) -> bool:
+    return _contains_any(query, _REPORT_PEER_CONTEXT_HINTS)
+
+
+def _split_primary_report_tickers(
+    query: str,
+    tickers: list[str],
+    *,
+    state: GraphState,
+    output_mode: str,
+) -> tuple[list[str], list[str]]:
+    if (
+        len(tickers) < 2
+        or not _explicit_report_mode(state, output_mode)
+        or _explicit_multi_ticker_compare_requested(query)
+        or not _query_frames_extra_tickers_as_report_context(query)
+    ):
+        return tickers, []
+    return [tickers[0]], tickers[1:]
+
+
 def _subject_type_for_ticker(ticker: str) -> str:
     symbol = str(ticker or "").strip().upper()
     if not symbol:
@@ -457,6 +495,15 @@ def _time_scope(query: str) -> dict[str, Any]:
 
 def _operation(name: str, confidence: float = 0.75, params: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"name": name, "confidence": confidence, "params": params or {}}
+
+
+def _operation_with_report_peers(operation: dict[str, Any], peer_tickers: list[str]) -> dict[str, Any]:
+    if not peer_tickers:
+        return operation
+    params = dict(operation.get("params") or {})
+    params["peer_tickers"] = list(peer_tickers)
+    params.setdefault("comparison_context", "covered_as_competitive_context")
+    return {**operation, "params": params}
 
 
 def _company_operations(
@@ -1864,12 +1911,16 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         and (not context_router_research_bound or context_binding_source == "selection")
         and tickers
     ):
-        multi_ticker_report = len(tickers) >= 2 and _explicit_report_mode(state, output_mode)
-        multi_ticker_compare = len(tickers) >= 2 and (
-            (
-                _contains_any(query, _COMPARE_HINTS)
-                and not _is_lightweight_representative_compare(query)
-            )
+        report_tickers, report_peer_tickers = _split_primary_report_tickers(
+            query,
+            tickers,
+            state=state,
+            output_mode=output_mode,
+        )
+        scoped_tickers = report_tickers or tickers
+        multi_ticker_report = len(scoped_tickers) >= 2 and _explicit_report_mode(state, output_mode)
+        multi_ticker_compare = len(scoped_tickers) >= 2 and (
+            _explicit_multi_ticker_compare_requested(query)
             or multi_ticker_report
         )
         if multi_ticker_compare:
@@ -1878,9 +1929,9 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 subject_type="company",
                 operation=_operation("compare", 0.86),
                 query=query,
-                tickers=tickers,
+                tickers=scoped_tickers,
                 priority=20,
-                reason="multi_ticker_report" if multi_ticker_report and not _contains_any(query, _COMPARE_HINTS) else "multi_ticker_compare",
+                reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query) else "multi_ticker_compare",
             )
             extra_operations: list[dict[str, Any]] = []
             if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
@@ -1893,7 +1944,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
             ):
                 extra_operations.append(_operation("analyze_impact", 0.78))
-            for ticker in tickers:
+            for ticker in scoped_tickers:
                 subject_type = _subject_type_for_ticker(ticker)
                 for operation in extra_operations:
                     _add_task(
@@ -1909,7 +1960,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         else:
             fallback_operations = _company_operations(
                 query,
-                tickers=tickers,
+                tickers=scoped_tickers,
                 allow_multi_ticker_default_compare=(
                     multi_ticker_report
                     or (
@@ -1922,21 +1973,24 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 conversation_decision,
                 fallback_operations=fallback_operations,
             )
-            operations = router_operations or fallback_operations
-            if len(tickers) >= 2 and _is_lightweight_representative_compare(query):
+            operations = [
+                _operation_with_report_peers(operation, report_peer_tickers)
+                for operation in (router_operations or fallback_operations)
+            ]
+            if len(scoped_tickers) >= 2 and _is_lightweight_representative_compare(query):
                 _add_task(
                     tasks,
                     subject_type="company",
                     operation=_operation("qa", 0.7),
                     query=query,
-                    tickers=tickers,
-                    subject_label=", ".join(tickers),
+                    tickers=scoped_tickers,
+                    subject_label=", ".join(scoped_tickers),
                     priority=25,
                     reason="representative_basket_qa",
                 )
             elif (
                 router_operations is None
-                and len(tickers) >= 2
+                and len(scoped_tickers) >= 2
                 and any((operation.get("name") or "") == "compare" for operation in operations)
             ):
                 _add_task(
@@ -1944,18 +1998,22 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     subject_type="company",
                     operation=_operation("compare", 0.7),
                     query=query,
-                    tickers=tickers,
+                    tickers=scoped_tickers,
                     priority=25,
                     reason="multi_ticker_operation",
                 )
             else:
                 _add_per_ticker_company_tasks(
                     tasks,
-                    tickers=tickers,
+                    tickers=scoped_tickers,
                     operations=operations,
                     query=query,
                     priority=25,
-                    reason="conversation_router_intent" if router_operations else "ticker_or_alias",
+                    reason=(
+                        "primary_report_ticker"
+                        if report_peer_tickers
+                        else ("conversation_router_intent" if router_operations else "ticker_or_alias")
+                    ),
                 )
 
     has_macro = _contains_any(query, _MACRO_HINTS)

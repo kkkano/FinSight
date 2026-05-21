@@ -308,6 +308,73 @@ def test_investment_report_understanding_task_path_keeps_filings_transcripts_and
     assert "deep_search_agent" in step_agents
 
 
+def test_chinese_primary_report_with_peer_context_runs_deep_search_on_primary_ticker_only():
+    query = (
+        "请给我一份 INTC 英特尔深度投资报告，覆盖最新财报、Arrow Lake、"
+        "NVIDIA/AMD/TSMC 竞争、分析师评级、估值和未来6-12个月风险机会。"
+    )
+    state = {
+        "query": query,
+        "operation": {
+            "name": "analyze_impact",
+            "confidence": 0.78,
+            "params": {
+                "peer_tickers": ["AMD", "TSM", "NVDA"],
+                "comparison_context": "covered_as_competitive_context",
+            },
+        },
+        "output_mode": "investment_report",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["INTC"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "INTC",
+                "tickers": ["INTC"],
+                "operation": {
+                    "name": "analyze_impact",
+                    "confidence": 0.78,
+                    "params": {
+                        "peer_tickers": ["AMD", "TSM", "NVDA"],
+                        "comparison_context": "covered_as_competitive_context",
+                    },
+                },
+                "status": "ready",
+            }
+        ],
+        "ui_context": {"market": "US"},
+    }
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [s.get("name") for s in steps]
+    agent_inputs = {
+        s.get("name"): s.get("inputs") or {}
+        for s in steps
+        if s.get("kind") == "agent"
+    }
+    tool_tickers = [
+        (s.get("inputs") or {}).get("ticker")
+        for s in steps
+        if s.get("kind") == "tool" and (s.get("inputs") or {}).get("ticker")
+    ]
+
+    assert "get_sec_filings" in step_names
+    assert "get_earnings_call_transcripts" in step_names
+    assert "deep_search_agent" in agent_inputs
+    assert agent_inputs["deep_search_agent"]["ticker"] == "INTC"
+    assert "Arrow Lake" in agent_inputs["deep_search_agent"]["query"]
+    assert set(tool_tickers) == {"INTC"}
+
+
 def test_investment_report_non_us_market_does_not_add_sec_steps():
     state = {
         "query": "Generate 600519 investment report with filing evidence",

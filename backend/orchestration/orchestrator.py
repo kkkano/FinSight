@@ -32,6 +32,11 @@ from backend.metrics import (
 logger = logging.getLogger(__name__)
 
 
+def _elapsed_ms(start_time: float) -> float:
+    """Return a positive elapsed millisecond value for very fast calls."""
+    return max((time.time() - start_time) * 1000, 0.001)
+
+
 @dataclass
 class DataSource:
     """Data source definition."""
@@ -232,7 +237,7 @@ class ToolOrchestrator:
                     cached_as_of,
                     ticker=ticker,
                 )
-                duration = (time.time() - start_time) * 1000
+                duration = _elapsed_ms(start_time)
                 observe_orch_latency(data_type, duration)
                 return FetchResult(
                     success=True,
@@ -358,7 +363,7 @@ class ToolOrchestrator:
                         now_iso,
                         ticker=ticker,
                     )
-                    duration = (time.time() - start_time) * 1000
+                    duration = _elapsed_ms(start_time)
 
                     trace_emitter.emit_data_source_query(
                         source.name, data_type, ticker=ticker,
@@ -421,7 +426,7 @@ class ToolOrchestrator:
                 continue
             
             time.sleep(0.3)
-        duration = (time.time() - start_time) * 1000
+        duration = _elapsed_ms(start_time)
         observe_orch_latency(data_type, duration)
         
         cache_key = f"{data_type}:{ticker}"
@@ -499,7 +504,7 @@ class ToolOrchestrator:
         """
         fallback_as_of = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         if not self.tools_module:
-            duration = (time.time() - start_time) * 1000
+            duration = _elapsed_ms(start_time)
             observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
@@ -525,7 +530,7 @@ class ToolOrchestrator:
 
         func_name = func_map.get(data_type)
         if not func_name:
-            duration = (time.time() - start_time) * 1000
+            duration = _elapsed_ms(start_time)
             observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
@@ -542,7 +547,7 @@ class ToolOrchestrator:
 
         func = getattr(self.tools_module, func_name, None)
         if not func:
-            duration = (time.time() - start_time) * 1000
+            duration = _elapsed_ms(start_time)
             observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
@@ -575,7 +580,7 @@ class ToolOrchestrator:
                 fallback_as_of,
                 ticker=ticker,
             )
-            duration = (time.time() - start_time) * 1000
+            duration = _elapsed_ms(start_time)
             observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=validation.is_valid,
@@ -598,7 +603,7 @@ class ToolOrchestrator:
             )
 
         except Exception as e:
-            duration = (time.time() - start_time) * 1000
+            duration = _elapsed_ms(start_time)
             observe_orch_latency(data_type, duration)
             return FetchResult(
                 success=False,
@@ -678,6 +683,5 @@ class ToolOrchestrator:
                 source.total_calls = 0
                 source.total_successes = 0
                 source.consecutive_failures = 0
-
 
 
