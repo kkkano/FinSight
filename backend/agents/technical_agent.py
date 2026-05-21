@@ -17,7 +17,7 @@ class TechnicalAgent(BaseFinancialAgent):
         self.tools = tools_module
 
     def _get_tool_registry(self) -> dict:
-        """TechnicalAgent tool registry: K-line data + search for confluence reflection."""
+        """TechnicalAgent tool registry: price, K-line, options and sentiment confluence."""
         registry = {}
         tools = self.tools
         if not tools:
@@ -36,13 +36,57 @@ class TechnicalAgent(BaseFinancialAgent):
                 "description": "获取K线历史数据(ticker)，用于计算技术指标",
                 "call_with": "ticker",
             }
+        quote_fn = getattr(tools, "get_stock_price", None)
+        if quote_fn:
+            registry["get_stock_price"] = {
+                "func": quote_fn,
+                "description": "获取当前报价与日内涨跌幅，用于校准技术快照的实时位置",
+                "call_with": "ticker",
+            }
+        option_metrics_fn = getattr(tools, "get_option_chain_metrics", None)
+        if option_metrics_fn:
+            registry["get_option_chain_metrics"] = {
+                "func": option_metrics_fn,
+                "description": "获取期权隐含波动率、Put/Call Ratio 与 Skew，辅助判断短线拥挤度",
+                "call_with": "ticker",
+            }
+        sentiment_fn = getattr(tools, "get_market_sentiment", None)
+        if sentiment_fn:
+            registry["get_market_sentiment"] = {
+                "func": sentiment_fn,
+                "description": "获取市场整体情绪，用于判断技术信号是否处在风险偏好顺风或逆风中",
+                "call_with": "none",
+            }
         return registry
+
+    def _call_optional_tool(self, tool_name: str, *args, **kwargs) -> Any:
+        tool_fn = getattr(self.tools, tool_name, None)
+        if not tool_fn:
+            return None
+        try:
+            payload = tool_fn(*args, **kwargs)
+        except Exception:
+            return None
+        return payload if isinstance(payload, (dict, list, str)) else None
+
+    def _enrich_with_side_signals(self, data: Dict[str, Any], ticker: str) -> Dict[str, Any]:
+        enriched = dict(data)
+        price_snapshot = self._call_optional_tool("get_stock_price", ticker)
+        if price_snapshot:
+            enriched["price_snapshot"] = price_snapshot
+        option_metrics = self._call_optional_tool("get_option_chain_metrics", ticker)
+        if option_metrics:
+            enriched["option_metrics"] = option_metrics
+        market_sentiment = self._call_optional_tool("get_market_sentiment")
+        if market_sentiment:
+            enriched["market_sentiment"] = market_sentiment
+        return enriched
 
     async def _initial_search(self, query: str, ticker: str) -> Dict[str, Any]:
         cache_key = f"{ticker}:technical:kline"
         cached = self.cache.get(cache_key)
-        if cached:
-            return cached
+        if isinstance(cached, dict):
+            return self._enrich_with_side_signals(cached, ticker)
 
         fetch = getattr(self.tools, "get_stock_historical_data", None)
         if not fetch:
@@ -53,6 +97,7 @@ class TechnicalAgent(BaseFinancialAgent):
             data.setdefault("ticker", ticker)
             if data.get("kline_data"):
                 self.cache.set(cache_key, data, self.CACHE_TTL)
+            return self._enrich_with_side_signals(data, ticker)
         return data
 
     async def _first_summary(self, data: Any) -> str:
@@ -100,6 +145,36 @@ class TechnicalAgent(BaseFinancialAgent):
             ),
             f"趋势: {trend_cn}。",
         ]
+        price_snapshot = data.get("price_snapshot")
+        if isinstance(price_snapshot, dict):
+            price = price_snapshot.get("price")
+            currency = price_snapshot.get("currency") or "USD"
+            change_pct = price_snapshot.get("change_percent") or price_snapshot.get("change_pct")
+            if price is not None:
+                quote = f"实时位置: {currency} {price}"
+                if change_pct is not None:
+                    try:
+                        quote += f"（日内 {float(change_pct):+.2f}%）"
+                    except Exception:
+                        pass
+                parts.append(quote + "。")
+        option_metrics = data.get("option_metrics")
+        if isinstance(option_metrics, dict):
+            option_bits = []
+            iv_atm = option_metrics.get("iv_atm")
+            pcr = option_metrics.get("put_call_ratio_oi") or option_metrics.get("put_call_ratio_volume")
+            skew = option_metrics.get("iv_skew_25d")
+            if isinstance(iv_atm, (int, float)):
+                option_bits.append(f"ATM IV {float(iv_atm):.2%}")
+            if isinstance(pcr, (int, float)):
+                option_bits.append(f"PCR {float(pcr):.2f}")
+            if isinstance(skew, (int, float)):
+                option_bits.append(f"Skew {float(skew):+.2%}")
+            if option_bits:
+                parts.append("期权情绪: " + "，".join(option_bits) + "。")
+        market_sentiment = data.get("market_sentiment")
+        if isinstance(market_sentiment, str) and market_sentiment.strip():
+            parts.append(f"市场情绪参考: {market_sentiment.strip()[:160]}。")
         interpretation = []
         if indicators.get("rsi_state") == "overbought":
             interpretation.append("RSI进入超买区，短期回撤风险上升。")
@@ -156,6 +231,56 @@ class TechnicalAgent(BaseFinancialAgent):
                     url=_yf_history_url,  # Yahoo Finance 历史数据页面，供证据池点击跳转
                     timestamp=timestamp,
                 ))
+
+                price_snapshot = raw_data.get("price_snapshot")
+                if isinstance(price_snapshot, dict):
+                    price_source = str(price_snapshot.get("source") or "quote")
+                    price = price_snapshot.get("price")
+                    currency = price_snapshot.get("currency") or "USD"
+                    change_pct = price_snapshot.get("change_percent") or price_snapshot.get("change_pct")
+                    price_text = f"Current quote: {currency} {price}"
+                    if change_pct is not None:
+                        try:
+                            price_text += f", intraday {float(change_pct):+.2f}%"
+                        except Exception:
+                            pass
+                    evidence.append(EvidenceItem(
+                        text=price_text,
+                        source=price_source,
+                        timestamp=str(price_snapshot.get("as_of") or timestamp or datetime.now().isoformat()),
+                        meta=price_snapshot,
+                    ))
+                    data_sources.append(price_source)
+
+                option_metrics = raw_data.get("option_metrics")
+                if isinstance(option_metrics, dict):
+                    option_source = str(option_metrics.get("source") or "options")
+                    option_bits = []
+                    iv_atm = option_metrics.get("iv_atm")
+                    pcr = option_metrics.get("put_call_ratio_oi") or option_metrics.get("put_call_ratio_volume")
+                    skew = option_metrics.get("iv_skew_25d")
+                    if isinstance(iv_atm, (int, float)):
+                        option_bits.append(f"ATM IV {float(iv_atm):.2%}")
+                    if isinstance(pcr, (int, float)):
+                        option_bits.append(f"PCR {float(pcr):.2f}")
+                    if isinstance(skew, (int, float)):
+                        option_bits.append(f"Skew {float(skew):+.2%}")
+                    evidence.append(EvidenceItem(
+                        text="Option metrics: " + (", ".join(option_bits) if option_bits else "available"),
+                        source=option_source,
+                        timestamp=str(option_metrics.get("as_of") or timestamp or datetime.now().isoformat()),
+                        meta=option_metrics,
+                    ))
+                    data_sources.append(option_source)
+
+                market_sentiment = raw_data.get("market_sentiment")
+                if isinstance(market_sentiment, str) and market_sentiment.strip():
+                    evidence.append(EvidenceItem(
+                        text=f"Market sentiment: {market_sentiment.strip()[:240]}",
+                        source="market_sentiment",
+                        timestamp=timestamp,
+                    ))
+                    data_sources.append("market_sentiment")
 
                 # --- Signal Confluence: detect inter-indicator conflicts ---
                 rsi_state = indicators.get("rsi_state", "neutral")

@@ -167,12 +167,14 @@ flowchart LR
   - `plan_ready` 事件携带 `agent_selection` 诊断——被跳过 Agent 附带原因、预算优先级排序（详见 `execution-event-contract.md`）
   - 新闻引用兜底：当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL
   - 对话路由安全边界：`_query_requests_illicit_nonpublic_info` 拦截索取内幕/非公开信息的请求，阻止进入 research
+  - 执行闭环守卫（2026-05-21）：`direct_answer` 携带结构化可执行 `task_hints` 时会投射为 research；direct 回复层会清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。
 - `planner_stub.py` 已支持新工具关键词路由：
   - `get_earnings_estimates`, `get_eps_revisions`
   - `get_option_chain_metrics`
   - `get_factor_exposure`, `run_portfolio_stress_test`
   - `get_event_calendar`
   - `score_news_source_reliability`
+- `technical_agent.py` 已将技术分析扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search 的共振证据，而不是单一 K 线判断。
 
 ### 3.3 Executor
 

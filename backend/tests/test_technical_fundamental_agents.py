@@ -53,6 +53,59 @@ async def test_technical_agent_indicators():
 
 
 @pytest.mark.asyncio
+async def test_technical_agent_enriches_kline_with_quote_options_and_sentiment():
+    cache = DummyCache()
+
+    class Tools:
+        def get_stock_historical_data(self, ticker, period="6mo", interval="1d"):
+            return {
+                "ticker": ticker,
+                "kline_data": _build_kline(),
+                "source": "mock_kline",
+            }
+
+        def get_stock_price(self, ticker):
+            return {
+                "ticker": ticker,
+                "price": 190.5,
+                "currency": "USD",
+                "change_percent": 1.25,
+                "source": "mock_quote",
+                "as_of": "2026-05-21T10:00:00",
+            }
+
+        def get_option_chain_metrics(self, ticker):
+            return {
+                "ticker": ticker,
+                "iv_atm": 0.32,
+                "put_call_ratio_oi": 0.74,
+                "iv_skew_25d": -0.04,
+                "source": "mock_options",
+                "as_of": "2026-05-21T10:00:00",
+            }
+
+        def get_market_sentiment(self):
+            return "Fear & Greed Index: 62 (greed)"
+
+    agent = TechnicalAgent(None, cache, Tools())
+    registry = agent._get_tool_registry()
+
+    assert {"get_stock_historical_data", "get_stock_price", "get_option_chain_metrics", "get_market_sentiment"}.issubset(registry)
+
+    result = await agent.research("AAPL technical analysis with IV and market sentiment", "AAPL")
+
+    assert "mock_kline" in result.data_sources
+    assert "mock_quote" in result.data_sources
+    assert "mock_options" in result.data_sources
+    assert "market_sentiment" in result.data_sources
+    evidence_text = "\n".join(item.text for item in result.evidence)
+    assert "Current quote" in evidence_text
+    assert "Option metrics" in evidence_text
+    assert "Market sentiment" in evidence_text
+    assert "ATM IV" in result.summary
+
+
+@pytest.mark.asyncio
 async def test_fundamental_agent_financials():
     mock_llm = MagicMock()
     cache = DummyCache()

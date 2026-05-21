@@ -448,13 +448,62 @@ def _bound_context_is_resolved(
     return bool(binding.subject_hint)
 
 
-def _task_hints_require_execution(task_hints: tuple[dict[str, Any], ...]) -> bool:
+def _task_hint_external_refs(hint: dict[str, Any]) -> bool:
+    params = hint.get("params") if isinstance(hint.get("params"), dict) else {}
+    urls = params.get("urls")
+    selection_ids = params.get("selection_ids")
+    return bool(
+        (isinstance(hint.get("tickers"), list) and any(str(item).strip() for item in hint.get("tickers") or []))
+        or str(params.get("url") or "").strip()
+        or (isinstance(urls, list) and any(str(item).strip() for item in urls))
+        or str(params.get("selection_id") or "").strip()
+        or (isinstance(selection_ids, list) and any(str(item).strip() for item in selection_ids))
+    )
+
+
+def _task_hints_require_execution(
+    task_hints: tuple[dict[str, Any], ...],
+    query: str = "",
+    *,
+    allow_subject_label_refs: bool = False,
+) -> bool:
     for hint in task_hints:
         if not isinstance(hint, dict):
             continue
         operation = str(hint.get("operation") or "").strip().lower()
+        subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
+        has_external_refs = _task_hint_external_refs(hint)
         if operation in {"alert_set", "portfolio_impact", "rebalance_check"}:
             return True
+        if operation == "qa":
+            if has_external_refs and subject_type in {"research_doc", "news_item", "news_set", "filing"}:
+                return True
+            continue
+        if operation not in _TASK_HINT_OPERATIONS:
+            continue
+        if (
+            _query_prefers_direct_style_explanation(query)
+            and not has_external_refs
+            and subject_type in {"macro", "theme", "unknown"}
+        ):
+            continue
+        if operation in {"price", "technical", "compare", "fact_check", "macro_brief"}:
+            if has_external_refs or _query_explicitly_requests_grounding(query):
+                return True
+            if subject_type in {"portfolio", "research_doc", "news_item", "news_set", "filing"}:
+                return True
+            continue
+        if operation in {"fetch", "news_impact", "analyze_impact"}:
+            if has_external_refs or _query_explicitly_requests_grounding(query):
+                return True
+            if subject_type in {"portfolio", "research_doc", "news_item", "news_set", "filing"}:
+                return True
+            if (
+                allow_subject_label_refs
+                and subject_type in {"company", "index", "crypto", "fund"}
+                and str(hint.get("subject_label") or "").strip()
+            ):
+                return True
     return False
 
 
@@ -471,11 +520,17 @@ def _research_decision_can_answer_as_chat(decision: ConversationDecision, query:
         return False
     ordinary_domain = decision.domain_intent in {"analysis", "finance_concept"}
     style_explanation = decision.domain_intent in {"news", "unknown"} and _query_prefers_direct_style_explanation(query)
-    if not (ordinary_domain or style_explanation):
+    no_news_direct = wants_no_news_or_links(query) and decision.domain_intent in {
+        "news",
+        "analysis",
+        "finance_concept",
+        "unknown",
+    }
+    if not (ordinary_domain or style_explanation or no_news_direct):
         return False
     if _query_explicitly_requests_grounding(query):
         return False
-    if _task_hints_require_execution(decision.task_hints):
+    if _task_hints_require_execution(decision.task_hints, query, allow_subject_label_refs=True):
         return False
     return True
 
@@ -753,7 +808,7 @@ def normalize_context_decision(
             subject_hint = _history_subject_hint(recent_history) or binding.subject_hint
             if subject_hint:
                 should_research = (
-                    bool(decision.task_hints and _task_hints_require_execution(decision.task_hints))
+                    bool(decision.task_hints and _task_hints_require_execution(decision.task_hints, query))
                     or bool(decision.needs_tools)
                     or _query_explicitly_requests_grounding(query)
                     or str(state.get("output_mode") or "").strip().lower() == "investment_report"
@@ -850,7 +905,7 @@ def normalize_context_decision(
         subject_hint = _history_subject_hint(recent_history)
         if subject_hint:
             should_research = (
-                bool(decision.task_hints and _task_hints_require_execution(decision.task_hints))
+                bool(decision.task_hints and _task_hints_require_execution(decision.task_hints, query))
                 or (decision.needs_tools and _query_explicitly_requests_grounding(query))
             )
             return replace(
@@ -921,7 +976,7 @@ def normalize_context_decision(
         and decision.relation != "new_topic"
         and decision.domain_intent not in {"news", "doc_qa", "portfolio", "alert"}
         and not _query_explicitly_requests_grounding(query)
-        and not _task_hints_require_execution(decision.task_hints)
+        and not _task_hints_require_execution(decision.task_hints, query)
         and _bound_context_is_resolved(
             source=source,
             binding=binding,
@@ -1602,7 +1657,7 @@ async def generate_contextual_reply(
 - 如果 relation=correct，简短确认用户纠正后的对象，之后按纠正后的对象继续；不要要求用户重复确认已经明确的 ticker。
 - 如果用户是省略式追问，优先结合 recent_history 和 context_binding 推断对象与动作；上下文足够时直接回答、计算、改写或展开，不要让用户重复对象。
 - 如果用户给了数字或要求计算，先看最近对话里是否已有可用数值；缺少必要数值时，只说明缺哪一个，不要忘掉已绑定的对象。
-- 不要虚构最新市场事实；需要实时数据时说明要进入研究链路。
+- 不要虚构最新市场事实。direct_answer 不能反问用户是否“启动研究/进入研究链路”；如果当前 decision 已是 direct_answer，只基于已有上下文回答，缺少必要实时数值时直接说明缺哪项数据。
 """
     prompt = "<context>\n" + json_dumps_safe(inputs, ensure_ascii=False, indent=2) + "\n</context>"
 

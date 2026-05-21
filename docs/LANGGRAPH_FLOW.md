@@ -300,6 +300,8 @@ graph TD
 
 **安全边界** (2026-05-20)：conversation_router 新增内幕/非公开信息请求检测，此类请求被拒绝进入 research 链路。新闻引用兜底确保 `reply_contract` 有可引用 URL。多轮对话中历史 ticker 自动补全主题提示。
 
+**执行闭环守卫** (2026-05-21)：`conversation_router` 对 `task_hints` 做结构化可执行判定；`understand_request` 会把错误的 `direct_answer + 可执行 task_hints` 强制投射为 research，同时保留 no-news、纯机制解释和历史数值追问的 direct 路径。direct 答复层清理“是否启动研究/进入研究链路”类二次确认，避免用户已明确提问时继续绕圈。
+
 **Source**: `backend/graph/nodes/planner.py`
 
 ---

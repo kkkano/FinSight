@@ -25,7 +25,7 @@ flowchart LR
 | `price_agent` | `backend/agents/price_agent.py` | 价格与短期行情信号 | `get_stock_price`, `get_option_chain_metrics`, `search` |
 | `news_agent` | `backend/agents/news_agent.py` | 新闻提要、事件影响、信源质量 | `get_company_news`, `get_event_calendar`, `score_news_source_reliability`, `search` |
 | `fundamental_agent` | `backend/agents/fundamental_agent.py` | 基本面/估值/财务解释 | `get_company_info`, `get_earnings_estimates`, `get_eps_revisions`, `search` |
-| `technical_agent` | `backend/agents/technical_agent.py` | 技术指标与形态判断 | `get_stock_historical_data`, `search` |
+| `technical_agent` | `backend/agents/technical_agent.py` | 技术指标、实时位置、期权拥挤度与市场情绪共振 | `get_stock_historical_data`, `get_stock_price`, `get_option_chain_metrics`, `get_market_sentiment`, `search` |
 | `macro_agent` | `backend/agents/macro_agent.py` | 宏观环境与市场风险背景 | `get_market_sentiment`, `get_economic_events`, `get_fred_data`, `search` |
 | `risk_agent` | `backend/agents/risk_agent.py` | 因子暴露与压力测试信号 | `get_stock_price`, `get_factor_exposure`, `run_portfolio_stress_test` |
 | `deep_search_agent` | `backend/agents/deep_search_agent.py` | 深度检索与高可靠证据补强 | `search` + 外部检索策略（Tavily/Exa 等） |

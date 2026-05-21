@@ -14,6 +14,7 @@ from backend.graph.nodes.conversation_router import (
     ContextBinding,
     ConversationDecision,
     _effective_current_turn_tickers,
+    _task_hints_require_execution,
     generate_contextual_reply,
     route_conversation,
 )
@@ -32,7 +33,11 @@ from backend.graph.state import GraphState
 
 
 _INDEX_TICKERS = {"SPY", "QQQ", "DIA", "IWM", "VTI", "^IXIC", "^DJI", "^GSPC", "^RUT", "^VIX"}
-_NON_ASSET_TOKENS = {"PDF", "DOC", "DOCX", "PPT", "PPTX", "CSV", "TXT", "HTML", "URL"}
+_NON_ASSET_TOKENS = {
+    "PDF", "DOC", "DOCX", "PPT", "PPTX", "CSV", "TXT", "HTML", "URL",
+    "IV", "PCR", "RSI", "MACD",
+    "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF",
+}
 _NEWS_HINTS = ("新闻", "消息", "大新闻", "发生什么", "快讯", "news", "headline", "latest")
 _PRICE_HINTS = ("价格", "股价", "涨了多少", "跌了多少", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
 _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "impact", "affect", "risk")
@@ -108,6 +113,29 @@ _FORBIDDEN_DIRECT_REPLY_MARKERS = (
     "分析对象：",
     "问题：",
 )
+_RESEARCH_CONFIRMATION_ASK_TERMS = (
+    "你希望",
+    "是否",
+    "要不要",
+    "需要我",
+    "我可以",
+    "如果你希望",
+    "would you like",
+    "do you want",
+    "should i",
+)
+_RESEARCH_CONFIRMATION_ACTION_TERMS = (
+    "启动研究",
+    "开始研究",
+    "进入研究",
+    "研究链路",
+    "研究模式",
+    "拉取最新",
+    "获取最新",
+    "最新实时",
+    "start research",
+    "research mode",
+)
 
 
 _THEME_HINTS = (*_THEME_HINTS, "semiconductor", "semiconductors", "sector", "chips")
@@ -115,7 +143,17 @@ _THEME_HINTS = (*_THEME_HINTS, "semiconductor", "semiconductors", "sector", "chi
 
 def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
     lowered = text.lower()
-    return any(h.lower() in lowered for h in hints)
+    for hint in hints:
+        needle = str(hint or "").strip().lower()
+        if not needle:
+            continue
+        if re.fullmatch(r"[a-z0-9]{1,3}", needle):
+            if re.search(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", lowered):
+                return True
+            continue
+        if needle in lowered:
+            return True
+    return False
 
 
 def _is_private_insider_information_request(query: str) -> bool:
@@ -205,6 +243,23 @@ def _has_prior_dialogue(state: GraphState, current_query: str) -> bool:
     return False
 
 
+def _history_tickers_from_messages(state: GraphState, current_query: str) -> list[str]:
+    messages = state.get("messages")
+    if not isinstance(messages, list):
+        return []
+    current = str(current_query or "").strip()
+    tickers: list[str] = []
+    for msg in reversed(messages[-8:]):
+        content = getattr(msg, "content", None)
+        if content is None and isinstance(msg, dict):
+            content = msg.get("content")
+        text = str(content or "").strip()
+        if not text or text == current:
+            continue
+        tickers.extend(_extract_tickers_from_text(text))
+    return dedup_tickers(tickers)
+
+
 def _can_use_active_symbol_fallback(ui_context: dict[str, Any], memory_context: dict[str, Any]) -> bool:
     if not isinstance(ui_context.get("active_symbol"), str) or not ui_context["active_symbol"].strip():
         return False
@@ -221,6 +276,20 @@ def _sanitize_direct_chat_reply(reply: str) -> str:
     cleaned = cleaned.replace("后续关注：", "后续观察：")
     for marker in _FORBIDDEN_DIRECT_REPLY_MARKERS:
         cleaned = cleaned.replace(marker, "")
+    paragraphs = re.split(r"\n\s*\n", cleaned)
+    kept: list[str] = []
+    for paragraph in paragraphs:
+        compact = re.sub(r"\s+", " ", paragraph).strip()
+        lowered = compact.lower()
+        asks_to_confirm_research = any(term in compact or term in lowered for term in _RESEARCH_CONFIRMATION_ASK_TERMS)
+        mentions_research_action = any(term in compact or term in lowered for term in _RESEARCH_CONFIRMATION_ACTION_TERMS)
+        if asks_to_confirm_research and mentions_research_action:
+            continue
+        kept.append(paragraph.strip())
+    if kept:
+        cleaned = "\n\n".join(part for part in kept if part)
+    elif cleaned:
+        cleaned = "这个问题需要实时数据才能可靠回答，当前直接答复缺少足够证据。"
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
@@ -968,9 +1037,11 @@ def _direct_decision_must_project_tasks(query: str, decision: ConversationDecisi
         _extract_urls(query)
         or query_explicitly_requests_sources(query)
         or _contains_any(query, _NEWS_HINTS)
+        or _contains_any(query, _TECHNICAL_HINTS)
         or _query_explicitly_requests_price_data(query)
         or _contains_any(query, _PORTFOLIO_HINTS)
         or decision.needs_tools
+        or _task_hints_require_execution(decision.task_hints, query, allow_subject_label_refs=True)
         or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
         or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
     )
@@ -996,6 +1067,19 @@ def _query_requests_company_side_data(query: str) -> bool:
         or _contains_any(text, _TECHNICAL_HINTS)
         or _contains_any(text, _PORTFOLIO_HINTS)
     )
+
+
+def _query_can_fallback_to_direct_finance_answer(query: str) -> bool:
+    text = _strip_urls(str(query or "")).strip()
+    if not text:
+        return False
+    if _extract_urls(text) or query_explicitly_requests_sources(text) or query_explicitly_requests_links(text):
+        return False
+    if _query_explicitly_requests_price_data(text) or _contains_any(text, _TECHNICAL_HINTS) or _contains_any(text, _PORTFOLIO_HINTS):
+        return False
+    if not wants_no_news_or_links(text) and _contains_any(text, _NEWS_HINTS):
+        return False
+    return bool(has_financial_intent(text) or _contains_any(text, _THEME_HINTS))
 
 
 def _prune_url_only_company_context_tasks(
@@ -1196,7 +1280,11 @@ def _extract_tickers_from_text(text: str) -> list[str]:
     if not str(text or "").strip():
         return []
     return dedup_tickers(
-        [str(t) for t in (extract_tickers(str(text)).get("tickers") or []) if str(t).strip()]
+        [
+            str(t)
+            for t in (extract_tickers(str(text)).get("tickers") or [])
+            if str(t).strip() and str(t).strip().upper() not in _NON_ASSET_TOKENS
+        ]
     )
 
 
@@ -1889,6 +1977,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         and _contains_any(query, _THEME_HINTS)
         and not has_macro
         and not tickers
+        and not wants_no_news_or_links(query)
         and not url_only_doc_turn
     ):
         if not any(task.get("subject_type") == "theme" for task in tasks):
@@ -2042,6 +2131,72 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 )
 
     tasks = _prune_url_only_company_context_tasks(tasks, query=query, explicit_urls=explicit_urls)
+
+    if (
+        not tasks
+        and not blocked_tasks
+        and conversation_decision is None
+        and _history_tickers_from_messages(state, query)
+    ):
+        history_tickers = _history_tickers_from_messages(state, query)
+        conversation_decision = ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="last_turn",
+                confidence=0.62,
+                reason="same-thread history provides the subject while router is unavailable",
+                subject_hint=", ".join(history_tickers[:3]),
+            ),
+            relation="follow_up",
+            domain_intent="analysis",
+            confidence=0.58,
+            needs_tools=False,
+            reason="deterministic same-thread direct fallback without tools",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+        reply = await generate_contextual_reply(state, conversation_decision)
+        result = _direct_conversation_result(
+            query=query,
+            output_mode=output_mode,
+            decision=conversation_decision,
+            reply=reply,
+            context_refs=[*context_refs, _binding_context_ref(conversation_decision.context_binding)],
+            artifacts=artifacts,
+            trace=trace,
+            memory_context=memory_context,
+        )
+        await _emit_understanding_trace(result["understanding"])
+        return result
+
+    if (
+        not tasks
+        and not blocked_tasks
+        and conversation_decision is None
+        and _query_can_fallback_to_direct_finance_answer(query)
+    ):
+        conversation_decision = ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0),
+            relation="new_topic",
+            domain_intent="finance_concept",
+            confidence=0.58,
+            needs_tools=False,
+            reason="deterministic finance concept fallback without tools",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+        reply = await generate_contextual_reply(state, conversation_decision)
+        result = _direct_conversation_result(
+            query=query,
+            output_mode=output_mode,
+            decision=conversation_decision,
+            reply=reply,
+            context_refs=list(context_refs),
+            artifacts=artifacts,
+            trace=trace,
+            memory_context=memory_context,
+        )
+        await _emit_understanding_trace(result["understanding"])
+        return result
 
     has_alert_task = any((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)
     pending_research_after_alert = has_alert_task and any(

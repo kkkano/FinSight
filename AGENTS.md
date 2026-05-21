@@ -25,6 +25,12 @@
 - `backend/research/debate.py`：新增 `build_read_only_adjudications`，输出 Bull/Bear/Judge 只读裁决产物。
 - `backend/research/agent_quality_contract.py`：增强 low_source_quality / recovery action 诊断。
 
+# 2026-05-21 增量架构说明（执行路由闭环与 TechnicalAgent 扩面）
+
+- `backend/graph/nodes/conversation_router.py`：`task_hints` 执行判定改为结构化判断，区分当前轮可执行任务与历史追问残留 hint。
+- `backend/graph/nodes/understand_request.py`：`direct_answer` 若携带可执行任务会被强制投射为 research；direct 回复清理“是否启动研究/进入研究链路”类绕圈 CTA。
+- `backend/agents/technical_agent.py`：技术 Agent 从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

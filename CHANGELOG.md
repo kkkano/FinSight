@@ -9,6 +9,10 @@
 
 ### 新增
 
+- **对话执行路由与 TechnicalAgent 能力扩面**（2026-05-21）：
+  - `understand_request` 不再允许 `direct_answer` 吞掉结构化可执行 `task_hints`；当前轮有 ticker / URL / selection / 显式取证信号时直接进入 research。
+  - direct 聊天答复清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。
+  - `technical_agent` 工具面从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
   - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。

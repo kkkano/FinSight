@@ -65,6 +65,13 @@ def test_context_router_coerces_compound_task_hints():
     assert decision.task_hints[1]["tickers"] == ["MSFT"]
 
 
+def test_theme_matching_does_not_treat_again_as_ai_topic():
+    from backend.graph.nodes.understand_request import _THEME_HINTS, _contains_any
+
+    assert _contains_any("AI sector pressure", _THEME_HINTS)
+    assert not _contains_any("Use 307 as my reference level and calculate the gap again.", _THEME_HINTS)
+
+
 def test_context_router_rejects_bespoke_followup_routes():
     from backend.graph.nodes.conversation_router import _coerce_decision
 
@@ -835,6 +842,42 @@ def test_context_router_style_only_market_mechanism_news_decision_stays_chat():
     assert normalized.context_binding.source == "none"
 
 
+def test_context_router_no_news_theme_research_decision_stays_chat():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="semiconductors"),
+        relation="new_topic",
+        domain_intent="news",
+        confidence=0.78,
+        needs_tools=True,
+        task_hints=(
+            {
+                "subject_type": "theme",
+                "subject_label": "semiconductors",
+                "operation": "fetch",
+                "params": {"topic": "news"},
+            },
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {"query": "Do not look up news. Just tell me why semiconductors can sell off together.", "messages": []},
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.needs_tools is False
+    assert normalized.task_hints == ()
+
+
 def test_context_router_resolved_bound_clarify_continues_conversation():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,
@@ -1420,6 +1463,122 @@ def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
     assert "后续观察：" in markdown
     assert markdown.startswith("Using NVDA, AMD, TSM as the representative set:")
     assert result["messages"][-1].content == markdown
+
+
+def test_understand_request_strips_research_confirmation_cta_from_direct_reply(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["INTC"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="INTC"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.86,
+            needs_tools=False,
+            reason="router says direct conceptual framing",
+        )
+
+    async def fake_reply(_state, _decision):
+        return (
+            "可以先从产品周期、竞争格局和估值三条线看。\n\n"
+            "你希望我首先启动研究，为你获取英特尔的最新实时技术指标和基本面数据，然后我们再一起逐一深入分析每个部分吗？"
+            "或者你可以指定一个你最想先深入探讨的维度。"
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "INTC 先按产品周期和竞争格局给我一个简短框架。",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    markdown = result["artifacts"]["draft_markdown"]
+    assert result["understanding"]["route"] == "direct"
+    assert "可以先从产品周期" in markdown
+    assert "启动研究" not in markdown
+    assert "最新实时" not in markdown
+    assert "你希望" not in markdown
+
+
+def test_understand_request_no_news_mechanism_falls_back_to_direct_when_router_unavailable(monkeypatch):
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == []
+        assert selection_ids == []
+        return None
+
+    async def fake_reply(_state, _decision):
+        return "Semiconductors can sell off together when investors de-risk the whole group."
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "Do not look up news. Just tell me why semiconductors can sell off together.",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "direct"
+    assert result["tasks"] == []
+    assert result["chat_responded"] is True
+    assert result["reply_contract"]["source_constraints"]["disallow_news"] is True
+
+
+def test_understand_request_history_followup_falls_back_to_direct_when_router_unavailable(monkeypatch):
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == []
+        assert selection_ids == []
+        return None
+
+    async def fake_reply(_state, decision):
+        assert decision.context_binding.source == "last_turn"
+        assert "GOOGL" in decision.context_binding.subject_hint
+        return "Using the prior GOOGL quote, the gap from 307 is about 93.80."
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "Use 307 as my reference level and calculate the gap. Do not ask which stock again.",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+                "messages": [
+                    HumanMessage(content="GOOGL current price, short answer."),
+                    AIMessage(content="GOOGL latest price is about 400.80 USD."),
+                ],
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "direct"
+    assert result["tasks"] == []
+    assert "93.80" in result["artifacts"]["draft_markdown"]
 
 
 def test_understand_request_direct_followup_keeps_last_turn_binding(monkeypatch):
@@ -2054,6 +2213,96 @@ def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatc
         task["reason"] in {"conversation_router_task_hint", "conversation_router_task_hint_support"}
         for task in result["tasks"]
     )
+
+
+def test_understand_request_projects_direct_decision_with_executable_task_hints(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["AAPL"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=False,
+            reason="bad direct choice despite an executable analysis task",
+            task_hints=(
+                {
+                    "subject_type": "company",
+                    "subject_label": "AAPL",
+                    "tickers": ["AAPL"],
+                    "operation": "analyze_impact",
+                    "params": {},
+                },
+            ),
+        )
+
+    async def fail_direct_reply(*_args, **_kwargs):
+        raise AssertionError("executable task hints must not be swallowed by direct reply")
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fail_direct_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "帮我分析 AAPL 这轮财报对接下来走势和风险的影响，直接开始做。",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "research"
+    assert result["chat_responded"] is False
+    assert result["tasks"]
+    assert any((task.get("operation") or {}).get("name") == "analyze_impact" for task in result["tasks"])
+
+
+def test_understand_request_projects_direct_technical_decision_to_research(monkeypatch):
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["AAPL"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=False,
+            reason="router missed technical execution",
+        )
+
+    async def fail_direct_reply(*_args, **_kwargs):
+        raise AssertionError("technical requests must enter research instead of direct chat")
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fail_direct_reply)
+
+    result = _run(
+        understand_mod.understand_request(
+            {
+                "query": "AAPL 技术面、期权IV和市场情绪一起看，短一点。",
+                "ui_context": {},
+                "output_mode": "chat",
+                "trace": {},
+            }
+        )
+    )
+
+    assert result["understanding"]["route"] == "research"
+    assert result["tasks"]
+    assert any((task.get("operation") or {}).get("name") == "technical" for task in result["tasks"])
 
 
 def test_understand_request_adds_price_anchor_for_router_fetch_analysis(monkeypatch):
