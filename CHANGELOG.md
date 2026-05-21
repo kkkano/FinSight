@@ -15,7 +15,9 @@
   - 显式深度报告 query（如 `deep report` / `filing document longform` / `10-K/10-Q`）可覆盖前端默认 `chat`，进入 `investment_report` 与 `report_generation` lane。
   - request-understanding tasks 路径的研报计划补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、业绩电话会 transcript 与报告 agent 步骤，避免只跑价格/新闻/公司信息。
   - 显式技术面 query 在 chat 模式也会计划 `technical_agent`，与 `get_stock_price`、`get_technical_snapshot` 一起执行。
-  - `technical_agent` 工具面从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
+  - 显式 `investment_report` 与技术面 query 在 `conversation_router` 走 fast path，不再先等待会话路由 LLM，降低报告/技术面请求的首段阻塞。
+  - Agent 内部 LLM 分析、gap detection 与 summary update 增加硬超时；LLM 长尾时回退确定性摘要，避免单 Agent 拖垮整轮报告。
+  - `technical_agent` 工具面从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search；确定性摘要补支撑/阻力、MA20 偏离、成交量相对均量，并把新增信号写入 evidence。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
   - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。

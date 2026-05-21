@@ -304,6 +304,8 @@ graph TD
 
 **执行闭环守卫** (2026-05-21)：`conversation_router` 对 `task_hints` 做结构化可执行判定；`understand_request` 会把错误的 `direct_answer + 可执行 task_hints` 强制投射为 research，同时保留 no-news、纯机制解释和历史数值追问的 direct 路径。direct 答复层清理“是否启动研究/进入研究链路”类二次确认，避免用户已明确提问时继续绕圈。
 
+**显式执行 fast path 与 Agent 超时** (2026-05-21)：`investment_report` 与技术面 query 已明确需要执行时，`conversation_router` 直接返回 research，不再等待路由 LLM；`BaseFinancialAgent` 对内部 LLM 分析、gap detection、summary update 设置硬超时，超时后保留确定性摘要。`technical_agent` 的确定性摘要补充支撑/阻力、MA20 偏离和成交量相对均量。
+
 **Source**: `backend/graph/nodes/planner.py`
 
 ---

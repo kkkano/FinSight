@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
@@ -110,3 +113,66 @@ async def test_base_agent_research_attaches_self_check_diagnostics() -> None:
     assert output.evidence_quality["agent_quality"]["status"] == "warn"
     assert output.evidence_quality["agent_self_check"]["status"] == "warn"
     assert output.evidence_quality["agent_self_check"]["gaps"][0]["code"] == "extract_claims"
+
+
+@pytest.mark.asyncio
+async def test_agent_llm_analysis_has_hard_call_timeout(monkeypatch) -> None:
+    class _SlowLLM:
+        model_name = "slow-fixture"
+
+        async def ainvoke(self, _messages):
+            await asyncio.sleep(2.0)
+            return type("_Resp", (), {"content": "这段内容不应该在超时后返回。"})()
+
+    class _TimeoutAgent(BaseFinancialAgent):
+        AGENT_NAME = "timeout_agent"
+
+    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "0.1")
+    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
+    monkeypatch.setattr(
+        "backend.services.rate_limiter.acquire_llm_token",
+        lambda *args, **kwargs: asyncio.sleep(0, result=True),
+    )
+
+    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
+
+    start = time.perf_counter()
+    result = await agent._llm_analyze(
+        "price 10, MA20 9, RSI 55",
+        role="fixture",
+        focus="fixture",
+    )
+    elapsed = time.perf_counter() - start
+
+    assert result is None
+    assert elapsed < 0.8
+
+
+@pytest.mark.asyncio
+async def test_agent_reflection_gap_detection_has_hard_call_timeout(monkeypatch) -> None:
+    class _SlowLLM:
+        model_name = "slow-fixture"
+
+        async def ainvoke(self, _messages):
+            await asyncio.sleep(2.0)
+            return type("_Resp", (), {"content": "{\"complete\": true}"})()
+
+    class _TimeoutAgent(BaseFinancialAgent):
+        AGENT_NAME = "timeout_agent"
+
+    monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
+    monkeypatch.setattr(
+        "backend.services.rate_limiter.acquire_llm_token",
+        lambda *args, **kwargs: asyncio.sleep(0, result=True),
+    )
+
+    agent = _TimeoutAgent(llm=_SlowLLM(), cache=None)
+    agent._current_query = "AAPL technical"
+    agent._current_ticker = "AAPL"
+
+    start = time.perf_counter()
+    result = await agent._identify_gaps("AAPL has price and RSI evidence.")
+    elapsed = time.perf_counter() - start
+
+    assert result == []
+    assert elapsed < 0.8

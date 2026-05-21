@@ -277,6 +277,41 @@ def _query_explicitly_requests_grounding(query: str) -> bool:
     )
 
 
+def _query_explicitly_requests_technical(query: str) -> bool:
+    text = str(query or "")
+    lowered = text.lower()
+    technical_tokens = (
+        "technical",
+        "technical analysis",
+        "chart",
+        "k-line",
+        "candlestick",
+        "moving average",
+        "ma20",
+        "ma50",
+        "ma200",
+        "macd",
+        "rsi",
+        "volume",
+        "support",
+        "resistance",
+    )
+    technical_cjk_tokens = (
+        "技术面",
+        "技术分析",
+        "k线",
+        "K线",
+        "均线",
+        "成交量",
+        "支撑",
+        "阻力",
+        "压力位",
+        "支撑位",
+        "趋势线",
+    )
+    return any(token in lowered for token in technical_tokens) or any(token in text for token in technical_cjk_tokens)
+
+
 def _query_prefers_direct_style_explanation(query: str) -> bool:
     text = str(query or "").strip()
     if not text or _query_explicitly_requests_grounding(text):
@@ -1352,7 +1387,7 @@ def _fallback_decision(
     keyword classifier.
     """
     output_mode = str(state.get("output_mode") or "").strip().lower()
-    if output_mode == "investment_report":
+    if output_mode == "investment_report" and (tickers or selection_ids):
         return ConversationDecision(
             execution_route="research",
             context_binding=ContextBinding(),
@@ -1388,6 +1423,60 @@ def _fallback_decision(
             needs_tools=False,
             reason="explicit subject context without grounded data request",
         )
+    return None
+
+
+def _fast_explicit_execution_decision(
+    state: GraphState,
+    *,
+    tickers: list[str],
+    selection_ids: list[str],
+) -> ConversationDecision | None:
+    """Skip router LLM for high-confidence execution turns."""
+
+    output_mode = str(state.get("output_mode") or "").strip().lower()
+    query = str(state.get("query") or "").strip()
+    source: ContextSource = "selection" if selection_ids else "none"
+
+    if output_mode == "investment_report":
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.72),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.78,
+            needs_tools=True,
+            reason="explicit report mode fast path",
+            reply_guidance="直接进入研报执行链路，不再询问是否启动研究。",
+        )
+
+    if tickers and _query_explicitly_requests_technical(query):
+        task_hints = tuple(
+            {
+                "subject_type": "company",
+                "subject_label": ticker,
+                "tickers": [ticker],
+                "operation": "technical",
+                "params": {
+                    "indicators": ["moving_average", "RSI", "MACD", "volume", "support_resistance"],
+                    "include_current_price": True,
+                },
+                "reason": "explicit technical indicator request",
+            }
+            for ticker in _dedupe_preserve_order(tickers)[:6]
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.7),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.82,
+            needs_tools=True,
+            reason="explicit technical indicator request fast path",
+            reply_guidance="运行 technical_agent 获取 K 线、报价、期权和情绪证据后直接给出技术结论。",
+            task_hints=task_hints,
+        )
+
     return None
 
 
@@ -1469,6 +1558,19 @@ async def route_conversation(
             reason="deictic follow-up has no same-thread or visible UI context",
             reply_guidance="I do not have enough current conversation context to know which point you mean. Send the relevant point, company, news item, document, or report and I will continue from there.",
         )
+
+    fast_decision = _fast_explicit_execution_decision(
+        state,
+        tickers=tickers,
+        selection_ids=selection_ids,
+    )
+    if fast_decision is not None:
+        logger.info(
+            "[conversation_router] fast_path route=%s reason=%s",
+            fast_decision.execution_route,
+            fast_decision.reason,
+        )
+        return fast_decision
 
     inputs = _router_inputs(state, tickers=tickers, selection_ids=selection_ids)
     timeout_sec = max(

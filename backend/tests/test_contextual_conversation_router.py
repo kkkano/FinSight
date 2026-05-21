@@ -996,6 +996,66 @@ def test_route_conversation_deictic_without_context_clarifies_without_llm(monkey
     assert decision.needs_tools is False
 
 
+def test_route_conversation_explicit_technical_query_uses_fast_path_without_llm(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    def fail_create_llm(*_args, **_kwargs):
+        raise AssertionError("explicit technical requests should not spend a router LLM call")
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", fail_create_llm)
+
+    decision = _run(
+        route_conversation(
+            {
+                "query": "INTC 现在技术面怎么样？请结合均线、RSI、MACD、成交量、支撑阻力和当前价格给出可执行结论。",
+                "ui_context": {},
+                "messages": [],
+            },
+            tickers=["INTC"],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "research"
+    assert decision.needs_tools is True
+    assert decision.domain_intent == "analysis"
+    assert decision.task_hints
+    assert decision.task_hints[0]["operation"] == "technical"
+    assert decision.task_hints[0]["tickers"] == ["INTC"]
+
+
+def test_route_conversation_explicit_report_mode_uses_fast_path_without_llm(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    def fail_create_llm(*_args, **_kwargs):
+        raise AssertionError("explicit report mode with a ticker should not spend a router LLM call")
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", fail_create_llm)
+
+    decision = _run(
+        route_conversation(
+            {
+                "query": "请给我一份 INTC 深度投资报告，覆盖财报、竞争、估值和分析师评级。",
+                "output_mode": "investment_report",
+                "ui_context": {},
+                "messages": [],
+            },
+            tickers=["INTC"],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "research"
+    assert decision.needs_tools is True
+    assert decision.reason == "explicit report mode fast path"
+
+
 def test_context_router_single_word_it_prefers_thread_history_over_recent_focus():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,

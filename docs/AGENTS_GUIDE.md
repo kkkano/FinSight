@@ -25,7 +25,7 @@ flowchart LR
 | `price_agent` | `backend/agents/price_agent.py` | 价格与短期行情信号 | `get_stock_price`, `get_option_chain_metrics`, `search` |
 | `news_agent` | `backend/agents/news_agent.py` | 新闻提要、事件影响、信源质量 | `get_company_news`, `get_event_calendar`, `score_news_source_reliability`, `search` |
 | `fundamental_agent` | `backend/agents/fundamental_agent.py` | 基本面/估值/财务解释 | `get_company_info`, `get_earnings_estimates`, `get_eps_revisions`, `search` |
-| `technical_agent` | `backend/agents/technical_agent.py` | 技术指标、实时位置、期权拥挤度与市场情绪共振 | `get_stock_historical_data`, `get_stock_price`, `get_option_chain_metrics`, `get_market_sentiment`, `search` |
+| `technical_agent` | `backend/agents/technical_agent.py` | 技术指标、支撑/阻力、量能、实时位置、期权拥挤度与市场情绪共振 | `get_stock_historical_data`, `get_stock_price`, `get_option_chain_metrics`, `get_market_sentiment`, `search` |
 | `macro_agent` | `backend/agents/macro_agent.py` | 宏观环境与市场风险背景 | `get_market_sentiment`, `get_economic_events`, `get_fred_data`, `search` |
 | `risk_agent` | `backend/agents/risk_agent.py` | 因子暴露与压力测试信号 | `get_stock_price`, `get_factor_exposure`, `run_portfolio_stress_test` |
 | `deep_search_agent` | `backend/agents/deep_search_agent.py` | 深度检索与高可靠证据补强 | `search` + 外部检索策略（Tavily/Exa 等） |
@@ -104,6 +104,7 @@ flowchart LR
 - 强报告 query 即使前端默认发 `output_mode=chat`，也会升格为 `investment_report` / `report_generation`。
 - request-understanding tasks 路径的研报会补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、业绩电话会 transcript 与报告 agent 步骤。
 - 显式技术面 query 在 chat 模式会计划 `technical_agent`，和价格、技术快照工具一起执行。
+- 显式研报 / 技术面请求在 `conversation_router` 有 fast path，不再先等会话路由 LLM；Agent 内部 LLM 分析和反思补查有硬超时，超时后交付确定性摘要。
 
 ## 5. 执行与事件可观测性
 

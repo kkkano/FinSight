@@ -28,10 +28,12 @@
 # 2026-05-21 增量架构说明（执行路由闭环与 TechnicalAgent 扩面）
 
 - `backend/graph/nodes/conversation_router.py`：`task_hints` 执行判定改为结构化判断，区分当前轮可执行任务与历史追问残留 hint。
+- `backend/graph/nodes/conversation_router.py`：显式 `investment_report` 与技术面请求进入 fast path，不再先等待会话路由 LLM，避免“是否启动研究”类绕圈和长时间无进展。
 - `backend/graph/nodes/understand_request.py`：`direct_answer` 若携带可执行任务会被强制投射为 research；direct 回复清理“是否启动研究/进入研究链路”类绕圈 CTA。
 - `backend/graph/nodes/decide_output_mode.py`：显式“深度投资报告 / deep report / filing document longform”等 query 可覆盖前端默认 `chat`，进入 `investment_report` 和 `report_generation` lane；否定报告请求仍保持 chat。
 - `backend/graph/nodes/policy_gate.py`、`backend/graph/nodes/planner_stub.py`：显式技术面任务会开放并计划 `technical_agent`；request-understanding tasks 路径的研报也会补齐 SEC/CompanyFacts/8-K、权威媒体、电话会 transcript 与报告 agent 步骤。
-- `backend/agents/technical_agent.py`：技术 Agent 从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search，并把新增信号写入 evidence。
+- `backend/agents/base_agent.py`：Agent 内部 LLM 分析 / gap detection / summary update 增加硬超时，LLM 长尾时回退到确定性摘要，避免单 Agent 拖垮整轮报告。
+- `backend/agents/technical_agent.py`：技术 Agent 从 K 线 + search 扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search；确定性摘要补支撑/阻力、MA20 偏离和成交量相对均量，并把新增信号写入 evidence。
 
 ## 当前推荐心智模型
 

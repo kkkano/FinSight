@@ -145,6 +145,19 @@ class TechnicalAgent(BaseFinancialAgent):
             ),
             f"趋势: {trend_cn}。",
         ]
+        if indicators.get("pct_from_ma20") is not None:
+            parts.append(f"价格相对MA20偏离 {indicators['pct_from_ma20']:+.2f}%。")
+        if indicators.get("support") is not None or indicators.get("resistance") is not None:
+            support_text = f"{indicators['support']:.2f}" if indicators.get("support") is not None else "暂无"
+            resistance_text = f"{indicators['resistance']:.2f}" if indicators.get("resistance") is not None else "暂无"
+            parts.append(f"关键价位: 支撑 {support_text}，阻力 {resistance_text}。")
+        if indicators.get("latest_volume") is not None:
+            volume_text = f"成交量: 最新 {indicators['latest_volume']:.0f}"
+            if indicators.get("avg_volume20") is not None:
+                volume_text += f"，20日均量 {indicators['avg_volume20']:.0f}"
+            if indicators.get("volume_ratio20") is not None:
+                volume_text += f"，量能为均量 {indicators['volume_ratio20']:.2f}倍"
+            parts.append(volume_text + "。")
         price_snapshot = data.get("price_snapshot")
         if isinstance(price_snapshot, dict):
             price = price_snapshot.get("price")
@@ -229,6 +242,29 @@ class TechnicalAgent(BaseFinancialAgent):
                     ),
                     source=source,
                     url=_yf_history_url,  # Yahoo Finance 历史数据页面，供证据池点击跳转
+                    timestamp=timestamp,
+                ))
+                support_text = (
+                    f"支撑 {indicators['support']:.2f}"
+                    if indicators.get("support") is not None
+                    else "支撑 暂无"
+                )
+                resistance_text = (
+                    f"阻力 {indicators['resistance']:.2f}"
+                    if indicators.get("resistance") is not None
+                    else "阻力 暂无"
+                )
+                volume_bits = []
+                if indicators.get("latest_volume") is not None:
+                    volume_bits.append(f"最新成交量 {indicators['latest_volume']:.0f}")
+                if indicators.get("avg_volume20") is not None:
+                    volume_bits.append(f"20日均量 {indicators['avg_volume20']:.0f}")
+                if indicators.get("volume_ratio20") is not None:
+                    volume_bits.append(f"量能 {indicators['volume_ratio20']:.2f}x")
+                evidence.append(EvidenceItem(
+                    text=" | ".join([support_text, resistance_text, *volume_bits]),
+                    source=source,
+                    url=_yf_history_url,
                     timestamp=timestamp,
                 ))
 
@@ -365,6 +401,31 @@ class TechnicalAgent(BaseFinancialAgent):
         ma200 = self._calc_ma(series, 200)
         rsi = self._calc_rsi(series, 14)
         macd, signal, hist = self._calc_macd(series)
+        pct_from_ma20 = ((close - ma20) / ma20 * 100.0) if ma20 else None
+
+        recent_rows = [item for item in kline_data[-20:] if isinstance(item, dict)]
+        lows: List[float] = []
+        highs: List[float] = []
+        volumes: List[float] = []
+        for item in recent_rows:
+            try:
+                if item.get("low") is not None:
+                    lows.append(float(item["low"]))
+                if item.get("high") is not None:
+                    highs.append(float(item["high"]))
+                if item.get("volume") is not None:
+                    volumes.append(float(item["volume"]))
+            except Exception:
+                continue
+        support = min(lows) if lows else None
+        resistance = max(highs) if highs else None
+        latest_volume = volumes[-1] if volumes else None
+        avg_volume20 = (sum(volumes) / len(volumes)) if volumes else None
+        volume_ratio20 = (
+            latest_volume / avg_volume20
+            if latest_volume is not None and avg_volume20 not in (None, 0)
+            else None
+        )
 
         trend = "sideways"
         if ma20 is not None and ma50 is not None:
@@ -387,6 +448,7 @@ class TechnicalAgent(BaseFinancialAgent):
             "ma20": ma20,
             "ma50": ma50,
             "ma200": ma200,
+            "pct_from_ma20": pct_from_ma20,
             "rsi": rsi if rsi is not None else 0.0,
             "rsi_state": rsi_state,
             "macd": macd if macd is not None else 0.0,
@@ -394,6 +456,11 @@ class TechnicalAgent(BaseFinancialAgent):
             "hist": hist if hist is not None else 0.0,
             "trend": trend,
             "momentum": momentum,
+            "support": support,
+            "resistance": resistance,
+            "latest_volume": latest_volume,
+            "avg_volume20": avg_volume20,
+            "volume_ratio20": volume_ratio20,
             "last_time": last_time,
         }
 

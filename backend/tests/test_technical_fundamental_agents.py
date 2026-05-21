@@ -103,6 +103,9 @@ async def test_technical_agent_enriches_kline_with_quote_options_and_sentiment()
     assert "Option metrics" in evidence_text
     assert "Market sentiment" in evidence_text
     assert "ATM IV" in result.summary
+    assert "支撑" in result.summary
+    assert "阻力" in result.summary
+    assert "成交量" in result.summary
 
 
 @pytest.mark.asyncio

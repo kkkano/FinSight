@@ -90,6 +90,14 @@ class BaseFinancialAgent:
         except Exception:
             return 30.0
 
+    def _llm_analyze_call_timeout(self) -> float:
+        """Hard timeout for the actual LLM request after a token is acquired."""
+        env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_CALL_TIMEOUT_SECONDS"
+        try:
+            return max(0.05, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "20"))))
+        except Exception:
+            return 20.0
+
     def _get_tool_registry(self) -> dict:
         """Return available tools for this agent's reflection loop.
 
@@ -188,10 +196,13 @@ class BaseFinancialAgent:
             )
             start_time = time.perf_counter()
 
-            response = await ainvoke_with_rate_limit_retry(
-                self.llm,
-                [HumanMessage(content=prompt)],
-                acquire_token=False,
+            response = await asyncio.wait_for(
+                ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [HumanMessage(content=prompt)],
+                    acquire_token=False,
+                ),
+                timeout=self._llm_analyze_call_timeout(),
             )
 
             content = getattr(response, "content", None)
@@ -425,10 +436,13 @@ class BaseFinancialAgent:
 
             from backend.services.llm_retry import ainvoke_with_rate_limit_retry
 
-            response = await ainvoke_with_rate_limit_retry(
-                self.llm,
-                [HumanMessage(content=prompt)],
-                acquire_token=False,
+            response = await asyncio.wait_for(
+                ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [HumanMessage(content=prompt)],
+                    acquire_token=False,
+                ),
+                timeout=self._llm_analyze_call_timeout(),
             )
             text = response.content if hasattr(response, "content") else str(response)
 
@@ -606,10 +620,13 @@ class BaseFinancialAgent:
 
             from backend.services.llm_retry import ainvoke_with_rate_limit_retry
 
-            response = await ainvoke_with_rate_limit_retry(
-                self.llm,
-                [HumanMessage(content=prompt)],
-                acquire_token=False,
+            response = await asyncio.wait_for(
+                ainvoke_with_rate_limit_retry(
+                    self.llm,
+                    [HumanMessage(content=prompt)],
+                    acquire_token=False,
+                ),
+                timeout=self._llm_analyze_call_timeout(),
             )
             updated = response.content if hasattr(response, "content") else str(response)
 

@@ -168,6 +168,7 @@ flowchart LR
   - 新闻引用兜底：当 plan 无新闻源时直接抓取文章，确保回复契约有可引用 URL
   - 对话路由安全边界：`_query_requests_illicit_nonpublic_info` 拦截索取内幕/非公开信息的请求，阻止进入 research
   - 执行闭环守卫（2026-05-21）：`direct_answer` 携带结构化可执行 `task_hints` 时会投射为 research；direct 回复层会清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。
+  - 显式执行 fast path（2026-05-21）：`investment_report` 与技术面 query 已有明确执行意图时不再等待会话路由 LLM，直接进入 research 任务投射。
 - `planner_stub.py` 已支持新工具关键词路由：
   - `get_earnings_estimates`, `get_eps_revisions`
   - `get_option_chain_metrics`
@@ -176,7 +177,8 @@ flowchart LR
   - `score_news_source_reliability`
 - request-understanding tasks 路径的 `investment_report` 会补齐 SEC 10-K/10-Q、CompanyFacts、8-K、权威媒体、电话会 transcript 与报告 agent 步骤，不再只保留任务自身的价格/新闻/公司信息步骤。
 - `policy_gate.py` 对显式技术面任务在 chat 模式开放 `technical_agent`，planner 会和 `get_stock_price` / `get_technical_snapshot` 一起执行，避免技术面请求只输出工具摘要。
-- `technical_agent.py` 已将技术分析扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search 的共振证据，而不是单一 K 线判断。
+- `base_agent.py` 对 Agent 内部 LLM 分析、gap detection 与 summary update 增加硬超时；长尾或失败时回退确定性摘要，避免单 Agent 阻塞整轮报告。
+- `technical_agent.py` 已将技术分析扩展为 K 线、当前报价、期权 IV/PCR/Skew、市场情绪和 search 的共振证据；确定性摘要包含支撑/阻力、MA20 偏离和成交量相对均量，而不是单一 K 线判断。
 
 ### 3.3 Executor
 
