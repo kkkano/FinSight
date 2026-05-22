@@ -249,6 +249,45 @@ def test_earnings_price_impact_query_routes_to_composite_chain(monkeypatch):
         assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(step_agents), query
 
 
+def test_earnings_price_impact_agents_run_in_one_serial_block():
+    from backend.graph.executor import group_steps_by_parallel_group
+
+    state = {
+        "query": "请问英伟达这个季度财报对股价的影响",
+        "operation": {"name": "earnings_impact", "confidence": 0.86, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "NVDA",
+                "tickers": ["NVDA"],
+                "operation": {"name": "earnings_impact", "confidence": 0.86, "params": {}},
+                "status": "ready",
+            }
+        ],
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    serial_groups = group_steps_by_parallel_group(steps)
+    agent_groups = [
+        {step.get("name") for step in group if step.get("kind") == "agent"}
+        for group in serial_groups
+        if any(step.get("kind") == "agent" for step in group)
+    ]
+
+    assert agent_groups == [{"fundamental_agent", "news_agent", "risk_agent"}]
+
+
 def test_earnings_price_impact_query_expands_tools_even_if_upstream_says_price():
     state = {
         "query": "请问英伟达这个季度财报对股价的影响",

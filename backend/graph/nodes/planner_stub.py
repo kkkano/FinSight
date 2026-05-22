@@ -359,7 +359,6 @@ def planner_stub(state: GraphState) -> dict:
             parallel_group=evidence_group,
             task_ids=task_ids,
         )
-        _append_earnings_performance_steps(ticker, group=evidence_group, task_ids=task_ids)
         _append_tool_step(
             "analyze_historical_drawdowns",
             {"ticker": ticker},
@@ -368,6 +367,7 @@ def planner_stub(state: GraphState) -> dict:
             parallel_group=evidence_group,
             task_ids=task_ids,
         )
+        _append_earnings_performance_steps(ticker, group=evidence_group, task_ids=task_ids)
         _append_agent_step(
             "risk_agent",
             {"query": query, "ticker": ticker},
