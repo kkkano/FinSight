@@ -247,7 +247,22 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
             url = ""
         source = str(row.get("source") or row.get("publisher") or "").strip()
         published = str(row.get("published_at") or row.get("published_date") or row.get("date") or "").strip()
-        items.append({"title": title, "url": url, "source": source, "published": published[:10]})
+        snippet = str(
+            row.get("snippet")
+            or row.get("description")
+            or row.get("content")
+            or row.get("summary")
+            or ""
+        ).strip()
+        items.append(
+            {
+                "title": title,
+                "url": url,
+                "source": source,
+                "published": published[:10],
+                "snippet": snippet[:500],
+            }
+        )
         if len(items) >= limit:
             break
     return items
@@ -779,7 +794,10 @@ def _news_by_ticker(state: GraphState) -> dict[str, list[dict[str, str]]]:
             if key:
                 seen.add(key)
             deduped.append(item)
-        news_by_ticker[ticker] = deduped[:5]
+        relevant = _filter_news_by_company_identity(state, deduped)
+        if relevant:
+            deduped = relevant
+        news_by_ticker[ticker] = deduped[:8]
     return news_by_ticker
 
 

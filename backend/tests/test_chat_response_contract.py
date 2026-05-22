@@ -715,13 +715,25 @@ def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
             "plan_ir": {
                 "steps": [
                     {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
-                    {"id": "s2", "kind": "tool", "name": "get_earnings_call_transcripts", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s3", "kind": "tool", "name": "get_earnings_call_transcripts", "inputs": {"ticker": "NVDA"}},
                 ]
             },
             "artifacts": {
                 "step_results": {
                     "s1": {"output": {"ticker": "NVDA", "name": "NVIDIA Corporation"}},
                     "s2": {
+                        "output": [
+                            {
+                                "title": f"Unrelated sector headline {i}",
+                                "url": f"https://example.com/sector-{i}",
+                                "source": "Example News",
+                                "published_at": "2026-05-20",
+                            }
+                            for i in range(6)
+                        ]
+                    },
+                    "s3": {
                         "output": {
                             "ticker": "NVDA",
                             "transcripts": [
