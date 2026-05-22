@@ -349,6 +349,172 @@ def test_technical_chat_renders_clean_actionable_short_answer() -> None:
     assert "阻力 132.75" in markdown
 
 
+def test_investment_opinion_chat_renders_quality_contract_sections() -> None:
+    markdown = _render_chat(
+        {
+            "query": "INTC 最近走势如何 看好么",
+            "subject": {"subject_type": "company", "tickers": ["INTC"]},
+            "operation": {"name": "investment_opinion"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["INTC"],
+                    "operation": {"name": "investment_opinion"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "INTC"}},
+                    {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "INTC"}},
+                    {"id": "s3", "kind": "agent", "name": "technical_agent", "inputs": {"ticker": "INTC"}},
+                    {"id": "s4", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "INTC"}},
+                    {"id": "s5", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "INTC"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {
+                        "output": {
+                            "ticker": "INTC",
+                            "price": 118.5,
+                            "currency": "USD",
+                            "change_percent": -0.39,
+                            "as_of": "2026-05-22T12:00:00Z",
+                        }
+                    },
+                    "s2": {
+                        "output": [
+                            {
+                                "title": "Intel shares react to AI PC update",
+                                "url": "https://example.com/intc-ai-pc",
+                                "source": "Example News",
+                                "published_at": "2026-05-22T09:00:00Z",
+                            }
+                        ]
+                    },
+                    "s3": {
+                        "output": {
+                            "summary": (
+                                "INTC 技术快照: 收盘价 118.50。RSI(14) 62.29（中性）。"
+                                "MACD 空头。趋势: 上升趋势。关键价位: 支撑 79.62，阻力 132.75。"
+                            )
+                        }
+                    },
+                    "s4": {
+                        "output": {
+                            "summary": "FundamentalAgent: 营收恢复仍需后续财报验证，估值结论需要结合 EPS 修正。",
+                            "risks": ["盈利修复不及预期会压制估值。"],
+                        }
+                    },
+                    "s5": {
+                        "output": {
+                            "summary": "RiskAgent: 波动和回撤风险中等，若跌破关键支撑需降低仓位。",
+                            "risks": ["跌破支撑位后趋势会转弱。"],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
+        assert heading in markdown
+    assert "支撑 79.62" in markdown
+    assert "Example News" in markdown
+    assert "盈利修复" in markdown
+    assert "跌破支撑" in markdown
+
+
+def test_investment_opinion_answer_matrix_preserves_quality_sections() -> None:
+    cases = [
+        ("INTC 最近走势如何 看好么", "INTC"),
+        ("NVDA 走势怎么看", "NVDA"),
+        ("AAPL 值得买吗", "AAPL"),
+        ("TSLA 后市怎么操作", "TSLA"),
+        ("MSFT 短中期风险机会怎么看", "MSFT"),
+        ("Should I buy AMD shares here?", "AMD"),
+    ]
+
+    for query, ticker in cases:
+        markdown = _render_chat(
+            {
+                "query": query,
+                "subject": {"subject_type": "company", "tickers": [ticker]},
+                "operation": {"name": "investment_opinion"},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": [ticker],
+                        "operation": {"name": "investment_opinion"},
+                    }
+                ],
+                "plan_ir": {
+                    "steps": [
+                        {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": ticker}},
+                        {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": ticker}},
+                        {"id": "s3", "kind": "agent", "name": "technical_agent", "inputs": {"ticker": ticker}},
+                        {"id": "s4", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": ticker}},
+                        {"id": "s5", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": ticker}},
+                    ]
+                },
+                "artifacts": {
+                    "step_results": {
+                        "s1": {"output": {"ticker": ticker, "price": 118.5, "currency": "USD", "change_percent": 0.8}},
+                        "s2": {"output": [{"title": f"{ticker} update", "url": f"https://example.com/{ticker.lower()}", "source": "Example News"}]},
+                        "s3": {"output": {"summary": f"{ticker} 技术快照: 上升趋势。关键价位: 支撑 100.00，阻力 125.00。"}},
+                        "s4": {"output": {"summary": f"{ticker} 基本面仍需盈利验证，估值需要结合 EPS 修正。"}},
+                        "s5": {"output": {"summary": f"{ticker} 回撤风险中等，跌破支撑需降低仓位。", "risks": ["跌破支撑后趋势转弱。"]}},
+                    }
+                },
+            }
+        )
+
+        _assert_chat_contract(markdown)
+        for heading in ("结论", "价格/趋势", "技术面", "消息/催化", "基本面/估值", "风险"):
+            assert heading in markdown, query
+        assert "数据缺失" not in markdown, query
+        assert "支撑 100.00" in markdown, query
+
+
+def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA 走势怎么看",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "investment_opinion"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "investment_opinion"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "agent", "name": "technical_agent", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s3", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s4", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "price": 125.4, "currency": "USD", "change_percent": 1.6}},
+                    "s2": {"output": {"summary": "NVDA 技术快照: 偏强，上升趋势。关键价位: 支撑 118.00，阻力 132.00。"}},
+                    "s3": {"output": {"summary": "RiskAgent: 波动风险可控，没有触及关键风控线。", "risks": ["波动风险可控。"]}},
+                    "s4": {"output": {"summary": "FundamentalAgent: 盈利预期仍在上修，估值需要结合后续业绩兑现。"}},
+                }
+            },
+        }
+    )
+
+    assert "「中性偏多」" in markdown
+
+
 def test_news_chat_answer_uses_clean_citations() -> None:
     markdown = _render_chat(
         {

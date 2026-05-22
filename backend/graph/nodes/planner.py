@@ -112,6 +112,7 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
             "price",
             "fetch",
             "technical",
+            "investment_opinion",
             "analyze_impact",
             "news_impact",
             "daily_brief",
@@ -128,7 +129,7 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
         if operation_names.issubset(simple_task_graph_ops) and (
             has_url_task
             or len(ready_tasks) >= 2
-            or bool(operation_names & {"price", "fetch", "technical", "analyze_impact", "news_impact", "daily_brief"})
+            or bool(operation_names & {"price", "fetch", "technical", "investment_opinion", "analyze_impact", "news_impact", "daily_brief"})
         ):
             return all(
                 str(task.get("subject_type") or "").strip().lower()
@@ -157,17 +158,17 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
         router_evidence_graph = (
             router_decomposed
             and operation_names.issubset(
-                {"compare", "price", "fetch", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa"}
+                {"compare", "price", "fetch", "investment_opinion", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa"}
             )
             and (
-                bool(operation_names & {"compare", "analyze_impact", "news_impact", "daily_brief"})
+                bool(operation_names & {"compare", "investment_opinion", "analyze_impact", "news_impact", "daily_brief"})
                 or len(operation_names) >= 2
             )
         )
         url_evidence_graph = (
             has_url_task
             and operation_names.issubset(
-                {"compare", "price", "fetch", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa", "macro_brief"}
+                {"compare", "price", "fetch", "investment_opinion", "analyze_impact", "news_impact", "daily_brief", "fact_check", "qa", "macro_brief"}
             )
             and len(ready_tasks) >= 2
         )

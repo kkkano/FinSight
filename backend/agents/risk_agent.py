@@ -151,6 +151,55 @@ class RiskAgent(BaseFinancialAgent):
         super().__init__(llm, cache, circuit_breaker)
         self.tools = tools_module
 
+    def _get_tool_registry(self) -> dict:
+        """RiskAgent tool registry: quote, drawdown, factor and stress signals."""
+        registry: dict[str, dict[str, Any]] = {}
+        tools = self.tools
+        if not tools:
+            return registry
+
+        search_fn = getattr(tools, "search", None)
+        if search_fn:
+            registry["search"] = {
+                "func": search_fn,
+                "description": "搜索公司特有风险、监管事件、行业冲击和风险披露。",
+                "call_with": "query",
+            }
+
+        quote_fn = getattr(tools, "get_stock_price", None)
+        if quote_fn:
+            registry["get_stock_price"] = {
+                "func": quote_fn,
+                "description": "获取当前报价和涨跌幅，用于校准短期风险暴露。",
+                "call_with": "ticker",
+            }
+
+        drawdown_fn = getattr(tools, "analyze_historical_drawdowns", None)
+        if drawdown_fn:
+            registry["analyze_historical_drawdowns"] = {
+                "func": drawdown_fn,
+                "description": "分析历史回撤、波动和极端下行情景。",
+                "call_with": "ticker",
+            }
+
+        factor_fn = getattr(tools, "get_factor_exposure", None)
+        if factor_fn:
+            registry["get_factor_exposure"] = {
+                "func": factor_fn,
+                "description": "估算单标的等权持仓的因子暴露。",
+                "call_with": "positions",
+            }
+
+        stress_fn = getattr(tools, "run_portfolio_stress_test", None)
+        if stress_fn:
+            registry["run_portfolio_stress_test"] = {
+                "func": stress_fn,
+                "description": "对单标的等权持仓运行压力测试。",
+                "call_with": "positions",
+            }
+
+        return registry
+
     @classmethod
     def risk_level_meets_threshold(cls, actual: RiskLevel, threshold: RiskLevel) -> bool:
         return cls._RISK_LEVEL_ORDER[actual] >= cls._RISK_LEVEL_ORDER[threshold]

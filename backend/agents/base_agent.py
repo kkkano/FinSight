@@ -535,6 +535,8 @@ class BaseFinancialAgent:
                     result = func(search_query)
                 elif call_with == "ticker":
                     result = func(ticker)
+                elif call_with == "positions":
+                    result = func([{"ticker": ticker, "weight": 1.0}])
                 else:
                     # No-args tools (e.g. get_fred_data)
                     result = func()

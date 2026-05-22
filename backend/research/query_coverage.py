@@ -21,6 +21,8 @@ _DIMENSION_KEYWORDS: dict[str, tuple[str, ...]] = {
 
 _OPERATION_DIMENSIONS: dict[str, tuple[str, ...]] = {
     "generate_report": ("direct_answer", "fundamental", "valuation", "risk", "catalyst"),
+    "investment_opinion": ("direct_answer", "price", "technical", "news", "fundamental", "valuation", "risk"),
+    "daily_brief": ("direct_answer", "price", "news", "risk"),
     "analyze_impact": ("direct_answer", "catalyst", "risk"),
     "technical": ("technical",),
     "fundamental": ("fundamental", "valuation"),

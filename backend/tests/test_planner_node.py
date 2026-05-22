@@ -278,6 +278,58 @@ def test_planner_llm_mode_uses_task_graph_only_for_price_chat_tasks(monkeypatch)
     assert any(step.get("name") == "get_stock_price" for step in steps)
 
 
+def test_planner_llm_mode_uses_task_graph_for_investment_opinion_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("investment opinion chat should use deterministic task graph")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "INTC 最近走势如何 看好么",
+                "output_mode": "chat",
+                "operation": {"name": "investment_opinion", "confidence": 0.86, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["INTC"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["INTC"],
+                        "operation": {"name": "investment_opinion", "confidence": 0.86, "params": {}},
+                        "status": "ready",
+                        "reason": "conversation_router_task_hint",
+                    }
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 5, "max_tools": 8},
+                    "allowed_tools": ["get_company_news", "get_stock_price", "get_technical_snapshot"],
+                    "allowed_agents": ["technical_agent", "fundamental_agent", "risk_agent", "news_agent"],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    assert {"get_stock_price", "get_technical_snapshot", "get_company_news"}.issubset(step_names)
+    assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_names)
+
+
 def test_planner_llm_mode_uses_task_graph_for_router_decomposed_news_chat(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 

@@ -24,6 +24,7 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from backend.config.ticker_mapping import extract_tickers
+from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.memory_scope import current_report_context
 from backend.graph.preference_timeouts import apply_preferred_timeout
@@ -310,6 +311,10 @@ def _query_explicitly_requests_technical(query: str) -> bool:
         "趋势线",
     )
     return any(token in lowered for token in technical_tokens) or any(token in text for token in technical_cjk_tokens)
+
+
+def _query_explicitly_requests_investment_opinion(query: str) -> bool:
+    return query_requests_investment_opinion(query)
 
 
 def _query_prefers_direct_style_explanation(query: str) -> bool:
@@ -1474,6 +1479,33 @@ def _fast_explicit_execution_decision(
             needs_tools=True,
             reason="explicit technical indicator request fast path",
             reply_guidance="运行 technical_agent 获取 K 线、报价、期权和情绪证据后直接给出技术结论。",
+            task_hints=task_hints,
+        )
+
+    if tickers and _query_explicitly_requests_investment_opinion(query):
+        task_hints = tuple(
+            {
+                "subject_type": "company",
+                "subject_label": ticker,
+                "tickers": [ticker],
+                "operation": "investment_opinion",
+                "params": {
+                    "include_current_price": True,
+                    "required_dimensions": ["price", "technical", "news", "fundamental", "risk"],
+                },
+                "reason": "explicit investment opinion request",
+            }
+            for ticker in _dedupe_preserve_order(tickers)[:6]
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.72),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=True,
+            reason="explicit investment opinion request fast path",
+            reply_guidance="运行价格、技术面、新闻、基本面和风险证据后，给出有条件的投资观点，不只列新闻。",
             task_hints=task_hints,
         )
 

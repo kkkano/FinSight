@@ -76,6 +76,122 @@ def test_technical_chat_path_runs_technical_agent_for_indicator_query():
     assert "technical_agent" in step_agents
 
 
+def test_investment_opinion_chat_path_runs_core_agents_and_evidence_steps():
+    state = {
+        "query": "INTC 最近走势如何 看好么",
+        "operation": {"name": "investment_opinion", "confidence": 0.86, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["INTC"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "INTC",
+                "tickers": ["INTC"],
+                "operation": {"name": "investment_opinion", "confidence": 0.86, "params": {}},
+                "status": "ready",
+            }
+        ],
+    }
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+    step_agents = [
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        if s.get("kind") == "agent"
+    ]
+
+    assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(agents)
+    assert "get_stock_price" in step_names
+    assert "get_technical_snapshot" in step_names
+    assert "get_company_news" in step_names
+    assert "get_company_info" in step_names
+    assert "technical_agent" in step_agents
+    assert "fundamental_agent" in step_agents
+    assert "risk_agent" in step_agents
+
+
+def test_investment_opinion_query_matrix_routes_to_rich_chat_chain(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    positive_cases = [
+        ("INTC 最近走势如何 看好么", "INTC"),
+        ("NVDA 走势怎么看", "NVDA"),
+        ("AAPL 值得买吗", "AAPL"),
+        ("TSLA 后市怎么操作", "TSLA"),
+        ("MSFT 短中期风险机会怎么看", "MSFT"),
+        ("Should I buy AMD shares here?", "AMD"),
+        ("What is your bullish or bearish view on NVDA?", "NVDA"),
+        ("META 可以加仓吗", "META"),
+    ]
+
+    for query, ticker in positive_cases:
+        state = {"query": query, "ui_context": {}, "output_mode": "chat"}
+        import asyncio
+
+        understanding = asyncio.run(understand_request(state))
+        assert (understanding.get("operation") or {}).get("name") == "investment_opinion", query
+        assert (understanding.get("subject") or {}).get("tickers") == [ticker], query
+
+        policy_out = policy_gate({**state, **understanding})
+        plan_out = planner_stub({**state, **understanding, **policy_out})
+        agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+        step_names = [s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+        step_agents = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+            if s.get("kind") == "agent"
+        }
+
+        assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(agents), query
+        assert {"get_stock_price", "get_technical_snapshot", "get_company_news", "get_company_info"}.issubset(set(step_names)), query
+        assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_agents), query
+
+
+def test_non_opinion_queries_keep_narrow_tool_chains(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    cases = [
+        ("AAPL 最新新闻有哪些", "fetch", {"get_company_news"}, {"technical_agent", "fundamental_agent", "risk_agent"}),
+        ("NVDA 当前价格是多少", "price", {"get_stock_price"}, {"technical_agent", "fundamental_agent", "risk_agent", "news_agent"}),
+        ("美联储利率路径对科技股估值有什么影响", "analyze_impact", {"get_official_macro_releases"}, {"technical_agent", "fundamental_agent", "risk_agent"}),
+    ]
+
+    for query, expected_op, required_tools, disallowed_agents in cases:
+        state = {"query": query, "ui_context": {}, "output_mode": "chat"}
+        import asyncio
+
+        understanding = asyncio.run(understand_request(state))
+        assert (understanding.get("operation") or {}).get("name") == expected_op, query
+        policy_out = policy_gate({**state, **understanding})
+        plan_out = planner_stub({**state, **understanding, **policy_out})
+        agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+        step_names = {s.get("name") for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])}
+        step_agents = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+            if s.get("kind") == "agent"
+        }
+
+        assert required_tools.issubset(step_names), query
+        assert disallowed_agents.isdisjoint(agents), query
+        assert disallowed_agents.isdisjoint(step_agents), query
+
+
 def test_old_query_compare_path_keeps_comparison_step():
     policy_out, plan_out = _run_policy_and_planner("AAPL vs MSFT", "compare", ["AAPL", "MSFT"])
     tools = set(((policy_out.get("policy") or {}).get("allowed_tools") or []))

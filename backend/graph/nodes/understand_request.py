@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.event_bus import emit_event
+from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.nodes.conversation_router import (
     ContextBinding,
     ConversationDecision,
@@ -178,6 +179,8 @@ def _is_private_insider_information_request(query: str) -> bool:
 
 def _has_holdings_intent(query: str) -> bool:
     if _is_private_insider_information_request(query):
+        return False
+    if query_requests_investment_opinion(query):
         return False
     return _contains_any(query, _HOLDINGS_HINTS)
 
@@ -517,6 +520,9 @@ def _company_operations(
         return [_operation("qa", 0.7)]
     if len(tickers) >= 2 and _contains_any(query, _COMPARE_HINTS):
         operations.append(_operation("compare", 0.86))
+        return operations
+    if query_requests_investment_opinion(query):
+        operations.append(_operation("investment_opinion", 0.86))
         return operations
     if _contains_any(query, _PRICE_HINTS):
         operations.append(_operation("price", 0.82))
@@ -1085,6 +1091,7 @@ def _direct_decision_must_project_tasks(query: str, decision: ConversationDecisi
         or query_explicitly_requests_sources(query)
         or _contains_any(query, _NEWS_HINTS)
         or _contains_any(query, _TECHNICAL_HINTS)
+        or query_requests_investment_opinion(query)
         or _query_explicitly_requests_price_data(query)
         or _contains_any(query, _PORTFOLIO_HINTS)
         or decision.needs_tools
@@ -1122,7 +1129,7 @@ def _query_can_fallback_to_direct_finance_answer(query: str) -> bool:
         return False
     if _extract_urls(text) or query_explicitly_requests_sources(text) or query_explicitly_requests_links(text):
         return False
-    if _query_explicitly_requests_price_data(text) or _contains_any(text, _TECHNICAL_HINTS) or _contains_any(text, _PORTFOLIO_HINTS):
+    if _query_explicitly_requests_price_data(text) or _contains_any(text, _TECHNICAL_HINTS) or query_requests_investment_opinion(text) or _contains_any(text, _PORTFOLIO_HINTS):
         return False
     if not wants_no_news_or_links(text) and _contains_any(text, _NEWS_HINTS):
         return False

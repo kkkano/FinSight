@@ -41,6 +41,14 @@ class PriceAgent(BaseFinancialAgent):
                 "call_with": "query",
             }
 
+        quote_fn = getattr(tools, "get_stock_price", None)
+        if quote_fn:
+            registry["get_stock_price"] = {
+                "func": quote_fn,
+                "description": "获取当前报价、涨跌幅和时间戳，校准价格判断。",
+                "call_with": "ticker",
+            }
+
         option_metrics_fn = getattr(tools, "get_option_chain_metrics", None)
         if option_metrics_fn:
             registry["get_option_chain_metrics"] = {

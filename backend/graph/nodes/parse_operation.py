@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.state import GraphState
 
 # ---------------------------------------------------------------------------
@@ -178,6 +179,13 @@ def parse_operation(state: GraphState) -> dict:
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "analyze_impact"
+
+    elif query_requests_investment_opinion(query):
+        op = "investment_opinion"
+        confidence = 0.86
+        source = "semantic_rule"
+        keyword_hits = ["investment_opinion_pattern"]
+        guardrail_a_hit = "investment_opinion"
 
     elif (hits := _match_any(_BACKTEST_KEYWORDS, lowered)):
         op = "backtest"

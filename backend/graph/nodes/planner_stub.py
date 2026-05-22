@@ -414,6 +414,97 @@ def planner_stub(state: GraphState) -> dict:
 
         for ticker in tickers_for_task[:6]:
             live_qa = op_name == "qa" and _qa_needs_live_context()
+            if op_name == "investment_opinion":
+                _append_tool_step(
+                    "get_stock_price",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：获取当前价格/涨跌幅作为方向判断锚点。",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_technical_snapshot",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：获取趋势、动量、支撑阻力等技术证据。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_company_news",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：获取近期新闻和催化事件，避免只看价格。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_company_info",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：补充公司基础信息和估值上下文。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_earnings_estimates",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：补充盈利预期，避免只给消息面判断。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_eps_revisions",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：补充 EPS 修正方向，判断基本面预期是否改善。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "analyze_historical_drawdowns",
+                    {"ticker": ticker},
+                    why=f"{ticker} 投资观点任务：补充历史回撤和波动风险。",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                agent_group = f"{group}_opinion_agents" if group else "opinion_agents"
+                _append_agent_step(
+                    "technical_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} 投资观点任务：运行 technical_agent 给出趋势、动量和关键价位。",
+                    optional=False,
+                    parallel_group=agent_group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "fundamental_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} 投资观点任务：运行 fundamental_agent 给出基本面和估值证据。",
+                    optional=True,
+                    parallel_group=agent_group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "risk_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} 投资观点任务：运行 risk_agent 给出回撤、波动和证伪风险。",
+                    optional=True,
+                    parallel_group=agent_group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "news_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} 投资观点任务：运行 news_agent 区分催化事件和噪音。",
+                    optional=True,
+                    parallel_group=agent_group,
+                    task_ids=task_ids,
+                )
+                continue
             if op_name in {"price", "technical", "analyze_impact", "daily_brief"} or live_qa:
                 _append_tool_step(
                     "get_stock_price",

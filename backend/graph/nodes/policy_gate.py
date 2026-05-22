@@ -538,6 +538,34 @@ def policy_gate(state: GraphState) -> dict:
                 required_list.append("deep_search_agent")
             agent_selection["required"] = required_list
             budget["max_rounds"] = min(max(int(budget.get("max_rounds", 6)), 7), 10)
+    elif op_name == "investment_opinion" or _has_ready_operation(ready_tasks, "investment_opinion"):
+        allowed_agents = [
+            name
+            for name in ("news_agent", "fundamental_agent", "technical_agent", "risk_agent")
+            if name in REPORT_AGENT_CANDIDATES
+        ]
+        agent_selection = {
+            "selected": list(allowed_agents),
+            "required": ["fundamental_agent", "technical_agent", "risk_agent"],
+            "reason": "explicit_investment_opinion_request",
+        }
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 5)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 8)
+
+        pref_agents = agent_preferences.get("agents")
+        if isinstance(pref_agents, dict):
+            removed_by_prefs: list[str] = []
+            for name in list(allowed_agents):
+                if str(pref_agents.get(name) or "").strip().lower() == "off":
+                    allowed_agents.remove(name)
+                    removed_by_prefs.append(name)
+            if removed_by_prefs:
+                agent_selection["selected"] = list(allowed_agents)
+                agent_selection["required"] = [
+                    name for name in agent_selection["required"] if name not in removed_by_prefs
+                ]
+                agent_selection["removed_by_prefs"] = removed_by_prefs
+
     elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
         allowed_agents = ["technical_agent"]
         agent_selection = {

@@ -97,6 +97,27 @@ def test_compare_risk_query_does_not_expand_to_per_ticker_impact_tasks():
     assert not any(row[2] == "analyze_impact" for row in ops)
 
 
+def test_investment_opinion_queries_create_research_tasks(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    for query, ticker in [
+        ("INTC 最近走势如何 看好么", "INTC"),
+        ("NVDA 走势怎么看", "NVDA"),
+        ("AAPL 值得买吗", "AAPL"),
+    ]:
+        result = _run(understand_request({"query": query, "ui_context": {}, "output_mode": "chat"}))
+
+        assert (result.get("understanding") or {}).get("route") == "research"
+        assert (result.get("subject") or {}).get("tickers") == [ticker]
+        assert (result.get("operation") or {}).get("name") == "investment_opinion"
+        assert ("company", (ticker,), "investment_opinion") in _task_ops(result)
+        contract = result.get("reply_contract") or {}
+        assert contract.get("lane") == "source_grounded_answer"
+        assert contract.get("source_constraints", {}).get("requires_realtime") is True
+
+
 def test_mixed_social_company_news_price_and_portfolio_blocked_locally():
     from backend.graph import GraphRunner
 

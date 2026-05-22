@@ -50,6 +50,15 @@
 - `backend/graph/nodes/chat_renderer.py`：技术面 chat 短答输出“技术面结论 + 可执行结论”，并清理内部 Suggested ladder 报价梯度残留。
 - `backend/graph/templates/company_report.md`：公司研报不再回显完整用户 query，避免控制语句进入正文。
 
+# 2026-05-22 增量架构说明（投资观点 chat 质量合同）
+
+- `backend/graph/investment_intent.py`：集中识别投资观点类 query，避免在多个节点堆叠散乱短语判断。
+- `backend/graph/nodes/conversation_router.py`、`backend/graph/nodes/understand_request.py`、`backend/graph/nodes/parse_operation.py`：将“走势怎么看 / 值得买吗 / bullish or bearish view”等显式观点请求投射为 `investment_opinion` research task。
+- `backend/graph/nodes/policy_gate.py`、`backend/graph/nodes/planner_stub.py`：`investment_opinion` 必须打开价格、技术面、新闻、基本面、EPS 修正和风险证据，并规划 Technical / Fundamental / Risk / News agent。
+- `backend/graph/nodes/chat_renderer.py`：投资观点 chat 输出固定质量章节：结论、价格/趋势、技术面、消息/催化、基本面/估值、风险；缺失维度必须显式标注 `[数据缺失]`。
+- `backend/agents/price_agent.py`、`backend/agents/risk_agent.py`、`backend/agents/base_agent.py`：补齐 Price / Risk Agent 的报价、回撤、因子暴露和压力测试工具入口。
+- `backend/tests/test_investment_intent.py`、`backend/tests/test_policy_planner_query_regression.py`、`backend/tests/test_chat_response_contract.py`、`backend/tests/test_agent_capability_audit.py`：保存 query -> route -> policy -> plan -> answer 的回归覆盖。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。
