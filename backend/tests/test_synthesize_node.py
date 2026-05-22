@@ -462,6 +462,63 @@ def test_synthesize_llm_deep_research_applies_verifier_redaction(monkeypatch):
     assert len(verifier.get("unresolved_unsupported_claims") or []) == 0
 
 
+def test_synthesize_report_llm_limits_ignore_stale_high_env(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", "800")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", "300")
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", "4")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+    create_kwargs: dict[str, object] = {}
+    retry_kwargs: dict[str, object] = {}
+
+    class _FakeResp:
+        content = (
+            '{"summary":"INTC 深度报告摘要。","analysis":"覆盖财报、竞争和估值。",'
+            '"conclusion":"保持中性，等待执行证据。","risks":"- 数据有限"}'
+        )
+
+    def _fake_create_llm(*_args, **kwargs):
+        create_kwargs.update(kwargs)
+        return object()
+
+    async def _fake_retry(*_args, **kwargs):
+        retry_kwargs.update(kwargs)
+        return _FakeResp()
+
+    async def _fake_verifier(**_kwargs):
+        return {"enabled": False, "checked": False, "unsupported_claims": []}
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+    monkeypatch.setattr(synth_mod, "_run_deep_report_verifier", _fake_verifier)
+
+    state = {
+        "query": "请给我一份 INTC 英特尔深度投资报告",
+        "output_mode": "investment_report",
+        "ui_context": {"agent_preferences": {"timeoutSeconds": 900}},
+        "operation": {"name": "investment_report", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["INTC"]},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
+    limits = runtime.get("llm_limits") or {}
+
+    assert create_kwargs.get("request_timeout") == 120
+    assert create_kwargs.get("max_retries") == 0
+    assert retry_kwargs.get("max_attempts") == 1
+    assert retry_kwargs.get("acquire_timeout_seconds") == 45.0
+    assert limits.get("request_timeout") == 120
+    assert limits.get("max_attempts") == 1
+    assert limits.get("acquire_timeout") == 45
+
+
 def test_synthesize_narrative_persists_verifier_result(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
 

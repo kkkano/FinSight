@@ -464,6 +464,7 @@ def create_llm(
     temperature: float = 0.3,
     max_tokens: int | None = None,
     request_timeout: int = 600,
+    max_retries: int | None = None,
 ):
     from langchain_openai import ChatOpenAI
 
@@ -483,14 +484,17 @@ def create_llm(
         resolved_provider = str(cfg.get("provider") or provider or _default_provider())
         raise ValueError(f"API key not found for provider '{resolved_provider}'")
 
+    resolved_max_retries = 3 if max_retries is None else max(0, int(max_retries))
+
     logger.info(
-        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s sdk_api_base=%s timeout=%ss",
+        "[LLM Factory] create endpoint=%s provider=%s model=%s api_base=%s sdk_api_base=%s timeout=%ss max_retries=%s",
         endpoint_name,
         cfg.get("provider"),
         model_name,
         api_base,
         sdk_api_base,
         request_timeout,
+        resolved_max_retries,
     )
 
     callbacks = []
@@ -505,7 +509,7 @@ def create_llm(
         temperature=temperature,
         max_tokens=resolved_max_tokens,
         request_timeout=request_timeout,
-        max_retries=3,
+        max_retries=resolved_max_retries,
         callbacks=callbacks or None,
     )
     bind_llm_instance(llm, endpoint_name)

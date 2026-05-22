@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 
 # Maximum messages to include in synthesize prompt context
 _MAX_SYNTH_HISTORY_MESSAGES = 8
+_REPORT_SYNTHESIS_MAX_REQUEST_TIMEOUT_SEC = 120
+_REPORT_SYNTHESIS_MAX_ACQUIRE_TIMEOUT_SEC = 45
+_REPORT_SYNTHESIS_MAX_ATTEMPTS = 1
+_REPORT_SYNTHESIS_SDK_MAX_RETRIES = 0
+_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC = 45
+_DEEP_VERIFIER_MAX_ATTEMPTS = 1
+_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC = 20
+
+
+def _clamp_int(value: int, *, minimum: int, maximum: int) -> int:
+    return max(minimum, min(int(value), maximum))
 
 
 def _sanitize_user_facing_markdown(markdown: str) -> str:
@@ -461,7 +472,12 @@ async def _run_deep_report_verifier(
 
     def _new_verifier_llm():
         try:
-            return create_llm(temperature=0.0, max_tokens=verifier_tokens, request_timeout=120)
+            return create_llm(
+                temperature=0.0,
+                max_tokens=verifier_tokens,
+                request_timeout=_DEEP_VERIFIER_MAX_REQUEST_TIMEOUT_SEC,
+                max_retries=0,
+            )
         except TypeError:
             # Test doubles may only accept `temperature`.
             return create_llm(temperature=0.0)
@@ -511,6 +527,8 @@ async def _run_deep_report_verifier(
             llm_factory=_new_verifier_llm,
             acquire_token=True,
             agent_name="deep_report_verifier",
+            max_attempts=_DEEP_VERIFIER_MAX_ATTEMPTS,
+            acquire_timeout_seconds=float(_DEEP_VERIFIER_MAX_ACQUIRE_TIMEOUT_SEC),
             on_retry=_on_retry,
         )
         content = resp.content if hasattr(resp, "content") else str(resp)
@@ -2466,6 +2484,25 @@ async def synthesize(state: GraphState) -> dict:
     if preferred_timeout is not None:
         llm_limits["request_timeout"] = int(preferred_timeout)
         llm_limits["acquire_timeout"] = int(min(float(llm_limits["acquire_timeout"]), preferred_timeout))
+    llm_create_extra: dict[str, Any] = {}
+    if output_mode == "investment_report":
+        llm_limits["request_timeout"] = _clamp_int(
+            int(llm_limits["request_timeout"]),
+            minimum=1,
+            maximum=_REPORT_SYNTHESIS_MAX_REQUEST_TIMEOUT_SEC,
+        )
+        llm_limits["max_attempts"] = _clamp_int(
+            int(llm_limits["max_attempts"]),
+            minimum=1,
+            maximum=_REPORT_SYNTHESIS_MAX_ATTEMPTS,
+        )
+        llm_limits["acquire_timeout"] = _clamp_int(
+            int(llm_limits["acquire_timeout"]),
+            minimum=1,
+            maximum=_REPORT_SYNTHESIS_MAX_ACQUIRE_TIMEOUT_SEC,
+        )
+        llm_limits["sdk_max_retries"] = _REPORT_SYNTHESIS_SDK_MAX_RETRIES
+        llm_create_extra["max_retries"] = _REPORT_SYNTHESIS_SDK_MAX_RETRIES
     try:
         from backend.llm_config import create_llm
 
@@ -2474,11 +2511,13 @@ async def synthesize(state: GraphState) -> dict:
             temperature=_synth_temp,
             max_tokens=int(llm_limits["max_tokens"]),
             request_timeout=int(llm_limits["request_timeout"]),
+            **llm_create_extra,
         )
         llm_factory = lambda: create_llm(  # noqa: E731
             temperature=_synth_temp,
             max_tokens=int(llm_limits["max_tokens"]),
             request_timeout=int(llm_limits["request_timeout"]),
+            **llm_create_extra,
         )
     except Exception as exc:
         render_vars = _stub_render_vars(state)

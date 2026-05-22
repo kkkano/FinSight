@@ -43,7 +43,9 @@
 - `backend/agents/base_agent.py`：Agent 内部 LLM 精修默认 opt-in；生产默认依赖工具与确定性摘要，避免 Price/Macro/Fundamental/News 的 LLM 长尾阻塞整轮报告。
 - `backend/agents/deep_search_agent.py`：DeepSearch gap follow-up 将 LLM 产出的长缺口改写为短 ticker/topic 查询；竞品仅作为研究上下文，不扩大主标的。
 - `backend/rag/embedder.py`：bge-m3 运行时不可用时，hash fallback 仍保持 1024 维，与既有 pgvector schema 对齐。
-- `backend/graph/nodes/synthesize.py`：investment report 合成默认预算收敛到 180s / 1 attempt / 60s acquire，超时后回退模板报告，优先保证报告返回。
+- `backend/graph/nodes/synthesize.py`：investment report 合成默认预算收敛到 180s / 1 attempt / 60s acquire，并有代码层硬上限 120s / 1 attempt / 45s acquire；报告合成关闭 SDK 内部重试，超时后回退模板报告，优先保证报告返回。
+- `backend/graph/nodes/synthesize.py`：deep report verifier 收敛到 45s 单次核查，避免主报告已生成后继续被事实核查 LLM 长尾卡住。
+- `backend/llm_config.py`：`create_llm` 支持按调用点覆盖 `max_retries`，报告链路可显式禁用 SDK 内部重试。
 - `backend/graph/nodes/synthesize.py`：chat/brief 下纯报价或技术面任务走短任务图渲染，跳过 synthesis LLM，避免工具结果齐备后继续等待长尾合成。
 - `backend/graph/nodes/chat_renderer.py`：技术面 chat 短答输出“技术面结论 + 可执行结论”，并清理内部 Suggested ladder 报价梯度残留。
 - `backend/graph/templates/company_report.md`：公司研报不再回显完整用户 query，避免控制语句进入正文。
