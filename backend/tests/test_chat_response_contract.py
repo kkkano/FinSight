@@ -31,6 +31,7 @@ def _render_chat(state: dict) -> str:
             "reply_contract": state.get("reply_contract", {}),
             "artifacts": state.get("artifacts", {}),
             "plan_ir": state.get("plan_ir", {"steps": []}),
+            "trace": state.get("trace", {}),
         }
     )
     return result["artifacts"]["draft_markdown"]
@@ -600,10 +601,54 @@ def test_earnings_performance_chat_renders_financial_sections_not_news_only() ->
         assert heading in markdown
     assert "44.06B" in markdown
     assert "0.81" in markdown
-    assert "FundamentalAgent" in markdown
+    assert "数据中心收入继续支撑增长" in markdown
+    assert "FundamentalAgent:" not in markdown
     assert "Nvidia reports latest quarterly results" in markdown
     assert "Workday jumps" not in markdown
     assert "价格/趋势" not in markdown
+
+
+def test_earnings_performance_chat_uses_successful_synthesis_summary() -> None:
+    markdown = _render_chat(
+        {
+            "query": "英伟达最新季度财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_performance"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_performance"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "render_vars": {
+                    "conclusion": "数据中心需求仍是核心驱动，但下一季指引决定股价能否继续消化估值。",
+                    "impact_analysis": "财报表现需要同时看收入增速、毛利率和 EPS 预期修正。",
+                },
+                "step_results": {
+                    "s1": {
+                        "output": {
+                            "summary": "FundamentalAgent: 数据中心收入继续支撑增长。"
+                        }
+                    },
+                },
+            },
+            "trace": {"synthesize_runtime": {"mode": "llm", "fallback": False}},
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "数据中心需求仍是核心驱动" in markdown
+    assert "财报表现需要同时看收入增速" in markdown
+    assert "不能只看新闻标题" not in markdown
+    assert "FundamentalAgent:" not in markdown
 
 
 def test_earnings_performance_news_filter_uses_company_name_not_profile_body() -> None:
@@ -721,6 +766,47 @@ def test_earnings_impact_chat_renders_price_and_earnings_evidence() -> None:
     assert "0.81" in markdown
     assert "Nvidia earnings beat expectations" in markdown
     assert "估值对指引变化敏感" in markdown
+
+
+def test_earnings_impact_chat_uses_successful_synthesis_summary() -> None:
+    markdown = _render_chat(
+        {
+            "query": "请问英伟达这个季度财报对股价的影响",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_impact"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_impact"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "render_vars": {
+                    "conclusion": "股价短线取决于财报超预期能否转化为下一季 EPS 上修。",
+                    "impact_analysis": "如果价格已提前反映利好，财报后反而要关注放量确认和回撤风险。",
+                },
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "price": 176.2, "currency": "USD"}},
+                    "s2": {"output": {"summary": "FundamentalAgent: 财报超预期主要来自数据中心需求。"}},
+                },
+            },
+            "trace": {"synthesize_runtime": {"mode": "llm", "fallback": False}},
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "股价短线取决于财报超预期" in markdown
+    assert "价格已提前反映利好" in markdown
+    assert "176.20 USD" in markdown
+    assert "FundamentalAgent:" not in markdown
 
 
 def test_news_chat_answer_uses_clean_citations() -> None:

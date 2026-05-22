@@ -768,6 +768,46 @@ def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatc
     assert "关注" in str(render_vars.get("conclusion") or "")
 
 
+def test_synthesize_chat_empty_llm_output_records_specific_reason(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    class _FakeResp:
+        content = ""
+
+    async def _fake_retry(*_args, **_kwargs):
+        return _FakeResp()
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(synth_mod, "ainvoke_with_rate_limit_retry", _fake_retry)
+
+    state = {
+        "query": "英伟达最新季度财报表现如何",
+        "output_mode": "chat",
+        "operation": {"name": "earnings_performance", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["NVDA"],
+                "operation": {"name": "earnings_performance"},
+            }
+        ],
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
+    assert runtime.get("fallback") is True
+    assert runtime.get("reason") == "llm_empty_output"
+
+
 def test_synthesize_brief_router_task_graph_skips_llm_for_latency(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
 

@@ -877,6 +877,41 @@ def _useful_render_var(render_vars: dict[str, str], key: str) -> str:
     return value
 
 
+def _successful_synthesis_render_vars(state: GraphState) -> dict[str, str]:
+    trace = state.get("trace") if isinstance(state.get("trace"), dict) else {}
+    runtime = trace.get("synthesize_runtime") if isinstance(trace.get("synthesize_runtime"), dict) else {}
+    legacy_runtime = trace.get("synthesize") if isinstance(trace.get("synthesize"), dict) else {}
+    synthesized = (
+        str(runtime.get("mode") or "").strip().lower() == "llm"
+        and runtime.get("fallback") is False
+    ) or (
+        str(legacy_runtime.get("mode") or "").strip().lower() == "llm"
+        and legacy_runtime.get("fallback") is False
+    )
+    if not synthesized:
+        return {}
+    return _render_vars(state)
+
+
+def _synthesis_points(state: GraphState, keys: tuple[str, ...], *, limit: int = 4) -> list[str]:
+    render_vars = _successful_synthesis_render_vars(state)
+    points: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        value = _useful_render_var(render_vars, key)
+        if not value:
+            continue
+        for line in value.splitlines():
+            text = line.strip(" -•\t")
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            points.append(text)
+            if len(points) >= limit:
+                return points
+    return points
+
+
 def _subject_types(state: GraphState) -> set[str]:
     values: set[str] = set()
     subject = state.get("subject") if isinstance(state.get("subject"), dict) else {}
@@ -959,15 +994,30 @@ def _risk_or_qa_fallback_lines(state: GraphState, risks: str = "") -> list[str]:
     return ["这轮没有足够的可靠证据支撑风险判断，我先不硬编风险点。"]
 
 
+def _sanitize_agent_summary(summary: str) -> str:
+    cleaned = str(summary or "").strip()
+    cleaned = re.sub(r"^(?:[A-Za-z]+Agent|[A-Za-z]+_agent)\s*[:：]\s*", "", cleaned)
+
+    def _compact_money(match: re.Match[str]) -> str:
+        raw = match.group(1).replace(",", "")
+        try:
+            return _format_compact_number(float(raw), money=True)
+        except Exception:
+            return match.group(0)
+
+    cleaned = re.sub(r"\$(\d{1,3}(?:,\d{3}){2,}|\d{9,})", _compact_money, cleaned)
+    return cleaned[:900]
+
+
 def _agent_summary(state: GraphState, names: set[str]) -> str:
     output = _first_matching_output(state, names)
     parsed = _parse_jsonish(output)
     if isinstance(parsed, dict):
         summary = str(parsed.get("summary") or parsed.get("analysis") or "").strip()
         if summary:
-            return summary[:900]
+            return _sanitize_agent_summary(summary)
     if isinstance(parsed, str) and parsed.strip():
-        return parsed.strip()[:900]
+        return _sanitize_agent_summary(parsed)
     return ""
 
 
@@ -1137,12 +1187,18 @@ def _render_earnings_performance_markdown(
     expectation_lines = _earnings_expectation_lines(state)
     fundamental = _agent_summary(state, {"fundamental_agent"})
     news = _filter_news_by_company_identity(state, [item for items in news_map.values() for item in items])
+    synthesis_points = _synthesis_points(state, ("conclusion", "impact_analysis"), limit=3)
 
-    lines: list[str] = [
-        f"**结论**：{ticker_label} 这类问题不能只看新闻标题；本轮按财务事实、盈利预期/EPS 修正和财报消息三层回答。",
-        "",
-        "**最新季度/财务表现**",
-    ]
+    if synthesis_points:
+        lines: list[str] = ["**结论**"]
+        lines.extend(f"- {item}" for item in synthesis_points)
+        lines.extend(["", "**最新季度/财务表现**"])
+    else:
+        lines = [
+            f"**结论**：{ticker_label} 的财报表现需要同时看财务事实、盈利预期/EPS 修正和管理层指引。",
+            "",
+            "**最新季度/财务表现**",
+        ]
     if financial_lines:
         for item in financial_lines:
             lines.append(f"- {item}")
@@ -1196,12 +1252,18 @@ def _render_earnings_impact_markdown(
     fundamental = _agent_summary(state, {"fundamental_agent"})
     risk_lines = _agent_risks(state, {"risk_agent", "fundamental_agent", "news_agent"})
     news = _filter_news_by_company_identity(state, [item for items in news_map.values() for item in items])
+    synthesis_points = _synthesis_points(state, ("conclusion", "impact_analysis"), limit=3)
 
-    lines: list[str] = [
-        f"**结论**：{ticker_label} 的财报对股价影响，要同时看“财报/指引是否超预期”和“股价是否已经反映”。本轮按财报事实、EPS 修正、股价反应和风险触发来判断。",
-        "",
-        "**股价反应**",
-    ]
+    if synthesis_points:
+        lines: list[str] = ["**结论**"]
+        lines.extend(f"- {item}" for item in synthesis_points)
+        lines.extend(["", "**股价反应**"])
+    else:
+        lines = [
+            f"**结论**：{ticker_label} 的财报对股价影响，要同时看“财报/指引是否超预期”和“股价是否已经反映”。本轮按财报事实、EPS 修正、股价反应和风险触发来判断。",
+            "",
+            "**股价反应**",
+        ]
     if price.get("price"):
         lines.append(f"- {_format_price_line(primary_ticker, price)}")
     else:

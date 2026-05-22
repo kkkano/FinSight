@@ -2666,6 +2666,7 @@ summary, highlights, analysis.
         nonlocal retry_attempts
         retry_attempts = max(retry_attempts, int(attempt))
 
+    raw_content = ""
     try:
         await emit_event(
             {
@@ -2903,12 +2904,13 @@ summary, highlights, analysis.
             }
         )
         render_vars = _stub_render_vars(state)
+        fallback_reason = "llm_empty_output" if not str(raw_content or "").strip() else "llm_output_invalid"
         trace.update(
             {
                 "synthesize_runtime": build_runtime(
                     mode="llm",
                     fallback=True,
-                    reason="llm_output_invalid",
+                    reason=fallback_reason,
                     retry_attempts=retry_attempts,
                 )
             }
