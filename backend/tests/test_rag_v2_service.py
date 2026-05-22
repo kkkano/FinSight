@@ -295,6 +295,28 @@ def test_postgres_service_raises_clear_error_when_explicit_embedder_conflicts(mo
         )
 
 
+def test_bge_requested_hash_fallback_keeps_bge_dimension(monkeypatch):
+    from backend.rag import embedder as embedder_module
+
+    monkeypatch.delenv("RAG_EMBEDDING", raising=False)
+    monkeypatch.setenv("RAG_HASH_DIM", "96")
+    monkeypatch.setattr(embedder_module.EmbeddingService, "_check_bge", lambda self: True)
+    monkeypatch.setattr(
+        embedder_module,
+        "_get_bge_m3",
+        lambda: (_ for _ in ()).throw(RuntimeError("model cache unavailable")),
+    )
+
+    service = embedder_module.EmbeddingService(force_backend="bge-m3")
+    result = service.encode(["INTC earnings and Arrow Lake roadmap"])
+
+    assert result.model_name == "hash"
+    assert result.dim == 1024
+    assert len(result.dense[0]) == 1024
+    assert service._hash_dim == 1024
+    assert service.dim == 1024
+
+
 
 def test_hybrid_rag_service_auto_aligns_to_existing_postgres_vector_dim(monkeypatch):
     monkeypatch.delenv("RAG_EMBEDDING", raising=False)

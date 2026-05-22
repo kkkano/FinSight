@@ -101,6 +101,28 @@ async def test_deepsearch_gap_queries_are_budget_limited(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_deepsearch_targeted_search_sanitizes_long_gap_query():
+    agent = DeepSearchAgent(None, MagicMock(), MagicMock())
+    captured: list[str] = []
+
+    def fake_search(query: str):
+        captured.append(query)
+        return []
+
+    agent._search_web = MagicMock(side_effect=fake_search)
+
+    await agent._targeted_search(
+        [
+            "深入研究英特尔与主要竞争对手NVIDIA（GPU/AI）、AMD（CPU）、TSMC（代工/制程）的最新竞争态势、"
+            "技术差距变化、市场份额争夺情况。分析英特尔在AI、制程、客户端、服务器各细分领域的相对位置。"
+        ],
+        "INTC",
+    )
+
+    assert captured == ["INTC NVDA AMD TSM competitive landscape"]
+
+
+@pytest.mark.asyncio
 async def test_deep_research_flow_rejects_unsafe_urls_before_fetch():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
     unsafe = "http://127.0.0.1/admin"

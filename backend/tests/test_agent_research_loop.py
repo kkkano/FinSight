@@ -116,6 +116,25 @@ async def test_base_agent_research_attaches_self_check_diagnostics() -> None:
 
 
 @pytest.mark.asyncio
+async def test_agent_llm_analysis_is_opt_in_by_default(monkeypatch) -> None:
+    class _UnexpectedLLM:
+        model_name = "unexpected-fixture"
+
+        async def ainvoke(self, _messages):
+            raise AssertionError("agent LLM analysis should be disabled by default")
+
+    class _OptInAgent(BaseFinancialAgent):
+        AGENT_NAME = "optin_agent"
+
+    monkeypatch.delenv("AGENT_LLM_ANALYZE_ENABLED", raising=False)
+    monkeypatch.delenv("OPTIN_AGENT_LLM_ANALYZE_ENABLED", raising=False)
+
+    agent = _OptInAgent(llm=_UnexpectedLLM(), cache=None)
+
+    assert await agent._llm_analyze("price 10", role="fixture", focus="fixture") is None
+
+
+@pytest.mark.asyncio
 async def test_agent_llm_analysis_has_hard_call_timeout(monkeypatch) -> None:
     class _SlowLLM:
         model_name = "slow-fixture"
@@ -127,6 +146,7 @@ async def test_agent_llm_analysis_has_hard_call_timeout(monkeypatch) -> None:
     class _TimeoutAgent(BaseFinancialAgent):
         AGENT_NAME = "timeout_agent"
 
+    monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
     monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "0.1")
     monkeypatch.setenv("TIMEOUT_AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "0.1")
     monkeypatch.setattr(

@@ -272,8 +272,11 @@ class EmbeddingService:
                     detail=str(exc),
                     requested_backend=self._requested_backend,
                 )
+                self._hash_dim = _BGE_M3_DIM
+                self._bge_available = False
 
-        return _hash_encode_batch(text_list, self._hash_dim)
+        fallback_dim = _BGE_M3_DIM if self._use_bge else self._hash_dim
+        return _hash_encode_batch(text_list, fallback_dim)
 
     def encode_single(self, text: str) -> tuple[list[float], SparseVector]:
         """Convenience: encode one text, return (dense_vec, sparse_vec)."""

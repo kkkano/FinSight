@@ -38,6 +38,14 @@
 - `backend/agents/deep_search_agent.py`：DeepSearch 财务研报查询会保留用户点名主题（如产品路线、分析师评级、竞品格局、估值、6-12 个月风险机会），同时默认限制 gap follow-up 为 1 轮 / 1 条查询，减少报告长尾空转。
 - `backend/agents/technical_agent.py`：技术面摘要默认走确定性指标路径，不等待 Agent 内部 LLM；如需恢复技术 Agent 自身 LLM 精修，可显式设置 `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1`。
 
+# 2026-05-22 增量架构说明（报告链路长尾收敛）
+
+- `backend/agents/base_agent.py`：Agent 内部 LLM 精修默认 opt-in；生产默认依赖工具与确定性摘要，避免 Price/Macro/Fundamental/News 的 LLM 长尾阻塞整轮报告。
+- `backend/agents/deep_search_agent.py`：DeepSearch gap follow-up 将 LLM 产出的长缺口改写为短 ticker/topic 查询；竞品仅作为研究上下文，不扩大主标的。
+- `backend/rag/embedder.py`：bge-m3 运行时不可用时，hash fallback 仍保持 1024 维，与既有 pgvector schema 对齐。
+- `backend/graph/nodes/synthesize.py`：investment report 合成默认预算收敛到 180s / 1 attempt / 60s acquire，超时后回退模板报告，优先保证报告返回。
+- `backend/graph/templates/company_report.md`：公司研报不再回显完整用户 query，避免控制语句进入正文。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

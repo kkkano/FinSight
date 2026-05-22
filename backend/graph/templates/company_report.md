@@ -1,7 +1,5 @@
 ## 投资研报：$ticker
 
-**问题**：$query
-
 ## 综合投资观点
 
 $investment_thesis

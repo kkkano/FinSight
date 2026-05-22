@@ -2457,10 +2457,10 @@ async def synthesize(state: GraphState) -> dict:
     }
     if output_mode == "investment_report":
         llm_limits = {
-            "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", 800),
+            "request_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_TIMEOUT_SEC", 180),
             "max_tokens": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_TOKENS", 6000),
-            "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 3),
-            "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 180),
+            "max_attempts": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_MAX_ATTEMPTS", 1),
+            "acquire_timeout": _env_int("LANGGRAPH_SYNTHESIZE_REPORT_ACQUIRE_TIMEOUT_SEC", 60),
         }
     preferred_timeout = timeout_seconds_from_state(state)
     if preferred_timeout is not None:

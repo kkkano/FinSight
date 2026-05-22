@@ -23,6 +23,11 @@
   - 单公司深度报告会把竞品 ticker 收敛为 `peer_tickers` 上下文，不再把“覆盖 NVIDIA/AMD/TSMC 竞争”误判成多公司 compare 报告；显式“比较/对比/谁更值得买”仍保持 compare。
   - DeepSearch 财务研报查询保留用户点名主题（产品路线、分析师评级、竞品格局、估值、6-12 个月风险机会），并默认限制 gap follow-up 为 1 轮 / 1 条查询，减少报告长尾空转。
   - 技术面摘要默认使用确定性指标路径，不再等待 TechnicalAgent 内部 LLM；需要技术 Agent 自身 LLM 精修时可用 `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1` 显式开启。
+  - Agent 内部 LLM 精修默认改为 opt-in（`AGENT_LLM_ANALYZE_ENABLED=1` 或单 Agent env），默认走工具/确定性摘要，避免 Price/Macro/Fundamental/News 的 LLM 长尾把报告卡住。
+  - DeepSearch targeted gap query 会把 LLM 产出的长中文缺口压缩为短 ticker/topic 查询，避免整段需求进入搜索引擎导致 403/timeout 和低相关 Yahoo RSS 结果。
+  - RAG bge-m3 线上下载失败时，hash fallback 仍保持 1024 维，匹配既有 pgvector schema，避免 `hash produced 96` 维度错误阻断 deep report。
+  - `investment_report` 合成默认预算从 800s/3 attempts 收敛为 180s/1 attempt/60s token acquire，失败后回退模板报告，优先保证报告可返回。
+  - 公司研报模板不再回显完整用户 query，避免把“不要问我要不要启动研究”这类控制语句带进报告正文。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
   - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。

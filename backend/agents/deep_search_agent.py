@@ -41,7 +41,9 @@ class DeepSearchAgent(BaseFinancialAgent):
     MAX_TEXT_CHARS = int(os.getenv("DEEPSEARCH_MAX_TEXT_CHARS", "12000"))
     HTTP_RETRIES = max(0, int(os.getenv("DEEPSEARCH_HTTP_RETRIES", "0")))
     FETCH_TIMEOUT_SECONDS = max(2.0, float(os.getenv("DEEPSEARCH_FETCH_TIMEOUT_SECONDS", "10")))
-    LLM_TOKEN_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_TOKEN_TIMEOUT_SECONDS", "500"))
+    LLM_TOKEN_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_TOKEN_TIMEOUT_SECONDS", "20"))
+    LLM_CALL_TIMEOUT_SECONDS = float(os.getenv("DEEPSEARCH_LLM_CALL_TIMEOUT_SECONDS", "45"))
+    LLM_MAX_ATTEMPTS = max(1, int(os.getenv("DEEPSEARCH_LLM_MAX_ATTEMPTS", "1")))
     _POSITIVE_SIGNAL_TERMS = (
         "beat",
         "strong",
@@ -274,7 +276,7 @@ queries 要求：
             return []
         results: List[Dict[str, Any]] = []
         for gap in gaps[: self.MAX_GAP_QUERIES]:
-            query = f"{ticker} {gap}".strip()
+            query = self._sanitize_gap_query(gap, ticker)
             for rank, item in enumerate(self._search_web(query), 1):
                 enriched = dict(item or {})
                 enriched["search_query"] = query
@@ -284,13 +286,47 @@ queries 要求：
                 results.append(enriched)
         results = self._dedupe_results(results)
         results = self._reject_unsafe_results(results)
-        synthesized_query = f"{ticker} {' '.join([str(g).strip() for g in gaps if str(g).strip()])}".strip()
+        sanitized_gaps = [self._sanitize_gap_query(gap, ticker) for gap in gaps if str(gap).strip()]
+        synthesized_query = " ".join(dict.fromkeys(sanitized_gaps).keys()).strip()
         results = self._filter_results(
             results,
             query=synthesized_query or ticker,
             ticker=ticker,
         )[:self.MAX_RESULTS]
         return await asyncio.to_thread(self._fetch_documents, results)
+
+    def _sanitize_gap_query(self, gap: str, ticker: str) -> str:
+        text = " ".join(str(gap or "").split())
+        ticker_upper = str(ticker or "").strip().upper()
+        lower = text.lower()
+        terms: List[str] = []
+
+        if any(k in lower for k in ["arrow lake", "product roadmap", "roadmap", "产品", "路线图"]):
+            terms.append("Arrow Lake product roadmap")
+        if any(k in lower for k in ["earnings", "revenue", "margin", "guidance", "财报", "业绩", "利润", "指引"]):
+            terms.append("latest earnings revenue margin guidance")
+        if any(k in lower for k in ["analyst", "rating", "price target", "分析师", "评级", "目标价"]):
+            terms.append("analyst rating price target")
+
+        peers = self._extract_peer_tickers_from_query(text, ticker_upper)
+        if peers or any(k in lower for k in ["competition", "competitor", "competitive", "market share", "竞争", "对手", "市场份额"]):
+            peer_text = " ".join(peers)
+            terms.append(f"{peer_text} competitive landscape".strip())
+        if any(k in lower for k in ["valuation", "multiple", "dcf", "估值", "pe", "pb", "ps"]):
+            terms.append("valuation multiples")
+        if any(k in lower for k in ["risk", "opportunity", "downside", "upside", "风险", "机会"]):
+            terms.append("6-12 month risks opportunities")
+
+        if not terms:
+            ascii_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9+./&-]{1,}", text)
+            terms.extend(ascii_terms[:8])
+
+        deduped_terms = " ".join(dict.fromkeys(term for term in terms if term).keys()).strip()
+        if not deduped_terms:
+            deduped_terms = "latest analysis report"
+
+        query = f"{ticker_upper} {deduped_terms}".strip()
+        return query[:180].rstrip()
 
     async def _update_summary(self, summary: str, new_data: Any) -> str:
         if not new_data:
@@ -641,12 +677,9 @@ queries 要求：
         }
         peers: List[str] = []
         upper_query = str(query or "").upper()
-        for name, symbol in aliases.items():
-            if name in upper_query and symbol != ticker_upper:
-                peers.append(symbol)
-        for token in re.findall(r"\b[A-Z]{2,5}\b", str(query or "")):
+        for token in re.findall(r"(?<![A-Z])[A-Z]{2,6}(?![A-Z])", upper_query):
             symbol = aliases.get(token.upper(), token.upper())
-            if symbol != ticker_upper and symbol not in {"SEC", "ETF", "USD"}:
+            if symbol != ticker_upper and symbol not in {"SEC", "ETF", "USD", "GPU", "CPU", "AI"}:
                 peers.append(symbol)
         return list(dict.fromkeys(peers))
 
@@ -767,6 +800,9 @@ queries 要求：
             "investment report",
             "deep report",
             "longform",
+            "competitive landscape",
+            "analyst rating",
+            "price target",
             "财报",
             "业绩",
             "研报",
@@ -820,7 +856,7 @@ queries 要求：
         score = 0.0
 
         if self._is_trusted_finance_domain(domain):
-            score += 4.0
+            score += 2.0
         if "sec.gov" in url:
             score += 2.0
         if ".pdf" in url:
@@ -1316,7 +1352,7 @@ queries 要求：
         external rate-limit windows may already be hot.  The outer retry
         gives endpoints extra time to recover.
         """
-        max_outer_retries = 3
+        max_outer_retries = self.LLM_MAX_ATTEMPTS
         for outer in range(max_outer_retries):
             try:
                 from backend.services.rate_limiter import acquire_llm_token
@@ -1336,14 +1372,20 @@ queries 要求：
                     _temp = getattr(self.llm, "temperature", 0.3)
                     llm_factory = lambda: create_llm(temperature=_temp)
 
-                    response = await ainvoke_with_rate_limit_retry(
-                        self.llm,
-                        [message],
-                        acquire_token=False,
-                        llm_factory=llm_factory,
+                    response = await asyncio.wait_for(
+                        ainvoke_with_rate_limit_retry(
+                            self.llm,
+                            [message],
+                            acquire_token=False,
+                            llm_factory=llm_factory,
+                        ),
+                        timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
                     )
                 else:
-                    response = await asyncio.to_thread(self.llm.invoke, [message])
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(self.llm.invoke, [message]),
+                        timeout=max(1.0, float(self.LLM_CALL_TIMEOUT_SECONDS)),
+                    )
                 return getattr(response, "content", "") if response is not None else ""
             except Exception as exc:
                 logger.warning(

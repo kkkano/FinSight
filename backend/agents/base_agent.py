@@ -86,17 +86,17 @@ class BaseFinancialAgent:
         """Timeout (seconds) for the LLM analysis call in _llm_analyze."""
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_TIMEOUT_SECONDS"
         try:
-            return max(5.0, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "30"))))
+            return max(1.0, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "8"))))
         except Exception:
-            return 30.0
+            return 8.0
 
     def _llm_analyze_call_timeout(self) -> float:
         """Hard timeout for the actual LLM request after a token is acquired."""
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_CALL_TIMEOUT_SECONDS"
         try:
-            return max(0.05, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "20"))))
+            return max(0.05, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "8"))))
         except Exception:
-            return 20.0
+            return 8.0
 
     def _get_tool_registry(self) -> dict:
         """Return available tools for this agent's reflection loop.
@@ -143,7 +143,9 @@ class BaseFinancialAgent:
         if not self.llm:
             return None
 
-        enabled = os.getenv("AGENT_LLM_ANALYZE_ENABLED", "true").lower() in (
+        agent_enabled = os.getenv(f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_ENABLED")
+        enabled_raw = agent_enabled if agent_enabled is not None else os.getenv("AGENT_LLM_ANALYZE_ENABLED", "false")
+        enabled = str(enabled_raw).lower() in (
             "true", "1", "yes", "on",
         )
         if not enabled:
