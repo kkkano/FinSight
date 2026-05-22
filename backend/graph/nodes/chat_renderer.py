@@ -261,6 +261,7 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
                 "source": source,
                 "published": published[:10],
                 "snippet": snippet[:500],
+                "type": str(row.get("type") or "").strip(),
             }
         )
         if len(items) >= limit:
@@ -797,6 +798,12 @@ def _news_by_ticker(state: GraphState) -> dict[str, list[dict[str, str]]]:
         relevant = _filter_news_by_company_identity(state, deduped)
         if relevant:
             deduped = relevant
+        deduped.sort(
+            key=lambda item: 0
+            if str(item.get("type") or "").strip().lower() == "transcript"
+            or "transcript" in str(item.get("title") or "").strip().lower()
+            else 1
+        )
         news_by_ticker[ticker] = deduped[:8]
     return news_by_ticker
 

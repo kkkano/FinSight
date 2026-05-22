@@ -729,6 +729,7 @@ def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
                                 "url": f"https://example.com/sector-{i}",
                                 "source": "Example News",
                                 "published_at": "2026-05-20",
+                                "snippet": "NVIDIA peer read-through mentioned only in passing.",
                             }
                             for i in range(6)
                         ]
@@ -754,6 +755,7 @@ def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
 
     _assert_chat_contract(markdown)
     assert "Nvidia (NVDA) Q1 2027 Earnings Transcript" in markdown
+    assert markdown.index("Nvidia (NVDA) Q1 2027 Earnings Transcript") < markdown.index("Unrelated sector headline 0")
     assert "本轮没有可引用的财报新闻、电话会或指引来源" not in markdown
 
 
