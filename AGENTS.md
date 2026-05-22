@@ -45,6 +45,7 @@
 - `backend/rag/embedder.py`：bge-m3 运行时不可用时，hash fallback 仍保持 1024 维，与既有 pgvector schema 对齐。
 - `backend/graph/nodes/synthesize.py`：investment report 合成默认预算收敛到 180s / 1 attempt / 60s acquire，超时后回退模板报告，优先保证报告返回。
 - `backend/graph/nodes/synthesize.py`：chat/brief 下纯报价或技术面任务走短任务图渲染，跳过 synthesis LLM，避免工具结果齐备后继续等待长尾合成。
+- `backend/graph/nodes/chat_renderer.py`：技术面 chat 短答输出“技术面结论 + 可执行结论”，并清理内部 Suggested ladder 报价梯度残留。
 - `backend/graph/templates/company_report.md`：公司研报不再回显完整用户 query，避免控制语句进入正文。
 
 ## 当前推荐心智模型

@@ -28,6 +28,7 @@
   - RAG bge-m3 线上下载失败时，hash fallback 仍保持 1024 维，匹配既有 pgvector schema，避免 `hash produced 96` 维度错误阻断 deep report。
   - `investment_report` 合成默认预算从 800s/3 attempts 收敛为 180s/1 attempt/60s token acquire，失败后回退模板报告，优先保证报告可返回。
   - chat/brief 下纯报价或技术面任务直接使用短任务图渲染，跳过 synthesis LLM，避免技术面回答在工具结果已齐时继续等待长尾合成。
+  - 技术面 chat 短答改为“技术面结论 + 可执行结论”，并完整清理内部 Suggested ladder 报价梯度，避免残留 `| :` 这类半截模板噪声。
   - 公司研报模板不再回显完整用户 query，避免把“不要问我要不要启动研究”这类控制语句带进报告正文。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。

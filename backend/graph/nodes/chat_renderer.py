@@ -607,6 +607,35 @@ def _technical_text(output: Any) -> str:
     return "；".join(parts[:8])
 
 
+def _technical_action_line(ticker: str, text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    support_match = re.search(r"支撑\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)", cleaned)
+    resistance_match = re.search(r"阻力\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)", cleaned)
+    support = support_match.group(1) if support_match else ""
+    resistance = resistance_match.group(1) if resistance_match else ""
+    if any(marker in cleaned for marker in ("偏强", "上升趋势", "多头排列")):
+        bias = "偏强"
+    elif any(marker in cleaned for marker in ("偏弱", "下降趋势", "空头排列")):
+        bias = "偏弱"
+    elif "空头" in cleaned:
+        bias = "信号有分歧"
+    else:
+        bias = "中性"
+
+    if support and resistance:
+        return (
+            f"可执行结论：{ticker} 技术状态{bias}；接近阻力 {resistance} 不追高，"
+            f"放量突破后再上调目标；回踩支撑 {support} 不破再考虑低吸，跌破则降低仓位或止损。"
+        )
+    if support:
+        return f"可执行结论：{ticker} 技术状态{bias}；先盯支撑 {support}，跌破则降低仓位，站稳后再看量能确认。"
+    if resistance:
+        return f"可执行结论：{ticker} 技术状态{bias}；先盯阻力 {resistance}，未放量突破前避免追高。"
+    return f"可执行结论：{ticker} 技术状态{bias}；等价格、MACD 和成交量同向确认后再加仓，信号冲突时控制仓位。"
+
+
 def _append_sources(lines: list[str], sources: list[dict[str, str]]) -> None:
     usable = [item for item in sources if _is_citable_url(str(item.get("url") or ""))]
     if not usable:
@@ -941,6 +970,7 @@ def _append_render_var_block(lines: list[str], text: str) -> None:
 
 def _sanitize_chat_markdown(text: str) -> str:
     cleaned = str(text or "").strip()
+    cleaned = re.sub(r"\s*\|\s*Suggested ladder\s*:\s*[^\n]+", "", cleaned, flags=re.IGNORECASE)
     for marker in FORBIDDEN_CHAT_MARKERS:
         cleaned = cleaned.replace(marker, "")
     cleaned = re.sub(r"(?m)^\s*\*{2,}\s*$\n?", "", cleaned)
@@ -1286,11 +1316,17 @@ def render_chat_markdown(state: GraphState) -> str:
             _append_render_var_block(lines, price_snapshot)
         if technical_map:
             for ticker, text in list(technical_map.items())[:4]:
-                lines.append(f"{ticker} 的技术面我会先看这几个信号：{text}")
+                lines.append(f"{ticker} 技术面结论：{text}")
+                action_line = _technical_action_line(ticker, text)
+                if action_line:
+                    lines.append(action_line)
             if conclusion:
                 _append_render_var_block(lines, conclusion)
         elif technical:
-            lines.append(f"{ticker_label} 的技术面我会先看这几个信号：{technical}")
+            lines.append(f"{ticker_label} 技术面结论：{technical}")
+            action_line = _technical_action_line(ticker_label, technical)
+            if action_line:
+                lines.append(action_line)
         elif technical_snapshot:
             _append_render_var_block(lines, technical_snapshot)
         else:

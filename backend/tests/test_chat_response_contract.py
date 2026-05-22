@@ -298,6 +298,57 @@ def test_price_chat_parses_string_quote_payload() -> None:
     assert "1.51%" in markdown
 
 
+def test_technical_chat_renders_clean_actionable_short_answer() -> None:
+    markdown = _render_chat(
+        {
+            "query": "INTC 技术面怎么样？给出可执行结论。",
+            "subject": {"subject_type": "company", "tickers": ["INTC"]},
+            "operation": {"name": "technical"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["INTC"],
+                    "operation": {"name": "technical"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "INTC"}},
+                    {"id": "s3", "kind": "agent", "name": "technical_agent", "inputs": {"ticker": "INTC"}},
+                ]
+            },
+            "artifacts": {
+                "render_vars": {
+                    "price_snapshot": "- INTC Current Price: $118.50 | Change: -0.46 (-0.39%) | Suggested ladder: $117.31 / $116.13",
+                },
+                "step_results": {
+                    "s3": {
+                        "output": {
+                            "ticker": "INTC",
+                            "summary": (
+                                "INTC 技术快照: 收盘价 118.50。 MA20 107.19 MA50 74.95 "
+                                "RSI(14) 62.29（中性）。 MACD 12.3580 vs 信号线 13.6624（空头）。 "
+                                "趋势: 上升趋势。 关键价位: 支撑 79.62，阻力 132.75。 "
+                                "成交量为均量 0.62倍。 均线呈多头排列，趋势偏强。"
+                            ),
+                        }
+                    }
+                },
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "| :" not in markdown
+    assert "$117.31" not in markdown
+    assert "我会先看" not in markdown
+    assert "技术面结论" in markdown
+    assert "可执行" in markdown
+    assert "支撑 79.62" in markdown
+    assert "阻力 132.75" in markdown
+
+
 def test_news_chat_answer_uses_clean_citations() -> None:
     markdown = _render_chat(
         {
