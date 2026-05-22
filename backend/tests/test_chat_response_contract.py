@@ -698,6 +698,53 @@ def test_earnings_performance_news_filter_uses_company_name_not_profile_body() -
     assert "Lenovo shares jump" not in markdown
 
 
+def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
+    markdown = _render_chat(
+        {
+            "query": "英伟达最新季度财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_performance"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_performance"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "get_earnings_call_transcripts", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "name": "NVIDIA Corporation"}},
+                    "s2": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "transcripts": [
+                                {
+                                    "title": "Nvidia (NVDA) Q1 2027 Earnings Transcript",
+                                    "url": "https://example.com/nvda-q1-2027-transcript",
+                                    "source": "The Motley Fool",
+                                    "published_date": "2026-05-20",
+                                    "type": "transcript",
+                                }
+                            ],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Nvidia (NVDA) Q1 2027 Earnings Transcript" in markdown
+    assert "本轮没有可引用的财报新闻、电话会或指引来源" not in markdown
+
+
 def test_earnings_impact_chat_renders_price_and_earnings_evidence() -> None:
     markdown = _render_chat(
         {

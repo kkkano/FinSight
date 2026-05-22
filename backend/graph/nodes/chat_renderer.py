@@ -229,6 +229,7 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
             or parsed.get("news")
             or parsed.get("results")
             or parsed.get("releases")
+            or parsed.get("transcripts")
         )
         rows = nested if isinstance(nested, list) else [parsed]
     else:
@@ -749,7 +750,14 @@ def _prices_by_ticker(state: GraphState) -> dict[str, dict[str, Any]]:
 def _news_by_ticker(state: GraphState) -> dict[str, list[dict[str, str]]]:
     news_by_ticker: dict[str, list[dict[str, str]]] = {}
     for step, output in _step_outputs(state):
-        if str(step.get("name") or "") not in {"get_company_news", "news_agent", "search", "get_official_macro_releases", "get_authoritative_media_news"}:
+        if str(step.get("name") or "") not in {
+            "get_company_news",
+            "news_agent",
+            "search",
+            "get_official_macro_releases",
+            "get_authoritative_media_news",
+            "get_earnings_call_transcripts",
+        }:
             continue
         ticker = _ticker_for_step(step, output, state) or "相关信息"
         items = _news_items(output)
