@@ -109,6 +109,28 @@ async def test_technical_agent_enriches_kline_with_quote_options_and_sentiment()
 
 
 @pytest.mark.asyncio
+async def test_technical_agent_uses_deterministic_summary_by_default():
+    agent = TechnicalAgent(MagicMock(), DummyCache(), MagicMock())
+
+    async def fail_llm(*_args, **_kwargs):
+        raise AssertionError("technical summary should not wait for LLM by default")
+
+    agent._llm_analyze = fail_llm
+
+    summary = await agent._first_summary(
+        {
+            "ticker": "AAPL",
+            "kline_data": _build_kline(),
+            "source": "mock_kline",
+        }
+    )
+
+    assert "RSI" in summary
+    assert "MACD" in summary
+    assert "支撑" in summary
+
+
+@pytest.mark.asyncio
 async def test_fundamental_agent_financials():
     mock_llm = MagicMock()
     cache = DummyCache()

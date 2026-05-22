@@ -22,6 +22,7 @@
   - torch 预安装层复用生产 `PIP_INDEX_URL` 作为依赖 fallback，并加 300 秒超时与 10 次重试，避免 `files.pythonhosted.org` 依赖下载超时阻断发版。
   - 单公司深度报告会把竞品 ticker 收敛为 `peer_tickers` 上下文，不再把“覆盖 NVIDIA/AMD/TSMC 竞争”误判成多公司 compare 报告；显式“比较/对比/谁更值得买”仍保持 compare。
   - DeepSearch 财务研报查询保留用户点名主题（产品路线、分析师评级、竞品格局、估值、6-12 个月风险机会），并默认限制 gap follow-up 为 1 轮 / 1 条查询，减少报告长尾空转。
+  - 技术面摘要默认使用确定性指标路径，不再等待 TechnicalAgent 内部 LLM；需要技术 Agent 自身 LLM 精修时可用 `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1` 显式开启。
 - **后端 Agent 能力诊断强化**（`315e519` 2026-05-20）：
   - Planner 输出 `agent_selection` 诊断，每个被跳过的 Agent 附带跳过原因与预算优先级排序，`plan_ready` / `decision_note` 事件同步携带。
   - Planner JSON Schema 容错：解析失败时自动构造重试 prompt 二次修复（`PlannerSchemaShapeError`）。

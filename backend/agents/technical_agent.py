@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
+import os
 import pandas as pd
 
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, ConflictClaim, EvidenceItem
@@ -69,6 +70,10 @@ class TechnicalAgent(BaseFinancialAgent):
             return None
         return payload if isinstance(payload, (dict, list, str)) else None
 
+    def _llm_summary_enabled(self) -> bool:
+        value = os.getenv("TECHNICAL_AGENT_LLM_SUMMARY_ENABLED", "0")
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
     def _enrich_with_side_signals(self, data: Dict[str, Any], ticker: str) -> Dict[str, Any]:
         enriched = dict(data)
         price_snapshot = self._call_optional_tool("get_stock_price", ticker)
@@ -103,6 +108,8 @@ class TechnicalAgent(BaseFinancialAgent):
     async def _first_summary(self, data: Any) -> str:
         deterministic = self._deterministic_summary(data)
         if not isinstance(data, dict) or not data.get("kline_data"):
+            return deterministic
+        if not self._llm_summary_enabled():
             return deterministic
 
         analysis = await self._llm_analyze(
