@@ -1027,6 +1027,69 @@ def test_route_conversation_explicit_technical_query_uses_fast_path_without_llm(
     assert decision.task_hints[0]["tickers"] == ["INTC"]
 
 
+def test_route_conversation_explicit_earnings_query_uses_fast_path_without_llm(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    def fail_create_llm(*_args, **_kwargs):
+        raise AssertionError("explicit earnings performance requests should not spend a router LLM call")
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", fail_create_llm)
+
+    decision = _run(
+        route_conversation(
+            {
+                "query": "英伟达最新季度财报表现如何",
+                "ui_context": {},
+                "messages": [],
+            },
+            tickers=["NVDA"],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "research"
+    assert decision.needs_tools is True
+    assert decision.domain_intent == "analysis"
+    assert decision.reason == "explicit earnings performance request fast path"
+    assert decision.task_hints
+    assert decision.task_hints[0]["operation"] == "earnings_performance"
+    assert decision.task_hints[0]["tickers"] == ["NVDA"]
+
+
+def test_route_conversation_explicit_earnings_impact_query_uses_fast_path_without_llm(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    def fail_create_llm(*_args, **_kwargs):
+        raise AssertionError("explicit earnings impact requests should not spend a router LLM call")
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+    monkeypatch.setattr(llm_config, "create_llm", fail_create_llm)
+
+    decision = _run(
+        route_conversation(
+            {
+                "query": "请问英伟达这个季度财报对股价的影响",
+                "ui_context": {},
+                "messages": [],
+            },
+            tickers=["NVDA"],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "research"
+    assert decision.needs_tools is True
+    assert decision.reason == "explicit earnings impact request fast path"
+    assert decision.task_hints
+    assert decision.task_hints[0]["operation"] == "earnings_impact"
+    assert decision.task_hints[0]["tickers"] == ["NVDA"]
+
+
 def test_route_conversation_explicit_report_mode_uses_fast_path_without_llm(monkeypatch):
     import backend.llm_config as llm_config
     from backend.graph.nodes.conversation_router import route_conversation

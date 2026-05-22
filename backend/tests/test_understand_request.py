@@ -118,6 +118,75 @@ def test_investment_opinion_queries_create_research_tasks(monkeypatch):
         assert contract.get("source_constraints", {}).get("requires_realtime") is True
 
 
+def test_earnings_performance_query_creates_fundamental_research_task(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    result = _run(
+        understand_request(
+            {
+                "query": "英伟达最新季度财报表现如何",
+                "ui_context": {},
+                "output_mode": "chat",
+            }
+        )
+    )
+
+    assert (result.get("understanding") or {}).get("route") == "research"
+    assert (result.get("subject") or {}).get("tickers") == ["NVDA"]
+    assert (result.get("operation") or {}).get("name") == "earnings_performance"
+    assert ("company", ("NVDA",), "earnings_performance") in _task_ops(result)
+    contract = result.get("reply_contract") or {}
+    assert contract.get("lane") == "source_grounded_answer"
+    assert contract.get("source_constraints", {}).get("requires_realtime") is True
+
+
+def test_earnings_price_impact_query_creates_composite_research_task(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    result = _run(
+        understand_request(
+            {
+                "query": "请问英伟达这个季度财报对股价的影响",
+                "ui_context": {},
+                "output_mode": "chat",
+            }
+        )
+    )
+
+    assert (result.get("understanding") or {}).get("route") == "research"
+    assert (result.get("subject") or {}).get("tickers") == ["NVDA"]
+    assert (result.get("operation") or {}).get("name") == "earnings_impact"
+    assert ("company", ("NVDA",), "earnings_impact") in _task_ops(result)
+    assert ("company", ("NVDA",), "price") not in _task_ops(result)
+    contract = result.get("reply_contract") or {}
+    assert contract.get("lane") == "source_grounded_answer"
+    assert contract.get("source_constraints", {}).get("requires_realtime") is True
+
+
+def test_explicit_technical_query_keeps_technical_operation_without_router(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    result = _run(
+        understand_request(
+            {
+                "query": "INTC 现在技术面怎么样？请结合均线、RSI、MACD、成交量、支撑阻力和当前价格给出可执行结论。",
+                "ui_context": {},
+                "output_mode": "chat",
+            }
+        )
+    )
+
+    assert (result.get("operation") or {}).get("name") == "technical"
+    assert ("company", ("INTC",), "technical") in _task_ops(result)
+    assert ("company", ("INTC",), "price") not in _task_ops(result)
+
+
 def test_mixed_social_company_news_price_and_portfolio_blocked_locally():
     from backend.graph import GraphRunner
 
@@ -220,6 +289,7 @@ def test_single_company_deep_report_keeps_competitors_as_context_not_subjects():
 
     assert (result.get("subject") or {}).get("tickers") == ["INTC"]
     assert (result.get("operation") or {}).get("name") != "compare"
+    assert (result.get("operation") or {}).get("name") != "earnings_performance"
     tasks = result.get("tasks") or []
     assert tasks
     assert all(task.get("tickers") == ["INTC"] for task in tasks)

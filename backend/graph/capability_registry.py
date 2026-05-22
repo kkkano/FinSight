@@ -30,21 +30,21 @@ AGENT_CAPABILITIES: dict[str, AgentCapability] = {
     "price_agent": AgentCapability(
         name="price_agent",
         subject_weights={"company": 0.55, "portfolio": 0.4, "news_item": 0.2, "news_set": 0.2},
-        operation_weights={"price": 0.65, "technical": 0.35, "investment_opinion": 0.45, "compare": 0.45, "generate_report": 0.3},
+        operation_weights={"price": 0.65, "technical": 0.35, "investment_opinion": 0.45, "earnings_impact": 0.45, "compare": 0.45, "generate_report": 0.3},
         output_mode_weights={"investment_report": 0.3, "brief": 0.1, "chat": 0.05},
         keyword_hints=("\u80a1\u4ef7", "\u4ef7\u683c", "price", "\u884c\u60c5", "quote"),
     ),
     "news_agent": AgentCapability(
         name="news_agent",
         subject_weights={"news_item": 0.7, "news_set": 0.75, "company": 0.45, "portfolio": 0.2},
-        operation_weights={"fetch": 0.65, "investment_opinion": 0.35, "analyze_impact": 0.45, "summarize": 0.4, "generate_report": 0.3},
+        operation_weights={"fetch": 0.65, "investment_opinion": 0.35, "earnings_impact": 0.45, "earnings_performance": 0.4, "analyze_impact": 0.45, "summarize": 0.4, "generate_report": 0.3},
         output_mode_weights={"investment_report": 0.25, "brief": 0.1, "chat": 0.05},
         keyword_hints=("\u65b0\u95fb", "news", "headline", "\u5feb\u8baf", "\u4e8b\u4ef6"),
     ),
     "fundamental_agent": AgentCapability(
         name="fundamental_agent",
         subject_weights={"company": 0.6, "filing": 0.6, "research_doc": 0.45, "portfolio": 0.25},
-        operation_weights={"generate_report": 0.55, "investment_opinion": 0.55, "compare": 0.45, "analyze_impact": 0.25, "summarize": 0.2},
+        operation_weights={"generate_report": 0.55, "investment_opinion": 0.55, "earnings_impact": 0.7, "earnings_performance": 0.75, "compare": 0.45, "analyze_impact": 0.25, "summarize": 0.2},
         output_mode_weights={"investment_report": 0.35, "brief": 0.05},
         keyword_hints=("\u57fa\u672c\u9762", "fundamental", "\u8d22\u52a1", "\u4f30\u503c", "valuation"),
     ),
@@ -65,7 +65,7 @@ AGENT_CAPABILITIES: dict[str, AgentCapability] = {
     "risk_agent": AgentCapability(
         name="risk_agent",
         subject_weights={"company": 0.2, "portfolio": 0.55, "news_set": 0.2},
-        operation_weights={"generate_report": 0.15, "investment_opinion": 0.45, "analyze_impact": 0.3, "compare": 0.1},
+        operation_weights={"generate_report": 0.15, "investment_opinion": 0.45, "earnings_impact": 0.35, "earnings_performance": 0.2, "analyze_impact": 0.3, "compare": 0.1},
         output_mode_weights={"investment_report": 0.15, "brief": 0.08},
         keyword_hints=("\u98ce\u9669", "risk", "\u98ce\u63a7", "\u6ce2\u52a8", "volatility", "drawdown", "var"),
         keyword_boost=0.35,
@@ -163,41 +163,49 @@ def score_agent_for_request(agent_name: str, state: dict[str, Any]) -> tuple[flo
 
 def required_agents_for_request(state: dict[str, Any], candidates: Iterable[str]) -> list[str]:
     output_mode = str(state.get("output_mode") or "brief")
-    if output_mode != "investment_report":
-        return []
-
     candidate_set = {str(x).strip() for x in candidates if isinstance(x, str) and str(x).strip()}
     subject_type = _subject_type(state)
     operation = _operation_name(state)
     query = _query_text(state)
 
     required: list[str]
-    if operation == "technical":
-        required = ["price_agent", "technical_agent"]
-    elif operation == "price":
-        required = ["price_agent"]
-    elif operation == "compare":
-        required = ["price_agent", "fundamental_agent"]
-    elif subject_type in ("filing", "research_doc"):
-        required = ["deep_search_agent", "fundamental_agent"]
-    elif subject_type in ("news_item", "news_set"):
-        required = ["news_agent", "price_agent"]
-    elif subject_type == "macro":
-        required = ["macro_agent"]
-    elif subject_type == "company":
-        required = ["price_agent", "news_agent", "fundamental_agent"]
-        # Always include macro + technical for comprehensive investment reports
-        if output_mode == "investment_report":
-            required.extend(["macro_agent", "technical_agent"])
+    if output_mode != "investment_report":
+        if operation == "technical":
+            required = ["technical_agent"]
+        elif operation == "investment_opinion":
+            required = ["news_agent", "fundamental_agent", "technical_agent", "risk_agent"]
+        elif operation == "earnings_impact":
+            required = ["fundamental_agent", "news_agent", "risk_agent"]
+        elif operation == "earnings_performance":
+            required = ["fundamental_agent", "news_agent"]
+        else:
+            required = []
     else:
-        required = ["price_agent", "news_agent"]
+        if operation == "technical":
+            required = ["price_agent", "technical_agent"]
+        elif operation == "price":
+            required = ["price_agent"]
+        elif operation == "compare":
+            required = ["price_agent", "fundamental_agent"]
+        elif subject_type in ("filing", "research_doc"):
+            required = ["deep_search_agent", "fundamental_agent"]
+        elif subject_type in ("news_item", "news_set"):
+            required = ["news_agent", "price_agent"]
+        elif subject_type == "macro":
+            required = ["macro_agent"]
+        elif subject_type == "company":
+            required = ["price_agent", "news_agent", "fundamental_agent"]
+            # Always include macro + technical for comprehensive investment reports
+            required.extend(["macro_agent", "technical_agent"])
+        else:
+            required = ["price_agent", "news_agent"]
 
-    if query and _contains_any(query, _MACRO_HINTS):
-        required.append("macro_agent")
-    if query and _contains_any(query, _TECHNICAL_HINTS):
-        required.extend(["price_agent", "technical_agent"])
-    if query and _contains_any(query, _DEEP_HINTS):
-        required.append("deep_search_agent")
+        if query and _contains_any(query, _MACRO_HINTS):
+            required.append("macro_agent")
+        if query and _contains_any(query, _TECHNICAL_HINTS):
+            required.extend(["price_agent", "technical_agent"])
+        if query and _contains_any(query, _DEEP_HINTS):
+            required.append("deep_search_agent")
 
     deduped: list[str] = []
     seen: set[str] = set()

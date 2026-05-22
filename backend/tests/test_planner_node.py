@@ -330,6 +330,139 @@ def test_planner_llm_mode_uses_task_graph_for_investment_opinion_chat(monkeypatc
     assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_names)
 
 
+def test_planner_llm_mode_uses_task_graph_for_earnings_performance_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("earnings performance chat should use deterministic task graph")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "英伟达最新季度财报表现如何",
+                "output_mode": "chat",
+                "operation": {"name": "earnings_performance", "confidence": 0.84, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["NVDA"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["NVDA"],
+                        "operation": {"name": "earnings_performance", "confidence": 0.84, "params": {}},
+                        "status": "ready",
+                        "reason": "explicit earnings performance request",
+                    }
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 5, "max_tools": 8},
+                    "allowed_tools": [
+                        "get_company_info",
+                        "get_sec_company_facts_quarterly",
+                        "get_earnings_estimates",
+                        "get_eps_revisions",
+                        "get_company_news",
+                    ],
+                    "allowed_agents": ["fundamental_agent", "news_agent"],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    assert {
+        "get_company_info",
+        "get_sec_company_facts_quarterly",
+        "get_earnings_estimates",
+        "get_eps_revisions",
+        "get_company_news",
+        "fundamental_agent",
+    }.issubset(step_names)
+
+
+def test_planner_llm_mode_uses_task_graph_for_earnings_impact_chat(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    planner_mod = importlib.import_module("backend.graph.nodes.planner")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("earnings impact chat should use deterministic task graph")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    out = _run(
+        planner_mod.planner(
+            {
+                "query": "请问英伟达这个季度财报对股价的影响",
+                "output_mode": "chat",
+                "operation": {"name": "earnings_impact", "confidence": 0.86, "params": {}},
+                "subject": {"subject_type": "company", "tickers": ["NVDA"], "selection_payload": []},
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "subject_type": "company",
+                        "tickers": ["NVDA"],
+                        "operation": {"name": "earnings_impact", "confidence": 0.86, "params": {}},
+                        "status": "ready",
+                        "reason": "explicit earnings impact request",
+                    }
+                ],
+                "policy": {
+                    "budget": {"max_rounds": 5, "max_tools": 9},
+                    "allowed_tools": [
+                        "get_stock_price",
+                        "get_company_info",
+                        "get_sec_company_facts_quarterly",
+                        "get_earnings_estimates",
+                        "get_eps_revisions",
+                        "get_company_news",
+                        "analyze_historical_drawdowns",
+                    ],
+                    "allowed_agents": ["fundamental_agent", "news_agent", "risk_agent"],
+                },
+                "trace": {},
+            }
+        )
+    )
+
+    runtime = (out.get("trace") or {}).get("planner_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph"
+    assert runtime.get("fallback") is False
+    steps = (out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    assert {
+        "get_stock_price",
+        "get_company_info",
+        "get_sec_company_facts_quarterly",
+        "get_earnings_estimates",
+        "get_eps_revisions",
+        "get_company_news",
+        "fundamental_agent",
+        "news_agent",
+        "risk_agent",
+    }.issubset(step_names)
+
+
 def test_planner_llm_mode_uses_task_graph_for_router_decomposed_news_chat(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "llm")
 

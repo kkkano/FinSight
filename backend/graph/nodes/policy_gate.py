@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 
+from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
@@ -41,6 +42,37 @@ _SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
     "get_insider_transactions",
     "get_holdings_overlap",
 )
+
+_SHORT_RESEARCH_AGENT_CONFIG: dict[str, dict[str, object]] = {
+    "earnings_impact": {
+        "max_agents": 3,
+        "min_agents": 2,
+        "max_rounds": 5,
+        "max_tools": 9,
+        "reason": "semantic_earnings_price_impact_request",
+    },
+    "earnings_performance": {
+        "max_agents": 2,
+        "min_agents": 1,
+        "max_rounds": 5,
+        "max_tools": 8,
+        "reason": "semantic_earnings_performance_request",
+    },
+    "investment_opinion": {
+        "max_agents": 4,
+        "min_agents": 3,
+        "max_rounds": 5,
+        "max_tools": 8,
+        "reason": "semantic_investment_opinion_request",
+    },
+    "technical": {
+        "max_agents": 1,
+        "min_agents": 1,
+        "max_rounds": 4,
+        "max_tools": 5,
+        "reason": "semantic_technical_indicator_request",
+    },
+}
 
 
 def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
@@ -182,6 +214,33 @@ def _without_holdings_tools(tools: list[str]) -> list[str]:
     return [tool_name for tool_name in tools if tool_name not in _SEC_HOLDINGS_TOOL_NAMES]
 
 
+def _with_earnings_impact_tools(tools: list[str], *, market: str) -> list[str]:
+    result = list(tools)
+    seen = set(result)
+    required = [
+        "get_stock_price",
+        "get_company_info",
+        "get_company_news",
+        "get_authoritative_media_news",
+        "get_earnings_call_transcripts",
+        "get_earnings_estimates",
+        "get_eps_revisions",
+        "analyze_historical_drawdowns",
+        "get_current_datetime",
+        "search",
+    ]
+    if str(market or "").strip().upper() == "US":
+        required.insert(2, "get_sec_company_facts_quarterly")
+    else:
+        required.insert(2, "get_local_market_filings")
+    for tool_name in required:
+        if tool_name in seen:
+            continue
+        seen.add(tool_name)
+        result.append(tool_name)
+    return result
+
+
 def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
     """Legacy hardcoded allowlist selector kept as manifest fallback."""
     if op_name == "holdings" and subject_type in {"company", "portfolio"}:
@@ -299,6 +358,7 @@ def policy_gate(state: GraphState) -> dict:
     operation = state.get("operation") or {}
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
+    query_text = str(state.get("query") or "")
 
     # --- Read user preferences from ui_context ---
     ui_context = state.get("ui_context") or {}
@@ -320,6 +380,11 @@ def policy_gate(state: GraphState) -> dict:
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
+    earnings_impact_requested = (
+        op_name == "earnings_impact"
+        or _has_ready_operation(ready_tasks, "earnings_impact")
+        or query_requests_earnings_price_impact(query_text)
+    )
 
     if output_mode == "investment_report":
         budget = {"max_rounds": 6, "max_tools": 8}
@@ -439,6 +504,10 @@ def policy_gate(state: GraphState) -> dict:
     if market != "US":
         allowed_tools = _without_holdings_tools(list(allowed_tools))
 
+    if earnings_impact_requested:
+        allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
+
     if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
         allowed_tools = ["fetch_url_content", *allowed_tools]
         budget["max_tools"] = max(int(budget.get("max_tools", 0)), 1)
@@ -450,6 +519,15 @@ def policy_gate(state: GraphState) -> dict:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
     allowed_agents: list[str] = []
     agent_selection: dict[str, object] = {}
+    short_research_operation = ""
+    if earnings_impact_requested:
+        short_research_operation = "earnings_impact"
+    elif op_name == "earnings_performance" or _has_ready_operation(ready_tasks, "earnings_performance"):
+        short_research_operation = "earnings_performance"
+    elif op_name == "investment_opinion" or _has_ready_operation(ready_tasks, "investment_opinion"):
+        short_research_operation = "investment_opinion"
+    elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
+        short_research_operation = "technical"
 
     # --- agents_override: highest priority (validated against whitelist) ---
     if agents_override and isinstance(agents_override, list):
@@ -538,19 +616,35 @@ def policy_gate(state: GraphState) -> dict:
                 required_list.append("deep_search_agent")
             agent_selection["required"] = required_list
             budget["max_rounds"] = min(max(int(budget.get("max_rounds", 6)), 7), 10)
-    elif op_name == "investment_opinion" or _has_ready_operation(ready_tasks, "investment_opinion"):
-        allowed_agents = [
-            name
-            for name in ("news_agent", "fundamental_agent", "technical_agent", "risk_agent")
-            if name in REPORT_AGENT_CANDIDATES
-        ]
+    elif short_research_operation:
+        config = _SHORT_RESEARCH_AGENT_CONFIG[short_research_operation]
+        selection_state = {
+            **state,
+            "operation": {"name": short_research_operation, "confidence": 0.9, "params": {}},
+        }
+        max_agents = int(config.get("max_agents") or 1)
+        min_agents = int(config.get("min_agents") or 1)
+        selection = select_agents_for_request(
+            selection_state,
+            REPORT_AGENT_CANDIDATES,
+            max_agents=max_agents,
+            min_agents=min_agents,
+        )
+        allowed_agents = list(selection.get("selected") or [])
+        scores = selection.get("scores") if isinstance(selection.get("scores"), dict) else {}
+        reasons = selection.get("reasons") if isinstance(selection.get("reasons"), dict) else {}
         agent_selection = {
             "selected": list(allowed_agents),
-            "required": ["fundamental_agent", "technical_agent", "risk_agent"],
-            "reason": "explicit_investment_opinion_request",
+            "required": list(selection.get("required") or []),
+            "max_agents": max_agents,
+            "min_agents": min_agents,
+            "scores": {name: scores.get(name) for name in allowed_agents},
+            "reasons": {name: reasons.get(name) for name in allowed_agents},
+            "reason": str(config.get("reason") or "semantic_short_research_request"),
+            "selection_mode": "capability_score",
         }
-        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 5)
-        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 8)
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), int(config.get("max_rounds") or 4))
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), int(config.get("max_tools") or 4))
 
         pref_agents = agent_preferences.get("agents")
         if isinstance(pref_agents, dict):
@@ -562,25 +656,9 @@ def policy_gate(state: GraphState) -> dict:
             if removed_by_prefs:
                 agent_selection["selected"] = list(allowed_agents)
                 agent_selection["required"] = [
-                    name for name in agent_selection["required"] if name not in removed_by_prefs
+                    name for name in (agent_selection.get("required") or []) if name not in removed_by_prefs
                 ]
                 agent_selection["removed_by_prefs"] = removed_by_prefs
-
-    elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
-        allowed_agents = ["technical_agent"]
-        agent_selection = {
-            "selected": ["technical_agent"],
-            "required": ["technical_agent"],
-            "reason": "explicit_technical_indicator_request",
-        }
-        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
-
-        pref_agents = agent_preferences.get("agents")
-        if isinstance(pref_agents, dict) and str(pref_agents.get("technical_agent") or "").strip().lower() == "off":
-            allowed_agents = []
-            agent_selection["selected"] = []
-            agent_selection["required"] = []
-            agent_selection["removed_by_prefs"] = ["technical_agent"]
 
     # Tool schemas (Pydantic JSON schema) for planner constraints.
     tool_schemas: dict[str, dict] = {}

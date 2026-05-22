@@ -9,6 +9,10 @@ from typing import Any
 from langchain_core.messages import AIMessage
 
 from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
+from backend.graph.earnings_intent import (
+    query_requests_earnings_performance,
+    query_requests_earnings_price_impact,
+)
 from backend.graph.event_bus import emit_event
 from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.nodes.conversation_router import (
@@ -514,17 +518,38 @@ def _company_operations(
     *,
     tickers: list[str],
     allow_multi_ticker_default_compare: bool = True,
+    output_mode: str = "",
 ) -> list[dict[str, Any]]:
     operations: list[dict[str, Any]] = []
+    report_mode = str(output_mode or "").strip().lower() == "investment_report"
     if len(tickers) >= 2 and _is_lightweight_representative_compare(query):
         return [_operation("qa", 0.7)]
     if len(tickers) >= 2 and _contains_any(query, _COMPARE_HINTS):
         operations.append(_operation("compare", 0.86))
         return operations
-    if query_requests_investment_opinion(query):
+    if not report_mode and query_requests_earnings_price_impact(query):
+        operations.append(
+            _operation(
+                "earnings_impact",
+                0.86,
+                {
+                    "event_type": "earnings",
+                    "target_metric": "stock_price",
+                    "required_dimensions": ["financials", "earnings", "price", "news", "risk"],
+                },
+            )
+        )
+        return operations
+    if not report_mode and query_requests_earnings_performance(query):
+        operations.append(_operation("earnings_performance", 0.84))
+        return operations
+    explicit_technical = _contains_any(query, _TECHNICAL_HINTS)
+    if explicit_technical:
+        operations.append(_operation("technical", 0.82))
+    if not explicit_technical and query_requests_investment_opinion(query):
         operations.append(_operation("investment_opinion", 0.86))
         return operations
-    if _contains_any(query, _PRICE_HINTS):
+    if not explicit_technical and _contains_any(query, _PRICE_HINTS):
         operations.append(_operation("price", 0.82))
     if _contains_any(query, _NEWS_HINTS):
         news_params: dict[str, Any] = {"topic": "news"}
@@ -533,7 +558,7 @@ def _company_operations(
         operations.append(_operation("fetch", 0.78, news_params))
     if _contains_any(query, _IMPACT_HINTS):
         operations.append(_operation("analyze_impact", 0.78))
-    if _contains_any(query, _TECHNICAL_HINTS):
+    if not explicit_technical and _contains_any(query, _TECHNICAL_HINTS):
         operations.append(_operation("technical", 0.82))
     if _contains_any(query, _ALERT_HINTS):
         operations.append(_operation("alert_set", 0.88))
@@ -1975,6 +2000,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         and conversation_decision.relation == "compare"
                     )
                 ),
+                output_mode=output_mode,
             )
             router_operations = _router_directed_company_operations(
                 conversation_decision,

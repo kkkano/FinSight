@@ -15,6 +15,15 @@ def _state(*, query: str, subject_type: str, operation: str = "generate_report")
     }
 
 
+def _chat_state(*, query: str, operation: str) -> dict:
+    return {
+        "query": query,
+        "output_mode": "chat",
+        "operation": {"name": operation, "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["NVDA"], "selection_types": []},
+    }
+
+
 def test_required_agents_company_report_has_foundation_trio():
     state = _state(query="Analyze AAPL and produce an investment report", subject_type="company")
     required = required_agents_for_request(state, REPORT_AGENT_CANDIDATES)
@@ -46,3 +55,23 @@ def test_select_agents_filing_prioritizes_document_agents():
     assert "deep_search_agent" in names
     assert "fundamental_agent" in names
     assert len(names) <= 4
+
+
+def test_required_agents_chat_earnings_impact_uses_soft_required_floor():
+    state = _chat_state(query="NVDA earnings impact on stock price", operation="earnings_impact")
+    required = required_agents_for_request(state, REPORT_AGENT_CANDIDATES)
+    assert required == ["fundamental_agent", "news_agent", "risk_agent"]
+
+    selected = select_agents_for_request(state, REPORT_AGENT_CANDIDATES, max_agents=3, min_agents=2)
+    names = selected.get("selected") or []
+    assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(set(names))
+    assert len(names) == 3
+
+
+def test_required_agents_chat_technical_keeps_narrow_fast_path():
+    state = _chat_state(query="NVDA RSI MACD support", operation="technical")
+    required = required_agents_for_request(state, REPORT_AGENT_CANDIDATES)
+    assert required == ["technical_agent"]
+
+    selected = select_agents_for_request(state, REPORT_AGENT_CANDIDATES, max_agents=1, min_agents=1)
+    assert selected.get("selected") == ["technical_agent"]

@@ -24,6 +24,10 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from backend.config.ticker_mapping import extract_tickers
+from backend.graph.earnings_intent import (
+    query_requests_earnings_performance,
+    query_requests_earnings_price_impact,
+)
 from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.memory_scope import current_report_context
@@ -315,6 +319,14 @@ def _query_explicitly_requests_technical(query: str) -> bool:
 
 def _query_explicitly_requests_investment_opinion(query: str) -> bool:
     return query_requests_investment_opinion(query)
+
+
+def _query_explicitly_requests_earnings_performance(query: str) -> bool:
+    return query_requests_earnings_performance(query)
+
+
+def _query_explicitly_requests_earnings_price_impact(query: str) -> bool:
+    return query_requests_earnings_price_impact(query)
 
 
 def _query_prefers_direct_style_explanation(query: str) -> bool:
@@ -1453,6 +1465,60 @@ def _fast_explicit_execution_decision(
             needs_tools=True,
             reason="explicit report mode fast path",
             reply_guidance="直接进入研报执行链路，不再询问是否启动研究。",
+        )
+
+    if tickers and _query_explicitly_requests_earnings_price_impact(query):
+        task_hints = tuple(
+            {
+                "subject_type": "company",
+                "subject_label": ticker,
+                "tickers": [ticker],
+                "operation": "earnings_impact",
+                "params": {
+                    "event_type": "earnings",
+                    "target_metric": "stock_price",
+                    "required_dimensions": ["financials", "earnings", "price", "news", "risk"],
+                },
+                "reason": "explicit earnings impact request",
+            }
+            for ticker in _dedupe_preserve_order(tickers)[:6]
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.73),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.86,
+            needs_tools=True,
+            reason="explicit earnings impact request fast path",
+            reply_guidance="运行财报、盈利预期、股价反应、新闻/指引和风险证据后，回答财报对股价的影响。",
+            task_hints=task_hints,
+        )
+
+    if tickers and _query_explicitly_requests_earnings_performance(query):
+        task_hints = tuple(
+            {
+                "subject_type": "company",
+                "subject_label": ticker,
+                "tickers": [ticker],
+                "operation": "earnings_performance",
+                "params": {
+                    "required_dimensions": ["financials", "earnings", "eps_revisions", "news", "risk"],
+                },
+                "reason": "explicit earnings performance request",
+            }
+            for ticker in _dedupe_preserve_order(tickers)[:6]
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.72),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=True,
+            reason="explicit earnings performance request fast path",
+            reply_guidance="运行基本面、盈利预期/EPS 修正和财报相关新闻证据后，回答财报表现，不退化成新闻列表。",
+            task_hints=task_hints,
         )
 
     if tickers and _query_explicitly_requests_technical(query):

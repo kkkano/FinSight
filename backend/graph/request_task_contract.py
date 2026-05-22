@@ -40,6 +40,8 @@ SOURCE_OPERATION_NAMES = frozenset(
         "news_impact",
         "technical",
         "investment_opinion",
+        "earnings_impact",
+        "earnings_performance",
         "daily_brief",
         "fact_check",
         "company_info",
@@ -298,7 +300,7 @@ def build_reply_contract(
         lane: Lane = LANE_REPORT_GENERATION
     elif disallow_news:
         lane = LANE_CHAT_ANSWER
-    elif has_url or explicit_sources or task_links or any(_task_operation_name(task) in {"price", "fetch", "daily_brief", "investment_opinion"} for task in task_rows):
+    elif has_url or explicit_sources or task_links or any(_task_operation_name(task) in {"price", "fetch", "daily_brief", "investment_opinion", "earnings_impact", "earnings_performance"} for task in task_rows):
         lane = LANE_SOURCE_GROUNDED_ANSWER
     else:
         lane = LANE_CHAT_ANSWER
@@ -347,7 +349,7 @@ def build_reply_contract(
         else bool(task_links or has_url or explicit_links),
         "requires_realtime": bool(
             any(_task_operation_name(task) == "price" for task in task_rows)
-            or any(_task_operation_name(task) in {"daily_brief", "investment_opinion"} for task in task_rows)
+            or any(_task_operation_name(task) in {"daily_brief", "investment_opinion", "earnings_impact", "earnings_performance"} for task in task_rows)
             or _contains_any(query_text, ("real-time", "realtime", "right now", "trading at now", "现在", "实时", "多少钱", "报价"))
         ),
         "requires_url_fetch": has_url,

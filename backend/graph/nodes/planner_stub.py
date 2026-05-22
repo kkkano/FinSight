@@ -5,6 +5,7 @@ import os
 import re
 import json
 
+from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
@@ -261,6 +262,121 @@ def planner_stub(state: GraphState) -> dict:
     def _has_step(kind: str, name: str) -> bool:
         return any(step.get("kind") == kind and step.get("name") == name for step in steps)
 
+    def _append_earnings_performance_steps(
+        ticker: str,
+        *,
+        group: str | None = None,
+        task_ids: list[str] | None = None,
+    ) -> None:
+        evidence_group = group or "earnings_evidence"
+        _append_tool_step(
+            "get_company_info",
+            {"ticker": ticker},
+            why=f"{ticker} 财报表现任务：补充公司基础信息，避免只列新闻标题。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_sec_company_facts_quarterly",
+            {"ticker": ticker, "limit": 8},
+            why=f"{ticker} 财报表现任务：读取季度营收、净利和 EPS 等事实指标。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_earnings_estimates",
+            {"ticker": ticker},
+            why=f"{ticker} 财报表现任务：补充盈利预期和下一季共识。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_eps_revisions",
+            {"ticker": ticker},
+            why=f"{ticker} 财报表现任务：补充 EPS 上修/下修趋势。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        if not news_disallowed:
+            _append_tool_step(
+                "get_company_news",
+                {"ticker": ticker},
+                why=f"{ticker} 财报表现任务：补充近期财报新闻、指引和市场反应。",
+                optional=True,
+                parallel_group=evidence_group,
+                task_ids=task_ids,
+            )
+            _append_tool_step(
+                "get_authoritative_media_news",
+                {"query": f"{ticker} latest earnings results", "max_results": 6, "authoritative_only": True},
+                why=f"{ticker} 财报表现任务：用权威媒体交叉验证财报要点。",
+                optional=True,
+                parallel_group=evidence_group,
+                task_ids=task_ids,
+            )
+            _append_tool_step(
+                "get_earnings_call_transcripts",
+                {"ticker": ticker, "limit": 3},
+                why=f"{ticker} 财报表现任务：补充电话会 transcript 以验证管理层指引。",
+                optional=True,
+                parallel_group=evidence_group,
+                task_ids=task_ids,
+            )
+        agent_group = f"{evidence_group}_agents"
+        _append_agent_step(
+            "fundamental_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 财报表现任务：运行 fundamental_agent 汇总财务表现、预期和质量风险。",
+            optional=False,
+            parallel_group=agent_group,
+            task_ids=task_ids,
+        )
+        _append_agent_step(
+            "news_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 财报表现任务：运行 news_agent 区分财报催化和噪音。",
+            optional=True,
+            parallel_group=agent_group,
+            task_ids=task_ids,
+        )
+
+    def _append_earnings_impact_steps(
+        ticker: str,
+        *,
+        group: str | None = None,
+        task_ids: list[str] | None = None,
+    ) -> None:
+        evidence_group = group or "earnings_impact_evidence"
+        _append_tool_step(
+            "get_stock_price",
+            {"ticker": ticker},
+            why=f"{ticker} 财报影响股价任务：获取当前价格/涨跌幅作为市场反应锚点。",
+            optional=False,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_earnings_performance_steps(ticker, group=evidence_group, task_ids=task_ids)
+        _append_tool_step(
+            "analyze_historical_drawdowns",
+            {"ticker": ticker},
+            why=f"{ticker} 财报影响股价任务：补充历史波动和回撤风险。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_agent_step(
+            "risk_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 财报影响股价任务：运行 risk_agent 给出价格反应的证伪和回撤风险。",
+            optional=True,
+            parallel_group=f"{evidence_group}_agents",
+            task_ids=task_ids,
+        )
+
     def _task_id(task: dict) -> str:
         value = str(task.get("id") or "").strip()
         return value or f"task_{len(steps) + 1}"
@@ -414,6 +530,12 @@ def planner_stub(state: GraphState) -> dict:
 
         for ticker in tickers_for_task[:6]:
             live_qa = op_name == "qa" and _qa_needs_live_context()
+            if op_name == "earnings_impact" or query_requests_earnings_price_impact(query):
+                _append_earnings_impact_steps(ticker, group=group, task_ids=task_ids)
+                continue
+            if op_name == "earnings_performance":
+                _append_earnings_performance_steps(ticker, group=group, task_ids=task_ids)
+                continue
             if op_name == "investment_opinion":
                 _append_tool_step(
                     "get_stock_price",
@@ -1195,6 +1317,12 @@ def planner_stub(state: GraphState) -> dict:
                     why=f"{ticker} 对比研报：补充公司基础信息。",
                     optional=True,
                 )
+
+    if operation == "earnings_impact" and primary_ticker:
+        _append_earnings_impact_steps(primary_ticker)
+
+    if operation == "earnings_performance" and primary_ticker:
+        _append_earnings_performance_steps(primary_ticker)
 
     if operation in ("price", "technical") and primary_ticker and "get_stock_price" in allowed_tools:
         steps.append(

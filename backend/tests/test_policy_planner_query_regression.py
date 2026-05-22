@@ -160,6 +160,145 @@ def test_investment_opinion_query_matrix_routes_to_rich_chat_chain(monkeypatch):
         assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_agents), query
 
 
+def test_earnings_performance_query_routes_to_fundamental_chain(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    cases = [
+        ("英伟达最新季度财报表现如何", "NVDA"),
+        ("NVDA latest quarterly earnings performance", "NVDA"),
+        ("AAPL 最新财报怎么样", "AAPL"),
+        ("MSFT revenue EPS margin 这个季度如何", "MSFT"),
+    ]
+
+    for query, ticker in cases:
+        state = {"query": query, "ui_context": {}, "output_mode": "chat"}
+        import asyncio
+
+        understanding = asyncio.run(understand_request(state))
+        assert (understanding.get("operation") or {}).get("name") == "earnings_performance", query
+        assert (understanding.get("subject") or {}).get("tickers") == [ticker], query
+
+        policy_out = policy_gate({**state, **understanding})
+        plan_out = planner_stub({**state, **understanding, **policy_out})
+        agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+        step_names = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        }
+        step_agents = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+            if s.get("kind") == "agent"
+        }
+
+        assert {"fundamental_agent", "news_agent"}.issubset(agents), query
+        assert {
+            "get_company_info",
+            "get_sec_company_facts_quarterly",
+            "get_earnings_estimates",
+            "get_eps_revisions",
+            "get_company_news",
+        }.issubset(step_names), query
+        assert "fundamental_agent" in step_agents, query
+        assert "get_stock_price" not in step_names, query
+
+
+def test_earnings_price_impact_query_routes_to_composite_chain(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    cases = [
+        ("请问英伟达这个季度财报对股价的影响", "NVDA"),
+        ("NVDA earnings impact on stock price", "NVDA"),
+        ("AAPL 财报出来后对走势是利好还是利空", "AAPL"),
+    ]
+
+    for query, ticker in cases:
+        state = {"query": query, "ui_context": {}, "output_mode": "chat"}
+        import asyncio
+
+        understanding = asyncio.run(understand_request(state))
+        assert (understanding.get("operation") or {}).get("name") == "earnings_impact", query
+        assert (understanding.get("subject") or {}).get("tickers") == [ticker], query
+
+        policy_out = policy_gate({**state, **understanding})
+        plan_out = planner_stub({**state, **understanding, **policy_out})
+        agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+        step_names = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        }
+        step_agents = {
+            s.get("name")
+            for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+            if s.get("kind") == "agent"
+        }
+
+        assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(agents), query
+        assert {
+            "get_stock_price",
+            "get_company_info",
+            "get_sec_company_facts_quarterly",
+            "get_earnings_estimates",
+            "get_eps_revisions",
+            "get_company_news",
+        }.issubset(step_names), query
+        assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(step_agents), query
+
+
+def test_earnings_price_impact_query_expands_tools_even_if_upstream_says_price():
+    state = {
+        "query": "请问英伟达这个季度财报对股价的影响",
+        "operation": {"name": "price", "confidence": 0.9, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "subject_label": "NVDA",
+                "tickers": ["NVDA"],
+                "operation": {"name": "price", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            }
+        ],
+    }
+
+    policy_out = policy_gate(state)
+    state = {**state, **policy_out}
+    plan_out = planner_stub(state)
+
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    step_names = {
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+    }
+    step_agents = {
+        s.get("name")
+        for s in ((plan_out.get("plan_ir") or {}).get("steps") or [])
+        if s.get("kind") == "agent"
+    }
+
+    assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(agents)
+    assert {
+        "get_stock_price",
+        "get_sec_company_facts_quarterly",
+        "get_earnings_estimates",
+        "get_eps_revisions",
+        "get_company_news",
+    }.issubset(step_names)
+    assert {"fundamental_agent", "news_agent", "risk_agent"}.issubset(step_agents)
+
+
 def test_non_opinion_queries_keep_narrow_tool_chains(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 

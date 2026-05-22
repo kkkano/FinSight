@@ -26,6 +26,12 @@ def test_parse_operation_extract_metrics_for_filing():
     assert op.get("name") == "extract_metrics"
 
 
+def test_parse_operation_earnings_performance_before_price_performance():
+    result = parse_operation({"query": "NVDA latest quarterly earnings performance", "subject": {"subject_type": "company"}})
+    op = result.get("operation") or {}
+    assert op.get("name") == "earnings_performance"
+
+
 def test_parse_operation_fetch():
     result = parse_operation({"query": "今天有什么新闻", "subject": {"subject_type": "company"}})
     op = result.get("operation") or {}

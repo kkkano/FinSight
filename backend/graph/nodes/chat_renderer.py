@@ -998,6 +998,251 @@ def _agent_risks(state: GraphState, names: set[str]) -> list[str]:
     return risks[:4]
 
 
+def _format_compact_number(value: Any, *, money: bool = False) -> str:
+    try:
+        number = float(value)
+    except Exception:
+        return str(value or "").strip()
+    abs_number = abs(number)
+    prefix = "$" if money else ""
+    if abs_number >= 1_000_000_000:
+        return f"{prefix}{number / 1_000_000_000:.2f}B"
+    if abs_number >= 1_000_000:
+        return f"{prefix}{number / 1_000_000:.2f}M"
+    if abs_number >= 1_000:
+        return f"{prefix}{number / 1_000:.2f}K"
+    return f"{prefix}{number:.2f}"
+
+
+def _latest_quarter_facts(state: GraphState) -> list[str]:
+    payload = _first_matching_output(state, {"get_sec_company_facts_quarterly"})
+    parsed = _parse_jsonish(payload)
+    if not isinstance(parsed, dict) or parsed.get("error"):
+        return []
+
+    periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
+    period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
+    metric_specs = (
+        ("revenue", "营收", True),
+        ("gross_profit", "毛利", True),
+        ("operating_income", "经营利润", True),
+        ("net_income", "净利润", True),
+        ("eps", "EPS", False),
+        ("operating_cash_flow", "经营现金流", True),
+        ("free_cash_flow", "自由现金流", True),
+    )
+
+    lines: list[str] = []
+    for key, label, money in metric_specs:
+        values = parsed.get(key)
+        if not isinstance(values, list) or not values:
+            continue
+        formatted = _format_compact_number(values[0], money=money)
+        if formatted:
+            lines.append(f"{period_label} {label} {formatted}")
+        if len(lines) >= 4:
+            break
+    return lines
+
+
+def _case_insensitive_get(row: dict[str, Any], key: str) -> Any:
+    if key in row:
+        return row.get(key)
+    wanted = key.lower()
+    for raw_key, value in row.items():
+        if str(raw_key).lower() == wanted:
+            return value
+    return None
+
+
+def _earnings_expectation_lines(state: GraphState) -> list[str]:
+    lines: list[str] = []
+    estimates = _parse_jsonish(_first_matching_output(state, {"get_earnings_estimates"}))
+    if isinstance(estimates, dict) and not estimates.get("error"):
+        rows = estimates.get("earnings_estimate")
+        if isinstance(rows, list) and rows:
+            first = rows[0] if isinstance(rows[0], dict) else {}
+            avg = first.get("avg") or first.get("current") or first.get("estimate")
+            period = str(first.get("period") or "下一季").strip() or "下一季"
+            if avg is not None:
+                lines.append(f"{period} 共识 EPS 约 {_format_compact_number(avg)}")
+        signal = str(estimates.get("revision_signal") or "").strip()
+        if signal:
+            lines.append(f"盈利预期修正信号：{signal}")
+
+    revisions = _parse_jsonish(_first_matching_output(state, {"get_eps_revisions"}))
+    if isinstance(revisions, dict) and not revisions.get("error"):
+        rows = revisions.get("eps_revisions")
+        if isinstance(rows, list) and rows:
+            first = rows[0] if isinstance(rows[0], dict) else {}
+            up = _case_insensitive_get(first, "upLast7days")
+            down = _case_insensitive_get(first, "downLast7days")
+            if up is not None or down is not None:
+                lines.append(f"近 7 天 EPS 上修 {up or 0} 次、下修 {down or 0} 次")
+        signal = str(revisions.get("revision_signal") or "").strip()
+        if signal and all(signal not in line for line in lines):
+            lines.append(f"EPS 修正信号：{signal}")
+
+    return lines[:4]
+
+
+def _company_identity_tokens(state: GraphState) -> set[str]:
+    tokens = {ticker.lower() for ticker in _tickers(state) if ticker}
+    generic = {"corp", "corporation", "inc", "ltd", "limited", "company", "class", "ordinary", "shares"}
+
+    company_info = _parse_jsonish(_first_matching_output(state, {"get_company_info"}))
+    candidates: list[str] = []
+    if isinstance(company_info, dict):
+        candidates.extend(
+            str(company_info.get(key) or "")
+            for key in ("name", "company_name", "longName", "shortName")
+        )
+    elif isinstance(company_info, str):
+        match = re.search(r"(?:^|\n)\s*-\s*Name:\s*([^\n]+)", company_info, re.IGNORECASE)
+        if match:
+            candidates.append(match.group(1))
+
+    for candidate in candidates:
+        for word in re.findall(r"[A-Za-z][A-Za-z0-9&.-]{2,}", candidate):
+            normalized = word.strip(" .,-").lower()
+            if len(normalized) >= 3 and normalized not in generic:
+                tokens.add(normalized)
+    return tokens
+
+
+def _filter_news_by_company_identity(state: GraphState, items: list[dict[str, str]]) -> list[dict[str, str]]:
+    tokens = _company_identity_tokens(state)
+    if not tokens:
+        return items
+    filtered: list[dict[str, str]] = []
+    for item in items:
+        haystack = " ".join(
+            str(item.get(key) or "")
+            for key in ("title", "url", "source", "published", "snippet")
+        ).lower()
+        if any(token and token in haystack for token in tokens):
+            filtered.append(item)
+    return filtered
+
+
+def _render_earnings_performance_markdown(
+    state: GraphState,
+    *,
+    news_map: dict[str, list[dict[str, str]]],
+    evidence_items: list[dict[str, str]],
+) -> str:
+    tickers = _tickers(state)
+    ticker_label = ", ".join(tickers) or "这个标的"
+    financial_lines = _latest_quarter_facts(state)
+    expectation_lines = _earnings_expectation_lines(state)
+    fundamental = _agent_summary(state, {"fundamental_agent"})
+    news = _filter_news_by_company_identity(state, [item for items in news_map.values() for item in items])
+
+    lines: list[str] = [
+        f"**结论**：{ticker_label} 这类问题不能只看新闻标题；本轮按财务事实、盈利预期/EPS 修正和财报消息三层回答。",
+        "",
+        "**最新季度/财务表现**",
+    ]
+    if financial_lines:
+        for item in financial_lines:
+            lines.append(f"- {item}")
+    elif fundamental:
+        lines.append(f"- {fundamental}")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到季度财务事实表，不能硬编营收、利润或 EPS。")
+
+    if fundamental and financial_lines:
+        lines.append(f"- {fundamental}")
+
+    lines.extend(["", "**盈利预期/EPS 修正**"])
+    if expectation_lines:
+        for item in expectation_lines:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到盈利预期或 EPS 修正数据，无法判断市场预期是否继续上修。")
+
+    lines.extend(["", "**消息/指引**"])
+    if news:
+        for item in news[:3]:
+            lines.append(f"- {_format_news_item(item)}")
+    else:
+        lines.append("- [数据缺失] 本轮没有可引用的财报新闻、电话会或指引来源，事件解释需要保守。")
+
+    lines.extend(["", "**风险/待验证**"])
+    risk_lines = _agent_risks(state, {"fundamental_agent", "news_agent"})
+    if risk_lines:
+        for item in risk_lines[:4]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- 重点验证下一季指引、毛利率/净利率变化和 EPS 修正方向；如果预期上修停止，财报利好可能被估值压力抵消。")
+
+    _append_sources(lines, news or evidence_items)
+    return _finalize_chat_markdown(lines, state)
+
+
+def _render_earnings_impact_markdown(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    news_map: dict[str, list[dict[str, str]]],
+    evidence_items: list[dict[str, str]],
+) -> str:
+    tickers = _tickers(state)
+    ticker_label = ", ".join(tickers) or "这个标的"
+    primary_ticker = tickers[0] if tickers else ticker_label
+    price = prices.get(primary_ticker) or next(iter(prices.values()), {})
+    financial_lines = _latest_quarter_facts(state)
+    expectation_lines = _earnings_expectation_lines(state)
+    fundamental = _agent_summary(state, {"fundamental_agent"})
+    risk_lines = _agent_risks(state, {"risk_agent", "fundamental_agent", "news_agent"})
+    news = _filter_news_by_company_identity(state, [item for items in news_map.values() for item in items])
+
+    lines: list[str] = [
+        f"**结论**：{ticker_label} 的财报对股价影响，要同时看“财报/指引是否超预期”和“股价是否已经反映”。本轮按财报事实、EPS 修正、股价反应和风险触发来判断。",
+        "",
+        "**股价反应**",
+    ]
+    if price.get("price"):
+        lines.append(f"- {_format_price_line(primary_ticker, price)}")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到可用当前报价，无法量化市场即时反应。")
+
+    lines.extend(["", "**财报/预期差**"])
+    if financial_lines:
+        for item in financial_lines:
+            lines.append(f"- {item}")
+    elif fundamental:
+        lines.append("- 本轮 SEC 季度事实表不可用，先用基本面 Agent 的财务摘要作为替代证据。")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到季度财务事实表，不能硬判断财报本身是利好还是利空。")
+    if fundamental:
+        lines.append(f"- {fundamental}")
+
+    lines.extend(["", "**盈利预期/EPS 修正**"])
+    if expectation_lines:
+        for item in expectation_lines:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到盈利预期或 EPS 修正，无法确认市场预期是否上修。")
+
+    lines.extend(["", "**消息/指引**"])
+    if news:
+        for item in news[:3]:
+            lines.append(f"- {_format_news_item(item)}")
+    else:
+        lines.append("- [数据缺失] 本轮没有可引用的财报新闻、电话会或指引来源，事件解释需要保守。")
+
+    lines.extend(["", "**风险/后续观察**"])
+    if risk_lines:
+        for item in risk_lines[:4]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- 重点看下一季指引、毛利率、EPS 修正和股价是否放量确认；若预期上修停滞，短线利好可能被估值压力抵消。")
+
+    _append_sources(lines, news or evidence_items)
+    return _finalize_chat_markdown(lines, state)
+
+
 def _investment_opinion_bias(price: dict[str, Any], technical: str, risk_lines: list[str]) -> str:
     score = 0
     change_pct = _price_change_pct(price)
@@ -1369,6 +1614,21 @@ def render_chat_markdown(state: GraphState) -> str:
             lines.append("这个链接和宏观问题需要更多可读证据；我先不按 URL 字面内容硬下结论。")
         _append_sources(lines, news or evidence_items)
         return _finalize_chat_markdown(lines, state)
+
+    if "earnings_impact" in operations:
+        return _render_earnings_impact_markdown(
+            state,
+            prices=prices,
+            news_map=news_map,
+            evidence_items=evidence_items,
+        )
+
+    if "earnings_performance" in operations:
+        return _render_earnings_performance_markdown(
+            state,
+            news_map=news_map,
+            evidence_items=evidence_items,
+        )
 
     if "price" in operations and "fetch" not in operations and "technical" not in operations and "analyze_impact" not in operations:
         target_tickers = _tickers(state) or list(prices.keys()) or [ticker_label]

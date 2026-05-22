@@ -515,6 +515,214 @@ def test_investment_opinion_bias_does_not_treat_controlled_risk_as_bearish() -> 
     assert "「中性偏多」" in markdown
 
 
+def test_earnings_performance_chat_renders_financial_sections_not_news_only() -> None:
+    markdown = _render_chat(
+        {
+            "query": "英伟达最新季度财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_performance"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_performance"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "get_sec_company_facts_quarterly", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s3", "kind": "tool", "name": "get_earnings_estimates", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s4", "kind": "tool", "name": "get_eps_revisions", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s5", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s6", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "name": "NVIDIA Corp", "sector": "Technology"}},
+                    "s2": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "source": "sec_companyfacts",
+                            "periods": ["2026Q1", "2025Q4"],
+                            "revenue": [44062000000, 39331000000],
+                            "net_income": [18775000000, 22066000000],
+                            "eps": [0.81, 0.89],
+                            "error": None,
+                        }
+                    },
+                    "s3": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "earnings_estimate": [{"period": "0q", "avg": 0.93}],
+                            "revision_signal": "positive",
+                            "error": None,
+                        }
+                    },
+                    "s4": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "eps_revisions": [{"period": "0q", "upLast7days": 8, "downLast7days": 1}],
+                            "revision_signal": "positive",
+                            "error": None,
+                        }
+                    },
+                    "s5": {
+                        "output": [
+                            {
+                                "title": "Nvidia reports latest quarterly results",
+                                "url": "https://example.com/nvda-results",
+                                "source": "Example News",
+                                "published_at": "2026-05-22",
+                            },
+                            {
+                                "title": "Workday jumps after AI margin forecast",
+                                "url": "https://example.com/workday-results",
+                                "source": "Example News",
+                                "published_at": "2026-05-22",
+                            }
+                        ]
+                    },
+                    "s6": {
+                        "output": {
+                            "summary": "FundamentalAgent: 数据中心收入继续支撑增长，但利润率和下一季指引仍需验证。"
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    for heading in ("结论", "最新季度/财务表现", "盈利预期/EPS 修正", "消息/指引", "风险/待验证"):
+        assert heading in markdown
+    assert "44.06B" in markdown
+    assert "0.81" in markdown
+    assert "FundamentalAgent" in markdown
+    assert "Nvidia reports latest quarterly results" in markdown
+    assert "Workday jumps" not in markdown
+    assert "价格/趋势" not in markdown
+
+
+def test_earnings_performance_news_filter_uses_company_name_not_profile_body() -> None:
+    markdown = _render_chat(
+        {
+            "query": "英伟达最新季度财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_performance"},
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {
+                        "output": (
+                            "Company Profile (NVDA):\n"
+                            "- Name: NVIDIA Corporation\n"
+                            "- Sector: Technology\n"
+                            "- Description: NVIDIA operates through Compute & Networking and Graphics.\n"
+                        )
+                    },
+                    "s2": {
+                        "output": [
+                            {
+                                "title": "NVIDIA Earnings: Key Metrics",
+                                "url": "https://example.com/nvidia-earnings",
+                                "source": "Example News",
+                                "published_at": "2026-05-22",
+                            },
+                            {
+                                "title": "Lenovo shares jump on record earnings and AI revenue",
+                                "url": "https://example.com/lenovo-earnings",
+                                "source": "Example News",
+                                "published_at": "2026-05-22",
+                            },
+                        ]
+                    },
+                }
+            },
+        }
+    )
+
+    assert "NVIDIA Earnings: Key Metrics" in markdown
+    assert "Lenovo shares jump" not in markdown
+
+
+def test_earnings_impact_chat_renders_price_and_earnings_evidence() -> None:
+    markdown = _render_chat(
+        {
+            "query": "请问英伟达这个季度财报对股价的影响",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_impact"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_impact"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s3", "kind": "tool", "name": "get_sec_company_facts_quarterly", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s4", "kind": "tool", "name": "get_earnings_estimates", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s5", "kind": "tool", "name": "get_eps_revisions", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s6", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s7", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s8", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "price": 176.2, "currency": "USD", "change_percent": 2.4}},
+                    "s2": {"output": {"ticker": "NVDA", "name": "NVIDIA Corp"}},
+                    "s3": {
+                        "output": {
+                            "ticker": "NVDA",
+                            "source": "sec_companyfacts",
+                            "periods": ["2026Q1"],
+                            "revenue": [44062000000],
+                            "net_income": [18775000000],
+                            "eps": [0.81],
+                            "error": None,
+                        }
+                    },
+                    "s4": {"output": {"earnings_estimate": [{"period": "0q", "avg": 0.93}], "revision_signal": "positive"}},
+                    "s5": {"output": {"eps_revisions": [{"period": "0q", "upLast7days": 8, "downLast7days": 1}]}},
+                    "s6": {
+                        "output": [
+                            {
+                                "title": "Nvidia earnings beat expectations",
+                                "url": "https://example.com/nvidia-earnings-beat",
+                                "source": "Example News",
+                                "published_at": "2026-05-22",
+                            }
+                        ]
+                    },
+                    "s7": {"output": {"summary": "FundamentalAgent: 财报超预期主要来自数据中心需求和毛利率韧性。"}},
+                    "s8": {"output": {"summary": "RiskAgent: 若指引不再上修，股价反应可能回吐。", "risks": ["估值对指引变化敏感。"]}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    for heading in ("结论", "股价反应", "财报/预期差", "盈利预期/EPS 修正", "消息/指引", "风险/后续观察"):
+        assert heading in markdown
+    assert "176.20 USD" in markdown
+    assert "44.06B" in markdown
+    assert "0.81" in markdown
+    assert "Nvidia earnings beat expectations" in markdown
+    assert "估值对指引变化敏感" in markdown
+
+
 def test_news_chat_answer_uses_clean_citations() -> None:
     markdown = _render_chat(
         {

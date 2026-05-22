@@ -22,6 +22,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from backend.graph.earnings_intent import (
+    query_requests_earnings_performance,
+    query_requests_earnings_price_impact,
+)
 from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.state import GraphState
 
@@ -173,12 +177,33 @@ def parse_operation(state: GraphState) -> dict:
     # ------------------------------------------------------------------
     # 2. Guardrail-A: single-task keywords (block default compare)
     # ------------------------------------------------------------------
+    elif query_requests_earnings_price_impact(query):
+        op = "earnings_impact"
+        confidence = 0.86
+        source = "semantic_rule"
+        keyword_hits = ["earnings_price_impact_pattern"]
+        guardrail_a_hit = "earnings_impact"
+
     elif (hits := _match_any(_IMPACT_KEYWORDS, lowered)):
         op = "analyze_impact"
         confidence = 0.75
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "analyze_impact"
+
+    elif query_requests_earnings_performance(query):
+        op = "earnings_performance"
+        confidence = 0.84
+        source = "semantic_rule"
+        keyword_hits = ["earnings_performance_pattern"]
+        guardrail_a_hit = "earnings_performance"
+
+    elif (hits := _match_any(_TECHNICAL_KEYWORDS, lowered)):
+        op = "technical"
+        confidence = 0.85
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "technical"
 
     elif query_requests_investment_opinion(query):
         op = "investment_opinion"
@@ -214,13 +239,6 @@ def parse_operation(state: GraphState) -> dict:
         source = "keyword"
         keyword_hits = hits
         guardrail_a_hit = "cn_market"
-
-    elif (hits := _match_any(_TECHNICAL_KEYWORDS, lowered)):
-        op = "technical"
-        confidence = 0.85
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "technical"
 
     elif (hits := _match_any(_PRICE_KEYWORDS, lowered)):
         op = "price"

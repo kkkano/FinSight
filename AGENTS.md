@@ -59,6 +59,14 @@
 - `backend/agents/price_agent.py`、`backend/agents/risk_agent.py`、`backend/agents/base_agent.py`：补齐 Price / Risk Agent 的报价、回撤、因子暴露和压力测试工具入口。
 - `backend/tests/test_investment_intent.py`、`backend/tests/test_policy_planner_query_regression.py`、`backend/tests/test_chat_response_contract.py`、`backend/tests/test_agent_capability_audit.py`：保存 query -> route -> policy -> plan -> answer 的回归覆盖。
 
+# 2026-05-22 增量架构说明（复合财报意图与软 Agent 召回）
+
+- `backend/graph/earnings_intent.py`：新增财报表现与“财报 -> 股价影响”语义 facet，避免“财报/股价/影响”被单标签压成纯 price。
+- `backend/graph/nodes/understand_request.py`、`backend/graph/nodes/conversation_router.py`：显式财报表现进入 `earnings_performance`，显式财报影响股价进入 `earnings_impact`；深度研报里的“覆盖财报”不再把报告主链误降级为短答财报链。
+- `backend/graph/nodes/policy_gate.py`、`backend/graph/capability_registry.py`：chat/brief 的 rich research agent 选择改为 capability score + required floor；operation/facet 只影响召回权重、预算和 required 底线，不再由单个 if/elif 直接硬编码完整 agent 列表。
+- `backend/graph/nodes/planner_stub.py`：`earnings_performance` 会拉取公司信息、季度事实、盈利预期、EPS 修正、财报新闻/电话会和 Fundamental/News agent；`earnings_impact` 额外拉取当前价格、历史回撤和 Risk agent。即使上游误判为 price，只要 query facet 指向财报影响股价，也会补齐复合工具链。
+- `backend/graph/nodes/chat_renderer.py`：新增财报表现与财报影响股价短答渲染合同，回答必须包含财务表现、EPS 修正、消息/指引和风险；财报新闻引用只保留可绑定到当前 ticker/公司名的项目，避免旁支新闻混入。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

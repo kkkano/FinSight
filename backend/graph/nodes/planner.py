@@ -113,6 +113,8 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
             "fetch",
             "technical",
             "investment_opinion",
+            "earnings_impact",
+            "earnings_performance",
             "analyze_impact",
             "news_impact",
             "daily_brief",
@@ -129,7 +131,7 @@ def _should_use_task_graph_planner(state: GraphState, ready_tasks: list[dict[str
         if operation_names.issubset(simple_task_graph_ops) and (
             has_url_task
             or len(ready_tasks) >= 2
-            or bool(operation_names & {"price", "fetch", "technical", "investment_opinion", "analyze_impact", "news_impact", "daily_brief"})
+            or bool(operation_names & {"price", "fetch", "technical", "investment_opinion", "earnings_impact", "earnings_performance", "analyze_impact", "news_impact", "daily_brief"})
         ):
             return all(
                 str(task.get("subject_type") or "").strip().lower()
