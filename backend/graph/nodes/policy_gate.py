@@ -6,8 +6,11 @@ import re
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
+from backend.graph.request_facets import derive_request_facets
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
+from backend.skills.registry import get_builtin_skill_registry
+from backend.skills.selector import extract_explicit_skill, select_skill_for_facets
 
 
 _DASHBOARD_CORE_AGENTS: tuple[str, ...] = (
@@ -359,6 +362,11 @@ def policy_gate(state: GraphState) -> dict:
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     query_text = str(state.get("query") or "")
+    facets = state.get("facets") if isinstance(state.get("facets"), dict) else derive_request_facets(
+        query=query_text,
+        operation=operation if isinstance(operation, dict) else {},
+        subject=subject if isinstance(subject, dict) else {},
+    )
 
     # --- Read user preferences from ui_context ---
     ui_context = state.get("ui_context") or {}
@@ -377,6 +385,33 @@ def policy_gate(state: GraphState) -> dict:
         analysis_depth = "deep_research" if _contains_any(query_text, _DEEP_RESEARCH_HINTS) else "report"
     raw_prefs = ui_context.get("agent_preferences") or {}
     agent_preferences: dict = raw_prefs if isinstance(raw_prefs, dict) else {}
+    explicit_skill = (
+        str(ui_context.get("skill") or ui_context.get("selected_skill") or "").strip()
+        if isinstance(ui_context, dict)
+        else ""
+    ) or (extract_explicit_skill(query_text) or "")
+    skill_registry = get_builtin_skill_registry()
+    skill_selection_model = select_skill_for_facets(
+        facets,
+        registry=skill_registry,
+        explicit_skill=explicit_skill or None,
+    )
+    skill_manifest = skill_registry.get(skill_selection_model.selected_skill or "")
+    skill_selection: dict[str, object] = {
+        "selected_skill": skill_selection_model.selected_skill,
+        "reason": skill_selection_model.reason,
+        "candidates": skill_selection_model.candidates,
+    }
+    if skill_manifest is not None:
+        skill_selection.update(
+            {
+                "preferred_tools": list(skill_manifest.preferred_tools),
+                "preferred_agents": list(skill_manifest.preferred_agents),
+                "optional_python_operations": list(skill_manifest.optional_python_operations),
+                "output_contract": dict(skill_manifest.output_contract),
+                "risk_level": skill_manifest.risk_level,
+            }
+        )
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
@@ -507,6 +542,19 @@ def policy_gate(state: GraphState) -> dict:
     if earnings_impact_requested:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
+
+    if skill_manifest is not None:
+        seen_tools = set(allowed_tools)
+        for tool_name in skill_manifest.preferred_tools:
+            if tool_name in seen_tools:
+                continue
+            seen_tools.add(tool_name)
+            allowed_tools.append(tool_name)
+        skill_budget = skill_manifest.budget
+        if isinstance(skill_budget, dict):
+            for key in ("max_rounds", "max_tools"):
+                if key in skill_budget:
+                    budget[key] = max(int(budget.get(key, 0)), int(skill_budget.get(key) or 0))
 
     if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
         allowed_tools = ["fetch_url_content", *allowed_tools]
@@ -660,6 +708,22 @@ def policy_gate(state: GraphState) -> dict:
                 ]
                 agent_selection["removed_by_prefs"] = removed_by_prefs
 
+    if skill_manifest is not None:
+        skill_added_agents: list[str] = []
+        seen_agents = set(allowed_agents)
+        for name in skill_manifest.preferred_agents:
+            if name not in REPORT_AGENT_CANDIDATES or name in seen_agents:
+                continue
+            seen_agents.add(name)
+            allowed_agents.append(name)
+            skill_added_agents.append(name)
+        if skill_added_agents:
+            agent_selection["skill_added_agents"] = skill_added_agents
+            agent_selection["selected"] = list(allowed_agents)
+        skill_budget = skill_manifest.budget
+        if isinstance(skill_budget, dict) and "max_agents" in skill_budget:
+            agent_selection["skill_max_agents"] = int(skill_budget.get("max_agents") or 0)
+
     # Tool schemas (Pydantic JSON schema) for planner constraints.
     tool_schemas: dict[str, dict] = {}
     try:  # pragma: no cover - import guard
@@ -685,6 +749,7 @@ def policy_gate(state: GraphState) -> dict:
         "force_all_agents": bool(agent_selection.get("force_all_agents")),
         "analysis_depth": analysis_depth,
         "agent_selection": agent_selection,
+        "skill_selection": skill_selection,
         "agent_schemas": {
             name: {
                 "type": "object",

@@ -54,6 +54,8 @@ def planner_stub(state: GraphState) -> dict:
     budget = PlanBudget.model_validate(raw_budget or {"max_rounds": 1, "max_tools": 0})
     allowed_tools = set((policy.get("allowed_tools") or []) if isinstance(policy, dict) else [])
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
+    skill_selection = policy.get("skill_selection") if isinstance(policy, dict) else {}
+    skill_selection = skill_selection if isinstance(skill_selection, dict) else {}
     raw_tasks = state.get("tasks")
     ready_tasks = [
         task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
@@ -368,12 +370,127 @@ def planner_stub(state: GraphState) -> dict:
             task_ids=task_ids,
         )
         _append_earnings_performance_steps(ticker, group=evidence_group, task_ids=task_ids)
+        _append_tool_step(
+            "run_python_compute",
+            {
+                "dataset_refs": [
+                    "step:get_stock_price",
+                    "step:get_sec_company_facts_quarterly",
+                    "step:get_earnings_estimates",
+                    "step:get_eps_revisions",
+                ],
+                "operation": "growth_rates",
+                "params": {"metric": "revenue", "ticker": ticker},
+            },
+            why=f"{ticker} 财报影响股价任务：用已采集财报事实计算增长/预期变化指标，给综合回答提供数值锚点。",
+            optional=True,
+            parallel_group=f"{evidence_group}_agents",
+            task_ids=task_ids,
+        )
         _append_agent_step(
             "risk_agent",
             {"query": query, "ticker": ticker},
             why=f"{ticker} 财报影响股价任务：运行 risk_agent 给出价格反应的证伪和回撤风险。",
             optional=True,
             parallel_group=f"{evidence_group}_agents",
+            task_ids=task_ids,
+        )
+
+    def _append_valuation_sanity_steps(
+        ticker: str,
+        *,
+        group: str | None = None,
+        task_ids: list[str] | None = None,
+    ) -> None:
+        evidence_group = group or "valuation_evidence"
+        _append_tool_step(
+            "get_stock_price",
+            {"ticker": ticker},
+            why=f"{ticker} 估值合理性任务：获取当前价格/市值作为估值锚点。",
+            optional=False,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_company_info",
+            {"ticker": ticker},
+            why=f"{ticker} 估值合理性任务：补充公司基础信息、市值和估值上下文。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_sec_company_facts_quarterly",
+            {"ticker": ticker, "limit": 8},
+            why=f"{ticker} 估值合理性任务：读取季度收入/净利用于增长和倍数计算。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_earnings_estimates",
+            {"ticker": ticker},
+            why=f"{ticker} 估值合理性任务：补充 forward earnings 预期。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_eps_revisions",
+            {"ticker": ticker},
+            why=f"{ticker} 估值合理性任务：补充 EPS 上修/下修，判断增长预期是否支撑估值。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        _append_tool_step(
+            "get_technical_snapshot",
+            {"ticker": ticker},
+            why=f"{ticker} 估值合理性任务：补充趋势/动量，避免只用静态估值判断。",
+            optional=True,
+            parallel_group=evidence_group,
+            task_ids=task_ids,
+        )
+        agent_group = f"{evidence_group}_agents"
+        _append_tool_step(
+            "run_python_compute",
+            {
+                "dataset_refs": [
+                    "step:get_stock_price",
+                    "step:get_company_info",
+                    "step:get_sec_company_facts_quarterly",
+                    "step:get_earnings_estimates",
+                ],
+                "operation": "valuation_sanity",
+                "params": {"ticker": ticker},
+            },
+            why=f"{ticker} 估值合理性任务：用已采集数据计算 P/S、P/E、增长率等表格指标。",
+            optional=True,
+            parallel_group=agent_group,
+            task_ids=task_ids,
+        )
+        _append_agent_step(
+            "fundamental_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 估值合理性任务：运行 fundamental_agent 解释增长、盈利质量和估值支撑。",
+            optional=False,
+            parallel_group=agent_group,
+            task_ids=task_ids,
+        )
+        _append_agent_step(
+            "technical_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 估值合理性任务：运行 technical_agent 检查市场是否已透支预期。",
+            optional=True,
+            parallel_group=agent_group,
+            task_ids=task_ids,
+        )
+        _append_agent_step(
+            "risk_agent",
+            {"query": query, "ticker": ticker},
+            why=f"{ticker} 估值合理性任务：运行 risk_agent 给出估值回撤和预期证伪风险。",
+            optional=True,
+            parallel_group=agent_group,
             task_ids=task_ids,
         )
 
@@ -535,6 +652,9 @@ def planner_stub(state: GraphState) -> dict:
                 continue
             if op_name == "earnings_performance":
                 _append_earnings_performance_steps(ticker, group=group, task_ids=task_ids)
+                continue
+            if op_name == "valuation_sanity":
+                _append_valuation_sanity_steps(ticker, group=group, task_ids=task_ids)
                 continue
             if op_name == "investment_opinion":
                 _append_tool_step(
@@ -1323,6 +1443,9 @@ def planner_stub(state: GraphState) -> dict:
 
     if operation == "earnings_performance" and primary_ticker:
         _append_earnings_performance_steps(primary_ticker)
+
+    if operation == "valuation_sanity" and primary_ticker:
+        _append_valuation_sanity_steps(primary_ticker)
 
     if operation in ("price", "technical") and primary_ticker and "get_stock_price" in allowed_tools:
         steps.append(

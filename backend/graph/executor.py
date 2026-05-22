@@ -293,11 +293,55 @@ async def execute_plan(
                 if quality_score > prev_quality_max:
                     signals["max_evidence_quality"] = quality_score
 
+    def _resolve_step_ref(ref: str) -> Any:
+        ref_name = str(ref or "").strip()
+        if not ref_name.startswith("step:"):
+            return None
+        target = ref_name.removeprefix("step:").strip()
+        if not target:
+            return None
+        step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+        direct = step_results.get(target)
+        if isinstance(direct, dict) and "output" in direct:
+            return direct.get("output")
+        matches: list[Any] = []
+        for candidate in steps:
+            if not isinstance(candidate, dict):
+                continue
+            if str(candidate.get("name") or "") != target:
+                continue
+            candidate_id = str(candidate.get("id") or "").strip()
+            result = step_results.get(candidate_id)
+            if isinstance(result, dict) and "output" in result:
+                matches.append(result.get("output"))
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            return matches
+        return None
+
+    def _inject_python_compute_datasets(name: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        if str(name or "") != "run_python_compute":
+            return inputs
+        refs = inputs.get("dataset_refs")
+        if not isinstance(refs, list):
+            return inputs
+        resolved = dict(inputs.get("datasets")) if isinstance(inputs.get("datasets"), dict) else {}
+        for ref in refs:
+            ref_name = str(ref or "").strip()
+            if not ref_name or ref_name in resolved:
+                continue
+            output = _resolve_step_ref(ref_name)
+            if output is not None:
+                resolved[ref_name] = output
+        return {**inputs, "datasets": resolved}
+
     async def _run_step(step: dict[str, Any]) -> None:
         step_id = step.get("id") or ""
         kind = step.get("kind") or ""
         name = step.get("name") or ""
-        inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+        raw_inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+        inputs = _inject_python_compute_datasets(str(name), dict(raw_inputs))
         optional = bool(step.get("optional"))
         parallel_group = step.get("parallel_group") if isinstance(step.get("parallel_group"), str) else None
         task_ids = _step_task_ids(step)

@@ -168,6 +168,7 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                 budget = policy.get("budget") or {}
                 tools = policy.get("allowed_tools") or []
                 selection = policy.get("agent_selection") or {}
+                skill_selection = policy.get("skill_selection") or {}
                 selected_agents = selection.get("selected") if isinstance(selection, dict) else []
                 selected_agents = selected_agents if isinstance(selected_agents, list) else []
                 required_agents = selection.get("required") if isinstance(selection, dict) else []
@@ -208,6 +209,13 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                         "required": required_agents[:8],
                         "scored": score_rows,
                     },
+                    "skill_selection": {
+                        "selected_skill": skill_selection.get("selected_skill"),
+                        "reason": skill_selection.get("reason"),
+                        "candidates": _safe_preview(skill_selection.get("candidates"), limit=180),
+                        "preferred_tools": _safe_preview(skill_selection.get("preferred_tools"), limit=180),
+                        "preferred_agents": _safe_preview(skill_selection.get("preferred_agents"), limit=180),
+                    } if isinstance(skill_selection, dict) else {},
                 }
             return {}
 
@@ -264,6 +272,7 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                 step_results = artifacts.get("step_results")
                 if isinstance(step_results, dict):
                     compact = []
+                    python_compute: list[dict[str, Any]] = []
                     for step_id, item in list(step_results.items())[:12]:
                         if not isinstance(item, dict):
                             continue
@@ -290,6 +299,22 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                                 else _safe_preview(output, limit=240),
                             }
                         )
+                        if step_meta.get("kind") == "tool" and step_meta.get("name") == "run_python_compute":
+                            python_compute.append(
+                                {
+                                    "step_id": step_id,
+                                    "duration_ms": item.get("duration_ms"),
+                                    "input_refs": output.get("input_refs") if isinstance(output, dict) else [],
+                                    "warning_count": len(output.get("warnings") or []) if isinstance(output, dict) else 0,
+                                    "output_preview": _safe_preview(
+                                        {
+                                            "metrics": output.get("metrics") if isinstance(output, dict) else {},
+                                            "tables": output.get("tables") if isinstance(output, dict) else [],
+                                        },
+                                        limit=240,
+                                    ),
+                                }
+                            )
                     done_count = sum(1 for row in compact if not row.get("skipped") and not row.get("status_reason") == "error")
                     skip_count = sum(1 for row in compact if row.get("skipped"))
                     return {
@@ -298,6 +323,7 @@ def _span_data(node_name: str, state: GraphState, updates: dict[str, Any]) -> di
                         "fallback_reason": "none",
                         "executor": executor,
                         "steps": compact,
+                        "python_compute": python_compute,
                         "input_state": _resolve_input_state(state.get("plan_ir"), state.get("policy")),
                         "input_sources": _resolve_input_sources(state),
                     }

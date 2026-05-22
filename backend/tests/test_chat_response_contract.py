@@ -870,6 +870,96 @@ def test_earnings_impact_chat_uses_successful_synthesis_summary() -> None:
     assert "FundamentalAgent:" not in markdown
 
 
+def test_earnings_impact_chat_renders_python_compute_metrics() -> None:
+    markdown = _render_chat(
+        {
+            "query": "请问英伟达这个季度财报对股价的影响",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "earnings_impact"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "earnings_impact"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "run_python_compute", "inputs": {"operation": "growth_rates"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "price": 912.34, "change_percent": -1.2}},
+                    "s2": {
+                        "output": {
+                            "metrics": {"revenue_growth_pct": 30.0},
+                            "tables": [],
+                            "input_refs": ["step:get_sec_company_facts_quarterly"],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "计算指标" in markdown
+    assert "revenue_growth_pct" in markdown
+    assert "30" in markdown
+
+
+def test_valuation_sanity_chat_renders_python_metrics_and_agents() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA 现在估值贵不贵，和增长匹配吗",
+            "subject": {"subject_type": "company", "tickers": ["NVDA"]},
+            "operation": {"name": "valuation_sanity"},
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "valuation_sanity"},
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s2", "kind": "tool", "name": "run_python_compute", "inputs": {"operation": "valuation_sanity"}},
+                    {"id": "s3", "kind": "agent", "name": "fundamental_agent", "inputs": {"ticker": "NVDA"}},
+                    {"id": "s4", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "NVDA"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "NVDA", "price": 912.34, "change_percent": 0.8}},
+                    "s2": {
+                        "output": {
+                            "metrics": {
+                                "price_to_sales": 18.2,
+                                "price_to_earnings": 42.5,
+                                "revenue_growth_pct": 31.0,
+                            },
+                            "tables": [],
+                        }
+                    },
+                    "s3": {"output": {"summary": "收入增长仍强，但毛利率变化需要跟踪。"}},
+                    "s4": {"output": {"risks": ["若增长放缓，估值倍数可能压缩。"]}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "估值" in markdown
+    assert "price_to_sales" in markdown
+    assert "18.2" in markdown
+    assert "增长" in markdown
+
+
 def test_news_chat_answer_uses_clean_citations() -> None:
     markdown = _render_chat(
         {

@@ -109,6 +109,7 @@ from .cn_market_flow import fetch_fund_flow, fetch_northbound
 from .cn_market_board import fetch_limit_board, fetch_lhb
 from .concept_map import fetch_concept_map
 from .wayback import resolve_wayback_snapshot, fetch_via_wayback
+from .python_compute import run_python_compute
 
 __all__ = [
     "ALPHA_VANTAGE_API_KEY",
@@ -204,4 +205,5 @@ __all__ = [
     "fetch_concept_map",
     "resolve_wayback_snapshot",
     "fetch_via_wayback",
+    "run_python_compute",
 ]

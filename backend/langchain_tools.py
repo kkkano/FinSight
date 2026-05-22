@@ -26,6 +26,7 @@ try:  # pragma: no cover - import guard
         get_performance_comparison as _get_performance_comparison,
         get_stock_price as _get_stock_price,
         get_stock_historical_data as _get_stock_historical_data,
+        run_python_compute as _run_python_compute,
         search as _search,
         fetch_url_document as _fetch_url_document,
     )
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover - backwards compatibility
         get_performance_comparison as _get_performance_comparison,
         get_stock_price as _get_stock_price,
         get_stock_historical_data as _get_stock_historical_data,
+        run_python_compute as _run_python_compute,
         search as _search,
         fetch_url_document as _fetch_url_document,
     )
@@ -344,6 +346,16 @@ class BacktestInput(BaseModel):
     slippage_bps: Optional[float] = Field(default=None, ge=0, description="slippage bps")
     t_plus_one: bool = Field(default=True, description="apply T+1")
     market: Optional[str] = Field(default=None, description="US/CN/HK hint")
+
+
+class PythonComputeInput(BaseModel):
+    """Restricted compute inputs over collected plan step outputs."""
+
+    dataset_refs: list[str] = Field(description="Collected step refs, e.g. ['step:get_stock_price']")
+    operation: str = Field(description="growth_rates/valuation_sanity/surprise_impact/ratio_table")
+    params: dict[str, Any] = Field(default_factory=dict, description="Operation parameters; arbitrary code is rejected")
+    datasets: dict[str, Any] = Field(default_factory=dict, description="Resolved step outputs injected by executor")
+    timeout_s: float = Field(default=10.0, ge=1.0, le=30.0, description="Compute timeout in seconds")
 
 
 # ============================================
@@ -962,6 +974,29 @@ def run_strategy_backtest(
         return f"run_strategy_backtest failed: {exc}"
 
 
+@tool("run_python_compute", args_schema=PythonComputeInput, return_direct=False)
+def run_python_compute(
+    dataset_refs: list[str],
+    operation: str,
+    params: dict[str, Any] | None = None,
+    datasets: dict[str, Any] | None = None,
+    timeout_s: float = 10.0,
+) -> str:
+    """Run restricted deterministic calculations over already collected evidence."""
+
+    try:
+        payload = _run_python_compute(
+            dataset_refs=dataset_refs,
+            operation=operation,
+            params=params or {},
+            datasets=datasets or {},
+            timeout_s=timeout_s,
+        )
+        return json.dumps(payload, ensure_ascii=False)
+    except Exception as exc:  # pragma: no cover
+        return f"run_python_compute failed: {exc}"
+
+
 # ============================================
 # Registry helpers
 # ============================================
@@ -986,6 +1021,7 @@ FINANCIAL_TOOLS = [
     get_cn_lhb,
     get_cn_concept_map,
     run_strategy_backtest,
+    run_python_compute,
     get_company_info,
     get_company_news,
     get_event_calendar,
@@ -1054,6 +1090,7 @@ __all__ = [
     "get_cn_lhb",
     "get_cn_concept_map",
     "run_strategy_backtest",
+    "run_python_compute",
     "get_company_news",
     "get_event_calendar",
     "get_authoritative_media_news",

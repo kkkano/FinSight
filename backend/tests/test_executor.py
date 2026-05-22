@@ -269,3 +269,49 @@ def test_execute_plan_progressive_escalation_force_run_executes_high_cost_step()
     assert calls["deep"] == 1
     step2_output = artifacts["step_results"]["s2"]["output"]
     assert step2_output.get("summary") == "deep search"
+
+
+def test_execute_plan_injects_dataset_refs_for_python_compute():
+    def fake_price(_inputs):
+        return {"price": 50.0}
+
+    def fake_facts(_inputs):
+        return {"quarterly": [{"period": "2025Q1", "revenue": 100.0}, {"period": "2025Q2", "revenue": 125.0}]}
+
+    def fake_compute(inputs):
+        assert inputs["datasets"]["step:get_stock_price"] == {"price": 50.0}
+        assert inputs["datasets"]["step:get_sec_company_facts_quarterly"]["quarterly"][1]["revenue"] == 125.0
+        return {"metrics": {"ok": True}, "input_refs": inputs["dataset_refs"]}
+
+    plan = {
+        "steps": [
+            {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}, "parallel_group": "evidence", "optional": False},
+            {"id": "s2", "kind": "tool", "name": "get_sec_company_facts_quarterly", "inputs": {"ticker": "NVDA"}, "parallel_group": "evidence", "optional": False},
+            {
+                "id": "s3",
+                "kind": "tool",
+                "name": "run_python_compute",
+                "inputs": {
+                    "dataset_refs": ["step:get_stock_price", "step:get_sec_company_facts_quarterly"],
+                    "operation": "valuation_sanity",
+                    "params": {},
+                },
+                "parallel_group": "analysis",
+                "optional": False,
+            },
+        ]
+    }
+
+    artifacts, _events = _run(
+        execute_plan(
+            plan,
+            tool_invokers={
+                "get_stock_price": fake_price,
+                "get_sec_company_facts_quarterly": fake_facts,
+                "run_python_compute": fake_compute,
+            },
+            dry_run=False,
+        )
+    )
+
+    assert artifacts["step_results"]["s3"]["output"]["metrics"]["ok"] is True

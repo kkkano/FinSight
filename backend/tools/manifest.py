@@ -95,6 +95,17 @@ TOOL_MANIFEST: tuple[ToolManifestEntry, ...] = (
         requires_env=("SEC_USER_AGENT",),
     ),
     ToolManifestEntry(
+        name="run_python_compute",
+        group="compute",
+        markets=("US", "CN", "HK"),
+        operations=("qa", "earnings_impact", "valuation_sanity", "generate_report"),
+        depths=("quick", "report", "deep_research"),
+        risk_level="low",
+        timeout_ms=30000,
+        cache_ttl_s=0,
+        help_text="Run restricted deterministic calculations over already collected step outputs.",
+    ),
+    ToolManifestEntry(
         name="get_institutional_holdings",
         group="regulatory",
         markets=("US",),

@@ -1,0 +1,34 @@
+name: earnings-impact-investigator
+description: Investigate how an earnings event can affect stock price through fundamentals, expectations, market reaction, news, and risk.
+required_facets:
+  primary_task: impact_analysis
+  event_type: earnings
+  target_metric: stock_price
+preferred_tools:
+  - get_stock_price
+  - get_company_info
+  - get_sec_company_facts_quarterly
+  - get_earnings_estimates
+  - get_eps_revisions
+  - get_company_news
+  - get_earnings_call_transcripts
+  - analyze_historical_drawdowns
+  - run_python_compute
+preferred_agents:
+  - fundamental_agent
+  - news_agent
+  - risk_agent
+optional_python_operations:
+  - growth_rates
+  - surprise_impact
+budget:
+  max_agents: 3
+  max_tools: 9
+  max_rounds: 5
+output_contract:
+  requires_metrics: true
+  requires_event_to_price_reasoning: true
+risk_level: medium
+eval_cases:
+  - earnings_price_impact
+  - earnings_good_price_down

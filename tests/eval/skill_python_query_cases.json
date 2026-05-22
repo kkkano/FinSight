@@ -1,0 +1,103 @@
+{
+  "cases": [
+    {
+      "id": "price_short_path",
+      "query": "NVDA 当前价格是多少",
+      "ticker": "NVDA",
+      "operation": "price",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "price",
+        "required_tools": ["get_stock_price"],
+        "forbidden_agents": ["fundamental_agent", "news_agent", "risk_agent"],
+        "forbid_skill": true,
+        "python_expected": false
+      }
+    },
+    {
+      "id": "technical_short_path",
+      "query": "NVDA 技术面怎么看，RSI 和支撑位如何",
+      "ticker": "NVDA",
+      "operation": "technical",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "technical",
+        "required_tools": ["get_technical_snapshot"],
+        "required_agents": ["technical_agent"],
+        "forbidden_agents": ["fundamental_agent", "news_agent", "risk_agent"],
+        "forbid_skill": true,
+        "python_expected": false
+      }
+    },
+    {
+      "id": "earnings_performance",
+      "query": "英伟达这个季度财报表现怎么样",
+      "ticker": "NVDA",
+      "operation": "earnings_performance",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "earnings_performance",
+        "required_tools": ["get_sec_company_facts_quarterly", "get_earnings_estimates", "get_eps_revisions"],
+        "required_agents": ["fundamental_agent", "news_agent"],
+        "forbid_skill": true,
+        "python_expected": false
+      }
+    },
+    {
+      "id": "earnings_price_impact",
+      "query": "请问英伟达这个季度财报对股价的影响",
+      "ticker": "NVDA",
+      "operation": "earnings_impact",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "earnings_impact",
+        "selected_skill": "earnings-impact-investigator",
+        "required_tools": ["get_stock_price", "get_sec_company_facts_quarterly", "get_earnings_estimates", "get_eps_revisions", "get_company_news", "run_python_compute"],
+        "required_agents": ["fundamental_agent", "news_agent", "risk_agent"],
+        "python_expected": true
+      }
+    },
+    {
+      "id": "investment_opinion",
+      "query": "现在 NVDA 还能买吗，主要风险是什么",
+      "ticker": "NVDA",
+      "operation": "investment_opinion",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "investment_opinion",
+        "required_tools": ["get_stock_price", "get_technical_snapshot", "get_company_news", "get_company_info"],
+        "required_agents": ["fundamental_agent", "technical_agent", "risk_agent"],
+        "forbid_skill": true,
+        "python_expected": false
+      }
+    },
+    {
+      "id": "valuation_sanity",
+      "query": "NVDA 现在估值贵不贵，和增长匹配吗",
+      "ticker": "NVDA",
+      "operation": "valuation_sanity",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "valuation_sanity",
+        "selected_skill": "valuation-sanity-check",
+        "required_tools": ["get_stock_price", "get_company_info", "get_sec_company_facts_quarterly", "get_earnings_estimates", "run_python_compute"],
+        "required_agents": ["fundamental_agent", "technical_agent", "risk_agent"],
+        "python_expected": true
+      }
+    },
+    {
+      "id": "earnings_good_price_down",
+      "query": "NVDA 财报很好但股价跌了，可能是什么原因",
+      "ticker": "NVDA",
+      "operation": "earnings_impact",
+      "output_mode": "chat",
+      "expect": {
+        "operation": "earnings_impact",
+        "selected_skill": "earnings-impact-investigator",
+        "required_tools": ["get_stock_price", "get_sec_company_facts_quarterly", "get_earnings_estimates", "get_eps_revisions", "get_company_news", "run_python_compute"],
+        "required_agents": ["fundamental_agent", "news_agent", "risk_agent"],
+        "python_expected": true
+      }
+    }
+  ]
+}

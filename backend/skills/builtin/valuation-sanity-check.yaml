@@ -1,0 +1,30 @@
+name: valuation-sanity-check
+description: Check whether current valuation is aligned with growth, profitability, and market risk.
+required_facets:
+  primary_task: valuation_analysis
+  target_metric: valuation
+preferred_tools:
+  - get_stock_price
+  - get_company_info
+  - get_sec_company_facts_quarterly
+  - get_earnings_estimates
+  - get_eps_revisions
+  - get_technical_snapshot
+  - run_python_compute
+preferred_agents:
+  - fundamental_agent
+  - technical_agent
+  - risk_agent
+optional_python_operations:
+  - valuation_sanity
+  - growth_rates
+budget:
+  max_agents: 3
+  max_tools: 8
+  max_rounds: 5
+output_contract:
+  requires_metrics: true
+  requires_valuation_growth_match: true
+risk_level: medium
+eval_cases:
+  - valuation_sanity

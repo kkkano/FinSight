@@ -1081,6 +1081,29 @@ def _agent_risks(state: GraphState, names: set[str]) -> list[str]:
     return risks[:4]
 
 
+def _python_compute_metric_lines(state: GraphState, *, limit: int = 8) -> list[str]:
+    lines: list[str] = []
+    for step, output in _step_outputs(state):
+        if str(step.get("name") or "") != "run_python_compute":
+            continue
+        parsed = _parse_jsonish(output)
+        if not isinstance(parsed, dict):
+            continue
+        metrics = parsed.get("metrics")
+        if not isinstance(metrics, dict):
+            continue
+        for key, value in metrics.items():
+            if value is None or value == "":
+                continue
+            formatted = _format_compact_number(value) if isinstance(value, (int, float)) else str(value).strip()
+            if not formatted:
+                continue
+            lines.append(f"{key}: {formatted}")
+            if len(lines) >= limit:
+                return lines
+    return lines
+
+
 def _format_compact_number(value: Any, *, money: bool = False) -> str:
     try:
         number = float(value)
@@ -1282,6 +1305,7 @@ def _render_earnings_impact_markdown(
     price = prices.get(primary_ticker) or next(iter(prices.values()), {})
     financial_lines = _latest_quarter_facts(state)
     expectation_lines = _earnings_expectation_lines(state)
+    compute_lines = _python_compute_metric_lines(state)
     fundamental = _agent_summary(state, {"fundamental_agent"})
     risk_lines = _agent_risks(state, {"risk_agent", "fundamental_agent", "news_agent"})
     news = _filter_news_by_company_identity(state, [item for items in news_map.values() for item in items])
@@ -1320,6 +1344,11 @@ def _render_earnings_impact_markdown(
     else:
         lines.append("- [数据缺失] 本轮没有拿到盈利预期或 EPS 修正，无法确认市场预期是否上修。")
 
+    if compute_lines:
+        lines.extend(["", "**计算指标**"])
+        for item in compute_lines[:6]:
+            lines.append(f"- {item}")
+
     lines.extend(["", "**消息/指引**"])
     if news:
         for item in news[:3]:
@@ -1335,6 +1364,63 @@ def _render_earnings_impact_markdown(
         lines.append("- 重点看下一季指引、毛利率、EPS 修正和股价是否放量确认；若预期上修停滞，短线利好可能被估值压力抵消。")
 
     _append_sources(lines, news or evidence_items)
+    return _finalize_chat_markdown(lines, state)
+
+
+def _render_valuation_sanity_markdown(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    technical_map: dict[str, str],
+    evidence_items: list[dict[str, str]],
+) -> str:
+    tickers = _tickers(state)
+    ticker_label = ", ".join(tickers) or "这个标的"
+    primary_ticker = tickers[0] if tickers else ticker_label
+    price = prices.get(primary_ticker) or next(iter(prices.values()), {})
+    compute_lines = _python_compute_metric_lines(state)
+    fundamental = _agent_summary(state, {"fundamental_agent"})
+    risk_lines = _agent_risks(state, {"risk_agent", "fundamental_agent"})
+    technical = technical_map.get(primary_ticker) or next(iter(technical_map.values()), "")
+    synthesis_points = _synthesis_points(state, ("valuation", "conclusion", "investment_summary"), limit=3)
+
+    if synthesis_points:
+        lines: list[str] = ["**估值结论**"]
+        lines.extend(f"- {item}" for item in synthesis_points)
+    else:
+        lines = [
+            f"**估值结论**：{ticker_label} 是否贵，不能只看股价；要把估值倍数、增长率、盈利质量和回撤风险放在一起看。",
+        ]
+
+    lines.extend(["", "**价格锚点**"])
+    if price.get("price"):
+        lines.append(f"- {_format_price_line(primary_ticker, price)}")
+    else:
+        lines.append("- [数据缺失] 本轮没有拿到可用当前报价，估值判断缺少价格锚点。")
+
+    lines.extend(["", "**估值/增长计算指标**"])
+    if compute_lines:
+        for item in compute_lines[:8]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- [数据缺失] 本轮没有可用 Python 计算指标，不能量化估值与增长是否匹配。")
+
+    lines.extend(["", "**基本面解释**"])
+    if fundamental:
+        lines.append(f"- {fundamental}")
+    else:
+        lines.append("- 需要继续验证收入增长、利润率和 EPS 修正是否足以支撑当前估值倍数。")
+    if technical:
+        lines.append(f"- 技术面补充：{technical[:420]}")
+
+    lines.extend(["", "**风险/后续观察**"])
+    if risk_lines:
+        for item in risk_lines[:4]:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- 若增长放缓、EPS 下修或风险偏好回落，估值倍数可能先压缩。")
+
+    _append_sources(lines, evidence_items)
     return _finalize_chat_markdown(lines, state)
 
 
@@ -1722,6 +1808,14 @@ def render_chat_markdown(state: GraphState) -> str:
         return _render_earnings_performance_markdown(
             state,
             news_map=news_map,
+            evidence_items=evidence_items,
+        )
+
+    if "valuation_sanity" in operations:
+        return _render_valuation_sanity_markdown(
+            state,
+            prices=prices,
+            technical_map=technical_map,
             evidence_items=evidence_items,
         )
 

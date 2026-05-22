@@ -27,6 +27,7 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
 from backend.graph.memory_scope import current_report_context, current_thread_focus
+from backend.graph.request_facets import derive_request_facets
 from backend.graph.request_task_contract import (
     build_reply_contract,
     query_explicitly_requests_links,
@@ -47,6 +48,8 @@ _NEWS_HINTS = ("新闻", "消息", "大新闻", "发生什么", "快讯", "news"
 _PRICE_HINTS = ("价格", "股价", "涨了多少", "跌了多少", "涨幅", "跌幅", "表现", "行情", "price", "quote", "performance")
 _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "impact", "affect", "risk")
 _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi", "technical")
+_VALUATION_CONCEPT_HINTS = ("估值", "valuation", "p/e", "pe", "p/s", "ps")
+_VALUATION_JUDGMENT_HINTS = ("贵", "便宜", "合理", "匹配", "增长", "growth", "expensive", "cheap", "overvalued", "undervalued")
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁更强", "哪个好", "哪个", "compare")
 _REPORT_PEER_CONTEXT_HINTS = (
     "覆盖",
@@ -542,6 +545,9 @@ def _company_operations(
         return operations
     if not report_mode and query_requests_earnings_performance(query):
         operations.append(_operation("earnings_performance", 0.84))
+        return operations
+    if not report_mode and _contains_any(query, _VALUATION_CONCEPT_HINTS) and _contains_any(query, _VALUATION_JUDGMENT_HINTS):
+        operations.append(_operation("valuation_sanity", 0.84, {"target_metric": "valuation"}))
         return operations
     explicit_technical = _contains_any(query, _TECHNICAL_HINTS)
     if explicit_technical:
@@ -2353,6 +2359,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     primary = tasks[0] if tasks else None
     operation = (primary or {}).get("operation") or _operation("qa", 0.0)
     subject = _build_subject(primary, selection_payload, tasks)
+    facets = derive_request_facets(query=query, operation=operation, subject=subject)
     clarify = {
         "needed": route == "clarify",
         "reason": str((blocked_tasks[0] if blocked_tasks else {}).get("reason") or ""),
@@ -2381,6 +2388,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "blocked_tasks": blocked_tasks,
         "context_refs": context_refs,
         "fallback_assumptions": fallback_assumptions,
+        "facets": facets,
     }
     trace["understanding"] = understanding
     trace["reply_contract"] = reply_contract
@@ -2394,6 +2402,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "context_refs": context_refs,
         "subject": subject,
         "operation": operation,
+        "facets": facets,
         "output_mode": output_mode,
         "clarify": clarify,
         "chat_responded": route == "direct",
