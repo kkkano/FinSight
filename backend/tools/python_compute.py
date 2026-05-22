@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import time
 from typing import Any
@@ -204,11 +205,72 @@ def _compute_ratio_table(
     }
 
 
+def _compute_growth_chart(
+    *,
+    dataset_refs: list[str],
+    params: dict[str, Any],
+    datasets: dict[str, Any],
+) -> dict[str, Any]:
+    metric = str(params.get("metric") or "revenue").strip()
+    rows: list[dict[str, Any]] = []
+    for ref in dataset_refs:
+        rows.extend(_datasets_rows(datasets, ref))
+    points: list[tuple[str, float]] = []
+    for idx, row in enumerate(rows[:12]):
+        value = _safe_float(row.get(metric))
+        if value is None:
+            continue
+        label = str(row.get("period") or row.get("date") or f"P{idx + 1}")
+        points.append((label, value))
+    if not points:
+        return {"metrics": {}, "tables": [], "warnings": ["no chartable rows"], "charts": []}
+
+    width = 480
+    height = 220
+    pad = 32
+    values = [value for _, value in points]
+    min_value = min(values)
+    max_value = max(values)
+    span = max(max_value - min_value, 1.0)
+    x_step = (width - pad * 2) / max(len(points) - 1, 1)
+    coords: list[tuple[float, float, str, float]] = []
+    for idx, (label, value) in enumerate(points):
+        x = pad + idx * x_step
+        y = height - pad - ((value - min_value) / span) * (height - pad * 2)
+        coords.append((x, y, label, value))
+    polyline = " ".join(f"{x:.1f},{y:.1f}" for x, y, _, _ in coords)
+    circles = "\n".join(
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3"><title>{html.escape(label)}: {value:.2f}</title></circle>'
+        for x, y, label, value in coords
+    )
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">'
+        f'<rect width="100%" height="100%" fill="white"/>'
+        f'<polyline points="{polyline}" fill="none" stroke="#2563eb" stroke-width="2"/>'
+        f"{circles}</svg>"
+    )
+    return {
+        "metrics": {"point_count": len(points), f"{metric}_latest": _round(points[-1][1], 4)},
+        "tables": [{"name": "growth_chart_points", "columns": ["period", metric], "rows": [{"period": label, metric: value} for label, value in points]}],
+        "warnings": [],
+        "charts": [
+            {
+                "name": "growth_chart",
+                "format": "svg",
+                "metric": metric,
+                "svg": svg,
+                "input_refs": list(dataset_refs),
+            }
+        ],
+    }
+
+
 _OPERATIONS = {
     "growth_rates": _compute_growth_rates,
     "valuation_sanity": _compute_valuation_sanity,
     "surprise_impact": _compute_surprise_impact,
     "ratio_table": _compute_ratio_table,
+    "growth_chart": _compute_growth_chart,
 }
 
 
@@ -236,6 +298,7 @@ def run_python_compute(
         result = {
             "metrics": payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {},
             "tables": payload.get("tables") if isinstance(payload.get("tables"), list) else [],
+            "charts": payload.get("charts") if isinstance(payload.get("charts"), list) else [],
             "warnings": payload.get("warnings") if isinstance(payload.get("warnings"), list) else [],
             "code_hash": _code_hash(op_name, clean_params),
             "input_refs": refs,
@@ -247,6 +310,7 @@ def run_python_compute(
             "error": "python_compute_rejected",
             "metrics": {},
             "tables": [],
+            "charts": [],
             "warnings": [str(exc)],
             "code_hash": _code_hash(op_name, clean_params),
             "input_refs": refs,
@@ -257,6 +321,7 @@ def run_python_compute(
             "error": "python_compute_failed",
             "metrics": {},
             "tables": [],
+            "charts": [],
             "warnings": [str(exc)],
             "code_hash": _code_hash(op_name, clean_params),
             "input_refs": refs,

@@ -19,6 +19,17 @@ def _primary_asset(subject: dict[str, Any] | None) -> str:
     return ""
 
 
+def _market_from_asset(asset: str) -> str:
+    symbol = str(asset or "").strip().upper()
+    if symbol.endswith((".SS", ".SZ", ".BJ")):
+        return "CN"
+    if symbol.endswith(".HK"):
+        return "HK"
+    if symbol:
+        return "US"
+    return ""
+
+
 def derive_request_facets(
     *,
     query: str,
@@ -28,8 +39,10 @@ def derive_request_facets(
     del query
     op_name = _operation_name(operation)
     params = operation.get("params") if isinstance(operation, dict) and isinstance(operation.get("params"), dict) else {}
+    asset = _primary_asset(subject)
     facets: dict[str, Any] = {
-        "asset": _primary_asset(subject),
+        "asset": asset,
+        "market": _market_from_asset(asset),
         "operation": op_name,
         "primary_task": "qa",
         "analysis_need": [],

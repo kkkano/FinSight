@@ -15,6 +15,7 @@ SAFE_OPERATIONS: frozenset[str] = frozenset(
         "valuation_sanity",
         "surprise_impact",
         "ratio_table",
+        "growth_chart",
     }
 )
 

@@ -1,0 +1,34 @@
+name: eastmoney-a-share-research
+description: Research A-share companies with local filings, CN market flow, northbound flow, board activity, and risk context.
+required_facets:
+  market: CN
+  primary_task:
+    - qa
+    - earnings_analysis
+    - impact_analysis
+    - investment_opinion
+preferred_tools:
+  - get_stock_price
+  - get_local_market_filings
+  - get_cn_market_fund_flow
+  - get_cn_market_northbound
+  - get_cn_lhb
+  - get_cn_concept_map
+  - get_company_news
+preferred_agents:
+  - news_agent
+  - fundamental_agent
+  - risk_agent
+optional_python_operations:
+  - growth_rates
+  - ratio_table
+budget:
+  max_agents: 3
+  max_tools: 8
+  max_rounds: 5
+output_contract:
+  requires_local_market_context: true
+  requires_source_boundary: true
+risk_level: medium
+eval_cases:
+  - cn_a_share_research
