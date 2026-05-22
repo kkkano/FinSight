@@ -44,6 +44,7 @@
 - `backend/agents/deep_search_agent.py`：DeepSearch gap follow-up 将 LLM 产出的长缺口改写为短 ticker/topic 查询；竞品仅作为研究上下文，不扩大主标的。
 - `backend/rag/embedder.py`：bge-m3 运行时不可用时，hash fallback 仍保持 1024 维，与既有 pgvector schema 对齐。
 - `backend/graph/nodes/synthesize.py`：investment report 合成默认预算收敛到 180s / 1 attempt / 60s acquire，超时后回退模板报告，优先保证报告返回。
+- `backend/graph/nodes/synthesize.py`：chat/brief 下纯报价或技术面任务走短任务图渲染，跳过 synthesis LLM，避免工具结果齐备后继续等待长尾合成。
 - `backend/graph/templates/company_report.md`：公司研报不再回显完整用户 query，避免控制语句进入正文。
 
 ## 当前推荐心智模型

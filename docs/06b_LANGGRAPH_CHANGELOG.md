@@ -5,6 +5,12 @@
 
 ---
 
+## 2026-05-22 - Report synthesis tail latency and technical chat fast render
+
+- `investment_report` 合成预算从历史 800s/3 attempts 收敛到 180s/1 attempt/60s token acquire；合成 LLM 超时后回退模板报告，优先保证报告返回。
+- chat/brief 下纯报价或技术面任务在工具结果已齐时直接使用短任务图渲染，跳过 synthesis LLM，避免技术面回答继续等待长尾合成。
+- 公司研报模板不再回显完整用户 query，避免“不要问我要不要启动研究”等控制语句进入正文。
+
 ## 2026-05-11 - Scoped conversation memory and user timeout preference
 
 - `memory_context` 改为作用域化结构：`user_profile_memory` 用于长期偏好，`historical_focus_memory` 只作为历史背景，`current_thread_focus` 和 `current_report` 才能绑定当前线程里的“刚才/第三点/那份报告”等指代。

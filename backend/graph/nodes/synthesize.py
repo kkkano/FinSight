@@ -2416,17 +2416,17 @@ async def synthesize(state: GraphState) -> dict:
         for task in ready_tasks
         if isinstance(task.get("operation"), dict)
     }
-    chat_brief_price_only = bool(ready_task_operations) and ready_task_operations == {"price"} and all(
+    chat_brief_low_latency_ops = bool(ready_task_operations) and ready_task_operations.issubset({"price", "technical"}) and all(
         str(task.get("subject_type") or "").strip().lower() in {"company", "index", "crypto", "fund"}
         for task in ready_tasks
     )
-    if mode == "llm" and output_mode in {"chat", "brief"} and ready_tasks and chat_brief_price_only:
+    if mode == "llm" and output_mode in {"chat", "brief"} and ready_tasks and chat_brief_low_latency_ops:
         render_vars = _stub_render_vars(state)
         trace.update(
             {
                 "synthesize_runtime": {
                     **build_runtime(mode="task_graph_stub", fallback=False),
-                    "reason": "pure_quote_uses_short_task_graph_renderer",
+                    "reason": "quote_or_technical_uses_short_task_graph_renderer",
                     "keys": sorted(render_vars.keys()),
                 }
             }

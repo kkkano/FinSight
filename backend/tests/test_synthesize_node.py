@@ -621,6 +621,57 @@ def test_synthesize_llm_mode_uses_llm_for_non_price_chat_tasks(monkeypatch):
     assert "render_vars" in (out.get("artifacts") or {})
 
 
+def test_synthesize_chat_technical_task_skips_llm_for_latency(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
+
+    import importlib
+    import backend.llm_config as llm_config
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+    called = {"llm": False}
+
+    def _fake_create_llm(*_args, **_kwargs):
+        called["llm"] = True
+        raise AssertionError("technical chat task should not call synthesis LLM")
+
+    monkeypatch.setattr(llm_config, "create_llm", _fake_create_llm)
+
+    state = {
+        "query": "INTC 技术面怎么样？",
+        "output_mode": "chat",
+        "operation": {"name": "technical", "confidence": 0.9, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["INTC"]},
+        "tasks": [
+            {
+                "id": "task_1",
+                "subject_type": "company",
+                "tickers": ["INTC"],
+                "operation": {"name": "technical", "confidence": 0.9, "params": {}},
+                "status": "ready",
+            }
+        ],
+        "artifacts": {
+            "step_results": {
+                "task_1": {
+                    "output": {
+                        "summary": "INTC 技术快照: RSI(14) 55，MACD 偏多，支撑 20，阻力 25。",
+                        "evidence": [],
+                    }
+                }
+            },
+            "evidence_pool": [],
+        },
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    runtime = (out.get("trace") or {}).get("synthesize_runtime") or {}
+    assert called["llm"] is False
+    assert runtime.get("mode") == "task_graph_stub"
+    assert runtime.get("reason") == "quote_or_technical_uses_short_task_graph_renderer"
+    assert "render_vars" in (out.get("artifacts") or {})
+
+
 def test_synthesize_chat_preserves_natural_text_when_llm_ignores_json(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "llm")
 
