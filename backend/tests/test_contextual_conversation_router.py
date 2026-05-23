@@ -9,6 +9,21 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _task_required_evidence(task: dict) -> set[str]:
+    operation = task.get("operation") if isinstance(task, dict) else {}
+    params = operation.get("params") if isinstance(operation, dict) else {}
+    if not isinstance(params, dict):
+        params = {}
+    return set(params.get("required_evidence") or [])
+
+
+def _assert_evidence_task(result: dict, tickers: tuple[str, ...], expected: set[str]) -> None:
+    for task in result.get("tasks") or []:
+        if tuple(task.get("tickers") or []) == tickers and expected.issubset(_task_required_evidence(task)):
+            return
+    raise AssertionError(f"missing evidence task for {tickers}: {sorted(expected)}")
+
+
 def test_context_router_schema_separates_execution_from_followup_context():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,
@@ -2285,7 +2300,7 @@ def test_understand_request_splits_multi_ticker_router_price_hint(monkeypatch):
     assert (result["operation"] or {})["name"] == "price"
     assert [task["tickers"] for task in result["tasks"]] == [["AAPL"], ["MSFT"], ["GOOGL"]]
     assert all((task.get("operation") or {}).get("name") == "price" for task in result["tasks"])
-    assert all(task.get("reason") == "conversation_router_task_hint" for task in result["tasks"])
+    assert all(task.get("reason") == "intent_contract_projection" for task in result["tasks"])
 
 
 def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatch):
@@ -2330,10 +2345,9 @@ def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatc
     ]
     assert ("company", ("AAPL",), "price") in task_sig
     assert ("company", ("MSFT",), "fetch") in task_sig
-    assert ("company", ("MSFT",), "price") in task_sig
-    assert ("macro", (), "analyze_impact") in task_sig
+    assert ("macro", (), "macro_brief") in task_sig
     assert all(
-        task["reason"] in {"conversation_router_task_hint", "conversation_router_task_hint_support"}
+        task["reason"] == "intent_contract_projection"
         for task in result["tasks"]
     )
 
@@ -2385,7 +2399,10 @@ def test_understand_request_projects_direct_decision_with_executable_task_hints(
     assert result["understanding"]["route"] == "research"
     assert result["chat_responded"] is False
     assert result["tasks"]
-    assert any((task.get("operation") or {}).get("name") == "analyze_impact" for task in result["tasks"])
+    assert any(
+        {"price_snapshot", "risk_profile", "technical_snapshot"}.issubset(_task_required_evidence(task))
+        for task in result["tasks"]
+    )
 
 
 def test_understand_request_projects_direct_technical_decision_to_research(monkeypatch):
@@ -2477,10 +2494,9 @@ def test_understand_request_adds_price_anchor_for_router_fetch_analysis(monkeypa
         (tuple(task.get("tickers") or []), (task.get("operation") or {}).get("name"), task.get("reason"))
         for task in result["tasks"]
     ]
-    assert (("GOOGL",), "fetch", "conversation_router_task_hint") in task_sig
-    assert (("MSFT",), "fetch", "conversation_router_task_hint") in task_sig
-    assert (("GOOGL",), "price", "conversation_router_task_hint_support") in task_sig
-    assert (("MSFT",), "price", "conversation_router_task_hint_support") in task_sig
+    assert (("GOOGL", "MSFT"), "compare", "intent_contract_synthesis_compare") in task_sig
+    _assert_evidence_task(result, ("GOOGL",), {"price_snapshot", "news_context", "risk_profile"})
+    _assert_evidence_task(result, ("MSFT",), {"price_snapshot", "news_context", "risk_profile"})
 
 
 def test_understand_request_expands_quick_compare_hint_into_support_tasks(monkeypatch):
@@ -2525,11 +2541,9 @@ def test_understand_request_expands_quick_compare_hint_into_support_tasks(monkey
         (tuple(task.get("tickers") or []), (task.get("operation") or {}).get("name"))
         for task in result["tasks"]
     ]
-    assert (("GOOGL",), "price") in task_sig
-    assert (("MSFT",), "price") in task_sig
-    assert (("GOOGL",), "fetch") in task_sig
-    assert (("MSFT",), "fetch") in task_sig
     assert (("GOOGL", "MSFT"), "compare") in task_sig
+    _assert_evidence_task(result, ("GOOGL",), {"price_snapshot", "news_context", "risk_profile"})
+    _assert_evidence_task(result, ("MSFT",), {"price_snapshot", "news_context", "risk_profile"})
 
 
 def test_understand_request_fast_brief_with_explicit_tickers_does_not_wait_for_context_router(monkeypatch):
@@ -2556,10 +2570,8 @@ def test_understand_request_fast_brief_with_explicit_tickers_does_not_wait_for_c
         for task in result["tasks"]
     ]
     assert (("GOOGL", "MSFT"), "compare") in task_sig
-    assert (("GOOGL",), "price") in task_sig
-    assert (("GOOGL",), "fetch") in task_sig
-    assert (("MSFT",), "price") in task_sig
-    assert (("MSFT",), "fetch") in task_sig
+    _assert_evidence_task(result, ("GOOGL",), {"price_snapshot", "news_context", "risk_profile"})
+    _assert_evidence_task(result, ("MSFT",), {"price_snapshot", "news_context", "risk_profile"})
 
 
 def test_understand_request_honors_router_clarify_even_with_explicit_tickers(monkeypatch):

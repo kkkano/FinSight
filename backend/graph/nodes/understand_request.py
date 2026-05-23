@@ -17,6 +17,7 @@ from backend.graph.event_bus import emit_event
 from backend.graph.intent_contract import (
     derive_intent_contract,
     evidence_focused_operation,
+    legacy_operation_for_contract,
     requires_per_ticker_research,
     synthesis_compare_operation,
 )
@@ -1023,6 +1024,285 @@ def _add_router_task_hints(
     return added
 
 
+def _add_router_task_hints_contract(
+    *,
+    tasks: list[dict[str, Any]],
+    context_refs: list[dict[str, Any]],
+    decision: ConversationDecision,
+    query: str,
+    output_mode: str = "chat",
+    current_tickers: list[str],
+    selection_ids: list[str] | None = None,
+    selection_types: list[str] | None = None,
+    intent_contracts: list[dict[str, Any]] | None = None,
+) -> bool:
+    """Compile router hint frames through the evidence-first intent contract."""
+    added = False
+    bound_tickers: list[str] = []
+    if decision.context_binding.source != "selection":
+        for task in tasks:
+            raw_tickers = task.get("tickers")
+            if isinstance(raw_tickers, list):
+                bound_tickers.extend(normalize_ticker(str(ticker)) for ticker in raw_tickers if str(ticker).strip())
+    scoped_current_tickers = dedup_tickers(list(current_tickers or []) + bound_tickers)
+
+    def _hint_domain_intent(operation_name: str) -> str:
+        if operation_name == "price":
+            return "quote"
+        if operation_name in {"fetch", "daily_brief", "news_impact"}:
+            return "news"
+        if operation_name == "technical":
+            return "technical"
+        if operation_name == "holdings":
+            return "holdings"
+        if operation_name in {"macro_brief", "fact_check"}:
+            return "macro"
+        return decision.domain_intent
+
+    def _add_projected_task(
+        *,
+        contract: dict[str, Any],
+        subject_type: str,
+        subject_label: str,
+        tickers: list[str],
+        priority: int,
+        params: dict[str, Any] | None = None,
+        task_selection_ids: list[str] | None = None,
+        task_selection_types: list[str] | None = None,
+    ) -> None:
+        operation = legacy_operation_for_contract(contract, subject_type=subject_type)
+        op_params = dict(operation.get("params") or {})
+        if params:
+            op_params.update(params)
+        operation = {**operation, "params": op_params}
+        _add_task(
+            tasks,
+            subject_type=subject_type,
+            subject_label=subject_label or ", ".join(tickers) or subject_type,
+            operation=operation,
+            query=query,
+            tickers=tickers,
+            selection_ids=task_selection_ids,
+            selection_types=task_selection_types,
+            priority=priority,
+            reason="intent_contract_projection",
+            params=op_params,
+        )
+
+    router_compare_requested = bool(
+        len(scoped_current_tickers) >= 2
+        and (decision.relation == "compare" or _explicit_multi_ticker_compare_requested(query))
+    )
+    if router_compare_requested:
+        first_hint = next((hint for hint in (decision.task_hints or ()) if isinstance(hint, dict)), {})
+        subject_type = str(first_hint.get("subject_type") or "company").strip().lower()
+        subject_label = str(first_hint.get("subject_label") or ", ".join(scoped_current_tickers)).strip()
+        contract = derive_intent_contract(
+            query=query,
+            tickers=scoped_current_tickers,
+            output_mode=output_mode,
+            comparison_requested=True,
+            domain_intent=decision.domain_intent,
+            subject_type=subject_type,
+            frame_id="router_compare",
+        )
+        if intent_contracts is not None:
+            intent_contracts.append(dict(contract))
+        contract_tickers = list(contract.get("primary_tickers") or scoped_current_tickers)
+        if requires_per_ticker_research(contract):
+            compare_operation = synthesis_compare_operation(contract)
+            _add_task(
+                tasks,
+                subject_type=subject_type,
+                subject_label=subject_label or ", ".join(contract_tickers),
+                operation=compare_operation,
+                query=query,
+                tickers=contract_tickers,
+                priority=18,
+                reason="intent_contract_synthesis_compare",
+                params=dict(compare_operation.get("params") or {}),
+            )
+            _add_per_ticker_company_tasks(
+                tasks,
+                tickers=contract_tickers,
+                operations=[evidence_focused_operation(contract)],
+                query=query,
+                priority=22,
+                reason="intent_contract_per_ticker_evidence",
+            )
+        else:
+            _add_projected_task(
+                contract=contract,
+                subject_type=subject_type,
+                subject_label=subject_label or ", ".join(contract_tickers),
+                tickers=contract_tickers,
+                priority=18,
+            )
+        context_refs.append(
+            {
+                "source": "conversation_router",
+                "key": "task_hints",
+                "label": "router compare frame compiled through intent_contract",
+                "value": len([hint for hint in (decision.task_hints or ()) if isinstance(hint, dict)]),
+            }
+        )
+        return True
+
+    for idx, hint in enumerate(decision.task_hints or (), 1):
+        if not isinstance(hint, dict):
+            continue
+        operation_name = str(hint.get("operation") or "qa").strip().lower()
+        if operation_name == "alert_set":
+            continue
+        subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
+        subject_label = str(hint.get("subject_label") or "").strip()
+        hint_tickers = [
+            normalize_ticker(str(ticker))
+            for ticker in (hint.get("tickers") if isinstance(hint.get("tickers"), list) else [])
+            if str(ticker).strip()
+        ]
+        if not hint_tickers and subject_label:
+            hint_tickers = [
+                normalize_ticker(str(ticker))
+                for ticker in (extract_tickers(subject_label).get("tickers") or [])
+                if str(ticker).strip()
+            ]
+        if not hint_tickers and subject_type in {"company", "index", "crypto", "fund"} and len(scoped_current_tickers) == 1:
+            hint_tickers = [scoped_current_tickers[0]]
+        if (
+            decision.context_binding.source
+            in {"active_symbol", "last_turn", "recent_focus", "last_report", "unresolved_clarification"}
+            and scoped_current_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            if hint_tickers:
+                scoped = [ticker for ticker in hint_tickers if ticker in set(scoped_current_tickers)]
+                if not scoped:
+                    continue
+                hint_tickers = scoped
+            else:
+                hint_tickers = list(scoped_current_tickers)
+
+        params = dict(hint.get("params") or {}) if isinstance(hint.get("params"), dict) else {}
+        if operation_name == "fetch" and not params.get("topic"):
+            params["topic"] = "news"
+        if operation_name in {"fetch", "news_impact", "daily_brief"} and query_explicitly_requests_links(query):
+            params.setdefault("include_links", True)
+        if subject_type == "unknown" and _contains_any(f"{subject_label} {query}", _THEME_HINTS):
+            subject_type = "theme"
+        if decision.context_binding.source != "none":
+            params.setdefault("context_binding", decision.context_binding.model_dump())
+
+        task_selection_ids = list(selection_ids or []) if subject_type in {"news_item", "news_set", "filing", "research_doc"} else []
+        task_selection_types = list(selection_types or []) if task_selection_ids else []
+        atomic_tickers = dedup_tickers(hint_tickers)
+        comparison_requested = bool(
+            len(atomic_tickers) >= 2
+            and (
+                operation_name == "compare"
+                or decision.relation == "compare"
+                or _explicit_multi_ticker_compare_requested(query)
+            )
+        )
+        frame_parts: list[str] = [
+            subject_label,
+            operation_name if operation_name not in {"qa", "compare"} else "",
+            params.get("topic") if isinstance(params.get("topic"), str) else "",
+        ]
+        if (
+            comparison_requested
+            or operation_name in {"analyze_impact", "news_impact", "daily_brief"}
+            or not any(str(part or "").strip() for part in frame_parts)
+        ):
+            frame_parts.append(query)
+        frame_query = " ".join(str(part) for part in frame_parts if str(part or "").strip())
+        contract = derive_intent_contract(
+            query=frame_query,
+            tickers=atomic_tickers,
+            output_mode=output_mode,
+            comparison_requested=comparison_requested,
+            domain_intent=_hint_domain_intent(operation_name),
+            subject_type=subject_type,
+            frame_id=f"router_hint_{idx}",
+        )
+        if intent_contracts is not None:
+            intent_contracts.append(dict(contract))
+
+        if comparison_requested and requires_per_ticker_research(contract):
+            contract_tickers = list(contract.get("primary_tickers") or atomic_tickers)
+            compare_operation = synthesis_compare_operation(contract)
+            _add_task(
+                tasks,
+                subject_type=subject_type,
+                subject_label=subject_label or ", ".join(contract_tickers),
+                operation=compare_operation,
+                query=query,
+                tickers=contract_tickers,
+                priority=18 + idx,
+                reason="intent_contract_synthesis_compare",
+                params=dict(compare_operation.get("params") or {}),
+            )
+            _add_per_ticker_company_tasks(
+                tasks,
+                tickers=contract_tickers,
+                operations=[evidence_focused_operation(contract)],
+                query=query,
+                priority=22 + idx,
+                reason="intent_contract_per_ticker_evidence",
+            )
+            added = True
+            continue
+
+        if len(atomic_tickers) > 1 and subject_type in {"company", "index", "crypto", "fund"} and not comparison_requested:
+            for ticker in atomic_tickers:
+                single_contract = derive_intent_contract(
+                    query=frame_query,
+                    tickers=[ticker],
+                    output_mode=output_mode,
+                    comparison_requested=False,
+                    domain_intent=_hint_domain_intent(operation_name),
+                    subject_type=subject_type,
+                    frame_id=f"router_hint_{idx}_{ticker}",
+                )
+                if intent_contracts is not None:
+                    intent_contracts.append(dict(single_contract))
+                _add_projected_task(
+                    contract=single_contract,
+                    subject_type=subject_type,
+                    subject_label=ticker,
+                    tickers=[ticker],
+                    priority=18 + idx,
+                    params=params,
+                    task_selection_ids=task_selection_ids,
+                    task_selection_types=task_selection_types,
+                )
+            added = True
+            continue
+
+        _add_projected_task(
+            contract=contract,
+            subject_type=subject_type,
+            subject_label=subject_label or ", ".join(atomic_tickers) or subject_type,
+            tickers=atomic_tickers,
+            priority=18 + idx,
+            params=params,
+            task_selection_ids=task_selection_ids,
+            task_selection_types=task_selection_types,
+        )
+        added = True
+
+    if added:
+        context_refs.append(
+            {
+                "source": "conversation_router",
+                "key": "task_hints",
+                "label": "router frames compiled through intent_contract",
+                "value": len([hint for hint in (decision.task_hints or ()) if isinstance(hint, dict)]),
+            }
+        )
+    return added
+
+
 def _macro_operation(query: str) -> dict[str, Any]:
     q = str(query or "").lower()
     if any(token in q for token in ("为什么", "为何", "怎么", "如何", "why", "mechanism")):
@@ -1694,6 +1974,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     )
     conversation_decision: ConversationDecision | None = None
     intent_contract: dict[str, Any] | None = None
+    intent_contracts: list[dict[str, Any]] = []
     context_router_research_bound = False
 
     if not query:
@@ -1835,14 +2116,16 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         selection_types=selection_types,
                     )
                 if conversation_decision.task_hints:
-                    hint_bound = _add_router_task_hints(
+                    hint_bound = _add_router_task_hints_contract(
                         tasks=tasks,
                         context_refs=context_refs,
                         decision=conversation_decision,
                         query=query,
+                        output_mode=output_mode,
                         current_tickers=tickers,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
+                        intent_contracts=intent_contracts,
                     )
                     context_router_research_bound = context_router_research_bound or hint_bound
             if conversation_decision.execution_route == "clarify":
@@ -1970,7 +2253,10 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             comparison_requested=multi_ticker_compare,
             domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
             lightweight_requested=_is_explicit_brief_request(query) or _is_lightweight_representative_compare(query),
+            subject_type="company",
+            frame_id="primary_company",
         )
+        intent_contracts.append(dict(intent_contract))
         trace["intent_contract"] = intent_contract
         if multi_ticker_compare:
             contract_tickers = list(intent_contract.get("primary_tickers") or scoped_tickers)
@@ -2039,13 +2325,18 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 ),
                 output_mode=output_mode,
             )
-            router_operations = _router_directed_company_operations(
+            contract_operations = (
+                [legacy_operation_for_contract(intent_contract, subject_type="company")]
+                if intent_contract.get("required_evidence") and output_mode != "investment_report"
+                else []
+            )
+            router_operations = None if contract_operations else _router_directed_company_operations(
                 conversation_decision,
                 fallback_operations=fallback_operations,
             )
             operations = [
                 _operation_with_report_peers(operation, report_peer_tickers)
-                for operation in (router_operations or fallback_operations)
+                for operation in (contract_operations or router_operations or fallback_operations)
             ]
             if len(scoped_tickers) >= 2 and _is_lightweight_representative_compare(query):
                 _add_task(
@@ -2198,14 +2489,16 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     return result
             if conversation_decision.execution_route == "research":
                 if conversation_decision.task_hints:
-                    hint_bound = _add_router_task_hints(
+                    hint_bound = _add_router_task_hints_contract(
                         tasks=tasks,
                         context_refs=context_refs,
                         decision=conversation_decision,
                         query=query,
+                        output_mode=output_mode,
                         current_tickers=tickers,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
+                        intent_contracts=intent_contracts,
                     )
                     context_router_research_bound = context_router_research_bound or hint_bound
                 if not tasks:
@@ -2369,6 +2662,9 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     if _is_explicit_brief_request(query):
         output_mode = "brief"
 
+    if intent_contract is None and intent_contracts:
+        intent_contract = intent_contracts[0]
+
     reply_contract = build_reply_contract(
         query=query,
         output_mode=output_mode,
@@ -2422,6 +2718,8 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     trace["understanding"] = understanding
     if intent_contract is not None:
         trace["intent_contract"] = intent_contract
+    if intent_contracts:
+        trace["intent_contracts"] = intent_contracts
     trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
@@ -2442,6 +2740,8 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     }
     if intent_contract is not None:
         result["intent_contract"] = intent_contract
+    if intent_contracts:
+        result["intent_contracts"] = intent_contracts
     return result
 
 

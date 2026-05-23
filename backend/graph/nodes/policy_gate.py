@@ -6,7 +6,14 @@ import re
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
-from backend.graph.intent_contract import is_valuation_contract, requires_per_ticker_research
+from backend.graph.intent_contract import (
+    canonical_evidence_kinds,
+    evidence_agents_for_kinds,
+    evidence_plan_for_contract,
+    evidence_plan_for_kinds,
+    evidence_tools_for_kinds,
+    is_valuation_contract,
+)
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
 
@@ -195,6 +202,36 @@ def _has_ready_operation(tasks: list[dict], operation_name: str) -> bool:
     return any(_task_operation_name(task).strip().lower() == target for task in tasks)
 
 
+def _operation_params(operation: object) -> dict:
+    if isinstance(operation, dict) and isinstance(operation.get("params"), dict):
+        return operation.get("params") or {}
+    return {}
+
+
+def _required_evidence_from_state(
+    *,
+    intent_contract: dict,
+    operation: object,
+    ready_tasks: list[dict],
+) -> list[str]:
+    required: list[str] = []
+    contract_required = intent_contract.get("required_evidence") if isinstance(intent_contract, dict) else []
+    if isinstance(contract_required, list):
+        required.extend(str(item) for item in contract_required if str(item).strip())
+    op_required = _operation_params(operation).get("required_evidence")
+    if isinstance(op_required, list):
+        required.extend(str(item) for item in op_required if str(item).strip())
+    for task in ready_tasks:
+        task_operation = task.get("operation")
+        task_required = _operation_params(task_operation).get("required_evidence")
+        if isinstance(task_required, list):
+            required.extend(str(item) for item in task_required if str(item).strip())
+        task_params = task.get("params")
+        if isinstance(task_params, dict) and isinstance(task_params.get("required_evidence"), list):
+            required.extend(str(item) for item in task_params.get("required_evidence") if str(item).strip())
+    return canonical_evidence_kinds(required)
+
+
 def _infer_market_from_task(task: dict, fallback: str) -> str:
     tickers = task.get("tickers")
     if isinstance(tickers, list):
@@ -222,6 +259,27 @@ def _with_us_holdings_tools(tools: list[str], *, subject_type: str, op_name: str
 
 def _without_holdings_tools(tools: list[str]) -> list[str]:
     return [tool_name for tool_name in tools if tool_name not in _SEC_HOLDINGS_TOOL_NAMES]
+
+
+def _filter_tools_for_market(tools: list[str], *, market: str) -> list[str]:
+    market_norm = str(market or "US").strip().upper() or "US"
+    try:
+        from backend.tools.manifest import TOOL_MANIFEST
+
+        markets_by_tool = {entry.name: set(entry.markets) for entry in TOOL_MANIFEST}
+    except Exception:
+        markets_by_tool = {}
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for tool_name in tools:
+        if tool_name in seen:
+            continue
+        seen.add(tool_name)
+        markets = markets_by_tool.get(tool_name)
+        if markets and market_norm not in markets:
+            continue
+        filtered.append(tool_name)
+    return filtered
 
 
 def _with_earnings_impact_tools(tools: list[str], *, market: str) -> list[str]:
@@ -370,7 +428,7 @@ def policy_gate(state: GraphState) -> dict:
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     query_text = str(state.get("query") or "")
     intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
-    valuation_contract = bool(is_valuation_contract(intent_contract) and requires_per_ticker_research(intent_contract))
+    valuation_contract = bool(is_valuation_contract(intent_contract))
 
     # --- Read user preferences from ui_context ---
     ui_context = state.get("ui_context") or {}
@@ -392,6 +450,11 @@ def policy_gate(state: GraphState) -> dict:
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
+    required_evidence = _required_evidence_from_state(
+        intent_contract=intent_contract,
+        operation=operation,
+        ready_tasks=ready_tasks,
+    )
     earnings_impact_requested = (
         op_name == "earnings_impact"
         or _has_ready_operation(ready_tasks, "earnings_impact")
@@ -516,21 +579,16 @@ def policy_gate(state: GraphState) -> dict:
     if market != "US":
         allowed_tools = _without_holdings_tools(list(allowed_tools))
 
+    evidence_tools = evidence_tools_for_kinds(required_evidence, market=market)
+    if evidence_tools:
+        allowed_tools = _append_missing(list(allowed_tools), tuple(evidence_tools + ["get_current_datetime", "search"]))
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(evidence_tools) + len(ready_tasks) + 2))
+
     if earnings_impact_requested:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
 
     if valuation_contract:
-        allowed_tools = _append_missing(
-            list(allowed_tools),
-            (
-                "get_stock_price",
-                "get_company_info",
-                "get_earnings_estimates",
-                "get_current_datetime",
-                "search",
-            ),
-        )
         budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 6)
 
@@ -541,10 +599,17 @@ def policy_gate(state: GraphState) -> dict:
     if output_mode != "investment_report" and reply_contract_disallows_news(state):
         allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
 
+    allowed_tools = _filter_tools_for_market(list(allowed_tools), market=market)
+
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
     allowed_agents: list[str] = []
     agent_selection: dict[str, object] = {}
+    evidence_agents = [
+        name
+        for name in evidence_agents_for_kinds(required_evidence, market=market)
+        if name in REPORT_AGENT_CANDIDATES
+    ]
     short_research_operation = ""
     if earnings_impact_requested:
         short_research_operation = "earnings_impact"
@@ -564,14 +629,15 @@ def policy_gate(state: GraphState) -> dict:
         if validated:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
-    elif valuation_contract and output_mode != "investment_report":
-        allowed_agents = ["fundamental_agent"]
+    elif evidence_agents and output_mode != "investment_report":
+        allowed_agents = list(evidence_agents)
         agent_selection = {
             "selected": list(allowed_agents),
             "required": list(allowed_agents),
-            "reason": "intent_contract_valuation_evidence",
+            "reason": "intent_contract_required_evidence",
             "selection_mode": "research_obligation",
-            "budget_profile": str(intent_contract.get("budget_profile") or "valuation_compare_light"),
+            "required_evidence": list(required_evidence),
+            "budget_profile": str(intent_contract.get("budget_profile") or "default"),
         }
     elif output_mode == "investment_report":
         force_all_agents = _is_truthy(ui_context.get("ensure_all_agents")) if isinstance(ui_context, dict) else False
@@ -717,6 +783,10 @@ def policy_gate(state: GraphState) -> dict:
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
+        "required_evidence": list(required_evidence),
+        "evidence_plan": evidence_plan_for_contract(intent_contract, market=market)
+        if intent_contract
+        else evidence_plan_for_kinds(required_evidence, market=market),
         "force_all_agents": bool(agent_selection.get("force_all_agents")),
         "analysis_depth": analysis_depth,
         "agent_selection": agent_selection,

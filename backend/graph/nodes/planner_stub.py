@@ -7,6 +7,7 @@ import json
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
+from backend.graph.intent_contract import canonical_evidence_kinds
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
@@ -258,6 +259,205 @@ def planner_stub(state: GraphState) -> dict:
         steps.append(step)
         step_index[key] = step
         step_id += 1
+
+    def _task_operation_params(task: dict) -> dict:
+        operation_obj = task.get("operation")
+        if isinstance(operation_obj, dict) and isinstance(operation_obj.get("params"), dict):
+            return operation_obj.get("params") or {}
+        return {}
+
+    def _task_required_evidence(task: dict) -> list[str]:
+        params = _task_operation_params(task)
+        required = params.get("required_evidence")
+        if not isinstance(required, list):
+            task_params = task.get("params")
+            required = task_params.get("required_evidence") if isinstance(task_params, dict) else []
+        if not isinstance(required, list):
+            required = []
+        if not required and len(ready_tasks) == 1 and isinstance(policy.get("required_evidence"), list):
+            required = policy.get("required_evidence") or []
+        return canonical_evidence_kinds([str(item) for item in required if str(item).strip()])
+
+    def _append_evidence_steps_for_ticker(
+        ticker: str,
+        required_evidence: list[str],
+        *,
+        group: str,
+        task_ids: list[str],
+    ) -> None:
+        for kind in required_evidence:
+            if kind == "price_snapshot":
+                _append_tool_step(
+                    "get_stock_price",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: price snapshot.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "company_profile":
+                _append_tool_step(
+                    "get_company_info",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: company profile.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "earnings_estimates":
+                _append_tool_step(
+                    "get_earnings_estimates",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: earnings estimates.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_eps_revisions",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: EPS revisions.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "fundamental_snapshot":
+                _append_agent_step(
+                    "fundamental_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: fundamental snapshot.",
+                    optional=False,
+                    parallel_group=f"{group}_fundamental_agents" if group else "fundamental_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "technical_snapshot":
+                _append_tool_step(
+                    "get_technical_snapshot",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: technical snapshot.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "technical_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: technical agent synthesis.",
+                    optional=True,
+                    parallel_group=f"{group}_technical_agents" if group else "technical_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "news_context":
+                _append_tool_step(
+                    "get_company_news",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: company news context.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_authoritative_media_news",
+                    {"query": f"{ticker} {query}".strip(), "max_results": 6, "authoritative_only": False},
+                    why=f"{ticker} evidence contract: authoritative media context.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "news_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: news agent synthesis.",
+                    optional=True,
+                    parallel_group=f"{group}_news_agents" if group else "news_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "risk_profile":
+                positions = [{"ticker": ticker, "weight": 1.0}]
+                _append_tool_step(
+                    "analyze_historical_drawdowns",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: drawdown risk.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_factor_exposure",
+                    {"positions": positions, "lookback_days": 252},
+                    why=f"{ticker} evidence contract: factor exposure.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "run_portfolio_stress_test",
+                    {"positions": positions, "lookback_days": 252},
+                    why=f"{ticker} evidence contract: stress test.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "risk_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: risk agent synthesis.",
+                    optional=True,
+                    parallel_group=f"{group}_risk_agents" if group else "risk_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "filing_context":
+                _append_tool_step(
+                    "get_sec_company_facts_quarterly",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: quarterly company facts.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_sec_filings",
+                    {"ticker": ticker, "forms": ["10-K", "10-Q"], "limit": 4},
+                    why=f"{ticker} evidence contract: SEC filings.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_local_market_filings",
+                    {"ticker": ticker, "limit": 5},
+                    why=f"{ticker} evidence contract: local-market filings.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "transcript_context":
+                _append_tool_step(
+                    "get_earnings_call_transcripts",
+                    {"ticker": ticker, "limit": 5},
+                    why=f"{ticker} evidence contract: earnings call transcripts.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "event_calendar":
+                _append_tool_step(
+                    "get_event_calendar",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: event calendar.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "options_derivatives":
+                _append_tool_step(
+                    "get_option_chain_metrics",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: options metrics.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
 
     def _has_step(kind: str, name: str) -> bool:
         return any(step.get("kind") == kind and step.get("name") == name for step in steps)
@@ -534,6 +734,15 @@ def planner_stub(state: GraphState) -> dict:
 
         for ticker in tickers_for_task[:6]:
             live_qa = op_name == "qa" and _qa_needs_live_context()
+            required_evidence = _task_required_evidence(task)
+            if required_evidence:
+                _append_evidence_steps_for_ticker(
+                    ticker,
+                    required_evidence,
+                    group=group,
+                    task_ids=task_ids,
+                )
+                continue
             if op_name == "earnings_impact" or query_requests_earnings_price_impact(query):
                 _append_earnings_impact_steps(ticker, group=group, task_ids=task_ids)
                 continue
