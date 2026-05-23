@@ -1601,7 +1601,29 @@ def _render_compare_or_basket_markdown(
 
 def _intent_contract(state: GraphState) -> dict[str, Any]:
     contract = state.get("intent_contract")
-    return contract if isinstance(contract, dict) else {}
+    if isinstance(contract, dict):
+        return contract
+    understanding = state.get("understanding")
+    if isinstance(understanding, dict):
+        contract = understanding.get("intent_contract")
+        if isinstance(contract, dict):
+            return contract
+    trace = state.get("trace")
+    if isinstance(trace, dict):
+        contract = trace.get("intent_contract")
+        if isinstance(contract, dict):
+            return contract
+        contracts = trace.get("intent_contracts")
+        if isinstance(contracts, list):
+            for item in contracts:
+                if isinstance(item, dict):
+                    return item
+    contracts = state.get("intent_contracts")
+    if isinstance(contracts, list):
+        for item in contracts:
+            if isinstance(item, dict):
+                return item
+    return {}
 
 
 def _has_contract_facet(state: GraphState, facet: str) -> bool:

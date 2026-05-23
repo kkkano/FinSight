@@ -1467,10 +1467,12 @@ def test_chat_renderer_external_entity_impact_adds_deterministic_judgment() -> N
             "query": "研究一下特斯拉会不会被 SpaceX 影响",
             "subject": {"subject_type": "company", "tickers": ["TSLA"]},
             "operation": {"name": "analyze_impact"},
-            "intent_contract": {
-                "facets": ["external_entity_impact"],
-                "budget_profile": "external_entity_impact_light",
-                "required_evidence": ["price_snapshot", "news_context", "risk_profile"],
+            "trace": {
+                "intent_contract": {
+                    "facets": ["external_entity_impact"],
+                    "budget_profile": "external_entity_impact_light",
+                    "required_evidence": ["price_snapshot", "news_context", "risk_profile"],
+                }
             },
             "tasks": [
                 {
