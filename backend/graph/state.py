@@ -223,6 +223,7 @@ class GraphState(MessagesState):
     memory_context: NotRequired[dict[str, Any]]
     understanding: NotRequired[Understanding]
     intent_contract: NotRequired[IntentContract]
+    understanding_v2: NotRequired[dict[str, Any]]
     reply_contract: NotRequired[ReplyContract]
     tasks: NotRequired[list[UnderstandingTask]]
     blocked_tasks: NotRequired[list[BlockedTask]]

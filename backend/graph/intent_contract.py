@@ -605,12 +605,21 @@ def _contract_params(contract: dict[str, Any] | None) -> dict[str, Any]:
 def evidence_focused_operation(contract: dict[str, Any] | None) -> dict[str, Any]:
     facets = contract.get("facets") if isinstance(contract, dict) else []
     facet_set = {str(f) for f in facets} if isinstance(facets, list) else set()
+    params = _contract_params(contract)
+    if isinstance(contract, dict) and contract.get("budget_profile"):
+        params["budget_profile"] = str(contract.get("budget_profile") or "")
+        params["evidence_profile"] = str(contract.get("budget_profile") or "")
+    if "technical" in facet_set and not {"valuation", "risk", "investment_opinion"}.intersection(facet_set):
+        return {"name": "technical", "confidence": 0.84, "params": params}
+    if "earnings" in facet_set and "price" in facet_set:
+        return {"name": "earnings_impact", "confidence": 0.84, "params": params}
+    if "earnings" in facet_set:
+        return {"name": "earnings_performance", "confidence": 0.84, "params": params}
     focus = "investment_opinion"
     if "valuation" in facet_set:
         focus = "valuation"
     elif "risk" in facet_set:
         focus = "risk"
-    params = _contract_params(contract)
     params["evidence_focus"] = focus
     if focus == "valuation":
         params["facets"] = ["valuation"]
@@ -656,19 +665,29 @@ def synthesis_compare_operation(contract: dict[str, Any] | None) -> dict[str, An
     render_intent = contract.get("render_intent") if isinstance(contract, dict) else {}
     dimensions = render_intent.get("dimensions") if isinstance(render_intent, dict) else []
     facets = contract.get("facets") if isinstance(contract, dict) else []
+    budget_profile = str(contract.get("budget_profile") or "") if isinstance(contract, dict) else ""
+    primary_tickers = contract.get("primary_tickers") if isinstance(contract, dict) and isinstance(contract.get("primary_tickers"), list) else []
+    omitted_tickers = contract.get("omitted_tickers") if isinstance(contract, dict) and isinstance(contract.get("omitted_tickers"), list) else []
+    params: dict[str, Any] = {
+        "synthesis_only": True,
+        "data_profile": "research_synthesis",
+        "comparison_dimensions": list(dimensions or []),
+        "facets": [str(f) for f in facets if str(f).strip()] if isinstance(facets, list) else [],
+        "required_evidence": canonical_evidence_kinds(
+            contract.get("required_evidence") if isinstance(contract, dict) and isinstance(contract.get("required_evidence"), list) else []
+        ),
+        "intent_contract_id": str(contract.get("contract_id") or "") if isinstance(contract, dict) else "",
+    }
+    if budget_profile:
+        params["budget_profile"] = budget_profile
+        params["comparison_data_profile"] = budget_profile
+    if omitted_tickers:
+        params["research_ticker_limit"] = len(primary_tickers)
+        params["omitted_tickers"] = [str(ticker) for ticker in omitted_tickers]
     return {
         "name": "compare",
         "confidence": 0.86,
-        "params": {
-            "synthesis_only": True,
-            "data_profile": "research_synthesis",
-            "comparison_dimensions": list(dimensions or []),
-            "facets": [str(f) for f in facets if str(f).strip()] if isinstance(facets, list) else [],
-            "required_evidence": canonical_evidence_kinds(
-                contract.get("required_evidence") if isinstance(contract, dict) and isinstance(contract.get("required_evidence"), list) else []
-            ),
-            "intent_contract_id": str(contract.get("contract_id") or "") if isinstance(contract, dict) else "",
-        },
+        "params": params,
     }
 
 

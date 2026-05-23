@@ -2,6 +2,7 @@
 """请求理解节点：一次性完成闲聊、标的、任务和阻塞项识别。"""
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import replace
 from typing import Any
@@ -34,6 +35,14 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
 from backend.graph.memory_scope import current_report_context, current_thread_focus
+from backend.graph.understanding_v2 import (
+    build_understanding_v2,
+    chat_multi_ticker_research_limit,
+    has_comparison_relation,
+    infer_facets,
+    relation_operation_params,
+    support_operations_for_relation,
+)
 from backend.graph.request_task_contract import (
     build_reply_contract,
     query_explicitly_requests_links,
@@ -179,6 +188,59 @@ def _contains_any(text: str, hints: tuple[str, ...]) -> bool:
         if needle in lowered:
             return True
     return False
+
+
+_FRAME_FRAGMENT_SPLIT_RE = re.compile(
+    r"[\u3001,\uff0c;\uff1b\u3002.!?\uff1f\uff01]+"
+    r"|\b(?:and|then|also)\b"
+    r"|(?:\u7136\u540e|\u518d|\u4ee5\u53ca|\u5e76\u4e14)",
+    re.IGNORECASE,
+)
+
+
+def _router_hint_frame_query(
+    *,
+    query: str,
+    subject_type: str,
+    subject_label: str,
+    tickers: list[str],
+    params: dict[str, Any],
+    operation_name: str,
+    comparison_requested: bool,
+) -> str:
+    """Recover the query text for one router frame before compiling a contract.
+
+    Router task operations are only weak fallback signals.  The contract must be
+    compiled from the user's frame text whenever that text can be recovered.
+    """
+    raw_query = str(query or "").strip()
+    if not raw_query or comparison_requested:
+        return raw_query
+
+    fragments = [part.strip() for part in _FRAME_FRAGMENT_SPLIT_RE.split(raw_query) if part.strip()]
+    labels = [str(subject_label or "").strip(), *[str(ticker or "").strip() for ticker in tickers]]
+    labels = [label for label in labels if label]
+
+    matched: list[str] = []
+    for fragment in fragments:
+        fragment_upper = fragment.upper()
+        if any(label.upper() in fragment_upper for label in labels):
+            matched.append(fragment)
+
+    if not matched and subject_type in {"macro", "theme"}:
+        for fragment in fragments:
+            if _contains_any(fragment, _MACRO_HINTS + _IMPACT_HINTS):
+                matched.append(fragment)
+
+    if matched:
+        return " ".join(matched)
+
+    topic = params.get("topic") if isinstance(params.get("topic"), str) else ""
+    parts = [subject_label, topic]
+    if operation_name not in {"qa", "compare"}:
+        parts.append(operation_name)
+    frame_query = " ".join(str(part) for part in parts if str(part or "").strip()).strip()
+    return frame_query or raw_query
 
 
 def _is_private_insider_information_request(query: str) -> bool:
@@ -1204,27 +1266,34 @@ def _add_router_task_hints_contract(
                 or _explicit_multi_ticker_compare_requested(query)
             )
         )
-        frame_parts: list[str] = [
-            subject_label,
-            operation_name if operation_name not in {"qa", "compare"} else "",
-            params.get("topic") if isinstance(params.get("topic"), str) else "",
-        ]
-        if (
-            comparison_requested
-            or operation_name in {"analyze_impact", "news_impact", "daily_brief"}
-            or not any(str(part or "").strip() for part in frame_parts)
-        ):
-            frame_parts.append(query)
-        frame_query = " ".join(str(part) for part in frame_parts if str(part or "").strip())
+        frame_query = _router_hint_frame_query(
+            query=query,
+            subject_type=subject_type,
+            subject_label=subject_label,
+            tickers=atomic_tickers,
+            params=params,
+            operation_name=operation_name,
+            comparison_requested=comparison_requested,
+        )
         contract = derive_intent_contract(
             query=frame_query,
             tickers=atomic_tickers,
             output_mode=output_mode,
             comparison_requested=comparison_requested,
-            domain_intent=_hint_domain_intent(operation_name),
+            domain_intent=decision.domain_intent,
             subject_type=subject_type,
             frame_id=f"router_hint_{idx}",
         )
+        if not contract.get("required_evidence") and operation_name not in {"qa", "compare"}:
+            contract = derive_intent_contract(
+                query=frame_query,
+                tickers=atomic_tickers,
+                output_mode=output_mode,
+                comparison_requested=comparison_requested,
+                domain_intent=_hint_domain_intent(operation_name),
+                subject_type=subject_type,
+                frame_id=f"router_hint_{idx}",
+            )
         if intent_contracts is not None:
             intent_contracts.append(dict(contract))
 
@@ -1260,10 +1329,20 @@ def _add_router_task_hints_contract(
                     tickers=[ticker],
                     output_mode=output_mode,
                     comparison_requested=False,
-                    domain_intent=_hint_domain_intent(operation_name),
+                    domain_intent=decision.domain_intent,
                     subject_type=subject_type,
                     frame_id=f"router_hint_{idx}_{ticker}",
                 )
+                if not single_contract.get("required_evidence") and operation_name not in {"qa", "compare"}:
+                    single_contract = derive_intent_contract(
+                        query=frame_query,
+                        tickers=[ticker],
+                        output_mode=output_mode,
+                        comparison_requested=False,
+                        domain_intent=_hint_domain_intent(operation_name),
+                        subject_type=subject_type,
+                        frame_id=f"router_hint_{idx}_{ticker}",
+                    )
                 if intent_contracts is not None:
                     intent_contracts.append(dict(single_contract))
                 _add_projected_task(
@@ -2241,7 +2320,13 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         scoped_tickers = report_tickers or tickers
         multi_ticker_report = len(scoped_tickers) >= 2 and _explicit_report_mode(state, output_mode)
-        comparison_requested = _explicit_multi_ticker_compare_requested(query)
+        comparison_requested = (
+            _explicit_multi_ticker_compare_requested(query)
+            or (
+                has_comparison_relation(query, scoped_tickers)
+                and not _is_lightweight_representative_compare(query)
+            )
+        )
         multi_ticker_compare = len(scoped_tickers) >= 2 and (
             comparison_requested
             or multi_ticker_report
@@ -2715,16 +2800,34 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "context_refs": context_refs,
         "fallback_assumptions": fallback_assumptions,
     }
+    understanding_v2_mode = str(os.getenv("FINSIGHT_UNDERSTANDING_V2_MODE") or "shadow").strip().lower()
+    understanding_v2 = {}
+    if understanding_v2_mode != "off":
+        understanding_v2 = build_understanding_v2(
+            query=query,
+            output_mode=output_mode,
+            tasks=tasks,
+            blocked_tasks=blocked_tasks,
+            subject=subject,
+            operation=operation,
+            reply_contract=reply_contract,
+            context_refs=context_refs,
+            fallback_assumptions=fallback_assumptions,
+        )
+        understanding["v2"] = understanding_v2
     trace["understanding"] = understanding
     if intent_contract is not None:
         trace["intent_contract"] = intent_contract
     if intent_contracts:
         trace["intent_contracts"] = intent_contracts
+    if understanding_v2:
+        trace["understanding_v2"] = understanding_v2
     trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
     result = {
         "understanding": understanding,
+        "understanding_v2": understanding_v2,
         "reply_contract": reply_contract,
         "tasks": tasks,
         "blocked_tasks": blocked_tasks,

@@ -10,6 +10,7 @@ from urllib.parse import quote_plus
 
 from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
+from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
 from backend.utils.quote import parse_quote_payload
 
 try:  # Optional live-news fallback for link-required chat answers.
@@ -1603,6 +1604,42 @@ def _intent_contract(state: GraphState) -> dict[str, Any]:
     return contract if isinstance(contract, dict) else {}
 
 
+def _understanding_v2(state: GraphState) -> dict[str, Any]:
+    payload = state.get("understanding_v2")
+    if isinstance(payload, dict):
+        return payload
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    payload = understanding.get("v2") if isinstance(understanding, dict) else {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _v2_profiles(state: GraphState) -> set[str]:
+    profiles: set[str] = set()
+    for requirement in (_understanding_v2(state).get("evidence_requirements") or []):
+        if not isinstance(requirement, dict):
+            continue
+        profile = str(requirement.get("profile") or "").strip()
+        if profile:
+            profiles.add(profile)
+    for task in _tasks(state):
+        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+        for key in ("evidence_profile", "comparison_data_profile", "budget_profile"):
+            profile = str(params.get(key) or "").strip()
+            if profile:
+                profiles.add(profile)
+        if str(params.get("evidence_focus") or "").strip().lower() == "valuation":
+            profiles.add(VALUATION_COMPARE_LIGHT_PROFILE)
+    return profiles
+
+
+def _v2_requires_research_compare(state: GraphState) -> bool:
+    v2 = _understanding_v2(state)
+    if not v2.get("relations"):
+        return False
+    return VALUATION_COMPARE_LIGHT_PROFILE in _v2_profiles(state)
+
+
 def _render_research_compare_markdown(
     state: GraphState,
     *,
@@ -1611,17 +1648,34 @@ def _render_research_compare_markdown(
     evidence_items: list[dict[str, str]],
 ) -> str:
     contract = _intent_contract(state)
-    tickers = _tickers(state)
-    facets = {str(item) for item in (contract.get("facets") if isinstance(contract.get("facets"), list) else [])}
-    dimensions = []
-    render_intent = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else {}
-    if isinstance(render_intent.get("dimensions"), list):
-        dimensions = [str(item) for item in render_intent.get("dimensions") if str(item).strip()]
+    v2 = _understanding_v2(state)
+    scope = v2.get("scope") if isinstance(v2.get("scope"), dict) else {}
+    if contract:
+        raw_tickers = contract.get("primary_tickers") if isinstance(contract.get("primary_tickers"), list) else _tickers(state)
+        tickers = [str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()]
+        facets = {str(item) for item in (contract.get("facets") if isinstance(contract.get("facets"), list) else [])}
+        render_intent = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else {}
+        dimensions = (
+            [str(item) for item in render_intent.get("dimensions") if str(item).strip()]
+            if isinstance(render_intent.get("dimensions"), list)
+            else []
+        )
+        focus = ", ".join(dimensions or sorted(facets) or ["research"])
+        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}: focus={focus}."
+        omitted = contract.get("omitted_tickers") if isinstance(contract.get("omitted_tickers"), list) else []
+    else:
+        raw_tickers = scope.get("primary_tickers") if isinstance(scope.get("primary_tickers"), list) else _tickers(state)
+        tickers = [str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()]
+        facets = {
+            str(facet.get("name") or "").strip()
+            for facet in (v2.get("facets") or [])
+            if isinstance(facet, dict) and str(facet.get("name") or "").strip()
+        }
+        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}."
+        omitted = scope.get("omitted_tickers") if isinstance(scope.get("omitted_tickers"), list) else []
     label = ", ".join(tickers) or "these tickers"
-    focus = ", ".join(dimensions or sorted(facets) or ["research"])
-
     lines: list[str] = [
-        f"Research comparison for {label}: focus={focus}.",
+        headline,
         "",
         "Per-ticker evidence",
     ]
@@ -1633,13 +1687,17 @@ def _render_research_compare_markdown(
         else:
             lines.append("  - [data missing] current price evidence was not available.")
         if "valuation" in facets:
-            lines.append("  - Valuation evidence requires company context, earnings expectations, and fundamental review.")
+            lines.append("  - Valuation evidence uses company context, earnings expectations, and fundamental review.")
 
     fundamental = _agent_summary(state, {"fundamental_agent"})
     if fundamental:
         lines.extend(["", "Fundamental / valuation read", f"- {fundamental}"])
     elif "valuation" in facets:
         lines.extend(["", "Fundamental / valuation read", "- [data missing] fundamental_agent output was not available."])
+
+    omitted = [str(ticker).strip().upper() for ticker in omitted if str(ticker).strip()]
+    if omitted:
+        lines.extend(["", f"Not covered in this lightweight chat pass: {', '.join(omitted)}."])
 
     sources = [item for items in news_map.values() for item in items] or evidence_items
     _append_sources(lines, sources)
@@ -1782,7 +1840,10 @@ def render_chat_markdown(state: GraphState) -> str:
 
     intent_contract = _intent_contract(state)
     render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
-    if render_intent.get("shape") == "compare" and bool(intent_contract.get("per_ticker_required")):
+    if (
+        render_intent.get("shape") == "compare"
+        and bool(intent_contract.get("per_ticker_required"))
+    ) or _v2_requires_research_compare(state):
         return _render_research_compare_markdown(
             state,
             prices=prices,

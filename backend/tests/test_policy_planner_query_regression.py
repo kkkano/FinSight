@@ -302,6 +302,63 @@ def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
     assert step_names.count("fundamental_agent") == 2
 
 
+def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):
+    import asyncio
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"AAPL", "MSFT"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL, MSFT, Fed rates"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router task operation is only a weak signal",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "AAPL", "tickers": ["AAPL"], "operation": "macro_brief", "params": {}},
+                {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"], "operation": "macro_brief", "params": {}},
+                {"subject_type": "macro", "subject_label": "Fed rates", "tickers": [], "operation": "analyze_impact", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {
+        "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    tasks = understanding.get("tasks") or []
+    task_ops = [(task.get("operation") or {}).get("name") for task in tasks]
+
+    assert task_ops == ["price", "fetch", "macro_brief"]
+    assert all(op != "compare" for op in task_ops)
+
+    contracts = understanding.get("intent_contracts") or []
+    by_frame = {contract.get("frame_id"): contract for contract in contracts}
+    assert by_frame["router_hint_1"].get("required_evidence") == ["price_snapshot"]
+    assert by_frame["router_hint_2"].get("required_evidence") == ["news_context"]
+    assert by_frame["router_hint_3"].get("required_evidence") == ["macro_context"]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    step_names = [step.get("name") for step in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+
+    assert "get_performance_comparison" not in step_names
+    assert "get_stock_price" in step_names
+    assert "get_company_news" in step_names
+    assert "get_official_macro_releases" in step_names
+
+
 def test_earnings_performance_query_routes_to_fundamental_chain(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 
