@@ -30,6 +30,8 @@ from backend.graph.nodes.query_intent import has_financial_intent, is_casual_cha
 from backend.graph.memory_scope import current_report_context, current_thread_focus
 from backend.graph.understanding_v2 import (
     build_understanding_v2,
+    chat_multi_ticker_research_limit,
+    has_comparison_relation,
     infer_facets,
     relation_operation_params,
     support_operations_for_relation,
@@ -1958,24 +1960,50 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         scoped_tickers = report_tickers or tickers
         multi_ticker_report = len(scoped_tickers) >= 2 and _explicit_report_mode(state, output_mode)
-        multi_ticker_compare = len(scoped_tickers) >= 2 and (
+        comparison_requested = (
             _explicit_multi_ticker_compare_requested(query)
+            or (
+                has_comparison_relation(query, scoped_tickers)
+                and not _is_lightweight_representative_compare(query)
+            )
+        )
+        multi_ticker_compare = len(scoped_tickers) >= 2 and (
+            comparison_requested
             or multi_ticker_report
         )
         if multi_ticker_compare:
             relation_facets = infer_facets(query, output_mode=output_mode)
             relation_params = relation_operation_params(query, relation_facets)
+            extra_operations: list[dict[str, Any]] = support_operations_for_relation(query, relation_facets)
+            evidence_operation_names = {
+                str(operation.get("name") or "").strip().lower()
+                for operation in extra_operations
+                if isinstance(operation, dict)
+            }
+            contract_tickers = list(scoped_tickers)
+            omitted_tickers: list[str] = []
+            if (
+                str(output_mode or "").strip().lower() == "chat"
+                and evidence_operation_names.intersection(
+                    {"investment_opinion", "technical", "earnings_impact", "earnings_performance"}
+                )
+            ):
+                ticker_limit = chat_multi_ticker_research_limit()
+                contract_tickers = list(scoped_tickers[:ticker_limit])
+                omitted_tickers = list(scoped_tickers[ticker_limit:])
+                relation_params["research_ticker_limit"] = ticker_limit
+                if omitted_tickers:
+                    relation_params["omitted_tickers"] = omitted_tickers
             _add_task(
                 tasks,
                 subject_type="company",
                 operation=_operation("compare", 0.86, relation_params),
                 query=query,
-                tickers=scoped_tickers,
+                tickers=contract_tickers,
                 priority=20,
-                reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query) else "multi_ticker_compare",
+                reason="multi_ticker_report" if multi_ticker_report and not comparison_requested else "multi_ticker_compare",
                 params=relation_params,
             )
-            extra_operations: list[dict[str, Any]] = support_operations_for_relation(query, relation_facets)
             if multi_ticker_report:
                 existing_extra_names = {str(operation.get("name") or "") for operation in extra_operations}
                 if "price" not in existing_extra_names:
@@ -1993,7 +2021,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
                 ):
                     extra_operations.append(_operation("analyze_impact", 0.78))
-            for ticker in scoped_tickers:
+            for ticker in contract_tickers:
                 subject_type = _subject_type_for_ticker(ticker)
                 for operation in extra_operations:
                     _add_task(

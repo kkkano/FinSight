@@ -10,7 +10,7 @@ from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
-from backend.graph.understanding_v2 import project_v2_tasks_to_legacy
+from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
 
 
 _SEC_HOLDINGS_ENABLED_VALUES = {"1", "true", "yes", "on"}
@@ -480,10 +480,21 @@ def planner_stub(state: GraphState) -> dict:
         if output_mode == "investment_report":
             return True
         params = _task_operation_params(task or {})
+        if bool(params.get("synthesis_only")):
+            return False
         data_profile = str(params.get("data_profile") or params.get("comparison_data_profile") or "").strip().lower()
         if data_profile in {"performance", "historical_performance"}:
             return True
-        if data_profile in {"facet_evidence", "valuation_compare", "technical_compare", "earnings_price_impact"}:
+        if data_profile in {
+            "facet_evidence",
+            "research_synthesis",
+            "synthesis_only",
+            VALUATION_COMPARE_LIGHT_PROFILE,
+            "valuation_compare",
+            "technical_compare",
+            "earnings_price_impact",
+            "investment_opinion_compare",
+        }:
             return False
         if task is not None and _compare_has_current_support(task):
             return False
@@ -542,6 +553,11 @@ def planner_stub(state: GraphState) -> dict:
                 _append_earnings_performance_steps(ticker, group=group, task_ids=task_ids)
                 continue
             if op_name == "investment_opinion":
+                valuation_focus = (
+                    str(params.get("evidence_focus") or "").strip().lower() == "valuation"
+                    or str(params.get("evidence_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                    or str(params.get("budget_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                )
                 _append_tool_step(
                     "get_stock_price",
                     {"ticker": ticker},
@@ -550,6 +566,32 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
+                if valuation_focus:
+                    _append_tool_step(
+                        "get_company_info",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add company and valuation context.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_earnings_estimates",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add earnings expectations for multiple sanity.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_agent_step(
+                        "fundamental_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} valuation evidence: run fundamental_agent for valuation support.",
+                        optional=False,
+                        parallel_group=f"{group}_valuation_agents" if group else "valuation_agents",
+                        task_ids=task_ids,
+                    )
+                    continue
                 _append_tool_step(
                     "get_technical_snapshot",
                     {"ticker": ticker},

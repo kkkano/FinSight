@@ -8,7 +8,11 @@ from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
-from backend.graph.understanding_v2 import project_v2_tasks_to_legacy
+from backend.graph.understanding_v2 import (
+    VALUATION_COMPARE_LIGHT_PROFILE,
+    evidence_profiles,
+    project_v2_tasks_to_legacy,
+)
 
 
 _DASHBOARD_CORE_AGENTS: tuple[str, ...] = (
@@ -42,6 +46,14 @@ _SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
     "get_institution_holdings_by_ticker",
     "get_insider_transactions",
     "get_holdings_overlap",
+)
+
+_VALUATION_COMPARE_LIGHT_TOOLS: tuple[str, ...] = (
+    "get_stock_price",
+    "get_company_info",
+    "get_earnings_estimates",
+    "get_current_datetime",
+    "search",
 )
 
 _SHORT_RESEARCH_AGENT_CONFIG: dict[str, dict[str, object]] = {
@@ -107,6 +119,30 @@ def _is_truthy(value: object) -> bool:
 def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(str(needle or "").lower() in lowered for needle in needles)
+
+
+def _append_missing(items: list[str], names: tuple[str, ...]) -> list[str]:
+    seen = set(items)
+    for name in names:
+        if name in seen:
+            continue
+        items.append(name)
+        seen.add(name)
+    return items
+
+
+def _task_param_profiles(tasks: list[dict]) -> set[str]:
+    profiles: set[str] = set()
+    for task in tasks:
+        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+        for key in ("evidence_profile", "comparison_data_profile", "budget_profile"):
+            value = str(params.get(key) or "").strip()
+            if value:
+                profiles.add(value)
+        if str(params.get("evidence_focus") or "").strip().lower() == "valuation":
+            profiles.add(VALUATION_COMPARE_LIGHT_PROFILE)
+    return profiles
 
 
 def _infer_market_from_ticker(ticker: str) -> str | None:
@@ -383,6 +419,9 @@ def policy_gate(state: GraphState) -> dict:
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
+    v2_profiles = set(evidence_profiles(state.get("understanding_v2")))
+    v2_profiles.update(_task_param_profiles(ready_tasks))
+    valuation_compare_light = VALUATION_COMPARE_LIGHT_PROFILE in v2_profiles
     earnings_impact_requested = (
         op_name == "earnings_impact"
         or _has_ready_operation(ready_tasks, "earnings_impact")
@@ -518,6 +557,14 @@ def policy_gate(state: GraphState) -> dict:
     if output_mode != "investment_report" and reply_contract_disallows_news(state):
         allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
 
+    if valuation_compare_light and output_mode != "investment_report":
+        allowed_tools = [
+            tool_name for tool_name in _append_missing(list(allowed_tools), _VALUATION_COMPARE_LIGHT_TOOLS)
+            if tool_name in _VALUATION_COMPARE_LIGHT_TOOLS
+        ]
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 6)
+
     if isinstance(state.get("understanding_v2"), dict):
         default_cap = 18 if output_mode == "investment_report" else (10 if output_mode == "chat" else 12)
         global_cap = _env_int("FINSIGHT_UNDERSTANDING_V2_MAX_TOOLS", default_cap, min_value=1, max_value=40)
@@ -548,6 +595,15 @@ def policy_gate(state: GraphState) -> dict:
         if validated:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
+    elif valuation_compare_light and output_mode != "investment_report":
+        allowed_agents = ["fundamental_agent"]
+        agent_selection = {
+            "selected": list(allowed_agents),
+            "required": list(allowed_agents),
+            "reason": "understanding_v2_valuation_evidence",
+            "selection_mode": "evidence_profile",
+            "budget_profile": VALUATION_COMPARE_LIGHT_PROFILE,
+        }
     elif output_mode == "investment_report":
         force_all_agents = _is_truthy(ui_context.get("ensure_all_agents")) if isinstance(ui_context, dict) else False
         dashboard_forced = _is_dashboard_source(ui_context)

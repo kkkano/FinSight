@@ -19,6 +19,8 @@ from backend.graph.earnings_intent import (
 from backend.graph.investment_intent import query_requests_investment_opinion
 
 SCHEMA_VERSION = "understanding.v2"
+VALUATION_COMPARE_LIGHT_PROFILE = "valuation_compare_light"
+INVESTMENT_OPINION_COMPARE_PROFILE = "investment_opinion_compare"
 
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁", "哪个", "哪家", "compare", "which", "who")
 _RANK_HINTS = ("哪个", "哪家", "谁", "which", "who", "better", "stronger", "more", "更")
@@ -76,7 +78,6 @@ def infer_facets(query: str, *, output_mode: str = "") -> list[dict[str, Any]]:
     if _contains_any(query, _VALUATION_HINTS):
         add("valuation")
         add("fundamental")
-        add("risk")
     if query_requests_earnings_price_impact(query):
         add("earnings")
         add("price")
@@ -186,19 +187,23 @@ def _operation(name: str, confidence: float, params: dict[str, Any] | None = Non
 
 def relation_operation_params(query: str, facets: list[dict[str, Any]]) -> dict[str, Any]:
     names = facet_names(facets)
+    profile = relation_evidence_profile(query, facets, has_relation=True)
     params: dict[str, Any] = {
         "relation": "rank" if _contains_any(query, _RANK_HINTS) else "compare",
         "facets": names,
         "aspects": names,
     }
-    if any(name in names for name in ("valuation", "fundamental", "earnings", "risk", "technical")):
-        params["comparison_data_profile"] = "facet_evidence"
+    if profile and profile != "source_grounded":
+        params["comparison_data_profile"] = profile
+    if profile in {VALUATION_COMPARE_LIGHT_PROFILE, INVESTMENT_OPINION_COMPARE_PROFILE}:
+        params["synthesis_only"] = True
     return params
 
 
 def support_operations_for_relation(query: str, facets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Project facet bundles into legacy operations for current downstream nodes."""
     names = set(facet_names(facets))
+    profile = relation_evidence_profile(query, facets, has_relation=True)
     operations: list[dict[str, Any]] = []
 
     def add(op: dict[str, Any]) -> None:
@@ -237,12 +242,27 @@ def support_operations_for_relation(query: str, facets: list[dict[str, Any]]) ->
             )
         )
 
-    if {"valuation", "fundamental"} & names or query_requests_investment_opinion(query):
+    if profile == VALUATION_COMPARE_LIGHT_PROFILE:
         add(
             _operation(
                 "investment_opinion",
                 0.86,
                 {
+                    "evidence_focus": "valuation",
+                    "evidence_profile": VALUATION_COMPARE_LIGHT_PROFILE,
+                    "facets": ["valuation"],
+                    "required_dimensions": ["price", "company_info", "earnings_estimates", "fundamental"],
+                    "relation_ids": ["rel_compare_1"],
+                },
+            )
+        )
+    elif {"valuation", "fundamental"} & names or query_requests_investment_opinion(query):
+        add(
+            _operation(
+                "investment_opinion",
+                0.86,
+                {
+                    "evidence_profile": profile or "investment_opinion",
                     "facets": sorted(names),
                     "required_dimensions": ["price", "news", "fundamental", "valuation", "risk"],
                     "relation_ids": ["rel_compare_1"],
@@ -267,6 +287,57 @@ def _max_relation_support_operations() -> int:
     return max(1, min(8, value))
 
 
+def chat_multi_ticker_research_limit() -> int:
+    raw = os.getenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT")
+    if not isinstance(raw, str) or not raw.strip():
+        return 3
+    try:
+        value = int(raw.strip())
+    except Exception:
+        return 3
+    return max(1, min(10, value))
+
+
+def relation_evidence_profile(
+    query: str,
+    facets: list[dict[str, Any]],
+    *,
+    has_relation: bool,
+) -> str:
+    names = set(facet_names(facets))
+    if not names:
+        return ""
+    if has_relation and "valuation" in names:
+        if {"risk", "technical", "news"} & names or query_requests_investment_opinion(query):
+            return INVESTMENT_OPINION_COMPARE_PROFILE
+        return VALUATION_COMPARE_LIGHT_PROFILE
+    if has_relation and "technical" in names:
+        return "technical_compare"
+    if "earnings" in names and "price" in names:
+        return "earnings_price_impact"
+    if has_relation and any(name in names for name in ("fundamental", "risk")):
+        return "facet_evidence"
+    return "source_grounded"
+
+
+def evidence_profiles(understanding_v2: dict[str, Any] | None) -> list[str]:
+    if not isinstance(understanding_v2, dict):
+        return []
+    profiles: list[str] = []
+    for requirement in understanding_v2.get("evidence_requirements") or []:
+        if not isinstance(requirement, dict):
+            continue
+        profile = str(requirement.get("profile") or "").strip()
+        if profile and profile not in profiles:
+            profiles.append(profile)
+    return profiles
+
+
+def has_evidence_profile(understanding_v2: dict[str, Any] | None, profile: str) -> bool:
+    wanted = str(profile or "").strip()
+    return bool(wanted and wanted in evidence_profiles(understanding_v2))
+
+
 def build_understanding_v2(
     *,
     query: str,
@@ -280,20 +351,33 @@ def build_understanding_v2(
     fallback_assumptions: list[str],
 ) -> dict[str, Any]:
     tickers = [str(ticker).strip().upper() for ticker in (subject.get("tickers") or []) if str(ticker).strip()]
+    execution_tickers = _task_tickers(tasks) or tickers
+    omitted_tickers = _task_omitted_tickers(tasks)
+    omitted_seen = set(omitted_tickers)
+    for ticker in tickers:
+        if ticker in set(execution_tickers) or ticker in omitted_seen:
+            continue
+        omitted_tickers.append(ticker)
+        omitted_seen.add(ticker)
     facets = infer_facets(query, output_mode=output_mode)
-    relations = build_relation_specs(query, tickers, facets)
+    relations = build_relation_specs(query, execution_tickers, facets)
     return {
         "schema_version": SCHEMA_VERSION,
         "route": "clarify" if blocked_tasks else ("research" if tasks else "direct"),
         "original_query": query,
         "cleaned_query": query,
         "language": "zh" if re.search(r"[\u4e00-\u9fff]", str(query or "")) else "en",
-        "subjects": build_subject_specs(tickers),
+        "subjects": build_subject_specs(execution_tickers),
+        "scope": {
+            "primary_tickers": execution_tickers,
+            "omitted_tickers": omitted_tickers,
+            "max_chat_research_tickers": chat_multi_ticker_research_limit(),
+        },
         "facets": facets,
         "relations": relations,
         "tasks": [_task_to_v2(task) for task in tasks],
         "blocked_tasks": blocked_tasks,
-        "evidence_requirements": _evidence_requirements(facets, relations),
+        "evidence_requirements": _evidence_requirements(query, facets, relations),
         "render": {
             "output_mode": output_mode,
             "lane": reply_contract.get("lane"),
@@ -307,6 +391,38 @@ def build_understanding_v2(
         "fallback_assumptions": fallback_assumptions,
         "legacy_projection": {"subject": subject, "operation": operation, "reply_contract": reply_contract},
     }
+
+
+def _task_tickers(tasks: list[dict[str, Any]]) -> list[str]:
+    tickers: list[str] = []
+    seen: set[str] = set()
+    for task in tasks or []:
+        if not isinstance(task, dict):
+            continue
+        for ticker in task.get("tickers") or []:
+            symbol = str(ticker or "").strip().upper()
+            if not symbol or symbol in seen:
+                continue
+            tickers.append(symbol)
+            seen.add(symbol)
+    return tickers
+
+
+def _task_omitted_tickers(tasks: list[dict[str, Any]]) -> list[str]:
+    omitted: list[str] = []
+    seen: set[str] = set()
+    for task in tasks or []:
+        if not isinstance(task, dict):
+            continue
+        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+        for ticker in params.get("omitted_tickers") or []:
+            symbol = str(ticker or "").strip().upper()
+            if not symbol or symbol in seen:
+                continue
+            omitted.append(symbol)
+            seen.add(symbol)
+    return omitted
 
 
 def project_v2_tasks_to_legacy(understanding_v2: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -360,7 +476,7 @@ def _task_to_v2(task: dict[str, Any]) -> dict[str, Any]:
     operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
     params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
     facets = [str(item) for item in params.get("facets", []) if str(item).strip()] if isinstance(params.get("facets"), list) else []
-    return {
+    row = {
         "id": task.get("id"),
         "goal_type": _goal_type(operation),
         "subject_refs": [_subject_id(ticker) for ticker in (task.get("tickers") or []) if str(ticker).strip()],
@@ -372,6 +488,13 @@ def _task_to_v2(task: dict[str, Any]) -> dict[str, Any]:
         "legacy_operation": operation,
         "params": task.get("params") or {},
     }
+    evidence_profile = str(params.get("evidence_profile") or params.get("comparison_data_profile") or "").strip()
+    if evidence_profile:
+        row["evidence_profile"] = evidence_profile
+    evidence_focus = str(params.get("evidence_focus") or "").strip()
+    if evidence_focus:
+        row["evidence_focus"] = evidence_focus
+    return row
 
 
 def _goal_type(operation: dict[str, Any]) -> str:
@@ -388,17 +511,15 @@ def _goal_type(operation: dict[str, Any]) -> str:
     return "measure"
 
 
-def _evidence_requirements(facets: list[dict[str, Any]], relations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _evidence_requirements(
+    query: str,
+    facets: list[dict[str, Any]],
+    relations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     names = facet_names(facets)
     if not names:
         return []
-    profile = "source_grounded"
-    if relations and "valuation" in names:
-        profile = "valuation_compare"
-    elif relations and "technical" in names:
-        profile = "technical_compare"
-    elif "earnings" in names and "price" in names:
-        profile = "earnings_price_impact"
+    profile = relation_evidence_profile(query, facets, has_relation=bool(relations))
     return [
         {
             "id": "ev_1",
@@ -433,10 +554,14 @@ __all__ = [
     "build_understanding_v2",
     "build_relation_specs",
     "build_subject_specs",
+    "chat_multi_ticker_research_limit",
+    "evidence_profiles",
     "facet_names",
     "has_comparison_relation",
+    "has_evidence_profile",
     "infer_facets",
     "project_v2_tasks_to_legacy",
     "relation_operation_params",
+    "relation_evidence_profile",
     "support_operations_for_relation",
 ]
