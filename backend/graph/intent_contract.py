@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal, NotRequired, TypedDict
 
-from backend.config.ticker_mapping import dedup_tickers, normalize_ticker
+from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP, dedup_tickers, normalize_ticker
 from backend.graph.earnings_intent import (
     query_requests_earnings_performance,
     query_requests_earnings_price_impact,
@@ -83,7 +83,67 @@ class IntentContract(TypedDict, total=False):
 
 
 _CONTRACT_VERSION = "intent_contract.v1"
-_HIGH_ORDER_FACETS = {"valuation", "risk", "trend", "earnings", "investment_opinion", "technical"}
+_HIGH_ORDER_FACETS = {"valuation", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
+_EXTERNAL_IMPACT_RELATION_RE = re.compile(
+    r"(影响|冲击|拖累|利好|利空|受.{0,24}影响|被.{0,24}影响|"
+    r"\b(?:impact|impacts|affect|affects|affected|influence|influences|hurt|hurts|benefit|benefits|weigh(?:s)?\s+on|pressure)\b)",
+    re.IGNORECASE,
+)
+_EXTERNAL_IMPACT_BRIDGE_RE = re.compile(
+    r"(.{1,40}?)(?:对|对于|会不会|是否|能否|会|可能|could|would|will|might|may).{0,40}?"
+    r"(?:影响|冲击|拖累|利好|利空|impact|affect)",
+    re.IGNORECASE,
+)
+_QUESTION_ONLY_EXTERNAL_RE = re.compile(r"^(?:什么|哪些|哪个|为什么|为何|怎么|如何|why|what|which|how)\s*$", re.IGNORECASE)
+_EXTERNAL_ENTITY_STOPWORDS = {
+    "WHY",
+    "WHAT",
+    "WHICH",
+    "HOW",
+    "THIS",
+    "THAT",
+    "THE",
+    "AND",
+    "OR",
+    "ITS",
+    "STOCK",
+    "SHARE",
+    "SHARES",
+    "PRICE",
+    "MARKET",
+    "CAP",
+    "VALUE",
+    "RISK",
+    "NEWS",
+}
+_EXTERNAL_THEME_TOKENS = (
+    "AI",
+    "CPI",
+    "PPI",
+    "FED",
+    "FOMC",
+    "ECB",
+    "tariff",
+    "tariffs",
+    "inflation",
+    "rates",
+    "interest rate",
+    "regulation",
+    "regulatory",
+    "policy",
+    "supply chain",
+    "export control",
+    "人工智能",
+    "利率",
+    "美联储",
+    "通胀",
+    "政策",
+    "监管",
+    "补贴",
+    "关税",
+    "供应链",
+    "出口管制",
+)
 
 _EVIDENCE_REGISTRY: dict[EvidenceKind, EvidenceDefinition] = {
     "price_snapshot": EvidenceDefinition(
@@ -356,8 +416,83 @@ def _has_filing_facet(query: str) -> bool:
     return any(token in lowered for token in ("filing", "10-k", "10-q", "sec", "transcript", "earnings call"))
 
 
-def _derive_facets(query: str, *, domain_intent: str = "") -> list[str]:
+def _company_aliases_for_tickers(tickers: list[str] | tuple[str, ...] | None) -> set[str]:
+    normalized = set(_normalized_tickers(tickers))
+    aliases: set[str] = set(normalized)
+    for ticker in normalized:
+        mapped_name = COMPANY_MAP.get(ticker)
+        if isinstance(mapped_name, str):
+            aliases.add(mapped_name)
+        for alias, value in COMPANY_MAP.items():
+            if str(value).upper() == ticker:
+                aliases.add(str(alias))
+        for alias, value in CN_TO_TICKER.items():
+            if str(value).upper() == ticker:
+                aliases.add(str(alias))
+    return {alias for alias in aliases if alias}
+
+
+def _remove_company_aliases(query: str, tickers: list[str] | tuple[str, ...] | None) -> str:
+    text = str(query or "")
+    for alias in sorted(_company_aliases_for_tickers(tickers), key=len, reverse=True):
+        if not alias:
+            continue
+        if re.search(r"[\u4e00-\u9fff]", alias):
+            text = text.replace(alias, " ")
+        else:
+            text = re.sub(rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _has_external_entity_marker(query: str, tickers: list[str] | tuple[str, ...] | None) -> bool:
+    stripped = _remove_company_aliases(query, tickers)
+    lowered = stripped.lower()
+    for token in _EXTERNAL_THEME_TOKENS:
+        needle = str(token or "").strip()
+        if not needle:
+            continue
+        if re.search(r"^[A-Z]{2,6}$", needle):
+            if re.search(rf"(?<![A-Za-z0-9]){re.escape(needle)}(?![A-Za-z0-9])", stripped, re.IGNORECASE):
+                return True
+        elif needle.lower() in lowered or needle in stripped:
+            return True
+
+    for token in re.findall(r"(?<![A-Za-z0-9])(?:[A-Z]{2,6}|[A-Z][A-Za-z0-9&.-]{2,})(?![A-Za-z0-9])", stripped):
+        upper = token.upper()
+        if upper in _EXTERNAL_ENTITY_STOPWORDS:
+            continue
+        if upper in {alias.upper() for alias in _company_aliases_for_tickers(tickers) if re.fullmatch(r"[A-Za-z0-9.\-=]+", alias)}:
+            continue
+        return True
+
+    bridge = _EXTERNAL_IMPACT_BRIDGE_RE.search(stripped)
+    if bridge:
+        candidate = re.sub(r"[\s,，。？?！!、;；:：]+", "", bridge.group(1) or "")
+        candidate = re.sub(r"(研究一下|查一下|看看|帮我|请问|分析一下|explain|check|research)", "", candidate, flags=re.IGNORECASE)
+        if candidate and not _QUESTION_ONLY_EXTERNAL_RE.fullmatch(candidate):
+            return True
+    return False
+
+
+def _has_external_entity_impact_facet(query: str, tickers: list[str] | tuple[str, ...] | None) -> bool:
+    company_like_tickers = [
+        ticker
+        for ticker in _normalized_tickers(tickers)
+        if not (ticker.startswith("^") or ticker.endswith("=F") or ticker.endswith("-USD"))
+    ]
+    if not company_like_tickers:
+        return False
+    if query_requests_earnings_price_impact(query):
+        return False
+    if not _EXTERNAL_IMPACT_RELATION_RE.search(str(query or "")):
+        return False
+    return _has_external_entity_marker(query, company_like_tickers)
+
+
+def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | tuple[str, ...] | None = None) -> list[str]:
     facets: list[str] = []
+    if _has_external_entity_impact_facet(query, tickers):
+        facets.append("external_entity_impact")
     if _has_valuation_facet(query):
         facets.append("valuation")
     earnings_price_impact = query_requests_earnings_price_impact(query)
@@ -389,6 +524,8 @@ def _derive_facets(query: str, *, domain_intent: str = "") -> list[str]:
 def _required_evidence_for_facets(facets: list[str], *, per_ticker_required: bool) -> list[str]:
     evidence: list[str] = []
     facet_set = set(facets)
+    if "external_entity_impact" in facet_set:
+        evidence.extend(["price_snapshot", "news_context", "risk_profile"])
     if "valuation" in facet_set:
         evidence.extend(["price_snapshot", "company_profile", "earnings_estimates", "fundamental_snapshot"])
     if "earnings" in facet_set:
@@ -433,6 +570,8 @@ def _comparison_dimensions(facets: list[str]) -> list[str]:
             dims.append("technical_quality")
         elif facet == "news":
             dims.append("news_catalysts")
+        elif facet == "external_entity_impact":
+            dims.append("external_impact")
         elif facet == "price_performance":
             dims.append("performance")
     return dims or ["performance"]
@@ -524,7 +663,7 @@ def derive_intent_contract(
 ) -> IntentContract:
     normalized = _normalized_tickers(list(tickers or []))
     target_scope = "multi" if len(normalized) >= 2 else ("single" if len(normalized) == 1 else "unknown")
-    facets = _derive_facets(query, domain_intent=domain_intent)
+    facets = _derive_facets(query, domain_intent=domain_intent, tickers=normalized)
     subject = str(subject_type or "company").strip().lower() or "company"
     if subject == "macro":
         facets = [facet for facet in facets if facet in {"macro", "news", "risk"}]
@@ -611,6 +750,8 @@ def evidence_focused_operation(contract: dict[str, Any] | None) -> dict[str, Any
         params["evidence_profile"] = str(contract.get("budget_profile") or "")
     if "technical" in facet_set and not {"valuation", "risk", "investment_opinion"}.intersection(facet_set):
         return {"name": "technical", "confidence": 0.84, "params": params}
+    if "external_entity_impact" in facet_set:
+        return {"name": "analyze_impact", "confidence": 0.84, "params": params}
     if "earnings" in facet_set and "price" in facet_set:
         return {"name": "earnings_impact", "confidence": 0.84, "params": params}
     if "earnings" in facet_set:
@@ -635,6 +776,8 @@ def legacy_operation_for_contract(contract: dict[str, Any] | None, *, subject_ty
         render_intent = contract.get("render_intent")
         if isinstance(render_intent, dict) and render_intent.get("shape") == "compare":
             return {"name": "compare", "confidence": 0.82, "params": params}
+    if "external_entity_impact" in facet_set:
+        return {"name": "analyze_impact", "confidence": 0.84, "params": params}
     if subject == "macro" or "macro" in facet_set:
         return {"name": "macro_brief", "confidence": 0.78, "params": params}
     if "holdings" in facet_set:

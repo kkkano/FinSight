@@ -1151,6 +1151,41 @@ def _add_router_task_hints_contract(
             params=op_params,
         )
 
+    def _add_news_support_from_contract(
+        *,
+        tickers: list[str],
+        subject_type: str,
+        subject_label: str,
+        priority: int,
+        frame_id: str,
+        task_selection_ids: list[str] | None = None,
+        task_selection_types: list[str] | None = None,
+    ) -> None:
+        news_contract = derive_intent_contract(
+            query=query,
+            tickers=tickers,
+            output_mode=output_mode,
+            comparison_requested=False,
+            domain_intent="news",
+            subject_type=subject_type,
+            frame_id=frame_id,
+        )
+        if intent_contracts is not None:
+            intent_contracts.append(dict(news_contract))
+        news_params: dict[str, Any] = {"topic": "news"}
+        if query_explicitly_requests_links(query):
+            news_params["include_links"] = True
+        _add_projected_task(
+            contract=news_contract,
+            subject_type=subject_type,
+            subject_label=subject_label,
+            tickers=tickers,
+            priority=priority,
+            params=news_params,
+            task_selection_ids=task_selection_ids,
+            task_selection_types=task_selection_types,
+        )
+
     router_compare_requested = bool(
         len(scoped_current_tickers) >= 2
         and (decision.relation == "compare" or _explicit_multi_ticker_compare_requested(query))
@@ -1355,6 +1390,20 @@ def _add_router_task_hints_contract(
                     task_selection_ids=task_selection_ids,
                     task_selection_types=task_selection_types,
                 )
+                if (
+                    operation_name == "price"
+                    and query_explicitly_requests_links(query)
+                    and _contains_any(query, _NEWS_HINTS)
+                ):
+                    _add_news_support_from_contract(
+                        tickers=[ticker],
+                        subject_type=subject_type,
+                        subject_label=ticker,
+                        priority=19 + idx,
+                        frame_id=f"router_hint_{idx}_{ticker}_news",
+                        task_selection_ids=task_selection_ids,
+                        task_selection_types=task_selection_types,
+                    )
             added = True
             continue
 
@@ -1368,6 +1417,22 @@ def _add_router_task_hints_contract(
             task_selection_ids=task_selection_ids,
             task_selection_types=task_selection_types,
         )
+        if (
+            operation_name == "price"
+            and atomic_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+            and query_explicitly_requests_links(query)
+            and _contains_any(query, _NEWS_HINTS)
+        ):
+            _add_news_support_from_contract(
+                tickers=atomic_tickers,
+                subject_type=subject_type,
+                subject_label=subject_label or ", ".join(atomic_tickers),
+                priority=19 + idx,
+                frame_id=f"router_hint_{idx}_news",
+                task_selection_ids=task_selection_ids,
+                task_selection_types=task_selection_types,
+            )
         added = True
 
     if added:
@@ -1472,7 +1537,41 @@ def _query_explicitly_requests_price_data(query: str) -> bool:
     )
 
 
-def _direct_decision_must_project_tasks(query: str, decision: ConversationDecision) -> bool:
+def _direct_decision_contract_requires_evidence(
+    query: str,
+    decision: ConversationDecision,
+    *,
+    current_tickers: list[str] | None = None,
+) -> bool:
+    tickers = dedup_tickers(
+        list(current_tickers or [])
+        or [
+            str(ticker)
+            for ticker in (extract_tickers(_strip_urls(query)).get("tickers") or [])
+            if str(ticker).strip()
+        ]
+    )
+    if not tickers:
+        return False
+    contract = derive_intent_contract(
+        query=query,
+        tickers=tickers,
+        output_mode="chat",
+        comparison_requested=False,
+        domain_intent=decision.domain_intent,
+        subject_type="company",
+        frame_id="direct_projection_probe",
+    )
+    facets = {str(facet) for facet in (contract.get("facets") or []) if str(facet).strip()}
+    return bool("external_entity_impact" in facets and contract.get("required_evidence"))
+
+
+def _direct_decision_must_project_tasks(
+    query: str,
+    decision: ConversationDecision,
+    *,
+    current_tickers: list[str] | None = None,
+) -> bool:
     """Prevent an LLM direct route from swallowing explicit tool/data requests."""
     if wants_no_news_or_links(query):
         return False
@@ -1486,6 +1585,7 @@ def _direct_decision_must_project_tasks(query: str, decision: ConversationDecisi
         or _contains_any(query, _PORTFOLIO_HINTS)
         or decision.needs_tools
         or _task_hints_require_execution(decision.task_hints, query, allow_subject_label_refs=True)
+        or _direct_decision_contract_requires_evidence(query, decision, current_tickers=current_tickers)
         or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
         or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
     )
@@ -2151,7 +2251,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 tickers = _effective_current_turn_tickers(query, tickers, conversation_decision)
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision):
+                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers):
                     conversation_decision = _force_grounded_research_decision(conversation_decision)
                     trace["conversation_router"] = conversation_decision.model_dump()
                 else:
@@ -2415,6 +2515,17 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 if intent_contract.get("required_evidence") and output_mode != "investment_report"
                 else []
             )
+            if contract_operations:
+                contract_operation_names = {
+                    str(operation.get("name") or "").strip()
+                    for operation in contract_operations
+                    if isinstance(operation, dict)
+                }
+                for operation in fallback_operations:
+                    op_name = str((operation or {}).get("name") or "").strip()
+                    if op_name == "alert_set" and op_name not in contract_operation_names:
+                        contract_operations.append(operation)
+                        contract_operation_names.add(op_name)
             router_operations = None if contract_operations else _router_directed_company_operations(
                 conversation_decision,
                 fallback_operations=fallback_operations,
@@ -2544,7 +2655,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         if conversation_decision is not None:
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision):
+                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers):
                     conversation_decision = _force_grounded_research_decision(conversation_decision)
                     trace["conversation_router"] = conversation_decision.model_dump()
                 else:

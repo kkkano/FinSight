@@ -1,7 +1,7 @@
 # FinSight LangGraph/LangChain 重构设计规范（设计 / 架构 / 约束指南）
 
 > **状态**：Living Doc（持续更新）
-> **更新日期**：2026-05-11
+> **更新日期**：2026-05-24
 > **目的**：设计 / 前端 / 后端 / 产品团队的总包文件（架构与设计规范）
 > **事实源说明**：本文是 LangGraph 设计规范；当前运行时事实以 `backend/graph/runner.py`、`backend/graph/state.py` 和测试为准。具体变更见 `06b_LANGGRAPH_CHANGELOG.md`。
 
@@ -9,6 +9,7 @@
 > 2026-05-10 修订说明：新增 `ReplyContract` 作为请求理解后的 UX 契约，三条 lane 为 `chat_answer`、`source_grounded_answer`、`report_generation`；`brief` 降级为长度偏好，不再是独立产品模式。`EvidenceItem` 与 `ToolError` 分离，工具失败、403、rejected、empty、timeout 只能进入 `artifacts.tool_diagnostics`，不能作为证据或来源渲染。
 > 2026-05-11 验收说明：`tests/eval/chat_router_100.json` 已成为当前聊天 UX 验收集；最终 current-state 产物为 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，含 `95` 个 hard 红线用例。
 > 2026-05-11 修订说明：连续对话上下文改为作用域化记忆，`memory_context` 明确拆分为 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；当前线程以外的历史 `last_report/last_focus/recent_focuses` 只能作为历史背景，不能绑定“刚才那份报告/第三点”。Settings 新增用户可调 `agent_preferences.timeoutSeconds`，`0` 为系统默认，正数限制在 `30-1200s` 并进入 chat/planner/synthesize/execution 预算。
+> 2026-05-24 修订说明：意图层从 `subject_type + operation + output_mode` 的三维兼容模型升级为 evidence-first contract。`conversation_router` 负责 resolution，`intent_contract.py` 负责 decomposition，`required_evidence` 负责 planner/tool/agent 选择；`operation` 仅作为兼容投影保留。新增 `external_entity_impact` facet，用结构化形态识别“上市公司 + 外部实体/主题 + 影响判断”，不针对 SpaceX 等实体逐个打补丁。
 
 ---
 
@@ -109,7 +110,7 @@ flowchart LR
 ### 1.1 目标（必须完成）
 
 1. **单一入口**：所有请求以 LangGraph 为唯一调度入口，兼容现有 API 兼容层，让各终端走入同一个图。
-2. **三维语义模型**：用 `subject_type + operation + output_mode` 取代 100+ Intent。
+2. **证据优先语义模型**：用 `IntentContract.facets + required_evidence + render_intent` 取代 100+ Intent；`subject_type / operation / output_mode` 保留为兼容投影和 UI 格式信号。
 3. **Planner-Executor**：用 LLM 生成结构化计划（PlanIR），执行器按计划并行/串行调用各个 agent。
 4. **按 subject_type 模板渲染**：让财报/公司/基金 等有不同模板；投标按 output_mode，让报告强制覆盖 8 章节。
 5. **MiniChat 与主 Chat 完全融合**：共用同一个 `thread_id(session_id)` 的对话机器，将 UI selection 作为上下文标注（ephemral context，不写长期记忆册）。
@@ -129,19 +130,38 @@ flowchart LR
 
 ---
 
-## 2. 三维语义模型（统一分类）
+## 2. 语义模型：Resolution -> IntentContract -> Legacy Projection
 
-### 2.1 语义分类模型（从「意图爆炸」到三维）
+### 2.1 当前权威模型（证据合同）
+
+当前代码的语义核心是 `backend/graph/intent_contract.py`。它不是从旧 `operation` 反推 contract，而是从 query/frame、resolved tickers、relation 与 output mode 编译：
+
+| 字段 | 含义 | 下游用途 |
+|---|---|---|
+| `facets` | 有限语义面，如 `valuation`、`earnings`、`technical`、`external_entity_impact` | 决定证据义务和渲染维度 |
+| `required_evidence` | 闭集证据 kind，如 `price_snapshot`、`news_context`、`risk_profile` | `policy_gate` / `planner_stub` 选择工具和 agent |
+| `render_intent` | 回答形态，如 `answer` / `compare` 及对比维度 | renderer / synthesize 是否做横向合成 |
+| `budget_profile` | 轻量估值对比、逐 ticker 对比等预算画像 | 控制 chat 下多 ticker 研究上限和 agent 组合 |
+| `primary_operation` / projected `operation` | 兼容旧链路的投影 | 不作为语义源头 |
+
+关键原则：
+
+- contract 的源头必须是 `query -> facets -> required_evidence`，不能是 `operation -> contract`。
+- router 的 `task_hints.operation` 是弱信号；真正落任务前必须通过 contract 编译。
+- 新增复合意图时优先补 facet/evidence registry 和 planner 映射，不在 `_direct_decision_must_project_tasks` 里堆实体名。
+- `external_entity_impact` 示例：`研究一下特斯拉会不会被 SpaceX 影响` -> `facets=["external_entity_impact"]` -> `required_evidence=["price_snapshot","news_context","risk_profile"]` -> legacy `operation=analyze_impact`。
+
+### 2.2 兼容三维投影（旧字段仍存在）
 
 | 维度 | 字段 | 说明 | 来源优先级 |
 |---|---|---|---|
 | Subject（主体） | `subject_type` | 用户当前处理的「东西是什么」 | selection > query(显式 ticker/公司名) > active_symbol |
-| Operation（操作） | `operation` | 用户要对主体做什么 | LLM parse（受约束） > 简单规则映射 |
+| Operation（操作） | `operation` | 旧 planner/renderer 兼容投影，不再是语义源头 | IntentContract projection > router 弱信号 > fallback helper |
 | Output（输出格式） | `output_mode` | 输出格式/深度（报告或图表） | UI 显式 > 明确词 > 默认 |
 
 > **重要**：`investment_report` 不是「操作」的同义词；它是一个格式，一种输出模式。
 
-### 2.2 SubjectType 规范（正式发布版）
+### 2.3 SubjectType 规范（正式发布版）
 
 > 说明：为了避免「早期当初 selection 的 `type="report"`」引发的分类冲突，我们将 selection 来源类型改为更准确的「内容来源类型」。
 
@@ -159,7 +179,7 @@ flowchart LR
 | `theme` | 行业/主题 | 半导体、AI、大型科技股等 |
 | `unknown` | 未明确主体 | 需要 clarify |
 
-### 2.3 Operation 规范（稳定小列表）
+### 2.4 Operation 规范（稳定小列表）
 
 | Operation | 说明 | 示例 |
 |---|---|---|
@@ -173,9 +193,9 @@ flowchart LR
 | `compare` | 对比 | 「AAPL vs MSFT 哪个更好」 |
 | `generate_report` | 生成研报（须配 output_mode=investment_report） | 「生成投资报告 / 研报」 |
 
-> Operation 可以扩展，但必须通过常量映射到子图。不得让其扩展导致新的 if-else。
+> Operation 可以扩展，但必须通过 contract/evidence 投影到子图。不得让 operation 重新成为研究内容的唯一来源。
 
-### 2.4 OutputMode（让 UI 拿到确切格式传入）
+### 2.5 OutputMode（让 UI 拿到确切格式传入）
 
 | OutputMode | 说明 | UI |
 |---|---|---|
@@ -183,7 +203,7 @@ flowchart LR
 | `brief` | 兼容轻量摘要模式；不作为主 UI 的“简报/深度”切换心智模型 | 兼容旧入口或内部策略 |
 | `investment_report` | 研报（完整，需拉多 agent） | **按钮触发专用** |
 
-### 2.5 ReplyContract（UX 契约）
+### 2.6 ReplyContract（UX 契约）
 
 `output_mode` 只表达显式格式，`ReplyContract` 表达本轮用户体验和取证约束。`understand_request` 生成 contract 后，`policy_gate`、`planner_stub`、`execute_plan_stub` 和 renderer 只能读取结构化约束，不应重新用 query 关键词猜模式。
 

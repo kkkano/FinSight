@@ -1,12 +1,12 @@
 # FinSight 文档索引
 
-更新时间：2026-05-20
+更新时间：2026-05-24
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
 
-- `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、作用域化记忆和 evidence/tool diagnostics 边界。
-- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/request_task_contract.py`、`backend/graph/memory_scope.py` 与 `understand_request` 测试为准。
+- `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、`IntentContract` evidence-first 意图模型、作用域化记忆和 evidence/tool diagnostics 边界。
+- `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/intent_contract.py`、`backend/graph/request_task_contract.py`、`backend/graph/memory_scope.py` 与 `understand_request` 测试为准。
 - `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。
 - `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
 - `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
@@ -55,6 +55,7 @@
 
 - `docs/archive/`：过期方案、旧路线图、临时报表和被替代文档。
 - `docs/archive/2026-05-agent-observability-cleanup/`：2026-05 文档清理归档批次。
+- `docs/archive/2026-05-24-doc-refresh/`：归档旧个人 Docker 部署笔记；当前部署事实源改用 `docs/11_PRODUCTION_RUNBOOK.md`。
 - `docs/archive/qa/`：2026-05-20 归档 97 个临时 smoke/targeted/regression eval 文件；保留最终验收和基线；批次说明见目录 `README.md`。
 - `docs/archive/feature_logs/`：2026-05-20 整批归档历史流水账（2025-12 ~ 2026-05 early）；批次说明见目录 `README.md`。
 - `docs/archive/Thinking/`：2026-05-20 归档 2026-01 过期架构草稿；保留 ADR 和参考；批次说明见目录 `README.md`。

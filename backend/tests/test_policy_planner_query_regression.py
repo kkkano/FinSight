@@ -252,6 +252,39 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
     assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
 
 
+def test_external_entity_impact_contract_runs_news_and_risk_evidence(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {"query": "研究一下特斯拉会不会被SpaceX影响", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    task = (understanding.get("tasks") or [])[0]
+
+    assert contract.get("facets") == ["external_entity_impact"]
+    assert (task.get("operation") or {}).get("name") == "analyze_impact"
+    assert (task.get("operation") or {}).get("params", {}).get("required_evidence") == [
+        "price_snapshot",
+        "news_context",
+        "risk_profile",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+    step_agents = {step.get("name") for step in steps if step.get("kind") == "agent"}
+
+    assert {"news_agent", "risk_agent"}.issubset(agents)
+    assert {"get_stock_price", "get_company_news", "get_authoritative_media_news"}.issubset(set(step_names))
+    assert {"news_agent", "risk_agent"}.issubset(step_agents)
+    assert step_names
+
+
 def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
     import asyncio
     import importlib

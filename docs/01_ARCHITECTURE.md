@@ -1,6 +1,6 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-05-11
+> 更新时间：2026-05-24
 > 适用分支：`main`
 > 主链实现：`backend/graph/runner.py`
 
@@ -9,6 +9,7 @@
 > 2026-05-10 增量：`understand_request` 现在写入 `ReplyContract`，将默认聊天、取证回答、报告生成拆成 `chat_answer / source_grounded_answer / report_generation` 三条 lane；`brief` 仅作为长度偏好保留。工具失败、403、rejected、empty、timeout 等只能进入 `artifacts.tool_diagnostics`，不能进入 `evidence_pool` 或被渲染为来源/结论。
 > 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
 > 2026-05-11 增量：`memory_context` 改为作用域化结构，区分 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；只有当前线程焦点/报告可绑定“刚才那份报告/第三点”等指代。前端偏好新增 `agent_preferences.timeoutSeconds`，`0` 使用系统默认，正数限制在 `30-1200s` 并应用到 chat/planner/synthesize/graph 执行预算。
+> 2026-05-24 增量：请求理解进入 evidence-first intent contract 模型。`conversation_router` 只负责定位与上下文绑定，router `task_hints` 在落任务前统一编译为 `intent_contract`；`operation` 降级为旧 planner/renderer 的兼容投影。新增 `external_entity_impact` facet，覆盖“上市公司 + 外部实体/主题 + 影响判断”类 query，例如“研究特斯拉会不会被 SpaceX 影响”，会产生 TSLA 的 `price_snapshot/news_context/risk_profile` 证据义务并投影为 `analyze_impact`。
 
 ## 1. 系统总览
 
@@ -101,6 +102,21 @@ flowchart TD
 
 旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 仍保留为兼容 helper 或聚焦测试对象；当前主链路由 `prepare_context` 承接上下文准备，再进入 `understand_request`，它们不再作为独立主路径节点串联。
 
+### 2.1.1 IntentContract（证据优先意图核心）
+
+文件：`backend/graph/intent_contract.py`
+
+`IntentContract` 是当前请求分解的语义事实源。它从 query/frame 与 resolved tickers 编译出有限 facets、`required_evidence`、`render_intent` 和 `budget_profile`；下游仍看到 `operation`，但 `operation` 只是兼容投影，不再决定“应该研究什么”。
+
+| 层 | 职责 | 示例 |
+|---|---|---|
+| Router / Resolution | 判断本轮路径、上下文来源、显式 ticker/selection、追问关系 | `direct_answer/research/clarify`、`context_binding`、`task_hints` |
+| Intent Contract / Decomposition | 从 frame 编译 facets 与证据义务 | `valuation`、`earnings`、`external_entity_impact` -> `required_evidence` |
+| Evidence Planner | 按 evidence kind 选择工具和 agent | `news_context` -> news tools + `news_agent`; `risk_profile` -> risk tools + `risk_agent` |
+| Legacy Projection | 为旧 policy/planner/renderer 保留 operation 字段 | `external_entity_impact` -> `analyze_impact`; `valuation compare` -> synthesis-only `compare` + per-ticker evidence |
+
+当前闭集 evidence kind 包含价格、公司信息、盈利预期、基本面、技术面、新闻、风险、宏观、filing、performance comparison、持仓/内部人、期权、事件日历、电话会和文档上下文。新增证据类型必须先补 registry、planner 映射和 contract 层测试，不能只在 router 里加关键词。
+
 当前 `ReplyContract` lane：
 
 | Lane | 触发 | 下游约束 |
@@ -146,7 +162,7 @@ flowchart LR
 
 文件：`backend/graph/nodes/policy_gate.py`
 
-- 根据 `subject_type + operation + output_mode` 生成 tool allowlist
+- 根据 `required_evidence` 优先生成 tool/agent allowlist；`subject_type + operation + output_mode` 作为兼容和预算信号
 - 支持用户覆盖：
   - `agents_override`
   - `budget_override`

@@ -32,6 +32,7 @@
 ## 目录
 
 - [核心特性](#-核心特性)
+- [当前请求链路](#-当前请求链路)
 - [平台预览](#-平台预览)
 - [系统架构](#%EF%B8%8F-系统架构)
 - [LangGraph 管线](#-langgraph-管线18-节点)
@@ -54,12 +55,25 @@
 
 ---
 
+## 🧭 当前请求链路
+
+FinSight 现在把“意图”建模为证据合同，而不是单个粗粒度 `operation` 标签。
+
+1. `conversation_router.py` 只做会话定位：本轮是直答、研究、提醒、澄清、越界，绑定哪些 ticker、selection、追问上下文。
+2. `intent_contract.py` 从 query/frame 编译语义 facets 和 `required_evidence`；`operation` 只是兼容旧 planner/renderer 的投影字段，不再是研究内容的源头。
+3. `policy_gate.py` 与 `planner_stub.py` 读取 `required_evidence` 选择工具和智能体。例如“NVDA 和 AMD 哪个估值更合理”会变成逐 ticker 估值证据 + synthesis-only compare；“研究特斯拉会不会被 SpaceX 影响”会变成 TSLA 的价格、新闻、风险证据。
+4. `chat_renderer.py` / `synthesize.py` 按 reply/render contract 输出；工具失败、403、空结果、超时只进入 diagnostics，不会伪装成 evidence。
+
+Agent 内部 LLM 精修由环境和 UI 偏好控制。生产可用 `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` 强制忽略旧浏览器偏好，并用 `AGENT_LLM_ANALYZE_ENABLED=true` 开启 Agent LLM 分析。
+
+---
+
 ## ✨ 核心特性
 
 | 类别 | 亮点 |
 |------|------|
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
-| **LangGraph 管线** | 支持类 GPT 的上下文对话、提醒、URL/文章分析、快速行情问答和显式报告生成。普通聊天先进 LLM conversation router，只有报告按钮进入结构化报告模板。 |
+| **LangGraph 管线** | 支持类 GPT 的上下文对话、提醒、URL/文章分析、快速行情问答和显式报告生成。普通聊天先进 LLM conversation router 做定位，再由 evidence-first intent contract 分解决定取证。 |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
 | **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |

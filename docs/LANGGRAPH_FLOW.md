@@ -3,6 +3,7 @@
 > 2026-05-06 状态说明：当前主路径为 `prepare_context -> chat_respond -> understand_request`。`chat_respond` 只短路纯问候/感谢/确认/再见；开放闲聊、非金融请求、能力问题、URL/网页/文章请求、指代追问和普通金融问题都进入 `understand_request` 的 LLM conversation router。Router 在 planner 前决定 direct/research/alert/clarify/out_of_scope，只有 research/alert 才继续进入工具规划；URL 读取是 planner/agent 工具 `fetch_url_content`，不是理解层预抓取。显式报告按钮、`investment_report` 或强报告 query（深度投资报告 / deep report / filing document longform）进入报告模板。旧 `trim_history / summarize_history / normalize_ui_context / decide_output_mode / resolve_subject / clarify / parse_operation` 章节保留为 helper 或兼容节点说明，不再代表主聊天路径。
 > 2026-05-10 增量：`understand_request` 写入 `reply_contract`，用 `chat_answer/source_grounded_answer/report_generation` 三条 lane 固定 UX 行为；工具失败、403、rejected、empty、timeout 等写入 `artifacts.tool_diagnostics`，不得进入 `evidence_pool`。
 > 2026-05-11 验收：`tests/eval/chat_router_100.json` 的最终 current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，覆盖 18 类连续对话和取证/报告红线。
+> 2026-05-24 增量：`understand_request` 现在把 router 解析出的 frame 统一编译为 `intent_contract`。`facets -> required_evidence` 是 planner/tool/agent 选择的权威输入；`operation` 只是兼容投影。外部实体影响类 query（如 TSLA + SpaceX）由 `external_entity_impact` facet 触发 price/news/risk evidence，而不是靠实体名白名单。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 
@@ -177,6 +178,7 @@ graph TD
 | `ui_context` | Read | selection、active_symbol、portfolio 等上下文 |
 | `understanding` | Write | route、summary、confidence、assumptions |
 | `reply_contract` | Write | lane、answer_style、length_preference、source_constraints、citation_policy、continuation_target |
+| `intent_contract` / `intent_contracts` | Write | evidence-first 语义合同；保存 facets、required_evidence、render_intent 和 budget_profile |
 | `tasks` | Write | 可执行任务列表 |
 | `blocked_tasks` | Write | 局部阻塞任务列表 |
 | `subject` / `operation` | Write | primary task 的兼容投影 |
@@ -194,6 +196,7 @@ graph TD
 - `research`：投影成 ready task，进入 `policy_gate -> planner`。
 - `clarify`：缺少必要上下文时结束并提示补充。
 - `no news/no links/direct answer` 纠偏会写入 `reply_contract.source_constraints.disallow_news=true`，后续 policy/planner 必须遵守。
+- router `task_hints` 不是最终操作指令；落 task 前会先通过 `intent_contract.py` 编译为证据义务，再投影成兼容 `operation`。
 
 **Source**: `backend/graph/nodes/understand_request.py`
 
