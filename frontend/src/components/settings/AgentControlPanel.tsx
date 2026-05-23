@@ -37,15 +37,15 @@ const STORAGE_KEY = 'finsight-agent-preferences';
 
 const DEFAULT_PREFS: AgentPreferences = {
   agents: Object.fromEntries(
-    AGENT_NAMES.map(({ key }) => [key, 'standard' as AgentDepth]),
+    AGENT_NAMES.map(({ key }) => [key, 'deep' as AgentDepth]),
   ),
-  maxRounds: 3,
+  maxRounds: 10,
   concurrentMode: true,
-  timeoutSeconds: 0,
-  enableLLMAnalysis: false,
-  reflectionRounds: 0,
-  analysisTimeoutSeconds: 0,
-  tokenAcquireTimeoutSeconds: 0,
+  timeoutSeconds: 1200,
+  enableLLMAnalysis: true,
+  reflectionRounds: 3,
+  analysisTimeoutSeconds: 120,
+  tokenAcquireTimeoutSeconds: 60,
 };
 
 const normalizePreferences = (raw: unknown): AgentPreferences => {

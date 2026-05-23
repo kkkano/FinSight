@@ -11,7 +11,7 @@ from backend.graph.preference_timeouts import normalize_timeout_seconds
 _VALID_DEPTHS = {"standard", "deep", "off"}
 _MAX_ROUNDS_MIN = 1
 _MAX_ROUNDS_MAX = 10
-_MAX_ROUNDS_DEFAULT = 3
+_MAX_ROUNDS_DEFAULT = 10
 
 
 @dataclass(frozen=True)
@@ -21,14 +21,14 @@ class AgentRouterDeps:
 
 def _default_preferences() -> dict[str, Any]:
     return {
-        "agents": {name: "standard" for name in REPORT_AGENT_CANDIDATES},
+        "agents": {name: "deep" for name in REPORT_AGENT_CANDIDATES},
         "maxRounds": _MAX_ROUNDS_DEFAULT,
         "concurrentMode": True,
-        "timeoutSeconds": 0,
-        "enableLLMAnalysis": False,
-        "reflectionRounds": 0,
-        "analysisTimeoutSeconds": 0,
-        "tokenAcquireTimeoutSeconds": 0,
+        "timeoutSeconds": 1200,
+        "enableLLMAnalysis": True,
+        "reflectionRounds": 3,
+        "analysisTimeoutSeconds": 120,
+        "tokenAcquireTimeoutSeconds": 60,
     }
 
 
