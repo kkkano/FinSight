@@ -68,6 +68,10 @@ _TASK_HINT_OPERATIONS: set[str] = {
     "alert_set",
     "macro_brief",
     "fact_check",
+    "valuation_sanity",
+    "earnings_impact",
+    "earnings_performance",
+    "investment_opinion",
 }
 _STRUCTURAL_DEIXIS_RE = re.compile(
     r"("
@@ -537,7 +541,7 @@ def _task_hints_require_execution(
         operation = str(hint.get("operation") or "").strip().lower()
         subject_type = str(hint.get("subject_type") or "unknown").strip().lower()
         has_external_refs = _task_hint_external_refs(hint)
-        if operation in {"alert_set", "portfolio_impact", "rebalance_check"}:
+        if operation in {"alert_set", "portfolio_impact", "rebalance_check", "valuation_sanity", "earnings_impact", "earnings_performance", "investment_opinion"}:
             return True
         if operation == "qa":
             if has_external_refs and subject_type in {"research_doc", "news_item", "news_set", "filing"}:
