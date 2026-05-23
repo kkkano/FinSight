@@ -29,6 +29,8 @@ def _render_chat(state: dict) -> str:
             "tasks": state.get("tasks", []),
             "memory_context": state.get("memory_context", {}),
             "reply_contract": state.get("reply_contract", {}),
+            "intent_contract": state.get("intent_contract"),
+            "intent_contracts": state.get("intent_contracts"),
             "artifacts": state.get("artifacts", {}),
             "plan_ir": state.get("plan_ir", {"steps": []}),
             "trace": state.get("trace", {}),
@@ -1458,6 +1460,52 @@ def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:
     assert "最近新闻" in markdown
     assert "[Li Auto delivery update](https://example.com/li)" in markdown
     assert "对股价的影响要看两点" not in markdown
+
+def test_chat_renderer_external_entity_impact_adds_deterministic_judgment() -> None:
+    markdown = _render_chat(
+        {
+            "query": "研究一下特斯拉会不会被 SpaceX 影响",
+            "subject": {"subject_type": "company", "tickers": ["TSLA"]},
+            "operation": {"name": "analyze_impact"},
+            "intent_contract": {
+                "facets": ["external_entity_impact"],
+                "budget_profile": "external_entity_impact_light",
+                "required_evidence": ["price_snapshot", "news_context", "risk_profile"],
+            },
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "subject_label": "TSLA",
+                    "tickers": ["TSLA"],
+                    "operation": {
+                        "name": "analyze_impact",
+                        "params": {
+                            "facets": ["external_entity_impact"],
+                            "budget_profile": "external_entity_impact_light",
+                        },
+                    },
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "TSLA"}, "task_ids": ["task_1"]},
+                    {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "TSLA"}, "task_ids": ["task_1"]},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 180.0, "change_percent": 1.2}},
+                    "s2": {"output": [{"title": "Tesla and SpaceX investor attention", "url": "https://example.com/tsla-spacex"}]},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "初步影响判断" in markdown
+    assert "间接叙事/风险影响" in markdown
+    assert "不能单独证明因果" in markdown
 
 
 def test_chat_renderer_macro_research_does_not_use_stock_news_template() -> None:

@@ -1604,6 +1604,35 @@ def _intent_contract(state: GraphState) -> dict[str, Any]:
     return contract if isinstance(contract, dict) else {}
 
 
+def _has_contract_facet(state: GraphState, facet: str) -> bool:
+    facets = _intent_contract(state).get("facets")
+    return isinstance(facets, list) and facet in {str(item) for item in facets}
+
+
+def _external_entity_impact_fallback_lines(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    news_map: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    if not _has_contract_facet(state, "external_entity_impact"):
+        return []
+    has_news = any(items for items in news_map.values())
+    has_price = any((payload or {}).get("price") for payload in prices.values())
+    lines = [
+        "初步影响判断：",
+        "- 这类问题要按“外部实体/主题 -> 公司基本面、估值叙事、管理层注意力、市场情绪”来拆，不应该只做概念解释。",
+    ]
+    if has_news:
+        lines.append("- 本轮已经抓到相关新闻和行情锚点；按现有证据，更稳妥的判断是先视为间接叙事/风险影响，除非新闻或公告显示明确的收入、成本、融资、持股或监管传导。")
+    else:
+        lines.append("- 本轮没有抓到足够新闻证据，不能硬编直接影响结论；当前只能把它列为待验证的外部风险主题。")
+    if has_price:
+        lines.append("- 股价涨跌只能说明市场反应，不能单独证明因果；后续要看同一时间段是否有公司公告、权威报道或分析师下修/上修预期。")
+    lines.append("- 下一步重点看：是否有跨公司资金/业务关系、管理层注意力分散、供应链/技术协同、或市场把两者叙事绑定交易。")
+    return lines
+
+
 def _understanding_v2(state: GraphState) -> dict[str, Any]:
     payload = state.get("understanding_v2")
     if isinstance(payload, dict):
@@ -1895,6 +1924,14 @@ def render_chat_markdown(state: GraphState) -> str:
             lines.append("")
             if analysis_block:
                 lines.append(analysis_block)
+            elif _has_contract_facet(state, "external_entity_impact"):
+                lines.extend(
+                    _external_entity_impact_fallback_lines(
+                        state,
+                        prices=prices,
+                        news_map=news_map,
+                    )
+                )
             elif _has_macro_context(state):
                 lines.extend(_macro_mechanism_lines(state))
             else:
@@ -1917,6 +1954,14 @@ def render_chat_markdown(state: GraphState) -> str:
                 _append_missing_article_url_note(lines, fallback_items[:4])
                 if analysis_block:
                     _append_render_var_block(lines, analysis_block)
+                elif _has_contract_facet(state, "external_entity_impact"):
+                    lines.extend(
+                        _external_entity_impact_fallback_lines(
+                            state,
+                            prices=prices,
+                            news_map=news_map,
+                        )
+                    )
                 elif _has_macro_context(state):
                     lines.append("")
                     lines.extend(_macro_mechanism_lines(state))
