@@ -10,6 +10,7 @@ from backend.graph.capability_registry import select_agents_for_request
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
+from backend.graph.understanding_v2 import project_v2_tasks_to_legacy
 
 
 _SEC_HOLDINGS_ENABLED_VALUES = {"1", "true", "yes", "on"}
@@ -55,6 +56,8 @@ def planner_stub(state: GraphState) -> dict:
     allowed_tools = set((policy.get("allowed_tools") or []) if isinstance(policy, dict) else [])
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
     raw_tasks = state.get("tasks")
+    if not isinstance(raw_tasks, list):
+        raw_tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
     ready_tasks = [
         task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
         if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
@@ -463,7 +466,7 @@ def planner_stub(state: GraphState) -> dict:
         compare_tickers = set(_task_tickers(task))
         if not compare_tickers:
             return False
-        current_ops = {"price", "fetch", "analyze_impact", "daily_brief", "technical"}
+        current_ops = {"price", "fetch", "analyze_impact", "daily_brief", "technical", "investment_opinion", "earnings_impact", "earnings_performance"}
         for other in ready_tasks:
             if other is task:
                 continue
@@ -480,6 +483,8 @@ def planner_stub(state: GraphState) -> dict:
         data_profile = str(params.get("data_profile") or params.get("comparison_data_profile") or "").strip().lower()
         if data_profile in {"performance", "historical_performance"}:
             return True
+        if data_profile in {"facet_evidence", "valuation_compare", "technical_compare", "earnings_price_impact"}:
+            return False
         if task is not None and _compare_has_current_support(task):
             return False
         return True

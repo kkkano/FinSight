@@ -2,6 +2,7 @@
 """请求理解节点：一次性完成闲聊、标的、任务和阻塞项识别。"""
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import replace
 from typing import Any
@@ -27,6 +28,12 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
 from backend.graph.memory_scope import current_report_context, current_thread_focus
+from backend.graph.understanding_v2 import (
+    build_understanding_v2,
+    infer_facets,
+    relation_operation_params,
+    support_operations_for_relation,
+)
 from backend.graph.request_task_contract import (
     build_reply_contract,
     query_explicitly_requests_links,
@@ -1956,26 +1963,36 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             or multi_ticker_report
         )
         if multi_ticker_compare:
+            relation_facets = infer_facets(query, output_mode=output_mode)
+            relation_params = relation_operation_params(query, relation_facets)
             _add_task(
                 tasks,
                 subject_type="company",
-                operation=_operation("compare", 0.86),
+                operation=_operation("compare", 0.86, relation_params),
                 query=query,
                 tickers=scoped_tickers,
                 priority=20,
                 reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query) else "multi_ticker_compare",
+                params=relation_params,
             )
-            extra_operations: list[dict[str, Any]] = []
-            if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
-                extra_operations.append(_operation("price", 0.82))
-            if _contains_any(query, _NEWS_HINTS) or multi_ticker_report:
-                extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
-            if (
-                _contains_any(query, _IMPACT_HINTS)
-                and (multi_ticker_report or len(tickers) == 1)
-                and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
-            ):
-                extra_operations.append(_operation("analyze_impact", 0.78))
+            extra_operations: list[dict[str, Any]] = support_operations_for_relation(query, relation_facets)
+            if multi_ticker_report:
+                existing_extra_names = {str(operation.get("name") or "") for operation in extra_operations}
+                if "price" not in existing_extra_names:
+                    extra_operations.append(_operation("price", 0.82))
+                if "fetch" not in existing_extra_names:
+                    extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
+            if not extra_operations:
+                if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
+                    extra_operations.append(_operation("price", 0.82))
+                if _contains_any(query, _NEWS_HINTS) or multi_ticker_report:
+                    extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
+                if (
+                    _contains_any(query, _IMPACT_HINTS)
+                    and (multi_ticker_report or len(tickers) == 1)
+                    and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
+                ):
+                    extra_operations.append(_operation("analyze_impact", 0.78))
             for ticker in scoped_tickers:
                 subject_type = _subject_type_for_ticker(ticker)
                 for operation in extra_operations:
@@ -2382,12 +2399,30 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "context_refs": context_refs,
         "fallback_assumptions": fallback_assumptions,
     }
+    understanding_v2_mode = str(os.getenv("FINSIGHT_UNDERSTANDING_V2_MODE") or "shadow").strip().lower()
+    understanding_v2 = {}
+    if understanding_v2_mode != "off":
+        understanding_v2 = build_understanding_v2(
+            query=query,
+            output_mode=output_mode,
+            tasks=tasks,
+            blocked_tasks=blocked_tasks,
+            subject=subject,
+            operation=operation,
+            reply_contract=reply_contract,
+            context_refs=context_refs,
+            fallback_assumptions=fallback_assumptions,
+        )
+        understanding["v2"] = understanding_v2
     trace["understanding"] = understanding
+    if understanding_v2:
+        trace["understanding_v2"] = understanding_v2
     trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
     return {
         "understanding": understanding,
+        "understanding_v2": understanding_v2,
         "reply_contract": reply_contract,
         "tasks": tasks,
         "blocked_tasks": blocked_tasks,

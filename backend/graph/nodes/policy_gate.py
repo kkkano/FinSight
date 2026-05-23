@@ -8,6 +8,7 @@ from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
+from backend.graph.understanding_v2 import project_v2_tasks_to_legacy
 
 
 _DASHBOARD_CORE_AGENTS: tuple[str, ...] = (
@@ -136,6 +137,8 @@ def _infer_market_from_subject(subject: dict | None) -> str | None:
 
 def _ready_understanding_tasks(state: GraphState) -> list[dict]:
     tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
     if not isinstance(tasks, list):
         return []
     ready: list[dict] = []
@@ -514,6 +517,13 @@ def policy_gate(state: GraphState) -> dict:
 
     if output_mode != "investment_report" and reply_contract_disallows_news(state):
         allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
+
+    if isinstance(state.get("understanding_v2"), dict):
+        default_cap = 18 if output_mode == "investment_report" else (10 if output_mode == "chat" else 12)
+        global_cap = _env_int("FINSIGHT_UNDERSTANDING_V2_MAX_TOOLS", default_cap, min_value=1, max_value=40)
+        mode_env = f"FINSIGHT_UNDERSTANDING_V2_{str(output_mode).upper()}_MAX_TOOLS"
+        mode_cap = _env_int(mode_env, global_cap, min_value=1, max_value=40)
+        budget["max_tools"] = min(int(budget.get("max_tools", mode_cap)), mode_cap)
 
     # Agent whitelist:
     # Priority: agents_override (explicit) > agent_preferences (depth) > default selection

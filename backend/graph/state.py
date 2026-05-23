@@ -221,6 +221,7 @@ class GraphState(MessagesState):
     chat_responded: NotRequired[bool]
     memory_context: NotRequired[dict[str, Any]]
     understanding: NotRequired[Understanding]
+    understanding_v2: NotRequired[dict[str, Any]]
     reply_contract: NotRequired[ReplyContract]
     tasks: NotRequired[list[UnderstandingTask]]
     blocked_tasks: NotRequired[list[BlockedTask]]
