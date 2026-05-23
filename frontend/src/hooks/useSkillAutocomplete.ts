@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { apiClient } from '../api/client';
 
 export interface SkillItem {
@@ -13,13 +13,7 @@ export interface SkillItem {
   insert_text: string;
 }
 
-interface SkillListResponse {
-  success: boolean;
-  count: number;
-  items: SkillItem[];
-}
-
-const SKILL_TRIGGER_RE = /(^|\s)\/skill(?:\s+([A-Za-z0-9_.:-]*))?$/;
+const SKILL_TRIGGER_RE = /(^|\s)\/skill(?:\s+(\S*))?$/;
 
 export function useSkillAutocomplete(
   inputText: string,
@@ -30,6 +24,7 @@ export function useSkillAutocomplete(
   const [dismissed, setDismissed] = useState(false);
   const fetchedRef = useRef(false);
   const prevInputRef = useRef(inputText);
+  const insertingRef = useRef(false);
 
   const match = SKILL_TRIGGER_RE.exec(inputText);
   const isOpen = match !== null && !dismissed;
@@ -38,28 +33,40 @@ export function useSkillAutocomplete(
   useEffect(() => {
     if (prevInputRef.current !== inputText) {
       prevInputRef.current = inputText;
-      setDismissed(false);
+      if (insertingRef.current) {
+        insertingRef.current = false;
+      } else {
+        setDismissed(false);
+      }
     }
   }, [inputText]);
 
   useEffect(() => {
     if (isOpen && !fetchedRef.current) {
       fetchedRef.current = true;
-      (apiClient as any).listSkills?.()
-        .then((res: SkillListResponse) => {
-          if (res?.success && Array.isArray(res.items)) setSkills(res.items);
+      apiClient.listSkills()
+        .then((res) => {
+          if (res?.success && Array.isArray(res.items)) {
+            setSkills(res.items as unknown as SkillItem[]);
+          }
         })
-        .catch(() => {});
+        .catch(() => {
+          fetchedRef.current = false;
+        });
     }
   }, [isOpen]);
 
-  const filteredSkills = query
-    ? skills.filter(
-        (s) =>
-          s.name.toLowerCase().includes(query) ||
-          s.description.toLowerCase().includes(query),
-      )
-    : skills;
+  const filteredSkills = useMemo(
+    () =>
+      query
+        ? skills.filter(
+            (s) =>
+              s.name.toLowerCase().includes(query) ||
+              s.description.toLowerCase().includes(query),
+          )
+        : skills,
+    [skills, query],
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -67,6 +74,7 @@ export function useSkillAutocomplete(
 
   const selectSkill = useCallback(
     (skill: SkillItem) => {
+      insertingRef.current = true;
       onInsert(skill.insert_text);
       setDismissed(true);
     },

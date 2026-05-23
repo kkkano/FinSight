@@ -34,7 +34,9 @@ export function SkillAutocomplete({
   return (
     <div
       ref={listRef}
+      id="skill-autocomplete-listbox"
       role="listbox"
+      aria-label="技能列表"
       className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg shadow-xl border overflow-hidden"
       style={{
         backgroundColor: 'var(--fin-card, #1a1a2e)',

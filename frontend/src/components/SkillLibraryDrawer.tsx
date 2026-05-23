@@ -34,7 +34,7 @@ export function SkillLibraryDrawer({
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    (apiClient as any).listSkills?.()
+    apiClient.listSkills()
       .then((res: SkillListResponse) => {
         if (res?.success && Array.isArray(res.items)) setSkills(res.items);
       })
