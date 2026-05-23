@@ -14,6 +14,12 @@ from backend.graph.earnings_intent import (
     query_requests_earnings_price_impact,
 )
 from backend.graph.event_bus import emit_event
+from backend.graph.intent_contract import (
+    derive_intent_contract,
+    evidence_focused_operation,
+    requires_per_ticker_research,
+    synthesis_compare_operation,
+)
 from backend.graph.investment_intent import query_requests_investment_opinion
 from backend.graph.nodes.conversation_router import (
     ContextBinding,
@@ -1687,6 +1693,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         [str(t) for t in (ticker_meta.get("tickers") or []) if str(t).strip().upper() not in _NON_ASSET_TOKENS]
     )
     conversation_decision: ConversationDecision | None = None
+    intent_contract: dict[str, Any] | None = None
     context_router_research_bound = False
 
     if not query:
@@ -1951,44 +1958,74 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         scoped_tickers = report_tickers or tickers
         multi_ticker_report = len(scoped_tickers) >= 2 and _explicit_report_mode(state, output_mode)
+        comparison_requested = _explicit_multi_ticker_compare_requested(query)
         multi_ticker_compare = len(scoped_tickers) >= 2 and (
-            _explicit_multi_ticker_compare_requested(query)
+            comparison_requested
             or multi_ticker_report
         )
+        intent_contract = derive_intent_contract(
+            query=query,
+            tickers=scoped_tickers,
+            output_mode=output_mode,
+            comparison_requested=multi_ticker_compare,
+            domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
+            lightweight_requested=_is_explicit_brief_request(query) or _is_lightweight_representative_compare(query),
+        )
+        trace["intent_contract"] = intent_contract
         if multi_ticker_compare:
-            _add_task(
-                tasks,
-                subject_type="company",
-                operation=_operation("compare", 0.86),
-                query=query,
-                tickers=scoped_tickers,
-                priority=20,
-                reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query) else "multi_ticker_compare",
-            )
-            extra_operations: list[dict[str, Any]] = []
-            if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
-                extra_operations.append(_operation("price", 0.82))
-            if _contains_any(query, _NEWS_HINTS) or multi_ticker_report:
-                extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
-            if (
-                _contains_any(query, _IMPACT_HINTS)
-                and (multi_ticker_report or len(tickers) == 1)
-                and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
-            ):
-                extra_operations.append(_operation("analyze_impact", 0.78))
-            for ticker in scoped_tickers:
-                subject_type = _subject_type_for_ticker(ticker)
-                for operation in extra_operations:
-                    _add_task(
-                        tasks,
-                        subject_type=subject_type,
-                        operation=operation,
-                        query=query,
-                        tickers=[ticker],
-                        subject_label=ticker,
-                        priority=26,
-                        reason="compare_subtask",
-                    )
+            contract_tickers = list(intent_contract.get("primary_tickers") or scoped_tickers)
+            if requires_per_ticker_research(intent_contract):
+                _add_task(
+                    tasks,
+                    subject_type="company",
+                    operation=synthesis_compare_operation(intent_contract),
+                    query=query,
+                    tickers=contract_tickers,
+                    priority=20,
+                    reason="intent_contract_synthesis_compare",
+                )
+                _add_per_ticker_company_tasks(
+                    tasks,
+                    tickers=contract_tickers,
+                    operations=[evidence_focused_operation(intent_contract)],
+                    query=query,
+                    priority=24,
+                    reason="intent_contract_per_ticker_evidence",
+                )
+            else:
+                _add_task(
+                    tasks,
+                    subject_type="company",
+                    operation=_operation("compare", 0.86),
+                    query=query,
+                    tickers=contract_tickers,
+                    priority=20,
+                    reason="multi_ticker_report" if multi_ticker_report and not comparison_requested else "multi_ticker_compare",
+                )
+                extra_operations: list[dict[str, Any]] = []
+                if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
+                    extra_operations.append(_operation("price", 0.82))
+                if _contains_any(query, _NEWS_HINTS) or multi_ticker_report:
+                    extra_operations.append(_operation("fetch", 0.78, {"topic": "news"}))
+                if (
+                    _contains_any(query, _IMPACT_HINTS)
+                    and (multi_ticker_report or len(tickers) == 1)
+                    and not re.search(r"(哪个|谁).{0,8}(风险|risk)", query, re.IGNORECASE)
+                ):
+                    extra_operations.append(_operation("analyze_impact", 0.78))
+                for ticker in contract_tickers:
+                    subject_type = _subject_type_for_ticker(ticker)
+                    for operation in extra_operations:
+                        _add_task(
+                            tasks,
+                            subject_type=subject_type,
+                            operation=operation,
+                            query=query,
+                            tickers=[ticker],
+                            subject_label=ticker,
+                            priority=26,
+                            reason="compare_subtask",
+                        )
         else:
             fallback_operations = _company_operations(
                 query,
@@ -2383,10 +2420,12 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "fallback_assumptions": fallback_assumptions,
     }
     trace["understanding"] = understanding
+    if intent_contract is not None:
+        trace["intent_contract"] = intent_contract
     trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
-    return {
+    result = {
         "understanding": understanding,
         "reply_contract": reply_contract,
         "tasks": tasks,
@@ -2401,6 +2440,9 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "artifacts": artifacts,
         "trace": trace,
     }
+    if intent_contract is not None:
+        result["intent_contract"] = intent_contract
+    return result
 
 
 __all__ = ["understand_request"]

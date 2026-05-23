@@ -1598,6 +1598,54 @@ def _render_compare_or_basket_markdown(
     return _finalize_chat_markdown(lines, state)
 
 
+def _intent_contract(state: GraphState) -> dict[str, Any]:
+    contract = state.get("intent_contract")
+    return contract if isinstance(contract, dict) else {}
+
+
+def _render_research_compare_markdown(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    news_map: dict[str, list[dict[str, str]]],
+    evidence_items: list[dict[str, str]],
+) -> str:
+    contract = _intent_contract(state)
+    tickers = _tickers(state)
+    facets = {str(item) for item in (contract.get("facets") if isinstance(contract.get("facets"), list) else [])}
+    dimensions = []
+    render_intent = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else {}
+    if isinstance(render_intent.get("dimensions"), list):
+        dimensions = [str(item) for item in render_intent.get("dimensions") if str(item).strip()]
+    label = ", ".join(tickers) or "these tickers"
+    focus = ", ".join(dimensions or sorted(facets) or ["research"])
+
+    lines: list[str] = [
+        f"Research comparison for {label}: focus={focus}.",
+        "",
+        "Per-ticker evidence",
+    ]
+    for ticker in tickers[:6]:
+        lines.append(f"- {ticker}:")
+        price = prices.get(ticker)
+        if price and price.get("price"):
+            lines.append(f"  - {_format_price_line(ticker, price)}")
+        else:
+            lines.append("  - [data missing] current price evidence was not available.")
+        if "valuation" in facets:
+            lines.append("  - Valuation evidence requires company context, earnings expectations, and fundamental review.")
+
+    fundamental = _agent_summary(state, {"fundamental_agent"})
+    if fundamental:
+        lines.extend(["", "Fundamental / valuation read", f"- {fundamental}"])
+    elif "valuation" in facets:
+        lines.extend(["", "Fundamental / valuation read", "- [data missing] fundamental_agent output was not available."])
+
+    sources = [item for items in news_map.values() for item in items] or evidence_items
+    _append_sources(lines, sources)
+    return _finalize_chat_markdown(lines, state)
+
+
 def render_chat_markdown(state: GraphState) -> str:
     query = str(state.get("query") or "").strip()
     ticker_label = ", ".join(_tickers(state)) or "这个标的"
@@ -1731,6 +1779,16 @@ def render_chat_markdown(state: GraphState) -> str:
             ticker_price = prices.get(ticker, price if len(target_tickers) == 1 else {})
             lines.append(_format_price_line(ticker, ticker_price))
         return _finalize_chat_markdown(lines, state)
+
+    intent_contract = _intent_contract(state)
+    render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
+    if render_intent.get("shape") == "compare" and bool(intent_contract.get("per_ticker_required")):
+        return _render_research_compare_markdown(
+            state,
+            prices=prices,
+            news_map=news_map,
+            evidence_items=evidence_items,
+        )
 
     if "compare" in operations:
         return _render_compare_or_basket_markdown(

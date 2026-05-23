@@ -6,6 +6,7 @@ import re
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
+from backend.graph.intent_contract import is_valuation_contract, requires_per_ticker_research
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
 
@@ -106,6 +107,15 @@ def _is_truthy(value: object) -> bool:
 def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(str(needle or "").lower() in lowered for needle in needles)
+
+
+def _append_missing(items: list[str], names: tuple[str, ...]) -> list[str]:
+    seen = set(items)
+    for name in names:
+        if name not in seen:
+            items.append(name)
+            seen.add(name)
+    return items
 
 
 def _infer_market_from_ticker(ticker: str) -> str | None:
@@ -359,6 +369,8 @@ def policy_gate(state: GraphState) -> dict:
     op_name = operation.get("name") if isinstance(operation, dict) else None
     op_name = str(op_name) if isinstance(op_name, str) and op_name else "qa"
     query_text = str(state.get("query") or "")
+    intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
+    valuation_contract = bool(is_valuation_contract(intent_contract) and requires_per_ticker_research(intent_contract))
 
     # --- Read user preferences from ui_context ---
     ui_context = state.get("ui_context") or {}
@@ -508,6 +520,20 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
 
+    if valuation_contract:
+        allowed_tools = _append_missing(
+            list(allowed_tools),
+            (
+                "get_stock_price",
+                "get_company_info",
+                "get_earnings_estimates",
+                "get_current_datetime",
+                "search",
+            ),
+        )
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 6)
+
     if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
         allowed_tools = ["fetch_url_content", *allowed_tools]
         budget["max_tools"] = max(int(budget.get("max_tools", 0)), 1)
@@ -538,6 +564,15 @@ def policy_gate(state: GraphState) -> dict:
         if validated:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
+    elif valuation_contract and output_mode != "investment_report":
+        allowed_agents = ["fundamental_agent"]
+        agent_selection = {
+            "selected": list(allowed_agents),
+            "required": list(allowed_agents),
+            "reason": "intent_contract_valuation_evidence",
+            "selection_mode": "research_obligation",
+            "budget_profile": str(intent_contract.get("budget_profile") or "valuation_compare_light"),
+        }
     elif output_mode == "investment_report":
         force_all_agents = _is_truthy(ui_context.get("ensure_all_agents")) if isinstance(ui_context, dict) else False
         dashboard_forced = _is_dashboard_source(ui_context)

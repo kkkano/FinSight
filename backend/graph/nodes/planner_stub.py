@@ -477,7 +477,11 @@ def planner_stub(state: GraphState) -> dict:
         if output_mode == "investment_report":
             return True
         params = _task_operation_params(task or {})
+        if bool(params.get("synthesis_only")):
+            return False
         data_profile = str(params.get("data_profile") or params.get("comparison_data_profile") or "").strip().lower()
+        if data_profile in {"research_synthesis", "synthesis_only"}:
+            return False
         if data_profile in {"performance", "historical_performance"}:
             return True
         if task is not None and _compare_has_current_support(task):
@@ -537,6 +541,7 @@ def planner_stub(state: GraphState) -> dict:
                 _append_earnings_performance_steps(ticker, group=group, task_ids=task_ids)
                 continue
             if op_name == "investment_opinion":
+                valuation_focus = str(params.get("evidence_focus") or "").strip().lower() == "valuation"
                 _append_tool_step(
                     "get_stock_price",
                     {"ticker": ticker},
@@ -545,6 +550,32 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
+                if valuation_focus:
+                    _append_tool_step(
+                        "get_company_info",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add company and valuation context.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_earnings_estimates",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add earnings expectations for multiple sanity.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_agent_step(
+                        "fundamental_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} valuation evidence: run fundamental_agent for valuation support.",
+                        optional=False,
+                        parallel_group=f"{group}_valuation_agents" if group else "valuation_agents",
+                        task_ids=task_ids,
+                    )
+                    continue
                 _append_tool_step(
                     "get_technical_snapshot",
                     {"ticker": ticker},

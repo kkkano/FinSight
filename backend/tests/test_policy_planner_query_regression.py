@@ -160,6 +160,71 @@ def test_investment_opinion_query_matrix_routes_to_rich_chat_chain(monkeypatch):
         assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_agents), query
 
 
+def test_valuation_compare_uses_intent_contract_and_per_ticker_evidence(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+
+    assert contract.get("facets") == ["valuation"]
+    assert contract.get("per_ticker_required") is True
+    assert (contract.get("render_intent") or {}).get("shape") == "compare"
+    assert contract.get("required_evidence") == [
+        "price_by_ticker",
+        "company_info_by_ticker",
+        "earnings_estimates_by_ticker",
+        "fundamental_snapshot_by_ticker",
+    ]
+
+    tasks = understanding.get("tasks") or []
+    compare_tasks = [task for task in tasks if (task.get("operation") or {}).get("name") == "compare"]
+    evidence_tasks = [task for task in tasks if (task.get("operation") or {}).get("name") == "investment_opinion"]
+    assert len(compare_tasks) == 1
+    assert (compare_tasks[0].get("operation") or {}).get("params", {}).get("synthesis_only") is True
+    assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
+    assert all((task.get("operation") or {}).get("params", {}).get("evidence_focus") == "valuation" for task in evidence_tasks)
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+    agent_steps = [step for step in steps if step.get("kind") == "agent"]
+
+    assert agents == {"fundamental_agent"}
+    assert "get_performance_comparison" not in step_names
+    assert {"get_stock_price", "get_company_info", "get_earnings_estimates"}.issubset(set(step_names))
+    assert "get_technical_snapshot" not in step_names
+    assert [step.get("name") for step in agent_steps] == ["fundamental_agent", "fundamental_agent"]
+
+
+def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    monkeypatch.setenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT", "2")
+
+    state = {"query": "NVDA AMD TSM MSFT 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    evidence_tasks = [
+        task
+        for task in (understanding.get("tasks") or [])
+        if (task.get("operation") or {}).get("name") == "investment_opinion"
+    ]
+
+    assert contract.get("primary_tickers") == ["NVDA", "AMD"]
+    assert contract.get("omitted_tickers") == ["TSM", "MSFT"]
+    assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
+
+
 def test_earnings_performance_query_routes_to_fundamental_chain(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 
