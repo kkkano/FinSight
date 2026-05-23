@@ -7,7 +7,7 @@ import json
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
-from backend.graph.intent_contract import canonical_evidence_kinds
+from backend.graph.intent_contract import EXTERNAL_IMPACT_LIGHT_PROFILE, canonical_evidence_kinds
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
@@ -287,7 +287,9 @@ def planner_stub(state: GraphState) -> dict:
         *,
         group: str,
         task_ids: list[str],
+        evidence_profile: str = "",
     ) -> None:
+        lightweight_external_impact = evidence_profile == EXTERNAL_IMPACT_LIGHT_PROFILE
         for kind in required_evidence:
             if kind == "price_snapshot":
                 _append_tool_step(
@@ -367,14 +369,15 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
-                _append_agent_step(
-                    "news_agent",
-                    {"query": query, "ticker": ticker},
-                    why=f"{ticker} evidence contract: news agent synthesis.",
-                    optional=True,
-                    parallel_group=f"{group}_news_agents" if group else "news_agents",
-                    task_ids=task_ids,
-                )
+                if not lightweight_external_impact:
+                    _append_agent_step(
+                        "news_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} evidence contract: news agent synthesis.",
+                        optional=True,
+                        parallel_group=f"{group}_news_agents" if group else "news_agents",
+                        task_ids=task_ids,
+                    )
             elif kind == "risk_profile":
                 positions = [{"ticker": ticker, "weight": 1.0}]
                 _append_tool_step(
@@ -401,14 +404,15 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
-                _append_agent_step(
-                    "risk_agent",
-                    {"query": query, "ticker": ticker},
-                    why=f"{ticker} evidence contract: risk agent synthesis.",
-                    optional=True,
-                    parallel_group=f"{group}_risk_agents" if group else "risk_agents",
-                    task_ids=task_ids,
-                )
+                if not lightweight_external_impact:
+                    _append_agent_step(
+                        "risk_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} evidence contract: risk agent synthesis.",
+                        optional=True,
+                        parallel_group=f"{group}_risk_agents" if group else "risk_agents",
+                        task_ids=task_ids,
+                    )
             elif kind == "filing_context":
                 _append_tool_step(
                     "get_sec_company_facts_quarterly",
@@ -755,6 +759,9 @@ def planner_stub(state: GraphState) -> dict:
                     required_evidence,
                     group=group,
                     task_ids=task_ids,
+                    evidence_profile=str(
+                        params.get("evidence_profile") or params.get("budget_profile") or ""
+                    ).strip().lower(),
                 )
                 continue
             if op_name == "earnings_impact" or query_requests_earnings_price_impact(query):

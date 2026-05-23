@@ -83,6 +83,7 @@ class IntentContract(TypedDict, total=False):
 
 
 _CONTRACT_VERSION = "intent_contract.v1"
+EXTERNAL_IMPACT_LIGHT_PROFILE = "external_entity_impact_light"
 _HIGH_ORDER_FACETS = {"valuation", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
 _EXTERNAL_IMPACT_RELATION_RE = re.compile(
     r"(影响|冲击|拖累|利好|利空|受.{0,24}影响|被.{0,24}影响|"
@@ -683,7 +684,9 @@ def derive_intent_contract(
     shape = "compare" if comparison_requested and target_scope == "multi" else "answer"
 
     primary_operation = "research" if per_ticker_required else ("compare" if shape == "compare" else "qa")
-    if "valuation" in facets and per_ticker_required:
+    if "external_entity_impact" in facets and str(output_mode or "").strip().lower() in {"chat", "brief"}:
+        budget_profile = EXTERNAL_IMPACT_LIGHT_PROFILE
+    elif "valuation" in facets and per_ticker_required:
         budget_profile = "valuation_compare_light"
     elif "investment_opinion" in facets and per_ticker_required:
         budget_profile = "investment_opinion_compare"
@@ -734,11 +737,16 @@ def is_research_compare_contract(contract: dict[str, Any] | None) -> bool:
 def _contract_params(contract: dict[str, Any] | None) -> dict[str, Any]:
     facets = contract.get("facets") if isinstance(contract, dict) else []
     required = contract.get("required_evidence") if isinstance(contract, dict) else []
-    return {
+    params = {
         "facets": [str(f) for f in facets if str(f).strip()] if isinstance(facets, list) else [],
         "required_evidence": canonical_evidence_kinds(required if isinstance(required, list) else []),
         "intent_contract_id": str(contract.get("contract_id") or "") if isinstance(contract, dict) else "",
     }
+    budget_profile = str(contract.get("budget_profile") or "").strip() if isinstance(contract, dict) else ""
+    if budget_profile:
+        params["budget_profile"] = budget_profile
+        params["evidence_profile"] = budget_profile
+    return params
 
 
 def evidence_focused_operation(contract: dict[str, Any] | None) -> dict[str, Any]:
@@ -838,6 +846,7 @@ __all__ = [
     "EvidenceDefinition",
     "EvidenceKind",
     "EvidencePlanItem",
+    "EXTERNAL_IMPACT_LIGHT_PROFILE",
     "IntentContract",
     "canonical_evidence_kinds",
     "derive_intent_contract",

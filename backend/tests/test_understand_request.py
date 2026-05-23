@@ -206,6 +206,7 @@ def test_external_entity_impact_query_creates_evidence_contract(monkeypatch):
         contract = result.get("intent_contract") or {}
         assert (result.get("understanding") or {}).get("route") == "research", query
         assert contract.get("facets") == ["external_entity_impact"], query
+        assert contract.get("budget_profile") == "external_entity_impact_light", query
         assert (task.get("operation") or {}).get("name") == "analyze_impact", query
         assert task.get("tickers") == [ticker], query
         assert {"price_snapshot", "news_context", "risk_profile"}.issubset(_task_required_evidence(task)), query

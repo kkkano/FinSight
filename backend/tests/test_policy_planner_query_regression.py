@@ -265,6 +265,7 @@ def test_external_entity_impact_contract_runs_news_and_risk_evidence(monkeypatch
     task = (understanding.get("tasks") or [])[0]
 
     assert contract.get("facets") == ["external_entity_impact"]
+    assert contract.get("budget_profile") == "external_entity_impact_light"
     assert (task.get("operation") or {}).get("name") == "analyze_impact"
     assert (task.get("operation") or {}).get("params", {}).get("required_evidence") == [
         "price_snapshot",
@@ -281,7 +282,8 @@ def test_external_entity_impact_contract_runs_news_and_risk_evidence(monkeypatch
 
     assert {"news_agent", "risk_agent"}.issubset(agents)
     assert {"get_stock_price", "get_company_news", "get_authoritative_media_news"}.issubset(set(step_names))
-    assert {"news_agent", "risk_agent"}.issubset(step_agents)
+    assert {"analyze_historical_drawdowns", "get_factor_exposure", "run_portfolio_stress_test"}.issubset(set(step_names))
+    assert not {"news_agent", "risk_agent"}.intersection(step_agents)
     assert step_names
 
 
