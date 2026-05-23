@@ -14,7 +14,10 @@ from backend.graph.earnings_intent import (
     query_requests_earnings_price_impact,
 )
 from backend.graph.event_bus import emit_event
-from backend.graph.investment_intent import query_requests_investment_opinion
+from backend.graph.investment_intent import (
+    query_requests_comparative_investment_opinion,
+    query_requests_investment_opinion,
+)
 from backend.graph.nodes.conversation_router import (
     ContextBinding,
     ConversationDecision,
@@ -50,6 +53,14 @@ _IMPACT_HINTS = ("影响", "冲击", "拖累", "风险", "利好", "利空", "im
 _TECHNICAL_HINTS = ("技术面", "技术分析", "k线", "均线", "macd", "rsi", "technical")
 _VALUATION_CONCEPT_HINTS = ("估值", "valuation", "p/e", "pe", "p/s", "ps")
 _VALUATION_JUDGMENT_HINTS = ("贵", "便宜", "合理", "匹配", "增长", "growth", "expensive", "cheap", "overvalued", "undervalued")
+_ROUTER_GENERIC_COMPANY_OPERATIONS = {"price", "fetch", "qa", "daily_brief", "analyze_impact", "news_impact"}
+_ROUTER_SPECIFIC_COMPANY_OPERATIONS = {
+    "earnings_impact",
+    "earnings_performance",
+    "valuation_sanity",
+    "investment_opinion",
+    "technical",
+}
 _COMPARE_HINTS = ("对比", "比较", "相比", "vs", "versus", "谁更强", "哪个好", "哪个", "compare")
 _REPORT_PEER_CONTEXT_HINTS = (
     "覆盖",
@@ -374,18 +385,23 @@ def _direct_conversation_result(
     trace["understanding"] = understanding
     trace["conversation_router"] = decision.model_dump()
     trace["reply_contract"] = reply_contract
+    subject = _build_subject(None, [])
+    operation = _operation("chat", decision.confidence)
+    facets = derive_request_facets(query=query, operation=operation, subject=subject)
+    understanding["facets"] = facets
     result: dict[str, Any] = {
         "understanding": understanding,
         "reply_contract": reply_contract,
         "tasks": [],
         "blocked_tasks": [],
         "context_refs": context_refs,
-        "subject": _build_subject(None, []),
-        "operation": _operation("chat", decision.confidence),
+        "subject": subject,
+        "operation": operation,
         "output_mode": output_mode,
         "clarify": {"needed": False, "reason": "", "question": "", "suggestions": []},
         "chat_responded": True,
         "artifacts": artifacts,
+        "facets": facets,
         "messages": [AIMessage(content=reply or "(response completed)")],
         "trace": trace,
     }
@@ -433,8 +449,10 @@ def _explicit_report_mode(state: GraphState, output_mode: str) -> bool:
     return output_mode == "investment_report" or analysis_depth == "deep_research"
 
 
-def _explicit_multi_ticker_compare_requested(query: str) -> bool:
-    return _contains_any(query, _COMPARE_HINTS) and not _is_lightweight_representative_compare(query)
+def _explicit_multi_ticker_compare_requested(query: str, tickers: list[str] | None = None) -> bool:
+    if _is_lightweight_representative_compare(query):
+        return False
+    return _contains_any(query, _COMPARE_HINTS) or query_requests_comparative_investment_opinion(query, tickers or [])
 
 
 def _query_frames_extra_tickers_as_report_context(query: str) -> bool:
@@ -451,7 +469,7 @@ def _split_primary_report_tickers(
     if (
         len(tickers) < 2
         or not _explicit_report_mode(state, output_mode)
-        or _explicit_multi_ticker_compare_requested(query)
+        or _explicit_multi_ticker_compare_requested(query, tickers)
         or not _query_frames_extra_tickers_as_report_context(query)
     ):
         return tickers, []
@@ -527,7 +545,7 @@ def _company_operations(
     report_mode = str(output_mode or "").strip().lower() == "investment_report"
     if len(tickers) >= 2 and _is_lightweight_representative_compare(query):
         return [_operation("qa", 0.7)]
-    if len(tickers) >= 2 and _contains_any(query, _COMPARE_HINTS):
+    if len(tickers) >= 2 and _explicit_multi_ticker_compare_requested(query, tickers):
         operations.append(_operation("compare", 0.86))
         return operations
     if not report_mode and query_requests_earnings_price_impact(query):
@@ -609,6 +627,15 @@ def _router_guided_analysis_operation(decision: ConversationDecision) -> dict[st
     return _operation("qa", max(decision.confidence, 0.68))
 
 
+def _specific_company_operations(operations: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    return [
+        operation
+        for operation in (operations or [])
+        if isinstance(operation, dict)
+        and str(operation.get("name") or "").strip().lower() in _ROUTER_SPECIFIC_COMPANY_OPERATIONS
+    ]
+
+
 def _router_directed_company_operations(
     decision: ConversationDecision | None,
     *,
@@ -635,6 +662,9 @@ def _router_directed_company_operations(
         return [_operation("alert_set", max(decision.confidence, 0.78))]
     if decision.context_binding.source not in {"none", ""}:
         return None
+    specific_fallbacks = _specific_company_operations(fallback_operations)
+    if specific_fallbacks:
+        return specific_fallbacks
     if decision.domain_intent in {"quote", "news", "report_discussion", "doc_qa", "portfolio"}:
         primary = _domain_intent_operation(decision.domain_intent, decision.confidence)
         primary_name = str(primary.get("name") or "").strip()
@@ -779,6 +809,7 @@ def _add_router_task_hints(
     decision: ConversationDecision,
     query: str,
     current_tickers: list[str],
+    output_mode: str = "",
     selection_ids: list[str] | None = None,
     selection_types: list[str] | None = None,
 ) -> bool:
@@ -879,6 +910,23 @@ def _add_router_task_hints(
                 operation_name = str(_router_guided_analysis_operation(decision).get("name") or "qa").strip().lower()
 
         params = dict(hint.get("params") or {}) if isinstance(hint.get("params"), dict) else {}
+        if (
+            operation_name in _ROUTER_GENERIC_COMPANY_OPERATIONS
+            and hint_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+        ):
+            fallback_operations = _company_operations(
+                query,
+                tickers=dedup_tickers(hint_tickers),
+                output_mode=output_mode,
+            )
+            specific_operations = _specific_company_operations(fallback_operations)
+            if specific_operations:
+                selected_operation = specific_operations[0]
+                operation_name = str(selected_operation.get("name") or operation_name).strip().lower()
+                selected_params = dict(selected_operation.get("params") or {})
+                selected_params.update(params)
+                params = selected_params
         if operation_name == "fetch" and not params.get("topic"):
             params["topic"] = "news"
         if operation_name in {"fetch", "news_impact", "daily_brief"} and query_explicitly_requests_links(query):
@@ -994,6 +1042,13 @@ def _add_router_task_hints(
                     params=params,
                 )
             added = True
+            continue
+
+        if (
+            atomic_tickers
+            and subject_type in {"company", "index", "crypto", "fund"}
+            and all(_has_task(operation_name, ticker) for ticker in atomic_tickers)
+        ):
             continue
 
         _add_task(
@@ -1840,6 +1895,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         decision=conversation_decision,
                         query=query,
                         current_tickers=tickers,
+                        output_mode=output_mode,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
                     )
@@ -1958,7 +2014,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         scoped_tickers = report_tickers or tickers
         multi_ticker_report = len(scoped_tickers) >= 2 and _explicit_report_mode(state, output_mode)
         multi_ticker_compare = len(scoped_tickers) >= 2 and (
-            _explicit_multi_ticker_compare_requested(query)
+            _explicit_multi_ticker_compare_requested(query, scoped_tickers)
             or multi_ticker_report
         )
         if multi_ticker_compare:
@@ -1969,7 +2025,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 query=query,
                 tickers=scoped_tickers,
                 priority=20,
-                reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query) else "multi_ticker_compare",
+                reason="multi_ticker_report" if multi_ticker_report and not _explicit_multi_ticker_compare_requested(query, scoped_tickers) else "multi_ticker_compare",
             )
             extra_operations: list[dict[str, Any]] = []
             if _contains_any(query, _PRICE_HINTS) or multi_ticker_report:
@@ -2173,6 +2229,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         decision=conversation_decision,
                         query=query,
                         current_tickers=tickers,
+                        output_mode=output_mode,
                         selection_ids=selection_ids,
                         selection_types=selection_types,
                     )

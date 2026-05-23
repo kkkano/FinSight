@@ -28,7 +28,10 @@ from backend.graph.earnings_intent import (
     query_requests_earnings_performance,
     query_requests_earnings_price_impact,
 )
-from backend.graph.investment_intent import query_requests_investment_opinion
+from backend.graph.investment_intent import (
+    query_requests_comparative_investment_opinion,
+    query_requests_investment_opinion,
+)
 from backend.graph.json_utils import json_dumps_safe
 from backend.graph.memory_scope import current_report_context
 from backend.graph.preference_timeouts import apply_preferred_timeout
@@ -327,6 +330,15 @@ def _query_explicitly_requests_earnings_performance(query: str) -> bool:
 
 def _query_explicitly_requests_earnings_price_impact(query: str) -> bool:
     return query_requests_earnings_price_impact(query)
+
+
+def _query_explicitly_requests_valuation_sanity(query: str) -> bool:
+    text = str(query or "").strip().lower()
+    if not text:
+        return False
+    concept = any(t in text for t in ("估值", "valuation", "p/e", "pe ratio", "p/s", "ps ratio"))
+    judgment = any(t in text for t in ("贵", "便宜", "合理", "匹配", "增长", "growth", "expensive", "cheap", "overvalued", "undervalued"))
+    return concept and judgment
 
 
 def _query_prefers_direct_style_explanation(query: str) -> bool:
@@ -1548,6 +1560,60 @@ def _fast_explicit_execution_decision(
             task_hints=task_hints,
         )
 
+    if tickers and _query_explicitly_requests_valuation_sanity(query):
+        task_hints = tuple(
+            {
+                "subject_type": "company",
+                "subject_label": ticker,
+                "tickers": [ticker],
+                "operation": "valuation_sanity",
+                "params": {
+                    "target_metric": "valuation",
+                    "required_dimensions": ["fundamental", "technical", "risk"],
+                },
+                "reason": "explicit valuation sanity check request",
+            }
+            for ticker in _dedupe_preserve_order(tickers)[:6]
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.72),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=True,
+            reason="explicit valuation sanity check fast path",
+            reply_guidance="运行基本面、估值分位和风险证据后，判断估值是否与增长匹配。",
+            task_hints=task_hints,
+        )
+
+    if len(tickers) >= 2 and query_requests_comparative_investment_opinion(query, tickers):
+        compare_tickers = _dedupe_preserve_order(tickers)[:6]
+        task_hints = (
+            {
+                "subject_type": "company",
+                "subject_label": ", ".join(compare_tickers),
+                "tickers": compare_tickers,
+                "operation": "compare",
+                "params": {
+                    "aspects": ["fundamental", "risk", "price", "technical", "news"],
+                    "selection_task": "comparative_investment_opinion",
+                },
+                "reason": "comparative investment opinion request",
+            },
+        )
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source=source, confidence=0.72),
+            relation="compare",
+            domain_intent="analysis",
+            confidence=0.84,
+            needs_tools=True,
+            reason="comparative investment opinion request fast path",
+            reply_guidance="运行多标的横向比较证据，围绕基本面、风险和价格反应给出相对结论。",
+            task_hints=task_hints,
+        )
+
     if tickers and _query_explicitly_requests_investment_opinion(query):
         task_hints = tuple(
             {
@@ -1704,7 +1770,7 @@ async def route_conversation(
       "subject_type": "company|index|crypto|fund|macro|theme|portfolio|research_doc|news_item|unknown",
       "subject_label": "AAPL / MSFT / 美联储利率 / 当前持仓",
       "tickers": ["AAPL"],
-      "operation": "price|fetch|technical|analyze_impact|news_impact|qa|compare|portfolio_impact|rebalance_check|alert_set|macro_brief|fact_check",
+      "operation": "price|fetch|technical|valuation_sanity|earnings_impact|earnings_performance|investment_opinion|analyze_impact|news_impact|qa|compare|portfolio_impact|rebalance_check|alert_set|macro_brief|fact_check",
       "params": {},
       "reason": "为什么这个原子任务存在"
     }
