@@ -287,6 +287,11 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
     )
     default_query = str(state.get("query") or "").strip()
 
+    policy = state.get("policy") if isinstance(state, Mapping) else {}
+    policy = policy if isinstance(policy, dict) else {}
+    research_config = policy.get("agent_research_config") if isinstance(policy, dict) else {}
+    research_config = research_config if isinstance(research_config, dict) else {}
+
     agents: dict[str, Any] = {}
     init_errors: dict[str, str] = {}
     for name in names:
@@ -295,7 +300,15 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
             init_errors[name] = "agent_class_not_found"
             continue
         try:
-            agents[name] = cls(llm, cache, tools_module)
+            agent_instance = cls(llm, cache, tools_module)
+            if hasattr(agent_instance, "configure_research") and research_config:
+                agent_instance.configure_research(
+                    enable_llm_analysis=research_config.get("enable_llm_analysis"),
+                    max_reflections=research_config.get("max_reflections"),
+                    analysis_timeout_seconds=research_config.get("analysis_timeout_seconds"),
+                    token_acquire_timeout_seconds=research_config.get("token_acquire_timeout_seconds"),
+                )
+            agents[name] = agent_instance
         except Exception as exc:
             logger.exception("agent adapter failed to instantiate %s", name)
             init_errors[name] = f"init_failed:{exc.__class__.__name__}"

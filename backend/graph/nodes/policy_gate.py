@@ -698,6 +698,12 @@ def policy_gate(state: GraphState) -> dict:
             }
             for name in allowed_agents
         },
+        "agent_research_config": {
+            "enable_llm_analysis": bool(agent_preferences.get("enableLLMAnalysis", False)),
+            "max_reflections": max(0, min(3, int(agent_preferences.get("reflectionRounds", 0) or 0))),
+            "analysis_timeout_seconds": int(agent_preferences.get("analysisTimeoutSeconds", 0) or 0),
+            "token_acquire_timeout_seconds": int(agent_preferences.get("tokenAcquireTimeoutSeconds", 0) or 0),
+        },
     }
 
     trace = state.get("trace") or {}

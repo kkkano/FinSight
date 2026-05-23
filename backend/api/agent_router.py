@@ -25,6 +25,10 @@ def _default_preferences() -> dict[str, Any]:
         "maxRounds": _MAX_ROUNDS_DEFAULT,
         "concurrentMode": True,
         "timeoutSeconds": 0,
+        "enableLLMAnalysis": False,
+        "reflectionRounds": 0,
+        "analysisTimeoutSeconds": 0,
+        "tokenAcquireTimeoutSeconds": 0,
     }
 
 
@@ -57,11 +61,40 @@ def _normalize_preferences(raw: Any) -> dict[str, Any]:
     timeout = normalize_timeout_seconds(raw.get("timeoutSeconds", raw.get("timeout_seconds")))
     timeout_seconds = int(timeout) if timeout is not None else 0
 
+    enable_llm = raw.get("enableLLMAnalysis", defaults["enableLLMAnalysis"])
+    if not isinstance(enable_llm, bool):
+        enable_llm = defaults["enableLLMAnalysis"]
+
+    reflection_raw = raw.get("reflectionRounds", defaults["reflectionRounds"])
+    try:
+        reflection_rounds = int(reflection_raw)
+    except Exception:
+        reflection_rounds = defaults["reflectionRounds"]
+    reflection_rounds = max(0, min(3, reflection_rounds))
+
+    analysis_timeout_raw = raw.get("analysisTimeoutSeconds", defaults["analysisTimeoutSeconds"])
+    try:
+        analysis_timeout = int(analysis_timeout_raw)
+    except Exception:
+        analysis_timeout = 0
+    analysis_timeout = max(10, min(120, analysis_timeout)) if analysis_timeout > 0 else 0
+
+    token_timeout_raw = raw.get("tokenAcquireTimeoutSeconds", defaults["tokenAcquireTimeoutSeconds"])
+    try:
+        token_timeout = int(token_timeout_raw)
+    except Exception:
+        token_timeout = 0
+    token_timeout = max(5, min(60, token_timeout)) if token_timeout > 0 else 0
+
     return {
         "agents": normalized_agents,
         "maxRounds": max_rounds_value,
         "concurrentMode": concurrent_mode,
         "timeoutSeconds": timeout_seconds,
+        "enableLLMAnalysis": enable_llm,
+        "reflectionRounds": reflection_rounds,
+        "analysisTimeoutSeconds": analysis_timeout,
+        "tokenAcquireTimeoutSeconds": token_timeout,
     }
 
 

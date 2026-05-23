@@ -68,6 +68,9 @@ class BaseFinancialAgent:
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
         self._current_query: Optional[str] = None
         self._current_ticker: Optional[str] = None
+        self._llm_analyze_enabled_override: Optional[bool] = None
+        self._llm_analyze_timeout_override: Optional[float] = None
+        self._llm_analyze_call_timeout_override: Optional[float] = None
         try:
             self.max_reflections = max(
                 0,
@@ -76,14 +79,36 @@ class BaseFinancialAgent:
         except Exception:
             self.max_reflections = max(0, self.MAX_REFLECTIONS)
 
+    def configure_research(
+        self,
+        *,
+        enable_llm_analysis: Optional[bool] = None,
+        max_reflections: Optional[int] = None,
+        analysis_timeout_seconds: Optional[int] = None,
+        token_acquire_timeout_seconds: Optional[int] = None,
+    ) -> None:
+        if enable_llm_analysis is not None:
+            self._llm_analyze_enabled_override = bool(enable_llm_analysis)
+        if max_reflections is not None:
+            self.max_reflections = max(0, min(3, int(max_reflections)))
+        if analysis_timeout_seconds is not None and analysis_timeout_seconds > 0:
+            self._llm_analyze_call_timeout_override = float(max(5, min(120, analysis_timeout_seconds)))
+        if token_acquire_timeout_seconds is not None and token_acquire_timeout_seconds > 0:
+            self._llm_analyze_timeout_override = float(max(3, min(60, token_acquire_timeout_seconds)))
+
     def _reflection_token_timeout(self) -> float:
+        override = self._llm_analyze_timeout_override
+        if override is not None and override > 0:
+            return override
         try:
             return max(3.0, float(os.getenv("BASE_AGENT_REFLECTION_TOKEN_TIMEOUT_SECONDS", "12")))
         except Exception:
             return 12.0
 
     def _llm_analyze_timeout(self) -> float:
-        """Timeout (seconds) for the LLM analysis call in _llm_analyze."""
+        override = self._llm_analyze_timeout_override
+        if override is not None and override > 0:
+            return override
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_TIMEOUT_SECONDS"
         try:
             return max(1.0, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", "8"))))
@@ -91,7 +116,9 @@ class BaseFinancialAgent:
             return 8.0
 
     def _llm_analyze_call_timeout(self) -> float:
-        """Hard timeout for the actual LLM request after a token is acquired."""
+        override = self._llm_analyze_call_timeout_override
+        if override is not None and override > 0:
+            return override
         env_key = f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_CALL_TIMEOUT_SECONDS"
         try:
             return max(0.05, float(os.getenv(env_key, os.getenv("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", "8"))))
@@ -143,11 +170,15 @@ class BaseFinancialAgent:
         if not self.llm:
             return None
 
-        agent_enabled = os.getenv(f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_ENABLED")
-        enabled_raw = agent_enabled if agent_enabled is not None else os.getenv("AGENT_LLM_ANALYZE_ENABLED", "false")
-        enabled = str(enabled_raw).lower() in (
-            "true", "1", "yes", "on",
-        )
+        override = self._llm_analyze_enabled_override
+        if override is not None:
+            enabled = bool(override)
+        else:
+            agent_enabled = os.getenv(f"{self.AGENT_NAME.upper()}_LLM_ANALYZE_ENABLED")
+            enabled_raw = agent_enabled if agent_enabled is not None else os.getenv("AGENT_LLM_ANALYZE_ENABLED", "false")
+            enabled = str(enabled_raw).lower() in (
+                "true", "1", "yes", "on",
+            )
         if not enabled:
             return None
 
