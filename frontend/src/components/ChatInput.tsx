@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { Message, ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, Square, X } from 'lucide-react';
+import { SendHorizontal, Paperclip, Square, X, BookOpen } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
@@ -10,6 +10,9 @@ import { useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useToast } from './ui';
 import { getAgentPreferences } from './settings/AgentControlPanel';
+import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
+import { SkillAutocomplete } from './SkillAutocomplete';
+import { SkillLibraryDrawer } from './SkillLibraryDrawer';
 
 const TICKER_STOPWORDS = new Set([
   'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
@@ -282,6 +285,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSessionIdRef = useRef(sessionId);
+  const [skillLibraryOpen, setSkillLibraryOpen] = useState(false);
+  const skillAutocomplete = useSkillAutocomplete(input, (text: string) => {
+    setInput(text);
+    setDraft(text);
+  });
 
   const shouldGenerateChart = async (
     query: string,
@@ -813,6 +821,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   }, [sessionId]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (skillAutocomplete.handleKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -873,6 +882,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         </button>
       </div>
       <div className="relative flex items-end max-w-5xl mx-auto">
+        {skillAutocomplete.isOpen && (
+          <SkillAutocomplete
+            skills={skillAutocomplete.filteredSkills}
+            selectedIndex={skillAutocomplete.selectedIndex}
+            onSelect={skillAutocomplete.selectSkill}
+            onOpenLibrary={() => setSkillLibraryOpen(true)}
+          />
+        )}
         <textarea
           ref={inputRef}
           id="chat-input"
@@ -918,6 +935,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           )}
         </div>
       </div>
+      <SkillLibraryDrawer
+        open={skillLibraryOpen}
+        onClose={() => setSkillLibraryOpen(false)}
+        onSelectSkill={(text) => {
+          setInput(text);
+          setDraft(text);
+          inputRef.current?.focus();
+        }}
+      />
       <div className="text-center mt-2">
         <p className="text-xs text-fin-muted">
           FinSight AI generated content may be inaccurate. Not financial advice.

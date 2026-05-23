@@ -16,6 +16,8 @@ import { useDashboardStore } from '../store/dashboardStore';
 import { ReportView } from './report';
 import { useToast } from './ui';
 import { getAgentPreferences } from './settings/AgentControlPanel';
+import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
+import { SkillAutocomplete } from './SkillAutocomplete';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -83,6 +85,10 @@ export const MiniChat: React.FC = () => {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSessionIdRef = useRef(sessionId);
+  const skillAutocomplete = useSkillAutocomplete(input, (text: string) => {
+    setInput(text);
+    setDraft(text);
+  });
 
   // 流式内容累积 ref（避免闭包问题）
   const accumulatedContentRef = useRef<string>('');
@@ -374,6 +380,7 @@ export const MiniChat: React.FC = () => {
   }, [sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (skillAutocomplete.handleKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -494,7 +501,15 @@ export const MiniChat: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {skillAutocomplete.isOpen && (
+            <SkillAutocomplete
+              skills={skillAutocomplete.filteredSkills}
+              selectedIndex={skillAutocomplete.selectedIndex}
+              onSelect={skillAutocomplete.selectSkill}
+              onOpenLibrary={() => {}}
+            />
+          )}
           <textarea
             ref={inputRef}
             data-testid="mini-chat-input"

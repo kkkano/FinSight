@@ -1348,4 +1348,9 @@ export const apiClient = {
     const response = await api.post('/api/portfolio/positions', { session_id: sessionId, positions });
     return response.data;
   },
+
+  async listSkills(query?: string, limit?: number): Promise<{ success: boolean; count: number; items: Array<Record<string, unknown>> }> {
+    const response = await api.get('/api/skills', { params: { query, limit } });
+    return response.data;
+  },
 };
