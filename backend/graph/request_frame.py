@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal, NotRequired, TypedDict
 
-from backend.config.ticker_mapping import dedup_tickers, normalize_ticker
+from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.intent_contract import (
     canonical_evidence_kinds,
     derive_intent_contract,
@@ -51,6 +51,19 @@ _BACKTEST_DEFINITION_RE = re.compile(
     r"^\s*(?:what\s+is|what's|explain|meaning\s+of|define|how\s+does)\s+(?:a\s+)?back[\s-]?test(?:ing)?\??\s*$",
     re.IGNORECASE,
 )
+_FRAME_SPLIT_RE = re.compile(
+    r"[\u3001,\uff0c;\uff1b\u3002.!?\uff1f\uff01]+"
+    r"|\b(?:and|then|also)\b"
+    r"|(?:\u7136\u540e|\u518d|\u4ee5\u53ca|\u5e76\u4e14)",
+    re.IGNORECASE,
+)
+_PRICE_HINT_RE = re.compile(r"\b(?:price|quote|trading|current)\b|\u4ef7\u683c|\u80a1\u4ef7|\u884c\u60c5", re.IGNORECASE)
+_NEWS_HINT_RE = re.compile(r"\b(?:news|headline|headlines|latest)\b|\u65b0\u95fb|\u6d88\u606f", re.IGNORECASE)
+_TECHNICAL_HINT_RE = re.compile(r"\b(?:technical|rsi|macd|support|resistance)\b|\u6280\u672f|\u5747\u7ebf", re.IGNORECASE)
+_MACRO_HINT_RE = re.compile(
+    r"\b(?:fed|fomc|rate|rates|inflation|cpi|ppi|macro)\b|\u5229\u7387|\u7f8e\u8054\u50a8|\u5b8f\u89c2|\u901a\u80c0",
+    re.IGNORECASE,
+)
 
 
 def _normalized_tickers(tickers: list[str] | tuple[str, ...] | None) -> list[str]:
@@ -77,6 +90,26 @@ def _requests_backtest_action(query: str, tickers: list[str]) -> bool:
     if not tickers:
         return False
     return bool(_BACKTEST_ACTION_RE.search(text))
+
+
+def _domain_intent_for_fragment(fragment: str, *, subject_type: str) -> str:
+    if _PRICE_HINT_RE.search(fragment):
+        return "quote"
+    if _NEWS_HINT_RE.search(fragment):
+        return "news"
+    if _TECHNICAL_HINT_RE.search(fragment):
+        return "technical"
+    if subject_type == "macro" or _MACRO_HINT_RE.search(fragment):
+        return "macro"
+    return ""
+
+
+def _fragment_subject_type(fragment: str, fragment_tickers: list[str]) -> str:
+    if fragment_tickers:
+        return "company"
+    if _MACRO_HINT_RE.search(fragment):
+        return "macro"
+    return "unknown"
 
 
 def _relation_for_contract(contract: dict[str, Any]) -> RelationKind:
@@ -187,8 +220,55 @@ def compile_request_frame(
     }
 
 
+def compile_request_frames(
+    *,
+    query: str,
+    tickers: list[str] | tuple[str, ...] | None,
+    output_mode: str,
+) -> list[RequestFrame]:
+    """Compile simple compound user turns into independent request frames.
+
+    This is intentionally conservative.  It only splits on clear separators and
+    keeps frames that have a concrete subject or a macro topic plus evidence
+    signal.  More ambiguous decomposition remains the router's job.
+    """
+    raw_query = str(query or "").strip()
+    if not raw_query:
+        return []
+    fragments = [part.strip() for part in _FRAME_SPLIT_RE.split(raw_query) if part.strip()]
+    if len(fragments) < 2:
+        return []
+
+    known_tickers = set(_normalized_tickers(tickers))
+    frames: list[RequestFrame] = []
+    for idx, fragment in enumerate(fragments, 1):
+        fragment_tickers = _normalized_tickers(extract_tickers(fragment).get("tickers") or [])
+        if not fragment_tickers and len(known_tickers) == 1 and any(
+            regex.search(fragment) for regex in (_PRICE_HINT_RE, _NEWS_HINT_RE, _TECHNICAL_HINT_RE)
+        ):
+            fragment_tickers = list(known_tickers)
+        subject_type = _fragment_subject_type(fragment, fragment_tickers)
+        domain_intent = _domain_intent_for_fragment(fragment, subject_type=subject_type)
+        if subject_type == "unknown" or not domain_intent:
+            continue
+        frame = compile_request_frame(
+            query=fragment,
+            tickers=fragment_tickers,
+            output_mode=output_mode,
+            comparison_requested=False,
+            domain_intent=domain_intent,
+            subject_type=subject_type,
+            frame_id=f"query_frame_{idx}",
+        )
+        if frame.get("lane") == "answer" and not frame.get("workflow_action"):
+            continue
+        frames.append(frame)
+    return frames if len(frames) >= 2 else []
+
+
 __all__ = [
     "RequestFrame",
     "WorkflowAction",
     "compile_request_frame",
+    "compile_request_frames",
 ]

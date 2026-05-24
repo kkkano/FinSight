@@ -175,3 +175,88 @@ def test_request_frame_for_external_entity_impact_carries_risk_and_news(monkeypa
 
     assert coverage.get("status") == "ok"
     assert coverage.get("missing_evidence") == []
+
+
+def test_router_hints_compile_to_independent_request_frames(monkeypatch):
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"AAPL", "MSFT"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL, MSFT, Fed rates"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router emitted atomized frames",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "AAPL", "tickers": ["AAPL"], "operation": "price", "params": {}},
+                {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"], "operation": "fetch", "params": {"topic": "news"}},
+                {"subject_type": "macro", "subject_label": "Fed rates", "tickers": [], "operation": "macro_brief", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {
+        "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_mod.understand_request(state))
+
+    frames = understanding.get("request_frames") or []
+    assert [frame.get("frame_id") for frame in frames] == [
+        "router_hint_1",
+        "router_hint_2",
+        "router_hint_3",
+    ]
+    assert [(frame.get("subject") or {}).get("tickers") for frame in frames] == [
+        ["AAPL"],
+        ["MSFT"],
+        [],
+    ]
+    assert [frame.get("evidence_obligations") for frame in frames] == [
+        ["price_snapshot"],
+        ["news_context"],
+        ["macro_context"],
+    ]
+
+    assert understanding.get("request_frame") == frames[0]
+
+
+def test_deterministic_request_frames_split_compound_query_without_router(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
+        "ui_context": {},
+        "output_mode": "chat",
+    }
+    understanding = asyncio.run(understand_request(state))
+
+    frames = understanding.get("request_frames") or []
+    assert [frame.get("frame_id") for frame in frames] == [
+        "query_frame_1",
+        "query_frame_2",
+        "query_frame_3",
+    ]
+    assert [(frame.get("subject") or {}).get("tickers") for frame in frames] == [
+        ["AAPL"],
+        ["MSFT"],
+        [],
+    ]
+    assert [frame.get("evidence_obligations") for frame in frames] == [
+        ["price_snapshot"],
+        ["news_context"],
+        ["macro_context"],
+    ]
