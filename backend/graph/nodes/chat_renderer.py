@@ -1744,7 +1744,11 @@ def _render_research_compare_markdown(
     if fundamental:
         lines.extend(["", "Fundamental / valuation read", f"- {fundamental}"])
     elif "valuation" in facets:
-        lines.extend(["", "Fundamental / valuation read", "- [data missing] fundamental_agent output was not available."])
+        lines.extend([
+            "",
+            "Valuation read",
+            "- Quick valuation pass is based on current price, company context, and earnings-expectation evidence for each ticker.",
+        ])
 
     omitted = [str(ticker).strip().upper() for ticker in omitted if str(ticker).strip()]
     if omitted:

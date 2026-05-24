@@ -776,6 +776,10 @@ def planner_stub(state: GraphState) -> dict:
                     or str(params.get("evidence_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
                     or str(params.get("budget_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
                 )
+                valuation_lightweight = (
+                    str(params.get("evidence_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                    or str(params.get("budget_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                )
                 _append_tool_step(
                     "get_stock_price",
                     {"ticker": ticker},
@@ -801,14 +805,15 @@ def planner_stub(state: GraphState) -> dict:
                         parallel_group=group,
                         task_ids=task_ids,
                     )
-                    _append_agent_step(
-                        "fundamental_agent",
-                        {"query": query, "ticker": ticker},
-                        why=f"{ticker} valuation evidence: run fundamental_agent for valuation support.",
-                        optional=False,
-                        parallel_group=f"{group}_valuation_agents" if group else "valuation_agents",
-                        task_ids=task_ids,
-                    )
+                    if not valuation_lightweight:
+                        _append_agent_step(
+                            "fundamental_agent",
+                            {"query": query, "ticker": ticker},
+                            why=f"{ticker} valuation evidence: run fundamental_agent for valuation support.",
+                            optional=False,
+                            parallel_group=f"{group}_valuation_agents" if group else "valuation_agents",
+                            task_ids=task_ids,
+                        )
                     continue
                 _append_tool_step(
                     "get_technical_snapshot",

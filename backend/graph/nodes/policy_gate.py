@@ -761,12 +761,12 @@ def policy_gate(state: GraphState) -> dict:
             "budget_profile": str(intent_contract.get("budget_profile") or "default"),
         }
     elif valuation_compare_light and output_mode != "investment_report":
-        allowed_agents = ["fundamental_agent"]
+        allowed_agents = []
         agent_selection = {
             "selected": list(allowed_agents),
             "required": list(allowed_agents),
-            "reason": "understanding_v2_valuation_evidence",
-            "selection_mode": "evidence_profile",
+            "reason": "valuation_compare_light_tool_only",
+            "selection_mode": "lightweight_evidence_profile",
             "budget_profile": VALUATION_COMPARE_LIGHT_PROFILE,
         }
     elif output_mode == "investment_report":

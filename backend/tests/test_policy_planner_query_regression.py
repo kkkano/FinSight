@@ -178,7 +178,6 @@ def test_valuation_compare_uses_intent_contract_and_per_ticker_evidence(monkeypa
         "price_snapshot",
         "company_profile",
         "earnings_estimates",
-        "fundamental_snapshot",
     ]
 
     tasks = understanding.get("tasks") or []
@@ -196,11 +195,11 @@ def test_valuation_compare_uses_intent_contract_and_per_ticker_evidence(monkeypa
     step_names = [step.get("name") for step in steps]
     agent_steps = [step for step in steps if step.get("kind") == "agent"]
 
-    assert agents == {"fundamental_agent"}
+    assert agents == set()
     assert "get_performance_comparison" not in step_names
     assert {"get_stock_price", "get_company_info", "get_earnings_estimates"}.issubset(set(step_names))
     assert "get_technical_snapshot" not in step_names
-    assert [step.get("name") for step in agent_steps] == ["fundamental_agent", "fundamental_agent"]
+    assert agent_steps == []
 
 
 def test_risk_evidence_planner_uses_positions_inputs(monkeypatch):
@@ -334,7 +333,7 @@ def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
 
     assert steps
     assert "get_performance_comparison" not in step_names
-    assert step_names.count("fundamental_agent") == 2
+    assert "fundamental_agent" not in step_names
 
 
 def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):

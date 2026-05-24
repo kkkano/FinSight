@@ -684,10 +684,13 @@ def derive_intent_contract(
     shape = "compare" if comparison_requested and target_scope == "multi" else "answer"
 
     primary_operation = "research" if per_ticker_required else ("compare" if shape == "compare" else "qa")
-    if "external_entity_impact" in facets and str(output_mode or "").strip().lower() in {"chat", "brief"}:
+    mode = str(output_mode or "").strip().lower()
+    if "external_entity_impact" in facets and mode in {"chat", "brief"}:
         budget_profile = EXTERNAL_IMPACT_LIGHT_PROFILE
-    elif "valuation" in facets and per_ticker_required:
+    elif "valuation" in facets and per_ticker_required and mode in {"chat", "brief"}:
         budget_profile = "valuation_compare_light"
+    elif "valuation" in facets and per_ticker_required:
+        budget_profile = "valuation_compare"
     elif "investment_opinion" in facets and per_ticker_required:
         budget_profile = "investment_opinion_compare"
     elif per_ticker_required:
@@ -696,6 +699,8 @@ def derive_intent_contract(
         budget_profile = "light_compare" if shape == "compare" else "default"
 
     required_evidence = _required_evidence_for_facets(facets, per_ticker_required=per_ticker_required)
+    if budget_profile == "valuation_compare_light":
+        required_evidence = [kind for kind in required_evidence if kind != "fundamental_snapshot"]
     contract: IntentContract = {
         "version": _CONTRACT_VERSION,
         "contract_id": f"contract_{frame_id}",
