@@ -10,7 +10,8 @@
 - `intent_contract.py` 新增 `external_entity_impact` facet，结构化识别“已解析上市公司/ticker + 外部实体或主题 + 影响关系”类问题；例如“研究一下特斯拉会不会被 SpaceX 影响”不再因为 router 选择 direct answer 而跳过取证。
 - `external_entity_impact` 编译为 `required_evidence=["price_snapshot","news_context","risk_profile"]`，并通过 legacy projection 输出 `operation=analyze_impact`，保持旧 planner/renderer 兼容。
 - `understand_request._direct_decision_must_project_tasks` 在 LLM router 选择 direct 时，会用 query/tickers 重新编译 contract；只有 contract 明确有外部实体影响证据义务时才强制改为 research，避免新增 SpaceX 这类实体白名单。
-- 回归覆盖：`研究一下特斯拉会不会被SpaceX影响`、`微软 AI 对市值有什么影响` 进入 source-grounded research；planner 会排 `get_stock_price`、新闻工具、`news_agent` 和 `risk_agent`，防止 0-step / data missing 复发。
+- 回归覆盖：`研究一下特斯拉会不会被SpaceX影响`、`微软 AI 对市值有什么影响` 进入 source-grounded research；chat/brief 下的 lightweight profile 会排 `get_stock_price`、新闻工具和风险工具，并由渲染层给出确定性影响判断，避免再等待 `news_agent` / `risk_agent` synthesis 长尾。
+- Router task hints 只作为定位信号；hint frame 恢复时会同时匹配 ticker、英文公司名和中文别名，避免 `微软 AI 对市值有什么影响` 被 router 的粗 `qa` hint 截短成 `MSFT` 后丢掉 `external_entity_impact` facet。
 - 文档同步：README、中文 README、`01_ARCHITECTURE.md`、`06a_LANGGRAPH_DESIGN_SPEC.md`、`LANGGRAPH_FLOW.md`、`DOCS_INDEX.md` 和生产 runbook 已更新为 evidence-first intent 模型；旧个人 Docker 部署笔记已归档。
 
 ## 2026-05-22 - Report synthesis tail latency and technical chat fast render

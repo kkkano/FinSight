@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
-from backend.config.ticker_mapping import dedup_tickers, extract_tickers, normalize_ticker
+from backend.config.ticker_mapping import CN_TO_TICKER, COMPANY_MAP, dedup_tickers, extract_tickers, normalize_ticker
 from backend.graph.earnings_intent import (
     query_requests_earnings_performance,
     query_requests_earnings_price_impact,
@@ -219,6 +219,19 @@ def _router_hint_frame_query(
 
     fragments = [part.strip() for part in _FRAME_FRAGMENT_SPLIT_RE.split(raw_query) if part.strip()]
     labels = [str(subject_label or "").strip(), *[str(ticker or "").strip() for ticker in tickers]]
+    for ticker in tickers:
+        normalized = normalize_ticker(str(ticker or ""))
+        if not normalized:
+            continue
+        mapped_name = COMPANY_MAP.get(normalized)
+        if isinstance(mapped_name, str):
+            labels.append(mapped_name)
+        for alias, value in COMPANY_MAP.items():
+            if str(value).upper() == normalized:
+                labels.append(str(alias))
+        for alias, value in CN_TO_TICKER.items():
+            if normalize_ticker(str(value)) == normalized:
+                labels.append(str(alias))
     labels = [label for label in labels if label]
 
     matched: list[str] = []

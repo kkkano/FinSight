@@ -394,6 +394,59 @@ def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):
     assert "get_official_macro_releases" in step_names
 
 
+def test_router_hint_uses_company_alias_frame_for_external_impact_contract(monkeypatch):
+    import asyncio
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    query = "\u5fae\u8f6f AI \u5bf9\u5e02\u503c\u6709\u4ec0\u4e48\u5f71\u54cd"
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"MSFT"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="MSFT"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router emitted coarse qa hint for company alias query",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"], "operation": "qa", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {"query": query, "ui_context": {}, "output_mode": "chat", "trace": {}}
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    task = (understanding.get("tasks") or [])[0]
+
+    assert contract.get("facets") == ["external_entity_impact"]
+    assert contract.get("budget_profile") == "external_entity_impact_light"
+    assert (task.get("operation") or {}).get("name") == "analyze_impact"
+    assert (task.get("operation") or {}).get("params", {}).get("required_evidence") == [
+        "price_snapshot",
+        "news_context",
+        "risk_profile",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    step_names = [step.get("name") for step in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+
+    assert "get_stock_price" in step_names
+    assert "get_company_news" in step_names
+    assert "get_authoritative_media_news" in step_names
+    assert "news_agent" not in step_names
+    assert "risk_agent" not in step_names
+
+
 def test_earnings_performance_query_routes_to_fundamental_chain(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 
