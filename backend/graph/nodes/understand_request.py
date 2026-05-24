@@ -35,6 +35,7 @@ from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.query_intent import has_financial_intent, is_casual_chat, is_greeting
 from backend.graph.memory_scope import current_report_context, current_thread_focus
+from backend.graph.request_frame import compile_request_frame
 from backend.graph.understanding_v2 import (
     build_understanding_v2,
     chat_multi_ticker_research_limit,
@@ -424,6 +425,7 @@ def _direct_conversation_result(
     artifacts: dict[str, Any],
     trace: dict[str, Any],
     memory_context: dict[str, Any] | None = None,
+    request_frame: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     reply = _sanitize_direct_chat_reply(reply)
     reply = _ensure_direct_reply_names_bound_tickers(reply, decision=decision, query=query)
@@ -453,6 +455,9 @@ def _direct_conversation_result(
     trace["understanding"] = understanding
     trace["conversation_router"] = decision.model_dump()
     trace["reply_contract"] = reply_contract
+    if request_frame is not None:
+        understanding["request_frame"] = request_frame
+        trace["request_frame"] = request_frame
     result: dict[str, Any] = {
         "understanding": understanding,
         "reply_contract": reply_contract,
@@ -468,6 +473,8 @@ def _direct_conversation_result(
         "messages": [AIMessage(content=reply or "(response completed)")],
         "trace": trace,
     }
+    if request_frame is not None:
+        result["request_frame"] = request_frame
     if decision.execution_route == "out_of_scope":
         result["skip_session_context"] = True
     return result
@@ -2168,6 +2175,19 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     intent_contract: dict[str, Any] | None = None
     intent_contracts: list[dict[str, Any]] = []
     context_router_research_bound = False
+    request_frame: dict[str, Any] = (
+        compile_request_frame(
+            query=query,
+            tickers=tickers,
+            output_mode=output_mode,
+            subject_type="company",
+            frame_id="primary_request",
+        )
+        if query
+        else {}
+    )
+    if request_frame:
+        trace["request_frame"] = request_frame
 
     if not query:
         blocked_tasks.append(
@@ -2182,6 +2202,41 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 "fallback_allowed": False,
             }
         )
+
+    workflow_action = request_frame.get("workflow_action") if isinstance(request_frame, dict) else None
+    if (
+        query
+        and not blocked_tasks
+        and isinstance(workflow_action, dict)
+        and workflow_action.get("name") == "backtest"
+    ):
+        slots = workflow_action.get("slots") if isinstance(workflow_action.get("slots"), dict) else {}
+        action_ticker = normalize_ticker(str(slots.get("ticker") or (tickers[0] if tickers else "")))
+        operation = dict(request_frame.get("legacy_operation") or _operation("backtest", 0.9))
+        params = dict(operation.get("params") or {})
+        operation["params"] = params
+        _add_task(
+            tasks,
+            subject_type="company",
+            subject_label=action_ticker,
+            operation=operation,
+            query=query,
+            tickers=[action_ticker] if action_ticker else [],
+            priority=8,
+            reason="request_frame_action",
+            params=params,
+        )
+        conversation_decision = ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint=action_ticker),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="request_frame workflow action requires deterministic execution",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+        context_router_research_bound = True
 
     if query and not blocked_tasks and is_casual_chat(query):
         # Keep this local path only for obvious social turns. Broader open-chat
@@ -2204,6 +2259,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             artifacts=artifacts,
             trace=trace,
             memory_context=memory_context,
+            request_frame=request_frame,
         )
         await _emit_understanding_trace(result["understanding"])
         return result
@@ -2289,6 +2345,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         artifacts=artifacts,
                         trace=trace,
                         memory_context=memory_context,
+                        request_frame=request_frame,
                     )
                     await _emit_understanding_trace(result["understanding"])
                     return result
@@ -2454,6 +2511,16 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             subject_type="company",
             frame_id="primary_company",
         )
+        request_frame = compile_request_frame(
+            query=query,
+            tickers=scoped_tickers,
+            output_mode=output_mode,
+            comparison_requested=multi_ticker_compare,
+            domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
+            subject_type="company",
+            frame_id="primary_company",
+        )
+        trace["request_frame"] = request_frame
         intent_contracts.append(dict(intent_contract))
         trace["intent_contract"] = intent_contract
         if multi_ticker_compare:
@@ -2693,6 +2760,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         artifacts=artifacts,
                         trace=trace,
                         memory_context=memory_context,
+                        request_frame=request_frame,
                     )
                     await _emit_understanding_trace(result["understanding"])
                     return result
@@ -2794,6 +2862,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             artifacts=artifacts,
             trace=trace,
             memory_context=memory_context,
+            request_frame=request_frame,
         )
         await _emit_understanding_trace(result["understanding"])
         return result
@@ -2824,6 +2893,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             artifacts=artifacts,
             trace=trace,
             memory_context=memory_context,
+            request_frame=request_frame,
         )
         await _emit_understanding_trace(result["understanding"])
         return result
@@ -2946,6 +3016,9 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         trace["intent_contracts"] = intent_contracts
     if understanding_v2:
         trace["understanding_v2"] = understanding_v2
+    if request_frame:
+        understanding["request_frame"] = request_frame
+        trace["request_frame"] = request_frame
     trace["reply_contract"] = reply_contract
     await _emit_understanding_trace(understanding)
 
@@ -2965,6 +3038,8 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "artifacts": artifacts,
         "trace": trace,
     }
+    if request_frame:
+        result["request_frame"] = request_frame
     if intent_contract is not None:
         result["intent_contract"] = intent_contract
     if intent_contracts:

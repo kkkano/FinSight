@@ -7,6 +7,7 @@ import json
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
+from backend.graph.coverage_validator import validate_plan_coverage
 from backend.graph.intent_contract import EXTERNAL_IMPACT_LIGHT_PROFILE, canonical_evidence_kinds
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
@@ -39,7 +40,9 @@ def planner_stub(state: GraphState) -> dict:
     subject = raw_subject if isinstance(raw_subject, dict) else {}
     output_mode = state.get("output_mode") or "brief"
     query = (state.get("query") or "").strip()
-    operation = (state.get("operation") or {}).get("name") or "qa"
+    operation_obj = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    operation = operation_obj.get("name") or "qa"
+    operation_params = operation_obj.get("params") if isinstance(operation_obj.get("params"), dict) else {}
     news_disallowed = reply_contract_disallows_news(state)
     reply_contract = state.get("reply_contract") if isinstance(state.get("reply_contract"), dict) else {}
     source_constraints = (
@@ -711,6 +714,24 @@ def planner_stub(state: GraphState) -> dict:
         params = _task_operation_params(task)
         tickers_for_task = _task_tickers(task)
         task_ids = [_task_id(task)]
+        if op_name == "backtest":
+            ticker = tickers_for_task[0] if tickers_for_task else primary_ticker
+            strategy = str(params.get("strategy") or "ma_cross").strip() or "ma_cross"
+            _append_tool_step(
+                "run_strategy_backtest",
+                {
+                    "ticker": ticker or "",
+                    "strategy": strategy,
+                    "params": dict(params.get("strategy_params") or params.get("params") or {}),
+                    "initial_cash": float(params.get("initial_cash") or 100000.0),
+                    "t_plus_one": bool(params.get("t_plus_one", True)),
+                },
+                why="Backtest workflow action: execute the requested strategy and return performance metrics.",
+                optional=False,
+                parallel_group=group,
+                task_ids=task_ids,
+            )
+            return
         if op_name == "compare" and len(tickers_for_task) >= 2:
             if _should_use_performance_compare(task):
                 mapping = {ticker: ticker for ticker in tickers_for_task[:6]}
@@ -1365,6 +1386,11 @@ def planner_stub(state: GraphState) -> dict:
         }
         try:
             plan = PlanIR.model_validate(raw_plan)
+            request_frame = state.get("request_frame") if isinstance(state.get("request_frame"), dict) else None
+            coverage_validation = validate_plan_coverage(
+                request_frame=request_frame,
+                plan_ir=plan.model_dump(),
+            ) if request_frame else None
             trace.update(
                 {
                     "planner": {
@@ -1376,6 +1402,8 @@ def planner_stub(state: GraphState) -> dict:
                     }
                 }
             )
+            if coverage_validation is not None:
+                trace["coverage_validator"] = coverage_validation
             return {"plan_ir": plan.model_dump(), "trace": trace}
         except Exception as exc:
             fallback = PlanIR(
@@ -1528,10 +1556,10 @@ def planner_stub(state: GraphState) -> dict:
             "run_strategy_backtest",
             {
                 "ticker": ticker_for_backtest,
-                "strategy": "ma_cross",
-                "params": {},
-                "initial_cash": 100000.0,
-                "t_plus_one": True,
+                "strategy": str(operation_params.get("strategy") or "ma_cross").strip() or "ma_cross",
+                "params": dict(operation_params.get("strategy_params") or operation_params.get("params") or {}),
+                "initial_cash": float(operation_params.get("initial_cash") or 100000.0),
+                "t_plus_one": bool(operation_params.get("t_plus_one", True)),
             },
             why="回测类请求调用策略回测工具并返回指标与交易明细。",
             optional=False,
@@ -2033,6 +2061,11 @@ def planner_stub(state: GraphState) -> dict:
 
     try:
         plan = PlanIR.model_validate(raw_plan)
+        request_frame = state.get("request_frame") if isinstance(state.get("request_frame"), dict) else None
+        coverage_validation = validate_plan_coverage(
+            request_frame=request_frame,
+            plan_ir=plan.model_dump(),
+        ) if request_frame else None
         trace.update(
             {
                 "planner": {
@@ -2043,6 +2076,8 @@ def planner_stub(state: GraphState) -> dict:
                 }
             }
         )
+        if coverage_validation is not None:
+            trace["coverage_validator"] = coverage_validation
         return {"plan_ir": plan.model_dump(), "trace": trace}
     except Exception as exc:
         fallback = PlanIR(
