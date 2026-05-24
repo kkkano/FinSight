@@ -232,6 +232,53 @@ def test_router_hints_compile_to_independent_request_frames(monkeypatch):
     assert understanding.get("request_frame") == frames[0]
 
 
+def test_router_direct_cannot_swallow_request_frame_evidence(monkeypatch):
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["AAPL", "MSFT"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.72,
+            needs_tools=False,
+            reason="router thought this was explainable without tools",
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {
+        "query": "Compare AAPL and MSFT risk",
+        "ui_context": {"market": "US"},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    frame = understanding.get("request_frame") or {}
+
+    assert (understanding.get("understanding") or {}).get("route") == "research"
+    assert frame.get("relation") == "compare"
+    assert frame.get("evidence_obligations") == ["price_snapshot", "risk_profile"]
+    assert (frame.get("render_contract") or {}).get("shape") == "compare"
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert {"get_stock_price", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(step_names)
+    assert coverage.get("status") == "ok"
+    assert coverage.get("missing_evidence") == []
+
+
 def test_deterministic_request_frames_split_compound_query_without_router(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 

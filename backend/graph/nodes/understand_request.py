@@ -1647,10 +1647,13 @@ def _direct_decision_must_project_tasks(
     decision: ConversationDecision,
     *,
     current_tickers: list[str] | None = None,
+    request_frame: dict[str, Any] | None = None,
 ) -> bool:
     """Prevent an LLM direct route from swallowing explicit tool/data requests."""
     if wants_no_news_or_links(query):
         return False
+    if _request_frame_blocks_direct_answer(request_frame):
+        return True
     return bool(
         _extract_urls(query)
         or query_explicitly_requests_sources(query)
@@ -1677,6 +1680,42 @@ def _request_frame_requires_execution(request_frame: dict[str, Any] | None) -> b
         (isinstance(evidence, list) and evidence)
         or (isinstance(results, list) and results)
         or isinstance(action, dict)
+    )
+
+
+def _request_frame_blocks_direct_answer(request_frame: dict[str, Any] | None) -> bool:
+    if not _request_frame_requires_execution(request_frame):
+        return False
+    if not isinstance(request_frame, dict):
+        return False
+    results = request_frame.get("required_results")
+    action = request_frame.get("workflow_action")
+    if (isinstance(results, list) and results) or isinstance(action, dict):
+        return True
+    relation = str(request_frame.get("relation") or "").strip().lower()
+    render_contract = request_frame.get("render_contract")
+    render_shape = (
+        str(render_contract.get("shape") or "").strip().lower()
+        if isinstance(render_contract, dict)
+        else ""
+    )
+    if relation in {"compare", "rank", "impact"} or render_shape == "compare":
+        return True
+    evidence = {
+        str(item).strip()
+        for item in (request_frame.get("evidence_obligations") or [])
+        if str(item).strip()
+    }
+    return bool(
+        evidence
+        & {
+            "holdings_ownership",
+            "earnings_estimates",
+            "fundamental_snapshot",
+            "filing_context",
+            "transcript_context",
+            "event_calendar",
+        }
     )
 
 
@@ -2400,7 +2439,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 tickers = _effective_current_turn_tickers(query, tickers, conversation_decision)
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers):
+                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers, request_frame=request_frame):
                     conversation_decision = _force_grounded_research_decision(conversation_decision)
                     trace["conversation_router"] = conversation_decision.model_dump()
                 else:
@@ -2826,7 +2865,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         if conversation_decision is not None:
             trace["conversation_router"] = conversation_decision.model_dump()
             if conversation_decision.execution_route in {"direct_answer", "out_of_scope"}:
-                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers):
+                if _direct_decision_must_project_tasks(query, conversation_decision, current_tickers=tickers, request_frame=request_frame):
                     conversation_decision = _force_grounded_research_decision(conversation_decision)
                     trace["conversation_router"] = conversation_decision.model_dump()
                 else:
