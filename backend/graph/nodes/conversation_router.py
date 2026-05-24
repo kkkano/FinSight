@@ -336,6 +336,13 @@ def _query_prefers_direct_style_explanation(query: str) -> bool:
     return bool(_STYLE_DIRECTIVE_RE.search(text) and _MECHANISM_EXPLANATION_RE.search(text))
 
 
+def _query_is_ordinary_mechanism_explanation(query: str) -> bool:
+    text = str(query or "").strip()
+    if not text or _query_explicitly_requests_grounding(text):
+        return False
+    return bool(_MECHANISM_EXPLANATION_RE.search(text))
+
+
 def _query_requests_illicit_nonpublic_info(query: str) -> bool:
     text = str(query or "").strip().lower()
     if not text:
@@ -519,6 +526,7 @@ def _task_hints_require_execution(
     *,
     allow_subject_label_refs: bool = False,
 ) -> bool:
+    ordinary_mechanism_explanation = _query_is_ordinary_mechanism_explanation(query)
     for hint in task_hints:
         if not isinstance(hint, dict):
             continue
@@ -538,6 +546,8 @@ def _task_hints_require_execution(
             and not has_external_refs
             and subject_type in {"macro", "theme", "unknown"}
         ):
+            continue
+        if ordinary_mechanism_explanation and subject_type in {"macro", "theme", "unknown"}:
             continue
         if operation in {"price", "technical", "compare", "fact_check", "macro_brief"}:
             if has_external_refs or _query_explicitly_requests_grounding(query):

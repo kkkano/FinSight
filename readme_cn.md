@@ -63,6 +63,7 @@ FinSight 现在把“意图”建模为证据合同，而不是单个粗粒度 `
 2. `intent_contract.py` 从 query/frame 编译语义 facets 和 `required_evidence`；`operation` 只是兼容旧 planner/renderer 的投影字段，不再是研究内容的源头。
 3. `policy_gate.py` 与 `planner_stub.py` 读取 `required_evidence` 选择工具和智能体。例如“NVDA 和 AMD 哪个估值更合理”会变成逐 ticker 估值证据 + synthesis-only compare；“研究特斯拉会不会被 SpaceX 影响”会变成 TSLA 的价格、新闻、风险证据。
 4. `chat_renderer.py` / `synthesize.py` 按 reply/render contract 输出；工具失败、403、空结果、超时只进入 diagnostics，不会伪装成 evidence。
+5. 普通金融机制解释默认保持直答；只有用户要求当前数据、来源、链接、新闻、价格，或明确要判断某上市公司受到外部实体的当前影响时，才进入取证研究。router `task_hints` 与这个 reply contract 冲突时，会在 planner 前被纠偏。
 
 Agent 内部 LLM 精修由环境和 UI 偏好控制。生产可用 `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` 强制忽略旧浏览器偏好，并用 `AGENT_LLM_ANALYZE_ENABLED=true` 开启 Agent LLM 分析。
 

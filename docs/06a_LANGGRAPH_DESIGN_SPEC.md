@@ -9,7 +9,7 @@
 > 2026-05-10 修订说明：新增 `ReplyContract` 作为请求理解后的 UX 契约，三条 lane 为 `chat_answer`、`source_grounded_answer`、`report_generation`；`brief` 降级为长度偏好，不再是独立产品模式。`EvidenceItem` 与 `ToolError` 分离，工具失败、403、rejected、empty、timeout 只能进入 `artifacts.tool_diagnostics`，不能作为证据或来源渲染。
 > 2026-05-11 验收说明：`tests/eval/chat_router_100.json` 已成为当前聊天 UX 验收集；最终 current-state 产物为 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，含 `95` 个 hard 红线用例。
 > 2026-05-11 修订说明：连续对话上下文改为作用域化记忆，`memory_context` 明确拆分为 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；当前线程以外的历史 `last_report/last_focus/recent_focuses` 只能作为历史背景，不能绑定“刚才那份报告/第三点”。Settings 新增用户可调 `agent_preferences.timeoutSeconds`，`0` 为系统默认，正数限制在 `30-1200s` 并进入 chat/planner/synthesize/execution 预算。
-> 2026-05-24 修订说明：意图层从 `subject_type + operation + output_mode` 的三维兼容模型升级为 evidence-first contract。`conversation_router` 负责 resolution，`intent_contract.py` 负责 decomposition，`required_evidence` 负责 planner/tool/agent 选择；`operation` 仅作为兼容投影保留。新增 `external_entity_impact` facet，用结构化形态识别“上市公司 + 外部实体/主题 + 影响判断”，不针对 SpaceX 等实体逐个打补丁。
+> 2026-05-24 修订说明：意图层从 `subject_type + operation + output_mode` 的三维兼容模型升级为 evidence-first contract。`conversation_router` 负责 resolution，`intent_contract.py` 负责 decomposition，`required_evidence` 负责 planner/tool/agent 选择；`operation` 仅作为兼容投影保留。新增 `external_entity_impact` facet，用结构化形态识别“上市公司 + 外部实体/主题 + 影响判断”，不针对 SpaceX 等实体逐个打补丁。普通金融机制解释在没有当前数据/来源/新闻/价格诉求时保持 direct，即使 router hint 带有宏观代理 ticker，也不进入 planner。
 
 ---
 
@@ -150,6 +150,7 @@ flowchart LR
 - router 的 `task_hints.operation` 是弱信号；真正落任务前必须通过 contract 编译。
 - 新增复合意图时优先补 facet/evidence registry 和 planner 映射，不在 `_direct_decision_must_project_tasks` 里堆实体名。
 - `external_entity_impact` 示例：`研究一下特斯拉会不会被 SpaceX 影响` -> `facets=["external_entity_impact"]` -> `required_evidence=["price_snapshot","news_context","risk_profile"]` -> legacy `operation=analyze_impact`。
+- `finance_concept` 机制解释示例：`Why can oil prices affect inflation expectations and airlines?` -> `reply_contract.lane="chat_answer"`，不生成 `macro_brief`；`How are current oil prices affecting airlines?` 因为要求 current data，才进入 source-grounded research。
 
 ### 2.2 兼容三维投影（旧字段仍存在）
 

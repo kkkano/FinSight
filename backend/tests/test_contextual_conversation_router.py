@@ -209,6 +209,49 @@ def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkey
     assert decision.needs_tools is False
 
 
+def test_context_router_downgrades_llm_macro_proxy_hint_for_mechanism_question(monkeypatch):
+    import backend.llm_config as llm_config
+    from backend.graph.nodes.conversation_router import route_conversation
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
+
+    class _Resp:
+        content = """
+        {
+          "execution_route": "research",
+          "context_binding": {"source": "none", "confidence": 0.0, "reason": "", "subject_hint": "oil prices"},
+          "relation": "new_topic",
+          "domain_intent": "finance_concept",
+          "confidence": 0.7,
+          "needs_tools": true,
+          "reason": "mechanism explanation, no tools needed",
+          "reply_guidance": "Explain the mechanism directly.",
+          "task_hints": [
+            {"subject_type": "macro", "subject_label": "oil prices", "tickers": ["CL=F"], "operation": "analyze_impact", "params": {}}
+          ]
+        }
+        """
+
+    class _FakeLLM:
+        async def ainvoke(self, _messages):
+            return _Resp()
+
+    monkeypatch.setattr(llm_config, "create_llm", lambda *_args, **_kwargs: _FakeLLM())
+
+    decision = _run(
+        route_conversation(
+            {"query": "Why can oil prices affect inflation expectations and airlines?", "ui_context": {}},
+            tickers=[],
+            selection_ids=[],
+        )
+    )
+
+    assert decision is not None
+    assert decision.execution_route == "direct_answer"
+    assert decision.needs_tools is False
+    assert decision.task_hints == ()
+
+
 def test_finance_concept_fallback_answers_macro_mechanism():
     from backend.graph.nodes.conversation_router import (
         ContextBinding,

@@ -5,6 +5,7 @@
 
 ## 当前必读
 
+- `README.md` / `readme_cn.md`：项目入口与当前 evidence-first 请求链路概览。
 - `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、`IntentContract` evidence-first 意图模型、作用域化记忆和 evidence/tool diagnostics 边界。
 - `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/intent_contract.py`、`backend/graph/request_task_contract.py`、`backend/graph/memory_scope.py` 与 `understand_request` 测试为准。
 - `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。

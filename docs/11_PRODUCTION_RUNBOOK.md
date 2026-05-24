@@ -208,6 +208,7 @@ curl -I http://127.0.0.1/
 - `AGENT_LLM_ANALYZE_ENABLED=true`
 - `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1`
 - `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT` 未设置时默认为 `3`
+- 机制解释 smoke：`Why can oil prices affect inflation expectations and airlines?` 应返回 direct/chat answer；`研究一下特斯拉会不会被 SpaceX 影响` 应返回 source-grounded research。
 
 旧 `docs/DEPLOYMENT.md` 是个人 Docker 流水笔记，已归档到 `docs/archive/2026-05-24-doc-refresh/`；当前发布、回滚和 smoke 以本 runbook 为准。
 

@@ -13,6 +13,7 @@
 - 回归覆盖：`研究一下特斯拉会不会被SpaceX影响`、`微软 AI 对市值有什么影响` 进入 source-grounded research；chat/brief 下的 lightweight profile 会排 `get_stock_price`、新闻工具和风险工具，并由渲染层给出确定性影响判断，避免再等待 `news_agent` / `risk_agent` synthesis 长尾。
 - Router task hints 只作为定位信号；hint frame 恢复时会同时匹配 ticker、英文公司名和中文别名，避免 `微软 AI 对市值有什么影响` 被 router 的粗 `qa` hint 截短成 `MSFT` 后丢掉 `external_entity_impact` facet。
 - `valuation_compare_light` 在 chat/brief 下收敛为工具证据（价格、公司信息、盈利预期），不再强制 `fundamental_agent`；深度报告仍可使用完整 fundamental research。此处防止线上全开 agent LLM/reflection 时估值比较短答超过客户端超时。
+- 机制解释 direct guard：当 LLM router 把 `Why can oil prices affect inflation expectations and airlines?` 这类普通机制解释误标为 research，并附带 `CL=F` 这种宏观代理 ticker 时，`conversation_router` 会在 planner 前清空粗 hint 并降级为 direct；包含 `current/latest/source/news/price` 等取证诉求的同类问题仍保持 research。
 - 文档同步：README、中文 README、`01_ARCHITECTURE.md`、`06a_LANGGRAPH_DESIGN_SPEC.md`、`LANGGRAPH_FLOW.md`、`DOCS_INDEX.md` 和生产 runbook 已更新为 evidence-first intent 模型；旧个人 Docker 部署笔记已归档。
 
 ## 2026-05-22 - Report synthesis tail latency and technical chat fast render
