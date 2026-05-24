@@ -4,6 +4,7 @@
 > 2026-05-10 增量：`understand_request` 写入 `reply_contract`，用 `chat_answer/source_grounded_answer/report_generation` 三条 lane 固定 UX 行为；工具失败、403、rejected、empty、timeout 等写入 `artifacts.tool_diagnostics`，不得进入 `evidence_pool`。
 > 2026-05-11 验收：`tests/eval/chat_router_100.json` 的最终 current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，结果 `100/100 PASS`，覆盖 18 类连续对话和取证/报告红线。
 > 2026-05-24 增量：`understand_request` 现在把 router 解析出的 frame 统一编译为 `intent_contract`。`facets -> required_evidence` 是 planner/tool/agent 选择的权威输入；`operation` 只是兼容投影。外部实体影响类 query（如 TSLA + SpaceX）由 `external_entity_impact` facet 触发 price/news/risk evidence，而不是靠实体名白名单。普通机制解释如果没有 current/latest/source/news/price 等取证要求，会在 planner 前保持 direct。
+> 2026-05-25 增量：生产发布默认启用 request-frame contract enforcement。`answer` lane 的零 evidence frame 只在解释/定义/机制类问题上短路 direct；缺少对象的“这只票/分析影响”等弱指代仍走 clarify。`research/action/report` lane 必须由 coverage validator 证明 required evidence/results 已被 plan steps 满足；holdings、backtest、external impact、valuation rank、macro context 都有对应回归样例。
 
 > Current overview is aligned to `backend/graph/runner.py`; legacy node-by-node notes are marked as compatibility detail.
 

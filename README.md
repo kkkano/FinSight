@@ -67,6 +67,8 @@ FinSight now treats intent as an evidence contract, not as a single coarse opera
 
 Agent-side LLM refinement is opt-in at runtime through environment and UI preferences. Production can force full research behavior with `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` and enable agent LLM passes with `AGENT_LLM_ANALYZE_ENABLED=true`.
 
+2026-05-25 release posture: production runs the request-frame contract in `FINSIGHT_INTENT_CONTRACT_MODE=enforce`, keeps the contextual router enabled, caps chat-mode per-ticker research at `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`, enables holdings evidence with `SEC_HOLDINGS_ENABLED=true`, and sets `BASE_AGENT_MAX_REFLECTIONS=0` so Agent LLM refinement is available without the extra reflection loop multiplying calls. The important boundary is semantic, not keyword-driven: mechanism explanations stay direct when no live evidence is requested; current market impact, valuation ranking, holdings, backtests, URL/news/source requests, and external-entity company impact all compile to explicit evidence obligations or workflow actions before planning.
+
 ---
 
 ## ✨ Key Features

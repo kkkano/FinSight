@@ -1,6 +1,6 @@
 # FinSight 当前架构（代码对齐版）
 
-> 更新时间：2026-05-24
+> 更新时间：2026-05-25
 > 适用分支：`main`
 > 主链实现：`backend/graph/runner.py`
 
@@ -10,6 +10,7 @@
 > 2026-05-11 验收：最终聊天 UX current-state 运行见 `docs/qa/chat-router-100-final100-current-state.md` / `.json`，`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 `100/100 PASS`。这批用例覆盖连续上下文、会话隔离、报告追问、URL/新闻/报价取证、不要新闻纠偏和工具错误证据隔离。
 > 2026-05-11 增量：`memory_context` 改为作用域化结构，区分 `user_profile_memory`、`historical_focus_memory`、`current_thread_focus`、`current_report`；只有当前线程焦点/报告可绑定“刚才那份报告/第三点”等指代。前端偏好新增 `agent_preferences.timeoutSeconds`，`0` 使用系统默认，正数限制在 `30-1200s` 并应用到 chat/planner/synthesize/graph 执行预算。
 > 2026-05-24 增量：请求理解进入 evidence-first intent contract 模型。`conversation_router` 只负责定位与上下文绑定，router `task_hints` 在落任务前统一编译为 `intent_contract`；`operation` 降级为旧 planner/renderer 的兼容投影。新增 `external_entity_impact` facet，覆盖“上市公司 + 外部实体/主题 + 影响判断”类 query，例如“研究特斯拉会不会被 SpaceX 影响”，会产生 TSLA 的 `price_snapshot/news_context/risk_profile` 证据义务并投影为 `analyze_impact`。普通金融机制解释默认保持 direct；如果 router 给出宏观代理标的（如 `CL=F`）但 query 没有 current/latest/source/news/price 等取证要求，会在 planner 前被纠偏，不生成空研究任务。
+> 2026-05-25 增量：request-frame release gate 固化为生产默认：`FINSIGHT_INTENT_CONTRACT_MODE=enforce`、`FINSIGHT_CONTEXT_ROUTER_ENABLED=true`、`FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true`、`AGENT_LLM_ANALYZE_ENABLED=true`、`SEC_HOLDINGS_ENABLED=true`、`BASE_AGENT_MAX_REFLECTIONS=0`、`FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`。机制解释的边界进一步收敛为“无实时取证诉求则 direct；具名当前宏观影响、估值排序、外部实体影响、持仓/内部人、回测、URL/新闻/来源请求则生成 evidence obligation 或 workflow action”。新增语义时应补 facet/evidence registry 与 coverage 测试，不应在 router 内按 query 文案穷举。
 
 ## 1. 系统总览
 

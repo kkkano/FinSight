@@ -1,17 +1,18 @@
 # FinSight 文档索引
 
-更新时间：2026-05-24
+更新时间：2026-05-25
 目标：把当前事实源、目标 spec、历史材料分开，避免继续引用过期路线图、临时报表和已完成 todolist。
 
 ## 当前必读
 
 - `README.md` / `readme_cn.md`：项目入口与当前 evidence-first 请求链路概览。
 - `docs/01_ARCHITECTURE.md`：当前系统架构入口，描述主模块、数据流、`ReplyContract` lane、`IntentContract` evidence-first 意图模型、作用域化记忆和 evidence/tool diagnostics 边界。
+- `docs/LANGGRAPH_FLOW.md`：当前 LangGraph 请求链路和 request-frame / intent-contract / coverage-validator 的运行边界。
 - `docs/06a_LANGGRAPH_DESIGN_SPEC.md`：LangGraph 主链路设计规范；当前代码以 `backend/graph/runner.py`、`backend/graph/intent_contract.py`、`backend/graph/request_task_contract.py`、`backend/graph/memory_scope.py` 与 `understand_request` 测试为准。
 - `docs/06b_LANGGRAPH_CHANGELOG.md`：LangGraph 相关变更日志。
 - `docs/AGENTS_GUIDE.md`：Agent、Tool、Planner、Executor 链路说明。
 - `docs/execution-event-contract.md`：执行事件、阶段、trace 展示契约。
-- `docs/11_PRODUCTION_RUNBOOK.md`：生产运行和排障手册。
+- `docs/11_PRODUCTION_RUNBOOK.md`：生产发布、回滚和排障事实源，包含 2026-05-25 request-frame enforce、context router、Agent LLM、holdings 能力开关和 smoke 要求。
 - `docs/AGENTS.md`：docs 目录协作规则和归档边界。
 
 ## 当前实现 Spec
@@ -28,6 +29,7 @@
 ## 质量与报告
 
 - `docs/release_evidence/2026-05-18_evidence_research_agents.md`：Evidence Research Agents 分支收口证据，记录 commit range、验证命令、chat eval 环境阻塞、feature flags 和残余风险。
+- `docs/release_evidence/2026-05-25_request_frame_release.md`：RequestFrame/IntentContract 生产发布证据，记录 feature flags、语义边界、20 类 contract/planner smoke 和非穷举扩展规则。
 - `docs/reports/2026-05-03_request_understanding_query_results.md`：20 条复杂 query 的请求理解与规划矩阵输出。
 - `docs/reports/2026-05-03_playwright_chat_smoke.md`：聊天 UX、会话切换/删除、Deep 模式启用、用户可见 trace 和停止生成的 Playwright 验证记录。
 - `docs/qa/chat-router-100-final100-current-state.md`：当前聊天 UX 最终 current-state 验收；配套 JSON 为同名 `.json`。`tests/eval/chat_router_100.json` 共 100 条、95 个 hard 红线用例，结果 100/100 PASS、0 REVIEW、0 FAIL。

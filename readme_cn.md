@@ -67,6 +67,8 @@ FinSight 现在把“意图”建模为证据合同，而不是单个粗粒度 `
 
 Agent 内部 LLM 精修由环境和 UI 偏好控制。生产可用 `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` 强制忽略旧浏览器偏好，并用 `AGENT_LLM_ANALYZE_ENABLED=true` 开启 Agent LLM 分析。
 
+2026-05-25 发布配置：生产环境使用 `FINSIGHT_INTENT_CONTRACT_MODE=enforce`，保持 contextual router 开启，chat 模式单轮逐 ticker 深度研究默认上限为 `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`，用 `SEC_HOLDINGS_ENABLED=true` 打开持仓/内部人证据能力，并设置 `BASE_AGENT_MAX_REFLECTIONS=0`，让 Agent LLM 精修可用但不额外放大反思循环调用。核心边界不是关键词穷举：机制解释在没有实时取证诉求时保持直答；当前市场影响、估值排序、持仓、回测、URL/新闻/来源请求、外部实体影响上市公司，都会先编译成明确的证据义务或 workflow action，再进入 planner。
+
 ---
 
 ## ✨ 核心特性

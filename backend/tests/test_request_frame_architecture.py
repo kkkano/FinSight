@@ -242,6 +242,22 @@ def test_macro_mechanism_question_stays_answer_lane_without_evidence(monkeypatch
     assert ((result.get("request_frame") or {}).get("evidence_obligations") or []) == []
 
 
+def test_live_market_proxy_mechanism_explanation_stays_answer_without_price_evidence(monkeypatch):
+    from backend.graph.request_frame import compile_request_frame
+
+    frame = compile_request_frame(
+        query="Do not look up news; just explain why oil prices can affect airlines",
+        tickers=["CL=F"],
+        output_mode="chat",
+        domain_intent="quote",
+        subject_type="company",
+    )
+
+    assert frame.get("lane") == "answer"
+    assert frame.get("evidence_obligations") == []
+    assert (frame.get("intent_contract") or {}).get("facets") == []
+
+
 def test_current_macro_question_still_requires_macro_context(monkeypatch):
     from backend.graph.request_frame import compile_request_frame
     from backend.graph.nodes.understand_request import understand_request

@@ -1,6 +1,6 @@
 # FinSight 生产部署 Runbook（LangGraph/LangChain）
 
-> 最后更新：2026-05-24
+> 最后更新：2026-05-25
 > 适用范围：当前生产 LangGraph 单入口 + evidence-first intent contract 架构
 > SSOT：`docs/01_ARCHITECTURE.md`、`docs/06a_LANGGRAPH_DESIGN_SPEC.md`
 
@@ -177,12 +177,15 @@ NEWS_ALERT_SCHEDULER_ENABLED=false
 
 # Evidence-first intent contract（生产默认 enforce，保留 off/shadow 回滚）
 FINSIGHT_INTENT_CONTRACT_MODE=enforce
+FINSIGHT_CONTEXT_ROUTER_ENABLED=true
 FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3
+SEC_HOLDINGS_ENABLED=true
 
 # Agent 内部 LLM 精修（按发布策略开启；force 可覆盖旧浏览器偏好）
 FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true
 AGENT_LLM_ANALYZE_ENABLED=true
 TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1
+BASE_AGENT_MAX_REFLECTIONS=0
 ```
 
 按需开启调度，默认建议先关闭，待核心链路稳定后再开启。
@@ -204,9 +207,12 @@ curl -I http://127.0.0.1/
 `.env.server` 是服务器本地 secret 文件，不进入 git。发布前确认：
 
 - `FINSIGHT_INTENT_CONTRACT_MODE=enforce`
+- `FINSIGHT_CONTEXT_ROUTER_ENABLED=true`
 - `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true`
 - `AGENT_LLM_ANALYZE_ENABLED=true`
 - `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1`
+- `BASE_AGENT_MAX_REFLECTIONS=0`
+- `SEC_HOLDINGS_ENABLED=true`
 - `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT` 未设置时默认为 `3`
 - 机制解释 smoke：`Why can oil prices affect inflation expectations and airlines?` 应返回 direct/chat answer；`研究一下特斯拉会不会被 SpaceX 影响` 应返回 source-grounded research。
 
