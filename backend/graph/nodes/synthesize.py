@@ -12,7 +12,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
 from backend.graph.intent_contract import is_research_compare_contract
-from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
+from backend.graph.nodes.compare_gate import (
+    has_compare_render_contract,
+    is_compare_operation,
+    should_render_compare,
+    should_render_performance_compare,
+)
 from backend.graph.executor import summarize_selection
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
@@ -1426,8 +1431,23 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 return None
 
         intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
-        if is_research_compare_contract(intent_contract):
+        if is_research_compare_contract(intent_contract) or (
+            has_compare_render_contract(state) and not should_render_performance_compare(state)
+        ):
             render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
+            if not render_intent:
+                frame = state.get("request_frame") if isinstance(state.get("request_frame"), dict) else {}
+                render_intent = frame.get("render_contract") if isinstance(frame.get("render_contract"), dict) else {}
+                if not render_intent:
+                    frames = state.get("request_frames")
+                    if isinstance(frames, list):
+                        for item in frames:
+                            if not isinstance(item, dict):
+                                continue
+                            candidate = item.get("render_contract")
+                            if isinstance(candidate, dict) and candidate.get("shape") == "compare":
+                                render_intent = candidate
+                                break
             dimensions = [
                 str(item)
                 for item in (render_intent.get("dimensions") if isinstance(render_intent, dict) else [])
@@ -1452,7 +1472,7 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
                 conclusion="- 对比结论以 per-ticker 研究证据为准；若证据缺口存在，应降级为部分比较。",
             ).model_dump()
 
-        if should_render_compare(state):
+        if should_render_performance_compare(state):
             metrics = _get_tool_output("get_performance_comparison")
             metrics_text = str(metrics).strip() if metrics is not None else ""
             metrics_missing = metrics is None or not metrics_text

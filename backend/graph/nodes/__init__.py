@@ -20,9 +20,11 @@ from backend.graph.nodes.resolve_subject import resolve_subject
 from backend.graph.nodes.research_debate import research_debate
 from backend.graph.nodes.synthesize import synthesize
 from backend.graph.nodes.compare_gate import (
+    has_compare_render_contract,
     has_compare_evidence,
     is_compare_operation,
     should_render_compare,
+    should_render_performance_compare,
 )
 from backend.graph.nodes.confirmation_gate import confirmation_gate
 from backend.graph.nodes.trim_conversation_history import trim_conversation_history
@@ -56,5 +58,7 @@ __all__ = [
     "is_casual_chat",
     "is_compare_operation",
     "has_compare_evidence",
+    "has_compare_render_contract",
+    "should_render_performance_compare",
     "should_render_compare",
 ]

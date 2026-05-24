@@ -31,6 +31,8 @@ def _render_chat(state: dict) -> str:
             "reply_contract": state.get("reply_contract", {}),
             "intent_contract": state.get("intent_contract"),
             "intent_contracts": state.get("intent_contracts"),
+            "request_frame": state.get("request_frame"),
+            "request_frames": state.get("request_frames"),
             "artifacts": state.get("artifacts", {}),
             "plan_ir": state.get("plan_ir", {"steps": []}),
             "trace": state.get("trace", {}),
@@ -1577,6 +1579,48 @@ def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental
     assert "Research comparison for NVDA, AMD" in markdown
     assert "Valuation read" in markdown
     assert "[data missing] fundamental_agent output was not available" not in markdown
+
+
+def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_operation() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA and AMD which valuation is more reasonable?",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "AMD"]},
+            "operation": {"name": "qa"},
+            "request_frame": {
+                "frame_id": "frame_compare",
+                "lane": "research",
+                "relation": "rank",
+                "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
+                "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
+                "required_results": [],
+                "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "intent_contract": {
+                    "facets": ["valuation"],
+                    "primary_tickers": ["NVDA", "AMD"],
+                    "per_ticker_required": True,
+                    "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                    "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+                },
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}, "task_ids": ["frame_compare"]},
+                    {"id": "s2", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AMD"}, "task_ids": ["frame_compare"]},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
+                    "s2": {"output": {"price": 50.0, "change_percent": -1.0}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Research comparison for NVDA, AMD" in markdown
+    assert "valuation_reasonableness" in markdown
 
 
 def test_chat_renderer_macro_research_does_not_use_stock_news_template() -> None:

@@ -1623,6 +1623,41 @@ def _intent_contract(state: GraphState) -> dict[str, Any]:
         for item in contracts:
             if isinstance(item, dict):
                 return item
+    frame = state.get("request_frame")
+    if isinstance(frame, dict):
+        frame_contract = frame.get("intent_contract")
+        if isinstance(frame_contract, dict):
+            return frame_contract
+        render_contract = frame.get("render_contract")
+        if isinstance(render_contract, dict):
+            subject = frame.get("subject") if isinstance(frame.get("subject"), dict) else {}
+            tickers = subject.get("tickers") if isinstance(subject.get("tickers"), list) else []
+            evidence = frame.get("evidence_obligations") if isinstance(frame.get("evidence_obligations"), list) else []
+            return {
+                "render_intent": dict(render_contract),
+                "primary_tickers": [str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()],
+                "per_ticker_required": bool(evidence),
+                "required_evidence": list(evidence),
+            }
+    frames = state.get("request_frames")
+    if isinstance(frames, list):
+        for frame in frames:
+            if not isinstance(frame, dict):
+                continue
+            frame_contract = frame.get("intent_contract")
+            if isinstance(frame_contract, dict):
+                return frame_contract
+            render_contract = frame.get("render_contract")
+            if isinstance(render_contract, dict):
+                subject = frame.get("subject") if isinstance(frame.get("subject"), dict) else {}
+                tickers = subject.get("tickers") if isinstance(subject.get("tickers"), list) else []
+                evidence = frame.get("evidence_obligations") if isinstance(frame.get("evidence_obligations"), list) else []
+                return {
+                    "render_intent": dict(render_contract),
+                    "primary_tickers": [str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()],
+                    "per_ticker_required": bool(evidence),
+                    "required_evidence": list(evidence),
+                }
     return {}
 
 
