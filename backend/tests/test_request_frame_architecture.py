@@ -177,6 +177,142 @@ def test_request_frame_for_external_entity_impact_carries_risk_and_news(monkeypa
     assert coverage.get("missing_evidence") == []
 
 
+def test_macro_mechanism_question_stays_answer_lane_without_evidence(monkeypatch):
+    import importlib
+
+    from backend.graph.request_frame import compile_request_frame
+
+    frame = compile_request_frame(
+        query="why do high valuation stocks dislike higher rates?",
+        tickers=[],
+        output_mode="chat",
+    )
+
+    assert frame.get("lane") == "answer"
+    assert frame.get("relation") == "none"
+    assert frame.get("evidence_obligations") == []
+    assert (frame.get("intent_contract") or {}).get("facets") == []
+
+    state = {
+        "query": "why do high valuation stocks dislike higher rates?",
+        "operation": {"name": "qa", "confidence": 0.0, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "macro",
+            "tickers": [],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert steps == []
+    assert coverage.get("status") == "ok"
+    assert coverage.get("missing_evidence") == []
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_generate_contextual_reply(_state, _decision):
+        return "Higher rates reduce the present value of long-duration earnings."
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_generate_contextual_reply)
+
+    result = asyncio.run(
+        understand_mod.understand_request(
+            {
+                "query": "why do high valuation stocks dislike higher rates?",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    assert (result.get("understanding") or {}).get("route") == "direct"
+    assert result.get("tasks") == []
+    assert (result.get("clarify") or {}).get("needed") is False
+    assert ((result.get("request_frame") or {}).get("evidence_obligations") or []) == []
+
+
+def test_current_macro_question_still_requires_macro_context(monkeypatch):
+    from backend.graph.request_frame import compile_request_frame
+    from backend.graph.nodes.understand_request import understand_request
+
+    frame = compile_request_frame(
+        query="How could this week's FOMC decision affect the Nasdaq?",
+        tickers=[],
+        output_mode="chat",
+    )
+
+    assert frame.get("lane") == "research"
+    assert frame.get("evidence_obligations") == ["macro_context"]
+    assert (frame.get("intent_contract") or {}).get("facets") == ["macro"]
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    understanding = asyncio.run(
+        understand_request(
+            {
+                "query": "How could this week's FOMC decision affect the Nasdaq?",
+                "output_mode": "chat",
+                "ui_context": {},
+                "trace": {},
+            }
+        )
+    )
+
+    assert (understanding.get("understanding") or {}).get("route") == "research"
+    assert (understanding.get("request_frame") or {}).get("evidence_obligations") == ["macro_context"]
+
+
+def test_chinese_mixed_ticker_valuation_compare_keeps_research_contract(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "NVDA \u548c AMD \u54ea\u4e2a\u4f30\u503c\u66f4\u5408\u7406",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_request(state))
+    frame = understanding.get("request_frame") or {}
+
+    assert (understanding.get("understanding") or {}).get("route") == "research"
+    assert frame.get("relation") == "rank"
+    assert (frame.get("subject") or {}).get("tickers") == ["NVDA", "AMD"]
+    assert frame.get("evidence_obligations") == [
+        "price_snapshot",
+        "company_profile",
+        "earnings_estimates",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert step_names == [
+        "get_stock_price",
+        "get_company_info",
+        "get_earnings_estimates",
+        "get_stock_price",
+        "get_company_info",
+        "get_earnings_estimates",
+    ]
+    assert coverage.get("status") == "ok"
+    assert coverage.get("missing_evidence") == []
+
+
 def test_plain_compare_request_frame_full_path_plans_performance_comparison(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 

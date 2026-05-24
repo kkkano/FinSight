@@ -1420,6 +1420,23 @@ def planner_stub(state: GraphState) -> dict:
                 appended = True
         return appended
 
+    def _request_frames_authoritatively_need_no_plan_steps() -> bool:
+        if ready_tasks:
+            return False
+        if not request_frames:
+            return False
+        for frame in request_frames:
+            render = frame.get("render_contract") if isinstance(frame.get("render_contract"), dict) else {}
+            if (
+                _frame_required_evidence(frame)
+                or _frame_required_results(frame)
+                or _frame_workflow_action(frame)
+                or str(frame.get("lane") or "").strip().lower() in {"research", "action", "report"}
+                or render.get("shape") == "compare"
+            ):
+                return False
+        return True
+
     def _append_report_mode_enrichment_steps() -> None:
         if output_mode != "investment_report" or not primary_ticker:
             return
@@ -1590,6 +1607,8 @@ def planner_stub(state: GraphState) -> dict:
         return True
 
     used_request_frame_plan = _append_request_frame_steps()
+    if not used_request_frame_plan and _request_frames_authoritatively_need_no_plan_steps():
+        used_request_frame_plan = True
     used_understanding_task_plan = False if used_request_frame_plan else _append_understanding_task_steps()
 
     if used_request_frame_plan or used_understanding_task_plan:

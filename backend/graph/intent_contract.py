@@ -400,6 +400,67 @@ def _has_macro_facet(query: str) -> bool:
     )
 
 
+def _is_macro_mechanism_explanation(
+    query: str,
+    tickers: list[str] | tuple[str, ...] | None = None,
+    *,
+    domain_intent: str = "",
+) -> bool:
+    if _normalized_tickers(tickers):
+        return False
+    text = str(query or "")
+    lowered = text.lower()
+    if not (_has_macro_facet(text) or str(domain_intent or "").strip().lower() in {"macro", "finance_concept"}):
+        return False
+    asks_for_mechanism = bool(
+        re.search(r"\b(why|how|explain|mechanism)\b", lowered)
+        or "\u4e3a\u4ec0\u4e48" in text
+        or "\u4e3a\u4f55" in text
+        or "\u600e\u4e48" in text
+        or "\u5982\u4f55" in text
+        or "\u89e3\u91ca" in text
+        or "\u673a\u5236" in text
+        or "\u539f\u7406" in text
+    )
+    if not asks_for_mechanism:
+        return False
+    named_macro_impact = bool(
+        re.search(r"\b(fed|fomc|cpi|ppi|ecb)\b", lowered)
+        and re.search(r"\b(impact|effect|affect|reaction|move|pressure)\b", lowered)
+    ) or bool(
+        (
+            "\u7f8e\u8054\u50a8" in text
+            or "\u8054\u50a8" in text
+            or "\u592e\u884c" in text
+            or "\u901a\u80c0" in text
+            or "CPI" in text
+            or "PPI" in text
+            or "FOMC" in text
+        )
+        and ("\u5f71\u54cd" in text or "\u51b2\u51fb" in text or "\u53cd\u5e94" in text)
+    )
+    if named_macro_impact:
+        return False
+    asks_for_current_data = bool(
+        re.search(
+            r"\b(today|latest|current|recent|this week|this month|now|release|decision|print|data|look up|research)\b",
+            lowered,
+        )
+        or "\u4eca\u5929" in text
+        or "\u6700\u65b0" in text
+        or "\u5f53\u524d" in text
+        or "\u8fd1\u671f" in text
+        or "\u672c\u5468" in text
+        or "\u672c\u6708" in text
+        or "\u516c\u5e03" in text
+        or "\u6570\u636e" in text
+        or "\u51b3\u8bae" in text
+        or "\u67e5" in text
+        or "\u7814\u7a76" in text
+    )
+    return not asks_for_current_data
+
+
 def _has_holdings_facet(query: str) -> bool:
     text = str(query or "")
     lowered = text.lower()
@@ -494,6 +555,7 @@ def _has_external_entity_impact_facet(query: str, tickers: list[str] | tuple[str
 
 def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | tuple[str, ...] | None = None) -> list[str]:
     facets: list[str] = []
+    macro_mechanism_explanation = _is_macro_mechanism_explanation(query, tickers, domain_intent=domain_intent)
     if _has_external_entity_impact_facet(query, tickers):
         facets.append("external_entity_impact")
     if _has_valuation_facet(query):
@@ -513,7 +575,7 @@ def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | 
         facets.append("news")
     if _has_price_facet(query) or domain_intent == "quote":
         facets.append("price")
-    if _has_macro_facet(query) or domain_intent in {"macro", "finance_concept"}:
+    if (_has_macro_facet(query) or domain_intent in {"macro", "finance_concept"}) and not macro_mechanism_explanation:
         facets.append("macro")
     if _has_holdings_facet(query) or domain_intent == "holdings":
         facets.append("holdings")
@@ -674,7 +736,7 @@ def derive_intent_contract(
     subject = str(subject_type or "company").strip().lower() or "company"
     if subject == "macro":
         facets = [facet for facet in facets if facet in {"macro", "news", "risk"}]
-        if "macro" not in facets:
+        if "macro" not in facets and not _is_macro_mechanism_explanation(query, normalized, domain_intent=domain_intent or subject):
             facets.append("macro")
     if relation_comparison_requested and not facets:
         facets = ["price_performance"]

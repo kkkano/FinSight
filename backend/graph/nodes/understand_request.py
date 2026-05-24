@@ -1687,6 +1687,33 @@ def _request_frame_requires_execution(request_frame: dict[str, Any] | None) -> b
     )
 
 
+def _request_frame_is_authoritative_direct_answer(
+    request_frame: dict[str, Any] | None,
+    query: str = "",
+) -> bool:
+    if not isinstance(request_frame, dict):
+        return False
+    if _request_frame_requires_execution(request_frame):
+        return False
+    if str(request_frame.get("lane") or "").strip().lower() != "answer":
+        return False
+    query = str(query or request_frame.get("query") or "")
+    if _contains_any(query, _VAGUE_SUBJECT_HINTS):
+        return False
+    lowered = query.lower()
+    return bool(
+        re.search(r"\b(why|how|what is|define|explain|mechanism)\b", lowered)
+        or "为什么" in query
+        or "为何" in query
+        or "怎么" in query
+        or "如何" in query
+        or "什么是" in query
+        or "解释" in query
+        or "机制" in query
+        or "原理" in query
+    )
+
+
 def _request_frame_blocks_direct_answer(request_frame: dict[str, Any] | None) -> bool:
     if not _request_frame_requires_execution(request_frame):
         return False
@@ -1713,6 +1740,7 @@ def _request_frame_blocks_direct_answer(request_frame: dict[str, Any] | None) ->
     return bool(
         evidence
         & {
+            "macro_context",
             "holdings_ownership",
             "earnings_estimates",
             "fundamental_snapshot",
@@ -3046,6 +3074,41 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             decision=conversation_decision,
             reply=reply,
             context_refs=[*context_refs, _binding_context_ref(conversation_decision.context_binding)],
+            artifacts=artifacts,
+            trace=trace,
+            memory_context=memory_context,
+            request_frame=request_frame,
+        )
+        await _emit_understanding_trace(result["understanding"])
+        return result
+
+    if (
+        not tasks
+        and not blocked_tasks
+        and conversation_decision is None
+        and _request_frame_is_authoritative_direct_answer(request_frame, query)
+    ):
+        conversation_decision = ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(
+                source="request_frame",
+                confidence=0.72,
+                reason="request frame answer lane requires no tool evidence",
+            ),
+            relation="new_topic",
+            domain_intent="finance_concept",
+            confidence=0.72,
+            needs_tools=False,
+            reason="request-frame answer contract without evidence obligations",
+        )
+        trace["conversation_router"] = conversation_decision.model_dump()
+        reply = await generate_contextual_reply(state, conversation_decision)
+        result = _direct_conversation_result(
+            query=query,
+            output_mode=output_mode,
+            decision=conversation_decision,
+            reply=reply,
+            context_refs=list(context_refs),
             artifacts=artifacts,
             trace=trace,
             memory_context=memory_context,
