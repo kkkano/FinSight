@@ -475,6 +475,25 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
+            elif kind == "holdings_ownership":
+                if not _sec_holdings_enabled():
+                    continue
+                _append_tool_step(
+                    "get_insider_transactions",
+                    {"ticker": ticker, "days": 180, "limit": 50},
+                    why=f"{ticker} evidence contract: public insider transactions.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_institution_holdings_by_ticker",
+                    {"ticker": ticker, "limit": 50},
+                    why=f"{ticker} evidence contract: institutional ownership holders.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
 
     def _has_step(kind: str, name: str) -> bool:
         return any(step.get("kind") == kind and step.get("name") == name for step in steps)

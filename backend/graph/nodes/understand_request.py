@@ -457,7 +457,9 @@ def _direct_conversation_result(
     trace["reply_contract"] = reply_contract
     if request_frame is not None:
         understanding["request_frame"] = request_frame
+        understanding["request_frames"] = [request_frame]
         trace["request_frame"] = request_frame
+        trace["request_frames"] = [request_frame]
     result: dict[str, Any] = {
         "understanding": understanding,
         "reply_contract": reply_contract,
@@ -475,6 +477,7 @@ def _direct_conversation_result(
     }
     if request_frame is not None:
         result["request_frame"] = request_frame
+        result["request_frames"] = [request_frame]
     if decision.execution_route == "out_of_scope":
         result["skip_session_context"] = True
     return result
@@ -1661,6 +1664,19 @@ def _direct_decision_must_project_tasks(
         or _direct_decision_contract_requires_evidence(query, decision, current_tickers=current_tickers)
         or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
         or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
+    )
+
+
+def _request_frame_requires_execution(request_frame: dict[str, Any] | None) -> bool:
+    if not isinstance(request_frame, dict):
+        return False
+    evidence = request_frame.get("evidence_obligations")
+    results = request_frame.get("required_results")
+    action = request_frame.get("workflow_action")
+    return bool(
+        (isinstance(evidence, list) and evidence)
+        or (isinstance(results, list) and results)
+        or isinstance(action, dict)
     )
 
 
@@ -2949,6 +2965,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         not tasks
         and not blocked_tasks
         and conversation_decision is None
+        and not _request_frame_requires_execution(request_frame)
         and _query_can_fallback_to_direct_finance_answer(query)
     ):
         conversation_decision = ConversationDecision(
@@ -2985,7 +3002,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         route = "clarify"
     elif tasks and has_alert_task and (pending_research_after_alert or all((task.get("operation") or {}).get("name") == "alert_set" for task in tasks)):
         route = "alert"
-    elif tasks:
+    elif tasks or _request_frame_requires_execution(request_frame):
         route = "research"
     else:
         route = "clarify"
@@ -3041,8 +3058,27 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     )
 
     primary = tasks[0] if tasks else None
-    operation = (primary or {}).get("operation") or _operation("qa", 0.0)
+    operation = (primary or {}).get("operation") or (
+        (request_frame.get("legacy_operation") if isinstance(request_frame, dict) else None)
+        if _request_frame_requires_execution(request_frame)
+        else None
+    ) or _operation("qa", 0.0)
     subject = _build_subject(primary, selection_payload, tasks)
+    if not tasks and isinstance(request_frame, dict):
+        frame_subject = request_frame.get("subject") if isinstance(request_frame.get("subject"), dict) else {}
+        frame_tickers = frame_subject.get("tickers") if isinstance(frame_subject, dict) else []
+        if isinstance(frame_tickers, list):
+            subject = _build_subject(
+                {
+                    "subject_type": frame_subject.get("type", "company"),
+                    "tickers": frame_tickers,
+                    "selection_ids": [],
+                    "selection_types": [],
+                    "selection_payload": selection_payload,
+                },
+                selection_payload,
+                [],
+            )
     clarify = {
         "needed": route == "clarify",
         "reason": str((blocked_tasks[0] if blocked_tasks else {}).get("reason") or ""),
@@ -3094,6 +3130,8 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         trace["intent_contracts"] = intent_contracts
     if understanding_v2:
         trace["understanding_v2"] = understanding_v2
+    if not request_frames and request_frame:
+        request_frames = [request_frame]
     if request_frames:
         request_frame = request_frames[0]
         understanding["request_frames"] = request_frames

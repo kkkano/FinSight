@@ -369,6 +369,46 @@ def test_planner_uses_request_frame_evidence_without_legacy_tasks():
     assert coverage.get("missing_evidence") == []
 
 
+def test_planner_uses_request_frame_holdings_evidence_without_legacy_tasks(monkeypatch):
+    monkeypatch.setenv("SEC_HOLDINGS_ENABLED", "true")
+    frame = {
+        "frame_id": "frame_plan_holdings",
+        "lane": "research",
+        "subject": {"type": "company", "tickers": ["AAPL"]},
+        "evidence_obligations": ["holdings_ownership"],
+        "required_results": [],
+        "legacy_operation": {"name": "qa", "confidence": 0.5, "params": {}},
+    }
+    state = {
+        "query": "Research AAPL institutional holdings",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "ui_context": {"market": "US"},
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert "get_institution_holdings_by_ticker" in step_names
+    assert "get_insider_transactions" in step_names
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_evidence") == ["holdings_ownership"]
+    assert coverage.get("missing_evidence") == []
+
+
 def test_planner_uses_request_frame_action_without_legacy_tasks():
     frame = {
         "frame_id": "frame_plan_backtest",

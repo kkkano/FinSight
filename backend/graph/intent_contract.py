@@ -18,6 +18,7 @@ from backend.graph.earnings_intent import (
     query_requests_earnings_price_impact,
 )
 from backend.graph.investment_intent import query_requests_investment_opinion
+from backend.graph.request_task_contract import wants_no_news_or_links
 
 
 EvidenceKind = Literal[
@@ -85,6 +86,7 @@ class IntentContract(TypedDict, total=False):
 _CONTRACT_VERSION = "intent_contract.v1"
 EXTERNAL_IMPACT_LIGHT_PROFILE = "external_entity_impact_light"
 _HIGH_ORDER_FACETS = {"valuation", "risk", "trend", "earnings", "investment_opinion", "technical", "external_entity_impact"}
+_COMPARISON_RELATION_RE = re.compile(r"\b(?:compare|versus|vs|which|who|better|stronger|relative)\b", re.IGNORECASE)
 _EXTERNAL_IMPACT_RELATION_RE = re.compile(
     r"(影响|冲击|拖累|利好|利空|受.{0,24}影响|被.{0,24}影响|"
     r"\b(?:impact|impacts|affect|affects|affected|influence|influences|hurt|hurts|benefit|benefits|weigh(?:s)?\s+on|pressure)\b)",
@@ -507,7 +509,7 @@ def _derive_facets(query: str, *, domain_intent: str = "", tickers: list[str] | 
         facets.append("trend")
     if _has_technical_facet(query) or domain_intent == "technical":
         facets.append("technical")
-    if _has_news_facet(query) or domain_intent == "news":
+    if not wants_no_news_or_links(query) and (_has_news_facet(query) or domain_intent == "news"):
         facets.append("news")
     if _has_price_facet(query) or domain_intent == "quote":
         facets.append("price")
@@ -664,24 +666,28 @@ def derive_intent_contract(
 ) -> IntentContract:
     normalized = _normalized_tickers(list(tickers or []))
     target_scope = "multi" if len(normalized) >= 2 else ("single" if len(normalized) == 1 else "unknown")
+    relation_comparison_requested = bool(
+        comparison_requested
+        or (target_scope == "multi" and _COMPARISON_RELATION_RE.search(str(query or "")))
+    )
     facets = _derive_facets(query, domain_intent=domain_intent, tickers=normalized)
     subject = str(subject_type or "company").strip().lower() or "company"
     if subject == "macro":
         facets = [facet for facet in facets if facet in {"macro", "news", "risk"}]
         if "macro" not in facets:
             facets.append("macro")
-    if comparison_requested and not facets:
+    if relation_comparison_requested and not facets:
         facets = ["price_performance"]
 
     per_ticker_required = bool(
         target_scope == "multi"
-        and comparison_requested
+        and relation_comparison_requested
         and set(facets).intersection(_HIGH_ORDER_FACETS)
     )
     limit = chat_multi_ticker_research_limit() if str(output_mode or "").strip().lower() == "chat" else 10
     primary_tickers = normalized[:limit] if per_ticker_required else normalized
     omitted_tickers = normalized[limit:] if per_ticker_required else []
-    shape = "compare" if comparison_requested and target_scope == "multi" else "answer"
+    shape = "compare" if relation_comparison_requested and target_scope == "multi" else "answer"
 
     primary_operation = "research" if per_ticker_required else ("compare" if shape == "compare" else "qa")
     mode = str(output_mode or "").strip().lower()
