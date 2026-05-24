@@ -182,6 +182,8 @@ def compile_request_frame(
 ) -> RequestFrame:
     normalized = _normalized_tickers(tickers)
     subject = str(subject_type or "company").strip().lower() or "company"
+    if subject == "company" and not normalized and _MACRO_HINT_RE.search(str(query or "")):
+        subject = "macro"
     if _requests_backtest_action(query, normalized):
         return _backtest_frame(query=query, tickers=normalized, subject_type=subject, frame_id=frame_id)
 

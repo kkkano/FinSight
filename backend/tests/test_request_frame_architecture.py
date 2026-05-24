@@ -260,3 +260,73 @@ def test_deterministic_request_frames_split_compound_query_without_router(monkey
         ["news_context"],
         ["macro_context"],
     ]
+
+
+def test_policy_uses_request_frame_evidence_when_legacy_operation_is_coarse():
+    frame = {
+        "frame_id": "frame_policy",
+        "lane": "research",
+        "subject": {"type": "company", "tickers": ["AAPL"]},
+        "evidence_obligations": ["technical_snapshot", "risk_profile"],
+        "required_results": [],
+        "legacy_operation": {"name": "qa", "confidence": 0.5, "params": {}},
+    }
+    state = {
+        "query": "AAPL technical and risk context",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy_out = policy_gate(state)
+    policy = policy_out.get("policy") or {}
+
+    assert policy.get("required_evidence") == ["technical_snapshot", "risk_profile"]
+    assert {"get_technical_snapshot", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(
+        set(policy.get("allowed_tools") or [])
+    )
+    assert {"technical_agent", "risk_agent"}.issubset(set(policy.get("allowed_agents") or []))
+    assert (policy.get("agent_selection") or {}).get("reason") == "request_frame_required_evidence"
+
+
+def test_policy_uses_request_frame_action_result_when_legacy_operation_is_coarse():
+    frame = {
+        "frame_id": "frame_backtest",
+        "lane": "action",
+        "subject": {"type": "company", "tickers": ["AAPL"]},
+        "evidence_obligations": [],
+        "required_results": ["backtest_result"],
+        "workflow_action": {
+            "name": "backtest",
+            "slots": {"ticker": "AAPL", "strategy": "macd"},
+            "required_results": ["backtest_result"],
+        },
+        "legacy_operation": {"name": "backtest", "confidence": 0.9, "params": {"strategy": "macd"}},
+    }
+    state = {
+        "query": "run this action",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy = (policy_gate(state).get("policy") or {})
+
+    assert "run_strategy_backtest" in set(policy.get("allowed_tools") or [])
+    assert "backtest_result" in policy.get("required_results", [])

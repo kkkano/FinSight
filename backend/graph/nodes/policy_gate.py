@@ -335,6 +335,66 @@ def _required_evidence_from_state(
     return canonical_evidence_kinds(required)
 
 
+_ACTION_RESULT_TOOLS: dict[str, tuple[str, ...]] = {
+    "backtest_result": ("run_strategy_backtest", "get_current_datetime", "search"),
+}
+
+
+def _request_frames_from_state(state: GraphState) -> list[dict]:
+    frames: list[dict] = []
+    raw_frames = state.get("request_frames")
+    if isinstance(raw_frames, list):
+        frames.extend(item for item in raw_frames if isinstance(item, dict))
+    raw_frame = state.get("request_frame")
+    if isinstance(raw_frame, dict) and raw_frame not in frames:
+        frames.append(raw_frame)
+    return frames
+
+
+def _request_frame_evidence_from_state(state: GraphState) -> list[str]:
+    required: list[str] = []
+    for frame in _request_frames_from_state(state):
+        raw = frame.get("evidence_obligations")
+        if isinstance(raw, list):
+            required.extend(str(item) for item in raw if str(item).strip())
+    return canonical_evidence_kinds(required)
+
+
+def _request_frame_results_from_state(state: GraphState) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for frame in _request_frames_from_state(state):
+        raw_results = frame.get("required_results")
+        if isinstance(raw_results, list):
+            for item in raw_results:
+                value = str(item or "").strip()
+                if not value or value in seen:
+                    continue
+                seen.add(value)
+                results.append(value)
+        workflow_action = frame.get("workflow_action")
+        if isinstance(workflow_action, dict) and isinstance(workflow_action.get("required_results"), list):
+            for item in workflow_action.get("required_results") or []:
+                value = str(item or "").strip()
+                if not value or value in seen:
+                    continue
+                seen.add(value)
+                results.append(value)
+    return results
+
+
+def _tools_for_required_results(required_results: list[str]) -> list[str]:
+    tools: list[str] = []
+    seen: set[str] = set()
+    for result in required_results:
+        for tool_name in _ACTION_RESULT_TOOLS.get(str(result or "").strip(), ()):
+            if tool_name in seen:
+                continue
+            seen.add(tool_name)
+            tools.append(tool_name)
+    return tools
+
+
 def _infer_market_from_task(task: dict, fallback: str) -> str:
     tickers = task.get("tickers")
     if isinstance(tickers, list):
@@ -558,6 +618,10 @@ def policy_gate(state: GraphState) -> dict:
         operation=operation,
         ready_tasks=ready_tasks,
     )
+    request_frame_evidence = _request_frame_evidence_from_state(state)
+    if request_frame_evidence:
+        required_evidence = canonical_evidence_kinds(list(required_evidence) + list(request_frame_evidence))
+    required_results = _request_frame_results_from_state(state)
     v2_profiles = set(evidence_profiles(state.get("understanding_v2")))
     v2_profiles.update(_task_param_profiles(ready_tasks))
     valuation_compare_light = VALUATION_COMPARE_LIGHT_PROFILE in v2_profiles
@@ -690,6 +754,11 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = _append_missing(list(allowed_tools), tuple(evidence_tools + ["get_current_datetime", "search"]))
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(evidence_tools) + len(ready_tasks) + 2))
 
+    action_tools = _tools_for_required_results(required_results)
+    if action_tools:
+        allowed_tools = _append_missing(list(allowed_tools), tuple(action_tools))
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(action_tools) + len(ready_tasks) + 2))
+
     if earnings_impact_requested:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
@@ -755,7 +824,7 @@ def policy_gate(state: GraphState) -> dict:
         agent_selection = {
             "selected": list(allowed_agents),
             "required": list(allowed_agents),
-            "reason": "intent_contract_required_evidence",
+            "reason": "request_frame_required_evidence" if request_frame_evidence else "intent_contract_required_evidence",
             "selection_mode": "research_obligation",
             "required_evidence": list(required_evidence),
             "budget_profile": str(intent_contract.get("budget_profile") or "default"),
@@ -922,6 +991,7 @@ def policy_gate(state: GraphState) -> dict:
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
+        "required_results": list(required_results),
         "required_evidence": list(required_evidence),
         "evidence_plan": evidence_plan_for_contract(intent_contract, market=market)
         if intent_contract
@@ -954,6 +1024,7 @@ def policy_gate(state: GraphState) -> dict:
                 "budget": budget,
                 "allowed_tools": allowed_tools,
                 "allowed_agents": allowed_agents,
+                "required_results": list(required_results),
                 "analysis_depth": analysis_depth,
                 "market": market,
                 "tool_selection_fallback": fallback_reason,
