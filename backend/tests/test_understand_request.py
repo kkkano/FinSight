@@ -19,6 +19,21 @@ def _task_ops(result: dict) -> list[tuple[str, tuple[str, ...], str]]:
     return rows
 
 
+def _task_required_evidence(task: dict) -> set[str]:
+    operation = task.get("operation") if isinstance(task, dict) else {}
+    params = operation.get("params") if isinstance(operation, dict) else {}
+    if not isinstance(params, dict):
+        params = {}
+    return set(params.get("required_evidence") or [])
+
+
+def _assert_evidence_task(result: dict, tickers: tuple[str, ...], expected: set[str]) -> None:
+    for task in result.get("tasks") or []:
+        if tuple(task.get("tickers") or []) == tickers and expected.issubset(_task_required_evidence(task)):
+            return
+    raise AssertionError(f"missing evidence task for {tickers}: {sorted(expected)}")
+
+
 def test_pure_greeting_routes_direct_without_research_pipeline():
     from backend.graph import GraphRunner
 
@@ -167,6 +182,36 @@ def test_earnings_price_impact_query_creates_composite_research_task(monkeypatch
     assert contract.get("source_constraints", {}).get("requires_realtime") is True
 
 
+def test_external_entity_impact_query_creates_evidence_contract(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    cases = [
+        ("研究一下特斯拉会不会被SpaceX影响", "TSLA"),
+        ("微软 AI 对市值有什么影响", "MSFT"),
+    ]
+    for query, ticker in cases:
+        result = _run(
+            understand_request(
+                {
+                    "query": query,
+                    "ui_context": {},
+                    "output_mode": "chat",
+                }
+            )
+        )
+
+        task = (result.get("tasks") or [])[0]
+        contract = result.get("intent_contract") or {}
+        assert (result.get("understanding") or {}).get("route") == "research", query
+        assert contract.get("facets") == ["external_entity_impact"], query
+        assert contract.get("budget_profile") == "external_entity_impact_light", query
+        assert (task.get("operation") or {}).get("name") == "analyze_impact", query
+        assert task.get("tickers") == [ticker], query
+        assert {"price_snapshot", "news_context", "risk_profile"}.issubset(_task_required_evidence(task)), query
+
+
 def test_explicit_technical_query_keeps_technical_operation_without_router(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 
@@ -200,10 +245,10 @@ def test_mixed_social_company_news_price_and_portfolio_blocked_locally():
     understanding = result.get("understanding") or {}
     ops = _task_ops(result)
     assert understanding.get("route") == "research"
-    assert ("company", ("GOOGL",), "price") in ops
-    assert ("company", ("GOOGL",), "fetch") in ops
-    assert ("company", ("MSFT",), "price") in ops
-    assert ("company", ("MSFT",), "fetch") in ops
+    assert any(row[0] == "company" and row[1] == ("GOOGL",) for row in ops)
+    assert any(row[0] == "company" and row[1] == ("MSFT",) for row in ops)
+    _assert_evidence_task(result, ("GOOGL",), {"price_snapshot", "news_context"})
+    _assert_evidence_task(result, ("MSFT",), {"price_snapshot", "news_context"})
     blocked = result.get("blocked_tasks") or []
     assert any(item.get("reason") == "missing_portfolio_holdings" for item in blocked)
     assert (result.get("clarify") or {}).get("needed") is False
@@ -241,10 +286,8 @@ def test_compare_query_keeps_price_news_and_risk_subtasks():
 
     ops = _task_ops(result)
     assert ("company", ("GOOGL", "MSFT"), "compare") in ops
-    assert ("company", ("GOOGL",), "price") in ops
-    assert ("company", ("GOOGL",), "fetch") in ops
-    assert ("company", ("MSFT",), "price") in ops
-    assert ("company", ("MSFT",), "fetch") in ops
+    _assert_evidence_task(result, ("GOOGL",), {"price_snapshot", "news_context", "risk_profile"})
+    _assert_evidence_task(result, ("MSFT",), {"price_snapshot", "news_context", "risk_profile"})
 
 
 def test_multiticker_fail_open_chat_defaults_to_quotes_not_history_compare():

@@ -1,7 +1,7 @@
 # FinSight 生产部署 Runbook（LangGraph/LangChain）
 
-> 最后更新：2026-02-06  
-> 适用范围：当前 `main` 上的 LangGraph 单入口架构  
+> 最后更新：2026-05-25
+> 适用范围：当前生产 LangGraph 单入口 + evidence-first intent contract 架构
 > SSOT：`docs/01_ARCHITECTURE.md`、`docs/06a_LANGGRAPH_DESIGN_SPEC.md`
 
 ## 1. 目标与边界
@@ -10,6 +10,7 @@
 
 - API 单入口：`POST /chat/supervisor`、`POST /chat/supervisor/stream`
 - 编排内核：LangGraph（PolicyGate → Planner → ExecutePlan → Synthesize → Render）
+- 请求理解：`conversation_router` 做 resolution，`intent_contract.py` 做 evidence-first decomposition，`operation` 仅作兼容投影
 - 会话与记忆：`session_id(thread_id)` + LangGraph checkpointer
 - 前端入口：`/chat`、`/dashboard/:symbol`
 
@@ -173,6 +174,18 @@ ENABLE_LANGSMITH=false
 
 PRICE_ALERT_SCHEDULER_ENABLED=false
 NEWS_ALERT_SCHEDULER_ENABLED=false
+
+# Evidence-first intent contract（生产默认 enforce，保留 off/shadow 回滚）
+FINSIGHT_INTENT_CONTRACT_MODE=enforce
+FINSIGHT_CONTEXT_ROUTER_ENABLED=true
+FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3
+SEC_HOLDINGS_ENABLED=true
+
+# Agent 内部 LLM 精修（按发布策略开启；force 可覆盖旧浏览器偏好）
+FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true
+AGENT_LLM_ANALYZE_ENABLED=true
+TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1
+BASE_AGENT_MAX_REFLECTIONS=0
 ```
 
 按需开启调度，默认建议先关闭，待核心链路稳定后再开启。
@@ -180,6 +193,30 @@ NEWS_ALERT_SCHEDULER_ENABLED=false
 ---
 
 ## 4. 部署步骤
+
+当前腾讯云生产机采用 Docker Compose：
+
+```bash
+cd /home/ubuntu/FinSight
+docker compose --env-file .env.server up -d --build
+docker compose --env-file .env.server ps
+curl -f http://127.0.0.1:8000/health
+curl -I http://127.0.0.1/
+```
+
+`.env.server` 是服务器本地 secret 文件，不进入 git。发布前确认：
+
+- `FINSIGHT_INTENT_CONTRACT_MODE=enforce`
+- `FINSIGHT_CONTEXT_ROUTER_ENABLED=true`
+- `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true`
+- `AGENT_LLM_ANALYZE_ENABLED=true`
+- `TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1`
+- `BASE_AGENT_MAX_REFLECTIONS=0`
+- `SEC_HOLDINGS_ENABLED=true`
+- `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT` 未设置时默认为 `3`
+- 机制解释 smoke：`Why can oil prices affect inflation expectations and airlines?` 应返回 direct/chat answer；`研究一下特斯拉会不会被 SpaceX 影响` 应返回 source-grounded research。
+
+旧 `docs/DEPLOYMENT.md` 是个人 Docker 流水笔记，已归档到 `docs/archive/2026-05-24-doc-refresh/`；当前发布、回滚和 smoke 以本 runbook 为准。
 
 ### 4.1 后端部署
 

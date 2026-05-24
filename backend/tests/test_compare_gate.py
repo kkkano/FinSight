@@ -10,9 +10,11 @@ Covers:
 import pytest
 
 from backend.graph.nodes.compare_gate import (
+    has_compare_render_contract,
     has_compare_evidence,
     is_compare_operation,
     should_render_compare,
+    should_render_performance_compare,
 )
 
 
@@ -186,11 +188,13 @@ class TestShouldRenderCompare:
             "operation": {"name": "compare", "confidence": 0.85, "params": {}},
             **_make_state_with_evidence("Ticker Current YTD 1Y\nAAPL +12% +15% +20%"),
         }
+        assert should_render_performance_compare(state) is True
         assert should_render_compare(state) is True
 
     def test_false_when_compare_operation_without_evidence(self):
         """Gap-1 fix: compare intent but no evidence → degrade to QA."""
         state = {"operation": {"name": "compare", "confidence": 0.85, "params": {}}}
+        assert should_render_performance_compare(state) is False
         assert should_render_compare(state) is False
 
     def test_false_when_compare_operation_with_failed_evidence(self):
@@ -199,7 +203,40 @@ class TestShouldRenderCompare:
             "operation": {"name": "compare", "confidence": 0.85, "params": {}},
             **_make_state_with_evidence("get_performance_comparison failed: timeout"),
         }
+        assert should_render_performance_compare(state) is False
         assert should_render_compare(state) is False
+
+    def test_true_when_intent_contract_requests_research_compare_without_performance_evidence(self):
+        state = {
+            "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+            "intent_contract": {
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "per_ticker_required": True,
+                "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+            },
+        }
+
+        assert has_compare_render_contract(state) is True
+        assert should_render_performance_compare(state) is False
+        assert should_render_compare(state) is True
+
+    def test_true_when_request_frame_render_contract_requests_compare(self):
+        state = {
+            "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+            "request_frame": {
+                "frame_id": "frame_compare",
+                "lane": "research",
+                "relation": "rank",
+                "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
+                "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
+                "required_results": [],
+            },
+        }
+
+        assert has_compare_render_contract(state) is True
+        assert should_render_performance_compare(state) is False
+        assert should_render_compare(state) is True
 
     def test_false_when_qa_with_two_tickers(self):
         """The old bug: 2 tickers + qa → should NOT render as compare."""

@@ -399,6 +399,42 @@ def test_policy_gate_agent_preferences_unknown_agent_ignored():
     assert "nonexistent_agent" not in allowed_agents
 
 
+def test_policy_gate_force_agent_research_config_overrides_stale_preferences(monkeypatch):
+    monkeypatch.setenv("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", "true")
+    monkeypatch.setenv("FINSIGHT_AGENT_REFLECTION_ROUNDS", "3")
+    monkeypatch.setenv("FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS", "120")
+    monkeypatch.setenv("FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS", "60")
+
+    result = policy_gate(
+        {
+            "subject": {
+                "subject_type": "company",
+                "tickers": ["AAPL"],
+                "selection_ids": [],
+                "selection_types": [],
+                "selection_payload": [],
+            },
+            "output_mode": "investment_report",
+            "ui_context": {
+                "agent_preferences": {
+                    "enableLLMAnalysis": False,
+                    "reflectionRounds": 0,
+                    "analysisTimeoutSeconds": 0,
+                    "tokenAcquireTimeoutSeconds": 0,
+                },
+            },
+        }
+    )
+
+    config = ((result.get("policy") or {}).get("agent_research_config") or {})
+    assert config == {
+        "enable_llm_analysis": True,
+        "max_reflections": 3,
+        "analysis_timeout_seconds": 120,
+        "token_acquire_timeout_seconds": 60,
+    }
+
+
 def test_policy_gate_analysis_depth_report_removes_deep_search_agent():
     result = policy_gate(
         {

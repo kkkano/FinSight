@@ -783,6 +783,62 @@ def test_ordinary_research_mechanism_decision_normalizes_to_chat():
     assert normalized.task_hints == ()
 
 
+def test_synthetic_macro_proxy_hint_does_not_force_mechanism_research():
+    from backend.graph.nodes.conversation_router import (
+        ContextBinding,
+        ConversationDecision,
+        normalize_context_decision,
+    )
+
+    decision = ConversationDecision(
+        execution_route="research",
+        context_binding=ContextBinding(source="none", subject_hint="oil prices"),
+        relation="new_topic",
+        domain_intent="finance_concept",
+        confidence=0.55,
+        needs_tools=True,
+        task_hints=(
+            {
+                "subject_type": "macro",
+                "subject_label": "oil prices",
+                "tickers": ["CL=F"],
+                "operation": "analyze_impact",
+                "params": {},
+            },
+        ),
+    )
+
+    normalized = normalize_context_decision(
+        decision,
+        {"query": "Why can oil prices affect inflation expectations and airlines?", "ui_context": {}},
+        tickers=[],
+        selection_ids=[],
+    )
+
+    assert normalized.execution_route == "direct_answer"
+    assert normalized.needs_tools is False
+    assert normalized.task_hints == ()
+
+
+def test_current_data_macro_proxy_hint_still_requires_research():
+    from backend.graph.nodes.conversation_router import _task_hints_require_execution
+
+    task_hints = (
+        {
+            "subject_type": "macro",
+            "subject_label": "oil prices",
+            "tickers": ["CL=F"],
+            "operation": "analyze_impact",
+            "params": {},
+        },
+    )
+
+    assert _task_hints_require_execution(
+        task_hints,
+        "How are current oil prices affecting inflation expectations and airlines?",
+    )
+
+
 def test_price_word_in_mechanism_question_does_not_force_quote_tasks(monkeypatch):
     import importlib
 

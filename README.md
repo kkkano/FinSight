@@ -32,6 +32,7 @@
 ## Table of Contents
 
 - [Key Features](#-key-features)
+- [Current Request Path](#-current-request-path)
 - [Platform Preview](#-platform-preview)
 - [System Architecture](#%EF%B8%8F-system-architecture)
 - [LangGraph Pipeline](#-langgraph-pipeline-current-runtime--target-refactor)
@@ -54,12 +55,28 @@
 
 ---
 
+## 🧭 Current Request Path
+
+FinSight now treats intent as an evidence contract, not as a single coarse operation label.
+
+1. `conversation_router.py` resolves the turn: direct chat, research, alert, clarification, scope, current tickers, selection, and follow-up context.
+2. `intent_contract.py` compiles each resolved frame from the query into semantic facets and required evidence. Operations are legacy projections for planner/renderer compatibility.
+3. `policy_gate.py` and `planner_stub.py` read `required_evidence` to select tools and agents. For example, valuation comparison becomes per-ticker valuation evidence plus synthesis-only compare, while external-entity impact such as "Will SpaceX affect Tesla?" becomes price/news/risk evidence for TSLA.
+4. `chat_renderer.py` / `synthesize.py` render from the reply and render contracts, with tool failures kept in diagnostics instead of evidence.
+5. Ordinary mechanism explanations stay direct unless the user asks for current data, sources, links, news, prices, or a concrete company impact judgment. Router `task_hints` are corrected before planning when they conflict with that reply contract.
+
+Agent-side LLM refinement is opt-in at runtime through environment and UI preferences. Production can force full research behavior with `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` and enable agent LLM passes with `AGENT_LLM_ANALYZE_ENABLED=true`.
+
+2026-05-25 release posture: production runs the request-frame contract in `FINSIGHT_INTENT_CONTRACT_MODE=enforce`, keeps the contextual router enabled, caps chat-mode per-ticker research at `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`, enables holdings evidence with `SEC_HOLDINGS_ENABLED=true`, and sets `BASE_AGENT_MAX_REFLECTIONS=0` so Agent LLM refinement is available without the extra reflection loop multiplying calls. The important boundary is semantic, not keyword-driven: mechanism explanations stay direct when no live evidence is requested; current market impact, valuation ranking, holdings, backtests, URL/news/source requests, and external-entity company impact all compile to explicit evidence obligations or workflow actions before planning.
+
+---
+
 ## ✨ Key Features
 
 | Category | Highlights |
 |----------|-----------|
 | **Multi-Agent Orchestration** | 7 specialized research agents (Price, News, Fundamental, Technical, Macro, Risk, DeepSearch) running in parallel execution groups |
-| **LangGraph Pipeline** | Stateful LangGraph runtime for GPT-like chat, alerts, URL/article analysis, quick market answers, and explicit report generation. Ordinary chat uses the LLM conversation router before planning; only the report button enters the structured report template path. |
+| **LangGraph Pipeline** | Stateful LangGraph runtime for GPT-like chat, alerts, URL/article analysis, quick market answers, and explicit report generation. Ordinary chat uses the LLM conversation router for resolution, then the evidence-first intent contract for decomposition before planning. |
 | **Professional Dashboard** | 6 analytical tabs (Overview, Financial, Technical, News, Research, Peers) with ECharts visualization |
 | **AI-Powered Insights** | 5 Dashboard Scorers generate real-time AI analysis cards for each tab via single LLM call + deterministic fallback (1-3s each) |
 | **Hybrid RAG Engine** | bge-m3 (1024-dim Dense + Sparse) with bge-reranker-v2-m3 cross-encoder reranking |

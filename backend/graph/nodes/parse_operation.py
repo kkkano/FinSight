@@ -4,8 +4,8 @@ Rule-first operation parsing with multi-ticker default compare strategy.
 
 Priority order (highest to lowest):
   1. Explicit compare keywords  → compare
-  2. Guardrail-A single-task keywords (analyze_impact > technical > price >
-     summarize > extract_metrics > fetch)  → corresponding op
+  2. Guardrail-A single-task keywords (analyze_impact > backtest > technical >
+     price > summarize > extract_metrics > fetch)  → corresponding op
   3. Multi-ticker default compare (len(tickers) >= 2, no guardrail-A hit)
   4. qa fallback
 
@@ -198,6 +198,13 @@ def parse_operation(state: GraphState) -> dict:
         keyword_hits = ["earnings_performance_pattern"]
         guardrail_a_hit = "earnings_performance"
 
+    elif (hits := _match_any(_BACKTEST_KEYWORDS, lowered)):
+        op = "backtest"
+        confidence = 0.86
+        source = "keyword"
+        keyword_hits = hits
+        guardrail_a_hit = "backtest"
+
     elif (hits := _match_any(_TECHNICAL_KEYWORDS, lowered)):
         op = "technical"
         confidence = 0.85
@@ -211,13 +218,6 @@ def parse_operation(state: GraphState) -> dict:
         source = "semantic_rule"
         keyword_hits = ["investment_opinion_pattern"]
         guardrail_a_hit = "investment_opinion"
-
-    elif (hits := _match_any(_BACKTEST_KEYWORDS, lowered)):
-        op = "backtest"
-        confidence = 0.86
-        source = "keyword"
-        keyword_hits = hits
-        guardrail_a_hit = "backtest"
 
     elif (hits := _match_any(_ALERT_KEYWORDS, lowered)):
         op = "alert_set"

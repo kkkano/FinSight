@@ -71,6 +71,10 @@ def test_agent_preferences_endpoints(client):
     assert data["preferences"]["maxRounds"] == 3
     assert data["preferences"]["concurrentMode"] is True
     assert data["preferences"]["agents"]["price_agent"] == "standard"
+    assert data["preferences"]["enableLLMAnalysis"] is False
+    assert data["preferences"]["reflectionRounds"] == 0
+    assert data["preferences"]["analysisTimeoutSeconds"] == 0
+    assert data["preferences"]["tokenAcquireTimeoutSeconds"] == 0
 
     # Update with mixed valid/invalid payload
     update_payload = {
