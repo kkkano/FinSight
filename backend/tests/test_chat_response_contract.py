@@ -1704,3 +1704,69 @@ def test_chat_renderer_filters_placeholder_evidence_for_risk_followup() -> None:
     assert "可用数据不足" in markdown or "不硬编风险点" in markdown
     assert "相关来源" not in markdown
     assert "仅供参考" not in markdown
+
+
+def test_chat_renderer_renders_holdings_contract_instead_of_price_fallback() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Buffett latest 13F holdings in AAPL",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "qa"},
+            "request_frame": {
+                "lane": "research",
+                "subject": {"type": "company", "tickers": ["AAPL"]},
+                "evidence_obligations": ["price_snapshot", "holdings_ownership"],
+                "intent_contract": {
+                    "facets": ["price", "holdings"],
+                    "required_evidence": ["price_snapshot", "holdings_ownership"],
+                    "render_intent": {"shape": "answer", "dimensions": ["ownership"]},
+                },
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "price", "name": "get_stock_price", "inputs": {"ticker": "AAPL"}},
+                    {"id": "insider", "name": "get_insider_transactions", "inputs": {"ticker": "AAPL"}},
+                    {"id": "holders", "name": "get_institution_holdings_by_ticker", "inputs": {"ticker": "AAPL"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "price": {"output": {"ticker": "AAPL", "price": 308.82, "change_percent": 1.26}},
+                    "insider": {
+                        "output": {
+                            "source": "sec_form4",
+                            "ticker": "AAPL",
+                            "transactions": [
+                                {
+                                    "transaction_date": "2026-05-10",
+                                    "owner_name": "Example Officer",
+                                    "transaction_code": "P",
+                                    "acquired_disposed": "A",
+                                    "shares": 100.0,
+                                    "price_per_share": 185.5,
+                                }
+                            ],
+                            "regulatory_notes": {"form_4_due": "Form 4 is usually filed within two business days."},
+                            "error": None,
+                        }
+                    },
+                    "holders": {
+                        "output": {
+                            "source": "sec_13f",
+                            "ticker": "AAPL",
+                            "holders": [],
+                            "capability_note": "Free SEC recent submissions are holder-centric.",
+                            "error": None,
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "持仓/所有权证据" in markdown
+    assert "SEC Form 4 insider transactions" in markdown
+    assert "Example Officer" in markdown
+    assert "no by-ticker 13F holder rows" in markdown
+    assert "最新价格约为" not in markdown
