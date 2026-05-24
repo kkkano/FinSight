@@ -330,3 +330,143 @@ def test_policy_uses_request_frame_action_result_when_legacy_operation_is_coarse
 
     assert "run_strategy_backtest" in set(policy.get("allowed_tools") or [])
     assert "backtest_result" in policy.get("required_results", [])
+
+
+def test_planner_uses_request_frame_evidence_without_legacy_tasks():
+    frame = {
+        "frame_id": "frame_plan_evidence",
+        "lane": "research",
+        "subject": {"type": "company", "tickers": ["AAPL"]},
+        "evidence_obligations": ["technical_snapshot", "risk_profile"],
+        "required_results": [],
+        "legacy_operation": {"name": "qa", "confidence": 0.5, "params": {}},
+    }
+    state = {
+        "query": "AAPL technical and risk context",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert {"get_technical_snapshot", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(step_names)
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_evidence") == ["technical_snapshot", "risk_profile"]
+    assert coverage.get("missing_evidence") == []
+
+
+def test_planner_uses_request_frame_action_without_legacy_tasks():
+    frame = {
+        "frame_id": "frame_plan_backtest",
+        "lane": "action",
+        "subject": {"type": "company", "tickers": ["AAPL"]},
+        "evidence_obligations": [],
+        "required_results": ["backtest_result"],
+        "workflow_action": {
+            "name": "backtest",
+            "slots": {"ticker": "AAPL", "strategy": "macd"},
+            "required_results": ["backtest_result"],
+        },
+        "legacy_operation": {"name": "backtest", "confidence": 0.9, "params": {"strategy": "macd"}},
+    }
+    state = {
+        "query": "run this action",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    backtest_step = next((step for step in steps if step.get("name") == "run_strategy_backtest"), None)
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert backtest_step is not None
+    assert (backtest_step.get("inputs") or {}).get("strategy") == "macd"
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_results") == ["backtest_result"]
+    assert coverage.get("missing_results") == []
+
+
+def test_planner_validates_all_request_frames_without_legacy_tasks():
+    frames = [
+        {
+            "frame_id": "query_frame_1",
+            "lane": "research",
+            "subject": {"type": "company", "tickers": ["AAPL"]},
+            "evidence_obligations": ["price_snapshot"],
+            "required_results": [],
+            "legacy_operation": {"name": "price", "confidence": 0.8, "params": {}},
+        },
+        {
+            "frame_id": "query_frame_2",
+            "lane": "research",
+            "subject": {"type": "company", "tickers": ["MSFT"]},
+            "evidence_obligations": ["news_context"],
+            "required_results": [],
+            "legacy_operation": {"name": "fetch", "confidence": 0.8, "params": {"topic": "news"}},
+        },
+        {
+            "frame_id": "query_frame_3",
+            "lane": "research",
+            "subject": {"type": "macro", "tickers": []},
+            "evidence_obligations": ["macro_context"],
+            "required_results": [],
+            "legacy_operation": {"name": "macro_brief", "confidence": 0.8, "params": {}},
+        },
+    ]
+    state = {
+        "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "MSFT"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "request_frame": frames[0],
+        "request_frames": frames,
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert {"get_stock_price", "get_company_news", "get_official_macro_releases"}.issubset(step_names)
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_evidence") == ["price_snapshot", "news_context", "macro_context"]
+    assert coverage.get("missing_evidence") == []
+    assert [item.get("frame_id") for item in coverage.get("frame_results", [])] == [
+        "query_frame_1",
+        "query_frame_2",
+        "query_frame_3",
+    ]
