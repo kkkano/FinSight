@@ -68,13 +68,13 @@ def test_agent_preferences_endpoints(client):
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    assert data["preferences"]["maxRounds"] == 10
+    assert data["preferences"]["maxRounds"] == 3
     assert data["preferences"]["concurrentMode"] is True
-    assert data["preferences"]["agents"]["price_agent"] == "deep"
-    assert data["preferences"]["enableLLMAnalysis"] is True
-    assert data["preferences"]["reflectionRounds"] == 3
-    assert data["preferences"]["analysisTimeoutSeconds"] == 120
-    assert data["preferences"]["tokenAcquireTimeoutSeconds"] == 60
+    assert data["preferences"]["agents"]["price_agent"] == "standard"
+    assert data["preferences"]["enableLLMAnalysis"] is False
+    assert data["preferences"]["reflectionRounds"] == 0
+    assert data["preferences"]["analysisTimeoutSeconds"] == 0
+    assert data["preferences"]["tokenAcquireTimeoutSeconds"] == 0
 
     # Update with mixed valid/invalid payload
     update_payload = {

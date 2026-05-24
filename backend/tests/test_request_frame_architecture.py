@@ -177,6 +177,34 @@ def test_request_frame_for_external_entity_impact_carries_risk_and_news(monkeypa
     assert coverage.get("missing_evidence") == []
 
 
+def test_plain_compare_request_frame_full_path_plans_performance_comparison(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "AAPL vs MSFT",
+        "ui_context": {"market": "US"},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_request(state))
+    frame = understanding.get("request_frame") or {}
+
+    assert frame.get("evidence_obligations") == ["performance_comparison"]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert "get_performance_comparison" in step_names
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_evidence") == ["performance_comparison"]
+    assert coverage.get("missing_evidence") == []
+
+
 def test_router_hints_compile_to_independent_request_frames(monkeypatch):
     import importlib
 
@@ -275,6 +303,53 @@ def test_router_direct_cannot_swallow_request_frame_evidence(monkeypatch):
     coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
 
     assert {"get_stock_price", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(step_names)
+    assert coverage.get("status") == "ok"
+    assert coverage.get("missing_evidence") == []
+
+
+def test_router_direct_no_news_compare_risk_still_requires_research(monkeypatch):
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert tickers == ["AAPL", "MSFT"]
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="direct_answer",
+            context_binding=ContextBinding(source="none", confidence=0.0),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.72,
+            needs_tools=False,
+            reason="router over-applied no-news direct answer preference",
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {
+        "query": "Do not look up news; compare AAPL and MSFT risk",
+        "ui_context": {"market": "US"},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    frame = understanding.get("request_frame") or {}
+
+    assert (understanding.get("understanding") or {}).get("route") == "research"
+    assert frame.get("relation") == "compare"
+    assert frame.get("evidence_obligations") == ["price_snapshot", "risk_profile"]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = {step.get("name") for step in steps}
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert {"get_stock_price", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(step_names)
+    assert "get_company_news" not in step_names
     assert coverage.get("status") == "ok"
     assert coverage.get("missing_evidence") == []
 
@@ -413,6 +488,46 @@ def test_planner_uses_request_frame_evidence_without_legacy_tasks():
     assert {"get_technical_snapshot", "analyze_historical_drawdowns", "get_factor_exposure"}.issubset(step_names)
     assert coverage.get("status") == "ok"
     assert coverage.get("fulfilled_evidence") == ["technical_snapshot", "risk_profile"]
+    assert coverage.get("missing_evidence") == []
+
+
+def test_planner_uses_request_frame_performance_comparison_without_legacy_tasks():
+    frame = {
+        "frame_id": "frame_compare",
+        "lane": "research",
+        "relation": "compare",
+        "subject": {"type": "company", "tickers": ["AAPL", "MSFT"]},
+        "evidence_obligations": ["performance_comparison"],
+        "required_results": [],
+        "legacy_operation": {"name": "compare", "confidence": 0.86, "params": {}},
+    }
+    state = {
+        "query": "AAPL vs MSFT",
+        "operation": {"name": "compare", "confidence": 0.86, "params": {}},
+        "output_mode": "chat",
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["AAPL", "MSFT"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "tasks": [],
+        "ui_context": {"market": "US"},
+        "request_frame": frame,
+        "request_frames": [frame],
+    }
+
+    policy_out = policy_gate(state)
+    plan_out = planner_stub({**state, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    comparison_step = next((step for step in steps if step.get("name") == "get_performance_comparison"), None)
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    assert comparison_step is not None
+    assert (comparison_step.get("inputs") or {}).get("tickers") == {"AAPL": "AAPL", "MSFT": "MSFT"}
+    assert coverage.get("status") == "ok"
+    assert coverage.get("fulfilled_evidence") == ["performance_comparison"]
     assert coverage.get("missing_evidence") == []
 
 
@@ -557,3 +672,51 @@ def test_planner_validates_all_request_frames_without_legacy_tasks():
         "query_frame_2",
         "query_frame_3",
     ]
+
+
+def test_intent_contract_mode_off_does_not_emit_authoritative_frames(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    monkeypatch.setenv("FINSIGHT_INTENT_CONTRACT_MODE", "off")
+
+    state = {
+        "query": "Research whether TSLA could be affected by SpaceX",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    result = asyncio.run(understand_request(state))
+    understanding = result.get("understanding") or {}
+    trace = result.get("trace") or {}
+
+    assert "request_frame" not in result
+    assert "request_frames" not in result
+    assert "intent_contract" not in result
+    assert "intent_contracts" not in result
+    assert "request_frame" not in understanding
+    assert "request_frame_shadow" not in trace
+
+
+def test_intent_contract_mode_shadow_records_only_trace_shadow(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    monkeypatch.setenv("FINSIGHT_INTENT_CONTRACT_MODE", "shadow")
+
+    state = {
+        "query": "Research whether TSLA could be affected by SpaceX",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    result = asyncio.run(understand_request(state))
+    understanding = result.get("understanding") or {}
+    trace = result.get("trace") or {}
+
+    assert "request_frame" not in result
+    assert "request_frames" not in result
+    assert "intent_contract" not in result
+    assert "request_frame" not in understanding
+    assert isinstance(trace.get("request_frame_shadow"), dict)
+    assert "request_frame" not in trace

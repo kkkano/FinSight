@@ -287,6 +287,7 @@ class TestResetTurnState:
             "understanding", "tasks", "blocked_tasks", "context_refs",
             "subject", "operation", "clarify", "policy",
             "plan_ir", "artifacts", "chat_responded",
+            "request_frame", "request_frames", "intent_contract", "intent_contracts",
         ]
         for key in expected_none_keys:
             assert key in result, f"Missing key: {key}"
@@ -323,13 +324,13 @@ class TestResetTurnState:
         result = reset_turn_state({})
         assert isinstance(result, dict)
 
-    def test_exactly_13_keys_returned(self):
-        """Exactly 22 keys should be reset (16 decision + 5 confirmation + 1 trace).
+    def test_exactly_26_keys_returned(self):
+        """Exactly 26 keys should be reset (20 decision + 5 confirmation + 1 trace).
 
-        16 decision keys include understanding_v2 (added by understanding v2 contract).
+        20 decision keys include understanding_v2 and request-frame contract state.
         """
         result = reset_turn_state({})
-        assert len(result) == 22, f"Expected 22 keys, got {len(result)}: {list(result.keys())}"
+        assert len(result) == 26, f"Expected 26 keys, got {len(result)}: {list(result.keys())}"
 
     def test_trace_runtime_subkeys_cleared(self):
         """Per-turn trace runtime sub-keys must be removed."""
@@ -342,6 +343,14 @@ class TestResetTurnState:
                 "synthesize_runtime": {"mode": "stub"},
                 "executor": {"steps_executed": 2},
                 "rag": {"chunks": 5},
+                "request_frame": {"frame_id": "stale"},
+                "request_frames": [{"frame_id": "stale"}],
+                "intent_contract": {"frame_id": "stale"},
+                "intent_contracts": [{"frame_id": "stale"}],
+                "request_frame_shadow": {"frame_id": "stale"},
+                "request_frames_shadow": [{"frame_id": "stale"}],
+                "intent_contract_shadow": {"frame_id": "stale"},
+                "intent_contracts_shadow": [{"frame_id": "stale"}],
             }
         }
         result = reset_turn_state(state)
@@ -356,6 +365,14 @@ class TestResetTurnState:
         assert "synthesize_runtime" not in trace
         assert "executor" not in trace
         assert "rag" not in trace
+        assert "request_frame" not in trace
+        assert "request_frames" not in trace
+        assert "intent_contract" not in trace
+        assert "intent_contracts" not in trace
+        assert "request_frame_shadow" not in trace
+        assert "request_frames_shadow" not in trace
+        assert "intent_contract_shadow" not in trace
+        assert "intent_contracts_shadow" not in trace
 
     def test_trace_empty_when_no_prior_trace(self):
         """When no prior trace exists, reset returns empty trace dict."""

@@ -18,6 +18,7 @@ from backend.graph.event_bus import emit_event
 from backend.graph.intent_contract import (
     derive_intent_contract,
     evidence_focused_operation,
+    intent_contract_mode,
     legacy_operation_for_contract,
     requires_per_ticker_research,
     synthesis_compare_operation,
@@ -455,7 +456,7 @@ def _direct_conversation_result(
     trace["understanding"] = understanding
     trace["conversation_router"] = decision.model_dump()
     trace["reply_contract"] = reply_contract
-    if request_frame is not None:
+    if request_frame:
         understanding["request_frame"] = request_frame
         understanding["request_frames"] = [request_frame]
         trace["request_frame"] = request_frame
@@ -475,7 +476,7 @@ def _direct_conversation_result(
         "messages": [AIMessage(content=reply or "(response completed)")],
         "trace": trace,
     }
-    if request_frame is not None:
+    if request_frame:
         result["request_frame"] = request_frame
         result["request_frames"] = [request_frame]
     if decision.execution_route == "out_of_scope":
@@ -1650,10 +1651,10 @@ def _direct_decision_must_project_tasks(
     request_frame: dict[str, Any] | None = None,
 ) -> bool:
     """Prevent an LLM direct route from swallowing explicit tool/data requests."""
-    if wants_no_news_or_links(query):
-        return False
     if _request_frame_blocks_direct_answer(request_frame):
         return True
+    if wants_no_news_or_links(query):
+        return False
     return bool(
         _extract_urls(query)
         or query_explicitly_requests_sources(query)
@@ -1664,7 +1665,10 @@ def _direct_decision_must_project_tasks(
         or _contains_any(query, _PORTFOLIO_HINTS)
         or decision.needs_tools
         or _task_hints_require_execution(decision.task_hints, query, allow_subject_label_refs=True)
-        or _direct_decision_contract_requires_evidence(query, decision, current_tickers=current_tickers)
+        or (
+            intent_contract_mode() == "enforce"
+            and _direct_decision_contract_requires_evidence(query, decision, current_tickers=current_tickers)
+        )
         or (decision.domain_intent == "quote" and _query_explicitly_requests_price_data(query))
         or decision.domain_intent in {"news", "doc_qa", "portfolio", "alert"}
     )
@@ -2280,11 +2284,14 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         [str(t) for t in (ticker_meta.get("tickers") or []) if str(t).strip().upper() not in _NON_ASSET_TOKENS]
     )
     conversation_decision: ConversationDecision | None = None
+    contract_mode = intent_contract_mode()
+    contract_enforced = contract_mode == "enforce"
+    contract_shadow = contract_mode == "shadow"
     intent_contract: dict[str, Any] | None = None
     intent_contracts: list[dict[str, Any]] = []
     context_router_research_bound = False
     request_frames: list[dict[str, Any]] = []
-    request_frame: dict[str, Any] = (
+    compiled_request_frame: dict[str, Any] = (
         compile_request_frame(
             query=query,
             tickers=tickers,
@@ -2295,6 +2302,9 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         if query
         else {}
     )
+    request_frame: dict[str, Any] = compiled_request_frame if contract_enforced else {}
+    if compiled_request_frame and contract_shadow:
+        trace["request_frame_shadow"] = compiled_request_frame
     if request_frame:
         trace["request_frame"] = request_frame
     deterministic_request_frames = (
@@ -2306,6 +2316,10 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         if query
         else []
     )
+    if deterministic_request_frames and contract_shadow:
+        trace["request_frames_shadow"] = deterministic_request_frames
+    if not contract_enforced:
+        deterministic_request_frames = []
 
     if not query:
         blocked_tasks.append(
@@ -2484,20 +2498,31 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                         selection_types=selection_types,
                     )
                 if conversation_decision.task_hints:
-                    hint_bound = _add_router_task_hints_contract(
-                        tasks=tasks,
-                        context_refs=context_refs,
-                        decision=conversation_decision,
-                        query=query,
-                        output_mode=output_mode,
-                        current_tickers=tickers,
-                        selection_ids=selection_ids,
-                        selection_types=selection_types,
-                        intent_contracts=intent_contracts,
-                        request_frames=request_frames,
-                    )
+                    if contract_enforced:
+                        hint_bound = _add_router_task_hints_contract(
+                            tasks=tasks,
+                            context_refs=context_refs,
+                            decision=conversation_decision,
+                            query=query,
+                            output_mode=output_mode,
+                            current_tickers=tickers,
+                            selection_ids=selection_ids,
+                            selection_types=selection_types,
+                            intent_contracts=intent_contracts,
+                            request_frames=request_frames,
+                        )
+                    else:
+                        hint_bound = _add_router_task_hints(
+                            tasks=tasks,
+                            context_refs=context_refs,
+                            decision=conversation_decision,
+                            query=query,
+                            current_tickers=tickers,
+                            selection_ids=selection_ids,
+                            selection_types=selection_types,
+                        )
                     context_router_research_bound = context_router_research_bound or hint_bound
-                    if request_frames:
+                    if contract_enforced and request_frames:
                         request_frame = request_frames[0]
             if conversation_decision.execution_route == "clarify":
                 blocked_tasks.append(_context_router_clarify_block(conversation_decision))
@@ -2510,7 +2535,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         else "none"
     )
 
-    if not request_frames and deterministic_request_frames:
+    if contract_enforced and not request_frames and deterministic_request_frames:
         request_frames.extend(deterministic_request_frames)
         request_frame = request_frames[0]
         trace["request_frame"] = request_frame
@@ -2629,37 +2654,50 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
             comparison_requested
             or multi_ticker_report
         )
-        intent_contract = derive_intent_contract(
-            query=query,
-            tickers=scoped_tickers,
-            output_mode=output_mode,
-            comparison_requested=multi_ticker_compare,
-            domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
-            lightweight_requested=_is_explicit_brief_request(query) or _is_lightweight_representative_compare(query),
-            subject_type="company",
-            frame_id="primary_company",
-        )
-        request_frame = compile_request_frame(
-            query=query,
-            tickers=scoped_tickers,
-            output_mode=output_mode,
-            comparison_requested=multi_ticker_compare,
-            domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
-            subject_type="company",
-            frame_id="primary_company",
-        )
-        trace["request_frame"] = request_frame
-        if not request_frames:
-            request_frames.append(request_frame)
-        intent_contracts.append(dict(intent_contract))
-        trace["intent_contract"] = intent_contract
+        company_intent_contract: dict[str, Any] | None = None
+        company_request_frame: dict[str, Any] | None = None
+        if contract_enforced or contract_shadow:
+            company_intent_contract = derive_intent_contract(
+                query=query,
+                tickers=scoped_tickers,
+                output_mode=output_mode,
+                comparison_requested=multi_ticker_compare,
+                domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
+                lightweight_requested=_is_explicit_brief_request(query) or _is_lightweight_representative_compare(query),
+                subject_type="company",
+                frame_id="primary_company",
+            )
+            company_request_frame = compile_request_frame(
+                query=query,
+                tickers=scoped_tickers,
+                output_mode=output_mode,
+                comparison_requested=multi_ticker_compare,
+                domain_intent=(conversation_decision.domain_intent if conversation_decision is not None else ""),
+                subject_type="company",
+                frame_id="primary_company",
+            )
+            if contract_enforced:
+                intent_contract = company_intent_contract
+                request_frame = company_request_frame
+                trace["request_frame"] = request_frame
+                if not request_frames:
+                    request_frames.append(request_frame)
+                intent_contracts.append(dict(intent_contract))
+                trace["intent_contract"] = intent_contract
+            else:
+                trace.setdefault("request_frame_shadow", company_request_frame)
+                trace.setdefault("intent_contract_shadow", company_intent_contract)
         if multi_ticker_compare:
-            contract_tickers = list(intent_contract.get("primary_tickers") or scoped_tickers)
-            if requires_per_ticker_research(intent_contract):
+            contract_tickers = list(
+                ((company_intent_contract or {}).get("primary_tickers") or scoped_tickers)
+                if contract_enforced and isinstance(company_intent_contract, dict)
+                else scoped_tickers
+            )
+            if contract_enforced and isinstance(company_intent_contract, dict) and requires_per_ticker_research(company_intent_contract):
                 _add_task(
                     tasks,
                     subject_type="company",
-                    operation=synthesis_compare_operation(intent_contract),
+                    operation=synthesis_compare_operation(company_intent_contract),
                     query=query,
                     tickers=contract_tickers,
                     priority=20,
@@ -2668,7 +2706,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 _add_per_ticker_company_tasks(
                     tasks,
                     tickers=contract_tickers,
-                    operations=[evidence_focused_operation(intent_contract)],
+                    operations=[evidence_focused_operation(company_intent_contract)],
                     query=query,
                     priority=24,
                     reason="intent_contract_per_ticker_evidence",
@@ -2721,8 +2759,13 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 output_mode=output_mode,
             )
             contract_operations = (
-                [legacy_operation_for_contract(intent_contract, subject_type="company")]
-                if intent_contract.get("required_evidence") and output_mode != "investment_report"
+                [legacy_operation_for_contract(company_intent_contract, subject_type="company")]
+                if (
+                    contract_enforced
+                    and isinstance(company_intent_contract, dict)
+                    and company_intent_contract.get("required_evidence")
+                    and output_mode != "investment_report"
+                )
                 else []
             )
             if contract_operations:
@@ -2896,20 +2939,31 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     return result
             if conversation_decision.execution_route == "research":
                 if conversation_decision.task_hints:
-                    hint_bound = _add_router_task_hints_contract(
-                        tasks=tasks,
-                        context_refs=context_refs,
-                        decision=conversation_decision,
-                        query=query,
-                        output_mode=output_mode,
-                        current_tickers=tickers,
-                        selection_ids=selection_ids,
-                        selection_types=selection_types,
-                        intent_contracts=intent_contracts,
-                        request_frames=request_frames,
-                    )
+                    if contract_enforced:
+                        hint_bound = _add_router_task_hints_contract(
+                            tasks=tasks,
+                            context_refs=context_refs,
+                            decision=conversation_decision,
+                            query=query,
+                            output_mode=output_mode,
+                            current_tickers=tickers,
+                            selection_ids=selection_ids,
+                            selection_types=selection_types,
+                            intent_contracts=intent_contracts,
+                            request_frames=request_frames,
+                        )
+                    else:
+                        hint_bound = _add_router_task_hints(
+                            tasks=tasks,
+                            context_refs=context_refs,
+                            decision=conversation_decision,
+                            query=query,
+                            current_tickers=tickers,
+                            selection_ids=selection_ids,
+                            selection_types=selection_types,
+                        )
                     context_router_research_bound = context_router_research_bound or hint_bound
-                    if request_frames:
+                    if contract_enforced and request_frames:
                         request_frame = request_frames[0]
                 if not tasks:
                     _add_context_bound_research_task(
@@ -3163,19 +3217,23 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         )
         understanding["v2"] = understanding_v2
     trace["understanding"] = understanding
-    if intent_contract is not None:
+    if contract_enforced and intent_contract is not None:
         trace["intent_contract"] = intent_contract
-    if intent_contracts:
+    elif contract_shadow and intent_contract is not None:
+        trace["intent_contract_shadow"] = intent_contract
+    if contract_enforced and intent_contracts:
         trace["intent_contracts"] = intent_contracts
+    elif contract_shadow and intent_contracts:
+        trace["intent_contracts_shadow"] = intent_contracts
     if understanding_v2:
         trace["understanding_v2"] = understanding_v2
-    if not request_frames and request_frame:
+    if contract_enforced and not request_frames and request_frame:
         request_frames = [request_frame]
-    if request_frames:
+    if contract_enforced and request_frames:
         request_frame = request_frames[0]
         understanding["request_frames"] = request_frames
         trace["request_frames"] = request_frames
-    if request_frame:
+    if contract_enforced and request_frame:
         understanding["request_frame"] = request_frame
         trace["request_frame"] = request_frame
     trace["reply_contract"] = reply_contract
@@ -3197,13 +3255,13 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
         "artifacts": artifacts,
         "trace": trace,
     }
-    if request_frames:
+    if contract_enforced and request_frames:
         result["request_frames"] = request_frames
-    if request_frame:
+    if contract_enforced and request_frame:
         result["request_frame"] = request_frame
-    if intent_contract is not None:
+    if contract_enforced and intent_contract is not None:
         result["intent_contract"] = intent_contract
-    if intent_contracts:
+    if contract_enforced and intent_contracts:
         result["intent_contracts"] = intent_contracts
     return result
 

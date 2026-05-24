@@ -988,6 +988,7 @@ def policy_gate(state: GraphState) -> dict:
 
     policy = {
         "budget": budget,
+        "market": market,
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,

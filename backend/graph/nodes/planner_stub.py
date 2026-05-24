@@ -59,6 +59,12 @@ def planner_stub(state: GraphState) -> dict:
     budget = PlanBudget.model_validate(raw_budget or {"max_rounds": 1, "max_tools": 0})
     allowed_tools = set((policy.get("allowed_tools") or []) if isinstance(policy, dict) else [])
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    market = str(
+        (policy.get("market") if isinstance(policy, dict) else None)
+        or ui_context.get("market")
+        or "US"
+    ).strip().upper() or "US"
     raw_tasks = state.get("tasks")
     if not isinstance(raw_tasks, list):
         raw_tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
@@ -1314,6 +1320,29 @@ def planner_stub(state: GraphState) -> dict:
             task_ids=[task_id],
         )
 
+    def _append_performance_comparison_frame_step(frame: dict, *, group: str, task_id: str) -> bool:
+        if "get_performance_comparison" not in allowed_tools:
+            return False
+        frame_tickers = _frame_tickers(frame)
+        if not frame_tickers and isinstance(tickers, list):
+            frame_tickers = [
+                str(ticker).strip().upper()
+                for ticker in tickers
+                if str(ticker).strip()
+            ]
+        frame_tickers = list(dict.fromkeys([ticker for ticker in frame_tickers if ticker]))[:6]
+        if len(frame_tickers) < 2:
+            return False
+        _append_tool_step(
+            "get_performance_comparison",
+            {"tickers": {ticker: ticker for ticker in frame_tickers}},
+            why="Request frame compare evidence: cross-subject performance comparison.",
+            optional=False,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        return True
+
     def _append_backtest_frame_steps(frame: dict, *, group: str, task_id: str) -> bool:
         required_results = set(_frame_required_results(frame))
         action = _frame_workflow_action(frame)
@@ -1367,7 +1396,14 @@ def planner_stub(state: GraphState) -> dict:
                 _append_macro_frame_steps(frame, group=group, task_id=frame_id)
                 appended = True
 
-            per_ticker_evidence = [kind for kind in required_evidence if kind != "macro_context"]
+            if "performance_comparison" in required_evidence:
+                appended = _append_performance_comparison_frame_step(frame, group=group, task_id=frame_id) or appended
+
+            per_ticker_evidence = [
+                kind
+                for kind in required_evidence
+                if kind not in {"macro_context", "performance_comparison"}
+            ]
             if not per_ticker_evidence:
                 continue
             frame_tickers = _frame_tickers(frame)
@@ -1587,6 +1623,7 @@ def planner_stub(state: GraphState) -> dict:
             coverage_validation = validate_plan_coverage_for_frames(
                 request_frames=request_frames,
                 plan_ir=plan.model_dump(),
+                market=market,
             ) if request_frames else None
             trace.update(
                 {
@@ -2263,6 +2300,7 @@ def planner_stub(state: GraphState) -> dict:
         coverage_validation = validate_plan_coverage_for_frames(
             request_frames=request_frames,
             plan_ir=plan.model_dump(),
+            market=market,
         ) if request_frames else None
         trace.update(
             {

@@ -143,4 +143,3 @@ Deployment recommendation:
   provider latency should be monitored as an execution-layer concern.
 - Existing untracked QA artifacts under `docs/qa/` were not included in this
   readiness package.
-

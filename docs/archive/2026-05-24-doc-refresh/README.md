@@ -5,4 +5,3 @@
 | 原路径 | 归档路径 | 原因 |
 |---|---|---|
 | `docs/DEPLOYMENT.md` | `DEPLOYMENT_legacy_docker_notes.md` | 这是早期个人 Docker 部署流水笔记，含大量历史踩坑过程；当前生产发布和回滚入口已收口到 `docs/11_PRODUCTION_RUNBOOK.md`。 |
-
