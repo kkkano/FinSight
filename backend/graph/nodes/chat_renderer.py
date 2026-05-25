@@ -1266,30 +1266,58 @@ def _format_compact_number(value: Any, *, money: bool = False) -> str:
 def _latest_quarter_facts(state: GraphState) -> list[str]:
     payload = _first_matching_output(state, {"get_sec_company_facts_quarterly"})
     parsed = _parse_jsonish(payload)
+    if isinstance(parsed, dict) and not parsed.get("error"):
+        periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
+        period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
+        metric_specs = (
+            ("revenue", "营收", True),
+            ("gross_profit", "毛利", True),
+            ("operating_income", "经营利润", True),
+            ("net_income", "净利润", True),
+            ("eps", "EPS", False),
+            ("operating_cash_flow", "经营现金流", True),
+            ("free_cash_flow", "自由现金流", True),
+        )
+
+        lines: list[str] = []
+        for key, label, money in metric_specs:
+            values = parsed.get(key)
+            if not isinstance(values, list) or not values:
+                continue
+            formatted = _format_compact_number(values[0], money=money)
+            if formatted:
+                lines.append(f"{period_label} {label} {formatted}")
+            if len(lines) >= 4:
+                break
+        if lines:
+            return lines
+    return _local_filing_fact_lines(state)
+
+
+def _local_filing_fact_lines(state: GraphState) -> list[str]:
+    payload = _first_matching_output(state, {"get_local_market_filings"})
+    parsed = _parse_jsonish(payload)
     if not isinstance(parsed, dict) or parsed.get("error"):
         return []
-
-    periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
-    period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
-    metric_specs = (
-        ("revenue", "营收", True),
-        ("gross_profit", "毛利", True),
-        ("operating_income", "经营利润", True),
-        ("net_income", "净利润", True),
-        ("eps", "EPS", False),
-        ("operating_cash_flow", "经营现金流", True),
-        ("free_cash_flow", "自由现金流", True),
-    )
-
+    filings = parsed.get("filings") if isinstance(parsed.get("filings"), list) else []
     lines: list[str] = []
-    for key, label, money in metric_specs:
-        values = parsed.get(key)
-        if not isinstance(values, list) or not values:
+    for filing in filings:
+        if not isinstance(filing, dict):
             continue
-        formatted = _format_compact_number(values[0], money=money)
-        if formatted:
-            lines.append(f"{period_label} {label} {formatted}")
-        if len(lines) >= 4:
+        title = str(filing.get("title") or filing.get("form") or "本地交易所公告").strip()
+        description = str(
+            filing.get("primary_doc_description")
+            or filing.get("summary")
+            or filing.get("snippet")
+            or ""
+        ).strip()
+        date = str(filing.get("filing_date") or filing.get("date") or filing.get("published_at") or "").strip()
+        line = " ".join(part for part in (date, title) if part)
+        if description and description not in line:
+            line = f"{line}：{description}" if line else description
+        if line:
+            lines.append(line)
+        if len(lines) >= 3:
             break
     return lines
 
@@ -2071,6 +2099,19 @@ def render_chat_markdown(state: GraphState) -> str:
         _append_sources(lines, news or evidence_items)
         return _finalize_chat_markdown(lines, state)
 
+    intent_contract = _intent_contract(state)
+    render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
+    if (
+        render_intent.get("shape") == "compare"
+        and bool(intent_contract.get("per_ticker_required"))
+    ) or _v2_requires_research_compare(state):
+        return _render_research_compare_markdown(
+            state,
+            prices=prices,
+            news_map=news_map,
+            evidence_items=evidence_items,
+        )
+
     if "earnings_impact" in operations:
         return _render_earnings_impact_markdown(
             state,
@@ -2095,19 +2136,6 @@ def render_chat_markdown(state: GraphState) -> str:
             ticker_price = prices.get(ticker, price if len(target_tickers) == 1 else {})
             lines.append(_format_price_line(ticker, ticker_price))
         return _finalize_chat_markdown(lines, state)
-
-    intent_contract = _intent_contract(state)
-    render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
-    if (
-        render_intent.get("shape") == "compare"
-        and bool(intent_contract.get("per_ticker_required"))
-    ) or _v2_requires_research_compare(state):
-        return _render_research_compare_markdown(
-            state,
-            prices=prices,
-            news_map=news_map,
-            evidence_items=evidence_items,
-        )
 
     if "compare" in operations:
         return _render_compare_or_basket_markdown(

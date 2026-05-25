@@ -306,7 +306,7 @@ def is_probably_ticker(ticker: str) -> bool:
 
 def _is_structured_market_ticker(ticker: str) -> bool:
     text = str(ticker or "").strip().upper()
-    return bool(re.match(r"^\d{5,6}\.(SS|SZ|BJ|HK)$", text))
+    return bool(re.match(r"^(?:\d{5,6}\.(?:SS|SZ|BJ)|\d{4,5}\.HK)$", text))
 
 
 def _alias_appears_in_text(query: str, alias: str) -> bool:
@@ -402,7 +402,7 @@ def extract_tickers(query: str) -> Dict[str, Any]:
     raw_matches.extend(index_tickers)
     dotted_tickers = re.findall(r'(?<![A-Za-z])([A-Za-z]{1,5}[.-][A-Za-z]{1,4})(?![A-Za-z])', query)
     raw_matches.extend(dotted_tickers)
-    cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])(\d{5,6}\.(?:SS|SZ|BJ|HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
+    cn_dotted_tickers = re.findall(r'(?<![A-Za-z0-9])((?:\d{5,6}\.(?:SS|SZ|BJ)|\d{4,5}\.HK))(?![A-Za-z0-9])', query, flags=re.IGNORECASE)
     raw_matches.extend(cn_dotted_tickers)
     potential_tickers = [t.upper() for t in raw_matches]
 

@@ -67,6 +67,14 @@
 - `backend/graph/nodes/planner_stub.py`：`earnings_performance` 会拉取公司信息、季度事实、盈利预期、EPS 修正、财报新闻/电话会和 Fundamental/News agent；`earnings_impact` 额外拉取当前价格、历史回撤和 Risk agent。即使上游误判为 price，只要 query facet 指向财报影响股价，也会补齐复合工具链。
 - `backend/graph/nodes/chat_renderer.py`：新增财报表现与财报影响股价短答渲染合同，回答必须包含财务表现、EPS 修正、消息/指引和风险；财报新闻引用只保留可绑定到当前 ticker/公司名的项目，避免旁支新闻混入。
 
+# 2026-05-25 增量架构说明（request-frame 契约收口）
+
+- `backend/graph/nodes/policy_gate.py`：`valuation_compare_light` 只裁剪 enrichment，不裁剪 `required_evidence` 的最低执行工具；`filing_context` 的最低工具按市场映射为 US `get_sec_company_facts_quarterly`、CN/HK `get_local_market_filings`。
+- `backend/graph/nodes/planner_stub.py`：契约必需的 `filing_context` 步骤不再统一排成 optional；US CompanyFacts 与 CN/HK 本地公告作为各自市场的 mandatory 最低依赖，SEC 10-K/10-Q 等补充来源仍可 optional。
+- `backend/graph/nodes/chat_renderer.py`：chat 渲染优先读取 `intent_contract.render_intent` 与 `per_ticker_required` 选择 compare 渲染，legacy `operation` 只做兼容 fallback；report/synthesize 暂不纳入本次收口。
+- `backend/graph/nodes/chat_renderer.py`：财报表现短答在 SEC 季度事实表不可用时，可用 `get_local_market_filings` 的公告标题、日期和摘要作为非美股最低财报证据，避免 CN/HK 直接落入 `[数据缺失]`。
+- `backend/config/ticker_mapping.py`：港股结构化 ticker 识别支持四到五位 `.HK` 代码，确保 `0700.HK`、`9988.HK` 能进入 request-frame per-ticker 规划。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

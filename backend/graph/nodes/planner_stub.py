@@ -430,30 +430,32 @@ def planner_stub(state: GraphState) -> dict:
                         task_ids=task_ids,
                     )
             elif kind == "filing_context":
-                _append_tool_step(
-                    "get_sec_company_facts_quarterly",
-                    {"ticker": ticker},
-                    why=f"{ticker} evidence contract: quarterly company facts.",
-                    optional=False,
-                    parallel_group=group,
-                    task_ids=task_ids,
-                )
-                _append_tool_step(
-                    "get_sec_filings",
-                    {"ticker": ticker, "forms": ["10-K", "10-Q"], "limit": 4},
-                    why=f"{ticker} evidence contract: SEC filings.",
-                    optional=True,
-                    parallel_group=group,
-                    task_ids=task_ids,
-                )
-                _append_tool_step(
-                    "get_local_market_filings",
-                    {"ticker": ticker, "limit": 5},
-                    why=f"{ticker} evidence contract: local-market filings.",
-                    optional=True,
-                    parallel_group=group,
-                    task_ids=task_ids,
-                )
+                if market == "US":
+                    _append_tool_step(
+                        "get_sec_company_facts_quarterly",
+                        {"ticker": ticker},
+                        why=f"{ticker} evidence contract: quarterly company facts.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_sec_filings",
+                        {"ticker": ticker, "forms": ["10-K", "10-Q"], "limit": 4},
+                        why=f"{ticker} evidence contract: SEC filings.",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                else:
+                    _append_tool_step(
+                        "get_local_market_filings",
+                        {"ticker": ticker, "limit": 5},
+                        why=f"{ticker} evidence contract: local-market filings.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
             elif kind == "transcript_context":
                 _append_tool_step(
                     "get_earnings_call_transcripts",

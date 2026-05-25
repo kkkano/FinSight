@@ -213,6 +213,26 @@ def _append_missing(items: list[str], names: tuple[str, ...]) -> list[str]:
     return items
 
 
+def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market: str) -> tuple[str, ...]:
+    """Light profile 可裁增强项，但不能裁契约声明的最低证据工具。"""
+    market_norm = str(market or "US").strip().upper() or "US"
+    minimum_tools_by_evidence = {
+        "price_snapshot": ("get_stock_price",),
+        "company_profile": ("get_company_info",),
+        "earnings_estimates": ("get_earnings_estimates",),
+        "filing_context": (
+            ("get_sec_company_facts_quarterly",)
+            if market_norm == "US"
+            else ("get_local_market_filings",)
+        ),
+        "news_context": ("get_company_news",),
+    }
+    required_tools: list[str] = []
+    for kind in canonical_evidence_kinds(required_evidence):
+        required_tools.extend(minimum_tools_by_evidence.get(kind, ()))
+    return tuple(_append_missing(list(_VALUATION_COMPARE_LIGHT_TOOLS), tuple(required_tools)))
+
+
 def _task_param_profiles(tasks: list[dict]) -> set[str]:
     profiles: set[str] = set()
     for task in tasks:
@@ -776,12 +796,13 @@ def policy_gate(state: GraphState) -> dict:
         allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
 
     if valuation_compare_light and output_mode != "investment_report":
+        light_tool_floor = _valuation_compare_light_tool_floor(required_evidence, market=market)
         allowed_tools = [
-            tool_name for tool_name in _append_missing(list(allowed_tools), _VALUATION_COMPARE_LIGHT_TOOLS)
-            if tool_name in _VALUATION_COMPARE_LIGHT_TOOLS
+            tool_name for tool_name in _append_missing(list(allowed_tools), light_tool_floor)
+            if tool_name in light_tool_floor
         ]
         budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
-        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 6)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(light_tool_floor)))
 
     if isinstance(state.get("understanding_v2"), dict):
         default_cap = 18 if output_mode == "investment_report" else (10 if output_mode == "chat" else 12)

@@ -1662,6 +1662,107 @@ def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_op
     assert "valuation_reasonableness" in markdown
 
 
+def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Compare AAPL and MSFT valuation and earnings performance",
+            "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"]},
+            "operation": {"name": "earnings_performance"},
+            "intent_contract": {
+                "facets": ["valuation", "earnings"],
+                "budget_profile": "valuation_compare_light",
+                "primary_tickers": ["AAPL", "MSFT"],
+                "per_ticker_required": True,
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness", "earnings"]},
+                "required_evidence": [
+                    "price_snapshot",
+                    "company_profile",
+                    "earnings_estimates",
+                    "news_context",
+                    "filing_context",
+                ],
+            },
+            "tasks": [
+                {
+                    "id": "task_compare",
+                    "subject_type": "company",
+                    "subject_label": "AAPL, MSFT",
+                    "tickers": ["AAPL", "MSFT"],
+                    "operation": {
+                        "name": "compare",
+                        "params": {"comparison_data_profile": "valuation_compare_light"},
+                    },
+                },
+                {
+                    "id": "task_aapl_earnings",
+                    "subject_type": "company",
+                    "subject_label": "AAPL",
+                    "tickers": ["AAPL"],
+                    "operation": {"name": "earnings_performance"},
+                },
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AAPL"}},
+                    {"id": "s2", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "MSFT"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
+                    "s2": {"output": {"price": 200.0, "change_percent": -0.5}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Research comparison for AAPL, MSFT" in markdown
+    assert "valuation_reasonableness, earnings" in markdown
+    assert "**最新季度/财务表现**" not in markdown
+
+
+def test_earnings_performance_uses_local_filings_as_financial_fallback() -> None:
+    markdown = _render_chat(
+        {
+            "query": "腾讯财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["0700.HK"]},
+            "operation": {"name": "earnings_performance"},
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_local_market_filings", "inputs": {"ticker": "0700.HK"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {
+                        "output": {
+                            "ticker": "0700.HK",
+                            "market": "HK",
+                            "source": "local_disclosure_free",
+                            "filings": [
+                                {
+                                    "title": "Tencent 2026 first quarter results announcement",
+                                    "form": "quarterly_report",
+                                    "filing_date": "2026-05-14",
+                                    "primary_doc_description": "Revenue and profit improved year over year.",
+                                    "filing_url": "https://www1.hkexnews.hk/tencent-q1.pdf",
+                                    "source": "hkexnews.hk",
+                                }
+                            ],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Tencent 2026 first quarter results announcement" in markdown
+    assert "Revenue and profit improved year over year." in markdown
+    assert "本轮没有拿到季度财务事实表" not in markdown
+
+
 def test_chat_renderer_macro_research_does_not_use_stock_news_template() -> None:
     markdown = _render_chat(
         {

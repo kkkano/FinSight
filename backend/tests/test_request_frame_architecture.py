@@ -209,6 +209,72 @@ def test_valuation_earnings_light_compare_keeps_us_quarterly_facts(monkeypatch):
     assert "filing_context" not in (coverage.get("missing_evidence") or [])
 
 
+def test_valuation_earnings_light_compare_keeps_cn_local_filings(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "Compare 600519.SS and 000858.SZ valuation and earnings performance",
+        "ui_context": {"market": "CN"},
+        "output_mode": "chat",
+    }
+    understanding = asyncio.run(understand_request(state))
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    local_filing_steps = [
+        step
+        for step in steps
+        if step.get("name") == "get_local_market_filings"
+    ]
+    tickers = {
+        (step.get("inputs") or {}).get("ticker")
+        for step in local_filing_steps
+    }
+
+    assert tickers == {"600519.SS", "000858.SZ"}
+    assert all(step.get("optional") is False for step in local_filing_steps)
+    assert not any(step.get("name") == "get_sec_company_facts_quarterly" for step in steps)
+    assert "filing_context" not in (coverage.get("missing_evidence") or [])
+
+
+def test_valuation_earnings_light_compare_keeps_hk_local_filings(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "Compare 0700.HK and 9988.HK valuation and earnings performance",
+        "ui_context": {"market": "HK"},
+        "output_mode": "chat",
+    }
+    understanding = asyncio.run(understand_request(state))
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    local_filing_steps = [
+        step
+        for step in steps
+        if step.get("name") == "get_local_market_filings"
+    ]
+    tickers = {
+        (step.get("inputs") or {}).get("ticker")
+        for step in local_filing_steps
+    }
+
+    assert tickers == {"0700.HK", "9988.HK"}
+    assert all(step.get("optional") is False for step in local_filing_steps)
+    assert not any(step.get("name") == "get_sec_company_facts_quarterly" for step in steps)
+    assert "filing_context" not in (coverage.get("missing_evidence") or [])
+
+
 def test_macro_mechanism_question_stays_answer_lane_without_evidence(monkeypatch):
     import importlib
 

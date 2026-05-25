@@ -15,6 +15,12 @@ def test_extract_tickers_keeps_cn_market_suffix_symbol():
     assert "SS" not in tickers
 
 
+def test_extract_tickers_keeps_hk_market_suffix_symbol():
+    meta = extract_tickers("Compare 0700.HK and 9988.HK valuation")
+    tickers = meta.get("tickers") if isinstance(meta, dict) else []
+    assert tickers == ["0700.HK", "9988.HK"]
+
+
 def test_ascii_aliases_do_not_match_inside_url_or_words():
     meta = extract_tickers(
         "Read https://example.com/msft-rates and tell me whether it matters for MSFT."
