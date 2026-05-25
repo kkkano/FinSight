@@ -177,6 +177,38 @@ def test_request_frame_for_external_entity_impact_carries_risk_and_news(monkeypa
     assert coverage.get("missing_evidence") == []
 
 
+def test_valuation_earnings_light_compare_keeps_us_quarterly_facts(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "Compare AAPL and MSFT valuation and earnings performance",
+        "ui_context": {"market": "US"},
+        "output_mode": "chat",
+    }
+    understanding = asyncio.run(understand_request(state))
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    coverage = (plan_out.get("trace") or {}).get("coverage_validator") or {}
+
+    quarterly_steps = [
+        step
+        for step in steps
+        if step.get("name") == "get_sec_company_facts_quarterly"
+    ]
+    tickers = {
+        (step.get("inputs") or {}).get("ticker")
+        for step in quarterly_steps
+    }
+
+    assert tickers == {"AAPL", "MSFT"}
+    assert all(step.get("optional") is False for step in quarterly_steps)
+    assert "filing_context" not in (coverage.get("missing_evidence") or [])
+
+
 def test_macro_mechanism_question_stays_answer_lane_without_evidence(monkeypatch):
     import importlib
 

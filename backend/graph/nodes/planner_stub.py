@@ -434,7 +434,7 @@ def planner_stub(state: GraphState) -> dict:
                     "get_sec_company_facts_quarterly",
                     {"ticker": ticker},
                     why=f"{ticker} evidence contract: quarterly company facts.",
-                    optional=True,
+                    optional=False,
                     parallel_group=group,
                     task_ids=task_ids,
                 )

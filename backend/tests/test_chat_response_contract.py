@@ -702,6 +702,45 @@ def test_earnings_performance_news_filter_uses_company_name_not_profile_body() -
     assert "Lenovo shares jump" not in markdown
 
 
+def test_earnings_performance_uses_news_agent_evidence_as_guidance_news() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Apple earnings performance and guidance",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "earnings_performance"},
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "AAPL"}},
+                    {"id": "s2", "kind": "agent", "name": "news_agent", "inputs": {"ticker": "AAPL"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "AAPL", "name": "Apple Inc"}},
+                    "s2": {
+                        "output": {
+                            "summary": "Recent earnings commentary focused on guidance details.",
+                            "articles": [],
+                            "evidence": [
+                                {
+                                    "text": "Apple earnings call points to stronger services guidance",
+                                    "url": "https://example.com/apple-guidance",
+                                    "source": "Example News",
+                                    "timestamp": "2026-05-22",
+                                }
+                            ],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Apple earnings call points to stronger services guidance" in markdown
+    assert "本轮没有可引用的财报新闻、电话会或指引来源" not in markdown
+
+
 def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
     markdown = _render_chat(
         {

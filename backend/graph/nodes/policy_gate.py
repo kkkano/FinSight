@@ -59,6 +59,7 @@ _SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
 _VALUATION_COMPARE_LIGHT_TOOLS: tuple[str, ...] = (
     "get_stock_price",
     "get_company_info",
+    "get_sec_company_facts_quarterly",
     "get_earnings_estimates",
     "get_current_datetime",
     "search",

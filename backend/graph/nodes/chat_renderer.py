@@ -232,7 +232,13 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
             or parsed.get("releases")
             or parsed.get("transcripts")
         )
-        rows = nested if isinstance(nested, list) else [parsed]
+        evidence = parsed.get("evidence")
+        if isinstance(nested, list) and nested:
+            rows = nested
+        elif isinstance(evidence, list):
+            rows = evidence
+        else:
+            rows = [parsed]
     else:
         rows = []
 
@@ -240,18 +246,19 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
     for row in rows:
         if not isinstance(row, dict):
             continue
-        title = str(row.get("title") or row.get("headline") or row.get("summary") or "").strip()
+        title = str(row.get("title") or row.get("headline") or row.get("text") or row.get("summary") or "").strip()
         if not title:
             continue
         url = str(row.get("url") or row.get("link") or row.get("article_url") or "").strip()
         if not _is_citable_url(url):
             url = ""
         source = str(row.get("source") or row.get("publisher") or "").strip()
-        published = str(row.get("published_at") or row.get("published_date") or row.get("date") or "").strip()
+        published = str(row.get("published_at") or row.get("published_date") or row.get("date") or row.get("timestamp") or "").strip()
         snippet = str(
             row.get("snippet")
             or row.get("description")
             or row.get("content")
+            or row.get("text")
             or row.get("summary")
             or ""
         ).strip()
