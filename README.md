@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="./README.md">English</a> |
-  <a href="./readme_cn.md">中文</a> |
+  <a href="./README_CN.md">中文</a> |
   <a href="./docs/DOCS_INDEX.md">Docs Index</a>
 </p>
 
@@ -220,23 +220,30 @@ The RAG Inspector opens up the retrieval pipeline for direct inspection. It show
 ```mermaid
 graph TB
     subgraph "Frontend (React + Vite)"
-        UI[Dashboard / Chat / Workbench]
+        UI[Dashboard / Chat / Workbench / Settings]
         STORE[Zustand Stores<br/>dashboardStore · executionStore · useStore]
-        PREFS[Settings<br/>agent_preferences.timeoutSeconds]
+        PREFS[AgentControlPanel<br/>timeout · LLM analysis · reflections]
         API_CLIENT[API Client<br/>SSE parseSSEStream]
     end
 
-    subgraph "Backend (FastAPI)"
-        ROUTER[API Routers<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph Pipeline<br/>Stateful Graph Runtime]
+    subgraph "Backend (FastAPI + 28 Routers)"
+        ROUTER[API Routers<br/>chat · agent · dashboard · research · execute · alerts · ...]
+        subgraph "LangGraph Pipeline (27 Nodes)"
+            UNDERSTAND[understand_request<br/>LLM Router · ReplyContract]
+            FRAME[IntentContract<br/>facets → required_evidence → evidence_plan]
+            POLICY[policy_gate<br/>evidence floor · market filter]
+            PLANNER[planner_stub<br/>contract-driven plan generation]
+            EXEC[execute_plan<br/>parallel agent groups]
+            SYNTH[synthesize<br/>conflict detection · hallucination scrub]
+            RENDER[chat_renderer<br/>chat / compare / report output]
+        end
         MEM_SCOPE[Memory Scope<br/>user profile · current thread focus]
         AGENTS[Agent Layer<br/>7 Research Agents + 5 Insight Scorers]
-        TOOLS[Tool Layer<br/>32 Registered Tools]
-        SYNTH[Synthesize Node<br/>Conflict Detection · Hallucination Scrub]
+        TOOLS[Tool Layer<br/>26 Tool Modules]
     end
 
     subgraph "Data Layer"
-        RAG[Hybrid RAG<br/>bge-m3 · Reranker]
+        RAG[Hybrid RAG<br/>bge-m3 · bge-reranker-v2-m3]
         CACHE[Dashboard Cache<br/>16 TTL Categories]
         MEMORY[Scoped Memory Store<br/>Per-user JSON + thread focus]
         DB[(SQLite / PostgreSQL<br/>Checkpoints · Reports · Portfolio)]
@@ -254,13 +261,14 @@ graph TB
 
     UI --> STORE --> PREFS
     UI --> API_CLIENT --> ROUTER
-    ROUTER --> GRAPH --> AGENTS --> TOOLS
-    GRAPH --> MEM_SCOPE --> MEMORY
-    GRAPH --> SYNTH
+    ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
+    EXEC --> SYNTH --> RENDER
+    UNDERSTAND --> MEM_SCOPE --> MEMORY
+    EXEC --> AGENTS --> TOOLS
     TOOLS --> YFINANCE & FMP & FINNHUB & TAVILY & FRED & SEC
     AGENTS --> LLM_API
     AGENTS --> RAG
-    GRAPH --> CACHE & DB
+    UNDERSTAND --> CACHE & DB
 ```
 
 ---
@@ -1155,45 +1163,74 @@ The current chat UX acceptance set lives at `tests/eval/chat_router_100.json` an
 ```
 FinSight/
 ├── backend/
-│   ├── api/                    # FastAPI routers
+│   ├── api/                    # FastAPI routers (28 modules)
 │   │   ├── main.py             # App entry point + CORS + lifespan
 │   │   ├── chat_router.py      # POST /api/chat (SSE streaming)
+│   │   ├── agent_router.py     # Agent preferences API
 │   │   ├── dashboard_router.py # GET /api/dashboard + /insights
+│   │   ├── conversation_router.py # Conversation lifecycle API
 │   │   ├── execution_router.py # POST /api/execute (workbench)
+│   │   ├── research_router.py  # Research mode API
 │   │   ├── alerts_router.py    # GET /api/alerts/feed
-│   │   └── tools_router.py     # GET /api/tools (manifest)
-│   ├── graph/                  # LangGraph pipeline
-│   │   ├── runner.py           # Graph construction (current runtime; target refactor in docs/plans)
+│   │   ├── portfolio_router.py # Holdings management
+│   │   ├── rebalance_router.py # Portfolio rebalancing
+│   │   ├── report_router.py    # Report management
+│   │   ├── backtest_router.py  # Strategy backtesting
+│   │   ├── screener_router.py  # Stock screener
+│   │   ├── cn_market_router.py # A-Share / HK market
+│   │   ├── tools_router.py     # GET /api/tools (manifest)
+│   │   └── ...                 # system/user/market/config etc.
+│   ├── graph/                  # LangGraph pipeline core
+│   │   ├── runner.py           # Graph construction + GraphRunner
 │   │   ├── state.py            # GraphState definition
-│   │   ├── report_builder.py   # ReportIR helper; not a graph node
-│   │   └── nodes/              # Individual node implementations
-│   │       ├── build_initial_state.py
-│   │       ├── reset_turn_state.py  # Per-turn ephemeral field + trace cleanup
-│   │       ├── conversation_router.py # LLM contextual router before planner
-│   │       ├── understand_request.py # current request understanding runtime
-│   │       ├── chat_respond.py      # pure-social fast path only
-│   │       ├── resolve_subject.py   # legacy compatibility node
-│   │       ├── parse_operation.py   # compatibility helper for legacy entry points
-│   │       ├── compare_gate.py      # Compare evidence gate (3 predicates)
-│   │       ├── policy_gate.py
-│   │       ├── planner.py
-│   │       ├── execute_plan_stub.py
-│   │       └── synthesize.py   # Conflict detection + hallucination scrub
-│   ├── agents/                 # Agent implementations
-│   │   ├── base_agent.py       # BaseFinancialAgent (reflection loops)
-│   │   ├── price_agent.py
-│   │   ├── news_agent.py
-│   │   ├── fundamental_agent.py
-│   │   ├── technical_agent.py
-│   │   ├── macro_agent.py
-│   │   ├── risk_agent.py
-│   │   └── deep_search_agent.py
+│   │   ├── intent_contract.py  # Evidence-first intent contract
+│   │   ├── request_frame.py    # Request frame model
+│   │   ├── request_task_contract.py # Task contract
+│   │   ├── memory_scope.py     # Scoped memory
+│   │   ├── capability_registry.py # Capability registry
+│   │   ├── coverage_validator.py  # Coverage validation
+│   │   ├── executor.py         # Plan executor
+│   │   ├── report_builder.py   # ReportIR helper
+│   │   ├── plan_ir.py          # Plan intermediate representation
+│   │   ├── cancellation.py     # Cancellation tokens
+│   │   ├── preference_timeouts.py # User timeout preferences
+│   │   └── nodes/              # 27 pipeline nodes
+│   │       ├── understand_request.py # Request understanding (LLM router)
+│   │       ├── chat_respond.py      # Pure-social fast path
+│   │       ├── conversation_router.py # Contextual router
+│   │       ├── policy_gate.py       # Policy gate + evidence floor
+│   │       ├── planner_stub.py      # Contract-driven planning fallback
+│   │       ├── chat_renderer.py     # Chat / compare rendering
+│   │       ├── synthesize.py        # Conflict detection + hallucination scrub
+│   │       ├── compare_gate.py      # Compare evidence gate
+│   │       ├── execute_plan_stub.py # Plan execution
+│   │       └── ...                  # build/reset/prepare/alert/confirm etc.
+│   ├── agents/                 # 7 research agents + base class
+│   │   ├── base_agent.py       # BaseFinancialAgent (reflection + configure_research)
+│   │   ├── price_agent.py      # 11-source price cascade
+│   │   ├── news_agent.py       # News + sentiment + source scoring
+│   │   ├── fundamental_agent.py # Financials + valuation
+│   │   ├── technical_agent.py  # Technical indicator calculation
+│   │   ├── macro_agent.py      # FRED + macro sentiment
+│   │   ├── risk_agent.py       # Risk assessment
+│   │   └── deep_search_agent.py # Self-RAG multi-engine search
+│   ├── tools/                  # 26 tool modules
+│   │   ├── manifest.py         # Tool manifest (with market annotations)
+│   │   ├── price.py            # Price data (11-source cascade)
+│   │   ├── financial.py        # Financial statements
+│   │   ├── technical.py        # Technical indicators
+│   │   ├── news.py             # News fetching
+│   │   ├── macro.py            # FRED + sentiment
+│   │   ├── search.py           # Multi-engine search
+│   │   ├── sec.py / sec_holdings.py # SEC EDGAR + holdings
+│   │   ├── earnings_transcripts.py  # Earnings call transcripts
+│   │   ├── local_disclosure.py      # Non-US market filings
+│   │   ├── cn_market_flow.py / cn_market_board.py # A-Share tools
+│   │   └── ...                 # screener/fmp/web/http etc.
 │   ├── dashboard/              # Dashboard data & AI insights
 │   │   ├── data_service.py     # yfinance/FMP data fetching
 │   │   ├── cache.py            # DashboardCache (16 TTL categories)
-│   │   ├── insights_engine.py  # Insight Scorer orchestrator (single-LLM-call, not autonomous agents)
-│   │   ├── insights_scorer.py  # Deterministic scoring fallback
-│   │   ├── insights_prompts.py # LLM prompt templates
+│   │   ├── insights_engine.py  # 5 Insight Scorers orchestrator
 │   │   └── schemas.py          # Pydantic schemas
 │   ├── rag/                    # Hybrid RAG engine
 │   │   ├── hybrid_service.py   # InMemory + Postgres backends
@@ -1201,23 +1238,14 @@ FinSight/
 │   │   ├── reranker.py         # bge-reranker-v2-m3
 │   │   ├── rag_router.py       # Query routing (SKIP/PRIMARY/PARALLEL)
 │   │   └── chunker.py          # Document chunking strategies
-│   ├── tools/                  # Tool implementations
-│   │   ├── manifest.py         # 17 tools with metadata
-│   │   ├── market.py           # Price data (11-source cascade)
-│   │   ├── financial.py        # Financial statements
-│   │   ├── technical.py        # Technical indicators
-│   │   ├── macro.py            # FRED + sentiment
-│   │   └── sec_tools.py        # SEC EDGAR filings
-│   ├── services/               # Background services
-│   │   ├── alert_scheduler.py  # 3 alert schedulers
-│   │   ├── scheduler_runner.py # APScheduler wrapper
-│   │   ├── subscription_service.py
-│   │   └── memory.py           # Per-user memory store
-│   └── tests/                  # 700+ tests
-│       ├── test_graph_*.py
-│       ├── test_agents_*.py
-│       ├── test_dashboard_*.py
-│       └── test_rag_*.py
+│   ├── config/                 # Ticker mapping, market config
+│   ├── conversation/           # Conversation management layer
+│   ├── orchestration/          # Orchestration (budget, tracking)
+│   ├── report/                 # Report IR, validation, citations
+│   ├── research/               # Research flows
+│   ├── security/               # SSRF protection
+│   ├── services/               # Background services (alerts, subscriptions, memory)
+│   └── tests/                  # Backend tests
 ├── frontend/
 │   ├── src/
 │   │   ├── api/client.ts       # API client + SSE parseSSEStream
@@ -1226,31 +1254,26 @@ FinSight/
 │   │   │   ├── dashboardStore.ts  # Dashboard state
 │   │   │   └── executionStore.ts  # Workbench execution state
 │   │   ├── components/
-│   │   │   ├── dashboard/      # Dashboard UI
-│   │   │   │   ├── tabs/       # 6 tab panels
-│   │   │   │   │   ├── OverviewTab.tsx
-│   │   │   │   │   ├── FinancialTab.tsx
-│   │   │   │   │   ├── TechnicalTab.tsx
-│   │   │   │   │   ├── NewsTab.tsx
-│   │   │   │   │   ├── ResearchTab.tsx
-│   │   │   │   │   └── PeersTab.tsx
-│   │   │   │   └── StockHeader.tsx
-│   │   │   ├── SmartChart.tsx  # LLM-driven dual-mode charts
-│   │   │   ├── ChatList.tsx    # Chat + inline charts
-│   │   │   └── workbench/      # Workbench components
+│   │   │   ├── dashboard/      # Dashboard UI (6 tab panels)
+│   │   │   ├── settings/       # Settings panel (AgentControlPanel)
+│   │   │   ├── SmartChart.tsx   # LLM-driven dual-mode charts
+│   │   │   ├── ChatList.tsx     # Chat + inline charts
+│   │   │   └── workbench/       # Workbench components
 │   │   ├── hooks/              # Custom React hooks
-│   │   │   ├── useLatestReport.ts
-│   │   │   ├── useDashboardData.ts
-│   │   │   ├── useDashboardInsights.ts
-│   │   │   └── useChartTheme.ts
-│   │   └── types/dashboard.ts  # TypeScript type definitions
+│   │   └── types/              # TypeScript type definitions
 │   └── vite.config.ts
 ├── data/                       # Runtime data storage
 │   ├── memory/                 # Per-user JSON profiles
 │   ├── subscriptions.json      # Email alert subscriptions
 │   └── *.sqlite                # SQLite databases
-├── docs/                       # Technical documentation
-└── images/                     # Screenshots
+├── docs/                       # Technical documentation (see docs/DOCS_INDEX.md)
+├── scripts/                    # Operations & evaluation scripts
+├── tests/                      # Regression tests & evaluators
+├── images/                     # Screenshots
+├── docker-compose.yml          # Docker orchestration
+├── Dockerfile                  # Backend image
+├── requirements.txt            # Python dependencies
+└── .env.server.example         # Environment variable template
 ```
 
 ---

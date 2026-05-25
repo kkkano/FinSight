@@ -139,3 +139,7 @@ ui-playwright-*.png
 
 # --- Conversation store runtime snapshot (not source) ---
 data/conversations.json
+
+# --- Deploy tarballs (local build artifacts) ---
+finsight_deploy_*.tar.gz
+*.tar.gz
