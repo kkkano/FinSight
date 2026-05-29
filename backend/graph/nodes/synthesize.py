@@ -1702,6 +1702,27 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
     ).model_dump()
 
 
+def _skill_perspective_block(state: GraphState) -> str:
+    """视角型 skill：把「解读视角」拼成 prompt 段落。
+
+    skill 系统原本只控数据/agent，不控解读视角。此处从 policy.skill_selection
+    读取 perspective，注入合成 prompt。无 skill / 无视角时返回空（向后兼容）。
+    """
+    skill_sel = (state.get("policy") or {}).get("skill_selection")
+    skill_sel = skill_sel if isinstance(skill_sel, dict) else {}
+    perspective = str(skill_sel.get("perspective") or "").strip()
+    if not perspective:
+        return ""
+    display = str(skill_sel.get("display_name") or skill_sel.get("selected_skill") or "").strip()
+    label = f"「{display}」" if display else ""
+    return (
+        "<analysis_perspective>\n"
+        f"本次分析采用{label}视角，请在以下各章节解读中始终贯彻该视角的方法与侧重：\n"
+        f"{perspective}\n"
+        "</analysis_perspective>\n\n"
+    )
+
+
 async def _generate_narrative_draft(
     state: GraphState,
     render_vars: dict[str, str],
@@ -1876,6 +1897,7 @@ async def _generate_narrative_draft(
     narrative_grounding_text = "\n".join(
         part for part in [evidence_text, conflict_context, debate_context, "\n".join(agent_sections)] if part
     )
+    perspective_block = _skill_perspective_block(state)
 
     prompt = f"""<role>FinSight 叙事报告引擎 — 资深卖方分析师视角，将多智能体分析结果合成为专业级投资研究报告</role>
 
@@ -1885,7 +1907,7 @@ async def _generate_narrative_draft(
 标的: {ticker_label}
 </task>
 
-<time_anchor>
+{perspective_block}<time_anchor>
 当前日期: {current_date}
 你的知识可能过时。涉及日期/发布/并购/监管等事件时，仅可使用本提示中明确提供的证据内容。
 </time_anchor>

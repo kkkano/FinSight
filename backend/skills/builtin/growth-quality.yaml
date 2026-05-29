@@ -1,0 +1,21 @@
+name: growth-quality
+display_name: 成长质量
+category: fundamental
+description: Evaluate a company through the lens of growth durability and earnings quality.
+preferred_agents:
+  - fundamental_agent
+  - risk_agent
+preferred_tools:
+  - get_company_info
+  - get_earnings_estimates
+  - get_sec_company_facts_quarterly
+budget:
+  max_agents: 2
+  max_tools: 6
+risk_level: low
+perspective: |
+  以成长质量框架视角解读：
+  - 拆解营收增长的驱动来源（量 / 价 / 新业务 / 并购）与可持续性。
+  - 评估盈利质量：毛利率 / 净利率趋势、经营现金流与净利润的匹配度、应收与存货健康度。
+  - 考察成长的资本效率（ROIC vs WACC）与再投资空间。
+  - 区分「高成长」与「高质量成长」，提示成长证伪信号与估值消化风险。

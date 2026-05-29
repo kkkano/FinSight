@@ -1,0 +1,20 @@
+name: chan-theory
+display_name: 缠论
+category: technical
+description: Analyze price structure with Chan Theory (笔/线段/中枢/级别), an explicit interpretation lens.
+preferred_agents:
+  - technical_agent
+preferred_tools:
+  - get_stock_price
+  - get_technical_snapshot
+budget:
+  max_agents: 2
+  max_tools: 4
+risk_level: low
+perspective: |
+  以缠论（缠中说禅）视角解读：
+  - 识别笔、线段、中枢，判定当前所处级别（日线 / 周线 / 30 分钟等）。
+  - 依据中枢的形成、延伸、新生判断走势类型（趋势 / 盘整）。
+  - 给出基于级别的买卖点（一买 / 二买 / 三买及对应卖点）与背驰信号。
+  - 操作建议须标注级别与前提，提示级别共振或背离风险。
+  - 数据不足以判级别时，明确说明而非强行套用。

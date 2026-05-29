@@ -1,0 +1,19 @@
+name: ma-trend
+display_name: 均线趋势
+category: technical
+description: Analyze trend via the moving-average system (MA alignment, crossovers, dynamic support/resistance).
+preferred_agents:
+  - technical_agent
+preferred_tools:
+  - get_stock_price
+  - get_technical_snapshot
+budget:
+  max_agents: 2
+  max_tools: 4
+risk_level: low
+perspective: |
+  以均线系统视角解读：
+  - 判断 MA20 / MA50 / MA200 的多空排列与价格相对位置。
+  - 识别金叉 / 死叉信号及其有效性（量能配合、均线斜率）。
+  - 以均线作为动态支撑 / 阻力，给出回踩与突破的操作含义。
+  - 提示均线粘合后的变盘风险与假突破信号。

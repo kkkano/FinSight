@@ -17,6 +17,10 @@ class SkillManifest:
     output_contract: dict[str, Any] = field(default_factory=dict)
     risk_level: str = "low"
     eval_cases: list[str] = field(default_factory=list)
+    # 视角层（向后兼容，旧 manifest 默认空）：
+    perspective: str = ""      # 解读视角（Markdown），注入合成 prompt
+    display_name: str = ""     # 中文名（前端 chip / 研究卡回显）
+    category: str = ""         # technical|framework|fundamental|event… 前端分组
 
     @classmethod
     def from_mapping(cls, payload: dict[str, Any]) -> "SkillManifest | None":
@@ -37,6 +41,9 @@ class SkillManifest:
             output_contract=dict(payload.get("output_contract") or {}),
             risk_level=str(payload.get("risk_level") or "low").strip().lower() or "low",
             eval_cases=[str(item) for item in payload.get("eval_cases") or [] if str(item).strip()],
+            perspective=str(payload.get("perspective") or "").strip(),
+            display_name=str(payload.get("display_name") or "").strip(),
+            category=str(payload.get("category") or "").strip(),
         )
 
 

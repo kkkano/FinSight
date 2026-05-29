@@ -20,10 +20,17 @@ def create_skills_router() -> APIRouter:
         q = str(query or "").strip().lower()
         items: list[dict[str, Any]] = []
         for manifest in registry.all():
-            if q and q not in manifest.name.lower() and q not in manifest.description.lower():
+            if (
+                q
+                and q not in manifest.name.lower()
+                and q not in manifest.description.lower()
+                and q not in manifest.display_name.lower()
+            ):
                 continue
             items.append({
                 "name": manifest.name,
+                "display_name": manifest.display_name or manifest.name,
+                "category": manifest.category,
                 "description": manifest.description,
                 "risk_level": manifest.risk_level,
                 "required_facets": dict(manifest.required_facets),

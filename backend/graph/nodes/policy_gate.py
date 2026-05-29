@@ -410,6 +410,9 @@ def policy_gate(state: GraphState) -> dict:
                 "optional_python_operations": list(skill_manifest.optional_python_operations),
                 "output_contract": dict(skill_manifest.output_contract),
                 "risk_level": skill_manifest.risk_level,
+                "perspective": skill_manifest.perspective,
+                "display_name": skill_manifest.display_name or skill_manifest.name,
+                "category": skill_manifest.category,
             }
         )
 

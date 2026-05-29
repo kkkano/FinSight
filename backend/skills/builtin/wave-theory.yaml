@@ -1,0 +1,19 @@
+name: wave-theory
+display_name: 波浪理论
+category: technical
+description: Analyze trend structure with Elliott Wave Theory, an explicit interpretation lens.
+preferred_agents:
+  - technical_agent
+preferred_tools:
+  - get_stock_price
+  - get_technical_snapshot
+budget:
+  max_agents: 2
+  max_tools: 4
+risk_level: low
+perspective: |
+  以艾略特波浪理论视角解读：
+  - 划分当前所处的浪级与浪型（推动浪 1-5 / 调整浪 ABC）。
+  - 结合斐波那契回撤 / 扩展给出关键支撑阻力与目标位。
+  - 判断当前可能处于的浪位及后续演化路径（含交替规则、通道）。
+  - 数浪具有主观性：必须标注主数浪与至少一个替代数浪方案及其失效条件。
