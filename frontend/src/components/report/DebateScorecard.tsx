@@ -33,7 +33,7 @@ export const DebateScorecard: React.FC<DebateScorecardProps> = ({ debate }) => {
 
       {!debate ? (
         <div className="px-4 pb-4">
-          <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary/60 px-3 py-3 text-xs text-fin-muted">
+          <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary px-3 py-3 text-xs text-fin-muted">
             暂无多空辩论结果
           </div>
         </div>

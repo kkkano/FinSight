@@ -1,47 +1,47 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Design Concept V2 - Light Mode (Default) */
-  --fin-bg: #f8fafc;
-  --fin-bg-secondary: #f1f5f9;
+  /* FinSight Redesign · Light (靛蓝多色混合) */
+  --fin-bg: #f5f6f8;
+  --fin-bg-secondary: #eceef1;
   --fin-card: #ffffff;
   --fin-panel: #ffffff;
-  --fin-border: #e2e8f0;
-  --fin-hover: #eff6ff;
-  
-  --fin-text: #1e293b;
-  --fin-text-secondary: #64748b;
-  --fin-muted: #94a3b8;
-  
-  --fin-primary: 37 99 235;
-  --fin-success: #10b981;
-  --fin-danger: #ef4444;
-  --fin-warning: #f59e0b;
-  --fin-predict: #8b5cf6;
+  --fin-border: #e4e7ec;
+  --fin-hover: #eaeefe;
+
+  --fin-text: #181b21;
+  --fin-text-secondary: #5e6671;
+  --fin-muted: #98a0ab;
+
+  --fin-primary: 59 91 219;
+  --fin-success: #15a05a;
+  --fin-danger: #e03131;
+  --fin-warning: #ec8413;
+  --fin-predict: #7048e8;
 
   color-scheme: light;
 }
 
 :root.dark {
-  /* Dark Mode Overrides - TradingKey dark theme */
-  --fin-bg: #12141a;
-  --fin-bg-secondary: #181a22;
-  --fin-card: #1e2028;
-  --fin-panel: #252830;
-  --fin-border: #2a2d38;
-  --fin-hover: #2e3140;
+  /* FinSight Redesign · Dark (靛蓝镜像，同一设计系统的暗色) */
+  --fin-bg: #0f1116;
+  --fin-bg-secondary: #161922;
+  --fin-card: #181c24;
+  --fin-panel: #1f2430;
+  --fin-border: #2a3040;
+  --fin-hover: #1d2747;
 
-  --fin-text: #f8fafc;
-  --fin-text-secondary: #cbd5e1;
-  --fin-muted: #64748b;
+  --fin-text: #e9ebef;
+  --fin-text-secondary: #99a1af;
+  --fin-muted: #5c6573;
 
-  --fin-primary: 59 130 246;
-  --fin-success: #0cad92;
-  --fin-danger: #f74f5c;
-  --fin-warning: #f5a623;
-  --fin-predict: #a78bfa;
+  --fin-primary: 107 138 255;
+  --fin-success: #37d399;
+  --fin-danger: #ff6b6b;
+  --fin-warning: #ffa94d;
+  --fin-predict: #9775fa;
 
   color-scheme: dark;
 }
@@ -49,22 +49,6 @@
 body {
   @apply bg-fin-bg text-fin-text antialiased overflow-hidden;
   font-feature-settings: "ss01", "ss02", "cv01", "cv02";
-  background-image: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.06), transparent 35%),
-    radial-gradient(circle at 80% 0%, rgba(16, 185, 129, 0.05), transparent 30%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent 50%);
-  background-attachment: fixed;
-}
-
-/* Subtle grain overlay */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: radial-gradient(#ffffff0d 1px, transparent 0);
-  background-size: 18px 18px;
-  opacity: 0.4;
-  z-index: -1;
 }
 
 @keyframes finsight-marquee {

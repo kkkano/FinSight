@@ -380,8 +380,8 @@ export function WelcomePage() {
         '--bb-border': '#1e2a3a',
         '--bb-text': '#e2e8f0',
         '--bb-text-dim': '#64748b',
-        '--bb-orange': '#ff8c00',
-        '--bb-orange-dim': 'rgba(255, 140, 0, 0.15)',
+        '--bb-orange': '#6b8aff',
+        '--bb-orange-dim': 'rgba(107, 138, 255, 0.16)',
         '--bb-green': '#00e676',
         '--bb-red': '#ff5252',
         '--bb-blue': '#2979ff',
@@ -393,8 +393,8 @@ export function WelcomePage() {
         '--bb-border': '#dbe4ef',
         '--bb-text': '#0f172a',
         '--bb-text-dim': '#475569',
-        '--bb-orange': '#ff7a00',
-        '--bb-orange-dim': 'rgba(255, 122, 0, 0.12)',
+        '--bb-orange': '#3b5bdb',
+        '--bb-orange-dim': 'rgba(59, 91, 219, 0.12)',
         '--bb-green': '#059669',
         '--bb-red': '#dc2626',
         '--bb-blue': '#2563eb',
@@ -403,7 +403,7 @@ export function WelcomePage() {
   return (
     <main className="relative h-screen overflow-y-auto font-mono" style={paletteVars as React.CSSProperties}>
       <div className="fixed inset-0 bg-[var(--bb-bg)]" />
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,140,0,0.14),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(41,121,255,0.10),transparent_30%)]" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(59,91,219,0.05),transparent_45%)]" />
 
       <div className="relative z-20 h-9 border-b border-[var(--bb-border)] bg-[var(--bb-surface)] px-4 text-[11px] text-[var(--bb-text-dim)] flex items-center justify-between max-[480px]:px-2 max-[480px]:gap-2">
         <div className="flex items-center gap-6 max-[480px]:gap-2 min-w-0">

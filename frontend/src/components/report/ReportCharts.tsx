@@ -384,19 +384,19 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
     .join('\n\n');
 
   return (
-    <div className="rounded-xl border border-blue-200/80 dark:border-blue-700/60 bg-white/90 dark:bg-slate-900/70 overflow-hidden">
-      <div className="px-5 py-3 border-b border-blue-200/60 dark:border-blue-700/40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
-        <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+    <div className="rounded-xl border border-fin-border bg-fin-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-fin-border bg-fin-primary/5">
+        <h3 className="text-sm font-semibold text-fin-text flex items-center gap-2">
           <span className="text-base">📋</span>
           综合研究报告
-          <span className="text-2xs font-normal text-blue-600 dark:text-blue-400 ml-auto">
+          <span className="text-2xs font-normal text-fin-primary ml-auto">
             {countContentChars(synthesisReport || '')} 字
           </span>
           <button
             onClick={onToggle}
-            className="ml-2 p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+            className="ml-2 p-1 hover:bg-fin-primary/10 rounded transition-colors"
           >
-            {isExpanded ? <ChevronUp size={14} className="text-blue-600" /> : <ChevronDown size={14} className="text-blue-600" />}
+            {isExpanded ? <ChevronUp size={14} className="text-fin-primary" /> : <ChevronDown size={14} className="text-fin-primary" />}
           </button>
         </h3>
       </div>
@@ -406,14 +406,14 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
           className={`p-5 transition-all duration-300 ease-in-out ${isExpanded ? '' : 'max-h-[300px] overflow-hidden'}`}
         >
           {/* Main content — always rendered */}
-          <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200 leading-relaxed">
+          <div className="prose prose-sm dark:prose-invert max-w-none text-fin-text-secondary leading-relaxed">
             <ReactMarkdown remarkPlugins={markdownPlugins}>{normalizeMarkdown(mainMarkdown)}</ReactMarkdown>
           </div>
 
           {/* Appendix sections — each individually collapsible */}
           {isExpanded && appendixSections.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-700/40">
-              <div className="text-2xs text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider font-medium">
+            <div className="mt-4 pt-3 border-t border-fin-border">
+              <div className="text-2xs text-fin-muted mb-1 uppercase tracking-wider font-medium">
                 附录 · {appendixSections.length} 项
               </div>
               {appendixSections.map((sec, idx) => (
@@ -424,10 +424,10 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
         </div>
 
         {!isExpanded && (
-          <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white dark:from-slate-900 to-transparent flex items-end justify-center pb-4">
+          <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-fin-card to-transparent flex items-end justify-center pb-4">
             <button
               onClick={onExpand}
-              className="px-4 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800/40 text-blue-600 dark:text-blue-300 rounded-full text-xs font-semibold shadow-sm border border-blue-100 dark:border-blue-800/50 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+              className="px-4 py-2 bg-fin-primary/10 hover:bg-fin-primary/20 text-fin-primary rounded-full text-xs font-semibold shadow-sm border border-fin-primary/20 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
             >
               <ChevronDown size={14} />
               展开完整报告
@@ -435,10 +435,10 @@ export const SynthesisReportBlock: React.FC<SynthesisReportBlockProps> = ({
           </div>
         )}
         {isExpanded && (
-          <div className="flex justify-center pb-4 pt-2 border-t border-slate-100 dark:border-slate-800/50 mt-2">
+          <div className="flex justify-center pb-4 pt-2 border-t border-fin-border mt-2">
             <button
               onClick={onCollapse}
-              className="text-xs text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 transition-colors"
+              className="text-xs text-fin-muted hover:text-fin-primary flex items-center gap-1 transition-colors"
             >
               <ChevronUp size={12} />
               收起报告

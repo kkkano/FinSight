@@ -4,6 +4,7 @@ import { apiClient } from '../api/client';
 
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
+type ChatStyle = 'bubble' | 'flat';
 type PortfolioPositions = Record<string, number>;
 export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
 export interface AuthIdentity {
@@ -38,6 +39,12 @@ const getInitialLayout = (): LayoutMode => {
   if (typeof window === 'undefined') return 'centered';
   const stored = window.localStorage.getItem('finsight-layout');
   return stored === 'full' || stored === 'centered' ? (stored as LayoutMode) : 'centered';
+};
+
+const getInitialChatStyle = (): ChatStyle => {
+  if (typeof window === 'undefined') return 'bubble';
+  const stored = window.localStorage.getItem('finsight-chat-style');
+  return stored === 'flat' ? 'flat' : 'bubble';
 };
 
 const getInitialTheme = (): Theme => {
@@ -206,6 +213,8 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   layoutMode: LayoutMode;
   setLayoutMode: (mode: LayoutMode) => void;
+  chatStyle: ChatStyle;
+  setChatStyle: (style: ChatStyle) => void;
   setDraft: (text: string) => void;
   draft: string;
   draftBySession: Record<string, string>;
@@ -568,6 +577,7 @@ export const useStore = create<AppState>((set) => ({
   draftBySession: {},
   theme: initialTheme,
   layoutMode: initialLayout,
+  chatStyle: getInitialChatStyle(),
   subscriptionEmail: initialSubscriptionEmail,
   entryMode: initialEntryMode,
   sessionId: initialSessionId,
@@ -588,8 +598,8 @@ export const useStore = create<AppState>((set) => ({
     toolTotalCalls: 0,
     updatedAt: null,
   },
-  // 右侧面板默认展开
-  showRightPanel: true,
+  // 右侧面板默认收起（告警进顶部铃铛，按需展开）
+  showRightPanel: false,
 
   addMessage: (message) =>
     set((state) => {
@@ -890,6 +900,14 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-layout', mode);
       }
       return { layoutMode: mode };
+    }),
+
+  setChatStyle: (style) =>
+    set(() => {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('finsight-chat-style', style);
+      }
+      return { chatStyle: style };
     }),
 
   setSubscriptionEmail: (email) =>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Brain, Cpu, Target, Wrench, Sparkles, AlertCircle } from 'lucide-react';
+import { Brain, Cpu, Target, Wrench, Sparkles, AlertCircle, Search, GitBranch } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { resolveUserMessage } from '../../utils/userMessageMapper';
 
 // ========== 阶段标签映射 ==========
@@ -58,6 +59,37 @@ export const getStageIcon = (stage: string) => {
   if (stage.includes('reasoning') || stage.includes('llm')) return <Sparkles size={14} className="text-purple-400" />;
   if (stage.includes('start') || stage.includes('processing') || stage.includes('collection')) return <Brain size={14} className="text-fin-primary animate-pulse" />;
   return <Brain size={14} className="text-fin-muted" />;
+};
+
+// ========== 阶段语义色调（trace 时间线节点） ==========
+// 按 stage 类型映射 → 节点圆点配色 + 图标组件，亮暗双模式下均醒目。
+// dot 含 text-*-400 供内层小圆点 bg-current 取色。
+export interface StageTone {
+  Icon: LucideIcon;
+  /** 节点圆点 border + 半透明填充 + text（供 bg-current 内点取色） */
+  dot: string;
+  /** 图标颜色 */
+  icon: string;
+}
+
+export const getStageTone = (stage: string): StageTone => {
+  const s = stage.toLowerCase();
+  if (s.includes('error') || s.includes('fail'))
+    return { Icon: AlertCircle, dot: 'border-red-400 bg-red-400/15 text-red-400', icon: 'text-red-400' };
+  if (s.includes('done') || s.includes('complete') || s.includes('classified'))
+    return { Icon: Target, dot: 'border-emerald-400 bg-emerald-400/15 text-emerald-400', icon: 'text-emerald-400' };
+  if (s.includes('tool'))
+    return { Icon: Wrench, dot: 'border-amber-400 bg-amber-400/15 text-amber-400', icon: 'text-amber-400' };
+  if (s.includes('agent') || s.includes('supervisor') || s.includes('executor'))
+    return { Icon: Cpu, dot: 'border-cyan-400 bg-cyan-400/15 text-cyan-400', icon: 'text-cyan-400' };
+  if (s.includes('plan') || s.includes('decision') || s.includes('policy') || s.includes('gate'))
+    return { Icon: GitBranch, dot: 'border-fin-primary bg-fin-primary/15 text-fin-primary', icon: 'text-fin-primary' };
+  if (s.includes('synthesize') || s.includes('render') || s.includes('llm') || s.includes('reason'))
+    return { Icon: Sparkles, dot: 'border-violet-400 bg-violet-400/15 text-violet-400', icon: 'text-violet-400' };
+  if (s.includes('understand') || s.includes('intent') || s.includes('classif') || s.includes('resolve'))
+    return { Icon: Search, dot: 'border-sky-400 bg-sky-400/15 text-sky-400', icon: 'text-sky-400' };
+  // start / processing / 默认
+  return { Icon: Brain, dot: 'border-fin-primary/60 bg-fin-primary/10 text-fin-primary', icon: 'text-fin-primary/80' };
 };
 
 // ========== 置信度格式化 ==========
