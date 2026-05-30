@@ -2385,7 +2385,10 @@ def test_understand_request_projects_direct_decision_with_executable_task_hints(
     assert result["understanding"]["route"] == "research"
     assert result["chat_responded"] is False
     assert result["tasks"]
-    assert any((task.get("operation") or {}).get("name") == "analyze_impact" for task in result["tasks"])
+    # 行为升级：query 含"财报…影响"语义时，understand_request 会把通用的
+    # analyze_impact 精化为更具体的 earnings_impact（_specific_company_operations）。
+    # 测试核心（可执行 hint 不被 direct reply 吞掉）仍由上面 route/tasks 断言保证。
+    assert any((task.get("operation") or {}).get("name") == "earnings_impact" for task in result["tasks"])
 
 
 def test_understand_request_projects_direct_technical_decision_to_research(monkeypatch):
