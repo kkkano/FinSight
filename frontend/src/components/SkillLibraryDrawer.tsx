@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, BookOpen, Search } from 'lucide-react';
 import type { SkillItem } from '../hooks/useSkillAutocomplete';
 import { apiClient } from '../api/client';
@@ -7,12 +7,6 @@ interface SkillLibraryDrawerProps {
   open: boolean;
   onClose: () => void;
   onSelectSkill: (insertText: string) => void;
-}
-
-interface SkillListResponse {
-  success: boolean;
-  count: number;
-  items: SkillItem[];
 }
 
 const RISK_COLORS: Record<string, string> = {
@@ -35,8 +29,8 @@ export function SkillLibraryDrawer({
     if (!open) return;
     setLoading(true);
     apiClient.listSkills()
-      .then((res: SkillListResponse) => {
-        if (res?.success && Array.isArray(res.items)) setSkills(res.items);
+      .then((res) => {
+        if (res?.success && Array.isArray(res.items)) setSkills(res.items as unknown as SkillItem[]);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

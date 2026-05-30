@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { Message, ThinkingStep, AgentLogSource } from '../types/index';
-import { SendHorizontal, Paperclip, Square, X, BookOpen } from 'lucide-react';
+import { SendHorizontal, Paperclip, Square, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { apiClient } from '../api/client';
