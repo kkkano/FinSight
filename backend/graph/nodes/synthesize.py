@@ -11,7 +11,13 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
-from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
+from backend.graph.intent_contract import is_research_compare_contract
+from backend.graph.nodes.compare_gate import (
+    has_compare_render_contract,
+    is_compare_operation,
+    should_render_compare,
+    should_render_performance_compare,
+)
 from backend.graph.executor import summarize_selection
 from backend.graph.event_bus import emit_event
 from backend.graph.failure import append_failure, build_runtime, utc_now_iso
@@ -1424,7 +1430,49 @@ def _stub_render_vars(state: GraphState) -> dict[str, str]:
             except Exception:
                 return None
 
-        if should_render_compare(state):
+        intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
+        if is_research_compare_contract(intent_contract) or (
+            has_compare_render_contract(state) and not should_render_performance_compare(state)
+        ):
+            render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
+            if not render_intent:
+                frame = state.get("request_frame") if isinstance(state.get("request_frame"), dict) else {}
+                render_intent = frame.get("render_contract") if isinstance(frame.get("render_contract"), dict) else {}
+                if not render_intent:
+                    frames = state.get("request_frames")
+                    if isinstance(frames, list):
+                        for item in frames:
+                            if not isinstance(item, dict):
+                                continue
+                            candidate = item.get("render_contract")
+                            if isinstance(candidate, dict) and candidate.get("shape") == "compare":
+                                render_intent = candidate
+                                break
+            dimensions = [
+                str(item)
+                for item in (render_intent.get("dimensions") if isinstance(render_intent, dict) else [])
+                if str(item).strip()
+            ]
+            tickers_list = [str(t).strip().upper() for t in tickers if isinstance(t, str) and str(t).strip()]
+            focus = ", ".join(dimensions or ["research evidence"])
+            return RenderVars(
+                comparison_conclusion="\n".join(
+                    [
+                        f"- Research comparison for {', '.join(tickers_list) or 'selected subjects'}: focus={focus}.",
+                        "- This comparison is based on per-subject research evidence rather than the historical performance table.",
+                    ]
+                ),
+                comparison_metrics="\n".join(
+                    [
+                        f"- Evidence dimensions: {focus}.",
+                        "- Missing per-subject agent/tool outputs should be rendered as explicit data gaps, not as a performance-compare failure.",
+                    ]
+                ),
+                risks="- 注：以上仅供参考，不构成投资建议。",
+                conclusion="- 对比结论以 per-ticker 研究证据为准；若证据缺口存在，应降级为部分比较。",
+            ).model_dump()
+
+        if should_render_performance_compare(state):
             metrics = _get_tool_output("get_performance_comparison")
             metrics_text = str(metrics).strip() if metrics is not None else ""
             metrics_missing = metrics is None or not metrics_text
@@ -2381,7 +2429,8 @@ async def synthesize(state: GraphState) -> dict:
     # tool evidence.  When evidence is absent, the downstream _stub_render_vars
     # / LLM path will naturally degrade to multi-asset QA.  We emit a note
     # here so the frontend can surface the reason once, before mode branching.
-    if is_compare_operation(state) and not should_render_compare(state):
+    research_compare_contract = is_research_compare_contract(state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else None)
+    if is_compare_operation(state) and not should_render_compare(state) and not research_compare_contract:
         await emit_event(
             {
                 "type": "decision_note",

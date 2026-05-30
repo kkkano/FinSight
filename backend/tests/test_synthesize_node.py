@@ -270,6 +270,96 @@ def test_synthesize_stub_compare_parses_label_rows_via_step_input_mapping(monkey
     assert "1Y：" in metrics and "+15.92%" in metrics and "-0.50%" in metrics
 
 
+def test_synthesize_research_compare_contract_does_not_emit_performance_missing(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
+
+    import importlib
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    events: list[dict] = []
+
+    async def _fake_emit(event):
+        events.append(event)
+
+    monkeypatch.setattr(synth_mod, "emit_event", _fake_emit)
+
+    state = {
+        "query": "NVDA 和 AMD 哪个估值更合理",
+        "output_mode": "brief",
+        "operation": {"name": "compare", "confidence": 0.86, "params": {"synthesis_only": True}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA", "AMD"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "intent_contract": {
+            "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+            "per_ticker_required": True,
+            "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates", "fundamental_snapshot"],
+        },
+        "plan_ir": {"steps": []},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    render_vars = ((out.get("artifacts") or {}).get("render_vars") or {})
+
+    assert not any(event.get("code") == "compare_evidence_missing" for event in events)
+    assert "Research comparison" in str(render_vars.get("comparison_conclusion") or "")
+    assert "valuation_reasonableness" in str(render_vars.get("comparison_metrics") or "")
+
+
+def test_synthesize_request_frame_compare_contract_does_not_require_performance_table(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
+
+    import importlib
+
+    synth_mod = importlib.import_module("backend.graph.nodes.synthesize")
+
+    events: list[dict] = []
+
+    async def _fake_emit(event):
+        events.append(event)
+
+    monkeypatch.setattr(synth_mod, "emit_event", _fake_emit)
+
+    state = {
+        "query": "NVDA and AMD which valuation is more reasonable?",
+        "output_mode": "brief",
+        "operation": {"name": "qa", "confidence": 0.5, "params": {}},
+        "subject": {
+            "subject_type": "company",
+            "tickers": ["NVDA", "AMD"],
+            "selection_ids": [],
+            "selection_types": [],
+            "selection_payload": [],
+        },
+        "request_frame": {
+            "frame_id": "frame_compare",
+            "lane": "research",
+            "relation": "rank",
+            "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
+            "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+            "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
+            "required_results": [],
+        },
+        "plan_ir": {"steps": []},
+        "artifacts": {"step_results": {}, "evidence_pool": []},
+        "trace": {},
+    }
+
+    out = _run(synth_mod.synthesize(state))
+    render_vars = ((out.get("artifacts") or {}).get("render_vars") or {})
+
+    assert not any(event.get("code") == "compare_evidence_missing" for event in events)
+    assert "Research comparison" in str(render_vars.get("comparison_conclusion") or "")
+    assert "valuation_reasonableness" in str(render_vars.get("comparison_metrics") or "")
+
+
 def test_synthesize_stub_company_fetch_formats_news_summary(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
 

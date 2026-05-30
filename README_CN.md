@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="./README.md">English</a> |
-  <a href="./readme_cn.md">中文</a> |
+  <a href="./README_CN.md">中文</a> |
   <a href="./docs/DOCS_INDEX.md">文档索引</a>
 </p>
 
@@ -32,6 +32,7 @@
 ## 目录
 
 - [核心特性](#-核心特性)
+- [当前请求链路](#-当前请求链路)
 - [平台预览](#-平台预览)
 - [系统架构](#%EF%B8%8F-系统架构)
 - [LangGraph 管线](#-langgraph-管线18-节点)
@@ -54,12 +55,28 @@
 
 ---
 
+## 🧭 当前请求链路
+
+FinSight 现在把“意图”建模为证据合同，而不是单个粗粒度 `operation` 标签。
+
+1. `conversation_router.py` 只做会话定位：本轮是直答、研究、提醒、澄清、越界，绑定哪些 ticker、selection、追问上下文。
+2. `intent_contract.py` 从 query/frame 编译语义 facets 和 `required_evidence`；`operation` 只是兼容旧 planner/renderer 的投影字段，不再是研究内容的源头。
+3. `policy_gate.py` 与 `planner_stub.py` 读取 `required_evidence` 选择工具和智能体。例如“NVDA 和 AMD 哪个估值更合理”会变成逐 ticker 估值证据 + synthesis-only compare；“研究特斯拉会不会被 SpaceX 影响”会变成 TSLA 的价格、新闻、风险证据。
+4. `chat_renderer.py` / `synthesize.py` 按 reply/render contract 输出；工具失败、403、空结果、超时只进入 diagnostics，不会伪装成 evidence。
+5. 普通金融机制解释默认保持直答；只有用户要求当前数据、来源、链接、新闻、价格，或明确要判断某上市公司受到外部实体的当前影响时，才进入取证研究。router `task_hints` 与这个 reply contract 冲突时，会在 planner 前被纠偏。
+
+Agent 内部 LLM 精修由环境和 UI 偏好控制。生产可用 `FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true` 强制忽略旧浏览器偏好，并用 `AGENT_LLM_ANALYZE_ENABLED=true` 开启 Agent LLM 分析。
+
+2026-05-25 发布配置：生产环境使用 `FINSIGHT_INTENT_CONTRACT_MODE=enforce`，保持 contextual router 开启，chat 模式单轮逐 ticker 深度研究默认上限为 `FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT=3`，用 `SEC_HOLDINGS_ENABLED=true` 打开持仓/内部人证据能力，并设置 `BASE_AGENT_MAX_REFLECTIONS=0`，让 Agent LLM 精修可用但不额外放大反思循环调用。核心边界不是关键词穷举：机制解释在没有实时取证诉求时保持直答；当前市场影响、估值排序、持仓、回测、URL/新闻/来源请求、外部实体影响上市公司，都会先编译成明确的证据义务或 workflow action，再进入 planner。
+
+---
+
 ## ✨ 核心特性
 
 | 类别 | 亮点 |
 |------|------|
 | **多智能体协作** | 7 个专业研究智能体（价格、新闻、基本面、技术面、宏观、风险、深度搜索）支持并行执行组 |
-| **LangGraph 管线** | 支持类 GPT 的上下文对话、提醒、URL/文章分析、快速行情问答和显式报告生成。普通聊天先进 LLM conversation router，只有报告按钮进入结构化报告模板。 |
+| **LangGraph 管线** | 支持类 GPT 的上下文对话、提醒、URL/文章分析、快速行情问答和显式报告生成。普通聊天先进 LLM conversation router 做定位，再由 evidence-first intent contract 分解决定取证。 |
 | **专业仪表盘** | 6 个分析标签页（总览、财务、技术、新闻、研究、同行）配 ECharts 可视化 |
 | **AI 驱动洞察** | 5 个仪表盘评分器通过单次 LLM 调用 + 确定性规则回退，为每个标签页生成实时 AI 分析卡片（每个 1-3 秒） |
 | **混合 RAG 引擎** | bge-m3（1024 维 Dense + Sparse）+ bge-reranker-v2-m3 交叉编码器精排 |
@@ -202,23 +219,30 @@ RAG Inspector 用来把检索链路彻底摊开看清楚：你可以直接查看
 ```mermaid
 graph TB
     subgraph "前端 (React + Vite)"
-        UI[仪表盘 / 对话 / 工作台]
+        UI[仪表盘 / 对话 / 工作台 / 设置]
         STORE[Zustand 状态管理<br/>dashboardStore · executionStore · useStore]
-        PREFS[偏好设置<br/>agent_preferences.timeoutSeconds]
+        PREFS[AgentControlPanel<br/>超时 · LLM 分析 · 反思轮数]
         API_CLIENT[API 客户端<br/>SSE parseSSEStream]
     end
 
-    subgraph "后端 (FastAPI)"
-        ROUTER[API 路由<br/>chat · dashboard · execute · alerts]
-        GRAPH[LangGraph 管线<br/>请求理解 + 执行图]
+    subgraph "后端 (FastAPI + 28 路由)"
+        ROUTER[API 路由<br/>chat · agent · dashboard · research · execute · alerts · ...]
+        subgraph "LangGraph 管线（27 节点）"
+            UNDERSTAND[understand_request<br/>LLM 路由 · ReplyContract]
+            FRAME[IntentContract<br/>facets → required_evidence → evidence_plan]
+            POLICY[policy_gate<br/>证据最低依赖 · 市场过滤]
+            PLANNER[planner_stub<br/>契约驱动计划生成]
+            EXEC[execute_plan<br/>并行智能体分组]
+            SYNTH[synthesize<br/>冲突检测 · 幻觉洗涤]
+            RENDER[chat_renderer<br/>对话 / 对比 / 报告输出]
+        end
         MEM_SCOPE[记忆作用域<br/>用户档案 · 当前线程焦点]
         AGENTS[智能体层<br/>7 研究智能体 + 5 洞察评分器]
-        TOOLS[工具层<br/>32 个注册工具]
-        SYNTH[合成节点<br/>冲突检测 · 幻觉洗涤]
+        TOOLS[工具层<br/>26 个工具模块]
     end
 
     subgraph "数据层"
-        RAG[混合 RAG<br/>bge-m3 · 精排器]
+        RAG[混合 RAG<br/>bge-m3 · bge-reranker-v2-m3]
         CACHE[仪表盘缓存<br/>16 类 TTL]
         MEMORY[分层记忆存储<br/>按用户 JSON + 线程焦点]
         DB[(SQLite / PostgreSQL<br/>检查点 · 报告 · 持仓)]
@@ -236,13 +260,14 @@ graph TB
 
     UI --> STORE --> PREFS
     UI --> API_CLIENT --> ROUTER
-    ROUTER --> GRAPH --> AGENTS --> TOOLS
-    GRAPH --> MEM_SCOPE --> MEMORY
-    GRAPH --> SYNTH
+    ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
+    EXEC --> SYNTH --> RENDER
+    UNDERSTAND --> MEM_SCOPE --> MEMORY
+    EXEC --> AGENTS --> TOOLS
     TOOLS --> YFINANCE & FMP & FINNHUB & TAVILY & FRED & SEC
     AGENTS --> LLM_API
     AGENTS --> RAG
-    GRAPH --> CACHE & DB
+    UNDERSTAND --> CACHE & DB
 ```
 
 ---
@@ -1136,32 +1161,43 @@ npm run test:e2e --prefix frontend
 ```
 FinSight/
 ├── backend/
-│   ├── api/                    # FastAPI 路由
+│   ├── api/                    # FastAPI 路由（28 个模块）
 │   │   ├── main.py             # 应用入口 + CORS + 生命周期
 │   │   ├── chat_router.py      # POST /api/chat（SSE 流式）
+│   │   ├── agent_router.py     # Agent 偏好设置 API
 │   │   ├── dashboard_router.py # GET /api/dashboard + /insights
+│   │   ├── conversation_router.py # 会话生命周期 API
 │   │   ├── execution_router.py # POST /api/execute（工作台）
-│   │   ├── alerts_router.py    # GET /api/alerts/feed
-│   │   └── tools_router.py     # GET /api/tools（工具清单）
-│   ├── graph/                  # LangGraph 管线
+│   │   ├── research_router.py  # 研究模式 API
+│   │   ├── alerts_router.py    # 预警推送
+│   │   ├── portfolio_router.py # 持仓管理
+│   │   ├── backtest_router.py  # 策略回测
+│   │   ├── screener_router.py  # 智能选股
+│   │   ├── cn_market_router.py # A 股/港股市场
+│   │   ├── tools_router.py     # 工具清单
+│   │   └── ...                 # system/user/market/config 等
+│   ├── graph/                  # LangGraph 管线核心
 │   │   ├── runner.py           # 图构建与 GraphRunner 入口
 │   │   ├── state.py            # GraphState 定义
+│   │   ├── intent_contract.py  # Evidence-first 意图合同
+│   │   ├── request_frame.py    # 请求帧模型
+│   │   ├── memory_scope.py     # 作用域化记忆
+│   │   ├── capability_registry.py # 能力注册
+│   │   ├── executor.py         # 计划执行器
 │   │   ├── report_builder.py   # ReportIR 结构构建
-│   │   └── nodes/              # 各节点实现
-│   │       ├── build_initial_state.py
-│   │       ├── reset_turn_state.py  # Per-turn 临时字段 + trace 运行时清除
-│   │       ├── conversation_router.py # planner 前的 LLM 上下文路由
-│   │       ├── understand_request.py # 当前请求理解主节点
-│   │       ├── chat_respond.py       # 仅纯社交快速通道
-│   │       ├── resolve_subject.py    # legacy 兼容节点
-│   │       ├── parse_operation.py    # legacy 入口兼容 helper
-│   │       ├── compare_gate.py      # 对比证据门控（3 个谓词函数）
-│   │       ├── policy_gate.py
-│   │       ├── planner.py
-│   │       ├── execute_plan_stub.py
-│   │       └── synthesize.py   # 冲突检测 + 幻觉洗涤
-│   ├── agents/                 # 智能体实现
-│   │   ├── base_agent.py       # BaseFinancialAgent（反思循环）
+│   │   ├── cancellation.py     # 取消令牌
+│   │   └── nodes/              # 27 个管线节点
+│   │       ├── understand_request.py # 请求理解主节点（LLM router）
+│   │       ├── chat_respond.py      # 纯社交快速通道
+│   │       ├── policy_gate.py       # 策略门控 + 证据最低依赖
+│   │       ├── planner_stub.py      # 契约驱动规划回退
+│   │       ├── chat_renderer.py     # 对话/对比渲染
+│   │       ├── synthesize.py        # 合成 + 冲突检测 + 幻觉洗涤
+│   │       ├── compare_gate.py      # 对比证据门控
+│   │       ├── execute_plan_stub.py # 计划执行
+│   │       └── ...                  # build/reset/prepare/alert/confirm 等
+│   ├── agents/                 # 7 个研究智能体 + 基类
+│   │   ├── base_agent.py       # BaseFinancialAgent（反思循环 + configure_research）
 │   │   ├── price_agent.py
 │   │   ├── news_agent.py
 │   │   ├── fundamental_agent.py
@@ -1169,36 +1205,33 @@ FinSight/
 │   │   ├── macro_agent.py
 │   │   ├── risk_agent.py
 │   │   └── deep_search_agent.py
+│   ├── tools/                  # 26 个工具模块
+│   │   ├── manifest.py         # 工具清单（含 market 标注）
+│   │   ├── price.py            # 价格（11 源级联）
+│   │   ├── financial.py        # 财务报表
+│   │   ├── news.py             # 新闻获取
+│   │   ├── search.py           # 多引擎搜索
+│   │   ├── sec.py / sec_holdings.py # SEC EDGAR + 持仓
+│   │   ├── earnings_transcripts.py  # 财报电话会
+│   │   ├── local_disclosure.py      # 非美市场公告
+│   │   └── ...                 # screener/fmp/web/http 等
 │   ├── dashboard/              # 仪表盘数据 & AI 洞察
 │   │   ├── data_service.py     # yfinance/FMP 数据获取
 │   │   ├── cache.py            # DashboardCache（16 类 TTL）
-│   │   ├── insights_engine.py  # 洞察评分器编排（单次 LLM 调用，非自主智能体）
-│   │   ├── insights_scorer.py  # 确定性评分回退
-│   │   ├── insights_prompts.py # LLM Prompt 模板
+│   │   ├── insights_engine.py  # 5 个洞察评分器编排
 │   │   └── schemas.py          # Pydantic Schema
 │   ├── rag/                    # 混合 RAG 引擎
 │   │   ├── hybrid_service.py   # 内存 + Postgres 后端
 │   │   ├── embedder.py         # bge-m3 嵌入服务
 │   │   ├── reranker.py         # bge-reranker-v2-m3
-│   │   ├── rag_router.py       # 查询路由（SKIP/PRIMARY/PARALLEL）
 │   │   └── chunker.py          # 文档切片策略
-│   ├── tools/                  # 工具实现
-│   │   ├── manifest.py         # 17 个工具（含元数据）
-│   │   ├── market.py           # 价格数据（11 源级联）
-│   │   ├── financial.py        # 财务报表
-│   │   ├── technical.py        # 技术指标
-│   │   ├── macro.py            # FRED + 市场情绪
-│   │   └── sec_tools.py        # SEC EDGAR 文件
-│   ├── services/               # 后台服务
-│   │   ├── alert_scheduler.py  # 3 个预警调度器
-│   │   ├── scheduler_runner.py # APScheduler 封装
-│   │   ├── subscription_service.py
-│   │   └── memory.py           # 按用户记忆存储
-│   └── tests/                  # 700+ 测试
-│       ├── test_graph_*.py
-│       ├── test_agents_*.py
-│       ├── test_dashboard_*.py
-│       └── test_rag_*.py
+│   ├── config/                 # Ticker 映射、市场配置
+│   ├── conversation/           # 会话管理层
+│   ├── orchestration/          # 编排层（预算、追踪）
+│   ├── report/                 # 报告 IR、校验、引用
+│   ├── security/               # SSRF 防护
+│   ├── services/               # 后台服务（预警调度、订阅、记忆）
+│   └── tests/                  # 后端测试
 ├── frontend/
 │   ├── src/
 │   │   ├── api/client.ts       # API 客户端 + SSE parseSSEStream
@@ -1207,31 +1240,23 @@ FinSight/
 │   │   │   ├── dashboardStore.ts  # 仪表盘状态
 │   │   │   └── executionStore.ts  # 工作台执行状态
 │   │   ├── components/
-│   │   │   ├── dashboard/      # 仪表盘 UI
-│   │   │   │   ├── tabs/       # 6 个标签面板
-│   │   │   │   │   ├── OverviewTab.tsx
-│   │   │   │   │   ├── FinancialTab.tsx
-│   │   │   │   │   ├── TechnicalTab.tsx
-│   │   │   │   │   ├── NewsTab.tsx
-│   │   │   │   │   ├── ResearchTab.tsx
-│   │   │   │   │   └── PeersTab.tsx
-│   │   │   │   └── StockHeader.tsx
-│   │   │   ├── SmartChart.tsx  # LLM 双模式智能图表
-│   │   │   ├── ChatList.tsx    # 对话 + 内联图表
-│   │   │   └── workbench/      # 工作台组件
+│   │   │   ├── dashboard/      # 仪表盘（6 标签页）
+│   │   │   ├── settings/       # 设置面板（AgentControlPanel）
+│   │   │   ├── SmartChart.tsx   # LLM 双模式智能图表
+│   │   │   ├── ChatList.tsx     # 对话 + 内联图表
+│   │   │   └── workbench/       # 工作台组件
 │   │   ├── hooks/              # 自定义 React Hooks
-│   │   │   ├── useLatestReport.ts
-│   │   │   ├── useDashboardData.ts
-│   │   │   ├── useDashboardInsights.ts
-│   │   │   └── useChartTheme.ts
-│   │   └── types/dashboard.ts  # TypeScript 类型定义
+│   │   └── types/              # TypeScript 类型定义
 │   └── vite.config.ts
 ├── data/                       # 运行时数据存储
-│   ├── memory/                 # 按用户 JSON 档案
-│   ├── subscriptions.json      # 邮件预警订阅
-│   └── *.sqlite                # SQLite 数据库
-├── docs/                       # 技术文档
-└── images/                     # 截图
+├── docs/                       # 技术文档（见 docs/DOCS_INDEX.md）
+├── scripts/                    # 运维与评估脚本
+├── tests/                      # 回归测试与评估器
+├── images/                     # 截图
+├── docker-compose.yml          # Docker 编排
+├── Dockerfile                  # 后端镜像
+├── requirements.txt            # Python 依赖
+└── .env.server.example         # 环境变量模板
 ```
 
 ---

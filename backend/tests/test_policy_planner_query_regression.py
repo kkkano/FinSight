@@ -160,6 +160,292 @@ def test_investment_opinion_query_matrix_routes_to_rich_chat_chain(monkeypatch):
         assert {"technical_agent", "fundamental_agent", "risk_agent"}.issubset(step_agents), query
 
 
+def test_valuation_compare_uses_intent_contract_and_per_ticker_evidence(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+
+    assert contract.get("facets") == ["valuation"]
+    assert contract.get("per_ticker_required") is True
+    assert (contract.get("render_intent") or {}).get("shape") == "compare"
+    assert contract.get("required_evidence") == [
+        "price_snapshot",
+        "company_profile",
+        "earnings_estimates",
+    ]
+
+    tasks = understanding.get("tasks") or []
+    compare_tasks = [task for task in tasks if (task.get("operation") or {}).get("name") == "compare"]
+    evidence_tasks = [task for task in tasks if (task.get("operation") or {}).get("name") == "investment_opinion"]
+    assert len(compare_tasks) == 1
+    assert (compare_tasks[0].get("operation") or {}).get("params", {}).get("synthesis_only") is True
+    assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
+    assert all((task.get("operation") or {}).get("params", {}).get("evidence_focus") == "valuation" for task in evidence_tasks)
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+    agent_steps = [step for step in steps if step.get("kind") == "agent"]
+
+    assert agents == set()
+    assert "get_performance_comparison" not in step_names
+    assert {"get_stock_price", "get_company_info", "get_earnings_estimates"}.issubset(set(step_names))
+    assert "get_technical_snapshot" not in step_names
+    assert agent_steps == []
+
+
+def test_risk_evidence_planner_uses_positions_inputs(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {
+        "query": "Compare GOOGL and MSFT today: news, price change, and risk in one sentence each.",
+        "ui_context": {},
+        "output_mode": "chat",
+    }
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    portfolio_risk_steps = [
+        step
+        for step in steps
+        if step.get("name") in {"get_factor_exposure", "run_portfolio_stress_test"}
+    ]
+
+    assert portfolio_risk_steps
+    assert all("positions" in (step.get("inputs") or {}) for step in portfolio_risk_steps)
+    assert not any("ticker" in (step.get("inputs") or {}) for step in portfolio_risk_steps)
+
+
+def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    monkeypatch.setenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT", "2")
+
+    state = {"query": "NVDA AMD TSM MSFT 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    evidence_tasks = [
+        task
+        for task in (understanding.get("tasks") or [])
+        if (task.get("operation") or {}).get("name") == "investment_opinion"
+    ]
+
+    assert contract.get("primary_tickers") == ["NVDA", "AMD"]
+    assert contract.get("omitted_tickers") == ["TSM", "MSFT"]
+    assert [task.get("tickers") for task in evidence_tasks] == [["NVDA"], ["AMD"]]
+
+
+def test_external_entity_impact_contract_runs_news_and_risk_evidence(monkeypatch):
+    from backend.graph.nodes.understand_request import understand_request
+
+    monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+
+    state = {"query": "研究一下特斯拉会不会被SpaceX影响", "ui_context": {}, "output_mode": "chat"}
+    import asyncio
+
+    understanding = asyncio.run(understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    task = (understanding.get("tasks") or [])[0]
+
+    assert contract.get("facets") == ["external_entity_impact"]
+    assert contract.get("budget_profile") == "external_entity_impact_light"
+    assert (task.get("operation") or {}).get("name") == "analyze_impact"
+    assert (task.get("operation") or {}).get("params", {}).get("required_evidence") == [
+        "price_snapshot",
+        "news_context",
+        "risk_profile",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    agents = set(((policy_out.get("policy") or {}).get("allowed_agents") or []))
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+    step_agents = {step.get("name") for step in steps if step.get("kind") == "agent"}
+
+    assert {"news_agent", "risk_agent"}.issubset(agents)
+    assert {"get_stock_price", "get_company_news", "get_authoritative_media_news"}.issubset(set(step_names))
+    assert {"analyze_historical_drawdowns", "get_factor_exposure", "run_portfolio_stress_test"}.issubset(set(step_names))
+    assert not {"news_agent", "risk_agent"}.intersection(step_agents)
+    assert step_names
+
+
+def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
+    import asyncio
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"NVDA", "AMD"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="NVDA, AMD"),
+            relation="compare",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router emitted coarse compare hints",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "NVDA", "tickers": ["NVDA"], "operation": "compare", "params": {}},
+                {"subject_type": "company", "subject_label": "AMD", "tickers": ["AMD"], "operation": "compare", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat", "trace": {}}
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    tasks = understanding.get("tasks") or []
+
+    assert contract.get("facets") == ["valuation"]
+    assert contract.get("per_ticker_required") is True
+    assert [task.get("reason") for task in tasks] == [
+        "intent_contract_synthesis_compare",
+        "intent_contract_per_ticker_evidence",
+        "intent_contract_per_ticker_evidence",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    steps = (plan_out.get("plan_ir") or {}).get("steps") or []
+    step_names = [step.get("name") for step in steps]
+
+    assert steps
+    assert "get_performance_comparison" not in step_names
+    assert "fundamental_agent" not in step_names
+
+
+def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):
+    import asyncio
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"AAPL", "MSFT"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="AAPL, MSFT, Fed rates"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router task operation is only a weak signal",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "AAPL", "tickers": ["AAPL"], "operation": "macro_brief", "params": {}},
+                {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"], "operation": "macro_brief", "params": {}},
+                {"subject_type": "macro", "subject_label": "Fed rates", "tickers": [], "operation": "analyze_impact", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {
+        "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
+        "ui_context": {},
+        "output_mode": "chat",
+        "trace": {},
+    }
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    tasks = understanding.get("tasks") or []
+    task_ops = [(task.get("operation") or {}).get("name") for task in tasks]
+
+    assert task_ops == ["price", "fetch", "macro_brief"]
+    assert all(op != "compare" for op in task_ops)
+
+    contracts = understanding.get("intent_contracts") or []
+    by_frame = {contract.get("frame_id"): contract for contract in contracts}
+    assert by_frame["router_hint_1"].get("required_evidence") == ["price_snapshot"]
+    assert by_frame["router_hint_2"].get("required_evidence") == ["news_context"]
+    assert by_frame["router_hint_3"].get("required_evidence") == ["macro_context"]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    step_names = [step.get("name") for step in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+
+    assert "get_performance_comparison" not in step_names
+    assert "get_stock_price" in step_names
+    assert "get_company_news" in step_names
+    assert "get_official_macro_releases" in step_names
+
+
+def test_router_hint_uses_company_alias_frame_for_external_impact_contract(monkeypatch):
+    import asyncio
+    import importlib
+
+    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+
+    understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
+
+    query = "\u5fae\u8f6f AI \u5bf9\u5e02\u503c\u6709\u4ec0\u4e48\u5f71\u54cd"
+
+    async def fake_route(_state, *, tickers, selection_ids):
+        assert set(tickers) == {"MSFT"}
+        assert selection_ids == []
+        return ConversationDecision(
+            execution_route="research",
+            context_binding=ContextBinding(source="none", confidence=0.0, subject_hint="MSFT"),
+            relation="new_topic",
+            domain_intent="analysis",
+            confidence=0.9,
+            needs_tools=True,
+            reason="router emitted coarse qa hint for company alias query",
+            task_hints=(
+                {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"], "operation": "qa", "params": {}},
+            ),
+        )
+
+    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+
+    state = {"query": query, "ui_context": {}, "output_mode": "chat", "trace": {}}
+    understanding = asyncio.run(understand_mod.understand_request(state))
+    contract = understanding.get("intent_contract") or {}
+    task = (understanding.get("tasks") or [])[0]
+
+    assert contract.get("facets") == ["external_entity_impact"]
+    assert contract.get("budget_profile") == "external_entity_impact_light"
+    assert (task.get("operation") or {}).get("name") == "analyze_impact"
+    assert (task.get("operation") or {}).get("params", {}).get("required_evidence") == [
+        "price_snapshot",
+        "news_context",
+        "risk_profile",
+    ]
+
+    policy_out = policy_gate({**state, **understanding})
+    plan_out = planner_stub({**state, **understanding, **policy_out})
+    step_names = [step.get("name") for step in ((plan_out.get("plan_ir") or {}).get("steps") or [])]
+
+    assert "get_stock_price" in step_names
+    assert "get_company_news" in step_names
+    assert "get_authoritative_media_news" in step_names
+    assert "news_agent" not in step_names
+    assert "risk_agent" not in step_names
+
+
 def test_earnings_performance_query_routes_to_fundamental_chain(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 

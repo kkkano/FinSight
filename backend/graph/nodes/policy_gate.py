@@ -6,9 +6,22 @@ import re
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
+from backend.graph.intent_contract import (
+    canonical_evidence_kinds,
+    evidence_agents_for_kinds,
+    evidence_plan_for_contract,
+    evidence_plan_for_kinds,
+    evidence_tools_for_kinds,
+    is_valuation_contract,
+)
 from backend.graph.request_facets import derive_request_facets
 from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
 from backend.graph.state import GraphState
+from backend.graph.understanding_v2 import (
+    VALUATION_COMPARE_LIGHT_PROFILE,
+    evidence_profiles,
+    project_v2_tasks_to_legacy,
+)
 from backend.skills.registry import get_builtin_skill_registry
 from backend.skills.selector import extract_explicit_skill, select_skill_for_facets
 
@@ -44,6 +57,15 @@ _SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
     "get_institution_holdings_by_ticker",
     "get_insider_transactions",
     "get_holdings_overlap",
+)
+
+_VALUATION_COMPARE_LIGHT_TOOLS: tuple[str, ...] = (
+    "get_stock_price",
+    "get_company_info",
+    "get_sec_company_facts_quarterly",
+    "get_earnings_estimates",
+    "get_current_datetime",
+    "search",
 )
 
 _SHORT_RESEARCH_AGENT_CONFIG: dict[str, dict[str, object]] = {
@@ -106,9 +128,126 @@ def _is_truthy(value: object) -> bool:
     return False
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return _is_truthy(raw)
+
+
+def _agent_research_config(agent_preferences: dict) -> dict[str, int | bool]:
+    """Build the per-agent research config.
+
+    ``FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG`` is an ops override for production
+    experiments: it wins over stale browser-local preferences that still submit
+    ``enableLLMAnalysis=false``.
+    """
+
+    forced = _env_bool("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", False)
+    env_reflections = _env_int(
+        "FINSIGHT_AGENT_REFLECTION_ROUNDS",
+        _env_int("BASE_AGENT_MAX_REFLECTIONS", 3 if forced else 0, min_value=0, max_value=3),
+        min_value=0,
+        max_value=3,
+    )
+    env_analysis_timeout = _env_int(
+        "FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS",
+        _env_int("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", 120 if forced else 0, min_value=0, max_value=120),
+        min_value=0,
+        max_value=120,
+    )
+    env_token_timeout = _env_int(
+        "FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS",
+        _env_int("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", 60 if forced else 0, min_value=0, max_value=60),
+        min_value=0,
+        max_value=60,
+    )
+
+    if forced:
+        return {
+            "enable_llm_analysis": True,
+            "max_reflections": env_reflections,
+            "analysis_timeout_seconds": env_analysis_timeout,
+            "token_acquire_timeout_seconds": env_token_timeout,
+        }
+
+    enable_default = _env_bool("AGENT_LLM_ANALYZE_ENABLED", False)
+    pref_enable = agent_preferences.get("enableLLMAnalysis")
+    enable_llm = pref_enable if isinstance(pref_enable, bool) else enable_default
+
+    def _pref_int(key: str, default: int, *, min_value: int, max_value: int) -> int:
+        raw = agent_preferences.get(key)
+        try:
+            value = int(raw)
+        except Exception:
+            value = default
+        return max(min_value, min(max_value, value))
+
+    return {
+        "enable_llm_analysis": bool(enable_llm),
+        "max_reflections": _pref_int("reflectionRounds", env_reflections, min_value=0, max_value=3),
+        "analysis_timeout_seconds": _pref_int(
+            "analysisTimeoutSeconds",
+            env_analysis_timeout,
+            min_value=0,
+            max_value=120,
+        ),
+        "token_acquire_timeout_seconds": _pref_int(
+            "tokenAcquireTimeoutSeconds",
+            env_token_timeout,
+            min_value=0,
+            max_value=60,
+        ),
+    }
+
+
 def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(str(needle or "").lower() in lowered for needle in needles)
+
+
+def _append_missing(items: list[str], names: tuple[str, ...]) -> list[str]:
+    seen = set(items)
+    for name in names:
+        if name in seen:
+            continue
+        items.append(name)
+        seen.add(name)
+    return items
+
+
+def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market: str) -> tuple[str, ...]:
+    """Light profile 可裁增强项，但不能裁契约声明的最低证据工具。"""
+    market_norm = str(market or "US").strip().upper() or "US"
+    minimum_tools_by_evidence = {
+        "price_snapshot": ("get_stock_price",),
+        "company_profile": ("get_company_info",),
+        "earnings_estimates": ("get_earnings_estimates",),
+        "filing_context": (
+            ("get_sec_company_facts_quarterly",)
+            if market_norm == "US"
+            else ("get_local_market_filings",)
+        ),
+        "news_context": ("get_company_news",),
+    }
+    required_tools: list[str] = []
+    for kind in canonical_evidence_kinds(required_evidence):
+        required_tools.extend(minimum_tools_by_evidence.get(kind, ()))
+    return tuple(_append_missing(list(_VALUATION_COMPARE_LIGHT_TOOLS), tuple(required_tools)))
+
+
+def _task_param_profiles(tasks: list[dict]) -> set[str]:
+    profiles: set[str] = set()
+    for task in tasks:
+        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+        for key in ("evidence_profile", "comparison_data_profile", "budget_profile"):
+            value = str(params.get(key) or "").strip()
+            if value:
+                profiles.add(value)
+        if str(params.get("evidence_focus") or "").strip().lower() == "valuation":
+            profiles.add(VALUATION_COMPARE_LIGHT_PROFILE)
+    return profiles
 
 
 def _infer_market_from_ticker(ticker: str) -> str | None:
@@ -139,6 +278,8 @@ def _infer_market_from_subject(subject: dict | None) -> str | None:
 
 def _ready_understanding_tasks(state: GraphState) -> list[dict]:
     tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
     if not isinstance(tasks, list):
         return []
     ready: list[dict] = []
@@ -188,6 +329,96 @@ def _has_ready_operation(tasks: list[dict], operation_name: str) -> bool:
     return any(_task_operation_name(task).strip().lower() == target for task in tasks)
 
 
+def _operation_params(operation: object) -> dict:
+    if isinstance(operation, dict) and isinstance(operation.get("params"), dict):
+        return operation.get("params") or {}
+    return {}
+
+
+def _required_evidence_from_state(
+    *,
+    intent_contract: dict,
+    operation: object,
+    ready_tasks: list[dict],
+) -> list[str]:
+    required: list[str] = []
+    contract_required = intent_contract.get("required_evidence") if isinstance(intent_contract, dict) else []
+    if isinstance(contract_required, list):
+        required.extend(str(item) for item in contract_required if str(item).strip())
+    op_required = _operation_params(operation).get("required_evidence")
+    if isinstance(op_required, list):
+        required.extend(str(item) for item in op_required if str(item).strip())
+    for task in ready_tasks:
+        task_operation = task.get("operation")
+        task_required = _operation_params(task_operation).get("required_evidence")
+        if isinstance(task_required, list):
+            required.extend(str(item) for item in task_required if str(item).strip())
+        task_params = task.get("params")
+        if isinstance(task_params, dict) and isinstance(task_params.get("required_evidence"), list):
+            required.extend(str(item) for item in task_params.get("required_evidence") if str(item).strip())
+    return canonical_evidence_kinds(required)
+
+
+_ACTION_RESULT_TOOLS: dict[str, tuple[str, ...]] = {
+    "backtest_result": ("run_strategy_backtest", "get_current_datetime", "search"),
+}
+
+
+def _request_frames_from_state(state: GraphState) -> list[dict]:
+    frames: list[dict] = []
+    raw_frames = state.get("request_frames")
+    if isinstance(raw_frames, list):
+        frames.extend(item for item in raw_frames if isinstance(item, dict))
+    raw_frame = state.get("request_frame")
+    if isinstance(raw_frame, dict) and raw_frame not in frames:
+        frames.append(raw_frame)
+    return frames
+
+
+def _request_frame_evidence_from_state(state: GraphState) -> list[str]:
+    required: list[str] = []
+    for frame in _request_frames_from_state(state):
+        raw = frame.get("evidence_obligations")
+        if isinstance(raw, list):
+            required.extend(str(item) for item in raw if str(item).strip())
+    return canonical_evidence_kinds(required)
+
+
+def _request_frame_results_from_state(state: GraphState) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for frame in _request_frames_from_state(state):
+        raw_results = frame.get("required_results")
+        if isinstance(raw_results, list):
+            for item in raw_results:
+                value = str(item or "").strip()
+                if not value or value in seen:
+                    continue
+                seen.add(value)
+                results.append(value)
+        workflow_action = frame.get("workflow_action")
+        if isinstance(workflow_action, dict) and isinstance(workflow_action.get("required_results"), list):
+            for item in workflow_action.get("required_results") or []:
+                value = str(item or "").strip()
+                if not value or value in seen:
+                    continue
+                seen.add(value)
+                results.append(value)
+    return results
+
+
+def _tools_for_required_results(required_results: list[str]) -> list[str]:
+    tools: list[str] = []
+    seen: set[str] = set()
+    for result in required_results:
+        for tool_name in _ACTION_RESULT_TOOLS.get(str(result or "").strip(), ()):
+            if tool_name in seen:
+                continue
+            seen.add(tool_name)
+            tools.append(tool_name)
+    return tools
+
+
 def _infer_market_from_task(task: dict, fallback: str) -> str:
     tickers = task.get("tickers")
     if isinstance(tickers, list):
@@ -215,6 +446,27 @@ def _with_us_holdings_tools(tools: list[str], *, subject_type: str, op_name: str
 
 def _without_holdings_tools(tools: list[str]) -> list[str]:
     return [tool_name for tool_name in tools if tool_name not in _SEC_HOLDINGS_TOOL_NAMES]
+
+
+def _filter_tools_for_market(tools: list[str], *, market: str) -> list[str]:
+    market_norm = str(market or "US").strip().upper() or "US"
+    try:
+        from backend.tools.manifest import TOOL_MANIFEST
+
+        markets_by_tool = {entry.name: set(entry.markets) for entry in TOOL_MANIFEST}
+    except Exception:
+        markets_by_tool = {}
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for tool_name in tools:
+        if tool_name in seen:
+            continue
+        seen.add(tool_name)
+        markets = markets_by_tool.get(tool_name)
+        if markets and market_norm not in markets:
+            continue
+        filtered.append(tool_name)
+    return filtered
 
 
 def _with_earnings_impact_tools(tools: list[str], *, market: str) -> list[str]:
@@ -367,6 +619,8 @@ def policy_gate(state: GraphState) -> dict:
         operation=operation if isinstance(operation, dict) else {},
         subject=subject if isinstance(subject, dict) else {},
     )
+    intent_contract = state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else {}
+    valuation_contract = bool(is_valuation_contract(intent_contract))
 
     # --- Read user preferences from ui_context ---
     ui_context = state.get("ui_context") or {}
@@ -418,6 +672,18 @@ def policy_gate(state: GraphState) -> dict:
 
     # Budget baseline
     ready_tasks = _ready_understanding_tasks(state)
+    required_evidence = _required_evidence_from_state(
+        intent_contract=intent_contract,
+        operation=operation,
+        ready_tasks=ready_tasks,
+    )
+    request_frame_evidence = _request_frame_evidence_from_state(state)
+    if request_frame_evidence:
+        required_evidence = canonical_evidence_kinds(list(required_evidence) + list(request_frame_evidence))
+    required_results = _request_frame_results_from_state(state)
+    v2_profiles = set(evidence_profiles(state.get("understanding_v2")))
+    v2_profiles.update(_task_param_profiles(ready_tasks))
+    valuation_compare_light = VALUATION_COMPARE_LIGHT_PROFILE in v2_profiles
     earnings_impact_requested = (
         op_name == "earnings_impact"
         or _has_ready_operation(ready_tasks, "earnings_impact")
@@ -542,6 +808,16 @@ def policy_gate(state: GraphState) -> dict:
     if market != "US":
         allowed_tools = _without_holdings_tools(list(allowed_tools))
 
+    evidence_tools = evidence_tools_for_kinds(required_evidence, market=market)
+    if evidence_tools:
+        allowed_tools = _append_missing(list(allowed_tools), tuple(evidence_tools + ["get_current_datetime", "search"]))
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(evidence_tools) + len(ready_tasks) + 2))
+
+    action_tools = _tools_for_required_results(required_results)
+    if action_tools:
+        allowed_tools = _append_missing(list(allowed_tools), tuple(action_tools))
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(action_tools) + len(ready_tasks) + 2))
+
     if earnings_impact_requested:
         allowed_tools = _with_earnings_impact_tools(list(allowed_tools), market=market)
         budget["max_tools"] = max(int(budget.get("max_tools", 4)), 9)
@@ -559,6 +835,10 @@ def policy_gate(state: GraphState) -> dict:
                 if key in skill_budget:
                     budget[key] = max(int(budget.get(key, 0)), int(skill_budget.get(key) or 0))
 
+    if valuation_contract:
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), 6)
+
     if _state_contains_url_reference(state, ui_context) and "fetch_url_content" not in allowed_tools:
         allowed_tools = ["fetch_url_content", *allowed_tools]
         budget["max_tools"] = max(int(budget.get("max_tools", 0)), 1)
@@ -566,10 +846,34 @@ def policy_gate(state: GraphState) -> dict:
     if output_mode != "investment_report" and reply_contract_disallows_news(state):
         allowed_tools = [tool_name for tool_name in allowed_tools if tool_name not in NEWS_TOOL_NAMES]
 
+    if valuation_compare_light and output_mode != "investment_report":
+        light_tool_floor = _valuation_compare_light_tool_floor(required_evidence, market=market)
+        allowed_tools = [
+            tool_name for tool_name in _append_missing(list(allowed_tools), light_tool_floor)
+            if tool_name in light_tool_floor
+        ]
+        budget["max_rounds"] = max(int(budget.get("max_rounds", 4)), 4)
+        budget["max_tools"] = max(int(budget.get("max_tools", 4)), min(12, len(light_tool_floor)))
+
+    if isinstance(state.get("understanding_v2"), dict):
+        default_cap = 18 if output_mode == "investment_report" else (10 if output_mode == "chat" else 12)
+        global_cap = _env_int("FINSIGHT_UNDERSTANDING_V2_MAX_TOOLS", default_cap, min_value=1, max_value=40)
+        mode_env = f"FINSIGHT_UNDERSTANDING_V2_{str(output_mode).upper()}_MAX_TOOLS"
+        mode_cap = _env_int(mode_env, global_cap, min_value=1, max_value=40)
+        budget["max_tools"] = min(int(budget.get("max_tools", mode_cap)), mode_cap)
+
+    allowed_tools = _filter_tools_for_market(list(allowed_tools), market=market)
+
     # Agent whitelist:
-    # Priority: agents_override (explicit) > agent_preferences (depth) > default selection
+    # Priority: agents_override (explicit) > evidence contract > v2 shadow profile
+    # > agent_preferences (depth) > default selection.
     allowed_agents: list[str] = []
     agent_selection: dict[str, object] = {}
+    evidence_agents = [
+        name
+        for name in evidence_agents_for_kinds(required_evidence, market=market)
+        if name in REPORT_AGENT_CANDIDATES
+    ]
     short_research_operation = ""
     if earnings_impact_requested:
         short_research_operation = "earnings_impact"
@@ -580,7 +884,6 @@ def policy_gate(state: GraphState) -> dict:
     elif op_name == "technical" or _has_ready_operation(ready_tasks, "technical"):
         short_research_operation = "technical"
 
-    # --- agents_override: highest priority (validated against whitelist) ---
     if agents_override and isinstance(agents_override, list):
         validated = [
             a for a in agents_override
@@ -589,6 +892,25 @@ def policy_gate(state: GraphState) -> dict:
         if validated:
             allowed_agents = validated
             agent_selection = {"selected": validated, "override": True}
+    elif evidence_agents and output_mode != "investment_report":
+        allowed_agents = list(evidence_agents)
+        agent_selection = {
+            "selected": list(allowed_agents),
+            "required": list(allowed_agents),
+            "reason": "request_frame_required_evidence" if request_frame_evidence else "intent_contract_required_evidence",
+            "selection_mode": "research_obligation",
+            "required_evidence": list(required_evidence),
+            "budget_profile": str(intent_contract.get("budget_profile") or "default"),
+        }
+    elif valuation_compare_light and output_mode != "investment_report":
+        allowed_agents = []
+        agent_selection = {
+            "selected": list(allowed_agents),
+            "required": list(allowed_agents),
+            "reason": "valuation_compare_light_tool_only",
+            "selection_mode": "lightweight_evidence_profile",
+            "budget_profile": VALUATION_COMPARE_LIGHT_PROFILE,
+        }
     elif output_mode == "investment_report":
         force_all_agents = _is_truthy(ui_context.get("ensure_all_agents")) if isinstance(ui_context, dict) else False
         dashboard_forced = _is_dashboard_source(ui_context)
@@ -618,33 +940,29 @@ def policy_gate(state: GraphState) -> dict:
             allowed_agents = list(selection.get("selected") or [])
             scores = selection.get("scores") if isinstance(selection.get("scores"), dict) else {}
             reasons = selection.get("reasons") if isinstance(selection.get("reasons"), dict) else {}
-            selected_scores = {name: scores.get(name) for name in allowed_agents}
-            selected_reasons = {name: reasons.get(name) for name in allowed_agents}
             agent_selection = {
                 "selected": allowed_agents,
                 "required": list(selection.get("required") or []),
                 "max_agents": max_agents,
                 "min_agents": min_agents,
-                "scores": selected_scores,
-                "reasons": selected_reasons,
+                "scores": {name: scores.get(name) for name in allowed_agents},
+                "reasons": {name: reasons.get(name) for name in allowed_agents},
             }
 
-            # --- Apply agent_preferences depth filtering (whitelist validated) ---
-            _VALID_DEPTHS = {"standard", "deep", "off"}
+            valid_depths = {"standard", "deep", "off"}
             pref_agents = agent_preferences.get("agents")
             if isinstance(pref_agents, dict):
                 removed_by_prefs: list[str] = []
                 for name, depth in pref_agents.items():
                     if not isinstance(name, str) or name not in REPORT_AGENT_CANDIDATES:
-                        continue  # Ignore unknown agent names
+                        continue
                     depth_str = str(depth) if depth else "standard"
-                    if depth_str not in _VALID_DEPTHS:
+                    if depth_str not in valid_depths:
                         depth_str = "standard"
                     if depth_str == "off" and name in allowed_agents:
                         allowed_agents.remove(name)
                         removed_by_prefs.append(name)
                     elif depth_str == "deep":
-                        # Boost budget for deep analysis
                         budget["max_rounds"] = min(budget["max_rounds"] + 1, 10)
                 if removed_by_prefs:
                     agent_selection["removed_by_prefs"] = removed_by_prefs
@@ -710,7 +1028,22 @@ def policy_gate(state: GraphState) -> dict:
                     name for name in (agent_selection.get("required") or []) if name not in removed_by_prefs
                 ]
                 agent_selection["removed_by_prefs"] = removed_by_prefs
+    elif agent_preferences:
+        if agent_preferences.get("include_all"):
+            allowed_agents = list(REPORT_AGENT_CANDIDATES)
+        else:
+            requested = agent_preferences.get("agents")
+            if isinstance(requested, list):
+                allowed_agents = [
+                    a for a in requested
+                    if isinstance(a, str) and a in REPORT_AGENT_CANDIDATES
+                ]
+        agent_selection = {"selected": list(allowed_agents), "preferences": True}
+    else:
+        allowed_agents = []
+        agent_selection = {"selected": [], "reason": "brief_or_tool_only"}
 
+    # skill 注入（skill 分支）：在 agent 选择链完成后，把所选 skill 的 preferred_agents 补入。
     if skill_manifest is not None:
         skill_added_agents: list[str] = []
         seen_agents = set(allowed_agents)
@@ -746,9 +1079,15 @@ def policy_gate(state: GraphState) -> dict:
 
     policy = {
         "budget": budget,
+        "market": market,
         "allowed_tools": allowed_tools,
         "tool_schemas": tool_schemas,
         "allowed_agents": allowed_agents,
+        "required_results": list(required_results),
+        "required_evidence": list(required_evidence),
+        "evidence_plan": evidence_plan_for_contract(intent_contract, market=market)
+        if intent_contract
+        else evidence_plan_for_kinds(required_evidence, market=market),
         "force_all_agents": bool(agent_selection.get("force_all_agents")),
         "analysis_depth": analysis_depth,
         "agent_selection": agent_selection,
@@ -766,6 +1105,7 @@ def policy_gate(state: GraphState) -> dict:
             }
             for name in allowed_agents
         },
+        "agent_research_config": _agent_research_config(agent_preferences),
     }
 
     trace = state.get("trace") or {}
@@ -777,6 +1117,7 @@ def policy_gate(state: GraphState) -> dict:
                 "budget": budget,
                 "allowed_tools": allowed_tools,
                 "allowed_agents": allowed_agents,
+                "required_results": list(required_results),
                 "analysis_depth": analysis_depth,
                 "market": market,
                 "tool_selection_fallback": fallback_reason,

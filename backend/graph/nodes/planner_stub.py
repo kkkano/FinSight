@@ -7,9 +7,12 @@ import json
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
+from backend.graph.coverage_validator import validate_plan_coverage_for_frames
+from backend.graph.intent_contract import EXTERNAL_IMPACT_LIGHT_PROFILE, canonical_evidence_kinds
 from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
+from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
 
 
 _SEC_HOLDINGS_ENABLED_VALUES = {"1", "true", "yes", "on"}
@@ -37,7 +40,9 @@ def planner_stub(state: GraphState) -> dict:
     subject = raw_subject if isinstance(raw_subject, dict) else {}
     output_mode = state.get("output_mode") or "brief"
     query = (state.get("query") or "").strip()
-    operation = (state.get("operation") or {}).get("name") or "qa"
+    operation_obj = state.get("operation") if isinstance(state.get("operation"), dict) else {}
+    operation = operation_obj.get("name") or "qa"
+    operation_params = operation_obj.get("params") if isinstance(operation_obj.get("params"), dict) else {}
     news_disallowed = reply_contract_disallows_news(state)
     reply_contract = state.get("reply_contract") if isinstance(state.get("reply_contract"), dict) else {}
     source_constraints = (
@@ -56,12 +61,27 @@ def planner_stub(state: GraphState) -> dict:
     allowed_agents = set((policy.get("allowed_agents") or []) if isinstance(policy, dict) else [])
     skill_selection = policy.get("skill_selection") if isinstance(policy, dict) else {}
     skill_selection = skill_selection if isinstance(skill_selection, dict) else {}
+    ui_context = state.get("ui_context") if isinstance(state.get("ui_context"), dict) else {}
+    market = str(
+        (policy.get("market") if isinstance(policy, dict) else None)
+        or ui_context.get("market")
+        or "US"
+    ).strip().upper() or "US"
     raw_tasks = state.get("tasks")
+    if not isinstance(raw_tasks, list):
+        raw_tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
     ready_tasks = [
         task for task in (raw_tasks if isinstance(raw_tasks, list) else [])
         if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
     ]
     ready_task_id_set = {str(task.get("id") or "").strip() for task in ready_tasks if str(task.get("id") or "").strip()}
+    raw_request_frames = state.get("request_frames")
+    request_frames = [
+        frame for frame in (raw_request_frames if isinstance(raw_request_frames, list) else [])
+        if isinstance(frame, dict)
+    ]
+    if not request_frames and isinstance(state.get("request_frame"), dict):
+        request_frames = [state["request_frame"]]
 
     steps: list[dict] = []
     step_index: dict[tuple[str, str, str], dict] = {}
@@ -260,6 +280,230 @@ def planner_stub(state: GraphState) -> dict:
         steps.append(step)
         step_index[key] = step
         step_id += 1
+
+    def _task_operation_params(task: dict) -> dict:
+        operation_obj = task.get("operation")
+        if isinstance(operation_obj, dict) and isinstance(operation_obj.get("params"), dict):
+            return operation_obj.get("params") or {}
+        return {}
+
+    def _task_required_evidence(task: dict) -> list[str]:
+        params = _task_operation_params(task)
+        required = params.get("required_evidence")
+        if not isinstance(required, list):
+            task_params = task.get("params")
+            required = task_params.get("required_evidence") if isinstance(task_params, dict) else []
+        if not isinstance(required, list):
+            required = []
+        if not required and len(ready_tasks) == 1 and isinstance(policy.get("required_evidence"), list):
+            required = policy.get("required_evidence") or []
+        return canonical_evidence_kinds([str(item) for item in required if str(item).strip()])
+
+    def _append_evidence_steps_for_ticker(
+        ticker: str,
+        required_evidence: list[str],
+        *,
+        group: str,
+        task_ids: list[str],
+        evidence_profile: str = "",
+    ) -> None:
+        lightweight_external_impact = evidence_profile == EXTERNAL_IMPACT_LIGHT_PROFILE
+        for kind in required_evidence:
+            if kind == "price_snapshot":
+                _append_tool_step(
+                    "get_stock_price",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: price snapshot.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "company_profile":
+                _append_tool_step(
+                    "get_company_info",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: company profile.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "earnings_estimates":
+                _append_tool_step(
+                    "get_earnings_estimates",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: earnings estimates.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_eps_revisions",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: EPS revisions.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "fundamental_snapshot":
+                _append_agent_step(
+                    "fundamental_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: fundamental snapshot.",
+                    optional=False,
+                    parallel_group=f"{group}_fundamental_agents" if group else "fundamental_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "technical_snapshot":
+                _append_tool_step(
+                    "get_technical_snapshot",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: technical snapshot.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_agent_step(
+                    "technical_agent",
+                    {"query": query, "ticker": ticker},
+                    why=f"{ticker} evidence contract: technical agent synthesis.",
+                    optional=True,
+                    parallel_group=f"{group}_technical_agents" if group else "technical_agents",
+                    task_ids=task_ids,
+                )
+            elif kind == "news_context":
+                _append_tool_step(
+                    "get_company_news",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: company news context.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_authoritative_media_news",
+                    {"query": f"{ticker} {query}".strip(), "max_results": 6, "authoritative_only": False},
+                    why=f"{ticker} evidence contract: authoritative media context.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                if not lightweight_external_impact:
+                    _append_agent_step(
+                        "news_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} evidence contract: news agent synthesis.",
+                        optional=True,
+                        parallel_group=f"{group}_news_agents" if group else "news_agents",
+                        task_ids=task_ids,
+                    )
+            elif kind == "risk_profile":
+                positions = [{"ticker": ticker, "weight": 1.0}]
+                _append_tool_step(
+                    "analyze_historical_drawdowns",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: drawdown risk.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_factor_exposure",
+                    {"positions": positions, "lookback_days": 252},
+                    why=f"{ticker} evidence contract: factor exposure.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "run_portfolio_stress_test",
+                    {"positions": positions, "lookback_days": 252},
+                    why=f"{ticker} evidence contract: stress test.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                if not lightweight_external_impact:
+                    _append_agent_step(
+                        "risk_agent",
+                        {"query": query, "ticker": ticker},
+                        why=f"{ticker} evidence contract: risk agent synthesis.",
+                        optional=True,
+                        parallel_group=f"{group}_risk_agents" if group else "risk_agents",
+                        task_ids=task_ids,
+                    )
+            elif kind == "filing_context":
+                if market == "US":
+                    _append_tool_step(
+                        "get_sec_company_facts_quarterly",
+                        {"ticker": ticker},
+                        why=f"{ticker} evidence contract: quarterly company facts.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_sec_filings",
+                        {"ticker": ticker, "forms": ["10-K", "10-Q"], "limit": 4},
+                        why=f"{ticker} evidence contract: SEC filings.",
+                        optional=True,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                else:
+                    _append_tool_step(
+                        "get_local_market_filings",
+                        {"ticker": ticker, "limit": 5},
+                        why=f"{ticker} evidence contract: local-market filings.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+            elif kind == "transcript_context":
+                _append_tool_step(
+                    "get_earnings_call_transcripts",
+                    {"ticker": ticker, "limit": 5},
+                    why=f"{ticker} evidence contract: earnings call transcripts.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "event_calendar":
+                _append_tool_step(
+                    "get_event_calendar",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: event calendar.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "options_derivatives":
+                _append_tool_step(
+                    "get_option_chain_metrics",
+                    {"ticker": ticker},
+                    why=f"{ticker} evidence contract: options metrics.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+            elif kind == "holdings_ownership":
+                if not _sec_holdings_enabled():
+                    continue
+                _append_tool_step(
+                    "get_insider_transactions",
+                    {"ticker": ticker, "days": 180, "limit": 50},
+                    why=f"{ticker} evidence contract: public insider transactions.",
+                    optional=True,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
+                _append_tool_step(
+                    "get_institution_holdings_by_ticker",
+                    {"ticker": ticker, "limit": 50},
+                    why=f"{ticker} evidence contract: institutional ownership holders.",
+                    optional=False,
+                    parallel_group=group,
+                    task_ids=task_ids,
+                )
 
     def _has_step(kind: str, name: str) -> bool:
         return any(step.get("kind") == kind and step.get("name") == name for step in steps)
@@ -580,7 +824,7 @@ def planner_stub(state: GraphState) -> dict:
         compare_tickers = set(_task_tickers(task))
         if not compare_tickers:
             return False
-        current_ops = {"price", "fetch", "analyze_impact", "daily_brief", "technical"}
+        current_ops = {"price", "fetch", "analyze_impact", "daily_brief", "technical", "investment_opinion", "earnings_impact", "earnings_performance"}
         for other in ready_tasks:
             if other is task:
                 continue
@@ -594,9 +838,24 @@ def planner_stub(state: GraphState) -> dict:
         if output_mode == "investment_report":
             return True
         params = _task_operation_params(task or {})
+        if bool(params.get("synthesis_only")):
+            return False
         data_profile = str(params.get("data_profile") or params.get("comparison_data_profile") or "").strip().lower()
+        if data_profile in {"research_synthesis", "synthesis_only"}:
+            return False
         if data_profile in {"performance", "historical_performance"}:
             return True
+        if data_profile in {
+            "facet_evidence",
+            "research_synthesis",
+            "synthesis_only",
+            VALUATION_COMPARE_LIGHT_PROFILE,
+            "valuation_compare",
+            "technical_compare",
+            "earnings_price_impact",
+            "investment_opinion_compare",
+        }:
+            return False
         if task is not None and _compare_has_current_support(task):
             return False
         return True
@@ -606,6 +865,24 @@ def planner_stub(state: GraphState) -> dict:
         params = _task_operation_params(task)
         tickers_for_task = _task_tickers(task)
         task_ids = [_task_id(task)]
+        if op_name == "backtest":
+            ticker = tickers_for_task[0] if tickers_for_task else primary_ticker
+            strategy = str(params.get("strategy") or "ma_cross").strip() or "ma_cross"
+            _append_tool_step(
+                "run_strategy_backtest",
+                {
+                    "ticker": ticker or "",
+                    "strategy": strategy,
+                    "params": dict(params.get("strategy_params") or params.get("params") or {}),
+                    "initial_cash": float(params.get("initial_cash") or 100000.0),
+                    "t_plus_one": bool(params.get("t_plus_one", True)),
+                },
+                why="Backtest workflow action: execute the requested strategy and return performance metrics.",
+                optional=False,
+                parallel_group=group,
+                task_ids=task_ids,
+            )
+            return
         if op_name == "compare" and len(tickers_for_task) >= 2:
             if _should_use_performance_compare(task):
                 mapping = {ticker: ticker for ticker in tickers_for_task[:6]}
@@ -647,6 +924,18 @@ def planner_stub(state: GraphState) -> dict:
 
         for ticker in tickers_for_task[:6]:
             live_qa = op_name == "qa" and _qa_needs_live_context()
+            required_evidence = _task_required_evidence(task)
+            if required_evidence:
+                _append_evidence_steps_for_ticker(
+                    ticker,
+                    required_evidence,
+                    group=group,
+                    task_ids=task_ids,
+                    evidence_profile=str(
+                        params.get("evidence_profile") or params.get("budget_profile") or ""
+                    ).strip().lower(),
+                )
+                continue
             if op_name == "earnings_impact" or query_requests_earnings_price_impact(query):
                 _append_earnings_impact_steps(ticker, group=group, task_ids=task_ids)
                 continue
@@ -657,6 +946,15 @@ def planner_stub(state: GraphState) -> dict:
                 _append_valuation_sanity_steps(ticker, group=group, task_ids=task_ids)
                 continue
             if op_name == "investment_opinion":
+                valuation_focus = (
+                    str(params.get("evidence_focus") or "").strip().lower() == "valuation"
+                    or str(params.get("evidence_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                    or str(params.get("budget_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                )
+                valuation_lightweight = (
+                    str(params.get("evidence_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                    or str(params.get("budget_profile") or "").strip().lower() == VALUATION_COMPARE_LIGHT_PROFILE
+                )
                 _append_tool_step(
                     "get_stock_price",
                     {"ticker": ticker},
@@ -665,6 +963,33 @@ def planner_stub(state: GraphState) -> dict:
                     parallel_group=group,
                     task_ids=task_ids,
                 )
+                if valuation_focus:
+                    _append_tool_step(
+                        "get_company_info",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add company and valuation context.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    _append_tool_step(
+                        "get_earnings_estimates",
+                        {"ticker": ticker},
+                        why=f"{ticker} valuation evidence: add earnings expectations for multiple sanity.",
+                        optional=False,
+                        parallel_group=group,
+                        task_ids=task_ids,
+                    )
+                    if not valuation_lightweight:
+                        _append_agent_step(
+                            "fundamental_agent",
+                            {"query": query, "ticker": ticker},
+                            why=f"{ticker} valuation evidence: run fundamental_agent for valuation support.",
+                            optional=False,
+                            parallel_group=f"{group}_valuation_agents" if group else "valuation_agents",
+                            task_ids=task_ids,
+                        )
+                    continue
                 _append_tool_step(
                     "get_technical_snapshot",
                     {"ticker": ticker},
@@ -1027,6 +1352,213 @@ def planner_stub(state: GraphState) -> dict:
             task_ids=[_task_id(task)],
         )
 
+    def _frame_id(frame: dict, index: int) -> str:
+        return str(frame.get("frame_id") or f"frame_{index}").strip() or f"frame_{index}"
+
+    def _frame_subject(frame: dict) -> dict:
+        subject_payload = frame.get("subject")
+        return subject_payload if isinstance(subject_payload, dict) else {}
+
+    def _frame_subject_type(frame: dict) -> str:
+        return str(_frame_subject(frame).get("type") or "unknown").strip().lower() or "unknown"
+
+    def _frame_tickers(frame: dict) -> list[str]:
+        frame_subject = _frame_subject(frame)
+        frame_tickers = frame_subject.get("tickers")
+        if not isinstance(frame_tickers, list):
+            return []
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in frame_tickers:
+            ticker = str(item or "").strip().upper()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            normalized.append(ticker)
+        return normalized
+
+    def _frame_required_evidence(frame: dict) -> list[str]:
+        raw_evidence = frame.get("evidence_obligations")
+        return canonical_evidence_kinds(raw_evidence if isinstance(raw_evidence, list) else [])
+
+    def _frame_required_results(frame: dict) -> list[str]:
+        raw_results = frame.get("required_results")
+        return [str(item).strip() for item in (raw_results if isinstance(raw_results, list) else []) if str(item).strip()]
+
+    def _frame_workflow_action(frame: dict) -> dict:
+        action = frame.get("workflow_action")
+        return action if isinstance(action, dict) else {}
+
+    def _frame_evidence_profile(frame: dict) -> str:
+        raw_intent_contract = frame.get("intent_contract")
+        intent_contract = raw_intent_contract if isinstance(raw_intent_contract, dict) else {}
+        raw_legacy_operation = frame.get("legacy_operation")
+        legacy_operation = raw_legacy_operation if isinstance(raw_legacy_operation, dict) else {}
+        raw_legacy_params = legacy_operation.get("params")
+        legacy_params = raw_legacy_params if isinstance(raw_legacy_params, dict) else {}
+        return str(
+            frame.get("evidence_profile")
+            or frame.get("budget_profile")
+            or intent_contract.get("budget_profile")
+            or legacy_params.get("evidence_profile")
+            or legacy_params.get("budget_profile")
+            or ""
+        ).strip()
+
+    def _append_macro_frame_steps(frame: dict, *, group: str, task_id: str) -> None:
+        frame_subject = _frame_subject(frame)
+        label = str(frame_subject.get("label") or frame.get("subject_label") or "").strip()
+        macro_query = label if label else query
+        _append_tool_step(
+            "get_current_datetime",
+            {},
+            why="Request frame macro evidence: current date guard.",
+            optional=True,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        _append_tool_step(
+            "get_official_macro_releases",
+            {"query": macro_query, "max_results": 8},
+            why="Request frame macro evidence: official macro releases.",
+            optional=False,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        _append_tool_step(
+            "get_authoritative_media_news",
+            {"query": macro_query, "max_results": 6, "authoritative_only": True},
+            why="Request frame macro evidence: authoritative market context.",
+            optional=True,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        _append_tool_step(
+            "search",
+            {"query": macro_query},
+            why="Request frame macro evidence: supplemental search.",
+            optional=True,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+
+    def _append_performance_comparison_frame_step(frame: dict, *, group: str, task_id: str) -> bool:
+        if "get_performance_comparison" not in allowed_tools:
+            return False
+        frame_tickers = _frame_tickers(frame)
+        if not frame_tickers and isinstance(tickers, list):
+            frame_tickers = [
+                str(ticker).strip().upper()
+                for ticker in tickers
+                if str(ticker).strip()
+            ]
+        frame_tickers = list(dict.fromkeys([ticker for ticker in frame_tickers if ticker]))[:6]
+        if len(frame_tickers) < 2:
+            return False
+        _append_tool_step(
+            "get_performance_comparison",
+            {"tickers": {ticker: ticker for ticker in frame_tickers}},
+            why="Request frame compare evidence: cross-subject performance comparison.",
+            optional=False,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        return True
+
+    def _append_backtest_frame_steps(frame: dict, *, group: str, task_id: str) -> bool:
+        required_results = set(_frame_required_results(frame))
+        action = _frame_workflow_action(frame)
+        action_name = str(action.get("name") or "").strip().lower()
+        if action_name != "backtest" and "backtest_result" not in required_results:
+            return False
+        raw_slots = action.get("slots")
+        slots = raw_slots if isinstance(raw_slots, dict) else {}
+        frame_tickers = _frame_tickers(frame)
+        ticker_for_backtest = (
+            str(slots.get("ticker") or "").strip().upper()
+            or (frame_tickers[0] if frame_tickers else "")
+            or primary_ticker
+            or ((tickers or [None])[0] if isinstance(tickers, list) else None)
+            or ""
+        )
+        strategy = str(slots.get("strategy") or "ma_cross").strip() or "ma_cross"
+        params = slots.get("strategy_params") or slots.get("params") or {}
+        _append_tool_step(
+            "run_strategy_backtest",
+            {
+                "ticker": ticker_for_backtest,
+                "strategy": strategy,
+                "params": dict(params if isinstance(params, dict) else {}),
+                "initial_cash": float(slots.get("initial_cash") or 100000.0),
+                "t_plus_one": bool(slots.get("t_plus_one", True)),
+            },
+            why="Request frame action result: run strategy backtest.",
+            optional=False,
+            parallel_group=group,
+            task_ids=[task_id],
+        )
+        return True
+
+    def _append_request_frame_steps() -> bool:
+        if not request_frames:
+            return False
+        appended = False
+        for index, frame in enumerate(request_frames[:16], 1):
+            frame_id = _frame_id(frame, index)
+            group = frame_id
+            required_evidence = _frame_required_evidence(frame)
+            required_results = _frame_required_results(frame)
+            if not required_evidence and not required_results and not _frame_workflow_action(frame):
+                continue
+
+            if _append_backtest_frame_steps(frame, group=group, task_id=frame_id):
+                appended = True
+
+            if "macro_context" in required_evidence or _frame_subject_type(frame) == "macro":
+                _append_macro_frame_steps(frame, group=group, task_id=frame_id)
+                appended = True
+
+            if "performance_comparison" in required_evidence:
+                appended = _append_performance_comparison_frame_step(frame, group=group, task_id=frame_id) or appended
+
+            per_ticker_evidence = [
+                kind
+                for kind in required_evidence
+                if kind not in {"macro_context", "performance_comparison"}
+            ]
+            if not per_ticker_evidence:
+                continue
+            frame_tickers = _frame_tickers(frame)
+            if not frame_tickers and primary_ticker and _frame_subject_type(frame) in {"company", "index", "commodity"}:
+                frame_tickers = [primary_ticker]
+            for ticker in frame_tickers[:12]:
+                _append_evidence_steps_for_ticker(
+                    ticker,
+                    per_ticker_evidence,
+                    group=group,
+                    task_ids=[frame_id],
+                    evidence_profile=_frame_evidence_profile(frame),
+                )
+                appended = True
+        return appended
+
+    def _request_frames_authoritatively_need_no_plan_steps() -> bool:
+        if ready_tasks:
+            return False
+        if not request_frames:
+            return False
+        for frame in request_frames:
+            render = frame.get("render_contract") if isinstance(frame.get("render_contract"), dict) else {}
+            if (
+                _frame_required_evidence(frame)
+                or _frame_required_results(frame)
+                or _frame_workflow_action(frame)
+                or str(frame.get("lane") or "").strip().lower() in {"research", "action", "report"}
+                or render.get("shape") == "compare"
+            ):
+                return False
+        return True
+
     def _append_report_mode_enrichment_steps() -> None:
         if output_mode != "investment_report" or not primary_ticker:
             return
@@ -1196,11 +1728,25 @@ def planner_stub(state: GraphState) -> dict:
                 _append_document_task_steps(task, group=group)
         return True
 
-    used_understanding_task_plan = _append_understanding_task_steps()
+    used_request_frame_plan = _append_request_frame_steps()
+    if not used_request_frame_plan and _request_frames_authoritatively_need_no_plan_steps():
+        used_request_frame_plan = True
+    used_understanding_task_plan = False if used_request_frame_plan else _append_understanding_task_steps()
 
-    if used_understanding_task_plan:
+    if used_request_frame_plan or used_understanding_task_plan:
         _append_report_mode_enrichment_steps()
         task_sections = []
+        if used_request_frame_plan:
+            for index, frame in enumerate(request_frames[:8], 1):
+                frame_subject = _frame_subject(frame)
+                label = str(
+                    frame_subject.get("label")
+                    or ", ".join(_frame_tickers(frame))
+                    or frame_subject.get("type")
+                    or f"frame_{index}"
+                )
+                obligations = "+".join(_frame_required_evidence(frame) + _frame_required_results(frame)) or "contract"
+                task_sections.append(f"{label}:{obligations}")
         for task in ready_tasks[:8]:
             label = str(task.get("subject_label") or ", ".join(_task_tickers(task)) or task.get("subject_type") or "任务")
             task_sections.append(f"{label}:{_task_operation_name(task)}")
@@ -1215,6 +1761,11 @@ def planner_stub(state: GraphState) -> dict:
         }
         try:
             plan = PlanIR.model_validate(raw_plan)
+            coverage_validation = validate_plan_coverage_for_frames(
+                request_frames=request_frames,
+                plan_ir=plan.model_dump(),
+                market=market,
+            ) if request_frames else None
             trace.update(
                 {
                     "planner": {
@@ -1223,9 +1774,13 @@ def planner_stub(state: GraphState) -> dict:
                         "steps": len(plan.steps),
                         "operation": operation,
                         "understanding_task_count": len(ready_tasks),
+                        "request_frame_count": len(request_frames),
+                        "request_frame_driven": used_request_frame_plan,
                     }
                 }
             )
+            if coverage_validation is not None:
+                trace["coverage_validator"] = coverage_validation
             return {"plan_ir": plan.model_dump(), "trace": trace}
         except Exception as exc:
             fallback = PlanIR(
@@ -1378,10 +1933,10 @@ def planner_stub(state: GraphState) -> dict:
             "run_strategy_backtest",
             {
                 "ticker": ticker_for_backtest,
-                "strategy": "ma_cross",
-                "params": {},
-                "initial_cash": 100000.0,
-                "t_plus_one": True,
+                "strategy": str(operation_params.get("strategy") or "ma_cross").strip() or "ma_cross",
+                "params": dict(operation_params.get("strategy_params") or operation_params.get("params") or {}),
+                "initial_cash": float(operation_params.get("initial_cash") or 100000.0),
+                "t_plus_one": bool(operation_params.get("t_plus_one", True)),
             },
             why="回测类请求调用策略回测工具并返回指标与交易明细。",
             optional=False,
@@ -1886,6 +2441,11 @@ def planner_stub(state: GraphState) -> dict:
 
     try:
         plan = PlanIR.model_validate(raw_plan)
+        coverage_validation = validate_plan_coverage_for_frames(
+            request_frames=request_frames,
+            plan_ir=plan.model_dump(),
+            market=market,
+        ) if request_frames else None
         trace.update(
             {
                 "planner": {
@@ -1896,6 +2456,8 @@ def planner_stub(state: GraphState) -> dict:
                 }
             }
         )
+        if coverage_validation is not None:
+            trace["coverage_validator"] = coverage_validation
         return {"plan_ir": plan.model_dump(), "trace": trace}
     except Exception as exc:
         fallback = PlanIR(

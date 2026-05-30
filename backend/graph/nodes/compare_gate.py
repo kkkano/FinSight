@@ -6,6 +6,12 @@ This module centralises the "should we render as comparison?" decision so
 that synthesize and render_stub always agree.  It replaces the old
 ``len(tickers) > 1`` heuristic that caused the pseudo-comparison bug.
 
+Current decision logic:
+  - request/intent ``shape=compare`` authorizes research comparison rendering;
+  - legacy ``operation=compare`` still requires valid
+    ``get_performance_comparison`` evidence before rendering the performance
+    comparison table.
+
 Decision logic:
   1. ``is_compare_operation(state)`` → True iff ``operation.name == "compare"``
   2. ``has_compare_evidence(state)`` → True iff the
@@ -15,9 +21,12 @@ Decision logic:
      normal multi-asset QA template and emit a ``compare_evidence_missing``
      decision note.
 """
+# Current contract: legacy performance compare needs tool evidence; request-frame
+# compare render is authorized by render_contract/render_intent shape=compare.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from backend.graph.state import GraphState
 
@@ -85,20 +94,59 @@ def has_compare_evidence(state: GraphState) -> bool:
 _REJECT_STATUS_REASONS = frozenset({"skipped", "escalation_not_needed"})
 
 
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _has_compare_shape(value: Any) -> bool:
+    payload = _dict_value(value)
+    return str(payload.get("shape") or "").strip().lower() == "compare"
+
+
+def _contract_requests_compare(contract: Any) -> bool:
+    payload = _dict_value(contract)
+    if not payload:
+        return False
+    return _has_compare_shape(payload.get("render_intent")) or _has_compare_shape(payload.get("render_contract"))
+
+
+def _frame_requests_compare(frame: Any) -> bool:
+    payload = _dict_value(frame)
+    if not payload:
+        return False
+    if _has_compare_shape(payload.get("render_contract")):
+        return True
+    return _contract_requests_compare(payload.get("intent_contract"))
+
+
+def has_compare_render_contract(state: GraphState) -> bool:
+    """Return True when the canonical request contract asks for compare rendering."""
+    if _contract_requests_compare(state.get("intent_contract")):
+        return True
+    if _frame_requests_compare(state.get("request_frame")):
+        return True
+    frames = state.get("request_frames")
+    if isinstance(frames, list):
+        return any(_frame_requests_compare(frame) for frame in frames)
+    return False
+
+
+def should_render_performance_compare(state: GraphState) -> bool:
+    """Return True for the legacy performance-comparison table path."""
+    return is_compare_operation(state) and has_compare_evidence(state)
+
+
 def should_render_compare(state: GraphState) -> bool:
     """
     Return True when the current request should use a comparison template.
 
-    This is the SINGLE source of truth for both synthesize and render.
-    The decision requires BOTH:
-      1. ``operation.name == "compare"``  (intent)
-      2. ``has_compare_evidence(state)``  (actual data from tool)
-
-    When (1) is True but (2) is False, callers should degrade to a
-    normal multi-asset QA template and emit a ``compare_evidence_missing``
-    decision note.
+    Contract compare and legacy performance compare are deliberately separate:
+      - request/intent contracts may ask for compare rendering from per-subject
+        evidence without calling ``get_performance_comparison``;
+      - legacy ``operation=compare`` still requires valid performance evidence
+        before the old table template is allowed.
     """
-    return is_compare_operation(state) and has_compare_evidence(state)
+    return has_compare_render_contract(state) or should_render_performance_compare(state)
 
 
 # ---------------------------------------------------------------------------
@@ -188,5 +236,7 @@ def _get_comparison_tool_result(state: GraphState) -> dict | None:
 __all__ = [
     "is_compare_operation",
     "has_compare_evidence",
+    "has_compare_render_contract",
+    "should_render_performance_compare",
     "should_render_compare",
 ]

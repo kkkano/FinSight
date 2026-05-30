@@ -27,6 +27,10 @@ export interface AgentPreferences {
   maxRounds: number;
   concurrentMode: boolean;
   timeoutSeconds: number;
+  enableLLMAnalysis: boolean;
+  reflectionRounds: number;
+  analysisTimeoutSeconds: number;
+  tokenAcquireTimeoutSeconds: number;
 }
 
 const STORAGE_KEY = 'finsight-agent-preferences';
@@ -38,6 +42,10 @@ const DEFAULT_PREFS: AgentPreferences = {
   maxRounds: 3,
   concurrentMode: true,
   timeoutSeconds: 0,
+  enableLLMAnalysis: false,
+  reflectionRounds: 0,
+  analysisTimeoutSeconds: 0,
+  tokenAcquireTimeoutSeconds: 0,
 };
 
 const normalizePreferences = (raw: unknown): AgentPreferences => {
@@ -70,7 +78,30 @@ const normalizePreferences = (raw: unknown): AgentPreferences => {
     ? Math.max(30, Math.min(1200, Math.trunc(timeoutRaw)))
     : 0;
 
-  return { agents, maxRounds, concurrentMode, timeoutSeconds };
+  const enableLLMAnalysis =
+    typeof parsed.enableLLMAnalysis === 'boolean'
+      ? parsed.enableLLMAnalysis
+      : DEFAULT_PREFS.enableLLMAnalysis;
+
+  const reflectionRaw = Number(parsed.reflectionRounds);
+  const reflectionRounds = Number.isFinite(reflectionRaw)
+    ? Math.max(0, Math.min(3, Math.trunc(reflectionRaw)))
+    : DEFAULT_PREFS.reflectionRounds;
+
+  const analysisTimeoutRaw = Number(parsed.analysisTimeoutSeconds);
+  const analysisTimeoutSeconds = Number.isFinite(analysisTimeoutRaw) && analysisTimeoutRaw > 0
+    ? Math.max(10, Math.min(120, Math.trunc(analysisTimeoutRaw)))
+    : 0;
+
+  const tokenAcquireTimeoutRaw = Number(parsed.tokenAcquireTimeoutSeconds);
+  const tokenAcquireTimeoutSeconds = Number.isFinite(tokenAcquireTimeoutRaw) && tokenAcquireTimeoutRaw > 0
+    ? Math.max(5, Math.min(60, Math.trunc(tokenAcquireTimeoutRaw)))
+    : 0;
+
+  return {
+    agents, maxRounds, concurrentMode, timeoutSeconds,
+    enableLLMAnalysis, reflectionRounds, analysisTimeoutSeconds, tokenAcquireTimeoutSeconds,
+  };
 };
 
 function loadPreferences(): AgentPreferences {
@@ -201,6 +232,43 @@ export const AgentControlPanel: React.FC = () => {
     [persist],
   );
 
+  const setEnableLLMAnalysis = useCallback(
+    (enabled: boolean) => {
+      persist((previous) => ({ ...previous, enableLLMAnalysis: enabled }));
+    },
+    [persist],
+  );
+
+  const setReflectionRounds = useCallback(
+    (value: number) => {
+      persist((previous) => ({
+        ...previous,
+        reflectionRounds: Math.max(0, Math.min(3, Math.trunc(value))),
+      }));
+    },
+    [persist],
+  );
+
+  const setAnalysisTimeoutSeconds = useCallback(
+    (value: number) => {
+      persist((previous) => ({
+        ...previous,
+        analysisTimeoutSeconds: value > 0 ? Math.max(10, Math.min(120, Math.trunc(value))) : 0,
+      }));
+    },
+    [persist],
+  );
+
+  const setTokenAcquireTimeoutSeconds = useCallback(
+    (value: number) => {
+      persist((previous) => ({
+        ...previous,
+        tokenAcquireTimeoutSeconds: value > 0 ? Math.max(5, Math.min(60, Math.trunc(value))) : 0,
+      }));
+    },
+    [persist],
+  );
+
   return (
     <Card className="p-4 bg-fin-bg/40">
       <h3 className="text-sm font-medium text-fin-text mb-3">
@@ -279,6 +347,88 @@ export const AgentControlPanel: React.FC = () => {
         />
         <div className="mt-1 text-2xs text-fin-muted">
           0 使用系统默认；正数会限制在 30-1200 秒。
+        </div>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-fin-border">
+        <h4 className="text-xs font-medium text-fin-text mb-2">研究深度设置</h4>
+
+        <label className="inline-flex items-center gap-2 text-xs text-fin-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={prefs.enableLLMAnalysis}
+            onChange={(e) => setEnableLLMAnalysis(e.target.checked)}
+            className="accent-fin-primary"
+          />
+          LLM 深度分析
+        </label>
+        <div className="mt-0.5 text-2xs text-fin-muted ml-5">
+          开启后 Agent 会用 LLM 解读原始数据，输出专业分析段落，但会增加响应时间。
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-fin-muted">反思轮数</span>
+            <span className="text-fin-text font-medium">{prefs.reflectionRounds}</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={3}
+            step={1}
+            value={prefs.reflectionRounds}
+            onChange={(e) => setReflectionRounds(Number(e.target.value))}
+            className="w-full accent-fin-primary h-1.5"
+          />
+          <div className="flex justify-between text-2xs text-fin-muted mt-0.5">
+            <span>0 (关闭)</span>
+            <span>3</span>
+          </div>
+          <div className="text-2xs text-fin-muted mt-0.5">
+            每轮反思检查信息缺口并补充搜索，会增加 LLM 调用次数。
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-fin-muted">分析超时（秒）</span>
+            <span className="text-fin-text font-medium">
+              {prefs.analysisTimeoutSeconds > 0 ? prefs.analysisTimeoutSeconds : '系统默认'}
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={120}
+            step={10}
+            value={prefs.analysisTimeoutSeconds}
+            onChange={(e) => setAnalysisTimeoutSeconds(Number(e.target.value))}
+            className="w-full rounded-md border border-fin-border bg-fin-bg px-2 py-1 text-xs text-fin-text outline-none focus:border-fin-primary"
+          />
+          <div className="text-2xs text-fin-muted mt-0.5">
+            单次 LLM 分析调用的超时时间。0 使用系统默认（8秒）。
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-fin-muted">令牌等待超时（秒）</span>
+            <span className="text-fin-text font-medium">
+              {prefs.tokenAcquireTimeoutSeconds > 0 ? prefs.tokenAcquireTimeoutSeconds : '系统默认'}
+            </span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={60}
+            step={5}
+            value={prefs.tokenAcquireTimeoutSeconds}
+            onChange={(e) => setTokenAcquireTimeoutSeconds(Number(e.target.value))}
+            className="w-full rounded-md border border-fin-border bg-fin-bg px-2 py-1 text-xs text-fin-text outline-none focus:border-fin-primary"
+          />
+          <div className="text-2xs text-fin-muted mt-0.5">
+            等待 API 速率限制令牌的超时时间。0 使用系统默认（8秒）。API 限流严格时建议增大。
+          </div>
         </div>
       </div>
 

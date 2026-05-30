@@ -29,6 +29,10 @@ def _render_chat(state: dict) -> str:
             "tasks": state.get("tasks", []),
             "memory_context": state.get("memory_context", {}),
             "reply_contract": state.get("reply_contract", {}),
+            "intent_contract": state.get("intent_contract"),
+            "intent_contracts": state.get("intent_contracts"),
+            "request_frame": state.get("request_frame"),
+            "request_frames": state.get("request_frames"),
             "artifacts": state.get("artifacts", {}),
             "plan_ir": state.get("plan_ir", {"steps": []}),
             "trace": state.get("trace", {}),
@@ -696,6 +700,45 @@ def test_earnings_performance_news_filter_uses_company_name_not_profile_body() -
 
     assert "NVIDIA Earnings: Key Metrics" in markdown
     assert "Lenovo shares jump" not in markdown
+
+
+def test_earnings_performance_uses_news_agent_evidence_as_guidance_news() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Apple earnings performance and guidance",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "earnings_performance"},
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "AAPL"}},
+                    {"id": "s2", "kind": "agent", "name": "news_agent", "inputs": {"ticker": "AAPL"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"ticker": "AAPL", "name": "Apple Inc"}},
+                    "s2": {
+                        "output": {
+                            "summary": "Recent earnings commentary focused on guidance details.",
+                            "articles": [],
+                            "evidence": [
+                                {
+                                    "text": "Apple earnings call points to stronger services guidance",
+                                    "url": "https://example.com/apple-guidance",
+                                    "source": "Example News",
+                                    "timestamp": "2026-05-22",
+                                }
+                            ],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Apple earnings call points to stronger services guidance" in markdown
+    assert "本轮没有可引用的财报新闻、电话会或指引来源" not in markdown
 
 
 def test_earnings_chat_uses_earnings_transcripts_as_guidance_sources() -> None:
@@ -1549,6 +1592,266 @@ def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:
     assert "[Li Auto delivery update](https://example.com/li)" in markdown
     assert "对股价的影响要看两点" not in markdown
 
+def test_chat_renderer_external_entity_impact_adds_deterministic_judgment() -> None:
+    markdown = _render_chat(
+        {
+            "query": "研究一下特斯拉会不会被 SpaceX 影响",
+            "subject": {"subject_type": "company", "tickers": ["TSLA"]},
+            "operation": {"name": "analyze_impact"},
+            "trace": {
+                "intent_contract": {
+                    "facets": ["external_entity_impact"],
+                    "budget_profile": "external_entity_impact_light",
+                    "required_evidence": ["price_snapshot", "news_context", "risk_profile"],
+                }
+            },
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "subject_label": "TSLA",
+                    "tickers": ["TSLA"],
+                    "operation": {
+                        "name": "analyze_impact",
+                        "params": {
+                            "facets": ["external_entity_impact"],
+                            "budget_profile": "external_entity_impact_light",
+                        },
+                    },
+                }
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "TSLA"}, "task_ids": ["task_1"]},
+                    {"id": "s2", "kind": "tool", "name": "get_company_news", "inputs": {"ticker": "TSLA"}, "task_ids": ["task_1"]},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 180.0, "change_percent": 1.2}},
+                    "s2": {"output": [{"title": "Tesla and SpaceX investor attention", "url": "https://example.com/tsla-spacex"}]},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "初步影响判断" in markdown
+    assert "间接叙事/风险影响" in markdown
+    assert "不能单独证明因果" in markdown
+
+
+def test_chat_renderer_valuation_compare_light_does_not_emit_missing_fundamental_agent() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA and AMD which valuation is more reasonable?",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "AMD"]},
+            "operation": {"name": "compare"},
+            "intent_contract": {
+                "facets": ["valuation"],
+                "budget_profile": "valuation_compare_light",
+                "primary_tickers": ["NVDA", "AMD"],
+                "per_ticker_required": True,
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+            },
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "subject_type": "company",
+                    "subject_label": "NVDA, AMD",
+                    "tickers": ["NVDA", "AMD"],
+                    "operation": {
+                        "name": "compare",
+                        "params": {
+                            "synthesis_only": True,
+                            "comparison_data_profile": "valuation_compare_light",
+                            "facets": ["valuation"],
+                        },
+                    },
+                },
+                {
+                    "id": "task_2",
+                    "subject_type": "company",
+                    "subject_label": "NVDA",
+                    "tickers": ["NVDA"],
+                    "operation": {"name": "investment_opinion", "params": {"evidence_focus": "valuation"}},
+                },
+                {
+                    "id": "task_3",
+                    "subject_type": "company",
+                    "subject_label": "AMD",
+                    "tickers": ["AMD"],
+                    "operation": {"name": "investment_opinion", "params": {"evidence_focus": "valuation"}},
+                },
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}, "task_ids": ["task_2"]},
+                    {"id": "s2", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "NVDA"}, "task_ids": ["task_2"]},
+                    {"id": "s3", "kind": "tool", "name": "get_earnings_estimates", "inputs": {"ticker": "NVDA"}, "task_ids": ["task_2"]},
+                    {"id": "s4", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AMD"}, "task_ids": ["task_3"]},
+                    {"id": "s5", "kind": "tool", "name": "get_company_info", "inputs": {"ticker": "AMD"}, "task_ids": ["task_3"]},
+                    {"id": "s6", "kind": "tool", "name": "get_earnings_estimates", "inputs": {"ticker": "AMD"}, "task_ids": ["task_3"]},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
+                    "s4": {"output": {"price": 50.0, "change_percent": -1.0}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Research comparison for NVDA, AMD" in markdown
+    assert "Valuation read" in markdown
+    assert "[data missing] fundamental_agent output was not available" not in markdown
+
+
+def test_chat_renderer_uses_request_frame_render_contract_for_compare_without_operation() -> None:
+    markdown = _render_chat(
+        {
+            "query": "NVDA and AMD which valuation is more reasonable?",
+            "subject": {"subject_type": "company", "tickers": ["NVDA", "AMD"]},
+            "operation": {"name": "qa"},
+            "request_frame": {
+                "frame_id": "frame_compare",
+                "lane": "research",
+                "relation": "rank",
+                "subject": {"type": "company", "tickers": ["NVDA", "AMD"]},
+                "evidence_obligations": ["price_snapshot", "company_profile", "earnings_estimates"],
+                "required_results": [],
+                "render_contract": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                "intent_contract": {
+                    "facets": ["valuation"],
+                    "primary_tickers": ["NVDA", "AMD"],
+                    "per_ticker_required": True,
+                    "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness"]},
+                    "required_evidence": ["price_snapshot", "company_profile", "earnings_estimates"],
+                },
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "NVDA"}, "task_ids": ["frame_compare"]},
+                    {"id": "s2", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AMD"}, "task_ids": ["frame_compare"]},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
+                    "s2": {"output": {"price": 50.0, "change_percent": -1.0}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Research comparison for NVDA, AMD" in markdown
+    assert "valuation_reasonableness" in markdown
+
+
+def test_chat_renderer_compare_contract_takes_priority_over_earnings_operation() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Compare AAPL and MSFT valuation and earnings performance",
+            "subject": {"subject_type": "company", "tickers": ["AAPL", "MSFT"]},
+            "operation": {"name": "earnings_performance"},
+            "intent_contract": {
+                "facets": ["valuation", "earnings"],
+                "budget_profile": "valuation_compare_light",
+                "primary_tickers": ["AAPL", "MSFT"],
+                "per_ticker_required": True,
+                "render_intent": {"shape": "compare", "dimensions": ["valuation_reasonableness", "earnings"]},
+                "required_evidence": [
+                    "price_snapshot",
+                    "company_profile",
+                    "earnings_estimates",
+                    "news_context",
+                    "filing_context",
+                ],
+            },
+            "tasks": [
+                {
+                    "id": "task_compare",
+                    "subject_type": "company",
+                    "subject_label": "AAPL, MSFT",
+                    "tickers": ["AAPL", "MSFT"],
+                    "operation": {
+                        "name": "compare",
+                        "params": {"comparison_data_profile": "valuation_compare_light"},
+                    },
+                },
+                {
+                    "id": "task_aapl_earnings",
+                    "subject_type": "company",
+                    "subject_label": "AAPL",
+                    "tickers": ["AAPL"],
+                    "operation": {"name": "earnings_performance"},
+                },
+            ],
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "AAPL"}},
+                    {"id": "s2", "kind": "tool", "name": "get_stock_price", "inputs": {"ticker": "MSFT"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {"output": {"price": 100.0, "change_percent": 1.0}},
+                    "s2": {"output": {"price": 200.0, "change_percent": -0.5}},
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Research comparison for AAPL, MSFT" in markdown
+    assert "valuation_reasonableness, earnings" in markdown
+    assert "**最新季度/财务表现**" not in markdown
+
+
+def test_earnings_performance_uses_local_filings_as_financial_fallback() -> None:
+    markdown = _render_chat(
+        {
+            "query": "腾讯财报表现如何",
+            "subject": {"subject_type": "company", "tickers": ["0700.HK"]},
+            "operation": {"name": "earnings_performance"},
+            "plan_ir": {
+                "steps": [
+                    {"id": "s1", "kind": "tool", "name": "get_local_market_filings", "inputs": {"ticker": "0700.HK"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "s1": {
+                        "output": {
+                            "ticker": "0700.HK",
+                            "market": "HK",
+                            "source": "local_disclosure_free",
+                            "filings": [
+                                {
+                                    "title": "Tencent 2026 first quarter results announcement",
+                                    "form": "quarterly_report",
+                                    "filing_date": "2026-05-14",
+                                    "primary_doc_description": "Revenue and profit improved year over year.",
+                                    "filing_url": "https://www1.hkexnews.hk/tencent-q1.pdf",
+                                    "source": "hkexnews.hk",
+                                }
+                            ],
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "Tencent 2026 first quarter results announcement" in markdown
+    assert "Revenue and profit improved year over year." in markdown
+    assert "本轮没有拿到季度财务事实表" not in markdown
+
 
 def test_chat_renderer_macro_research_does_not_use_stock_news_template() -> None:
     markdown = _render_chat(
@@ -1631,3 +1934,69 @@ def test_chat_renderer_filters_placeholder_evidence_for_risk_followup() -> None:
     assert "可用数据不足" in markdown or "不硬编风险点" in markdown
     assert "相关来源" not in markdown
     assert "仅供参考" not in markdown
+
+
+def test_chat_renderer_renders_holdings_contract_instead_of_price_fallback() -> None:
+    markdown = _render_chat(
+        {
+            "query": "Buffett latest 13F holdings in AAPL",
+            "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+            "operation": {"name": "qa"},
+            "request_frame": {
+                "lane": "research",
+                "subject": {"type": "company", "tickers": ["AAPL"]},
+                "evidence_obligations": ["price_snapshot", "holdings_ownership"],
+                "intent_contract": {
+                    "facets": ["price", "holdings"],
+                    "required_evidence": ["price_snapshot", "holdings_ownership"],
+                    "render_intent": {"shape": "answer", "dimensions": ["ownership"]},
+                },
+            },
+            "plan_ir": {
+                "steps": [
+                    {"id": "price", "name": "get_stock_price", "inputs": {"ticker": "AAPL"}},
+                    {"id": "insider", "name": "get_insider_transactions", "inputs": {"ticker": "AAPL"}},
+                    {"id": "holders", "name": "get_institution_holdings_by_ticker", "inputs": {"ticker": "AAPL"}},
+                ]
+            },
+            "artifacts": {
+                "step_results": {
+                    "price": {"output": {"ticker": "AAPL", "price": 308.82, "change_percent": 1.26}},
+                    "insider": {
+                        "output": {
+                            "source": "sec_form4",
+                            "ticker": "AAPL",
+                            "transactions": [
+                                {
+                                    "transaction_date": "2026-05-10",
+                                    "owner_name": "Example Officer",
+                                    "transaction_code": "P",
+                                    "acquired_disposed": "A",
+                                    "shares": 100.0,
+                                    "price_per_share": 185.5,
+                                }
+                            ],
+                            "regulatory_notes": {"form_4_due": "Form 4 is usually filed within two business days."},
+                            "error": None,
+                        }
+                    },
+                    "holders": {
+                        "output": {
+                            "source": "sec_13f",
+                            "ticker": "AAPL",
+                            "holders": [],
+                            "capability_note": "Free SEC recent submissions are holder-centric.",
+                            "error": None,
+                        }
+                    },
+                }
+            },
+        }
+    )
+
+    _assert_chat_contract(markdown)
+    assert "持仓/所有权证据" in markdown
+    assert "SEC Form 4 insider transactions" in markdown
+    assert "Example Officer" in markdown
+    assert "no by-ticker 13F holder rows" in markdown
+    assert "最新价格约为" not in markdown

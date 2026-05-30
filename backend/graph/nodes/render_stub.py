@@ -10,6 +10,7 @@ from urllib.parse import quote_plus
 
 from langchain_core.messages import AIMessage
 
+from backend.graph.intent_contract import is_research_compare_contract
 from backend.graph.nodes.chat_renderer import render_chat_markdown
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
@@ -612,7 +613,7 @@ def render_stub(state: GraphState) -> dict:
         # When evidence is missing, should_render_compare returns False and we
         # fall through to the normal company template.  The decision_note is
         # emitted upstream in synthesize.
-        elif should_render_compare(state):
+        elif should_render_compare(state) or is_research_compare_contract(state.get("intent_contract") if isinstance(state.get("intent_contract"), dict) else None):
             template_key = "company_compare_report" if output_mode == "investment_report" else "company_compare_brief"
         else:
             template_key = "company_report" if output_mode == "investment_report" else "company_brief"

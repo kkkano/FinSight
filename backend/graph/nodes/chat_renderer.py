@@ -10,6 +10,7 @@ from urllib.parse import quote_plus
 
 from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
+from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
 from backend.utils.quote import parse_quote_payload
 
 try:  # Optional live-news fallback for link-required chat answers.
@@ -231,7 +232,13 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
             or parsed.get("releases")
             or parsed.get("transcripts")
         )
-        rows = nested if isinstance(nested, list) else [parsed]
+        evidence = parsed.get("evidence")
+        if isinstance(nested, list) and nested:
+            rows = nested
+        elif isinstance(evidence, list):
+            rows = evidence
+        else:
+            rows = [parsed]
     else:
         rows = []
 
@@ -239,18 +246,19 @@ def _news_items(output: Any, limit: int = 5) -> list[dict[str, str]]:
     for row in rows:
         if not isinstance(row, dict):
             continue
-        title = str(row.get("title") or row.get("headline") or row.get("summary") or "").strip()
+        title = str(row.get("title") or row.get("headline") or row.get("text") or row.get("summary") or "").strip()
         if not title:
             continue
         url = str(row.get("url") or row.get("link") or row.get("article_url") or "").strip()
         if not _is_citable_url(url):
             url = ""
         source = str(row.get("source") or row.get("publisher") or "").strip()
-        published = str(row.get("published_at") or row.get("published_date") or row.get("date") or "").strip()
+        published = str(row.get("published_at") or row.get("published_date") or row.get("date") or row.get("timestamp") or "").strip()
         snippet = str(
             row.get("snippet")
             or row.get("description")
             or row.get("content")
+            or row.get("text")
             or row.get("summary")
             or ""
         ).strip()
@@ -882,6 +890,164 @@ def _technical_by_ticker(state: GraphState) -> dict[str, str]:
     return rows
 
 
+def _request_requires_holdings(state: GraphState) -> bool:
+    if "holdings" in _operation_names(state):
+        return True
+    contract = _intent_contract(state)
+    required = contract.get("required_evidence")
+    if isinstance(required, list) and "holdings_ownership" in {str(item) for item in required}:
+        return True
+    facets = contract.get("facets")
+    if isinstance(facets, list) and "holdings" in {str(item) for item in facets}:
+        return True
+    frames: list[Any] = []
+    frame = state.get("request_frame")
+    if isinstance(frame, dict):
+        frames.append(frame)
+    raw_frames = state.get("request_frames")
+    if isinstance(raw_frames, list):
+        frames.extend(item for item in raw_frames if isinstance(item, dict))
+    for item in frames:
+        evidence = item.get("evidence_obligations")
+        if isinstance(evidence, list) and "holdings_ownership" in {str(kind) for kind in evidence}:
+            return True
+    return False
+
+
+def _format_compact_usd_thousands(value: Any) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return ""
+    if amount >= 1_000_000:
+        return f"${amount / 1_000_000:.2f}B"
+    if amount >= 1_000:
+        return f"${amount / 1_000:.1f}M"
+    return f"${amount:.0f}K"
+
+
+def _format_holdings_number(value: Any) -> str:
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        return f"{value:,.0f}" if value.is_integer() else f"{value:,.2f}"
+    text = str(value or "").strip()
+    return text
+
+
+def _render_holdings_markdown(state: GraphState) -> str:
+    target = ", ".join(_tickers(state)) or str(state.get("query") or "相关标的").strip() or "相关标的"
+    lines: list[str] = [f"{target} 持仓/所有权证据："]
+    added_detail = False
+    notes: list[str] = []
+
+    for step, output in _step_outputs(state):
+        name = str(step.get("name") or "").strip()
+        if name not in {
+            "get_institutional_holdings",
+            "get_institution_holdings_by_ticker",
+            "get_insider_transactions",
+            "get_holdings_overlap",
+        }:
+            continue
+        payload = _parse_jsonish(output)
+        if not isinstance(payload, dict):
+            continue
+
+        error = str(payload.get("error") or "").strip()
+        message = str(payload.get("message") or "").strip()
+        if error:
+            label = name.replace("_", " ")
+            notes.append(f"{label}: {message or error}")
+            continue
+
+        if name == "get_insider_transactions":
+            transactions = [row for row in (payload.get("transactions") or []) if isinstance(row, dict)]
+            ticker = str(payload.get("ticker") or "").strip().upper() or target
+            if transactions:
+                lines.append(f"- SEC Form 4 insider transactions for {ticker}:")
+                for row in transactions[:5]:
+                    date = str(row.get("transaction_date") or row.get("filing_date") or "").strip()
+                    owner = str(row.get("owner_name") or row.get("reporting_owner_name") or "").strip()
+                    code = str(row.get("transaction_code") or "?").strip()
+                    side = str(row.get("acquired_disposed") or "").strip()
+                    shares = _format_holdings_number(row.get("shares"))
+                    price = _format_holdings_number(row.get("price_per_share"))
+                    parts = [part for part in (date, owner, f"code {code}", side, f"{shares} shares" if shares else "", f"@ ${price}" if price else "") if part]
+                    lines.append(f"  - {' | '.join(parts)}")
+                added_detail = True
+            else:
+                lines.append(f"- SEC Form 4: no recent parsed insider transactions for {ticker} in this window.")
+                added_detail = True
+            note = (payload.get("regulatory_notes") or {}).get("form_4_due") if isinstance(payload.get("regulatory_notes"), dict) else ""
+            if note:
+                notes.append(str(note))
+
+        elif name == "get_institution_holdings_by_ticker":
+            ticker = str(payload.get("ticker") or "").strip().upper() or target
+            holders = [row for row in (payload.get("holders") or []) if isinstance(row, dict)]
+            if holders:
+                lines.append(f"- Institutional holders for {ticker}:")
+                for row in holders[:5]:
+                    holder = str(row.get("holder_name") or row.get("name") or "").strip()
+                    shares = _format_holdings_number(row.get("shares"))
+                    value = _format_compact_usd_thousands(row.get("value_usd_thousands"))
+                    parts = [part for part in (holder, f"{shares} shares" if shares else "", value) if part]
+                    if parts:
+                        lines.append(f"  - {' | '.join(parts)}")
+                added_detail = True
+            else:
+                capability = str(payload.get("capability_note") or "").strip()
+                lines.append(f"- Institutional holders for {ticker}: no by-ticker 13F holder rows were returned by this free SEC path.")
+                if capability:
+                    notes.append(capability)
+                added_detail = True
+
+        elif name == "get_institutional_holdings":
+            holder = str(payload.get("holder_name") or payload.get("cik") or "institution").strip()
+            quarter = str(payload.get("quarter") or "").strip()
+            holdings = [row for row in (payload.get("holdings") or []) if isinstance(row, dict)]
+            if holdings:
+                suffix = f" ({quarter})" if quarter else ""
+                lines.append(f"- {holder} 13F holdings{suffix}:")
+                for row in holdings[:8]:
+                    ticker = str(row.get("ticker") or "").strip().upper()
+                    issuer = str(row.get("issuer_name") or "").strip()
+                    shares = _format_holdings_number(row.get("shares"))
+                    value = _format_compact_usd_thousands(row.get("value_usd_thousands"))
+                    name_part = ticker or issuer
+                    parts = [part for part in (name_part, issuer if ticker and issuer else "", f"{shares} shares" if shares else "", value) if part]
+                    if parts:
+                        lines.append(f"  - {' | '.join(parts)}")
+                added_detail = True
+            else:
+                lines.append(f"- {holder} 13F: no recent matching holdings table was returned.")
+                added_detail = True
+            note = (payload.get("regulatory_notes") or {}).get("form_13f_due") if isinstance(payload.get("regulatory_notes"), dict) else ""
+            if note:
+                notes.append(str(note))
+
+        elif name == "get_holdings_overlap":
+            holder = str(payload.get("holder_name") or payload.get("cik") or "institution").strip()
+            overlap = [str(item).strip().upper() for item in (payload.get("overlap_tickers") or []) if str(item).strip()]
+            portfolio = [str(item).strip().upper() for item in (payload.get("portfolio_tickers") or []) if str(item).strip()]
+            lines.append(f"- Holdings overlap with {holder}: {', '.join(overlap) if overlap else 'no overlap found'}")
+            if portfolio:
+                lines.append(f"  - Portfolio checked: {', '.join(portfolio)}")
+            added_detail = True
+
+    if not added_detail:
+        lines.append("- 本轮识别为持仓/内部人/13F 查询，但没有拿到可用的 SEC holdings 工具输出；我不会改用价格数据来冒充持仓答案。")
+
+    if notes:
+        lines.append("")
+        lines.append("说明：")
+        for note in list(dict.fromkeys(notes))[:4]:
+            lines.append(f"- {note}")
+
+    return _finalize_chat_markdown(lines, state)
+
+
 def _render_vars(state: GraphState) -> dict[str, str]:
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     raw = artifacts.get("render_vars") if isinstance(artifacts.get("render_vars"), dict) else {}
@@ -1123,30 +1289,58 @@ def _format_compact_number(value: Any, *, money: bool = False) -> str:
 def _latest_quarter_facts(state: GraphState) -> list[str]:
     payload = _first_matching_output(state, {"get_sec_company_facts_quarterly"})
     parsed = _parse_jsonish(payload)
+    if isinstance(parsed, dict) and not parsed.get("error"):
+        periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
+        period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
+        metric_specs = (
+            ("revenue", "营收", True),
+            ("gross_profit", "毛利", True),
+            ("operating_income", "经营利润", True),
+            ("net_income", "净利润", True),
+            ("eps", "EPS", False),
+            ("operating_cash_flow", "经营现金流", True),
+            ("free_cash_flow", "自由现金流", True),
+        )
+
+        lines: list[str] = []
+        for key, label, money in metric_specs:
+            values = parsed.get(key)
+            if not isinstance(values, list) or not values:
+                continue
+            formatted = _format_compact_number(values[0], money=money)
+            if formatted:
+                lines.append(f"{period_label} {label} {formatted}")
+            if len(lines) >= 4:
+                break
+        if lines:
+            return lines
+    return _local_filing_fact_lines(state)
+
+
+def _local_filing_fact_lines(state: GraphState) -> list[str]:
+    payload = _first_matching_output(state, {"get_local_market_filings"})
+    parsed = _parse_jsonish(payload)
     if not isinstance(parsed, dict) or parsed.get("error"):
         return []
-
-    periods = parsed.get("periods") if isinstance(parsed.get("periods"), list) else []
-    period_label = str(periods[0] if periods else "最新季度").strip() or "最新季度"
-    metric_specs = (
-        ("revenue", "营收", True),
-        ("gross_profit", "毛利", True),
-        ("operating_income", "经营利润", True),
-        ("net_income", "净利润", True),
-        ("eps", "EPS", False),
-        ("operating_cash_flow", "经营现金流", True),
-        ("free_cash_flow", "自由现金流", True),
-    )
-
+    filings = parsed.get("filings") if isinstance(parsed.get("filings"), list) else []
     lines: list[str] = []
-    for key, label, money in metric_specs:
-        values = parsed.get(key)
-        if not isinstance(values, list) or not values:
+    for filing in filings:
+        if not isinstance(filing, dict):
             continue
-        formatted = _format_compact_number(values[0], money=money)
-        if formatted:
-            lines.append(f"{period_label} {label} {formatted}")
-        if len(lines) >= 4:
+        title = str(filing.get("title") or filing.get("form") or "本地交易所公告").strip()
+        description = str(
+            filing.get("primary_doc_description")
+            or filing.get("summary")
+            or filing.get("snippet")
+            or ""
+        ).strip()
+        date = str(filing.get("filing_date") or filing.get("date") or filing.get("published_at") or "").strip()
+        line = " ".join(part for part in (date, title) if part)
+        if description and description not in line:
+            line = f"{line}：{description}" if line else description
+        if line:
+            lines.append(line)
+        if len(lines) >= 3:
             break
     return lines
 
@@ -1684,6 +1878,201 @@ def _render_compare_or_basket_markdown(
     return _finalize_chat_markdown(lines, state)
 
 
+def _intent_contract(state: GraphState) -> dict[str, Any]:
+    contract = state.get("intent_contract")
+    if isinstance(contract, dict):
+        return contract
+    understanding = state.get("understanding")
+    if isinstance(understanding, dict):
+        contract = understanding.get("intent_contract")
+        if isinstance(contract, dict):
+            return contract
+    trace = state.get("trace")
+    if isinstance(trace, dict):
+        contract = trace.get("intent_contract")
+        if isinstance(contract, dict):
+            return contract
+        contracts = trace.get("intent_contracts")
+        if isinstance(contracts, list):
+            for item in contracts:
+                if isinstance(item, dict):
+                    return item
+    contracts = state.get("intent_contracts")
+    if isinstance(contracts, list):
+        for item in contracts:
+            if isinstance(item, dict):
+                return item
+    frame = state.get("request_frame")
+    if isinstance(frame, dict):
+        frame_contract = frame.get("intent_contract")
+        if isinstance(frame_contract, dict):
+            return frame_contract
+        render_contract = frame.get("render_contract")
+        if isinstance(render_contract, dict):
+            subject = frame.get("subject") if isinstance(frame.get("subject"), dict) else {}
+            tickers = subject.get("tickers") if isinstance(subject.get("tickers"), list) else []
+            evidence = frame.get("evidence_obligations") if isinstance(frame.get("evidence_obligations"), list) else []
+            return {
+                "render_intent": dict(render_contract),
+                "primary_tickers": [str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()],
+                "per_ticker_required": bool(evidence),
+                "required_evidence": list(evidence),
+            }
+    frames = state.get("request_frames")
+    if isinstance(frames, list):
+        for frame in frames:
+            if not isinstance(frame, dict):
+                continue
+            frame_contract = frame.get("intent_contract")
+            if isinstance(frame_contract, dict):
+                return frame_contract
+            render_contract = frame.get("render_contract")
+            if isinstance(render_contract, dict):
+                subject = frame.get("subject") if isinstance(frame.get("subject"), dict) else {}
+                tickers = subject.get("tickers") if isinstance(subject.get("tickers"), list) else []
+                evidence = frame.get("evidence_obligations") if isinstance(frame.get("evidence_obligations"), list) else []
+                return {
+                    "render_intent": dict(render_contract),
+                    "primary_tickers": [str(ticker).strip().upper() for ticker in tickers if str(ticker).strip()],
+                    "per_ticker_required": bool(evidence),
+                    "required_evidence": list(evidence),
+                }
+    return {}
+
+
+def _has_contract_facet(state: GraphState, facet: str) -> bool:
+    facets = _intent_contract(state).get("facets")
+    return isinstance(facets, list) and facet in {str(item) for item in facets}
+
+
+def _external_entity_impact_fallback_lines(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    news_map: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    if not _has_contract_facet(state, "external_entity_impact"):
+        return []
+    has_news = any(items for items in news_map.values())
+    has_price = any((payload or {}).get("price") for payload in prices.values())
+    lines = [
+        "初步影响判断：",
+        "- 这类问题要按“外部实体/主题 -> 公司基本面、估值叙事、管理层注意力、市场情绪”来拆，不应该只做概念解释。",
+    ]
+    if has_news:
+        lines.append("- 本轮已经抓到相关新闻和行情锚点；按现有证据，更稳妥的判断是先视为间接叙事/风险影响，除非新闻或公告显示明确的收入、成本、融资、持股或监管传导。")
+    else:
+        lines.append("- 本轮没有抓到足够新闻证据，不能硬编直接影响结论；当前只能把它列为待验证的外部风险主题。")
+    if has_price:
+        lines.append("- 股价涨跌只能说明市场反应，不能单独证明因果；后续要看同一时间段是否有公司公告、权威报道或分析师下修/上修预期。")
+    lines.append("- 下一步重点看：是否有跨公司资金/业务关系、管理层注意力分散、供应链/技术协同、或市场把两者叙事绑定交易。")
+    return lines
+
+
+def _understanding_v2(state: GraphState) -> dict[str, Any]:
+    payload = state.get("understanding_v2")
+    if isinstance(payload, dict):
+        return payload
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    payload = understanding.get("v2") if isinstance(understanding, dict) else {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _v2_profiles(state: GraphState) -> set[str]:
+    profiles: set[str] = set()
+    for requirement in (_understanding_v2(state).get("evidence_requirements") or []):
+        if not isinstance(requirement, dict):
+            continue
+        profile = str(requirement.get("profile") or "").strip()
+        if profile:
+            profiles.add(profile)
+    for task in _tasks(state):
+        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
+        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
+        for key in ("evidence_profile", "comparison_data_profile", "budget_profile"):
+            profile = str(params.get(key) or "").strip()
+            if profile:
+                profiles.add(profile)
+        if str(params.get("evidence_focus") or "").strip().lower() == "valuation":
+            profiles.add(VALUATION_COMPARE_LIGHT_PROFILE)
+    return profiles
+
+
+def _v2_requires_research_compare(state: GraphState) -> bool:
+    v2 = _understanding_v2(state)
+    if not v2.get("relations"):
+        return False
+    return VALUATION_COMPARE_LIGHT_PROFILE in _v2_profiles(state)
+
+
+def _render_research_compare_markdown(
+    state: GraphState,
+    *,
+    prices: dict[str, dict[str, Any]],
+    news_map: dict[str, list[dict[str, str]]],
+    evidence_items: list[dict[str, str]],
+) -> str:
+    contract = _intent_contract(state)
+    v2 = _understanding_v2(state)
+    scope = v2.get("scope") if isinstance(v2.get("scope"), dict) else {}
+    if contract:
+        raw_tickers = contract.get("primary_tickers") if isinstance(contract.get("primary_tickers"), list) else _tickers(state)
+        tickers = [str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()]
+        facets = {str(item) for item in (contract.get("facets") if isinstance(contract.get("facets"), list) else [])}
+        render_intent = contract.get("render_intent") if isinstance(contract.get("render_intent"), dict) else {}
+        dimensions = (
+            [str(item) for item in render_intent.get("dimensions") if str(item).strip()]
+            if isinstance(render_intent.get("dimensions"), list)
+            else []
+        )
+        focus = ", ".join(dimensions or sorted(facets) or ["research"])
+        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}: focus={focus}."
+        omitted = contract.get("omitted_tickers") if isinstance(contract.get("omitted_tickers"), list) else []
+    else:
+        raw_tickers = scope.get("primary_tickers") if isinstance(scope.get("primary_tickers"), list) else _tickers(state)
+        tickers = [str(ticker).strip().upper() for ticker in raw_tickers if str(ticker).strip()]
+        facets = {
+            str(facet.get("name") or "").strip()
+            for facet in (v2.get("facets") or [])
+            if isinstance(facet, dict) and str(facet.get("name") or "").strip()
+        }
+        headline = f"Research comparison for {', '.join(tickers) or 'these tickers'}."
+        omitted = scope.get("omitted_tickers") if isinstance(scope.get("omitted_tickers"), list) else []
+    label = ", ".join(tickers) or "these tickers"
+    lines: list[str] = [
+        headline,
+        "",
+        "Per-ticker evidence",
+    ]
+    for ticker in tickers[:6]:
+        lines.append(f"- {ticker}:")
+        price = prices.get(ticker)
+        if price and price.get("price"):
+            lines.append(f"  - {_format_price_line(ticker, price)}")
+        else:
+            lines.append("  - [data missing] current price evidence was not available.")
+        if "valuation" in facets:
+            lines.append("  - Valuation evidence uses company context, earnings expectations, and fundamental review.")
+
+    fundamental = _agent_summary(state, {"fundamental_agent"})
+    if fundamental:
+        lines.extend(["", "Fundamental / valuation read", f"- {fundamental}"])
+    elif "valuation" in facets:
+        lines.extend([
+            "",
+            "Valuation read",
+            "- Quick valuation pass is based on current price, company context, and earnings-expectation evidence for each ticker.",
+        ])
+
+    omitted = [str(ticker).strip().upper() for ticker in omitted if str(ticker).strip()]
+    if omitted:
+        lines.extend(["", f"Not covered in this lightweight chat pass: {', '.join(omitted)}."])
+
+    sources = [item for items in news_map.values() for item in items] or evidence_items
+    _append_sources(lines, sources)
+    return _finalize_chat_markdown(lines, state)
+
+
 def render_chat_markdown(state: GraphState) -> str:
     query = str(state.get("query") or "").strip()
     ticker_label = ", ".join(_tickers(state)) or "这个标的"
@@ -1796,6 +2185,19 @@ def render_chat_markdown(state: GraphState) -> str:
         _append_sources(lines, news or evidence_items)
         return _finalize_chat_markdown(lines, state)
 
+    intent_contract = _intent_contract(state)
+    render_intent = intent_contract.get("render_intent") if isinstance(intent_contract.get("render_intent"), dict) else {}
+    if (
+        render_intent.get("shape") == "compare"
+        and bool(intent_contract.get("per_ticker_required"))
+    ) or _v2_requires_research_compare(state):
+        return _render_research_compare_markdown(
+            state,
+            prices=prices,
+            news_map=news_map,
+            evidence_items=evidence_items,
+        )
+
     if "earnings_impact" in operations:
         return _render_earnings_impact_markdown(
             state,
@@ -1818,6 +2220,9 @@ def render_chat_markdown(state: GraphState) -> str:
             technical_map=technical_map,
             evidence_items=evidence_items,
         )
+
+    if _request_requires_holdings(state):
+        return _render_holdings_markdown(state)
 
     if "price" in operations and "fetch" not in operations and "technical" not in operations and "analyze_impact" not in operations:
         target_tickers = _tickers(state) or list(prices.keys()) or [ticker_label]
@@ -1870,6 +2275,14 @@ def render_chat_markdown(state: GraphState) -> str:
             lines.append("")
             if analysis_block:
                 lines.append(analysis_block)
+            elif _has_contract_facet(state, "external_entity_impact"):
+                lines.extend(
+                    _external_entity_impact_fallback_lines(
+                        state,
+                        prices=prices,
+                        news_map=news_map,
+                    )
+                )
             elif _has_macro_context(state):
                 lines.extend(_macro_mechanism_lines(state))
             else:
@@ -1892,6 +2305,14 @@ def render_chat_markdown(state: GraphState) -> str:
                 _append_missing_article_url_note(lines, fallback_items[:4])
                 if analysis_block:
                     _append_render_var_block(lines, analysis_block)
+                elif _has_contract_facet(state, "external_entity_impact"):
+                    lines.extend(
+                        _external_entity_impact_fallback_lines(
+                            state,
+                            prices=prices,
+                            news_map=news_map,
+                        )
+                    )
                 elif _has_macro_context(state):
                     lines.append("")
                     lines.extend(_macro_mechanism_lines(state))
