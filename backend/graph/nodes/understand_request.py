@@ -2848,6 +2848,12 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                 ),
                 output_mode=output_mode,
             )
+            # skill fast path：当 _company_operations 已判定为 valuation_sanity（确定性轻量
+            # 估值合理性诉求，带 return 的快路径）时，尊重该判定，不让 main 的 intent_contract
+            # legacy operation（通常会泛化成 investment_opinion）覆盖它。
+            fallback_primary_op = str(
+                ((fallback_operations[0] if fallback_operations else None) or {}).get("name") or ""
+            ).strip()
             contract_operations = (
                 [legacy_operation_for_contract(company_intent_contract, subject_type="company")]
                 if (
@@ -2855,6 +2861,7 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
                     and isinstance(company_intent_contract, dict)
                     and company_intent_contract.get("required_evidence")
                     and output_mode != "investment_report"
+                    and fallback_primary_op != "valuation_sanity"
                 )
                 else []
             )
