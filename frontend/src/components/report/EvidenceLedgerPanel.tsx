@@ -63,7 +63,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
 
       {!ledger ? (
         <div className="px-4 pb-4">
-          <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary/60 px-3 py-3 text-xs text-fin-muted">
+          <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary px-3 py-3 text-xs text-fin-muted">
             暂无证据账本
           </div>
         </div>
@@ -161,7 +161,7 @@ export const EvidenceLedgerPanel: React.FC<EvidenceLedgerPanelProps> = ({ ledger
             })}
 
             {claims.length === 0 && (
-              <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary/50 px-3 py-2 text-xs text-fin-muted">
+              <div className="rounded-lg border border-dashed border-fin-border bg-fin-bg-secondary px-3 py-2 text-xs text-fin-muted">
                 暂无结构化 claim
               </div>
             )}
