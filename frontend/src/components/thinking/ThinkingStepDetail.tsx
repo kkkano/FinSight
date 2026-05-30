@@ -216,7 +216,7 @@ export const ThinkingStepDetail: React.FC<ThinkingStepDetailProps> = ({
   traceViewMode,
 }) => {
   return (
-    <div className="px-3 pb-2 pt-1 border-t border-fin-border/30 bg-fin-bg/30">
+    <div className="px-3 py-2 bg-fin-bg/20">
       {traceViewMode === 'user' ? (
         <div className="space-y-2">
           {renderDecisionSummary(result) || (
