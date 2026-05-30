@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
@@ -110,7 +110,6 @@ const extractTickers = (text: string): string[] => {
     addTicker(match[1]);
   }
 
-  // Plain words: only accept user-explicit uppercase tokens (e.g. AAPL, TSLA).
   const alphaTokens = text.match(/\b[A-Za-z]{1,6}\b/g) ?? [];
   for (const token of alphaTokens) {
     if (token !== token.toUpperCase()) continue;
@@ -121,6 +120,197 @@ const extractTickers = (text: string): string[] => {
 
   return tickers.slice(0, MAX_AUTO_CHART_TICKERS);
 };
+
+// ── Shared sub-components ──
+
+const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence_pool }) => (
+  <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
+    <div className="text-[11px] text-fin-muted mb-2">Evidence ({evidence_pool.length})</div>
+    <div className="flex flex-wrap gap-2">
+      {evidence_pool.map((ev, idx) => {
+        const label = ev.title || ev.source || ev.url || `Source ${idx + 1}`;
+        if (ev.url) {
+          return <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />;
+        }
+        return (
+          <span key={`ev-${idx}`} className="px-2 py-1 rounded-full border border-fin-border/70 bg-fin-panel text-[11px] text-fin-text">
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  </div>
+);
+
+const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; as_of?: string | null; tried_sources?: string[] }> = ({
+  data_origin, fallback_used, as_of, tried_sources,
+}) => {
+  if (!data_origin) return null;
+  return (
+    <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
+      <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
+        来源: {data_origin} {fallback_used ? '(兜底)' : ''}
+      </span>
+      {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {as_of}</span>}
+      {tried_sources && tried_sources.length > 0 && (
+        <span className="text-2xs text-fin-muted/70">尝试: {tried_sources.join(' → ')}</span>
+      )}
+    </div>
+  );
+};
+
+type MessagePayload = {
+  id: string;
+  role: string;
+  content: string;
+  isLoading?: boolean;
+  report?: ReportIR;
+  evidence_pool?: EvidenceItem[];
+  data_origin?: string;
+  fallback_used?: boolean;
+  as_of?: string | null;
+  tried_sources?: string[];
+  thinking?: ThinkingStep[];
+};
+
+const AssistantContent: React.FC<{
+  msg: MessagePayload;
+  onRetry: () => void;
+  onDelete: () => void;
+  actionsInline?: boolean;
+}> = ({ msg, onRetry, onDelete, actionsInline }) => (
+  <>
+    {msg.isLoading ? (
+      msg.content ? (
+        <MessageWithChart content={msg.content} />
+      ) : (
+        <div className="py-4 flex items-center justify-start">
+          <LoadingDots />
+        </div>
+      )
+    ) : msg.report ? (
+      <ReportView report={msg.report} />
+    ) : (
+      <MessageWithChart content={msg.content} />
+    )}
+    {msg.evidence_pool && msg.evidence_pool.length > 0 && (
+      <EvidenceSection evidence_pool={msg.evidence_pool} />
+    )}
+    <DataOriginTag
+      data_origin={msg.data_origin}
+      fallback_used={msg.fallback_used}
+      as_of={msg.as_of}
+      tried_sources={msg.tried_sources}
+    />
+    {msg.thinking && msg.thinking.length > 0 && (
+      <ThinkingProcess thinking={msg.thinking} />
+    )}
+    <MessageActions
+      messageId={msg.id}
+      content={msg.content}
+      thinking={msg.thinking}
+      report={msg.report}
+      onRetry={onRetry}
+      onDelete={onDelete}
+      inline={actionsInline}
+    />
+  </>
+);
+
+// ── Avatar ──
+
+const Avatar: React.FC<{ role: string; size?: number }> = ({ role, size = 32 }) => {
+  const iconSize = Math.round(size * 0.5);
+  return (
+    <div
+      className={clsx(
+        "flex-shrink-0 rounded-full flex items-center justify-center",
+        role === 'user' ? "bg-fin-primary text-white" : "bg-fin-panel border border-fin-border text-fin-primary"
+      )}
+      style={{ width: size, height: size }}
+    >
+      {role === 'user' ? <User size={iconSize} /> : <Bot size={iconSize} />}
+    </div>
+  );
+};
+
+// ── Bubble Message (original layout) ──
+
+const BubbleMessage: React.FC<{
+  msg: MessagePayload;
+  onRetry: () => void;
+  onDelete: () => void;
+}> = ({ msg, onRetry, onDelete }) => (
+  <div className={clsx("flex w-full animate-slide-up", msg.role === 'user' ? "justify-end" : "justify-start")}>
+    <div className={clsx(
+      "flex",
+      msg.role === 'user'
+        ? "max-w-[85%] md:max-w-[72%] lg:max-w-[60%] flex-row-reverse"
+        : "max-w-[97%] lg:max-w-[90%] xl:max-w-[82%] flex-row"
+    )}>
+      <div className="mx-2"><Avatar role={msg.role} /></div>
+      <div className={clsx(
+        "p-4 rounded-xl text-sm leading-relaxed shadow-sm",
+        msg.role === 'user'
+          ? "bg-fin-hover text-fin-text rounded-tr-sm"
+          : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-sm relative overflow-visible"
+      )}>
+        {msg.role === 'user' ? (
+          msg.content
+        ) : (
+          <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} />
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+// ── Flat Message (ChatGPT-style layout) ──
+
+const FlatMessage: React.FC<{
+  msg: MessagePayload;
+  onRetry: () => void;
+  onDelete: () => void;
+}> = ({ msg, onRetry, onDelete }) => {
+  const isUser = msg.role === 'user';
+  return (
+    <div className="group/msg animate-slide-up">
+      <div className={clsx("py-6 px-4 md:px-6", isUser ? "bg-transparent" : "bg-transparent")}>
+        <div className="max-w-[48rem] mx-auto flex gap-4">
+          {/* Avatar */}
+          <div className="flex-shrink-0 pt-0.5">
+            <div className={clsx(
+              "w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold",
+              isUser
+                ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm"
+                : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm"
+            )}>
+              {isUser ? <User size={16} /> : <Bot size={16} />}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 text-[13px] font-semibold text-fin-text">
+              {isUser ? '你' : 'FinSight'}
+            </div>
+            <div className="text-[14.5px] leading-7 text-fin-text">
+              {isUser ? (
+                <p className="whitespace-pre-wrap m-0">{msg.content}</p>
+              ) : (
+                <div className="relative overflow-visible">
+                  <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Main ChatList ──
 
 export const ChatList: React.FC = () => {
   const {
@@ -136,25 +326,22 @@ export const ChatList: React.FC = () => {
     setTicker,
     addMessage,
     updateMessage,
+    chatStyle,
   } = useStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsed, setElapsed] = useState<string>('0.0');
+  const isFlat = chatStyle === 'flat';
   const showExecutionBanner = isChatLoading
     || statusMessage === STOPPED_GENERATION_MESSAGE
     || currentStep === '已停止生成';
 
-  // 只滚动聊天容器本身，避免整页被拉走
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, [messages, isChatLoading, showExecutionBanner]);
 
-  // 动态计时
   useEffect(() => {
     if (!statusSince) {
       setElapsed('0.0');
@@ -216,13 +403,10 @@ export const ChatList: React.FC = () => {
         if (missingTickers.length > 0) {
           const chartType = forceMulti ? 'line' : (chartInfo.chartType || 'line');
           missingTickers.forEach((ticker) => {
-            responseContent += `
-
-[CHART:${ticker}:${chartType}]`;
+            responseContent += `\n\n[CHART:${ticker}:${chartType}]`;
           });
         }
       }
-
 
       updateMessage(messageId, {
         content: responseContent,
@@ -235,7 +419,7 @@ export const ChatList: React.FC = () => {
         fallback_used: response.data?.fallback_used,
         tried_sources: response.data?.tried_sources,
         evidence_pool: evidencePool,
-        report: response.report,  // Phase 2: 深度研报数据
+        report: response.report,
         isLoading: false,
       });
 
@@ -247,10 +431,7 @@ export const ChatList: React.FC = () => {
         setTicker(response.current_focus || tickerToChart);
       }
     } catch {
-      updateMessage(messageId, {
-        content: originalMsg.content,
-        isLoading: false,
-      });
+      updateMessage(messageId, { content: originalMsg.content, isLoading: false });
       addMessage({
         id: uuidv4(),
         role: 'system',
@@ -264,136 +445,67 @@ export const ChatList: React.FC = () => {
     }
   };
 
+  const renderMessages = () => {
+    const items = messages.map((msg) =>
+      isFlat ? (
+        <FlatMessage
+          key={msg.id}
+          msg={msg}
+          onRetry={() => handleRetry(msg.id)}
+          onDelete={() => removeMessage(msg.id)}
+        />
+      ) : (
+        <BubbleMessage
+          key={msg.id}
+          msg={msg}
+          onRetry={() => handleRetry(msg.id)}
+          onDelete={() => removeMessage(msg.id)}
+        />
+      )
+    );
+
+    if (isFlat) {
+      return <>{items}</>;
+    }
+    return items;
+  };
+
   return (
     <div
       id="chat-scroll-container"
       ref={containerRef}
-      className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-6"
+      className={clsx("flex-1 overflow-y-auto", isFlat ? "p-0" : "p-4 md:p-6 lg:p-8 space-y-6")}
     >
-      {messages.map((msg) => (
-        <div
-          key={msg.id}
-          className={clsx(
-            "flex w-full animate-slide-up",
-            msg.role === 'user' ? "justify-end" : "justify-start"
-          )}
-        >
-          <div className={clsx(
-            "flex max-w-[85%] md:max-w-[75%] lg:max-w-[65%] xl:max-w-[55%]",
-            msg.role === 'user' ? "flex-row-reverse" : "flex-row"
-          )}>
-            {/* 头像 */}
-            <div className={clsx(
-              "flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center mx-2",
-              msg.role === 'user' ? "bg-fin-primary text-white" : "bg-fin-panel border border-fin-border text-fin-primary"
-            )}>
-              {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-            </div>
+      {renderMessages()}
 
-            {/* 气泡 */}
-            <div className={clsx(
-              "p-4 rounded-xl text-sm leading-relaxed shadow-sm",
-              msg.role === 'user'
-                ? "bg-fin-hover text-fin-text rounded-tr-sm"
-                : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-sm relative overflow-visible"
-            )}>
-              {msg.role === 'user' ? (
-                msg.content
-              ) : (
-                <>
-                  {msg.isLoading ? (
-                    // 加载中：如果有内容则显示流式文本，否则显示加载动画
-                    msg.content ? (
-                      <MessageWithChart content={msg.content} />
-                    ) : (
-                      <div className="py-4 flex items-center justify-start">
-                        <LoadingDots />
-                      </div>
-                    )
-                  ) : msg.report ? (
-                    // 完成且有报告：显示报告卡片
-                    <ReportView report={msg.report} />
-                  ) : (
-                    // 完成无报告：显示普通文本
-                    <MessageWithChart content={msg.content} />
-                  )}
-                  {msg.evidence_pool && msg.evidence_pool.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
-                      <div className="text-[11px] text-fin-muted mb-2">Evidence ({msg.evidence_pool.length})</div>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.evidence_pool.map((ev: EvidenceItem, idx: number) => {
-                          const label = ev.title || ev.source || ev.url || `Source ${idx + 1}`;
-                          if (ev.url) {
-                            return (
-                              <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />
-                            );
-                          }
-                          return (
-                            <span key={`ev-${idx}`} className="px-2 py-1 rounded-full border border-fin-border/70 bg-fin-panel text-[11px] text-fin-text">
-                              {label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {msg.data_origin && (
-                    <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
-                        来源: {msg.data_origin} {msg.fallback_used ? '(兜底)' : ''}
-                      </span>
-                      {msg.as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {msg.as_of}</span>}
-                      {msg.tried_sources && msg.tried_sources.length > 0 && (
-                        <span className="text-2xs text-fin-muted/70">
-                          尝试: {msg.tried_sources.join(' → ')}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {msg.thinking && msg.thinking.length > 0 && (
-                    <ThinkingProcess thinking={msg.thinking} />
-                  )}
-                  <MessageActions
-                    messageId={msg.id}
-                    content={msg.content}
-                    thinking={msg.thinking}
-                    report={msg.report}
-                    onRetry={() => handleRetry(msg.id)}
-                    onDelete={() => removeMessage(msg.id)}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {/* Loading Indicator */}
       {showExecutionBanner && (
-        <div className="flex w-full justify-start animate-fade-in">
-          <div className="ml-12 rounded-xl border border-fin-border/60 bg-fin-panel/60 px-3 py-2 shadow-sm min-w-[280px] max-w-[420px]">
-            <div className="flex items-center gap-2">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-fin-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-              <span className="text-xs text-fin-muted">
-                {statusMessage === STOPPED_GENERATION_MESSAGE
-                  ? '本次生成已停止（结果已保留）'
-                  : statusMessage || 'Analyzing...'}（用时 {elapsed}s）
+        <div className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
+          <div className={clsx(
+            "rounded-xl border border-fin-border bg-fin-card px-4 py-3 shadow-sm min-w-[300px] max-w-[440px]",
+            isFlat ? "max-w-3xl mx-auto w-full" : "ml-12"
+          )}>
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-fin-primary opacity-60 animate-ping" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-fin-primary" />
               </span>
+              <span className="flex-1 truncate text-[13px] font-medium text-fin-text">
+                {statusMessage === STOPPED_GENERATION_MESSAGE
+                  ? '已停止生成（结果已保留）'
+                  : statusMessage || '正在分析…'}
+              </span>
+              <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{elapsed}s</span>
             </div>
-            <div className="mt-2">
-              <div className="h-1.5 rounded-full bg-fin-border/70 overflow-hidden">
+            <div className="mt-2.5">
+              <div className="h-1 overflow-hidden rounded-full bg-fin-border">
                 <div
-                  className="h-full rounded-full bg-fin-primary transition-all duration-300"
-                  style={{ width: `${Math.max(0, Math.min(100, executionProgress ?? 0))}%` }}
+                  className="h-full rounded-full bg-fin-primary transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(3, Math.min(100, executionProgress ?? 0))}%` }}
                 />
               </div>
-              <div className="mt-1 flex items-center justify-between text-2xs text-fin-muted">
-                <span className="truncate">{currentStep || 'Preparing execution...'}</span>
-                <span>{Math.round(executionProgress ?? 0)}%</span>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <span className="truncate text-2xs text-fin-text-secondary">{currentStep || '准备执行…'}</span>
+                <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{Math.round(executionProgress ?? 0)}%</span>
               </div>
             </div>
           </div>
@@ -405,11 +517,11 @@ export const ChatList: React.FC = () => {
   );
 };
 
-// 支持图表的消息组件
+// ── MessageWithChart ──
+
 const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
   const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
 
-  // Step 1: Extract smart chart blocks (before Markdown rendering)
   const smartChartBlocks = useMemo(() => parseSmartChartBlocks(content), [content]);
 
   useEffect(() => {
@@ -446,7 +558,6 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
     }
   };
 
-  // Step 2: Clean text — remove both [CHART:] and <chart>/<chart_ref> tags
   const textContent = stripSmartChartTags(
     content.replace(/\[CHART:[^\]]+\]/g, '')
   );
@@ -463,7 +574,6 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       >
         {normalizeMarkdown(textContent)}
       </ReactMarkdown>
-      {/* Existing InlineChart rendering (API-fetched K-line data) */}
       {chartData.map((chart) => (
         <InlineChart
           key={`${chart.ticker}-${chart.chartType}`}
@@ -472,7 +582,6 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
           onDataReady={(_data, summary) => handleChartDataReady(chart.ticker, summary)}
         />
       ))}
-      {/* G3 SmartChart rendering (LLM-generated or API-ref data) */}
       {smartChartBlocks.map((block, idx) => (
         <SmartChartRenderer key={`smart-${idx}-${block.type}-${block.title}`} block={block} />
       ))}
@@ -480,13 +589,13 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
+// ── SourceLink ──
+
 const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, label }) => {
   const urlMeta = useMemo(() => {
     try {
       const url = new URL(href);
-      return {
-        domain: url.hostname.replace(/^www\./, ''),
-      };
+      return { domain: url.hostname.replace(/^www\./, '') };
     } catch {
       return { domain: '' };
     }
@@ -520,6 +629,8 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
   );
 };
 
+// ── MessageActions ──
+
 const MessageActions: React.FC<{
   messageId: string;
   content: string;
@@ -527,7 +638,8 @@ const MessageActions: React.FC<{
   report?: ReportIR;
   onRetry: () => void;
   onDelete: () => void;
-}> = ({ content, thinking, report, onRetry, onDelete }) => {
+  inline?: boolean;
+}> = ({ content, thinking, report, onRetry, onDelete, inline }) => {
   const buildTraceMarkdown = () => {
     const lines: string[] = [];
 
@@ -553,17 +665,13 @@ const MessageActions: React.FC<{
       thinking.forEach((step, idx) => {
         lines.push('');
         lines.push(`### ${idx + 1}. ${step.stage}`);
-        if (step.message) {
-          lines.push(step.message);
-        }
+        if (step.message) lines.push(step.message);
         if (step.result) {
           lines.push('```json');
           lines.push(JSON.stringify(step.result, null, 2));
           lines.push('```');
         }
-        if (step.timestamp) {
-          lines.push(`Time: ${new Date(step.timestamp).toLocaleString()}`);
-        }
+        if (step.timestamp) lines.push(`Time: ${new Date(step.timestamp).toLocaleString()}`);
       });
     }
 
@@ -572,9 +680,7 @@ const MessageActions: React.FC<{
       lines.push('## Sources');
       report.citations.forEach((citation) => {
         lines.push(`- [${citation.title || citation.source_id}](${citation.url}) (${citation.published_date || 'n/a'})`);
-        if (citation.snippet) {
-          lines.push(`  - ${citation.snippet}`);
-        }
+        if (citation.snippet) lines.push(`  - ${citation.snippet}`);
       });
     }
 
@@ -600,34 +706,25 @@ const MessageActions: React.FC<{
     URL.revokeObjectURL(url);
   };
 
+  const btnClass = "p-1.5 rounded-md hover:bg-fin-hover hover:text-fin-text transition-colors";
+
   return (
-    <div className="absolute bottom-0 right-2 translate-y-full flex items-center gap-3 text-fin-muted pointer-events-auto">
-      <button
-        className="p-1 rounded hover:text-fin-text"
-        title="复制"
-        onClick={handleCopy}
-      >
+    <div className={clsx(
+      "flex items-center gap-1 text-fin-muted pointer-events-auto",
+      inline
+        ? "mt-4 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200"
+        : "absolute bottom-0 right-2 translate-y-full"
+    )}>
+      <button className={btnClass} title="复制" onClick={handleCopy}>
         <Copy size={14} />
       </button>
-      <button
-        className="p-1 rounded hover:text-fin-text"
-        title="重试"
-        onClick={onRetry}
-      >
+      <button className={btnClass} title="重试" onClick={onRetry}>
         <RefreshCcw size={14} />
       </button>
-      <button
-        className="p-1 rounded hover:text-fin-text"
-        title="导出"
-        onClick={handleExport}
-      >
+      <button className={btnClass} title="导出" onClick={handleExport}>
         <Download size={14} />
       </button>
-      <button
-        className="p-1 rounded hover:text-fin-text"
-        title="删除"
-        onClick={onDelete}
-      >
+      <button className={btnClass} title="删除" onClick={onDelete}>
         <Trash2 size={14} />
       </button>
     </div>

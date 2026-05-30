@@ -1,4 +1,4 @@
-import { Eraser, Moon, Plus, Sun, ChevronUp, Loader2, MessageSquare, Trash2 } from 'lucide-react';
+import { Eraser, Moon, Plus, Sun, Bell, ChevronUp, Loader2, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
@@ -66,6 +66,8 @@ export function ChatWorkspace({
   initialReportId,
 }: ChatWorkspaceProps) {
   const traceViewMode = useStore((state) => state.traceViewMode);
+  const chatStyle = useStore((state) => state.chatStyle);
+  const setChatStyle = useStore((state) => state.setChatStyle);
   const sessionId = useStore((state) => state.sessionId);
   const conversationSummaries = useStore((state) => state.conversationSummaries);
   const selectConversation = useStore((state) => state.selectConversation);
@@ -171,10 +173,28 @@ export function ChatWorkspace({
           </button>
           <button
             type="button"
+            onClick={() => setChatStyle(chatStyle === 'bubble' ? 'flat' : 'bubble')}
+            className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            title={chatStyle === 'bubble' ? '切换平铺布局' : '切换气泡布局'}
+            aria-label="切换聊天布局"
+          >
+            {chatStyle === 'bubble' ? <AlignLeft size={16} /> : <MessageSquareText size={16} />}
+          </button>
+          <button
+            type="button"
             onClick={onToggleTheme}
             className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            type="button"
+            onClick={contextPanel.onExpand}
+            className="relative p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            title="告警与订阅"
+            aria-label="告警与订阅"
+          >
+            <Bell size={16} />
           </button>
           <button
             type="button"
