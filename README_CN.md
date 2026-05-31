@@ -221,6 +221,7 @@ graph TB
     subgraph "前端 (React + Vite)"
         UI[仪表盘 / 对话 / 工作台 / 设置]
         STORE[Zustand 状态管理<br/>dashboardStore · executionStore · useStore]
+        CONSOLE[执行指挥台<br/>ExecutionPanel · ParallelWaterfall · ExecutionStats token/成本]
         PREFS[AgentControlPanel<br/>超时 · LLM 分析 · 反思轮数]
         API_CLIENT[API 客户端<br/>SSE parseSSEStream]
     end
@@ -259,7 +260,9 @@ graph TB
     end
 
     UI --> STORE --> PREFS
+    STORE --> CONSOLE
     UI --> API_CLIENT --> ROUTER
+    API_CLIENT -.->|SSE trace 事件| STORE
     ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
     EXEC --> SYNTH --> RENDER
     UNDERSTAND --> MEM_SCOPE --> MEMORY
@@ -269,6 +272,28 @@ graph TB
     AGENTS --> RAG
     UNDERSTAND --> CACHE & DB
 ```
+
+---
+
+## 🔭 执行追踪与可观测性
+
+底部的**执行指挥台**把原始 SSE 流变成实时的、结构化的执行追踪视图——不再是空面板。`ChatInput` 把聊天 SSE 流接入 `executionStore`，其 reducer 解析 `plan_ready`、`pipeline_stage`、`step_start/step_done`、`agent_*`、`decision_note` 事件，构建结构化运行模型。
+
+**三种模式**（通过 `traceViewMode` 切换）：
+
+| 模式 | 展示 |
+|------|------|
+| **用户** | 阶段进度环 + 带数据源 chips 的 agent 卡片 |
+| **专家（指挥台）** | 阶段条 · 计划摘要 · **并行执行瀑布图** · 决策流 · token/成本统计 |
+| **开发** | 原始 SSE 事件流（默认过滤 token 事件） |
+
+**并行执行瀑布图**（`ParallelWaterfall.tsx`）：步骤按 `parallel_group` 分泳道；每个 bar 宽度 ∝ 真实 `duration_ms`，颜色区分**工具（amber）与 agent（violet）**，对齐到组起点。一眼看出哪些步骤并行、各自耗时、瓶颈在哪。
+
+**LLM token 可观测**：每个 run 用 `ContextVar` 累加器在 LLM 统一入口（`llm_retry` + 节点直接调用）采集 `prompt_tokens`/`completion_tokens`；`done.metrics` 携带 `total_tokens` / `total_cost_usd` / `tokens_by_model`，由 `ExecutionStats` 展示。单价可通过 `LLM_PRICING_JSON` 环境变量配置。
+
+**预算优先级表**：planner 的 `agent_selection.budget_priority`（rank · effort · latency）被渲染出来，让你看清*为什么*每个 agent 被选中或跳过。
+
+事件协议详见：[`docs/execution-event-contract.md`](docs/execution-event-contract.md)。
 
 ---
 

@@ -9,6 +9,13 @@
 
 ### 新增
 
+- **执行追踪 Console 重构 + LLM token 可观测**（2026-05-31）：
+  - 主聊天 SSE 流接入 `executionStore`，user/expert/dev 三模式底部指挥台从空白变实时执行追踪（`ChatInput` 接线 `beginExternalExecution`/`ingestExternalThinking`/`completeExternalExecution`）。
+  - 新增**并行执行泳道瀑布图**（`ParallelWaterfall`）：按 `parallel_group` 分泳道，bar 宽度 ∝ `duration_ms`，区分 tool(amber)/agent(violet)，一眼看出并行结构与瓶颈。
+  - 专家指挥台新增**预算优先级表**（`agent_selection.budget_priority`：rank/effort/latency）+ agent **数据源 chips**。
+  - 后端 **LLM token 埋点**：`ContextVar` 累加器在 LLM 统一入口（`llm_retry`）+ 4 处节点直接调用提取 token，兼容 LangChain 新旧响应；`done.metrics` 聚合 `total_tokens`/`total_cost_usd`/`tokens_by_model`，前端 `ExecutionStats` 展示 token+成本，单价可经 `LLM_PRICING_JSON` 配置。
+  - 文档同步：README / README_CN 新增「执行追踪与可观测性」章节 + 系统架构 mermaid 重画。
+
 - **对话执行路由与 TechnicalAgent 能力扩面**（2026-05-21）：
   - `understand_request` 不再允许 `direct_answer` 吞掉结构化可执行 `task_hints`；当前轮有 ticker / URL / selection / 显式取证信号时直接进入 research。
   - direct 聊天答复清理“是否启动研究/进入研究链路”类二次确认话术，避免明确请求被反问绕圈。

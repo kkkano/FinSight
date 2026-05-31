@@ -222,6 +222,7 @@ graph TB
     subgraph "Frontend (React + Vite)"
         UI[Dashboard / Chat / Workbench / Settings]
         STORE[Zustand Stores<br/>dashboardStore · executionStore · useStore]
+        CONSOLE[Execution Console<br/>ExecutionPanel · ParallelWaterfall · ExecutionStats token/cost]
         PREFS[AgentControlPanel<br/>timeout · LLM analysis · reflections]
         API_CLIENT[API Client<br/>SSE parseSSEStream]
     end
@@ -260,7 +261,9 @@ graph TB
     end
 
     UI --> STORE --> PREFS
+    STORE --> CONSOLE
     UI --> API_CLIENT --> ROUTER
+    API_CLIENT -.->|SSE trace events| STORE
     ROUTER --> UNDERSTAND --> FRAME --> POLICY --> PLANNER --> EXEC
     EXEC --> SYNTH --> RENDER
     UNDERSTAND --> MEM_SCOPE --> MEMORY
@@ -270,6 +273,28 @@ graph TB
     AGENTS --> RAG
     UNDERSTAND --> CACHE & DB
 ```
+
+---
+
+## 🔭 Execution Tracking & Observability
+
+The bottom **Execution Console** turns the raw SSE stream into a live, structured view of every run — it is no longer an empty panel. `ChatInput` bridges the chat SSE stream into `executionStore`, whose reducer parses `plan_ready`, `pipeline_stage`, `step_start/step_done`, `agent_*`, and `decision_note` events into a structured run model.
+
+**Three modes** (switchable via `traceViewMode`):
+
+| Mode | Shows |
+|------|-------|
+| **User** | Phase progress ring + agent cards with data-source chips |
+| **Expert (指挥台)** | Stage bar · plan summary · **parallel execution waterfall** · decision flow · token/cost stats |
+| **Dev** | Raw SSE event stream (token events filtered by default) |
+
+**Parallel execution waterfall** (`ParallelWaterfall.tsx`): steps are grouped into swim-lanes by `parallel_group`; each bar's width ∝ real `duration_ms`, color-coded **tool (amber) vs agent (violet)**, aligned to the group start. One glance shows which steps ran in parallel, their durations, and the bottleneck.
+
+**LLM token observability**: a per-run `ContextVar` accumulator collects `prompt_tokens`/`completion_tokens` at the unified LLM entry (`llm_retry` + direct node calls); `done.metrics` carries `total_tokens` / `total_cost_usd` / `tokens_by_model`, surfaced by `ExecutionStats`. Pricing is configurable via the `LLM_PRICING_JSON` env var.
+
+**Budget priority table**: the planner's `agent_selection.budget_priority` (rank · effort · latency) is rendered so you can see *why* each agent was selected or skipped.
+
+Event protocol details: [`docs/execution-event-contract.md`](docs/execution-event-contract.md).
 
 ---
 
