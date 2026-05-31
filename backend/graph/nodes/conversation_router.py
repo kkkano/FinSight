@@ -1821,6 +1821,8 @@ async def route_conversation(
         llm = create_llm(temperature=0.0, max_tokens=max_tokens, request_timeout=int(timeout_sec) + 2)
         messages = [SystemMessage(content=system), HumanMessage(content=prompt)]
         response = await asyncio.wait_for(llm.ainvoke(messages), timeout=timeout_sec)
+        from backend.services.llm_usage import record_llm_usage
+        record_llm_usage(response, getattr(llm, "model_name", None))
         raw_output = str(getattr(response, "content", "") or "")
         try:
             payload = _extract_json_object(raw_output)
@@ -1849,6 +1851,7 @@ async def route_conversation(
                 llm.ainvoke([SystemMessage(content=system), HumanMessage(content=retry_prompt)]),
                 timeout=timeout_sec,
             )
+            record_llm_usage(retry_response, getattr(llm, "model_name", None))
             raw_output = str(getattr(retry_response, "content", "") or "")
             payload = _extract_json_object(raw_output)
         decision = normalize_context_decision(
@@ -1949,6 +1952,8 @@ async def generate_contextual_reply(
             llm.ainvoke([SystemMessage(content=system), HumanMessage(content=prompt)]),
             timeout=timeout_sec,
         )
+        from backend.services.llm_usage import record_llm_usage
+        record_llm_usage(response, getattr(llm, "model_name", None))
         text = str(getattr(response, "content", "") or "").strip()
         text = re.sub(r"^```(?:markdown)?\s*", "", text, flags=re.IGNORECASE)
         text = re.sub(r"\s*```$", "", text).strip()

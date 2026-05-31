@@ -15,6 +15,10 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 from uuid import uuid4
 
 from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
+from backend.services.llm_usage import (
+    TokenUsageAccumulator,
+    set_token_accumulator,
+)
 
 logger = logging.getLogger("execution_service")
 
@@ -243,6 +247,7 @@ async def run_graph_pipeline(
     cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
+    token_acc = TokenUsageAccumulator()
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -311,6 +316,8 @@ async def run_graph_pipeline(
     async def _producer() -> None:
         token = set_event_emitter(_emit)
         cancel_token = set_cancel_event(cancel_event)
+        # 每个 run 独立的 token 累加器（create_task 复制 context，天然隔离，无需 reset）
+        set_token_accumulator(token_acc)
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
@@ -550,6 +557,7 @@ async def run_graph_pipeline(
                         **stream_metrics,
                         "llm_total_calls": llm_total_calls,
                         "tool_total_calls": tool_total_calls,
+                        **token_acc.summary(),
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),
                     },

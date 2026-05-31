@@ -20,6 +20,23 @@ export interface PlanStepSummary {
   optional?: boolean;
 }
 
+/** Planner 预算优先级单项（agent_selection.budget_priority[]）。 */
+export interface BudgetPriorityItem {
+  agent: string;
+  rank: number;
+  estimatedEffort?: number;
+  estimatedLatencyMs?: number;
+}
+
+/** 单次 run 的 LLM token / 成本汇总（done.metrics，来自后端 token 累加器）。 */
+export interface RunTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  llmCalls: number;
+}
+
 export interface PipelineStageState {
   stage: PipelineStage;
   status: PipelineStageStatus;
@@ -128,6 +145,10 @@ export interface ExecutionRun {
   skippedAgents?: string[];
   planSteps?: PlanStepSummary[];
   hasParallelPlan?: boolean;
+  /** Planner 预算优先级排序（rank / effort / latency），用于指挥台展示。 */
+  budgetPriority?: BudgetPriorityItem[];
+  /** LLM token / 成本汇总（done 时从 metrics 填充）。 */
+  tokenUsage?: RunTokenUsage;
   reasoningBrief?: string;
   decisionNotes?: DecisionNote[];
   etaSeconds?: number | null;

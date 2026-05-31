@@ -101,6 +101,8 @@ async def _llm_classify_financial(query: str) -> tuple[bool, int]:
             llm.ainvoke([HumanMessage(content=prompt)]),
             timeout=_LLM_CLASSIFY_TIMEOUT,
         )
+        from backend.services.llm_usage import record_llm_usage
+        record_llm_usage(response, getattr(llm, "model_name", None))
         text = (response.content or "").strip()
         match = re.search(r"\d+", text)
         if match:

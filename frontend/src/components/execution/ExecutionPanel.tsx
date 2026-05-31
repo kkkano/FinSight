@@ -6,6 +6,7 @@ import { useExecutionStore } from '../../store/executionStore';
 import type { ExecutionRun } from '../../types/execution';
 import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
+import { ParallelWaterfall } from './ParallelWaterfall';
 import { PipelineStageBar } from './PipelineStageBar';
 import { ThinkingBubble } from './ThinkingBubble';
 import { AgentProgressList } from './AgentProgressList';
@@ -103,6 +104,27 @@ function renderPlanSummary(run: ExecutionRun) {
       </div>
       {run.reasoningBrief && (
         <div className="mt-2 text-fin-text/80 leading-relaxed">{run.reasoningBrief}</div>
+      )}
+      {run.budgetPriority && run.budgetPriority.length > 0 && (
+        <div className="mt-2 border-t border-fin-border pt-2">
+          <div className="text-fin-text-secondary mb-1">预算优先级</div>
+          <div className="space-y-0.5">
+            {run.budgetPriority.map((item) => (
+              <div key={item.agent} className="flex items-center justify-between gap-2 text-fin-muted">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-fin-primary/10 text-fin-primary text-[9px] flex items-center justify-center tabular-nums">
+                    {item.rank}
+                  </span>
+                  <span className="truncate">{item.agent.replace(/_agent$/, '')}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-[10px]">
+                  {typeof item.estimatedEffort === 'number' ? `effort ${item.estimatedEffort}` : ''}
+                  {typeof item.estimatedLatencyMs === 'number' ? ` · ~${item.estimatedLatencyMs}ms` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -224,6 +246,8 @@ export function ExecutionPanel({
       )}
 
       {isExpert && renderPlanSummary(run)}
+
+      {isExpert && <ParallelWaterfall timeline={run.timeline} compact={compact} />}
 
       {isExpert && (
         <GroupedTimeline

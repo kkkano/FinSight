@@ -13,6 +13,7 @@ import type { ExecuteRequest, SSECallbacks } from '../api/client';
 import { getAgentPreferences } from '../components/settings/AgentControlPanel';
 import type {
   AgentRunInfo,
+  BudgetPriorityItem,
   DecisionNote,
   ExecutionRun,
   PipelineStage,
@@ -217,6 +218,26 @@ function asPlanSteps(value: unknown): PlanStepSummary[] {
     });
   }
   return steps;
+}
+
+function asBudgetPriority(agentSelection: unknown): BudgetPriorityItem[] {
+  if (!agentSelection || typeof agentSelection !== 'object') return [];
+  const raw = (agentSelection as Record<string, unknown>).budget_priority;
+  if (!Array.isArray(raw)) return [];
+  const items: BudgetPriorityItem[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    const agent = typeof row.agent === 'string' ? row.agent.trim() : '';
+    if (!agent) continue;
+    items.push({
+      agent,
+      rank: typeof row.rank === 'number' && Number.isFinite(row.rank) ? row.rank : items.length + 1,
+      estimatedEffort: asFiniteNumber(row.estimated_effort),
+      estimatedLatencyMs: asFiniteNumber(row.estimated_latency_ms),
+    });
+  }
+  return items.sort((a, b) => a.rank - b.rank);
 }
 
 function normalizeQualityState(value: unknown): 'pass' | 'warn' | 'block' {
@@ -467,6 +488,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     patch.skippedAgents = asStringArray(result.skipped_agents);
     patch.agentStatuses = statuses;
     patch.hasParallelPlan = result.has_parallel === true;
+    patch.budgetPriority = asBudgetPriority(result.agent_selection);
     patch.reasoningBrief = typeof result.reasoning_brief === 'string' ? result.reasoning_brief : undefined;
     patch.currentStep = message || '计划已生成';
     patch.progress = Math.max(run.progress, 8);
@@ -1214,6 +1236,20 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nextError = nextError || 'Execution cancelled';
       }
 
+      const metricsObj = (meta && typeof meta === 'object' && meta.metrics && typeof meta.metrics === 'object')
+        ? (meta.metrics as Record<string, unknown>)
+        : {};
+      const totalTokens = Number(metricsObj.total_tokens) || 0;
+      const tokenUsage = totalTokens > 0
+        ? {
+            promptTokens: Number(metricsObj.total_prompt_tokens) || 0,
+            completionTokens: Number(metricsObj.total_completion_tokens) || 0,
+            totalTokens,
+            costUsd: Number(metricsObj.total_cost_usd) || 0,
+            llmCalls: Number(metricsObj.llm_token_calls) || Number(metricsObj.llm_total_calls) || 0,
+          }
+        : run.tokenUsage;
+
       const completed: ExecutionRun = {
         ...run,
         ...qualityPatch,
@@ -1225,6 +1261,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         timeline,
         pipelineStages,
         pipelineCurrentStage: nextCurrentStage,
+        tokenUsage,
         etaSeconds: null,
         completedAt: doneAt,
         abortController: null,

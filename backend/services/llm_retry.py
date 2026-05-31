@@ -19,6 +19,7 @@ import re
 from typing import Any, Callable, Optional
 
 from backend.llm_config import report_llm_failure, report_llm_success
+from backend.services.llm_usage import record_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,7 @@ async def ainvoke_with_rate_limit_retry(
     if not enabled or max_attempts <= 1:
         result = await llm.ainvoke(messages)
         report_llm_success(llm)
+        record_llm_usage(result, getattr(llm, "model_name", None))
         return result
 
     acquire_fn = None
@@ -192,6 +194,7 @@ async def ainvoke_with_rate_limit_retry(
         try:
             result = await current_llm.ainvoke(messages)
             report_llm_success(current_llm)
+            record_llm_usage(result, getattr(current_llm, "model_name", None))
             return result
         except Exception as exc:
             last_exc = exc

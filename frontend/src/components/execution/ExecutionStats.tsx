@@ -43,7 +43,7 @@ export function ExecutionStats({ run }: ExecutionStatsProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-2xs">
         <div className="text-fin-muted">
           LLM 调用
-          <div className="text-fin-text text-xs mt-0.5">{stats.llmCalls}</div>
+          <div className="text-fin-text text-xs mt-0.5">{run.tokenUsage?.llmCalls || stats.llmCalls}</div>
         </div>
         <div className="text-fin-muted">
           工具调用
@@ -62,6 +62,15 @@ export function ExecutionStats({ run }: ExecutionStatsProps) {
         <span>Agent 成功：{stats.doneAgents}</span>
         <span>Agent 异常：{stats.errorAgents}</span>
         <span>决策说明：{stats.decisionNotes}</span>
+        {run.tokenUsage && run.tokenUsage.totalTokens > 0 && (
+          <span className="text-fin-primary">
+            Token：{run.tokenUsage.totalTokens.toLocaleString()}
+            <span className="text-fin-muted">（↑{run.tokenUsage.promptTokens.toLocaleString()} ↓{run.tokenUsage.completionTokens.toLocaleString()}）</span>
+          </span>
+        )}
+        {run.tokenUsage && run.tokenUsage.costUsd > 0 && (
+          <span className="text-fin-primary">成本：${run.tokenUsage.costUsd.toFixed(4)}</span>
+        )}
         {typeof run.etaSeconds === 'number' && run.etaSeconds > 0 && run.status === 'running' && (
           <span className="text-fin-warning">预计剩余：~{run.etaSeconds}s</span>
         )}

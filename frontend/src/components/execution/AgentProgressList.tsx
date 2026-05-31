@@ -189,6 +189,21 @@ export function AgentProgressList({
                       >
                         {detail}
                       </div>
+                      {info.dataSources && info.dataSources.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {info.dataSources.slice(0, 5).map((src) => (
+                            <span
+                              key={src}
+                              className="rounded px-1 py-px text-[9px] leading-[13px] text-fin-primary bg-fin-primary/10 border border-fin-primary/20"
+                            >
+                              {src}
+                            </span>
+                          ))}
+                          {info.dataSources.length > 5 && (
+                            <span className="text-[9px] text-fin-muted">+{info.dataSources.length - 5}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       {info.parallelGroup && (

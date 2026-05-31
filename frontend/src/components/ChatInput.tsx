@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '../api/client';
 import type { ChatContext } from '../api/client';
 import { useStore } from '../store/useStore';
+import { useExecutionStore } from '../store/executionStore';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useToast } from './ui';
 import { getAgentPreferences } from './settings/AgentControlPanel';
@@ -434,6 +435,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     let fullContent = '';
     let thinkingSteps: ThinkingStep[] = [];
     const effectiveOutputMode = outputMode;
+    // 接通底部执行指挥台（executionStore）：runId 取自首个携带 run_id 的 SSE 事件
+    let execRunId: string | null = null;
 
     const requestStartedAt = Date.now();
 
@@ -510,6 +513,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         endTime: new Date().toISOString(),
         lastMessage: STOPPED_GENERATION_MESSAGE,
       });
+      if (execRunId) {
+        useExecutionStore.getState().completeExternalExecution({
+          runId: execRunId,
+          status: 'cancelled',
+        });
+      }
     };
 
     try {
@@ -520,6 +529,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
           if (safeToken) {
             fullContent += safeToken;
+            if (execRunId) useExecutionStore.getState().ingestExternalToken(execRunId, safeToken);
           }
           updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
@@ -639,6 +649,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             thinking: thinkingSteps,
             evidence_pool: evidencePool,
           });
+          if (execRunId) {
+            useExecutionStore.getState().completeExternalExecution({
+              runId: execRunId,
+              status: 'done',
+              report: report ?? null,
+              meta,
+            });
+          }
           if (isRequestSessionActive()) {
             setExecutionState('Completed', 100);
             setStatus(null);
@@ -670,11 +688,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               message: `Error: ${error}`,
             });
             updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
+            if (execRunId) {
+              useExecutionStore.getState().completeExternalExecution({
+                runId: execRunId,
+                status: 'error',
+                error: String(error),
+              });
+            }
           };
 
           void handleFailure();
         },
         (step) => {
+          // 接通底部指挥台：把同一条 SSE 事件喂给 executionStore（step.result 即原始 payload，
+          // 内部 pipelineReducer 自动解析 plan/step/agent/decision/stage）
+          const stepRunId = (typeof step.runId === 'string' && step.runId)
+            || (step.result && typeof (step.result as Record<string, unknown>).run_id === 'string'
+              ? (step.result as Record<string, string>).run_id
+              : null);
+          if (stepRunId) {
+            const execStore = useExecutionStore.getState();
+            if (execRunId !== stepRunId) {
+              execRunId = stepRunId;
+              execStore.beginExternalExecution({
+                runId: stepRunId,
+                query: userMsgContent,
+                tickers: extractTickers(userMsgContent),
+                source: 'chat',
+                outputMode: effectiveOutputMode,
+              });
+            }
+            execStore.ingestExternalThinking(stepRunId, step);
+          }
           thinkingSteps = [...thinkingSteps, step];
           updateScopedMessage(aiMsgId, { thinking: thinkingSteps });
           const current = useStore.getState().executionProgress ?? 0;
