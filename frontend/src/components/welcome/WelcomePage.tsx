@@ -500,7 +500,7 @@ export function WelcomePage() {
                   markWelcomeGatePassed();
                   navigate(redirectPath);
                 }}
-                className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] !text-black font-semibold"
+                className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#4c6ef5)] !text-white font-semibold"
               >
                 继续进入
               </Button>
@@ -521,7 +521,7 @@ export function WelcomePage() {
                     variant="primary"
                     size="lg"
                     onClick={handleAnonymousEnter}
-                    className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] !text-black font-semibold"
+                    className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#4c6ef5)] !text-white font-semibold"
                   >
                     匿名体验（本地会话）
                   </Button>
@@ -551,7 +551,7 @@ export function WelcomePage() {
                 size="lg"
                 onClick={handleSendCode}
                 disabled={sending || !supabaseReady}
-                className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#ff6d00)] !text-black font-semibold"
+                className="w-full !bg-[linear-gradient(135deg,var(--bb-orange),#4c6ef5)] !text-white font-semibold"
               >
                 <Mail size={14} />
                 {sending ? '发送中...' : '发送验证码'}
