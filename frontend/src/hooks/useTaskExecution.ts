@@ -206,7 +206,9 @@ export function useTaskExecution({
       const controller = new AbortController();
       abortRef.current[task.id] = controller;
 
-      const request: ExecuteRequest = {
+      // executeAgent 形参为 `ExecuteRequest & Record<string, unknown>`（与 executionStore 一致），
+      // 这里同步标注，避免具名接口缺索引签名导致的 TS2345。
+      const request: ExecuteRequest & Record<string, unknown> = {
         ...task.execution_params,
         session_id: sessionId,
         source: 'workbench_task',
