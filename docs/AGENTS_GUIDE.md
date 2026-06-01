@@ -317,3 +317,26 @@ flowchart LR
 - Debate 展示：`frontend/src/components/report/DebateScorecard.tsx`
 - Holdings 展示：`frontend/src/components/report/HoldingsWatchPanel.tsx`
 - `ReportView.tsx` 负责组合展示 query coverage warning、证据、辩论和持仓披露，不展示原始 trace。
+
+## 13. 执行追踪 Console 与 Token 可观测（2026-05-31）
+
+补强 `## 5 执行与事件可观测性`，把 Planner 的 agent 选择诊断与 LLM token 计量贯通到前端指挥台。
+
+### 13.1 Agent 预算优先级诊断（budget_priority）
+
+- Planner 在 `plan_ready.agent_selection.budget_priority` 输出**每个候选 agent** 的预算排序：`rank`（选择顺序）/ `effort`（投入档位）/ `latency`（预估延迟）。
+- 与 `agent_selection` 的 skip 原因（被跳过 agent 的诊断，见 `## 9.2`）互补：一个解释「为什么不选」，一个解释「选了的按什么优先级跑」。
+- 前端 `executionStore.pipelineReducer` 解析后写入 `ExecutionRun.budgetPriority`，expert 指挥台计划摘要渲染为表。
+
+### 13.2 Agent LLM Token 计量
+
+- Agent 内部 LLM 调用统一经 `backend/services/llm_retry.ainvoke_with_rate_limit_retry`，由 `backend/services/llm_usage.py` 的 `record_llm_usage` 把每次调用的 prompt/completion token 累加进 `ContextVar` 级 `TokenUsageAccumulator`（每个 run 天然隔离）。
+- 不走统一入口的 4 处直接 `ainvoke`（`resolve_subject` ×1 / `conversation_router` ×3）已补 `record_llm_usage`，避免漏计。
+- `execution_service.run_graph_pipeline` 在 `done.metrics` 合并 `token_acc.summary()`（`total_tokens` / `total_cost_usd` / `tokens_by_model` 等），前端 `ExecutionStats` 展示总量与成本。
+- 单价经 `LLM_PRICING_JSON`（每 1K token USD）配置；未配置时仅显示 token 量。
+
+### 13.3 排查入口（补充）
+
+- 看 token 计量：`backend/services/llm_usage.py`、`done.metrics`
+- 看 agent 预算诊断：`backend/graph/nodes/planner.py` 的 `agent_selection`、前端 `ExecutionPanel` 计划摘要
+- 看并行结构：前端 `components/execution/waterfallLayout.ts`（按 `parallel_group` 分泳道）

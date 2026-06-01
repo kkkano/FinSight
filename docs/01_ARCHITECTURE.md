@@ -424,3 +424,69 @@ flowchart LR
 - `AgentBackedEnhancer`：并行获取新闻+公司信息，LLM 精调优先级和理由
 - SSE 流式端点：`POST /api/rebalance/suggestions/generate-stream`（6 阶段进度事件）
 - 安全回退：LLM 失败时返回原始 candidates，不丢失数据
+
+---
+
+## 10. 执行追踪 Console 与 LLM Token 可观测（2026-05-31）
+
+主聊天 SSE 流此前未接入 `executionStore`，底部「执行指挥台」在 user/expert 模式下空白。本次重构把主聊天流接入现成的 `executionStore`，并新增并行泳道瀑布图与 LLM token 计量，使指挥台对齐真实执行链路。
+
+### 10.1 三模式指挥台与 SSE 接线
+
+`ChatInput` 在 SSE 生命周期各阶段调用 `executionStore` 的外部接口，把主聊天流喂入与 Workbench 共用的执行模型：
+
+| 阶段 | ChatInput 调用 | executionStore 行为 |
+|------|---------------|--------------------|
+| 首个事件 | `beginExternalExecution({runId, query, tickers, source:'chat', outputMode})` | 创建 `ExecutionRun`，runId 取自 SSE `run_id` |
+| 每个 thinking 事件 | `ingestExternalThinking(runId, step)` | 经 `pipelineReducer` 填充 plan/timeline/agents/decisions/stages |
+| token 流 | `ingestExternalToken(runId, content)` | 累加流式输出 |
+| 结束/错误/取消 | `completeExternalExecution({runId, status, report, meta})` | 收口 run，从 `meta.metrics` 提取 token 用量 |
+
+底部指挥台据 `mode` 渲染同一份 `ExecutionRun`：
+
+- `user`：阶段条（`PipelineStageBar`）+ agent 进度
+- `expert`：并行瀑布图 + 计划摘要（含预算优先级表）+ 决策流 + 统计（含 token/成本）
+- `dev`：`AgentLogPanel` 原始事件流（开发者调试）
+
+```mermaid
+sequenceDiagram
+  participant FE as ChatInput / api.client.ts
+  participant SVC as execution_service
+  participant STORE as executionStore (pipelineReducer)
+  participant PANEL as ExecutionPanel (user/expert/dev)
+
+  FE->>SVC: POST /chat/supervisor/stream
+  SVC-->>FE: SSE plan_ready / step_start / step_done / decision_note / done
+  FE->>STORE: beginExternalExecution(首个事件)
+  FE->>STORE: ingestExternalThinking(每个 thinking)
+  FE->>STORE: ingestExternalToken(token)
+  FE->>STORE: completeExternalExecution(done, meta.metrics)
+  STORE-->>PANEL: ExecutionRun (timeline/agents/budgetPriority/tokenUsage)
+  PANEL-->>PANEL: 按 mode 渲染 阶段条/瀑布/统计
+```
+
+### 10.2 并行泳道瀑布图（ParallelWaterfall）
+
+`frontend/src/components/execution/waterfallLayout.ts` 纯函数把 `run.timeline` 聚合成瀑布布局：
+
+- `extractWaterfallSteps`：按 `stepId` 配对 `step_start` / `step_done`，`startMs` 取开始时间，`durationMs` 取 `step_done.duration_ms`（精确）
+- `groupWaterfallLanes`：按 `parallel_group` 分泳道（无组归一为 `(serial)`），泳道与组内均按起点升序
+- `buildWaterfallLayout`：计算每个 bar 的 `left% ∝ (start−origin)`、`width% ∝ duration_ms`，并约束 `left+width ≤ 100`
+
+同组并行步骤起点对齐、bar 宽反映各自真实耗时，一眼看出并行结构与瓶颈。bar 配色（`colorMaps.ts`）：tool=amber、agent=violet、cached=emerald、error=red、skipped=slate。
+
+### 10.3 预算优先级诊断（budget_priority）
+
+`pipelineReducer` 解析 `plan_ready.agent_selection.budget_priority` 写入 `ExecutionRun.budgetPriority`，expert 计划摘要渲染为表（`BudgetPriorityItem`：`rank` / `effort` / `latency`），解释 Planner 为何按此顺序与预算选择 agent。
+
+### 10.4 LLM Token 计量
+
+后端在 LLM 统一入口埋点，经 SSE `done.metrics` 上送，前端展示：
+
+- `backend/services/llm_usage.py`：`TokenUsageAccumulator` 基于 `ContextVar`，`asyncio.create_task` 复制上下文 → 每个 run 天然隔离，无需 reset。提取逻辑兼容 LangChain 新版 `usage_metadata` 与旧版 `response_metadata.token_usage`。
+- 采集点：`llm_retry.ainvoke_with_rate_limit_retry`（统一入口）+ 4 处节点直接 `ainvoke`（`resolve_subject` ×1 / `conversation_router` ×3）调用 `record_llm_usage`。
+- `execution_service.run_graph_pipeline` 的 `done.metrics` 合并 `token_acc.summary()`：`total_prompt_tokens` / `total_completion_tokens` / `total_tokens` / `total_cost_usd` / `tokens_by_model`。
+- 前端 `completeExternalExecution` 把 `meta.metrics` 映射为 `ExecutionRun.tokenUsage`（`promptTokens` / `completionTokens` / `totalTokens` / `costUsd` / `llmCalls`），`ExecutionStats` 展示 token 总量与成本。
+- 单价经 `LLM_PRICING_JSON` 环境变量配置（每 1K token USD）；mimo-v2.5-pro 默认单价 0（仅显示 token 量，不显示成本）。
+
+> 事件协议字段详见 `docs/execution-event-contract.md`。

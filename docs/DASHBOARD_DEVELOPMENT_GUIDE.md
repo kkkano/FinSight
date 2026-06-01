@@ -1397,3 +1397,52 @@ frontend/src/components/dashboard/
 | MacroAgent | ✅ 雷达图 | | | | | |
 | DeepSearchAgent | ✅ AI洞察 | | | | ✅ 全部 | |
 | Synthesize | ✅ 综合评分 | | | | | ✅ AI摘要 |
+
+---
+
+## 执行追踪指挥台（ExecutionPanel / 瀑布图）开发指南（2026-05-31）
+
+聊天底部「执行指挥台」与 Workbench 共用 `executionStore`。新增 execution 可视化组件时遵循以下约定。
+
+### 组件位置
+
+```
+src/components/execution/
+├── ExecutionPanel.tsx        # 指挥台容器，按 mode=user/expert/dev 渲染
+├── PipelineStageBar.tsx      # 阶段条
+├── AgentProgressList.tsx     # agent 进度 + data_sources chips
+├── ParallelWaterfall.tsx     # 并行泳道瀑布（expert）
+├── WaterfallBar.tsx          # 单条 bar + tooltip
+├── waterfallLayout.ts        # 布局纯函数（可单测）
+├── colorMaps.ts              # bar 配色 + 时长格式化
+└── ExecutionStats.tsx        # 统计（token / 成本）
+```
+
+### 接线模式：external run
+
+主聊天 / Workbench 把 SSE 流喂入 `executionStore`，组件只读 `ExecutionRun`：
+
+```typescript
+// 流开始（首个 SSE 事件）
+beginExternalExecution({ runId, query, tickers, source: 'chat', outputMode })
+// 每个 thinking 事件 → 经 pipelineReducer 填充 plan/timeline/agents/decisions
+ingestExternalThinking(runId, step)
+// token 流
+ingestExternalToken(runId, content)
+// 结束 / 错误 / 取消 → 提取 meta.metrics 的 token
+completeExternalExecution({ runId, status, report, meta })
+```
+
+新增数据可视化时，优先在 `pipelineReducer` 解析 SSE 字段写入 `ExecutionRun`，组件保持纯展示（不可变更新）。
+
+### 瀑布布局：纯函数可测
+
+`waterfallLayout.ts` 与渲染解耦，便于单测（见 `waterfallLayout.test.ts`，fixture 取真实抓包 `skill_stream_1088.txt`）：
+
+- `buildWaterfallLayout(timeline)` → `{ lanes, bars, originMs, totalSpanMs }`
+- bar `left% ∝ (start − origin)`、`width% ∝ duration_ms`，约束 `left + width ≤ 100`
+- 同组（`parallel_group`）并行步骤起点对齐、bar 宽反映各自真实耗时
+
+### 配色须知：fin-* alpha 陷阱
+
+execution 组件用 Tailwind 原生调色板（amber / violet / emerald / slate）+ `bg-fin-card` / `bg-fin-primary/10`。**只有 `fin-primary` 是 rgb 通道格式、支持 `/alpha`**；`fin-bg` / `fin-panel` / `fin-card` / `fin-border` / `fin-hover` 是 hex 变量，加 `/数字` 在暗色模式会失效变白。提交前自检：`grep 'bg-fin-(panel|card|bg|border|hover)/\d'` 须 0 命中。

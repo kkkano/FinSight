@@ -1171,4 +1171,29 @@ flowchart TD
 
 ---
 
-> 文档由 FinSight AI 工程团队维护 | 最后更新：2026-05-03
+## LLM Token 计量与 ContextVar 埋点（2026-05-31 增量）
+
+执行追踪指挥台需要每个 run 的 LLM token 与成本。难点在于 LangGraph 用 `asyncio.create_task` 并发跑多个 agent / 工具，若用全局累加器会串号。
+
+### 机制：ContextVar 天然隔离
+
+`backend/services/llm_usage.py` 的 `TokenUsageAccumulator` 挂在 `ContextVar` 上：
+
+- `asyncio.create_task` 会**复制当前上下文**，每个 run 的 producer 任务各自持有独立累加器实例 → 天然按 run 隔离，无需手动 reset / 层层传参。
+- `set_token_accumulator(acc)` 在 `run_graph_pipeline` 的 producer 入口设置；`record_llm_usage(response, model)` 从 `get_token_accumulator()` 取当前上下文的累加器写入。
+
+### 采集点：统一入口 + 直接调用补点
+
+- 统一入口 `llm_retry.ainvoke_with_rate_limit_retry` 两处 `return` 前调用 `record_llm_usage`，覆盖绝大多数 agent LLM 调用。
+- 不走统一入口的 4 处直接 `llm.ainvoke`（`resolve_subject` ×1、`conversation_router` ×3）单独补 `record_llm_usage`，避免漏计。
+- 提取逻辑兼容两代 LangChain 响应：新版 `AIMessage.usage_metadata`（`input_tokens` / `output_tokens`）与旧版 `response_metadata.token_usage` / `usage`（`prompt_tokens` / `completion_tokens`），缺字段安全归零。
+
+### 上送：done.metrics
+
+`run_graph_pipeline` 在 `done` 事件的 `metrics` 合并 `token_acc.summary()`：`total_prompt_tokens` / `total_completion_tokens` / `total_tokens` / `total_cost_usd` / `tokens_by_model`。成本按 `LLM_PRICING_JSON`（每 1K token USD）计算，未配置则为 0；前端 `ExecutionStats` 消费展示。
+
+> 该机制在 LLM 调用层直接计量，绕过 raw-trace 事件过滤（`trace_raw` 关闭时会丢弃 `llm_end` 事件），不依赖事件可见性开关。
+
+---
+
+> 文档由 FinSight AI 工程团队维护 | 最后更新：2026-05-31
