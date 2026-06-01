@@ -12,6 +12,10 @@ langchain-classic==1.0.1
 
 # LangGraph (现代 Agent 框架)
 langgraph==1.0.7
+# pin 死：langgraph-prebuilt 1.0.9+ 会 `from langgraph.runtime import ExecutionInfo`（需 core>1.0.7），
+# 而 langgraph 1.0.7 仅约束 prebuilt<1.1.0,>=1.0.7，CI 全新安装会装到最高 1.0.13 → ImportError。
+# 1.0.8 是只 import Runtime、兼容 core 1.0.7 的最后一版。
+langgraph-prebuilt==1.0.8
 langgraph-checkpoint==3.0.0
 langgraph-checkpoint-sqlite==3.0.3
 langgraph-checkpoint-postgres==3.0.4

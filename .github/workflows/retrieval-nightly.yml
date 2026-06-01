@@ -35,6 +35,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Enable pgvector extension
+        run: |
+          python - <<'PY'
+          import psycopg
+          with psycopg.connect("host=127.0.0.1 port=5432 user=postgres password=postgres dbname=postgres") as conn:
+              conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+              conn.commit()
+          print("pgvector extension ready")
+          PY
+
       - name: Verify retrieval dependency versions
         run: |
           python - <<'PY'
