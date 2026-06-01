@@ -35,7 +35,8 @@ graph TD
     confirmation_gate -->|cancel_execution| END_CANCEL([END: 用户取消])
     confirmation_gate -->|adjust_parameters| planner
     confirmation_gate -->|confirm_execute| execute_plan
-    execute_plan --> synthesize
+    execute_plan --> research_debate
+    research_debate --> synthesize
     synthesize --> render
     render --> END_DONE([END: 返回最终响应])
 

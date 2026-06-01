@@ -189,21 +189,31 @@ classDiagram
     }
 
     class Policy {
-        +int max_tool_calls
-        +int max_rounds
-        +int max_seconds
+        +dict budget
+        +list~str~ allowed_tools
+        +dict tool_schemas
         +list~str~ allowed_agents
-        +list~str~ denied_agents
-        +str budget_label
+        +dict agent_selection
+        +dict agent_schemas
     }
 
     class Artifacts {
         +list~dict~ evidence_pool
+        +dict~str,list~ evidence_by_task
+        +dict evidence_ledger
+        +dict debate
+        +list~dict~ rag_context
+        +dict rag_stats
+        +dict step_results
+        +dict task_results
+        +list~dict~ tool_diagnostics
+        +dict agent_diagnostics
         +dict agent_outputs
         +dict render_vars
         +dict report
+        +dict signals
+        +list errors
         +str response
-        +str draft_markdown
     }
 
     GraphState --> Subject
@@ -225,6 +235,20 @@ classDiagram
 | `operation` | understand_request 兼容投影 | policy_gate, planner, execute_plan, synthesize, render | `Operation` |
 | `output_mode` | prepare_context | policy_gate, planner, synthesize, render, report_builder | `str` |
 | `clarify` | understand_request / legacy clarify | route=clarify 或兼容测试 | `Clarify` |
+| `chat_responded` | chat_respond | route 决策（跳过后续节点） | `bool` |
+| `memory_context` | build_initial_state | understand_request, prepare_context | `dict` |
+| `intent_contract` | understand_request | policy_gate, planner_stub, coverage_validator | `IntentContract` |
+| `intent_contracts` | understand_request（多 frame） | policy_gate, planner_stub | `list[IntentContract]` |
+| `request_frame` | understand_request | policy_gate, planner_stub | `dict` |
+| `request_frames` | understand_request | policy_gate, planner_stub | `list[dict]` |
+| `reply_contract` | understand_request | synthesize, chat_renderer, render | `ReplyContract` |
+| `context_refs` | understand_request | synthesize, render | `list[ContextRef]` |
+| `user_email` | 外部输入 | alert_action | `str` |
+| `alert_params` | alert_extractor | alert_action | `dict` |
+| `alert_valid` | alert_extractor | route 决策 | `bool` |
+| `require_confirmation` | planner | confirmation_gate | `bool` |
+| `confirmation_mode` | planner | confirmation_gate | `ConfirmationMode` |
+| `user_confirmation` | 外部（resume） | confirmation_gate | `Any` |
 | `policy` | policy_gate | planner, execute_plan | `Policy` |
 | `plan_ir` | planner | execute_plan | `PlanIR` |
 | `artifacts` | execute_plan, synthesize, render | synthesize, render, report_builder | `Artifacts` |

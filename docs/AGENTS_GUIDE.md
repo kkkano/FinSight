@@ -55,24 +55,25 @@ flowchart LR
 17. `get_cn_lhb`
 18. `get_cn_concept_map`
 19. `run_strategy_backtest`
-20. `get_company_info`
-21. `get_company_news`
-22. `get_event_calendar`
-23. `get_authoritative_media_news`
-24. `get_earnings_call_transcripts`
-25. `score_news_source_reliability`
-26. `get_local_market_filings`
-27. `fetch_url_content`
-28. `search`
-29. `get_market_sentiment`
-30. `get_economic_events`
-31. `get_official_macro_releases`
-32. `get_earnings_estimates`
-33. `get_eps_revisions`
-34. `get_performance_comparison`
-35. `analyze_historical_drawdowns`
-36. `get_factor_exposure`
-37. `run_portfolio_stress_test`
+20. `run_python_compute`
+21. `get_company_info`
+22. `get_company_news`
+23. `get_event_calendar`
+24. `get_authoritative_media_news`
+25. `get_earnings_call_transcripts`
+26. `score_news_source_reliability`
+27. `get_local_market_filings`
+28. `fetch_url_content`
+29. `search`
+30. `get_market_sentiment`
+31. `get_economic_events`
+32. `get_official_macro_releases`
+33. `get_earnings_estimates`
+34. `get_eps_revisions`
+35. `get_performance_comparison`
+36. `analyze_historical_drawdowns`
+37. `get_factor_exposure`
+38. `run_portfolio_stress_test`
 
 ### 3.2 allowlist 入口
 
