@@ -109,7 +109,10 @@ async def test_technical_agent_enriches_kline_with_quote_options_and_sentiment()
 
 
 @pytest.mark.asyncio
-async def test_technical_agent_uses_deterministic_summary_by_default():
+async def test_technical_agent_uses_deterministic_summary_by_default(monkeypatch):
+    # 隔离环境变量：本地 .env 可能设置 TECHNICAL_AGENT_LLM_SUMMARY_ENABLED=1，
+    # 本测试验证的是"默认（未配置时）不等待 LLM"
+    monkeypatch.delenv("TECHNICAL_AGENT_LLM_SUMMARY_ENABLED", raising=False)
     agent = TechnicalAgent(MagicMock(), DummyCache(), MagicMock())
 
     async def fail_llm(*_args, **_kwargs):
