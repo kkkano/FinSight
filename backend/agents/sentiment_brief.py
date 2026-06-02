@@ -1,0 +1,158 @@
+"""舆情简报渲染器（P0-9）。
+
+确定性骨架 + LLM 观点段：
+- 骨架（情绪/热度/催化/价格传导/风险/新闻列表）由代码渲染，零 LLM 依赖
+- 观点段由调用方传入（LLM 生成），缺失时骨架照常输出
+
+数据真实性防线：
+- 价格传导 status=todo -> 区块不渲染
+- 情绪样本 < 3 -> 显示"情绪样本不足"
+- 有新闻但无催化 -> 显示"未识别到催化事件"
+- 未评估可靠度 -> 不显示假分数
+"""
+from typing import Any, Dict, List, Optional
+
+_BIAS_LABELS = {"bullish": "偏多", "bearish": "偏空", "neutral": "中性"}
+_TREND_LABELS = {"improving": "改善中", "deteriorating": "恶化中", "stable": "平稳", "unknown": ""}
+_HEAT_LABELS = {"elevated": "高热", "active": "活跃", "normal": "一般", "thin": "清淡"}
+_PRICE_STATUS_LABELS = {"resonance": "共振", "divergence": "背离", "neutral": "不明确"}
+
+_MIN_SENTIMENT_SAMPLE = 3
+
+
+def _render_title_line(snapshot: Dict[str, Any]) -> str:
+    bias = snapshot.get("sentiment_bias") or {}
+    heat = snapshot.get("heat") or {}
+    catalysts = snapshot.get("catalyst_events") or {}
+
+    sample_size = int(bias.get("sample_size") or 0)
+    if sample_size < _MIN_SENTIMENT_SAMPLE:
+        sentiment_part = "**整体情绪：情绪样本不足**"
+    else:
+        label = _BIAS_LABELS.get(str(bias.get("label")), "中性")
+        avg = bias.get("average_score")
+        avg_text = f" ({avg:+.2f})" if isinstance(avg, (int, float)) else ""
+        sentiment_part = f"**整体情绪：{label}{avg_text}**"
+
+    parts = [sentiment_part]
+    heat_label = _HEAT_LABELS.get(str(heat.get("level")), "")
+    if heat_label:
+        parts.append(f"热度：{heat_label}")
+    catalyst_count = int(catalysts.get("count") or 0)
+    if catalyst_count > 0:
+        parts.append(f"{catalyst_count} 条催化")
+    return " · ".join(parts)
+
+
+def _render_catalysts(snapshot: Dict[str, Any], has_news: bool) -> Optional[str]:
+    catalysts = snapshot.get("catalyst_events") or {}
+    events = catalysts.get("events") or []
+    if not events:
+        # 有新闻但无催化 = 真实信息；无新闻 = 跳过区块
+        return "⚡ **催化事件**\n\n未识别到催化事件" if has_news else None
+
+    lines = ["⚡ **催化事件**", ""]
+    for event in events[:5]:
+        if not isinstance(event, dict):
+            continue
+        title = str(event.get("title") or "").strip()
+        if not title:
+            continue
+        date = str(event.get("date") or "").strip()
+        impact = event.get("impact_score")
+        impact_text = f" (影响:{'高' if impact and impact >= 0.8 else '中'})" if isinstance(impact, (int, float)) else ""
+        date_text = f" — {date[:10]}" if date else ""
+        lines.append(f"- {title}{impact_text}{date_text}")
+    return "\n".join(lines) if len(lines) > 2 else None
+
+
+def _render_price_transmission(snapshot: Dict[str, Any]) -> Optional[str]:
+    price = snapshot.get("price_transmission") or {}
+    status = str(price.get("status") or "")
+    # 数据真实性防线：todo = 我们没做到，不渲染；绝不输出 TODO 文案
+    if status in ("todo", "", "unknown"):
+        return None
+    status_label = _PRICE_STATUS_LABELS.get(status, status)
+    analysis = str(price.get("analysis") or "").strip()
+    if "TODO" in analysis:
+        return None
+    change = price.get("price_change_pct")
+    change_text = f"（近期价格 {change:+.1f}%）" if isinstance(change, (int, float)) else ""
+    return f"📈 **情绪与价格：{status_label}**{change_text}\n\n{analysis}"
+
+
+def _render_risks(snapshot: Dict[str, Any], extra_risks: Optional[List[str]] = None) -> Optional[str]:
+    risks: List[str] = list(extra_risks or [])
+    bias = snapshot.get("sentiment_bias") or {}
+    sample_size = int(bias.get("sample_size") or 0)
+    if 0 < sample_size < _MIN_SENTIMENT_SAMPLE:
+        risks.append("情绪样本量小，整体判断的可靠性有限")
+    if not risks:
+        return None
+    lines = ["⚠️ **风险提示**", ""]
+    lines.extend(f"- {risk}" for risk in risks[:4])
+    return "\n".join(lines)
+
+
+_LOW_CONFIDENCE_THRESHOLD = 0.5  # spec 防线5：低于此置信度的新闻标注 ⚠️
+
+
+def _render_news_list(news_items: List[Dict[str, Any]]) -> Optional[str]:
+    if not news_items:
+        return None
+    lines = [f"📰 **依据新闻** ({len(news_items)} 条)", ""]
+    for idx, item in enumerate(news_items[:8], 1):
+        if not isinstance(item, dict):
+            continue
+        headline = str(item.get("headline") or item.get("title") or "").strip()
+        if not headline:
+            continue
+        url = str(item.get("url") or "").strip()
+        source = str(item.get("source") or "").strip()
+        date = str(item.get("datetime") or item.get("published_at") or "").strip()[:10]
+        title_part = f"[{headline}]({url})" if url else headline
+        meta_parts = [p for p in (source, date) if p]
+        meta_text = f" — {' · '.join(meta_parts)}" if meta_parts else ""
+        # spec 防线5：低置信（搜索硬解析等）新闻标注 ⚠️，提醒读者甄别
+        confidence = item.get("confidence")
+        low_conf_mark = " ⚠️" if isinstance(confidence, (int, float)) and confidence < _LOW_CONFIDENCE_THRESHOLD else ""
+        lines.append(f"{idx}. {title_part}{meta_text}{low_conf_mark}")
+    return "\n".join(lines) if len(lines) > 2 else None
+
+
+def render_stock_brief(
+    snapshot: Dict[str, Any],
+    news_items: List[Dict[str, Any]],
+    opinion: Optional[str],
+    extra_risks: Optional[List[str]] = None,
+) -> str:
+    """渲染个股舆情简报（markdown）。
+
+    Args:
+        snapshot: NewsSentimentSnapshot 的 dict 形式（dataclasses.asdict）
+        news_items: 依据新闻列表
+        opinion: LLM 生成的核心观点段；None 时跳过该区块（降级阶梯）
+        extra_risks: 额外风险（如来源可靠度警告）
+    """
+    ticker = str(snapshot.get("ticker") or "").upper()
+    has_news = bool(news_items)
+
+    sections: List[Optional[str]] = [
+        f"## {ticker} 舆情简报",
+        _render_title_line(snapshot),
+    ]
+
+    clean_opinion = str(opinion or "").strip()
+    if clean_opinion:
+        sections.append(f"📍 **核心观点**\n\n{clean_opinion}")
+
+    sections.append(_render_catalysts(snapshot, has_news))
+    sections.append(_render_price_transmission(snapshot))
+    sections.append(_render_risks(snapshot, extra_risks))
+
+    news_section = _render_news_list(news_items)
+    if news_section:
+        sections.append("---")
+        sections.append(news_section)
+
+    return "\n\n".join(s for s in sections if s)
