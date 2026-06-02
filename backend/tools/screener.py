@@ -39,8 +39,22 @@ def _yfinance_screen_stocks(
     """Fallback screener using yfinance when FMP is unavailable."""
     market_norm = str(market or "US").strip().upper()
 
-    # Directly use popular stocks approach - more reliable than Screener API
-    return _yfinance_popular_stocks(market_norm, filters, limit, sort_by, sort_order)
+    # P0-5: CN/HK 市场无法用美股热门列表代替筛选——诚实报错，绝不静默换内容
+    if market_norm in {"CN", "HK"}:
+        return {
+            "success": False,
+            "market": market_norm,
+            "items": [],
+            "count": 0,
+            "error": f"{market_norm} 市场筛选暂不可用（主数据源 FMP 不可达，且无可用的 {market_norm} 备用筛选源）",
+            "capability_note": "A股/港股筛选能力建设中，当前仅支持美股筛选",
+        }
+
+    # US 市场允许降级到热门股，但必须明确标注
+    result = _yfinance_popular_stocks(market_norm, filters, limit, sort_by, sort_order)
+    if result.get("success"):
+        result["capability_note"] = "⚠️ 主数据源不可用，当前展示的是美股热门股票快照（非筛选结果）"
+    return result
 
 
 def _yfinance_popular_stocks(
