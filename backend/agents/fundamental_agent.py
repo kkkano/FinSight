@@ -352,8 +352,13 @@ class FundamentalAgent(BaseFinancialAgent):
             evidence_quality = self._compute_evidence_quality(normalized)
 
         quality_score = self._safe_float(evidence_quality.get("overall_score")) if isinstance(evidence_quality, dict) else None
-        confidence = quality_score if quality_score is not None else (0.7 if evidence else 0.2)
-        confidence = max(0.2, min(0.92, confidence))
+        # P0-2: 无证据时不演戏——confidence 压到 0.1，禁止 0.2 下限保护制造"有点信心"的假象
+        if evidence:
+            confidence = quality_score if quality_score is not None else 0.7
+            confidence = max(0.2, min(0.92, confidence))
+        else:
+            confidence = 0.1
+            fallback_used = True
         risks = self._build_risks(raw_data, normalized)
         source_ids = assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
         claims = self._build_native_claims(
@@ -408,6 +413,9 @@ class FundamentalAgent(BaseFinancialAgent):
                     fallback_reason = "financial_data_unavailable"
             else:
                 fallback_reason = "no_structured_data"
+            # P0-2: 无证据是最严重的缺失，覆盖为明确原因
+            if not evidence:
+                fallback_reason = "no_fundamental_data"
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,

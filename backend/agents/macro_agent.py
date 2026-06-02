@@ -21,6 +21,7 @@ class MacroAgent(BaseFinancialAgent):
 
     AGENT_NAME = "macro"
     MAX_REFLECTIONS = 1  # Plan-Execute-Reflect: one reflection for cross-validation
+    _MISSING_QUALITY_CONFIDENCE = 0.35  # P0-2: 质量分缺失时的诚实上限
 
     _INDICATORS: Dict[str, Dict[str, str]] = {
         "fed_rate": {"label": "Federal funds rate", "unit": "%"},
@@ -493,9 +494,13 @@ class MacroAgent(BaseFinancialAgent):
 
         overall_quality = evidence_quality.get("overall_score") if isinstance(evidence_quality, dict) else None
         try:
-            confidence = float(overall_quality) if overall_quality is not None else 0.6
+            confidence = float(overall_quality) if overall_quality is not None else self._MISSING_QUALITY_CONFIDENCE
         except (TypeError, ValueError):
-            confidence = 0.6
+            confidence = self._MISSING_QUALITY_CONFIDENCE
+        if overall_quality is None:
+            # P0-2: 质量分缺失时压低置信度并在风险中明示
+            risks = list(risks or [])
+            risks.append("宏观数据质量未评估（评分缺失），本节置信度已下调")
         confidence = max(0.2, min(0.95, confidence))
         if fallback_used:
             confidence = min(confidence, 0.6)
