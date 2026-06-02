@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import traceback
 import time as _time
 from dataclasses import dataclass
@@ -87,12 +88,22 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     return markdown, state
 
 
+def _generation_enabled() -> bool:
+    """P0-8: 紧急熔断开关。设 REPORTS_GENERATION_ENABLED=false 可立即停止所有报告生成（无需重启）。"""
+    return str(os.getenv("REPORTS_GENERATION_ENABLED", "true")).strip().lower() not in {"false", "0", "off"}
+
+
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
     _logger = logging.getLogger("chat_router")
 
     @router.post("/chat/supervisor")
     async def chat_supervisor_endpoint(request: ChatRequest):
+        if not _generation_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="服务临时维护中，报告生成已暂停，请稍后再试",
+            )
         _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
@@ -226,6 +237,11 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
     @router.post("/chat/supervisor/stream")
     async def chat_supervisor_stream_endpoint(request: ChatRequest):
+        if not _generation_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="服务临时维护中，报告生成已暂停，请稍后再试",
+            )
         import json as _json
 
         from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
