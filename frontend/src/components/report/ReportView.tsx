@@ -95,9 +95,24 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
   /* ---------------------------------------------------------------- */
 
   const anchorPrefix = useMemo(() => normalizeAnchor(report.report_id || report.ticker || 'report'), [report.report_id, report.ticker]);
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  // P0-4: 显示完整时间，让用户知道数据时效（避免拿过时数据决策）
   const formattedDate = useMemo(() => {
     const date = new Date(report.generated_at);
-    return Number.isNaN(date.getTime()) ? report.generated_at : date.toLocaleDateString();
+    if (Number.isNaN(date.getTime())) return report.generated_at;
+    return `基于 ${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())} 数据生成`;
+  }, [report.generated_at]);
+  // P0-4: 紧凑场景用的短格式 "2026-05-29 14:32"（cockpit 单行 metadata）
+  const formattedDateShort = useMemo(() => {
+    const date = new Date(report.generated_at);
+    if (Number.isNaN(date.getTime())) return report.generated_at;
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }, [report.generated_at]);
+  // P0-4: 文件名安全格式 "2026-05-29_1432"（不含空格/冒号等非法字符）
+  const formattedDateFile = useMemo(() => {
+    const date = new Date(report.generated_at);
+    if (Number.isNaN(date.getTime())) return 'report';
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}_${pad2(date.getHours())}${pad2(date.getMinutes())}`;
   }, [report.generated_at]);
 
   const sections = useMemo(() => report.sections ?? [], [report.sections]);
@@ -272,7 +287,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `report_${report.ticker}_${formattedDate}.pdf`;
+      a.download = `report_${report.ticker}_${formattedDateFile}.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
       toast({ type: 'success', title: 'PDF 已导出' });
@@ -422,7 +437,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
       <div className="p-6">
         <ReportCockpit
           report={report}
-          formattedDate={formattedDate}
+          formattedDate={formattedDateShort}
           evidenceBadges={evidenceBadges}
           metricItems={metricItems}
         />
