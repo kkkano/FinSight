@@ -202,3 +202,221 @@ def render_market_brief(
         sections.append(news_section)
 
     return "\n\n".join(s for s in sections if s)
+
+
+# ──────────────────────────────────────────────────────────────
+# 轻量舆情快照（Chat 快速模式用，零额外 API 调用）
+#
+# 与 NewsAgent 的完整快照（news_agent.py）相比：
+# - sentiment_bias: 仅从新闻条目自带 sentiment 字段统计；无则 sample_size=0
+# - heat: 新闻数量
+# - catalyst_events: 用催化关键词扫描标题（确定性）
+# - price_transmission: status="todo"（渲染器自动跳过该区块）
+#
+# 关键约束：不 import NewsAgent 类，避免 sentiment_brief 依赖重型 agent 模块。
+# ──────────────────────────────────────────────────────────────
+
+# 催化关键词（从 news_agent.py 的 _item_impact_score 同步，含中文 A 股词）
+_CATALYST_KEYWORDS = (
+    # English
+    "beat",
+    "beats",
+    "miss",
+    "earnings",
+    "revenue",
+    "guidance",
+    "approval",
+    "launch",
+    "upgrade",
+    "downgrade",
+    "lawsuit",
+    "investigation",
+    "merger",
+    "acquisition",
+    "dividend",
+    # 中文（A 股新闻催化识别）
+    "财报",
+    "业绩",
+    "超预期",
+    "不及预期",
+    "净利润",
+    "营收",
+    "减持",
+    "增持",
+    "立案",
+    "重组",
+    "并购",
+    "中标",
+    "回购",
+    "停牌",
+    "分红",
+    "解禁",
+)
+
+# 新闻条目自带情绪字段优先级（与 news_agent._extract_item_sentiment 一致）
+_SENTIMENT_SCORE_KEYS = (
+    "sentiment_score",
+    "score",
+    "ticker_sentiment_score",
+    "overall_sentiment_score",
+    "news_sentiment_score",
+)
+_SENTIMENT_LABEL_KEYS = (
+    "sentiment_label",
+    "ticker_sentiment_label",
+    "overall_sentiment_label",
+    "sentiment",
+)
+
+
+def _light_item_title(item: Dict[str, Any]) -> str:
+    return str(item.get("headline") or item.get("title") or "").strip()
+
+
+def _light_coerce_float(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip().replace("%", ""))
+        except (ValueError, AttributeError):
+            return None
+    return None
+
+
+def _light_sentiment_bucket(score: Optional[float], label: str) -> str:
+    lowered = str(label or "").lower()
+    if "neutral" in lowered:
+        return "neutral"
+    if "bull" in lowered or "positive" in lowered:
+        return "positive"
+    if "bear" in lowered or "negative" in lowered:
+        return "negative"
+    if score is None:
+        return "neutral"
+    if score >= 0.15:
+        return "positive"
+    if score <= -0.15:
+        return "negative"
+    return "neutral"
+
+
+def _light_extract_sentiment(item: Dict[str, Any]) -> Optional[str]:
+    """从单条新闻自带字段提取情绪 bucket；无情绪信号返回 None（不计入样本）。"""
+    score: Optional[float] = None
+    for key in _SENTIMENT_SCORE_KEYS:
+        score = _light_coerce_float(item.get(key))
+        if score is not None:
+            break
+    label = ""
+    for key in _SENTIMENT_LABEL_KEYS:
+        raw_label = item.get(key)
+        if isinstance(raw_label, dict):
+            raw_label = raw_label.get("label")
+        if raw_label:
+            label = str(raw_label)
+            break
+    if score is None and not label:
+        return None
+    return _light_sentiment_bucket(score, label)
+
+
+def _light_sentiment_bias(news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    counts = {"positive": 0, "negative": 0, "neutral": 0}
+    for item in news_items:
+        if not isinstance(item, dict):
+            continue
+        bucket = _light_extract_sentiment(item)
+        if bucket is None:
+            continue
+        counts[bucket] += 1
+
+    total = sum(counts.values())
+    if counts["positive"] > counts["negative"]:
+        label = "bullish"
+    elif counts["negative"] > counts["positive"]:
+        label = "bearish"
+    else:
+        label = "neutral"
+
+    return {
+        "label": label,
+        "average_score": None,  # 轻量模式无逐条分数平均（防止假精度）
+        "positive_count": counts["positive"],
+        "negative_count": counts["negative"],
+        "neutral_count": counts["neutral"],
+        "sample_size": total,
+        "confidence": None,
+    }
+
+
+def _light_heat(news_count: int) -> Dict[str, Any]:
+    if news_count >= 6:
+        level = "elevated"
+    elif news_count >= 3:
+        level = "active"
+    elif news_count > 0:
+        level = "normal"
+    else:
+        level = "thin"
+    return {"level": level, "news_count": news_count, "basis": "chat_news_volume"}
+
+
+def _light_catalyst_events(news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    events: List[Dict[str, Any]] = []
+    for item in news_items:
+        if not isinstance(item, dict):
+            continue
+        title = _light_item_title(item)
+        if not title:
+            continue
+        lowered = title.lower()
+        if not any(token in lowered for token in _CATALYST_KEYWORDS):
+            continue
+        events.append(
+            {
+                "kind": "news",
+                "category": "keyword_catalyst",
+                "title": title,
+                "date": item.get("datetime")
+                or item.get("published_at")
+                or item.get("published")
+                or item.get("date"),
+                "source": item.get("source") or "news",
+            }
+        )
+    return {"count": len(events), "events": events[:8]}
+
+
+def build_light_snapshot(ticker: str, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """从新闻列表构建轻量舆情快照（Chat 快速模式用，零额外 API 调用）。
+
+    与 NewsAgent 的完整快照相比：
+    - sentiment_bias: 仅从新闻条目自带的 sentiment 字段统计；无则 sample_size=0
+      （渲染器显示"情绪样本不足"）
+    - heat: 新闻数量
+    - catalyst_events: 用催化关键词扫描标题（确定性，含中文 A 股词）
+    - price_transmission: status="todo"（渲染器自动跳过该区块——数据真实性防线）
+
+    Args:
+        ticker: 标的代码（用于简报标题）
+        news_items: 新闻列表（dict，字段约定见 sentiment_brief._render_news_list）
+
+    Returns:
+        与 render_stock_brief 期望的 snapshot 结构兼容的 dict
+    """
+    safe_items = [item for item in (news_items or []) if isinstance(item, dict)]
+    return {
+        "ticker": str(ticker or "").strip().upper(),
+        "sentiment_bias": _light_sentiment_bias(safe_items),
+        "heat": _light_heat(len(safe_items)),
+        "catalyst_events": _light_catalyst_events(safe_items),
+        "price_transmission": {
+            "status": "todo",
+            "source": None,
+            "price_change_pct": None,
+        },
+        "source": "chat_light_snapshot",
+    }

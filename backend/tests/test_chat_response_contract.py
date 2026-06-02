@@ -263,10 +263,11 @@ def test_chat_renderer_compound_news_answer_keeps_unrelated_price_and_focus_line
     )
 
     _assert_chat_contract(markdown)
-    assert "MSFT 我找到几条比较相关的消息" in markdown
-    assert "最近新闻" in markdown
+    # P0-9: 新闻走确定性舆情简报（替换旧的"我找到几条比较相关的消息"自由发挥格式）
+    assert "MSFT 舆情简报" in markdown
+    assert "Microsoft AI spending under scrutiny" in markdown
     assert "AAPL" in markdown and "276.83" in markdown
-    assert "折现率" in markdown
+    assert "折现率" in markdown  # impact_analysis 作为简报核心观点
     assert "一句话：" not in markdown
 
 
@@ -1587,8 +1588,9 @@ def test_chat_renderer_analyze_impact_news_answer_stays_natural() -> None:
     )
 
     _assert_chat_contract(markdown)
-    assert "我找到几条比较相关的消息" in markdown
-    assert "最近新闻" in markdown
+    # P0-9: 新闻走确定性舆情简报（替换旧的"我找到几条比较相关的消息"自由发挥格式）
+    assert "LI 舆情简报" in markdown
+    assert "依据新闻" in markdown
     assert "[Li Auto delivery update](https://example.com/li)" in markdown
     assert "对股价的影响要看两点" not in markdown
 

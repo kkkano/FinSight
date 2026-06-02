@@ -8,6 +8,11 @@ import time
 from typing import Any
 from urllib.parse import quote_plus
 
+from backend.agents.sentiment_brief import (
+    build_light_snapshot,
+    render_market_brief,
+    render_stock_brief,
+)
 from backend.graph.memory_scope import current_report_context
 from backend.graph.state import GraphState
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
@@ -769,6 +774,50 @@ def _prices_by_ticker(state: GraphState) -> dict[str, dict[str, Any]]:
         if price and tickers:
             prices[tickers[0]] = price
     return prices
+
+
+_TICKER_CODE_RE = re.compile(r"^[A-Z0-9]{1,6}([.\-][A-Z0-9]{1,4})?$")
+
+
+def _is_real_ticker(key: str) -> bool:
+    """判断 news_map 的 key 是真实股票代码（个股简报）还是泛市场兜底标签。
+
+    真实 ticker：AAPL / MSFT / 600519.SS / 0700.HK 等 ASCII 代码。
+    泛市场兜底：``_news_by_ticker`` 在无法判定标的时写入的 "相关信息" 等中文标签。
+    """
+    candidate = str(key or "").strip().upper()
+    return bool(_TICKER_CODE_RE.match(candidate))
+
+
+def _render_news_brief_block(
+    ticker: str,
+    items: list[dict[str, str]],
+    *,
+    opinion: str | None,
+) -> str:
+    """把一组新闻渲染成确定性舆情简报（P0-9 接入真实 Chat 路径）。
+
+    - 真实 ticker -> render_stock_brief(build_light_snapshot(...))（个股简报）
+    - 泛市场兜底标签 -> render_market_brief(themes=[], ...)（市场简报）
+
+    opinion 复用 synthesize 已生成的 render_var（impact_analysis/conclusion），
+    不额外触发 LLM 调用；缺失时简报骨架照常输出（降级阶梯）。
+    """
+    clean_opinion = str(opinion or "").strip() or None
+    # 净化 URL：剥离不可引用链接（如 google search 页），与 chat_renderer 防线对齐，
+    # 避免简报 news_list 把搜索页当成引用外泄。
+    safe_items: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        new_item = dict(item)
+        if not _is_citable_url(str(new_item.get("url") or "").strip()):
+            new_item["url"] = ""
+        safe_items.append(new_item)
+    if _is_real_ticker(ticker):
+        snapshot = build_light_snapshot(ticker, safe_items)
+        return render_stock_brief(snapshot, safe_items, opinion=clean_opinion)
+    return render_market_brief(themes=[], news_items=safe_items, opinion=clean_opinion)
 
 
 def _news_by_ticker(state: GraphState) -> dict[str, list[dict[str, str]]]:
@@ -2257,11 +2306,20 @@ def render_chat_markdown(state: GraphState) -> str:
         )
         if news_map:
             listed_news_items: list[dict[str, str]] = []
+            # P0-9: 用确定性舆情简报替换"我找到几条比较相关的消息"自由发挥格式。
+            # opinion 复用 synthesize 已生成的 analysis_block（不额外调 LLM）；
+            # 简报消费后不再单独 append analysis_block，避免重复。
+            opinion_consumed_by_brief = False
             for ticker, items in list(news_map.items())[:4]:
-                lines.append(f"{ticker} 我找到几条比较相关的消息（最近新闻）：")
-                for item in items[:3]:
-                    lines.append(f"- {_format_news_item(item)}")
-                    listed_news_items.append(item)
+                brief_items = items[:8]
+                listed_news_items.extend(brief_items)
+                brief_md = _render_news_brief_block(
+                    ticker, brief_items, opinion=analysis_block
+                )
+                if brief_md.strip():
+                    lines.append(brief_md)
+                    if analysis_block:
+                        opinion_consumed_by_brief = True
                 if ticker in prices and prices[ticker].get("price"):
                     lines.append(f"- {_format_price_line(ticker, prices[ticker])}")
                 lines.append("")
@@ -2273,7 +2331,7 @@ def render_chat_markdown(state: GraphState) -> str:
                 lines.pop()
             _append_url_fetch_notes(lines, state)
             lines.append("")
-            if analysis_block:
+            if analysis_block and not opinion_consumed_by_brief:
                 lines.append(analysis_block)
             elif _has_contract_facet(state, "external_entity_impact"):
                 lines.extend(
@@ -2285,7 +2343,7 @@ def render_chat_markdown(state: GraphState) -> str:
                 )
             elif _has_macro_context(state):
                 lines.extend(_macro_mechanism_lines(state))
-            else:
+            elif not opinion_consumed_by_brief:
                 lines.append("我先只列出可引用消息；这轮没有足够证据支撑进一步影响判断。")
             if next_watch and "关注" not in "\n".join(lines):
                 lines.append("")
