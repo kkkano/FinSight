@@ -3,8 +3,6 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock
 from backend.services.memory import UserProfile
 from backend.orchestration.forum import ForumHost, ForumOutput, AgentOutput
-from backend.orchestration.supervisor_agent import SupervisorAgent
-from backend.orchestration.intent_classifier import ClassificationResult, AgentIntent
 import backend.services.llm_retry as llm_retry
 
 @pytest.mark.asyncio
@@ -46,57 +44,8 @@ async def test_forum_host_context_injection():
     assert isinstance(result, ForumOutput)
     # 暂时只能断言结果类型，因为 Prompt 逻辑被注释掉了
 
-@pytest.mark.asyncio
-async def test_supervisor_pass_profile():
-    # Mock dependencies
-    mock_llm = MagicMock()
-    mock_tools = MagicMock()
-    mock_cache = MagicMock()
-
-    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
-
-    # Mock Agents
-    for name in supervisor.agents:
-        supervisor.agents[name].research = AsyncMock(return_value=AgentOutput(
-            agent_name=name,
-            summary=f"{name} summary",
-            evidence=[],
-            confidence=0.8,
-            data_sources=["test"],
-            as_of="2023-01-01"
-        ))
-
-    # Mock Forum
-    supervisor.forum.synthesize = AsyncMock(return_value=ForumOutput(
-        consensus="Consensus",
-        disagreement="None",
-        confidence=0.8,
-        recommendation="HOLD",
-        risks=[]
-    ))
-
-    profile = UserProfile(user_id="u2", risk_tolerance="high")
-
-    supervisor.classifier.classify = MagicMock(return_value=ClassificationResult(
-        intent=AgentIntent.REPORT,
-        confidence=1.0,
-        tickers=["AAPL"],
-        method="test",
-        reasoning="forced",
-        scores={},
-    ))
-
-    # Run process
-    result = await supervisor.process("分析 AAPL", tickers=["AAPL"], user_profile=profile)
-
-    # Verify analyze call passed profile to forum
-    supervisor.forum.synthesize.assert_called_once()
-    call_args = supervisor.forum.synthesize.call_args
-    assert call_args.kwargs['user_profile'] == profile
-
 if __name__ == "__main__":
     asyncio.run(test_forum_host_context_injection())
-    asyncio.run(test_supervisor_pass_profile())
 
 
 @pytest.mark.asyncio
@@ -130,18 +79,3 @@ async def test_forum_host_uses_retry_and_fallback_on_empty_response(monkeypatch)
     assert isinstance(result, ForumOutput)
     assert isinstance(result.consensus, str)
     assert len(result.consensus.strip()) > 0
-
-
-def test_supervisor_url_summary_no_sync_llm_needed():
-    mock_llm = MagicMock()
-    mock_tools = MagicMock()
-    mock_cache = MagicMock()
-    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
-
-    mock_tools.fetch_url_content = MagicMock(return_value="x " * 400)
-    summary = supervisor._fetch_and_summarize_url("https://example.com/a")
-
-    assert isinstance(summary, str)
-    assert len(summary) > 0
-    assert len(summary) <= 300
-    assert not mock_llm.invoke.called

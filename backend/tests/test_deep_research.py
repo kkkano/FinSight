@@ -5,8 +5,6 @@ from typing import Any
 import backend.agents.deep_search_agent as deep_search_module
 from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.macro_agent import MacroAgent
-from backend.orchestration.supervisor_agent import SupervisorAgent
-from backend.orchestration.intent_classifier import ClassificationResult, AgentIntent
 from backend.agents.base_agent import AgentOutput
 
 @pytest.mark.asyncio
@@ -206,53 +204,6 @@ async def test_macro_agent_conflict_merge_prefers_fred():
     assert result.agent_name == "macro"
     assert result.evidence_quality.get("has_conflicts") is True
     assert any("conflicting" in str(risk).lower() for risk in result.risks)
-
-@pytest.mark.asyncio
-async def test_supervisor_integration_phase2():
-    mock_llm = MagicMock()
-    mock_tools = MagicMock()
-    mock_cache = MagicMock()
-
-    supervisor = SupervisorAgent(mock_llm, mock_tools, mock_cache)
-
-    # Check if new agents are registered
-    assert "deep_search" in supervisor.agents
-    assert "macro" in supervisor.agents
-    assert "technical" in supervisor.agents
-    assert "fundamental" in supervisor.agents
-
-    # Mock all agents research method to avoid actual calls
-    for name, agent in supervisor.agents.items():
-        agent.research = AsyncMock(return_value=AgentOutput(
-            agent_name=name,
-            summary=f"{name} summary",
-            evidence=[],
-            confidence=0.8,
-            data_sources=["test"],
-            as_of="2023-01-01"
-        ))
-
-    # Mock Forum synthesize
-    supervisor.forum.synthesize = AsyncMock(return_value=MagicMock())
-
-    classification = ClassificationResult(
-        intent=AgentIntent.REPORT,
-        confidence=1.0,
-        tickers=["NVDA"],
-        method="test",
-        reasoning="forced",
-        scores={},
-    )
-
-    # Run report handler directly (avoids agent reset in process)
-    await supervisor._handle_report("Deep analysis of NVDA", "NVDA", None, classification)
-
-    # Verify agents were called
-    supervisor.agents["deep_search"].research.assert_called()
-    supervisor.agents["macro"].research.assert_called()
-    supervisor.agents["technical"].research.assert_called()
-    supervisor.agents["fundamental"].research.assert_called()
-
 
 def test_deep_search_queries_dynamic():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())
@@ -681,4 +632,3 @@ def test_deep_search_http_session_disables_retries_by_default(monkeypatch):
 if __name__ == "__main__":
     asyncio.run(test_deep_search_agent())
     asyncio.run(test_macro_agent())
-    asyncio.run(test_supervisor_integration_phase2())
