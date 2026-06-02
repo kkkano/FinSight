@@ -122,11 +122,11 @@ export function ActionButtons({
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="primary" size="sm" onClick={onAcceptAll}>
             <CheckCheck size={14} />
-            全部接受
+            全部标记接受
           </Button>
           <Button variant="ghost" size="sm" onClick={onRejectAll}>
             <XCircle size={14} />
-            全部拒绝
+            全部标记拒绝
           </Button>
           <Button variant="ghost" size="sm" onClick={onResetAll}>
             <RotateCcw size={14} />
