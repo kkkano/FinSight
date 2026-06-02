@@ -21,6 +21,8 @@ from backend.services.alert_scheduler import PriceSnapshot
 def client(tmp_path, monkeypatch):
     # 单例重置 + 路径重定向到 tmp
     monkeypatch.setenv("MONITOR_DB_PATH", str(tmp_path / "monitor_router_test.db"))
+    # Phase 1 路由冒烟：关闭 L2，避免扫描串联 agent/LLM 调用
+    monkeypatch.setenv("MONITOR_L2_ENABLED", "false")
     monkeypatch.setattr(ms, "_STORE", None, raising=False)
     with TestClient(app) as c:
         yield c

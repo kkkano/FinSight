@@ -16,6 +16,20 @@ export type FindingTriggerType =
 /** 发现处理状态 */
 export type FindingStatus = 'new' | 'viewed' | 'acted';
 
+/** L2 agent 深析结果（Phase 2） */
+export interface AgentAnalysis {
+  /** agent 标识，如 technical_agent / risk_agent */
+  agent: string;
+  /** 分析摘要文本 */
+  summary: string;
+  /** 置信度（0~1）；agent 未评估时为 null（诚实原则，不编造） */
+  confidence: number | null;
+  /** 数据来源标签 */
+  data_sources: string[];
+  /** ISO 时间字符串 */
+  analyzed_at: string;
+}
+
 /** 发现卡片上的行动按钮 */
 export interface FindingAction {
   /** 行动类型，如 full_report / risk_review / rebalance 等 */
@@ -41,8 +55,8 @@ export interface Finding {
   title: string;
   /** 摘要 */
   summary: string;
-  /** L2 agent 分析结果，Phase 1 恒为 null */
-  agent_analysis: Record<string, unknown> | null;
+  /** L2 agent 分析结果（Phase 2）；未分析时为 null */
+  agent_analysis: AgentAnalysis | null;
   /** 可执行行动列表 */
   actions: FindingAction[];
   status: FindingStatus;

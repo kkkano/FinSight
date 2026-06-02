@@ -72,12 +72,15 @@ async def update_finding_endpoint(finding_id: str, session_id: str, request: Upd
 
 
 @monitor_router.post("/api/monitor/scan")
-async def scan_endpoint(session_id: str):
-    """手动触发该 session 的 L1 规则扫描，返回本次新产生的 findings。"""
+async def scan_endpoint(session_id: str, enable_l2: bool = True):
+    """手动触发该 session 的 L1 规则扫描，返回本次新产生的 findings。
+
+    enable_l2 默认 True：手动扫描时附带 L2 agent 深析（受同样的成本护栏限制）。
+    """
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
     try:
-        findings = await run_l1_scan(session_id)
+        findings = await run_l1_scan(session_id, enable_l2=enable_l2)
     except Exception as exc:  # noqa: BLE001
         logger.exception("[MonitorRouter] manual scan failed for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail="scan failed") from exc

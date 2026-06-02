@@ -24,6 +24,7 @@ import uuid
 from datetime import datetime, timezone
 
 from backend.services.alert_scheduler import fetch_price_snapshot
+from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_store import get_monitor_store
 from backend.services.portfolio_store import get_positions, list_session_ids
 
@@ -202,8 +203,31 @@ async def _scan_concentration(
     return findings
 
 
-async def run_l1_scan(session_id: str) -> list[dict]:
-    """对单个 session 跑 L1 规则扫描，返回本次新产生的 findings。"""
+async def _run_l2_for_findings(store, findings: list[dict]) -> None:
+    """Phase 2：对新产生的 findings 逐条做 L2 agent 深析（带成本护栏）。
+
+    - 总开关 / 熔断 / 预算任一不满足则整体跳过
+    - 单条预算用尽即停止后续 L2（已分析的保留）
+    - L2 失败（run_l2_analysis 返回 None）不影响 Finding 本身
+    """
+    if not l2_enabled():
+        return
+    budget = get_l2_budget()
+    for finding in findings:
+        if not budget.can_spend():
+            break
+        analysis = await run_l2_analysis(finding)
+        if analysis:
+            budget.record_spend()
+            store.update_finding_analysis(finding["session_id"], finding["id"], analysis)
+            finding["agent_analysis"] = analysis  # 返回值里也带上
+
+
+async def run_l1_scan(session_id: str, enable_l2: bool = True) -> list[dict]:
+    """对单个 session 跑 L1 规则扫描，返回本次新产生的 findings。
+
+    enable_l2=True 时（默认），对新 finding 串联 L2 agent 深析（受成本护栏限制）。
+    """
     store = get_monitor_store()
     positions = get_positions(session_id)
     targets = store.list_targets(session_id)
@@ -218,6 +242,11 @@ async def run_l1_scan(session_id: str) -> list[dict]:
     findings: list[dict] = []
     findings += await _scan_price_move(session_id, store, positions, config_map)
     findings += await _scan_concentration(session_id, store, positions, conc_config)
+
+    # Phase 2: L2 agent 自动深析（有成本护栏）
+    if enable_l2 and findings:
+        await _run_l2_for_findings(store, findings)
+
     return findings
 
 

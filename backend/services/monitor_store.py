@@ -174,6 +174,23 @@ class MonitorStore:
         self._db().commit()
         return cursor.rowcount > 0
 
+    def update_finding_analysis(
+        self, session_id: str, finding_id: str, analysis: dict[str, Any] | None
+    ) -> bool:
+        """写入 L2 agent 分析结果（Phase 2）；session 隔离，跨 session 不可改。
+
+        analysis 为 None 时清空该字段（落库为 NULL）。
+        """
+        payload = (
+            json.dumps(analysis, ensure_ascii=False) if analysis is not None else None
+        )
+        cursor = self._db().execute(
+            "UPDATE findings SET agent_analysis = ? WHERE id = ? AND session_id = ?",
+            (payload, finding_id, session_id),
+        )
+        self._db().commit()
+        return cursor.rowcount > 0
+
     def has_recent_finding(
         self, session_id: str, target: str, trigger_type: str, within_hours: int = 4
     ) -> bool:

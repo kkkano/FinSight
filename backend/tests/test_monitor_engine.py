@@ -22,6 +22,9 @@ from backend.services.monitor_store import MonitorStore
 @pytest.fixture()
 def patched_env(tmp_path, monkeypatch):
     """注入临时 store + 默认的空持仓/价格 mock，返回 store 供断言。"""
+    # Phase 1 测试：关闭 L2，避免触发 agent/LLM 调用（L2 串联另有专门测试覆盖）
+    monkeypatch.setenv("MONITOR_L2_ENABLED", "false")
+
     store = MonitorStore(db_path=str(tmp_path / "monitor_engine_test.db"))
     monkeypatch.setattr(monitor_engine, "get_monitor_store", lambda: store)
 

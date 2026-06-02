@@ -15,12 +15,13 @@ import {
   CalendarClock,
   Globe,
   MessageSquareWarning,
+  Sparkles,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import type { ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 
-import type { Finding, FindingTriggerType } from '../../types/monitor';
+import type { AgentAnalysis, Finding, FindingTriggerType } from '../../types/monitor';
 
 interface FindingCardProps {
   finding: Finding;
@@ -110,6 +111,30 @@ export function isActionEnabled(actionType: string): boolean {
   return actionType === 'full_report';
 }
 
+/** agent 标识 → 中文展示名 */
+export function resolveAgentLabel(agent: string): string {
+  switch (agent) {
+    case 'technical_agent':
+      return '技术分析';
+    case 'risk_agent':
+      return '风险评估';
+    default:
+      return agent || 'AI';
+  }
+}
+
+/**
+ * 置信度展示：number → 百分比字符串；null → "未评估"（诚实原则，不编造数值）。
+ * 兼容 0~1 小数与 0~100 整数两种输入。
+ */
+export function formatConfidence(confidence: number | null): string {
+  if (confidence === null || confidence === undefined || Number.isNaN(confidence)) {
+    return '未评估';
+  }
+  const pct = confidence <= 1 ? confidence * 100 : confidence;
+  return `${Math.round(pct)}%`;
+}
+
 /** 格式化相对时间（简化版，避免引入额外依赖） */
 function formatRelativeTime(iso: string): string {
   const ts = new Date(iso).getTime();
@@ -122,6 +147,78 @@ function formatRelativeTime(iso: string): string {
   if (diffHour < 24) return `${diffHour} 小时前`;
   const diffDay = Math.floor(diffHour / 24);
   return `${diffDay} 天前`;
+}
+
+/**
+ * AI 分析区块（Phase 2）：agent badge + summary（默认折叠 4 行）+ 置信度 + 数据来源 tag。
+ * summary 超过约 4 行时提供「展开全部 / 收起」切换。
+ */
+function AgentAnalysisBlock({ analysis }: { analysis: AgentAnalysis }) {
+  const [expanded, setExpanded] = useState(false);
+  const summary = analysis.summary?.trim() ?? '';
+  // 用字符长度粗略判断是否可能超 4 行（避免依赖布局测量）
+  const isLong = summary.length > 120;
+
+  return (
+    <div
+      data-testid="finding-agent-analysis"
+      className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1 text-fin-primary">
+          <Sparkles size={13} />
+          <span className="text-2xs font-semibold">AI 分析</span>
+        </span>
+        <span className="px-1.5 py-0.5 rounded text-2xs font-medium bg-fin-primary/10 text-fin-primary">
+          {resolveAgentLabel(analysis.agent)}
+        </span>
+        <span
+          data-testid="finding-agent-confidence"
+          className="text-2xs text-fin-muted"
+          title="分析置信度"
+        >
+          置信度 {formatConfidence(analysis.confidence)}
+        </span>
+      </div>
+
+      {summary && (
+        <p
+          data-testid="finding-agent-summary"
+          className={`mt-1.5 text-xs text-fin-text-secondary leading-relaxed whitespace-pre-line ${
+            expanded ? '' : 'line-clamp-4'
+          }`}
+        >
+          {summary}
+        </p>
+      )}
+
+      {isLong && (
+        <button
+          type="button"
+          data-testid="finding-agent-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-2xs font-medium text-fin-primary hover:underline"
+        >
+          {expanded ? '收起' : '展开全部'}
+        </button>
+      )}
+
+      {analysis.data_sources.length > 0 && (
+        <div className="mt-2 flex items-center gap-1 flex-wrap">
+          {analysis.data_sources.map((src, idx) => (
+            <span
+              key={`${src}-${idx}`}
+              data-testid="finding-agent-source"
+              className="px-1.5 py-0.5 rounded text-2xs text-fin-muted bg-fin-border/30"
+            >
+              {src}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function FindingCard({ finding, onView, onNavigateToChat }: FindingCardProps) {
@@ -189,6 +286,9 @@ export function FindingCard({ finding, onView, onNavigateToChat }: FindingCardPr
           </div>
         </div>
       </div>
+
+      {/* AI 分析区块（Phase 2，agent_analysis 存在时渲染） */}
+      {finding.agent_analysis && <AgentAnalysisBlock analysis={finding.agent_analysis} />}
 
       {/* 行动按钮组 */}
       {finding.actions.length > 0 && (
