@@ -4,6 +4,7 @@ import { WorkspaceShell } from './components/layout/WorkspaceShell';
 import { WelcomePage } from './components/welcome/WelcomePage';
 import { Phase24PanelsPage } from './components/labs/Phase24PanelsPage';
 import { ToastProvider } from './components/ui';
+import { RateLimitToastListener } from './components/common/RateLimitToastListener';
 import { CommandPalette } from './components/CommandPalette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
@@ -220,6 +221,8 @@ function App() {
 
   return (
     <ToastProvider>
+      {/* P1-8: 全局 429 限流 toast 提示 */}
+      <RateLimitToastListener />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-fin-primary focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-white"

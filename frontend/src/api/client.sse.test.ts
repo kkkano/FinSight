@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiClient, parseSSEStream } from './client';
+import { apiClient, parseSSEStream, RATE_LIMIT_EVENT, rateLimitEvents } from './client';
 
 function sseResponse(events: Array<Record<string, unknown>>): Response {
   const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
@@ -114,5 +114,131 @@ describe('parseSSEStream', () => {
     );
 
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('SSE read timeout (P1-2)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('reports a connection error when no data arrives within the read timeout', async () => {
+    vi.useFakeTimers();
+    // 一个永远不发数据的流，模拟连接挂死（网络断/Tunnel 超时）
+    const stream = new ReadableStream({ start() { /* never enqueue */ } });
+    const response = new Response(stream);
+    const onError = vi.fn();
+    const onDone = vi.fn();
+
+    const promise = parseSSEStream(response, { onError, onDone }, { readTimeoutMs: 1000 });
+    await vi.advanceTimersByTimeAsync(1100);
+    await promise;
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain('连接中断');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('does not time out while frames keep arriving (heartbeats reset the timer)', async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    let pushCount = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    // 每 500ms 发一个心跳帧，发 5 个之后正常结束（总时长 2500ms > 单次超时 1000ms）
+    const stream = new ReadableStream({
+      start(controller) {
+        intervalId = setInterval(() => {
+          pushCount += 1;
+          controller.enqueue(encoder.encode('data: {"type":"heartbeat"}\n\n'));
+          if (pushCount >= 5) {
+            if (intervalId) clearInterval(intervalId);
+            controller.close();
+          }
+        }, 500);
+      },
+    });
+    const response = new Response(stream);
+    const onError = vi.fn();
+
+    const promise = parseSSEStream(response, { onError }, { readTimeoutMs: 1000 });
+    await vi.advanceTimersByTimeAsync(3000);
+    await promise;
+
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not report timeout error when stream was aborted', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const stream = new ReadableStream({ start() { /* never enqueue */ } });
+    const response = new Response(stream);
+    const onError = vi.fn();
+
+    const promise = parseSSEStream(
+      response,
+      { onError },
+      { readTimeoutMs: 1000, signal: controller.signal },
+    );
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(1100);
+    await promise;
+
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('429 rate limit event (P1-8)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('dispatches a rate-limit event when stream endpoint returns 429', async () => {
+    const listener = vi.fn();
+    rateLimitEvents.addEventListener(RATE_LIMIT_EVENT, listener);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('rate limited', {
+          status: 429,
+          headers: { 'Retry-After': '30' },
+        }),
+      ),
+    );
+
+    await expect(
+      apiClient.sendMessageStream('AAPL 分析', vi.fn()),
+    ).rejects.toThrow();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    const detail = (listener.mock.calls[0][0] as CustomEvent).detail;
+    expect(detail.retryAfterSeconds).toBe(30);
+
+    rateLimitEvents.removeEventListener(RATE_LIMIT_EVENT, listener);
+  });
+
+  it('dispatches a rate-limit event with null retry-after when header missing', async () => {
+    const listener = vi.fn();
+    rateLimitEvents.addEventListener(RATE_LIMIT_EVENT, listener);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('rate limited', { status: 429 })),
+    );
+
+    await expect(
+      apiClient.executeAgent(
+        { query: 'AAPL', session_id: 'public:user:thread' },
+        {},
+      ),
+    ).rejects.toThrow();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    const detail = (listener.mock.calls[0][0] as CustomEvent).detail;
+    expect(detail.retryAfterSeconds).toBeNull();
+
+    rateLimitEvents.removeEventListener(RATE_LIMIT_EVENT, listener);
   });
 });

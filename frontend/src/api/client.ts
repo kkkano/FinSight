@@ -319,14 +319,63 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// ---------------------------------------------------------------------------
+// P1-8: 429 限流全局事件 — UI 层（RateLimitToastListener）监听后弹 toast
+// ---------------------------------------------------------------------------
+
+/** 429 限流事件名（CustomEvent，detail: { retryAfterSeconds: number | null }） */
+export const RATE_LIMIT_EVENT = 'finsight:rate-limited';
+
+/**
+ * 限流事件总线。
+ * 用独立 EventTarget 而非 window：拦截器/fetch 不在 React 内无法用 useToast，
+ * 且独立总线在测试/SSR 环境下也能工作。
+ */
+export const rateLimitEvents = new EventTarget();
+
+/** 解析 Retry-After 响应头（秒数格式），无效时返回 null */
+function parseRetryAfter(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
+}
+
+/** 派发全局限流事件，UI 层（RateLimitToastListener）监听后弹 toast */
+function emitRateLimitEvent(retryAfterSeconds: number | null): void {
+  try {
+    rateLimitEvents.dispatchEvent(
+      new CustomEvent(RATE_LIMIT_EVENT, { detail: { retryAfterSeconds } }),
+    );
+  } catch {
+    // CustomEvent 不可用的环境（极老运行时）忽略，不阻断错误处理主流程
+  }
+}
+
 // 响应拦截器：处理后端返回的非 200 错误
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // P1-8: 429 限流 → 派发全局事件，UI 弹 toast 提示
+    if (error.response?.status === 429) {
+      emitRateLimitEvent(parseRetryAfter(error.response.headers?.['retry-after']));
+    }
     console.error('API Error:', error.response || error.message);
     return Promise.reject(error);
   }
 );
+
+/**
+ * 检查流式 fetch 响应，429 时派发限流事件并抛出友好错误。
+ * 其他非 2xx 状态抛出通用 HTTP 错误。
+ */
+function ensureStreamResponseOk(response: Response): void {
+  if (response.ok) return;
+  if (response.status === 429) {
+    emitRateLimitEvent(parseRetryAfter(response.headers.get('retry-after')));
+    throw new Error('请求过于频繁，服务器限流中，请稍后再试');
+  }
+  throw new Error(`HTTP error! status: ${response.status}`);
+}
 
 // ---------------------------------------------------------------------------
 // Shared SSE parser — used by sendMessageStream() and executeAgent()
@@ -337,6 +386,19 @@ const sseIdleDoneFallbackMs = (): number => {
   if (!Number.isFinite(raw)) return 8000;
   return Math.max(0, raw);
 };
+
+/**
+ * P1-2: SSE 读超时（毫秒）。超过该时长未收到任何数据帧（包括后端心跳）
+ * 视为连接断开，向用户明确报错而不是让进度条永久卡住。设 0 禁用。
+ */
+const sseReadTimeoutMs = (): number => {
+  const raw = Number(import.meta.env.VITE_SSE_READ_TIMEOUT_MS ?? 30000);
+  if (!Number.isFinite(raw)) return 30000;
+  return Math.max(0, raw);
+};
+
+/** 内部标记：SSE 读超时错误（与业务错误区分） */
+const SSE_READ_TIMEOUT_ERROR = 'SSE_READ_TIMEOUT';
 
 const isCompletionProgressSignal = (step: any): boolean => {
   const stage = String(step?.stage || step?.result?.stage || '').trim().toLowerCase();
@@ -361,10 +423,11 @@ const isCompletionProgressSignal = (step: any): boolean => {
 export async function parseSSEStream(
   response: Response,
   callbacks: SSECallbacks,
-  opts: { traceRawEnabled?: boolean; signal?: AbortSignal } = {},
+  opts: { traceRawEnabled?: boolean; signal?: AbortSignal; readTimeoutMs?: number } = {},
 ): Promise<void> {
   const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent, onInterrupt } = callbacks;
   const traceRawEnabled = opts.traceRawEnabled ?? true;
+  const readTimeoutMs = opts.readTimeoutMs ?? sseReadTimeoutMs();
 
   const normalizeEventType = (payload: any): RawEventType => {
     const baseType = String(payload?.type || '').trim();
@@ -383,11 +446,47 @@ export async function parseSSEStream(
   let buffer = '';
   let eventCounter = 0;
 
+  /**
+   * P1-2: 带超时的 read。超过 readTimeoutMs 未收到任何数据（含心跳帧）
+   * 视为连接断开（网络断/Tunnel 超时），避免 reader.read() 永久挂起。
+   */
+  const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+    if (readTimeoutMs <= 0) return reader.read();
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        reader.read(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(SSE_READ_TIMEOUT_ERROR)), readTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+
   try {
     while (true) {
       if (opts.signal?.aborted) break;
 
-      const { done, value } = await reader.read();
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await readWithTimeout();
+      } catch (e) {
+        if (e instanceof Error && e.message === SSE_READ_TIMEOUT_ERROR) {
+          // 中止前再确认一次没有被外部取消
+          if (!opts.signal?.aborted) {
+            onError?.(
+              `连接中断：${Math.round(readTimeoutMs / 1000)} 秒未收到服务器数据，请检查网络后重试`,
+            );
+          }
+          break;
+        }
+        throw e;
+      }
+
+      const { done, value } = readResult;
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -1049,9 +1148,7 @@ export const apiClient = {
       signal: opts.signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    ensureStreamResponseOk(response);
 
     let sawDone = false;
     let sawError = false;
@@ -1152,9 +1249,7 @@ export const apiClient = {
       signal: opts.signal,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    ensureStreamResponseOk(response);
 
     let sawDone = false;
     let sawError = false;
@@ -1288,6 +1383,11 @@ export const apiClient = {
       body: JSON.stringify(params),
       signal: opts?.signal,
     });
+
+    // P1-8: resume 流被限流时同样提示用户（不抛错，保持原有返回 Response 的契约）
+    if (response.status === 429) {
+      emitRateLimitEvent(parseRetryAfter(response.headers.get('retry-after')));
+    }
 
     if (callbacks && response.ok) {
       let sawDone = false;
