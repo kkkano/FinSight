@@ -801,6 +801,11 @@ class SimpleRateLimiter:
 
 _rate_limiter = SimpleRateLimiter.from_env()
 
+# P1-6: 昂贵生成端点的并发限制（全局 + 单客户端）
+from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
+
+_concurrency_limiter = ConcurrencyLimiter.from_env()
+
 def _init_default_user_config() -> None:
     """Write default LLM config on first boot if user_config.json does not exist.
 
@@ -1020,16 +1025,47 @@ async def security_gate(request: Request, call_next):
             else:
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
+    # 解析客户端标识（限流 + 并发限制共用）
+    request_identity = getattr(request.state, "rag_authenticated_user", None)
+    if isinstance(request_identity, dict) and request_identity.get("user_id"):
+        client_id = f"user:{request_identity['user_id']}"
+    else:
+        client_id = api_key or (request.client.host if request.client else "anonymous")
+
     if _rate_limiter.enabled:
-        request_identity = getattr(request.state, "rag_authenticated_user", None)
-        if isinstance(request_identity, dict) and request_identity.get("user_id"):
-            client_id = f"user:{request_identity['user_id']}"
-        else:
-            client_id = api_key or (request.client.host if request.client else "anonymous")
         allowed, retry_after = _rate_limiter.allow(client_id)
         if not allowed:
             headers = {"Retry-After": str(retry_after)}
             return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}, headers=headers)
+
+    # P1-6: 昂贵生成端点（Chat/报告执行）施加并发上限，防止少量长连接打满后端
+    if _concurrency_limiter.enabled and is_generation_path(request.url.path):
+        if not _concurrency_limiter.try_acquire(client_id):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "并发请求数已达上限，请等待当前任务完成后再试"},
+                headers={"Retry-After": "15"},
+            )
+        try:
+            response = await call_next(request)
+        except Exception:
+            _concurrency_limiter.release(client_id)
+            raise
+
+        # 流式响应（SSE）：在 body 迭代完成后才释放并发槽
+        body_iterator = getattr(response, "body_iterator", None)
+        if body_iterator is not None:
+            async def _release_after_stream(iterator=body_iterator, cid=client_id):
+                try:
+                    async for chunk in iterator:
+                        yield chunk
+                finally:
+                    _concurrency_limiter.release(cid)
+
+            response.body_iterator = _release_after_stream()
+        else:
+            _concurrency_limiter.release(client_id)
+        return response
 
     return await call_next(request)
 
