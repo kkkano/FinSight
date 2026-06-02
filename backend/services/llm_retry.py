@@ -19,7 +19,11 @@ import re
 from typing import Any, Callable, Optional
 
 from backend.llm_config import report_llm_failure, report_llm_success
-from backend.services.llm_usage import record_llm_usage
+from backend.services.llm_usage import (
+    TokenBudgetExceededError,
+    check_token_budget,
+    record_llm_usage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +156,9 @@ async def ainvoke_with_rate_limit_retry(
     if acquire_timeout_seconds is None:
         acquire_timeout_seconds = _env_float("LLM_RATE_LIMIT_RETRY_ACQUIRE_TIMEOUT_SECONDS", 3600.0)
 
+    # P1-5: 调用前检查单请求 token 预算（超限直接抛错，不消耗 LLM 调用）
+    check_token_budget()
+
     enabled = _env_bool("LLM_RATE_LIMIT_RETRY_ENABLED", True)
     if not enabled or max_attempts <= 1:
         result = await llm.ainvoke(messages)
@@ -192,10 +199,14 @@ async def ainvoke_with_rate_limit_retry(
                 continue
 
         try:
+            # P1-5: 每次重试前也检查预算（重试循环本身也在消耗 token）
+            check_token_budget()
             result = await current_llm.ainvoke(messages)
             report_llm_success(current_llm)
             record_llm_usage(result, getattr(current_llm, "model_name", None))
             return result
+        except TokenBudgetExceededError:
+            raise  # 预算超限不重试，直接上抛
         except Exception as exc:
             last_exc = exc
             report_llm_failure(current_llm, exc)

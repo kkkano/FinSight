@@ -181,3 +181,46 @@ def estimate_cost(by_model: dict[str, dict[str, int]]) -> float:
         total += (usage.get("prompt", 0) / 1000.0) * input_rate
         total += (usage.get("completion", 0) / 1000.0) * output_rate
     return total
+
+
+# ---------------------------------------------------------------------------
+# P1-5: 单请求 token 预算上限
+# ---------------------------------------------------------------------------
+
+_DEFAULT_REQUEST_TOKEN_BUDGET = 300_000
+
+
+class TokenBudgetExceededError(RuntimeError):
+    """P1-5: 单请求 token 预算超限，后续 LLM 调用被拒绝。"""
+
+    def __init__(self, used: int, budget: int):
+        self.used = used
+        self.budget = budget
+        super().__init__(
+            f"Request token budget exceeded: used={used}, budget={budget}. "
+            "请缩小请求范围或联系管理员调高 LLM_REQUEST_TOKEN_BUDGET。"
+        )
+
+
+def _request_token_budget() -> int:
+    """单请求 token 预算（环境变量 LLM_REQUEST_TOKEN_BUDGET，0 = 不限制）。"""
+    try:
+        return int(os.getenv("LLM_REQUEST_TOKEN_BUDGET", str(_DEFAULT_REQUEST_TOKEN_BUDGET)))
+    except (TypeError, ValueError):
+        return _DEFAULT_REQUEST_TOKEN_BUDGET
+
+
+def check_token_budget() -> None:
+    """在每次 LLM 调用前检查当前请求是否已超 token 预算。
+
+    无 accumulator（非请求上下文，如启动脚本/测试）或预算为 0 时不检查。
+    超限抛 TokenBudgetExceededError，由调用方（执行管线）转换为用户可见错误。
+    """
+    acc = get_token_accumulator()
+    if acc is None:
+        return
+    budget = _request_token_budget()
+    if budget <= 0:
+        return
+    if acc.total_tokens >= budget:
+        raise TokenBudgetExceededError(acc.total_tokens, budget)
