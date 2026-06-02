@@ -116,6 +116,88 @@ def _apply_quality_gate(
     return quality, blocked
 
 
+def _resolve_cache_ticker(ui_context: dict[str, Any] | None, output_mode: str | None) -> str | None:
+    """P1-7: 解析可用于报告缓存的 ticker。
+
+    只有 investment_report 模式 + 显式单 ticker（tickers_override）才走缓存，
+    避免把 Chat 上下文里的 active_symbol 误当作查询意图。
+    """
+    if str(output_mode or "").strip().lower() != "investment_report":
+        return None
+    context = ui_context or {}
+    tickers_override = context.get("tickers_override")
+    if isinstance(tickers_override, list) and len(tickers_override) == 1:
+        ticker = str(tickers_override[0] or "").strip().upper()
+        return ticker or None
+    return None
+
+
+async def _replay_cached_report(
+    queue_event,
+    *,
+    deps: "ExecutionDeps",
+    thread_id: str,
+    source: str,
+    cached: dict[str, Any],
+    markdown_chunk_size: int,
+) -> None:
+    """P1-7: 回放缓存的报告（跳过整个图执行，零 LLM 成本）。"""
+    report = cached.get("report")
+    markdown = str(cached.get("markdown") or "")
+
+    await queue_event(
+        {
+            "schema_version": deps.sse_event_schema_version,
+            "type": "pipeline_stage",
+            "stage": "rendering",
+            "status": "start",
+            "message": "命中报告缓存，直接返回（零成本）",
+            "timestamp": _utc_iso_now(),
+        }
+    )
+    for idx in range(0, len(markdown), markdown_chunk_size):
+        chunk = markdown[idx: idx + markdown_chunk_size]
+        if chunk:
+            await queue_event(
+                {
+                    "schema_version": deps.sse_event_schema_version,
+                    "type": "token",
+                    "content": chunk,
+                }
+            )
+        await asyncio.sleep(0)
+    await queue_event(
+        {
+            "schema_version": deps.sse_event_schema_version,
+            "type": "pipeline_stage",
+            "stage": "done",
+            "status": "done",
+            "message": "Execution completed (cached)",
+            "timestamp": _utc_iso_now(),
+        }
+    )
+    quality = {}
+    if isinstance(report, dict):
+        quality = report.get("report_quality") or {}
+    await queue_event(
+        {
+            "schema_version": deps.sse_event_schema_version,
+            "type": "done",
+            "contracts": deps.contract_info(),
+            "intent": "chat",
+            "session_id": thread_id,
+            "source": source,
+            "response": markdown,
+            "report": report,
+            "cached": True,
+            "quality": quality,
+            "quality_blocked": False,
+            "publishable": True,
+            "metrics": {"cached": True, "cache_created_at": cached.get("created_at")},
+        }
+    )
+
+
 def _execution_timeout_seconds(output_mode: str | None = None, ui_context: dict[str, Any] | None = None) -> float:
     """
     Resolve execution timeout with mode-aware defaults.
@@ -332,10 +414,33 @@ async def run_graph_pipeline(
                 }
             )
 
-            # 2. Run the graph（通过 Langfuse Trace 入口）
-            runner = await deps.get_graph_runner()
             graph_ui_context = dict(ui_context or {})
             graph_ui_context.setdefault("run_id", run_id_value)
+
+            # P1-7: 报告缓存命中 → 直接回放，不跑图（零 LLM 成本）
+            cache_ticker = _resolve_cache_ticker(graph_ui_context, output_mode)
+            if cache_ticker:
+                from backend.services.report_cache import get_report_cache
+
+                cached_entry = get_report_cache().get(cache_ticker, str(output_mode or ""))
+                if cached_entry:
+                    logger.info(
+                        "[execution_service] report cache hit ticker=%s mode=%s",
+                        cache_ticker,
+                        output_mode,
+                    )
+                    await _replay_cached_report(
+                        _queue_event,
+                        deps=deps,
+                        thread_id=thread_id,
+                        source=source,
+                        cached=cached_entry,
+                        markdown_chunk_size=markdown_chunk_size,
+                    )
+                    return
+
+            # 2. Run the graph（通过 Langfuse Trace 入口）
+            runner = await deps.get_graph_runner()
 
             from backend.graph.runner import run_graph_traced
             timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=graph_ui_context)
@@ -587,6 +692,24 @@ async def run_graph_pipeline(
                     },
                 }
             )
+
+            # P1-7: 缓存成功生成的报告（仅 report 模式 + 显式 ticker 请求 + 无失败/拦截）
+            if (
+                is_report_mode
+                and isinstance(persisted_report, dict)
+                and not quality_blocked
+                and not report_build_error
+            ):
+                cache_write_ticker = cache_ticker or str(persisted_report.get("ticker") or "").strip().upper()
+                if cache_write_ticker:
+                    from backend.services.report_cache import get_report_cache
+
+                    get_report_cache().put(
+                        cache_write_ticker,
+                        str(output_mode or ""),
+                        report=persisted_report,
+                        markdown=markdown,
+                    )
         except asyncio.CancelledError:
             cancel_event.set()
             await _queue_event(_cancelled_trace_payload(), record_metric=False)
