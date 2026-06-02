@@ -133,14 +133,10 @@ def get_fred_data(series_id: str = None) -> Dict[str, Any]:
                         if value != ".":
                             result[key] = float(value)
             else:
-                # 无 API key 时使用搜索回退
-                if key == "cpi":
-                    result[key] = 3.0  # 估计值
-                elif key == "fed_rate":
-                    result[key] = 4.5  # 估计值
-                elif key == "unemployment":
-                    result[key] = 4.0  # 估计值
-                result["source"] = "estimate"
+                # 无 API key：诚实返回不可用，绝不编造数值（P0-1）
+                result["status"] = "data_unavailable"
+                result["unavailable_reason"] = "FRED_API_KEY not configured"
+                break
 
         except Exception as e:
             logger.info(f"[FRED] Failed to fetch {sid}: {e}")

@@ -177,6 +177,13 @@ def fetch_macro_snapshot() -> dict[str, Any]:
         from backend.tools.macro import get_fred_data
 
         fred_payload = get_fred_data()
+        if isinstance(fred_payload, dict) and fred_payload.get("status") == "data_unavailable":
+            # FRED 不可用：不把空 payload 当数据用，也不污染 as_of（P0-1）
+            logger.warning(
+                "[DataService] FRED unavailable: %s",
+                fred_payload.get("unavailable_reason"),
+            )
+            fred_payload = {}
         if isinstance(fred_payload, dict):
             for key in ("fed_rate", "cpi", "unemployment", "gdp_growth", "treasury_10y", "yield_spread"):
                 value = safe_float(fred_payload.get(key))

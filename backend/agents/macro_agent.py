@@ -104,6 +104,10 @@ class MacroAgent(BaseFinancialAgent):
         try:
             if hasattr(self.tools, "get_fred_data"):
                 payload = self.tools.get_fred_data()
+                if isinstance(payload, dict) and payload.get("status") == "data_unavailable":
+                    # FRED 不可用（如无 API key）：明确走 fallback 路径，不把空 payload 当数据用（P0-1）
+                    logger.info("[MacroAgent] FRED unavailable: %s", payload.get("unavailable_reason"))
+                    payload = None
                 if isinstance(payload, dict):
                     fred_payload = payload
                     fred_metrics = self._extract_numeric_metrics(payload)
@@ -112,6 +116,8 @@ class MacroAgent(BaseFinancialAgent):
                         used_sources.append("fred")
                     else:
                         source_health["fred"] = "empty"
+                elif payload is None:
+                    source_health["fred"] = "unavailable"
                 else:
                     source_health["fred"] = "invalid_payload"
             else:
