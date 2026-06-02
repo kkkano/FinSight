@@ -77,6 +77,13 @@ def test_build_light_snapshot_sentiment_from_item_fields():
     assert bias["negative_count"] == 1
 
 
+def test_build_light_snapshot_catalyst_english_word():
+    """英文 "catalyst" 关键词识别（实测 "WWDC Key Catalyst" 标题没被识别的小修）。"""
+    snap = build_light_snapshot("AAPL", [{"title": "WWDC Key Catalyst for AAPL", "url": ""}])
+    assert snap["catalyst_events"]["count"] == 1
+    assert any("Catalyst" in e["title"] for e in snap["catalyst_events"]["events"])
+
+
 def test_build_light_snapshot_no_extra_api_calls():
     """轻量快照纯确定性：不依赖任何 tools / agent 实例。"""
     # 仅传 ticker + dict 列表即可完整构建，无任何外部依赖
@@ -220,3 +227,157 @@ def test_chat_news_brief_does_not_break_price_only():
     md = _render_chat(state)
     assert "舆情简报" not in md
     assert "276.83" in md
+
+
+# ──────────────────────────────────────────────────────────────
+# P0-9-2 双快照打架修复：NewsAgent 完整快照 > 轻量快照
+#
+# 现象（FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG=true 时）：
+# - NewsAgent 完整快照以 evidence(source=news_sentiment_snapshot) 混进新闻流
+# - chat_renderer 把快照文本当新闻渲染，却用轻量快照渲染标题/催化
+# 修复目标：
+# 1. 快照条目不出现在新闻列表（被识别并移除）
+# 2. 有完整快照时标题行用它的情绪数据（偏多 +0.10），不是"样本不足"
+# 3. 催化区块用完整快照真实数量，不是"未识别到催化事件"
+# ──────────────────────────────────────────────────────────────
+
+# NewsAgent 完整快照的 EvidenceItem.text 文本格式（_snapshot_text 输出）
+_SNAPSHOT_TEXT = (
+    "AAPL 整体舆情: bullish (平均分 +0.10, 正/负/中占比 25%/12%/62%); "
+    "趋势: deteriorating; 热度: active (新闻 3 条, 事件 3 个); "
+    "催化事件: 3 个; 价格传导: neutral。"
+)
+
+# NewsAgent 完整快照的结构化 dict（asdict(NewsSentimentSnapshot)），meta.snapshot 形态
+_SNAPSHOT_DICT = {
+    "ticker": "AAPL",
+    "as_of": "2026-06-02T10:00:00",
+    "sentiment_bias": {
+        "label": "bullish",
+        "average_score": 0.10,
+        "sample_size": 8,
+        "positive_ratio": 0.25,
+        "negative_ratio": 0.12,
+        "neutral_ratio": 0.62,
+    },
+    "sentiment_trend": {"direction": "deteriorating"},
+    "heat": {"level": "active", "news_count": 3, "event_count": 3},
+    "catalyst_events": {
+        "count": 3,
+        "events": [
+            {"title": "WWDC Key Catalyst", "category": "high_impact_news", "date": "2026-06-01"},
+            {"title": "Q2 earnings call", "category": "earnings", "date": "2026-06-10"},
+            {"title": "Dividend declaration", "category": "dividend", "date": "2026-06-15"},
+        ],
+    },
+    "price_transmission": {"status": "neutral", "analysis": "舆情方向或价格方向不够明确。"},
+}
+
+
+def _agent_snapshot_news_state(*, with_meta: bool = True) -> dict:
+    """构造 news_agent step 输出（含 snapshot evidence 条目），模拟真实生产路径。
+
+    with_meta=True: snapshot 条目带 meta.snapshot 结构化 dict（NewsAgent 正常路径）
+    with_meta=False: snapshot 条目只有文本（meta 丢失时的兜底，走正则解析）
+    """
+    snapshot_evidence = {
+        "text": _SNAPSHOT_TEXT,
+        "source": "news_sentiment_snapshot",
+        "url": None,
+        "timestamp": "2026-06-02T10:00:00",
+        "confidence": 0.6,
+    }
+    if with_meta:
+        snapshot_evidence["meta"] = {"snapshot": _SNAPSHOT_DICT}
+
+    return {
+        "query": "拉几条 AAPL 新闻",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "operation": {"name": "fetch"},
+        "tasks": [
+            {"id": "task_1", "subject_type": "company", "tickers": ["AAPL"], "operation": {"name": "fetch"}}
+        ],
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "kind": "agent", "name": "news_agent", "inputs": {"ticker": "AAPL"}},
+            ]
+        },
+        "artifacts": {
+            "step_results": {
+                "s1": {
+                    "output": {
+                        "agent_name": "news_agent",
+                        "summary": "AAPL 舆情分析",
+                        "evidence": [
+                            {
+                                "text": "Apple Q2 earnings beat expectations",
+                                "source": "Reuters",
+                                "url": "https://example.com/aapl-earnings",
+                                "timestamp": "2026-05-30",
+                            },
+                            {
+                                "text": "Apple unveils product launch",
+                                "source": "CNBC",
+                                "url": "https://example.com/aapl-launch",
+                                "timestamp": "2026-05-29",
+                            },
+                            snapshot_evidence,
+                        ],
+                    }
+                }
+            }
+        },
+    }
+
+
+def test_snapshot_item_not_rendered_as_news():
+    """快照条目（source=news_sentiment_snapshot）不出现在新闻列表里。"""
+    md = _render_chat(_agent_snapshot_news_state())
+    # 快照文本的特征片段绝不能作为新闻条目渲染
+    assert "整体舆情: bullish" not in md
+    assert "news_sentiment_snapshot" not in md
+    assert "正/负/中占比" not in md
+    # 真实新闻还在
+    assert "Apple Q2 earnings beat expectations" in md
+
+
+def test_full_snapshot_preferred_over_light():
+    """有完整快照时标题行用它的情绪数据（偏多 +0.10），不是"样本不足"。"""
+    md = _render_chat(_agent_snapshot_news_state())
+    # 完整快照 sample_size=8 -> 显示偏多 + 平均分，不是"情绪样本不足"
+    assert "情绪样本不足" not in md
+    assert "偏多" in md
+    assert "+0.10" in md
+    # 催化区块用完整快照真实数量（3 条），不是"未识别到催化事件"
+    assert "未识别到催化事件" not in md
+    assert "WWDC Key Catalyst" in md
+
+
+def test_snapshot_text_parsing():
+    """meta 丢失时从快照文本正则提取数值（平均分/占比/催化数/趋势）。"""
+    from backend.graph.nodes.chat_renderer import _parse_snapshot_text
+
+    parsed = _parse_snapshot_text(_SNAPSHOT_TEXT)
+    assert parsed is not None
+    bias = parsed.get("sentiment_bias") or {}
+    assert bias.get("label") == "bullish"
+    assert abs(float(bias.get("average_score")) - 0.10) < 1e-6
+    # 占比 25%/12%/62% -> 0.25/0.12/0.62
+    assert abs(float(bias.get("positive_ratio")) - 0.25) < 1e-6
+    assert abs(float(bias.get("negative_ratio")) - 0.12) < 1e-6
+    assert abs(float(bias.get("neutral_ratio")) - 0.62) < 1e-6
+    # sample_size 从"新闻 3 条"提取 -> >0（让标题行不显示"样本不足"）
+    assert int(bias.get("sample_size") or 0) >= 3
+    # 催化数 3 个
+    assert int((parsed.get("catalyst_events") or {}).get("count") or 0) == 3
+    # 趋势 deteriorating
+    assert (parsed.get("sentiment_trend") or {}).get("direction") == "deteriorating"
+
+
+def test_snapshot_text_only_fallback_renders_real_sentiment():
+    """meta 丢失（只有快照文本）时，正则解析兜底仍能渲染真实情绪，不退回样本不足。"""
+    md = _render_chat(_agent_snapshot_news_state(with_meta=False))
+    assert "整体舆情: bullish" not in md  # 快照文本不当新闻
+    assert "情绪样本不足" not in md       # 正则解析出 sample_size>0
+    assert "偏多" in md
+    assert "+0.10" in md

@@ -234,6 +234,7 @@ _CATALYST_KEYWORDS = (
     "merger",
     "acquisition",
     "dividend",
+    "catalyst",
     # 中文（A 股新闻催化识别）
     "财报",
     "业绩",
