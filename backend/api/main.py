@@ -42,6 +42,7 @@ from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morn
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.skills_router import create_skills_router
+from backend.api.agents_router import create_agents_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
@@ -1134,6 +1135,7 @@ task_router = create_task_router(
 )
 tools_router = create_tools_router()
 skills_router = create_skills_router()
+agents_router = create_agents_router()
 
 morning_brief_router = create_morning_brief_router(
     MorningBriefRouterDeps(
@@ -1204,6 +1206,7 @@ app.include_router(research_router)
 app.include_router(task_router)
 app.include_router(tools_router)
 app.include_router(skills_router)
+app.include_router(agents_router)
 app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)

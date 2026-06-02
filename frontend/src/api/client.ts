@@ -25,6 +25,7 @@ export interface ChatOptions {
   locale?: string;
   trace_raw_override?: 'on' | 'off' | 'inherit';
   agent_preferences?: AgentPreferencesPayload;
+  agents?: string[];
 }
 
 export interface ReportIndexItem {
@@ -1357,6 +1358,11 @@ export const apiClient = {
 
   async listSkills(query?: string, limit?: number): Promise<{ success: boolean; count: number; items: Array<Record<string, unknown>> }> {
     const response = await api.get('/api/skills', { params: { query, limit } });
+    return response.data;
+  },
+
+  async listAgents(query?: string, limit?: number): Promise<{ success: boolean; count: number; items: Array<Record<string, unknown>> }> {
+    const response = await api.get('/api/agents', { params: { query, limit } });
     return response.data;
   },
 };

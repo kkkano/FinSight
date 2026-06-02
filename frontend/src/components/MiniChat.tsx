@@ -18,6 +18,8 @@ import { useToast } from './ui';
 import { getAgentPreferences } from './settings/AgentControlPanel';
 import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
 import { SkillAutocomplete } from './SkillAutocomplete';
+import { useAgentMention, parseAgentMentions } from '../hooks/useAgentMention';
+import { AgentMention } from './AgentMention';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -89,6 +91,10 @@ export const MiniChat: React.FC = () => {
     setInput(text);
     setDraft(text);
   });
+  const agentMention = useAgentMention(input, (text: string) => {
+    setInput(text);
+    setDraft(text);
+  });
 
   // 流式内容累积 ref（避免闭包问题）
   const accumulatedContentRef = useRef<string>('');
@@ -128,6 +134,13 @@ export const MiniChat: React.FC = () => {
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
+
+    // 手动选 Agent（@agent）：解析提及并从发给后端的 query 中剥离，
+    // 用户消息仍显示原文；agents 经 options 透传到 ui_context.agents_override。
+    const selectedAgents = parseAgentMentions(text);
+    const queryToSend = selectedAgents.length
+      ? (text.replace(/(?:^|\s)@[A-Za-z_]+/g, ' ').replace(/\s+/g, ' ').trim() || text)
+      : text;
 
     const requestSessionId = sessionId || useStore.getState().sessionId;
     const updateScopedMessage = (id: string, patch: Parameters<typeof updateMessageInSession>[2]) => {
@@ -243,7 +256,7 @@ export const MiniChat: React.FC = () => {
 
       // SSE 流式获取响应
       await apiClient.sendMessageStream(
-        text,
+        queryToSend,
         (token: string) => {
           accumulatedContentRef.current += token;
           updateScopedMessage(aiMsgId, {
@@ -309,12 +322,14 @@ export const MiniChat: React.FC = () => {
             confirmation_mode: 'skip' as const,
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
             agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
           }
           : {
             output_mode: 'chat',
             confirmation_mode: 'skip' as const,
             trace_raw_override: traceRawEnabled ? 'on' : 'off',
             agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
           },
         requestSessionId || undefined,
         traceRawEnabled,
@@ -381,6 +396,7 @@ export const MiniChat: React.FC = () => {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (skillAutocomplete.handleKeyDown(e)) return;
+    if (agentMention.handleKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -508,6 +524,13 @@ export const MiniChat: React.FC = () => {
               selectedIndex={skillAutocomplete.selectedIndex}
               onSelect={skillAutocomplete.selectSkill}
               onOpenLibrary={() => {}}
+            />
+          )}
+          {agentMention.isOpen && (
+            <AgentMention
+              agents={agentMention.filteredAgents}
+              selectedIndex={agentMention.selectedIndex}
+              onSelect={agentMention.selectAgent}
             />
           )}
           <textarea

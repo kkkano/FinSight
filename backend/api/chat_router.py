@@ -248,6 +248,10 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             confirmation_mode = parse_confirmation_mode(request.options.confirmation_mode)
             if isinstance(request.options.agent_preferences, dict):
                 ui_context["agent_preferences"] = request.options.agent_preferences
+            # 手动选 agent（@agent）：复用 execution_router 的 agents_override key，
+            # 由 policy_gate 校验并强制只跑指定 agent（自动模式则为空，走评分选择）。
+            if request.options.agents:
+                ui_context["agents_override"] = list(request.options.agents)
 
         # Chat entry point defaults to skip — Chat UI has no InterruptCard.
         # Exception: investment_report mode always requires confirmation (auto).

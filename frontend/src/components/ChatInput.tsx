@@ -14,6 +14,8 @@ import { getAgentPreferences } from './settings/AgentControlPanel';
 import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
 import { SkillAutocomplete } from './SkillAutocomplete';
 import { SkillLibraryDrawer } from './SkillLibraryDrawer';
+import { useAgentMention, parseAgentMentions } from '../hooks/useAgentMention';
+import { AgentMention } from './AgentMention';
 
 const TICKER_STOPWORDS = new Set([
   'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
@@ -291,6 +293,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     setInput(text);
     setDraft(text);
   });
+  const agentMention = useAgentMention(input, (text: string) => {
+    setInput(text);
+    setDraft(text);
+  });
 
   const shouldGenerateChart = async (
     query: string,
@@ -331,6 +337,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     if (!input.trim() || isChatLoading) return;
 
     const userMsgContent = input.trim();
+    // 手动选 Agent（@agent）：解析提及并从发给后端的 query 中剥离，
+    // 用户消息仍显示原文；agents 经 options 透传到 ui_context.agents_override。
+    const selectedAgents = parseAgentMentions(userMsgContent);
+    const queryToSend = selectedAgents.length
+      ? (userMsgContent.replace(/(?:^|\s)@[A-Za-z_]+/g, ' ').replace(/\s+/g, ' ').trim() || userMsgContent)
+      : userMsgContent;
 
     // T2：模糊查询前端拦截 —— 仅当用户明确写"分析股票/帮我分析"等模糊动词，
     //      且 query 里既没有英文 ticker / 中文公司名 / 数字代码 / 已选股票时，
@@ -524,7 +536,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
     try {
       const agentPreferences = getAgentPreferences();
       await apiClient.sendMessageStream(
-        userMsgContent,
+        queryToSend,
         (token) => {
           const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
           if (safeToken) {
@@ -786,12 +798,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               confirmation_mode: 'skip' as const,
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
               agent_preferences: agentPreferences,
+              agents: selectedAgents.length ? selectedAgents : undefined,
             }
           : {
               output_mode: 'chat',
               confirmation_mode: 'skip' as const,
               trace_raw_override: traceRawEnabled ? 'on' : 'off',
               agent_preferences: agentPreferences,
+              agents: selectedAgents.length ? selectedAgents : undefined,
             },
         requestSessionId || undefined,
         traceRawEnabled,
@@ -867,6 +881,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (skillAutocomplete.handleKeyDown(e)) return;
+    if (agentMention.handleKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -933,6 +948,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             selectedIndex={skillAutocomplete.selectedIndex}
             onSelect={skillAutocomplete.selectSkill}
             onOpenLibrary={() => setSkillLibraryOpen(true)}
+          />
+        )}
+        {agentMention.isOpen && (
+          <AgentMention
+            agents={agentMention.filteredAgents}
+            selectedIndex={agentMention.selectedIndex}
+            onSelect={agentMention.selectAgent}
           />
         )}
         <textarea

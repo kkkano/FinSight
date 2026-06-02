@@ -74,6 +74,10 @@ class ChatOptions(BaseModel):
         None,
         description="validated agent/runtime preferences from the frontend",
     )
+    agents: Optional[list[str]] = Field(
+        None,
+        description="Override: only run these agents (from @agent manual selection)",
+    )
 
 
 class ChatRequest(BaseModel):
