@@ -8,6 +8,7 @@ from datetime import datetime
 from urllib.parse import parse_qs, unquote, urlparse
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
 from backend.agents.chart_specs import build_news_sentiment_chart_specs
+from backend.agents.sentiment_brief import render_stock_brief
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -1051,36 +1052,50 @@ class NewsAgent(BaseFinancialAgent):
         return results[:5]  # 限制数量
 
     async def _first_summary(self, data: List[Any]) -> str:
-        deterministic = self._deterministic_summary(data)
+        """P0-9: 输出舆情简报（确定性骨架 + LLM 观点段）"""
         if not data:
-            return deterministic
+            return "未找到相关新闻。"
 
-        # Build rich context for LLM ReAct-style analysis
-        news_context_parts = []
-        for item in data[:8]:
-            if not isinstance(item, dict):
-                continue
-            headline = item.get("headline", item.get("title", ""))
-            source = item.get("source", "")
-            date = item.get("datetime", item.get("published_at", ""))
-            url = item.get("url", "")
-            meta = f" ({source}" + (f", {date}" if date else "") + ")" if source else ""
-            news_context_parts.append(f"- {headline}{meta}")
-        news_context = "\n".join(news_context_parts)
+        snapshot = self._last_sentiment_snapshot
+        snapshot_dict = asdict(snapshot) if isinstance(snapshot, NewsSentimentSnapshot) else {}
 
-        analysis = await self._llm_analyze(
-            f"新闻列表：\n{news_context}",
-            role="资深金融新闻分析师（ReAct 推理模式）",
-            focus=(
-                "按 ReAct 模式分析：\n"
-                "1. Observe（观察）：从新闻标题中识别 2-4 个核心主题/事件\n"
-                "2. Reason（推理）：分析事件间的关联性、情绪倾向、对标的资产的影响路径\n"
-                "3. Assess（评估）：区分短期噪音 vs 中长期趋势信号\n"
-                "4. Risk（风险）：标注 1-2 个关键不确定性或信息缺口\n"
-                "输出一段连贯的分析文本，不要使用编号列表。"
-            ),
-        )
-        return analysis if analysis else deterministic
+        # LLM 观点段（唯一的 LLM 依赖，失败时为 None -> 骨架照常输出）
+        opinion = None
+        if self.llm is not None:
+            news_context_parts = []
+            for item in data[:8]:
+                if not isinstance(item, dict):
+                    continue
+                headline = item.get("headline", item.get("title", ""))
+                source = item.get("source", "")
+                date = item.get("datetime", item.get("published_at", ""))
+                meta = f" ({source}" + (f", {date}" if date else "") + ")" if source else ""
+                news_context_parts.append(f"- {headline}{meta}")
+            news_context = "\n".join(news_context_parts)
+            snapshot_summary = self._snapshot_text(snapshot) if isinstance(snapshot, NewsSentimentSnapshot) else ""
+
+            opinion = await self._llm_analyze(
+                f"舆情快照：{snapshot_summary}\n\n新闻列表：\n{news_context}",
+                role="资深舆情分析师",
+                focus=(
+                    "基于舆情快照和新闻列表，输出 2-4 句核心观点：\n"
+                    "1. 识别 1-2 条驱动舆情的主线事件\n"
+                    "2. 说明事件对标的的影响路径\n"
+                    "3. 给出短期方向判断（结合情绪与价格关系）\n"
+                    "要求：连贯段落、不用列表、不复述新闻标题、中文输出。"
+                ),
+            )
+
+        # 风险（来源可靠度警告）
+        extra_risks: List[str] = []
+        reliability_summary = self._last_reliability_summary if isinstance(self._last_reliability_summary, dict) else {}
+        avg_rel = reliability_summary.get("avg_reliability")
+        if isinstance(avg_rel, (int, float)) and float(avg_rel) < 0.65:
+            extra_risks.append("新闻来源整体可靠度偏低，关键结论建议以官方披露为准")
+
+        if snapshot_dict:
+            return render_stock_brief(snapshot_dict, list(data), opinion, extra_risks=extra_risks)
+        return self._deterministic_summary(data)
 
     def _deterministic_summary(self, data: List[Any]) -> str:
         """Simple headline concatenation (fallback)."""

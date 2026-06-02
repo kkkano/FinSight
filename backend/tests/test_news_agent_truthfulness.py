@@ -1,4 +1,5 @@
 """P0-9 Task2: 新闻 agent 数据真实性防线"""
+import asyncio
 from unittest.mock import MagicMock
 from backend.agents.news_agent import NewsAgent
 
@@ -56,3 +57,26 @@ def test_generic_survey_news_not_catalyst():
     item = {"headline": "某券商发布行业市场调查报告", "source_reliability": {"reliability_score": 0.9}}
     score = agent._item_impact_score(item)
     assert score <= 0.6, f"市场调查报告 impact score={score}，不应被判为催化（>= 0.72）"
+
+
+def test_first_summary_renders_brief_without_llm():
+    """无 LLM 时 _first_summary 输出舆情简报骨架（而非标题拼接）"""
+    agent = _make_agent()
+    agent._current_ticker = "AAPL"
+    # 构造最小可用的 snapshot
+    from backend.agents.news_agent import NewsSentimentSnapshot
+    agent._last_sentiment_snapshot = NewsSentimentSnapshot(
+        ticker="AAPL", as_of="2026-06-02T10:00:00",
+        sentiment_bias={"label": "bullish", "average_score": 0.3, "sample_size": 5,
+                        "positive_ratio": 0.6, "negative_ratio": 0.2, "neutral_ratio": 0.2},
+        sentiment_trend={"direction": "improving"},
+        heat={"level": "active", "news_count": 5, "event_count": 0},
+        catalyst_events={"count": 1, "events": [{"title": "Earnings beat", "category": "high_impact_news", "date": "2026-06-01"}]},
+        price_transmission={"status": "todo", "analysis": "TODO: x"},
+    )
+    data = [{"headline": "Apple Q2 beat", "url": "https://x.com/a", "source": "Reuters", "ticker": "AAPL"}]
+
+    summary = asyncio.run(agent._first_summary(data))
+
+    assert "舆情简报" in summary
+    assert "TODO" not in summary  # 价格传导 todo 不外泄
