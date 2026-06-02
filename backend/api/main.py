@@ -852,6 +852,14 @@ async def lifespan(app: FastAPI):
     # Ensure a working default LLM config exists on first boot.
     _init_default_user_config()
 
+    # P1-1/P1-3: 启动配置自检（数据源 key 缺失告警 + LLM endpoint 可用性）
+    try:
+        from backend.services.startup_check import run_startup_checks
+
+        run_startup_checks()
+    except Exception as exc:
+        logger.exception("[StartupCheck] failed: %s", exc)
+
     from backend.services.alert_scheduler import run_price_change_cycle
     from backend.services.scheduler_runner import start_interval_scheduler, start_price_change_scheduler
 

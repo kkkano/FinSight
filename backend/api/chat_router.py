@@ -93,6 +93,17 @@ def _generation_enabled() -> bool:
     return str(os.getenv("REPORTS_GENERATION_ENABLED", "true")).strip().lower() not in {"false", "0", "off"}
 
 
+def _ensure_llm_available() -> None:
+    """P1-3: LLM endpoint 不可用时快速失败（503），而非让用户等待数百秒超时。"""
+    from backend.services.startup_check import is_llm_available
+
+    if not is_llm_available():
+        raise HTTPException(
+            status_code=503,
+            detail="LLM 服务未配置或不可用，请检查 API key 配置后重启服务",
+        )
+
+
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
     _logger = logging.getLogger("chat_router")
@@ -104,6 +115,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        _ensure_llm_available()
         _t0 = _time.perf_counter()
         try:
             runner = await deps.get_graph_runner()
@@ -242,6 +254,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        _ensure_llm_available()
         import json as _json
 
         from backend.services.execution_service import ExecutionDeps, run_graph_pipeline
