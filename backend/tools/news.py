@@ -246,6 +246,23 @@ def _headline_tags(text: str) -> List[str]:
 
 
 
+def _strip_trailing_source(title: str, source: str) -> str:
+    """剥离标题末尾自带的来源后缀（P0-9: 防来源重复显示）。
+
+    只剥离与 source 字段相同（忽略大小写）的尾部片段，
+    例如 "Apple Rises - Yahoo Finance" + source="Yahoo Finance" -> "Apple Rises"。
+    """
+    clean_title = (title or "").strip()
+    clean_source = (source or "").strip()
+    if not clean_title or not clean_source:
+        return clean_title
+    pattern = re.compile(
+        r"\s*[-–—|]\s*" + re.escape(clean_source) + r"\s*$",
+        flags=re.IGNORECASE,
+    )
+    return pattern.sub("", clean_title).strip()
+
+
 def _format_headline_line(
     date_str: str,
     title: str,
@@ -255,15 +272,17 @@ def _format_headline_line(
 ) -> str:
     tags = _headline_tags(f"{title} {snippet}".strip())
     tag_text = f"[{'/'.join(tags)}] " if tags else ""
-    clean_title = (title or "").strip() or "Untitled"
-    display_title = f"[{clean_title}]({url})" if url else clean_title
     clean_source = (source or "").strip()
-    source_text = f"({clean_source})" if clean_source else ""
+    # P0-9: 剥离标题尾部重复的来源，统一为 "[标题](url) — 来源 · 日期" 格式
+    clean_title = _strip_trailing_source(title, clean_source) or "Untitled"
+    display_title = f"[{clean_title}]({url})" if url else clean_title
     clean_snippet = (snippet or "").strip()
     if len(clean_snippet) > 160:
         clean_snippet = clean_snippet[:157] + "..."
     snippet_text = f" - {clean_snippet}" if clean_snippet else ""
-    return f"[{date_str}] {tag_text}{display_title} {source_text}{snippet_text}".strip()
+    meta_parts = [p for p in (clean_source, date_str) if p]
+    meta_text = f" — {' · '.join(meta_parts)}" if meta_parts else ""
+    return f"{tag_text}{display_title}{meta_text}{snippet_text}".strip()
 
 
 def _domain_from_url(url: str) -> str:
