@@ -7,11 +7,13 @@ import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
 import { PortfolioPerformance } from '../components/workbench/PortfolioPerformance';
 import { PortfolioPieChart } from '../components/workbench/PortfolioPieChart';
-import { QuickAnalysisBar } from '../components/workbench/QuickAnalysisBar';
 import { MorningBriefCard } from '../components/workbench/MorningBriefCard';
 import { RebalanceEntryCard } from '../components/workbench/RebalanceEntryCard';
 import { ReportSection } from '../components/workbench/ReportSection';
 import { TaskSection } from '../components/workbench/TaskSection';
+import { FindingsFeed } from '../components/workbench/FindingsFeed';
+import { PortfolioEditor } from '../components/workbench/PortfolioEditor';
+import { MonitorConfigPanel } from '../components/workbench/MonitorConfigPanel';
 import { ReportView } from '../components/report/ReportView';
 import { WorkbenchQualityDrawer } from '../components/workbench/WorkbenchQualityDrawer';
 import { usePortfolioSummary } from '../hooks/usePortfolioSummary';
@@ -34,7 +36,7 @@ export function Workbench({
   onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
-  const { sessionId, portfolioPositions } = useStore();
+  const { sessionId, portfolioPositions, setDraft } = useStore();
   const portfolioSummary = usePortfolioSummary(sessionId);
 
   const {
@@ -89,6 +91,22 @@ export function Workbench({
     navigate(`/chat?report_id=${encodeURIComponent(selectedReportId)}`);
   }, [navigate, selectedReportId]);
 
+  // 发现卡片「看完整简报」→ 带 ticker 跳转 Chat：预填查询并切到聊天视图
+  const handleNavigateToChatWithTicker = useCallback(
+    (ticker: string) => {
+      const normalized = ticker.trim().toUpperCase();
+      if (normalized) {
+        setDraft(`分析 ${normalized} 的投资前景`);
+      }
+      if (onNavigateToChat) {
+        onNavigateToChat();
+      } else {
+        navigate('/chat');
+      }
+    },
+    [setDraft, onNavigateToChat, navigate],
+  );
+
   return (
     <div className="space-y-4">
       {/* Breadcrumb / navigation bar */}
@@ -112,19 +130,10 @@ export function Workbench({
         </div>
       </Card>
 
-      {/* Portfolio Summary Bar */}
+      {/* 顶部：持仓摘要条（常驻） */}
       <PortfolioSummaryBar />
 
-      {/* Portfolio Performance Table (P2-1) */}
-      <PortfolioPerformance
-        data={portfolioSummary.data}
-        loading={portfolioSummary.loading}
-      />
-
-      {/* Quick Analysis Bar (G4) */}
-      <QuickAnalysisBar defaultTicker={symbol} />
-
-      {/* 一键晨报 */}
+      {/* 一键晨报（保留，折叠态由卡片内部控制） */}
       <MorningBriefCard
         brief={morningBrief.brief}
         loading={morningBrief.loading}
@@ -132,20 +141,35 @@ export function Workbench({
         onGenerate={morningBrief.generate}
       />
 
-      {/* Main content: two-column layout */}
+      {/* 主体：双列布局——左侧发现流 + 任务，右侧持仓管理 + 监控配置 + 其余 */}
       <div className="grid lg:grid-cols-3 gap-4">
-        {/* Left: Tasks + Rebalance (main, emphasized) */}
+        {/* 左列（约 2/3）：今日发现流（核心，置顶）+ 每日任务 */}
         <div className="lg:col-span-2 space-y-4">
+          <FindingsFeed
+            sessionId={sessionId}
+            onNavigateToChat={handleNavigateToChatWithTicker}
+          />
           <TaskSection
             symbol={symbol}
             onNavigateToChat={onNavigateToChat}
           />
-          <RebalanceEntryCard />
         </div>
 
-        {/* Right: Portfolio Pie + Reports (sidebar) */}
+        {/* 右列（约 1/3）：持仓管理 + 监控配置 + 调仓入口 + 分布饼图 + 报告时间线 */}
         <div className="space-y-4">
-          {/* Portfolio distribution pie chart (G4) */}
+          <PortfolioEditor
+            data={portfolioSummary.data}
+            loading={portfolioSummary.loading}
+            onChanged={() => void portfolioSummary.refresh()}
+          />
+          <MonitorConfigPanel sessionId={sessionId} />
+          <RebalanceEntryCard />
+          {/* 持仓收益追踪表（保留） */}
+          <PortfolioPerformance
+            data={portfolioSummary.data}
+            loading={portfolioSummary.loading}
+          />
+          {/* 持仓分布饼图 */}
           {portfolioSummary.data && portfolioSummary.data.positions.length > 0 && (
             <PortfolioPieChart
               positions={portfolioSummary.data.positions}

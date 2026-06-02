@@ -3,6 +3,15 @@
 // 如果没有，请将 type 导入行注释掉，使用 any 暂时代替
 import type { ChatResponse, KlineResponse, RawSSEEvent, RawEventType, ReportIR, ThinkingStep } from '../types/index';
 import type { SelectionItem, DashboardInsightsResponse } from '../types/dashboard';
+import type {
+  FindingStatus,
+  FindingsResponse,
+  MonitorScanResponse,
+  MonitorTargetsResponse,
+  MonitorTargetResponse,
+  CreateMonitorTargetParams,
+  PatchMonitorTargetParams,
+} from '../types/monitor';
 import { API_BASE_URL, buildApiUrl } from '../config/runtime';
 import { getRagInspectorDevAccessToken } from '../auth/devAuth';
 import { getSupabaseClient } from './supabaseClient';
@@ -1453,6 +1462,110 @@ export const apiClient = {
     positions: Array<{ ticker: string; shares: number; avg_cost?: number | null }>,
   ): Promise<{ success: boolean; session_id: string; synced_count: number }> {
     const response = await api.post('/api/portfolio/positions', { session_id: sessionId, positions });
+    return response.data;
+  },
+
+  /** 更新单个持仓（股数 / 成本价）—— PUT /api/portfolio/positions/{ticker} */
+  async updatePortfolioPosition(
+    sessionId: string,
+    ticker: string,
+    shares: number,
+    avgCost?: number | null,
+  ): Promise<{ success: boolean; session_id: string; position?: PortfolioSummaryPosition }> {
+    const response = await api.put(`/api/portfolio/positions/${encodeURIComponent(ticker)}`, {
+      session_id: sessionId,
+      shares,
+      avg_cost: avgCost ?? null,
+    });
+    return response.data;
+  },
+
+  /** 删除单个持仓 —— DELETE /api/portfolio/positions/{ticker} */
+  async deletePortfolioPosition(
+    sessionId: string,
+    ticker: string,
+  ): Promise<{ success: boolean; session_id: string }> {
+    const response = await api.delete(`/api/portfolio/positions/${encodeURIComponent(ticker)}`, {
+      params: { session_id: sessionId },
+    });
+    return response.data;
+  },
+
+  // --- Monitor（Agent 盯盘中心）---
+
+  /** 获取发现列表 —— GET /api/monitor/findings */
+  async getFindings(
+    sessionId: string,
+    status?: FindingStatus,
+    limit = 50,
+  ): Promise<FindingsResponse> {
+    const response = await api.get<FindingsResponse>('/api/monitor/findings', {
+      params: { session_id: sessionId, status, limit },
+    });
+    return response.data;
+  },
+
+  /** 更新发现状态（标记已读 / 已行动）—— PATCH /api/monitor/findings/{id} */
+  async patchFindingStatus(
+    sessionId: string,
+    findingId: string,
+    status: FindingStatus,
+  ): Promise<{ success: boolean }> {
+    const response = await api.patch(
+      `/api/monitor/findings/${encodeURIComponent(findingId)}`,
+      { status },
+      { params: { session_id: sessionId } },
+    );
+    return response.data;
+  },
+
+  /** 手动触发盯盘扫描 —— POST /api/monitor/scan */
+  async triggerMonitorScan(sessionId: string): Promise<MonitorScanResponse> {
+    const response = await api.post<MonitorScanResponse>(
+      '/api/monitor/scan',
+      null,
+      { params: { session_id: sessionId } },
+    );
+    return response.data;
+  },
+
+  /** 获取盯盘对象列表 —— GET /api/monitor/targets */
+  async getMonitorTargets(sessionId: string): Promise<MonitorTargetsResponse> {
+    const response = await api.get<MonitorTargetsResponse>('/api/monitor/targets', {
+      params: { session_id: sessionId },
+    });
+    return response.data;
+  },
+
+  /** 创建盯盘对象 —— POST /api/monitor/targets */
+  async createMonitorTarget(params: CreateMonitorTargetParams): Promise<MonitorTargetResponse> {
+    const response = await api.post<MonitorTargetResponse>('/api/monitor/targets', params);
+    return response.data;
+  },
+
+  /** 更新盯盘对象（阈值 / 开关）—— PATCH /api/monitor/targets/{id} */
+  async patchMonitorTarget(
+    sessionId: string,
+    targetId: string,
+    params: PatchMonitorTargetParams,
+  ): Promise<MonitorTargetResponse> {
+    const response = await api.patch<MonitorTargetResponse>(
+      `/api/monitor/targets/${encodeURIComponent(targetId)}`,
+      params,
+      { params: { session_id: sessionId } },
+    );
+    return response.data;
+  },
+
+  /** 删除盯盘对象 —— DELETE /api/monitor/targets/{id} */
+  async deleteMonitorTarget(
+    sessionId: string,
+    targetId: string,
+  ): Promise<{ success: boolean }> {
+    const response = await api.delete(
+      `/api/monitor/targets/${encodeURIComponent(targetId)}`,
+      { params: { session_id: sessionId } },
+    );
     return response.data;
   },
 
