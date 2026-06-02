@@ -295,15 +295,9 @@ class SupervisorAgent:
         if intent == AgentIntent.PRICE:
             return await self._handle_price(query, ticker, classification, context_summary)
 
-        # NEWS 意图：子意图分类 - 区分"查询新闻"和"分析新闻"
+        # NEWS 意图：统一走舆情简报（P0-9，二分法已废除）
         if intent == AgentIntent.NEWS:
-            news_subintent = self._classify_news_subintent(query, context_summary)
-            if news_subintent == "analyze":
-                # 分析类请求：走 NewsAgent + Forum 深度分析
-                return await self._handle_news_analysis(query, ticker, classification, context_summary)
-            else:
-                # 查询类请求：返回原始新闻列表（带链接）
-                return await self._handle_news(query, ticker, classification, context_summary)
+            return await self._handle_news_brief(query, ticker, classification, context_summary)
 
         if intent == AgentIntent.SENTIMENT:
             return await self._handle_sentiment(query, ticker, classification, context_summary)
@@ -452,117 +446,70 @@ class SupervisorAgent:
                 errors=[str(e)]
             )
 
-    def _classify_news_subintent(self, query: str, context_summary: str = None) -> str:
+    async def _handle_news_brief(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
+        """统一新闻入口：舆情简报（P0-9）
+
+        - Selection Context（用户点"问这条"）-> 引用新闻深度分析（复用 _handle_news_analysis）
+        - 有 ticker -> NewsAgent.research() 输出舆情简报
+        - 无 ticker -> 泛市场舆情简报（见 _handle_market_news_brief）
         """
-        NEWS 意图的子分类：区分"查询新闻"和"分析新闻"
-
-        业界最佳实践：Sub-intent Classification
-        - 分析类：用户想要对新闻进行解读、分析影响
-        - 查询类：用户只是想看最新新闻列表
-
-        Args:
-            query: 用户查询
-
-        Returns:
-            str: "analyze" 或 "fetch"
-        """
-        query_lower = (query or "").lower()
-
-        # 如果存在 Selection Context（用户引用具体新闻），且上下文/问题带有分析意图，优先走 analyze
-        if context_summary and "[System Context]" in context_summary:
-            if ("用户正在询问以下新闻" in context_summary) or ("引用新闻" in context_summary):
-                ctx_lower = context_summary.lower()
-                if any(k in ctx_lower for k in ["分析", "影响", "解读", "评估", "怎么看", "analyze", "impact", "assess"]):
-                    return "analyze"
-
-        # 分析类关键词（中英文）
-        analyze_keywords = [
-            # 中文分析词
-            "分析", "影响", "解读", "意味", "评估", "看法", "观点",
-            "走势", "预测", "解析", "深度", "详细", "怎么看", "会怎样",
-            "带来", "导致", "造成", "引发", "说明", "反映", "表明",
-            "利好", "利空", "机会", "风险", "趋势", "前景", "展望",
-            # 英文分析词
-            "analyze", "analysis", "impact", "effect", "implication",
-            "interpret", "predict", "forecast", "outlook", "assess"
-        ]
-
-        # 检查是否包含分析类关键词
-        for keyword in analyze_keywords:
-            if keyword in query_lower:
-                return "analyze"
-
-        # 默认返回查询类
-        return "fetch"
-
-    async def _handle_news(self, query: str, ticker: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
-        """Handle news query - 显示原始新闻，有上下文时补充分析"""
         trace_emitter = get_trace_emitter()
 
         try:
-            # ── Selection Context 优先处理 ──────────────────────────────
-            # 如果用户选中了特定新闻，统一走 _handle_news_analysis（保证分析链路只有一套实现与输出结构）
+            # ── Selection Context：引用新闻深度分析（保留现有实现）──
             if context_summary and "[System Context]" in context_summary:
                 if "用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary:
-                    logger.info("[Supervisor] Selection Context detected in _handle_news - delegating to _handle_news_analysis")
+                    logger.info("[Supervisor] Selection Context -> news deep analysis")
                     return await self._handle_news_analysis(query, ticker, classification, context_summary)
 
-            # Prefer NewsAgent for reliability when ticker is available
-            if ticker:
-                news_agent = self.agents.get("news")
-                if news_agent:
-                    try:
-                        self._consume_round("agent:news")
-                        # 发射 Agent 开始事件
-                        trace_emitter.emit_agent_start("NewsAgent", query=query, ticker=ticker)
-                        agent_start_time = time.perf_counter()
+            # ── 无 ticker：泛市场舆情简报 ──
+            if not ticker:
+                return await self._handle_market_news_brief(query, classification, context_summary)
 
-                        output = await news_agent.research(query, ticker)
+            # ── 有 ticker：NewsAgent 舆情简报 ──
+            news_agent = self.agents.get("news")
+            if news_agent:
+                try:
+                    self._consume_round("agent:news")
+                    trace_emitter.emit_agent_start("NewsAgent", query=query, ticker=ticker)
+                    agent_start_time = time.perf_counter()
 
-                        # 发射 Agent 完成事件
-                        agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
-                        trace_emitter.emit_agent_done(
-                            "NewsAgent",
-                            duration_ms=agent_duration_ms,
-                            success=bool(output and output.summary)
+                    output = await news_agent.research(query, ticker)
+
+                    agent_duration_ms = int((time.perf_counter() - agent_start_time) * 1000)
+                    trace_emitter.emit_agent_done(
+                        "NewsAgent",
+                        duration_ms=agent_duration_ms,
+                        success=bool(output and output.summary),
+                    )
+
+                    # P0-9: 删除了旧版关键词回退检查（编码损坏 bug），
+                    # NewsAgent 的简报输出直接返回
+                    if output and output.summary:
+                        return self._result(
+                            success=True,
+                            intent=AgentIntent.NEWS,
+                            response=output.summary,
+                            agent_outputs={"news": output},
+                            classification=classification,
                         )
+                except Exception as e:
+                    logger.info(f"[Supervisor] NewsAgent failed: {e}")
 
-                        if output and output.summary:
-                            summary_text = output.summary
-                            summary_lower = summary_text.lower()
-                            missing_ticker = ticker and ticker.upper() not in summary_text.upper()
-                            missing_news_word = ("??" not in summary_text) and ("news" not in summary_lower)
-                            if missing_ticker or missing_news_word:
-                                logger.info("[Supervisor] NewsAgent summary missing expected keywords, fallback to raw news list")
-                            else:
-                                return self._result(
-                                    success=True,
-                                    intent=AgentIntent.NEWS,
-                                    response=summary_text,
-                                    agent_outputs={"news": output},
-                                    classification=classification
-                                )
-                    except Exception as e:
-                        logger.info(f"[Supervisor] NewsAgent failed: {e}")
-
+            # ── NewsAgent 不可用：降级为原始新闻列表（保留原有工具回退逻辑）──
             self._consume_round("tool:news")
-            # 发射工具调用开始事件
-            tool_name = "get_company_news" if ticker else "search"
-            trace_emitter.emit_tool_start(tool_name, {"ticker": ticker} if ticker else {"query": query})
+            tool_name = "get_company_news"
+            trace_emitter.emit_tool_start(tool_name, {"ticker": ticker})
             tool_start_time = time.perf_counter()
 
-            if ticker:
-                news_data = self.tools_module.get_company_news(ticker)
-            else:
-                news_data = self.tools_module.search(query)
+            news_data = self.tools_module.get_company_news(ticker)
 
-            # 发射工具调用结束事件
             tool_duration_ms = int((time.perf_counter() - tool_start_time) * 1000)
             trace_emitter.emit_tool_end(
                 tool_name,
                 success=not (isinstance(news_data, dict) and news_data.get("error")),
                 duration_ms=tool_duration_ms,
-                result_preview=str(news_data)[:100] if news_data else None
+                result_preview=str(news_data)[:100] if news_data else None,
             )
 
             if isinstance(news_data, dict) and news_data.get("error"):
@@ -570,89 +517,32 @@ class SupervisorAgent:
                     success=True,
                     intent=AgentIntent.NEWS,
                     response=f"获取新闻失败：{news_data.get('error')}",
-                    classification=classification
+                    classification=classification,
                 )
 
-            # 格式化原始新闻数据
             if isinstance(news_data, list):
                 formatter = getattr(self.tools_module, "format_news_items", None) if self.tools_module else None
                 if formatter:
-                    title = f"{ticker} \u65b0\u95fb" if ticker else "\u6700\u65b0\u65b0\u95fb"
-                    base_response = formatter(news_data, title=title)
+                    base_response = formatter(news_data, title=f"{ticker} 新闻")
                 else:
                     base_response = "\n".join(
                         f"- {(item.get('headline') or item.get('title') or 'No title')}"
                         for item in news_data
                         if isinstance(item, dict)
                     )
+                # 诚实标注这是降级输出
+                base_response = f"{base_response}\n\n> ⚠️ 舆情分析暂不可用，以上为原始新闻列表"
             else:
                 base_response = str(news_data) if news_data else "暂无相关新闻"
 
             if isinstance(base_response, str) and ("Connection error" in base_response or "Search error" in base_response):
                 base_response = "新闻源连接失败，请稍后重试。"
 
-            # 如果有上下文，在原始新闻后补充简短分析
-            if context_summary and news_data:
-                try:
-                    from langchain_core.messages import HumanMessage
-                    prompt = f"""<role>金融新闻分析师</role>
-<task>分析新闻与对话上下文的关联性</task>
-
-<news>{base_response[:1500]}</news>
-<context>{context_summary}</context>
-
-<output_format>
-💡 **上下文关联**: [1-2句关联分析]
-</output_format>
-
-<rules>
-- 禁止开场白，直接输出格式内容
-- 不重复新闻内容
-- 仅分析关联性
-</rules>"""
-                    # 发射 LLM 调用开始事件
-                    llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
-                    trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
-                    llm_start_time = time.perf_counter()
-
-                    response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-
-                    # 发射 LLM 调用结束事件
-                    llm_duration_ms = int((time.perf_counter() - llm_start_time) * 1000)
-                    context_analysis = response.content if hasattr(response, 'content') else str(response)
-                    trace_emitter.emit_llm_end(
-                        model=llm_model,
-                        duration_ms=llm_duration_ms,
-                        success=True,
-                        output_preview=context_analysis[:100] if context_analysis else None
-                    )
-
-                    # 先显示新闻，再显示上下文分析
-                    base_response = f"{base_response}\n\n{context_analysis}"
-                except Exception as e:
-                    logger.info(f"[Supervisor] News context enhancement failed: {e}")
-                    if self._is_news_analysis_requested(query, context_summary):
-                        return self._result(
-                            success=False,
-                            intent=AgentIntent.NEWS,
-                            response=self._news_analysis_failure_response(
-                                reason=str(e),
-                                ticker=ticker,
-                                has_selection=(
-                                    bool(context_summary)
-                                    and "[System Context]" in context_summary
-                                    and ("用户正在询问以下新闻" in context_summary or "引用新闻" in context_summary)
-                                ),
-                            ),
-                            classification=classification,
-                            errors=[str(e)],
-                        )
-
             return self._result(
                 success=True,
                 intent=AgentIntent.NEWS,
                 response=base_response,
-                classification=classification
+                classification=classification,
             )
         except Exception as e:
             return self._result(
@@ -660,15 +550,22 @@ class SupervisorAgent:
                 intent=AgentIntent.NEWS,
                 response="新闻源连接失败，请稍后重试。",
                 classification=classification,
-                errors=[str(e)]
+                errors=[str(e)],
             )
 
-    async def _handle_general_news(self, query: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
-        """
-        Handle general news query without ticker (e.g., "今天有什么财经新闻")
-        使用通用搜索获取新闻，并结合上下文分析
-        """
-        return await self._handle_news(query, None, classification, context_summary)
+    async def _handle_market_news_brief(self, query: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
+        """泛市场舆情简报（Task 6 实现完整版，当前为搜索降级）"""
+        self._consume_round("tool:news")
+        news_data = self.tools_module.search(query) if self.tools_module else None
+        response = str(news_data) if news_data else "暂无相关新闻"
+        if "Connection error" in response or "Search error" in response:
+            response = "新闻源连接失败，请稍后重试。"
+        return self._result(
+            success=True,
+            intent=AgentIntent.NEWS,
+            response=response,
+            classification=classification,
+        )
 
     async def _handle_news_analysis(self, query: str, ticker: Optional[str], classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
         """
