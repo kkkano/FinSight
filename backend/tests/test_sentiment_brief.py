@@ -1,5 +1,5 @@
 """P0-9 Task3: 舆情简报确定性骨架渲染"""
-from backend.agents.sentiment_brief import render_stock_brief
+from backend.agents.sentiment_brief import render_market_brief, render_stock_brief
 
 
 def _snapshot(**overrides):
@@ -77,3 +77,47 @@ def test_brief_news_list_rendered_with_unscored_marker():
     md = render_stock_brief(_snapshot(), news_items=items, opinion="观点。")
     assert "依据新闻" in md
     assert "Apple Q2 beat" in md
+
+
+# ── Task 6: 泛市场舆情简报 ──
+
+
+def test_market_brief_with_themes():
+    themes = [
+        {"name": "美联储政策", "sentiment": "negative", "news_indices": [0, 1]},
+        {"name": "科技股财报", "sentiment": "positive", "news_indices": [2]},
+    ]
+    news = [
+        {"headline": "Fed signals higher rates", "url": "", "source": "Reuters"},
+        {"headline": "Treasury yields spike", "url": "", "source": "Bloomberg"},
+        {"headline": "NVDA earnings beat", "url": "", "source": "CNBC"},
+    ]
+    md = render_market_brief(themes=themes, news_items=news, opinion="市场观点段。")
+    assert "市场舆情简报" in md
+    assert "美联储政策" in md
+    assert "市场观点段。" in md
+    assert "3 条" in md
+
+
+def test_market_brief_clustering_failed_fallback():
+    """聚类失败（themes 为空）时退化为带说明的新闻列表"""
+    news = [{"headline": "Some news", "url": "", "source": "x"}]
+    md = render_market_brief(themes=[], news_items=news, opinion=None)
+    assert "Some news" in md
+    assert "主题聚类暂不可用" in md
+
+
+def test_market_brief_low_confidence_news_marked():
+    """spec 防线5：低置信（<0.5）新闻在列表标注 ⚠️"""
+    news = [
+        {"headline": "Reliable news", "url": "", "source": "Reuters", "confidence": 0.8},
+        {"headline": "Sketchy search result", "url": "", "source": "search", "confidence": 0.4},
+    ]
+    md = render_market_brief(themes=[], news_items=news, opinion=None)
+    # 低置信条目带 ⚠️ 标注，高置信条目不带
+    assert "⚠️" in md
+    lines = md.splitlines()
+    sketchy_line = next(line for line in lines if "Sketchy" in line)
+    reliable_line = next(line for line in lines if "Reliable" in line)
+    assert "⚠️" in sketchy_line
+    assert "⚠️" not in reliable_line

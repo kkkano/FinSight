@@ -66,6 +66,24 @@ class SupervisorAgent:
     4. Forum synthesizes results (complex queries)
     """
 
+    _MARKET_CLUSTER_PROMPT = """<role>市场舆情分析师</role>
+<task>对以下财经新闻做主题聚类并给出核心观点</task>
+
+<news>
+{news_block}
+</news>
+
+<output_format>
+只输出 JSON（不要 markdown 代码块标记）：
+{{"themes": [{{"name": "主题名", "sentiment": "positive|negative|neutral", "news_indices": [0, 1]}}], "opinion": "2-4 句核心观点，中文"}}
+</output_format>
+
+<rules>
+- 主题 2-4 个；news_indices 是新闻在列表中的序号（从 0 开始）
+- 低质量/无标题的新闻不参与聚类
+- opinion 要点明市场主线与方向，不复述标题
+</rules>"""
+
     def __init__(self, llm, tools_module, cache, circuit_breaker=None):
         _warn_deprecated_once()
         self.llm = llm
@@ -494,7 +512,7 @@ class SupervisorAgent:
                             classification=classification,
                         )
                 except Exception as e:
-                    logger.info(f"[Supervisor] NewsAgent failed: {e}")
+                    logger.warning(f"[Supervisor] NewsAgent failed: {e}")
 
             # ── NewsAgent 不可用：降级为原始新闻列表（保留原有工具回退逻辑）──
             self._consume_round("tool:news")
@@ -554,16 +572,111 @@ class SupervisorAgent:
             )
 
     async def _handle_market_news_brief(self, query: str, classification: ClassificationResult, context_summary: str = None) -> SupervisorResult:
-        """泛市场舆情简报（Task 6 实现完整版，当前为搜索降级）"""
+        """泛市场舆情简报（P0-9 Task 6）"""
+        from backend.agents.sentiment_brief import render_market_brief
+
+        trace_emitter = get_trace_emitter()
         self._consume_round("tool:news")
-        news_data = self.tools_module.search(query) if self.tools_module else None
-        response = str(news_data) if news_data else "暂无相关新闻"
-        if "Connection error" in response or "Search error" in response:
-            response = "新闻源连接失败，请稍后重试。"
+
+        # tools_module 缺失：无法采集新闻，与"连接失败"区分
+        if not self.tools_module:
+            return self._result(
+                success=True,
+                intent=AgentIntent.NEWS,
+                response="暂无相关市场新闻。",
+                classification=classification,
+            )
+
+        # 1. 采集新闻
+        trace_emitter.emit_tool_start("search", {"query": query})
+        tool_start = time.perf_counter()
+        raw = self.tools_module.search(query)
+        trace_emitter.emit_tool_end(
+            "search",
+            success=bool(raw),
+            duration_ms=int((time.perf_counter() - tool_start) * 1000),
+            result_preview=str(raw)[:100] if raw else None,
+        )
+
+        # 连接/搜索失败：诚实提示重试，不混入新闻解析
+        if isinstance(raw, str) and ("Connection error" in raw or "Search error" in raw):
+            return self._result(
+                success=True,
+                intent=AgentIntent.NEWS,
+                response="新闻源连接失败，请稍后重试。",
+                classification=classification,
+            )
+
+        # 解析为结构化条目（复用 tools.news 的解析能力）
+        news_items: list = []
+        if isinstance(raw, str) and raw.strip():
+            try:
+                from backend.tools.news import _extract_search_items
+                news_items = [
+                    {"headline": item.get("title", ""), "url": item.get("url", ""), "source": "search", "snippet": item.get("snippet", "")}
+                    for item in _extract_search_items(raw)
+                    if item.get("title")
+                ]
+            except Exception:
+                news_items = []
+        elif isinstance(raw, list):
+            news_items = [item for item in raw if isinstance(item, dict)]
+
+        if not news_items:
+            return self._result(
+                success=True,
+                intent=AgentIntent.NEWS,
+                response="暂无相关市场新闻。",
+                classification=classification,
+            )
+
+        # 2. 一次 LLM 调用：主题聚类 + 观点
+        themes: list = []
+        opinion = None
+        try:
+            from langchain_core.messages import HumanMessage
+            import json as _json
+
+            # spec 防线5：低置信（<0.5）新闻不参与主题聚类情绪统计
+            clusterable = [
+                item for item in news_items[:12]
+                if not (isinstance(item.get("confidence"), (int, float)) and item["confidence"] < 0.5)
+            ]
+            news_block = "\n".join(
+                f"{idx}. {item.get('headline', '')}" for idx, item in enumerate(clusterable)
+            )
+            prompt = self._MARKET_CLUSTER_PROMPT.format(news_block=news_block)
+
+            llm_model = getattr(self.llm, "model_name", None) or getattr(self.llm, "model", "unknown")
+            trace_emitter.emit_llm_start(model=llm_model, prompt_preview=prompt[:150])
+            llm_start = time.perf_counter()
+
+            response = await self.llm.ainvoke([HumanMessage(content=prompt)])
+            text = response.content if hasattr(response, "content") else str(response)
+
+            trace_emitter.emit_llm_end(
+                model=llm_model,
+                duration_ms=int((time.perf_counter() - llm_start) * 1000),
+                success=True,
+                output_preview=str(text)[:100],
+            )
+
+            # 容错解析 JSON（剥掉可能的代码块标记）
+            cleaned = str(text).strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            parsed = _json.loads(cleaned)
+            if isinstance(parsed, dict):
+                themes = parsed.get("themes") or []
+                opinion = parsed.get("opinion")
+        except Exception as e:
+            logger.info(f"[Supervisor] market news clustering failed: {e}")
+            # 降级阶梯：聚类失败 -> themes 为空，渲染器自动退化为带说明的列表
+
+        # 3. 渲染简报
+        brief = render_market_brief(themes=themes, news_items=news_items, opinion=opinion)
         return self._result(
             success=True,
             intent=AgentIntent.NEWS,
-            response=response,
+            response=brief,
             classification=classification,
         )
 

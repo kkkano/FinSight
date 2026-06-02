@@ -13,7 +13,6 @@
 from typing import Any, Dict, List, Optional
 
 _BIAS_LABELS = {"bullish": "偏多", "bearish": "偏空", "neutral": "中性"}
-_TREND_LABELS = {"improving": "改善中", "deteriorating": "恶化中", "stable": "平稳", "unknown": ""}
 _HEAT_LABELS = {"elevated": "高热", "active": "活跃", "normal": "一般", "thin": "清淡"}
 _PRICE_STATUS_LABELS = {"resonance": "共振", "divergence": "背离", "neutral": "不明确"}
 
@@ -149,6 +148,53 @@ def render_stock_brief(
     sections.append(_render_catalysts(snapshot, has_news))
     sections.append(_render_price_transmission(snapshot))
     sections.append(_render_risks(snapshot, extra_risks))
+
+    news_section = _render_news_list(news_items)
+    if news_section:
+        sections.append("---")
+        sections.append(news_section)
+
+    return "\n\n".join(s for s in sections if s)
+
+
+_THEME_SENTIMENT_LABELS = {"positive": "偏多", "negative": "偏空", "neutral": "中性"}
+
+
+def render_market_brief(
+    themes: List[Dict[str, Any]],
+    news_items: List[Dict[str, Any]],
+    opinion: Optional[str],
+) -> str:
+    """渲染泛市场舆情简报（无 ticker）。
+
+    Args:
+        themes: LLM 主题聚类结果 [{"name", "sentiment", "news_indices"}]
+        news_items: 新闻列表
+        opinion: LLM 核心观点；None 时跳过
+    """
+    sections: List[Optional[str]] = ["## 市场舆情简报"]
+
+    valid_themes = [t for t in (themes or []) if isinstance(t, dict) and t.get("name")]
+    title_parts = [f"{len(news_items)} 条新闻"]
+    if valid_themes:
+        title_parts.append(f"{len(valid_themes)} 个主题")
+    sections.append(" · ".join(title_parts))
+
+    clean_opinion = str(opinion or "").strip()
+    if clean_opinion:
+        sections.append(f"📍 **核心观点**\n\n{clean_opinion}")
+
+    if valid_themes:
+        lines = ["🗂 **主题分布**", ""]
+        for theme in valid_themes[:4]:
+            name = str(theme.get("name") or "").strip()
+            sentiment = _THEME_SENTIMENT_LABELS.get(str(theme.get("sentiment")), "中性")
+            indices = theme.get("news_indices") or []
+            count_text = f"（{len(indices)} 条）" if indices else ""
+            lines.append(f"- **{name}**：{sentiment}{count_text}")
+        sections.append("\n".join(lines))
+    elif news_items:
+        sections.append("> ⚠️ 主题聚类暂不可用，以下为原始新闻列表")
 
     news_section = _render_news_list(news_items)
     if news_section:
