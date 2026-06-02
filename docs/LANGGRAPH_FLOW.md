@@ -49,6 +49,34 @@ graph TD
 
 **Source**: `backend/graph/runner.py` — `_build_graph()`
 
+### 全部 21 个注册节点（`graph.add_node`）
+
+| # | 节点 | 角色 | 归属 |
+|---|---|---|---|
+| 1 | build_initial_state | 初始化 state / thread_id | ✅ 主路径 |
+| 2 | reset_turn_state | 重置每轮状态 | ✅ 主路径 |
+| 3 | prepare_context | 准备上下文（记忆 / selection） | ✅ 主路径 |
+| 4 | chat_respond | 纯社交短路（问候 / 感谢 / 告别） | ✅ 主路径 |
+| 5 | understand_request | LLM 对话路由 + intent_contract | ✅ 主路径 |
+| 6 | policy_gate | agent/tool 白名单 + **agents_override** | ✅ 主路径 |
+| 7 | planner | 任务规划 | ✅ 主路径 |
+| 8 | confirmation_gate | 执行前确认（report 模式） | ✅ 主路径 |
+| 9 | execute_plan | 执行计划 → 调度 agents / tools | ✅ 主路径 |
+| 10 | research_debate | 多 agent 辩论 / 裁决 | ✅ 主路径 |
+| 11 | synthesize | 综合 agent 多段分析 + claims + chart_specs | ✅ 主路径 |
+| 12 | render | 渲染最终响应 | ✅ 主路径 |
+| 13 | alert_extractor | 提取提醒参数 | 🔔 alert 分支 |
+| 14 | alert_action | 保存提醒（可回流 policy_gate） | 🔔 alert 分支 |
+| 15 | resolve_subject | 解析标的 | 🧩 legacy 兼容 |
+| 16 | clarify | 澄清 | 🧩 legacy 兼容 |
+| 17 | parse_operation | 解析操作 | 🧩 legacy 兼容 |
+| 18 | trim_history | 裁剪历史 | ⚙️ helper（未接主图边） |
+| 19 | summarize_history | 摘要历史 | ⚙️ helper（未接主图边） |
+| 20 | normalize_ui_context | 规范化 ui_context | ⚙️ helper（未接主图边） |
+| 21 | decide_output_mode | 决定输出模式 | ⚙️ helper（未接主图边） |
+
+> 主路径（✅）+ alert 分支（🔔）构成当前运行时图；legacy（🧩）节点保留供兼容/聚焦单测，helper（⚙️）节点已 `add_node` 但当前主图未接入边。**手动选 Agent（`@agent`）经 `ui_context.agents_override` 在 `policy_gate` 生效**（与 `/api/execute` 复用同一覆盖入口）。
+
 ---
 
 ## Node-by-Node Data Flow

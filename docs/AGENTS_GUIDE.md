@@ -18,6 +18,48 @@ flowchart LR
   SYNTH --> REPORT[report_builder/render]
 ```
 
+## 1b. Agent 内部研究流程（通用骨架）
+
+7 个 agent 均继承 `BaseFinancialAgent.research()`（`backend/agents/base_agent.py:276`），共用下列内部流程；子类覆盖 `_initial_search` / `_first_summary` / `_identify_gaps` / `_targeted_search` / `_format_output` 等钩子实现差异化。
+
+```mermaid
+flowchart TD
+  START([research 开始]) --> SEARCH[_initial_search 初始检索]
+  SEARCH --> SUM1[_first_summary 首轮摘要]
+  SUM1 --> GAP{_identify_gaps 是否存在信息缺口?}
+  GAP -->|有缺口 且 round 小于 max_reflections| TSEARCH[_targeted_search 针对性补充检索]
+  TSEARCH --> USUM[_update_summary 更新摘要]
+  USUM --> GAP
+  GAP -->|无缺口 / 达到反思上限| FORMAT[_format_output 结构化输出]
+  FORMAT --> EVID[evidence 证据链 + assign_evidence_source_ids]
+  FORMAT --> CLAIMS[native claims 结构化命题]
+  FORMAT --> CHARTS[chart_specs 图表规格]
+  EVID --> QC[quality_contract + self_check 质量契约与自检]
+  CLAIMS --> QC
+  CHARTS --> QC
+  QC --> OUT([AgentOutput])
+
+  style START fill:#10b981,color:#fff
+  style FORMAT fill:#f59e0b,color:#fff
+  style OUT fill:#3b82f6,color:#fff
+```
+
+**Source**: `backend/agents/base_agent.py` — `research()` / `_format_output()`
+
+各 agent 在 `_format_output` 产出的结构化命题（claims）与图表（chart_specs）差异：
+
+| Agent | 原生 claims 主题 | chart_specs 图种 | 图表生成器 |
+|---|---|---|---|
+| `price_agent` | 价格动量 / 相对强弱 / 量价确认 / 波动率 / 关键价位风险 | candlestick · price_volume · rs_line | `build_price_behavior_chart_specs` |
+| `news_agent` | 舆情偏向 / 催化事件 / 情绪-价格传导 | pie · line | `build_news_sentiment_chart_specs` |
+| `fundamental_agent` | 增长 / 盈利质量 / 现金流 / 估值支撑 | bar · waterfall | `build_fundamental_chart_specs` |
+| `technical_agent` | RSI / MACD / 均线 / 支撑阻力 | —（复用价格类图） | — |
+| `macro_agent` | 宏观环境 / 利率 / 通胀背景 | — | — |
+| `risk_agent` | 因子暴露 / 回撤 / 压力测试 | — | — |
+| `deep_search_agent` | 深度证据补强 | — | — |
+
+> 图表生成器集中在 `backend/agents/chart_specs.py`（3 个 builder）；当前仅 price / news / fundamental 三类 agent 产出专属图表，其余 agent 以 claims + evidence 为主，图表由报告 `synthesize` 阶段按需统筹。
+
 ## 2. Agent 清单
 
 | Agent | 文件 | 典型职责 | 主要依赖工具 |
