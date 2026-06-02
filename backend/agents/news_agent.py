@@ -183,10 +183,13 @@ class NewsAgent(BaseFinancialAgent):
                 filtered.append(item)
         return filtered
 
+    _UNSCORED_RELIABILITY = {"reliability_score": None, "reliability_tier": "unscored", "reason": "unscored"}
+
     def _score_reliability_for_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         scorer = getattr(self.tools, "score_news_source_reliability", None)
         if not scorer:
-            return {"reliability_score": 0.55, "reliability_tier": "medium", "reason": "default"}
+            # P0-9: 无评分工具时诚实标记未评估，不编造 0.55
+            return dict(self._UNSCORED_RELIABILITY)
         try:
             payload = scorer(source=item.get("source", ""), url=item.get("url", ""))
             if isinstance(payload, dict):
@@ -195,7 +198,7 @@ class NewsAgent(BaseFinancialAgent):
                     return payload
         except Exception:
             pass
-        return {"reliability_score": 0.55, "reliability_tier": "medium", "reason": "default"}
+        return dict(self._UNSCORED_RELIABILITY)
 
     def _annotate_reliability(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         annotated: List[Dict[str, Any]] = []
@@ -206,6 +209,7 @@ class NewsAgent(BaseFinancialAgent):
             cloned = dict(item)
             cloned["source_reliability"] = rel
             score = rel.get("reliability_score")
+            # P0-9: 只有真实评分才进 confidence；未评估(None)不注入
             if isinstance(score, (int, float)) and "confidence" not in cloned:
                 cloned["confidence"] = max(0.1, min(0.95, float(score)))
             annotated.append(cloned)
@@ -537,6 +541,7 @@ class NewsAgent(BaseFinancialAgent):
         base = float(base) if base is not None else 0.5
         lowered = self._news_title(item).lower()
         catalyst_keywords = (
+            # English
             "beat",
             "beats",
             "miss",
@@ -552,6 +557,24 @@ class NewsAgent(BaseFinancialAgent):
             "merger",
             "acquisition",
             "dividend",
+            # 中文（P0-9: A股新闻催化识别）
+            "财报",
+            "业绩",
+            "超预期",
+            "不及预期",
+            "净利润",
+            "营收",
+            "减持",
+            "增持",
+            "立案",
+            "调查",
+            "重组",
+            "并购",
+            "中标",
+            "回购",
+            "停牌",
+            "分红",
+            "解禁",
         )
         if any(token in lowered for token in catalyst_keywords):
             return max(base, 0.72)
