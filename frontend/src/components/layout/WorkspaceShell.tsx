@@ -13,6 +13,7 @@ import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { WorkbenchWorkspace } from './WorkbenchWorkspace';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
+import { AiDisclaimer } from '../common/AiDisclaimer';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 
 export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
@@ -207,6 +208,9 @@ export function WorkspaceShell({
       />
 
       <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+        <div className="mx-3 mt-3 shrink-0">
+          <AiDisclaimer variant="banner" />
+        </div>
         <ExecutionBanner />
         {workspaceHealth && workspaceHealth.state !== 'ok' ? (
           <div

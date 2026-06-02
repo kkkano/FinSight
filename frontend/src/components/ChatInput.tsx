@@ -16,6 +16,7 @@ import { SkillAutocomplete } from './SkillAutocomplete';
 import { SkillLibraryDrawer } from './SkillLibraryDrawer';
 import { useAgentMention, parseAgentMentions } from '../hooks/useAgentMention';
 import { AgentMention } from './AgentMention';
+import { AiDisclaimer } from './common/AiDisclaimer';
 
 const TICKER_STOPWORDS = new Set([
   'A', 'I', 'AM', 'PM', 'US', 'UK', 'AI', 'CEO', 'IPO', 'ETF', 'VS',
@@ -1012,9 +1013,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         }}
       />
       <div className="text-center mt-2">
-        <p className="text-xs text-fin-muted">
-          FinSight AI generated content may be inaccurate. Not financial advice.
-        </p>
+        <AiDisclaimer variant="compact" />
         <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
           <button
             className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
