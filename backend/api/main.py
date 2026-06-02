@@ -781,7 +781,7 @@ class SimpleRateLimiter:
 
     @classmethod
     def from_env(cls) -> "SimpleRateLimiter":
-        enabled = _env_bool("RATE_LIMIT_ENABLED", "false")
+        enabled = _env_bool("RATE_LIMIT_ENABLED", "true")  # P0-7: 公网产品限流默认开启
         limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
         window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
         return cls(limit_per_window=limit, window_seconds=window_seconds, enabled=enabled)
