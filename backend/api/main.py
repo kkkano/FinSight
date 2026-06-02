@@ -28,6 +28,7 @@ from backend.api.conversation_router import ConversationRouterDeps, create_conve
 from backend.api.dashboard_router import dashboard_router
 from backend.api.execution_router import ExecutionRouterDeps, create_execution_router
 from backend.api.market_router import MarketRouterDeps, create_market_router
+from backend.api.monitor_router import monitor_router
 from backend.api.portfolio_router import portfolio_router
 from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
@@ -926,6 +927,24 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
 
+    # Workbench Phase 1: L1 monitor scan scheduler（盯盘规则引擎，零 LLM 成本）
+    monitor_enabled = _env_bool("MONITOR_SCAN_ENABLED", "true")
+    if monitor_enabled:
+        from backend.services.monitor_engine import run_monitor_scan_cycle
+
+        monitor_interval = float(os.getenv("MONITOR_SCAN_INTERVAL_MINUTES", "15"))
+        sched = start_interval_scheduler(
+            run_monitor_scan_cycle,
+            interval_minutes=monitor_interval,
+            enabled=True,
+            job_id="monitor_l1_scan",
+            job_label="workbench L1 monitor scan",
+        )
+        if sched:
+            _schedulers.append(sched)
+    else:
+        logger.info("[Scheduler] MONITOR_SCAN_ENABLED is false; skip start.")
+
     try:
         install_rag_observability_hooks()
         rag_observability_status = get_rag_observability_store().ensure_schema() if hasattr(get_rag_observability_store(), 'ensure_schema') else False
@@ -1254,6 +1273,7 @@ app.include_router(agents_router)
 app.include_router(execution_router)
 app.include_router(dashboard_router)
 app.include_router(portfolio_router)
+app.include_router(monitor_router)
 app.include_router(rebalance_router)
 app.include_router(morning_brief_router)
 # 閸氼垰濮╅崗銉ュ經

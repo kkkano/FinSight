@@ -20,6 +20,11 @@ tempfile.tempdir = str(_PYTEST_TMP)
 os.environ.setdefault("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
 os.environ.setdefault("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
 
+# 工作台 L1 盯盘扫描器默认开启（生产），测试里关掉后台自动扫描，
+# 避免 TestClient 启动时触发真实价格抓取（网络）/读真实 portfolio.db。
+# 手动 /api/monitor/scan 端点不受此开关影响。
+os.environ.setdefault("MONITOR_SCAN_ENABLED", "false")
+
 
 @pytest.fixture(autouse=True)
 def _force_langgraph_deterministic_defaults(monkeypatch):

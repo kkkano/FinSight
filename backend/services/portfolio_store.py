@@ -121,6 +121,14 @@ def remove_position(session_id: str, ticker: str) -> None:
     _db().commit()
 
 
+def list_session_ids() -> list[str]:
+    """返回所有持有持仓的 session id（去重）。供盯盘调度遍历用。"""
+    rows = _db().execute(
+        "SELECT DISTINCT session_id FROM portfolio_positions"
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 # ── Rebalance suggestions CRUD ──────────────────────────────
 
 
@@ -171,6 +179,7 @@ __all__ = [
     "sync_positions",
     "update_position",
     "remove_position",
+    "list_session_ids",
     "save_suggestion",
     "list_suggestions",
     "patch_suggestion",
