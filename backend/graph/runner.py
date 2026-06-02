@@ -95,11 +95,18 @@ def _build_graph(*, checkpointer: Any) -> Any:
     def _route_after_understand_request(state: GraphState) -> str:
         understanding = state.get("understanding") or {}
         route = str(understanding.get("route") or "").strip().lower()
-        if route in {"direct", "clarify"}:
-            return END
         op = (state.get("operation") or {}).get("name", "qa")
         if route == "alert" or op == "alert_set":
             return "alert_extractor"
+        # 用户显式 @agent（ui_context.agents_override）= 明确要 agent 分析，
+        # 强制进入 policy_gate，不被 LLM router 的 direct/clarify 短路。
+        ui_context = state.get("ui_context") or {}
+        forced_agents = ui_context.get("agents_override")
+        has_forced = isinstance(forced_agents, list) and any(
+            isinstance(a, str) and a.strip() for a in forced_agents
+        )
+        if route in {"direct", "clarify"} and not has_forced:
+            return END
         return "policy_gate"
 
     graph.add_conditional_edges(

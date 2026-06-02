@@ -25,6 +25,7 @@ _AGENT_TITLE_MAP: dict[str, str] = {
     "technical_agent": "技术分析",
     "fundamental_agent": "基本面分析",
     "macro_agent": "宏观分析",
+    "risk_agent": "风险分析",
     "deep_search_agent": "深度搜索",
 }
 
