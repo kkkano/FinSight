@@ -48,3 +48,11 @@ def test_unscored_reliability_not_in_confidence():
     assert len(items) == 1
     # 未评估时不注入 confidence（保持上游原值或缺失），绝不能是编造的 0.55
     assert items[0].get("confidence") != 0.55
+
+
+def test_generic_survey_news_not_catalyst():
+    """普通市场调查报告不得被误判为催化事件"""
+    agent = _make_agent()
+    item = {"headline": "某券商发布行业市场调查报告", "source_reliability": {"reliability_score": 0.9}}
+    score = agent._item_impact_score(item)
+    assert score <= 0.6, f"市场调查报告 impact score={score}，不应被判为催化（>= 0.72）"

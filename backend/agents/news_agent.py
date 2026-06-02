@@ -567,7 +567,6 @@ class NewsAgent(BaseFinancialAgent):
             "减持",
             "增持",
             "立案",
-            "调查",
             "重组",
             "并购",
             "中标",
