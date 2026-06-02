@@ -223,7 +223,7 @@ export const ReportCockpit: React.FC<ReportCockpitProps> = ({
             )}
           </div>
           <div className="mt-1.5 text-[11.5px] text-fin-muted">
-            DEEP RESEARCH · {formattedDate}
+            DEEP RESEARCH · 数据时效 {formattedDate}
             {report.company_name ? ` · ${report.company_name}` : ' · 深度研究报告'}
           </div>
         </div>
