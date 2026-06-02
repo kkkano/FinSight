@@ -75,6 +75,11 @@
 - `backend/graph/nodes/chat_renderer.py`：财报表现短答在 SEC 季度事实表不可用时，可用 `get_local_market_filings` 的公告标题、日期和摘要作为非美股最低财报证据，避免 CN/HK 直接落入 `[数据缺失]`。
 - `backend/config/ticker_mapping.py`：港股结构化 ticker 识别支持四到五位 `.HK` 代码，确保 `0700.HK`、`9988.HK` 能进入 request-frame per-ticker 规划。
 
+# 2026-05-31 增量架构说明（PriceAgent 价格行为合同）
+
+- `backend/agents/price_agent.py`：`PriceBehaviorSnapshot` 输出升级为多段 deterministic summary，并按价格动量、相对强弱、量价确认、波动率结构和关键价位风险生成 native claims。
+- `backend/agents/technical_agent.py`：与 PriceAgent 分工收口；TechnicalAgent 负责 MA / RSI / MACD / Bollinger / 支撑阻力等指标形态，quote/options 只作为技术形态校准旁证。
+
 ## 当前推荐心智模型
 
 - `memory`：线程级轻记忆，不存大原文。

@@ -409,6 +409,7 @@ class TestDigestAgent:
         assert isinstance(card, InsightCard)
         assert card.agent_name == "technical_digest"
         assert card.scorer_name == "technical_scorer"
+        assert card.source_type == "quick_score"
         assert card.tab == "technical"
         assert card.model_generated is False
         assert card.confidence == 0.4
@@ -438,6 +439,7 @@ class TestDigestAgent:
         assert isinstance(card, InsightCard)
         assert card.model_generated is True
         assert card.scorer_name == "technical_scorer"
+        assert card.source_type == "quick_score"
         assert card.confidence == 0.8
         assert card.score_label == "偏多"
         assert len(card.key_points) == 2
@@ -795,6 +797,19 @@ class TestInsightCardSchema:
         assert card.score == 7.5
         assert card.model_generated is True
         assert card.scorer_name == "test_scorer"
+        assert card.source_type == "quick_score"
+
+    def test_card_can_explicitly_mark_quick_score_source(self):
+        card = InsightCard(
+            agent_name="technical_digest",
+            scorer_name="technical_scorer",
+            source_type="quick_score",
+            tab="technical",
+            score=6.0,
+            score_label="中性",
+        )
+
+        assert card.source_type == "quick_score"
 
     def test_score_clamped_by_schema(self):
         """Score must be between 0 and 10."""
@@ -826,6 +841,8 @@ class TestInsightCardSchema:
         data = card.model_dump()
         assert data["agent_name"] == "test"
         assert data["scorer_name"] is None
+        assert data["source_type"] == "quick_score"
         assert data["score"] == 5.0
         restored = InsightCard(**data)
         assert restored.score == card.score
+        assert restored.source_type == "quick_score"

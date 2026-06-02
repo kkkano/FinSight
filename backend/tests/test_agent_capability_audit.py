@@ -21,6 +21,9 @@ class _Tools:
     def get_option_chain_metrics(self, ticker):
         return {"ticker": ticker, "iv_atm": 0.4}
 
+    def get_stock_historical_data(self, ticker, period="1y", interval="1d"):
+        return {"ticker": ticker, "period": period, "interval": interval, "kline_data": []}
+
     def analyze_historical_drawdowns(self, ticker):
         return {"ticker": ticker, "max_drawdown": -0.25}
 
@@ -34,8 +37,18 @@ class _Tools:
 def test_price_agent_registry_exposes_quote_and_options_tools():
     registry = PriceAgent(None, _Cache(), _Tools())._get_tool_registry()
 
-    assert {"search", "get_stock_price", "get_option_chain_metrics"}.issubset(registry)
+    assert {
+        "search",
+        "get_stock_price",
+        "get_stock_historical_data",
+        "get_market_benchmark_history",
+        "get_relative_strength",
+        "analyze_historical_drawdowns",
+        "get_option_chain_metrics",
+    }.issubset(registry)
     assert registry["get_stock_price"]["call_with"] == "ticker"
+    assert registry["get_stock_historical_data"]["call_with"] == "ticker"
+    assert registry["get_relative_strength"]["call_with"] == "ticker"
     assert registry["get_option_chain_metrics"]["call_with"] == "ticker"
 
 

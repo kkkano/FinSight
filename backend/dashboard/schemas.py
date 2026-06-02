@@ -351,6 +351,10 @@ class InsightCard(BaseModel):
         None,
         description="Dashboard scorer semantic identifier, e.g. technical_scorer",
     )
+    source_type: str = Field(
+        "quick_score",
+        description="卡片来源类型：quick_score=快速评分(规则+单次 LLM) / agent_deep=Agent 深度分析",
+    )
     tab: str = Field(..., description="对应的 Dashboard Tab 名称")
     score: float = Field(..., ge=0, le=10, description="综合评分 (0-10)")
     score_label: str = Field(..., description="评分标签 (弱势/偏空/中性/偏多/强势)")

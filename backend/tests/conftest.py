@@ -66,4 +66,7 @@ def _reset_api_memory_test_fixtures():
 
     # Teardown: remove ALL test_api_user* files to prevent pollution
     for f in memory_dir.glob("test_api_user*.json"):
-        f.unlink(missing_ok=True)
+        try:
+            f.unlink(missing_ok=True)
+        except PermissionError:
+            pass

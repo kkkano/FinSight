@@ -18,7 +18,10 @@ class TechnicalAgent(BaseFinancialAgent):
         self.tools = tools_module
 
     def _get_tool_registry(self) -> dict:
-        """TechnicalAgent tool registry: price, K-line, options and sentiment confluence."""
+        """TechnicalAgent tool registry: K-line indicators with side-signal calibration.
+
+        价格行为、RS、量价和期权波动率主分析归 PriceAgent；这里的 quote/options 仅用于校准 MA/RSI/MACD 等技术形态所处的位置。
+        """
         registry = {}
         tools = self.tools
         if not tools:
@@ -76,6 +79,7 @@ class TechnicalAgent(BaseFinancialAgent):
 
     def _enrich_with_side_signals(self, data: Dict[str, Any], ticker: str) -> Dict[str, Any]:
         enriched = dict(data)
+        # 分工说明：TechnicalAgent 保留 quote/options 作为指标形态的旁证校准，不在这里生成价格行为结论。
         price_snapshot = self._call_optional_tool("get_stock_price", ticker)
         if price_snapshot:
             enriched["price_snapshot"] = price_snapshot

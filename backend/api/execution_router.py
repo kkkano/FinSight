@@ -12,13 +12,17 @@ import json as _json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
-from typing import Any, Awaitable, Callable, Literal, Optional
+from typing import Any, AsyncIterable, Awaitable, Callable, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from backend.dashboard.agent_bridge import (
+    DashboardDeepDiveRequest,
+    build_dashboard_deep_dive_execution,
+)
 from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.services.execution_service import ExecutionDeps, run_graph_pipeline, resume_graph_pipeline
 
@@ -99,6 +103,46 @@ class ExecutionRouterDeps:
     sse_event_schema_version: str
 
 
+def _build_execution_deps(deps: ExecutionRouterDeps) -> ExecutionDeps:
+    return ExecutionDeps(
+        get_graph_runner=deps.get_graph_runner,
+        schedule_report_index=deps.schedule_report_index,
+        update_session_context=deps.update_session_context,
+        redact_sensitive_payload=deps.redact_sensitive_payload,
+        is_raw_trace_event=deps.is_raw_trace_event,
+        contract_info=deps.contract_info,
+        sse_event_schema_version=deps.sse_event_schema_version,
+    )
+
+
+def _serialize_sse_item(item: object) -> str:
+    def _fallback(value: object):
+        if isinstance(value, (datetime, date, dt_time)):
+            return value.isoformat()
+        return str(value)
+
+    return _json.dumps(
+        jsonable_encoder(item), ensure_ascii=False, default=_fallback,
+    )
+
+
+async def _stream_sse_pipeline(pipeline: AsyncIterable[dict[str, Any]]):
+    async for event in pipeline:
+        yield f"data: {_serialize_sse_item(event)}\n\n"
+
+
+def _sse_response(pipeline: AsyncIterable[dict[str, Any]]) -> StreamingResponse:
+    return StreamingResponse(
+        _stream_sse_pipeline(pipeline),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Router factory
 # ---------------------------------------------------------------------------
@@ -132,15 +176,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
         if (request.output_mode or "").strip().lower() == "investment_report":
             ui_context.setdefault("ensure_all_agents", True)
 
-        exec_deps = ExecutionDeps(
-            get_graph_runner=deps.get_graph_runner,
-            schedule_report_index=deps.schedule_report_index,
-            update_session_context=deps.update_session_context,
-            redact_sensitive_payload=deps.redact_sensitive_payload,
-            is_raw_trace_event=deps.is_raw_trace_event,
-            contract_info=deps.contract_info,
-            sse_event_schema_version=deps.sse_event_schema_version,
-        )
+        exec_deps = _build_execution_deps(deps)
 
         pipeline = run_graph_pipeline(
             deps=exec_deps,
@@ -154,34 +190,32 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
         )
 
-        # --- SSE streaming (same wire format as /chat/supervisor/stream) ---
+        return _sse_response(pipeline)
 
-        def _serialize(item: object) -> str:
-            def _fallback(value: object):
-                if isinstance(value, (datetime, date, dt_time)):
-                    return value.isoformat()
-                return str(value)
+    @router.post("/api/dashboard/deep-dive")
+    async def dashboard_deep_dive_endpoint(request: DashboardDeepDiveRequest):
+        try:
+            thread_id = deps.resolve_thread_id(request.session_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-            return _json.dumps(
-                jsonable_encoder(item), ensure_ascii=False, default=_fallback,
-            )
+        bridge = build_dashboard_deep_dive_execution(request)
+        exec_deps = _build_execution_deps(deps)
 
-        async def _stream():
-            async for event in pipeline:
-                if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield f"data: {_serialize(event)}\n\n"
-                else:
-                    yield f"data: {_serialize(event)}\n\n"
-
-        return StreamingResponse(
-            _stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+        pipeline = run_graph_pipeline(
+            deps=exec_deps,
+            query=bridge.query,
+            thread_id=thread_id,
+            run_id=bridge.run_id,
+            ui_context=bridge.ui_context,
+            output_mode=bridge.output_mode,
+            confirmation_mode=parse_confirmation_mode(bridge.confirmation_mode),
+            original_query=bridge.original_query,
+            source=bridge.source,
+            trace_raw_enabled=True if bridge.trace_raw is None else bool(bridge.trace_raw),
         )
+
+        return _sse_response(pipeline)
 
     # ------------------------------------------------------------------
     # POST /api/execute/resume — resume an interrupted graph run
@@ -196,15 +230,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             except ValueError:
                 pass
 
-        exec_deps = ExecutionDeps(
-            get_graph_runner=deps.get_graph_runner,
-            schedule_report_index=deps.schedule_report_index,
-            update_session_context=deps.update_session_context,
-            redact_sensitive_payload=deps.redact_sensitive_payload,
-            is_raw_trace_event=deps.is_raw_trace_event,
-            contract_info=deps.contract_info,
-            sse_event_schema_version=deps.sse_event_schema_version,
-        )
+        exec_deps = _build_execution_deps(deps)
 
         pipeline = resume_graph_pipeline(
             deps=exec_deps,
@@ -215,30 +241,6 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
         )
 
-        def _serialize(item: object) -> str:
-            def _fallback(value: object):
-                if isinstance(value, (datetime, date, dt_time)):
-                    return value.isoformat()
-                return str(value)
-            return _json.dumps(
-                jsonable_encoder(item), ensure_ascii=False, default=_fallback,
-            )
-
-        async def _stream():
-            async for event in pipeline:
-                if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield f"data: {_serialize(event)}\n\n"
-                else:
-                    yield f"data: {_serialize(event)}\n\n"
-
-        return StreamingResponse(
-            _stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        return _sse_response(pipeline)
 
     return router

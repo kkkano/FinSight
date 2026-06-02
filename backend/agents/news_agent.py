@@ -1,14 +1,32 @@
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 import os
 import logging
 import json
+import re
 from datetime import datetime
 from urllib.parse import parse_qs, unquote, urlparse
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.agents.chart_specs import build_news_sentiment_chart_specs
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class NewsSentimentSnapshot:
+    """整只股票的舆情聚合快照。"""
+
+    ticker: str
+    as_of: str
+    sentiment_bias: Dict[str, Any]
+    sentiment_trend: Dict[str, Any]
+    heat: Dict[str, Any]
+    catalyst_events: Dict[str, Any]
+    price_transmission: Dict[str, Any]
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
 
 class NewsAgent(BaseFinancialAgent):
     AGENT_NAME = "NewsAgent"
@@ -42,6 +60,7 @@ class NewsAgent(BaseFinancialAgent):
         self._last_convergence = None
         self._last_event_calendar: Dict[str, Any] = {}
         self._last_reliability_summary: Dict[str, Any] = {}
+        self._last_sentiment_snapshot: Optional[NewsSentimentSnapshot] = None
 
     def _get_tool_registry(self) -> dict:
         """NewsAgent tool registry: news APIs + search for ReAct reflection."""
@@ -231,15 +250,537 @@ class NewsAgent(BaseFinancialAgent):
             return {}
         return {}
 
+    def _call_ticker_tool(self, fn, ticker: str, **kwargs) -> Any:
+        try:
+            return fn(ticker=ticker, **kwargs)
+        except TypeError:
+            try:
+                return fn(ticker, **kwargs)
+            except TypeError:
+                return fn(ticker)
+
+    def _load_news_sentiment_payload(self, ticker: str) -> Any:
+        sentiment_fn = getattr(self.tools, "get_news_sentiment", None)
+        if not callable(sentiment_fn):
+            return None
+        try:
+            return self._call_ticker_tool(sentiment_fn, ticker, limit=8)
+        except Exception:
+            return None
+
+    def _coerce_float(self, value: Any) -> Optional[float]:
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip().replace("%", "")
+            try:
+                return float(text)
+            except Exception:
+                match = re.search(r"([+-]?\d+(?:\.\d+)?)", text)
+                if match:
+                    try:
+                        return float(match.group(1))
+                    except Exception:
+                        return None
+        return None
+
+    def _sentiment_bucket(self, score: Optional[float], label: str = "") -> str:
+        lowered = str(label or "").lower()
+        if "neutral" in lowered:
+            return "neutral"
+        if "bull" in lowered or "positive" in lowered:
+            return "positive"
+        if "bear" in lowered or "negative" in lowered:
+            return "negative"
+        if score is None:
+            return "neutral"
+        if score >= 0.15:
+            return "positive"
+        if score <= -0.15:
+            return "negative"
+        return "neutral"
+
+    def _parse_news_sentiment_payload(self, payload: Any) -> Dict[str, Any]:
+        observations: List[Dict[str, Any]] = []
+        explicit_average: Optional[float] = None
+        status = "unavailable"
+        raw_preview = ""
+
+        if isinstance(payload, str):
+            raw_preview = payload[:1200]
+            avg_match = re.search(r"平均情绪分数\s*[:：]\s*([+-]?\d+(?:\.\d+)?)", payload)
+            if avg_match:
+                explicit_average = self._coerce_float(avg_match.group(1))
+            for line in payload.splitlines():
+                if "情绪" not in line and "sentiment" not in line.lower():
+                    continue
+                score = None
+                score_match = re.search(r"\(([+-]?\d+(?:\.\d+)?)\)", line)
+                if score_match:
+                    score = self._coerce_float(score_match.group(1))
+                label = ""
+                label_match = re.search(r"情绪\s*[:：]\s*([^(]+)", line)
+                if label_match:
+                    label = label_match.group(1).strip()
+                date_match = re.search(r"\[(\d{4}-\d{2}-\d{2})\]", line)
+                if score is None and not label:
+                    continue
+                observations.append(
+                    {
+                        "score": score,
+                        "label": label,
+                        "bucket": self._sentiment_bucket(score, label),
+                        "date": date_match.group(1) if date_match else None,
+                        "source": "get_news_sentiment",
+                    }
+                )
+            if observations or explicit_average is not None:
+                status = "ok"
+        elif isinstance(payload, dict):
+            raw_preview = json.dumps(payload, ensure_ascii=False)[:1200]
+            for key in ("average_score", "avg_score", "average_sentiment_score", "overall_sentiment_score"):
+                explicit_average = self._coerce_float(payload.get(key))
+                if explicit_average is not None:
+                    break
+            feed = payload.get("feed") or payload.get("items") or payload.get("articles") or []
+            if isinstance(feed, list):
+                for item in feed:
+                    observation = self._extract_item_sentiment(item)
+                    if observation:
+                        observation["source"] = "get_news_sentiment"
+                        observations.append(observation)
+            if observations or explicit_average is not None:
+                status = "ok"
+
+        return {
+            "status": status,
+            "observations": observations,
+            "explicit_average": explicit_average,
+            "raw_preview": raw_preview,
+        }
+
+    def _extract_item_sentiment(self, item: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(item, dict):
+            return None
+
+        score = None
+        label = ""
+        ticker = str(item.get("ticker") or self._current_ticker or "").upper()
+        for ts in item.get("ticker_sentiment") or []:
+            if not isinstance(ts, dict):
+                continue
+            if ticker and str(ts.get("ticker") or "").upper() != ticker:
+                continue
+            score = self._coerce_float(ts.get("ticker_sentiment_score"))
+            label = str(ts.get("ticker_sentiment_label") or "")
+            break
+
+        if score is None:
+            for key in (
+                "sentiment_score",
+                "ticker_sentiment_score",
+                "overall_sentiment_score",
+                "news_sentiment_score",
+            ):
+                score = self._coerce_float(item.get(key))
+                if score is not None:
+                    break
+
+        for key in ("sentiment_label", "ticker_sentiment_label", "overall_sentiment_label", "sentiment"):
+            raw_label = item.get(key)
+            if isinstance(raw_label, dict):
+                raw_label = raw_label.get("label")
+            if raw_label:
+                label = str(raw_label)
+                break
+
+        if score is None and not label:
+            return None
+        return {
+            "score": score,
+            "label": label,
+            "bucket": self._sentiment_bucket(score, label),
+            "date": item.get("datetime") or item.get("published_at") or item.get("time_published"),
+            "source": item.get("source") or "news_item",
+        }
+
+    def _build_sentiment_bias(
+        self,
+        observations: List[Dict[str, Any]],
+        explicit_average: Optional[float],
+    ) -> Dict[str, Any]:
+        counts = {"positive": 0, "negative": 0, "neutral": 0}
+        scores: List[float] = []
+        for observation in observations:
+            bucket = observation.get("bucket") or "neutral"
+            if bucket not in counts:
+                bucket = "neutral"
+            counts[bucket] += 1
+            score = self._coerce_float(observation.get("score"))
+            if score is not None:
+                scores.append(score)
+
+        average_score = explicit_average
+        if average_score is None and scores:
+            average_score = sum(scores) / len(scores)
+
+        if average_score is not None and average_score >= 0.08:
+            label = "bullish"
+        elif average_score is not None and average_score <= -0.08:
+            label = "bearish"
+        elif counts["positive"] > counts["negative"]:
+            label = "bullish"
+        elif counts["negative"] > counts["positive"]:
+            label = "bearish"
+        else:
+            label = "neutral"
+
+        total = sum(counts.values())
+        denominator = total or 1
+        confidence = min(0.9, 0.45 + min(total, 8) * 0.05)
+        if average_score is None and total == 0:
+            confidence = 0.35
+
+        return {
+            "label": label,
+            "average_score": round(float(average_score), 4) if average_score is not None else None,
+            "positive_count": counts["positive"],
+            "negative_count": counts["negative"],
+            "neutral_count": counts["neutral"],
+            "positive_ratio": round(counts["positive"] / denominator, 4),
+            "negative_ratio": round(counts["negative"] / denominator, 4),
+            "neutral_ratio": round(counts["neutral"] / denominator, 4),
+            "sample_size": total,
+            "confidence": round(confidence, 4),
+        }
+
+    def _build_sentiment_trend(self, observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        scores = [
+            float(score)
+            for score in (self._coerce_float(item.get("score")) for item in observations)
+            if score is not None
+        ]
+        if len(scores) < 2:
+            return {
+                "direction": "unknown",
+                "delta": None,
+                "recent_average": None,
+                "previous_average": None,
+                "basis": "insufficient_sentiment_history",
+            }
+
+        split = max(1, len(scores) // 2)
+        recent = scores[:split]
+        previous = scores[split:] or scores[:split]
+        recent_avg = sum(recent) / len(recent)
+        previous_avg = sum(previous) / len(previous)
+        delta = recent_avg - previous_avg
+        if delta >= 0.08:
+            direction = "improving"
+        elif delta <= -0.08:
+            direction = "deteriorating"
+        else:
+            direction = "stable"
+        return {
+            "direction": direction,
+            "delta": round(delta, 4),
+            "recent_average": round(recent_avg, 4),
+            "previous_average": round(previous_avg, 4),
+            "basis": "newest_items_vs_older_items",
+        }
+
+    def _event_counts(self, calendar: Dict[str, Any]) -> Dict[str, int]:
+        return {
+            "earnings": len(calendar.get("earnings_events") or []) if isinstance(calendar.get("earnings_events"), list) else 0,
+            "dividends": len(calendar.get("dividend_events") or []) if isinstance(calendar.get("dividend_events"), list) else 0,
+            "macro": len(calendar.get("macro_events") or []) if isinstance(calendar.get("macro_events"), list) else 0,
+        }
+
+    def _build_sentiment_heat(self, items: List[Dict[str, Any]], observations: List[Dict[str, Any]]) -> Dict[str, Any]:
+        calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
+        event_counts = self._event_counts(calendar)
+        event_count = sum(event_counts.values())
+        news_count = len([item for item in items if isinstance(item, dict)])
+        discussion_proxy_score = min(1.0, (news_count / 8.0) * 0.7 + (event_count / 6.0) * 0.3)
+        if news_count >= 6 or event_count >= 4:
+            level = "elevated"
+        elif news_count >= 3 or event_count >= 2:
+            level = "active"
+        elif news_count > 0:
+            level = "normal"
+        else:
+            level = "thin"
+        return {
+            "level": level,
+            "news_count": news_count,
+            "sentiment_observation_count": len(observations),
+            "event_count": event_count,
+            "event_counts": event_counts,
+            "discussion_proxy_score": round(discussion_proxy_score, 4),
+            "discussion_proxy": "news_volume_plus_event_calendar",
+        }
+
+    def _news_title(self, item: Dict[str, Any]) -> str:
+        return str(item.get("headline") or item.get("title") or "").strip()
+
+    def _item_impact_score(self, item: Dict[str, Any]) -> float:
+        for key in ("impact_score", "impact", "relevance_score"):
+            score = self._coerce_float(item.get(key))
+            if score is not None:
+                return max(0.0, min(1.0, score))
+        rel = item.get("source_reliability")
+        rel_score = self._coerce_float(rel.get("reliability_score")) if isinstance(rel, dict) else None
+        confidence = self._coerce_float(item.get("confidence"))
+        base = rel_score if rel_score is not None else confidence
+        base = float(base) if base is not None else 0.5
+        lowered = self._news_title(item).lower()
+        catalyst_keywords = (
+            "beat",
+            "beats",
+            "miss",
+            "earnings",
+            "revenue",
+            "guidance",
+            "approval",
+            "launch",
+            "upgrade",
+            "downgrade",
+            "lawsuit",
+            "investigation",
+            "merger",
+            "acquisition",
+            "dividend",
+        )
+        if any(token in lowered for token in catalyst_keywords):
+            return max(base, 0.72)
+        return min(base, 0.6)
+
+    def _build_catalyst_events(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        events: List[Dict[str, Any]] = []
+        calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
+        for key, category in (
+            ("earnings_events", "earnings"),
+            ("dividend_events", "dividend"),
+            ("macro_events", "macro"),
+        ):
+            raw_events = calendar.get(key)
+            if not isinstance(raw_events, list):
+                continue
+            for event in raw_events[:4]:
+                if not isinstance(event, dict):
+                    continue
+                title = str(event.get("title") or event.get("event") or category).strip()
+                events.append(
+                    {
+                        "kind": "event_calendar",
+                        "category": category,
+                        "title": title,
+                        "date": event.get("date"),
+                        "source": event.get("source") or "event_calendar",
+                    }
+                )
+
+        high_impact_news = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            impact_score = self._item_impact_score(item)
+            if impact_score < 0.7:
+                continue
+            high_impact_news += 1
+            events.append(
+                {
+                    "kind": "news",
+                    "category": "high_impact_news",
+                    "title": self._news_title(item),
+                    "date": item.get("datetime") or item.get("published_at"),
+                    "source": item.get("source") or "news",
+                    "impact_score": round(impact_score, 4),
+                }
+            )
+
+        return {
+            "count": len(events),
+            "events": events[:8],
+            "calendar_event_count": len([event for event in events if event.get("kind") == "event_calendar"]),
+            "high_impact_news_count": high_impact_news,
+        }
+
+    def _load_recent_price_signal(self, ticker: str) -> Dict[str, Any]:
+        history_fn = getattr(self.tools, "get_stock_historical_data", None)
+        if callable(history_fn):
+            try:
+                payload = self._call_ticker_tool(history_fn, ticker, period="5d", interval="1d")
+                if isinstance(payload, dict):
+                    rows = payload.get("kline_data") or payload.get("data") or []
+                    closes = []
+                    if isinstance(rows, list):
+                        for row in rows:
+                            if not isinstance(row, dict):
+                                continue
+                            close = self._coerce_float(row.get("close") or row.get("Close"))
+                            if close is not None and close > 0:
+                                closes.append(close)
+                    if len(closes) >= 2:
+                        change_pct = (closes[-1] - closes[0]) / closes[0] * 100.0
+                        return {
+                            "status": "ok",
+                            "source": payload.get("source") or "get_stock_historical_data",
+                            "price_change_pct": round(change_pct, 4),
+                            "window": payload.get("period") or "5d",
+                        }
+            except Exception:
+                pass
+
+        quote_fn = getattr(self.tools, "get_stock_price", None)
+        if callable(quote_fn):
+            try:
+                payload = self._call_ticker_tool(quote_fn, ticker)
+                if isinstance(payload, dict):
+                    for key in ("change_percent", "change_pct", "pct_change"):
+                        change_pct = self._coerce_float(payload.get(key))
+                        if change_pct is not None:
+                            return {
+                                "status": "ok",
+                                "source": payload.get("source") or "get_stock_price",
+                                "price_change_pct": round(change_pct, 4),
+                                "window": "quote_change",
+                            }
+                if isinstance(payload, str):
+                    match = re.search(r"Change[^%]*\(\s*([+-]?\d+(?:\.\d+)?)%\s*\)", payload, flags=re.IGNORECASE)
+                    if match:
+                        return {
+                            "status": "ok",
+                            "source": "get_stock_price",
+                            "price_change_pct": round(float(match.group(1)), 4),
+                            "window": "quote_change",
+                        }
+            except Exception:
+                pass
+
+        return {
+            "status": "todo",
+            "source": None,
+            "price_change_pct": None,
+            "window": None,
+            "todo": "TODO: 接入 get_stock_historical_data 或可解析的 get_stock_price 变动字段后评估舆情到价格的传导。",
+        }
+
+    def _build_price_transmission(self, ticker: str, sentiment_label: str) -> Dict[str, Any]:
+        signal = self._load_recent_price_signal(ticker)
+        change_pct = signal.get("price_change_pct")
+        if not isinstance(change_pct, (int, float)):
+            return {
+                "status": "todo",
+                "sentiment_direction": sentiment_label,
+                "price_direction": "unknown",
+                "price_change_pct": None,
+                "source": signal.get("source"),
+                "window": signal.get("window"),
+                "analysis": signal.get("todo") or "TODO: price signal unavailable.",
+            }
+
+        if change_pct >= 0.5:
+            price_direction = "up"
+        elif change_pct <= -0.5:
+            price_direction = "down"
+        else:
+            price_direction = "flat"
+
+        if sentiment_label == "bullish" and price_direction == "down":
+            status = "divergence"
+            analysis = "整体舆情偏多，但近期价格走弱，存在情绪与价格背离。"
+        elif sentiment_label == "bearish" and price_direction == "up":
+            status = "divergence"
+            analysis = "整体舆情偏空，但近期价格走强，存在情绪与价格背离。"
+        elif sentiment_label == "bullish" and price_direction == "up":
+            status = "resonance"
+            analysis = "偏多舆情与近期价格上行共振。"
+        elif sentiment_label == "bearish" and price_direction == "down":
+            status = "resonance"
+            analysis = "偏空舆情与近期价格下行共振。"
+        else:
+            status = "neutral"
+            analysis = "舆情方向或价格方向不够明确，暂未形成强共振/背离。"
+
+        return {
+            "status": status,
+            "sentiment_direction": sentiment_label,
+            "price_direction": price_direction,
+            "price_change_pct": round(float(change_pct), 4),
+            "source": signal.get("source"),
+            "window": signal.get("window"),
+            "analysis": analysis,
+        }
+
+    def _build_sentiment_snapshot(self, ticker: str, items: List[Dict[str, Any]]) -> NewsSentimentSnapshot:
+        payload = self._load_news_sentiment_payload(ticker)
+        parsed = self._parse_news_sentiment_payload(payload)
+        observations = list(parsed.get("observations") or [])
+        for item in items:
+            observation = self._extract_item_sentiment(item)
+            if observation:
+                observations.append(observation)
+
+        bias = self._build_sentiment_bias(observations, parsed.get("explicit_average"))
+        return NewsSentimentSnapshot(
+            ticker=str(ticker or "").upper(),
+            as_of=datetime.now().isoformat(),
+            sentiment_bias=bias,
+            sentiment_trend=self._build_sentiment_trend(observations),
+            heat=self._build_sentiment_heat(items, observations),
+            catalyst_events=self._build_catalyst_events(items),
+            price_transmission=self._build_price_transmission(str(ticker or "").upper(), str(bias.get("label") or "neutral")),
+            inputs={
+                "sentiment_tool_status": parsed.get("status"),
+                "sentiment_tool_preview": parsed.get("raw_preview"),
+                "reliability_summary": self._last_reliability_summary,
+            },
+        )
+
+    def _snapshot_text(self, snapshot: NewsSentimentSnapshot) -> str:
+        bias = snapshot.sentiment_bias
+        trend = snapshot.sentiment_trend
+        heat = snapshot.heat
+        catalysts = snapshot.catalyst_events
+        price = snapshot.price_transmission
+        avg = bias.get("average_score")
+        avg_text = f"{avg:+.2f}" if isinstance(avg, (int, float)) else "N/A"
+        return (
+            f"{snapshot.ticker} 整体舆情: {bias.get('label', 'neutral')} "
+            f"(平均分 {avg_text}, 正/负/中占比 "
+            f"{bias.get('positive_ratio', 0):.0%}/{bias.get('negative_ratio', 0):.0%}/{bias.get('neutral_ratio', 0):.0%}); "
+            f"趋势: {trend.get('direction', 'unknown')}; "
+            f"热度: {heat.get('level', 'normal')} (新闻 {heat.get('news_count', 0)} 条, 事件 {heat.get('event_count', 0)} 个); "
+            f"催化事件: {catalysts.get('count', 0)} 个; "
+            f"价格传导: {price.get('status', 'unknown')}。"
+        )
+
+    def _snapshot_has_aggregate_signal(self, snapshot: NewsSentimentSnapshot) -> bool:
+        bias = snapshot.sentiment_bias
+        catalysts = snapshot.catalyst_events
+        price = snapshot.price_transmission
+        if int(bias.get("sample_size") or 0) > 0:
+            return True
+        if int(catalysts.get("count") or 0) > 0:
+            return True
+        if price.get("price_change_pct") is not None:
+            return True
+        return False
+
     async def _initial_search(self, query: str, ticker: str) -> List[Any]:
         cache_key = f"{ticker}:news:24h"
         self._last_event_calendar = {}
         self._last_reliability_summary = {}
+        self._last_sentiment_snapshot = None
         cached = self.cache.get(cache_key)
         if isinstance(cached, list):
             annotated_cached = self._annotate_reliability(cached)
             self._last_reliability_summary = self._summarize_reliability(annotated_cached)
             self._last_event_calendar = self._load_event_calendar(ticker)
+            self._last_sentiment_snapshot = self._build_sentiment_snapshot(ticker, annotated_cached)
             return annotated_cached
 
         results = []
@@ -338,7 +879,6 @@ class NewsAgent(BaseFinancialAgent):
 
         # Apply search convergence (content-level dedupe + info gain)
         try:
-            from dataclasses import asdict
             from backend.agents.search_convergence import SearchConvergence
             sc = SearchConvergence()
             docs = []
@@ -406,6 +946,7 @@ class NewsAgent(BaseFinancialAgent):
         unique_results = self._annotate_reliability(unique_results)
         self._last_reliability_summary = self._summarize_reliability(unique_results)
         self._last_event_calendar = self._load_event_calendar(ticker)
+        self._last_sentiment_snapshot = self._build_sentiment_snapshot(ticker, unique_results)
 
         if unique_results:
             self.cache.set(cache_key, unique_results, self.CACHE_TTL)
@@ -523,8 +1064,14 @@ class NewsAgent(BaseFinancialAgent):
         """Simple headline concatenation (fallback)."""
         if not data:
             return "No recent news found."
+        snapshot = self._last_sentiment_snapshot
         titles = [item.get("headline", item.get("title", "")) for item in data[:5]]
-        summary = f"Recent news includes: {'; '.join(titles)}"
+        if isinstance(snapshot, NewsSentimentSnapshot) and self._snapshot_has_aggregate_signal(snapshot):
+            summary = self._snapshot_text(snapshot)
+            if titles:
+                summary += f" 核心新闻: {'; '.join(titles)}"
+        else:
+            summary = f"Recent news includes: {'; '.join(titles)}"
         calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
         earnings_count = len(calendar.get("earnings_events") or []) if isinstance(calendar.get("earnings_events"), list) else 0
         dividend_count = len(calendar.get("dividend_events") or []) if isinstance(calendar.get("dividend_events"), list) else 0
@@ -540,6 +1087,11 @@ class NewsAgent(BaseFinancialAgent):
         evidence = []
         sources = set()
         fallback_used = False
+        ticker = (
+            str(raw_data[0].get("ticker") or "")
+            if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict)
+            else str(self._current_ticker or "")
+        )
 
         # Handle None or non-list raw_data
         if raw_data and isinstance(raw_data, list):
@@ -609,13 +1161,33 @@ class NewsAgent(BaseFinancialAgent):
                 )
                 sources.add("event_calendar")
 
+        if self._last_sentiment_snapshot is None and isinstance(raw_data, list):
+            self._last_sentiment_snapshot = self._build_sentiment_snapshot(ticker, raw_data)
+        snapshot = self._last_sentiment_snapshot
+        snapshot_dict: Dict[str, Any] = {}
+        if isinstance(snapshot, NewsSentimentSnapshot) and self._snapshot_has_aggregate_signal(snapshot):
+            snapshot_dict = asdict(snapshot)
+            bias_confidence = snapshot.sentiment_bias.get("confidence")
+            snapshot_confidence = float(bias_confidence) if isinstance(bias_confidence, (int, float)) else 0.55
+            snapshot_confidence = max(0.55, snapshot_confidence)
+            evidence.append(
+                EvidenceItem(
+                    text=self._snapshot_text(snapshot),
+                    source="news_sentiment_snapshot",
+                    timestamp=snapshot.as_of,
+                    confidence=max(0.1, min(0.9, snapshot_confidence)),
+                    meta={"snapshot": snapshot_dict},
+                )
+            )
+            sources.add("news_sentiment_snapshot")
+
         output_confidence = 0.8 if evidence else 0.1
         if isinstance(avg_reliability, (int, float)):
             output_confidence = max(0.1, min(0.9, float(avg_reliability)))
         assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
         claims = self._build_native_claims(
             query=self._current_query or "",
-            ticker=str(raw_data[0].get("ticker") or "") if isinstance(raw_data, list) and raw_data and isinstance(raw_data[0], dict) else "",
+            ticker=ticker,
             evidence=evidence,
             confidence=output_confidence,
         )
@@ -628,12 +1200,109 @@ class NewsAgent(BaseFinancialAgent):
             data_sources=list(sources) if sources else ["news"],
             as_of=datetime.now().isoformat(),
             claims=claims,
+            chart_specs=build_news_sentiment_chart_specs(snapshot_dict),
             fallback_used=fallback_used,
             trace=trace,
             risks=risks,
             fallback_reason=fallback_reason,
             retryable=True,
         )
+
+    def _build_snapshot_claims(
+        self,
+        *,
+        query: str,
+        ticker: str,
+        snapshot_item: EvidenceItem,
+        confidence: float,
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(snapshot_item.meta, dict):
+            return []
+        source_id = str(snapshot_item.meta.get("source_id") or "").strip()
+        snapshot = snapshot_item.meta.get("snapshot")
+        if not source_id or not isinstance(snapshot, dict):
+            return []
+
+        ticker_value = str(snapshot.get("ticker") or ticker or "").strip()
+        bias = snapshot.get("sentiment_bias") if isinstance(snapshot.get("sentiment_bias"), dict) else {}
+        catalysts = snapshot.get("catalyst_events") if isinstance(snapshot.get("catalyst_events"), dict) else {}
+        price = snapshot.get("price_transmission") if isinstance(snapshot.get("price_transmission"), dict) else {}
+
+        bias_label = str(bias.get("label") or "neutral")
+        stance = {"bullish": "bull", "bearish": "bear"}.get(bias_label, "neutral")
+        avg_score = bias.get("average_score")
+        avg_text = f"{avg_score:+.2f}" if isinstance(avg_score, (int, float)) else "N/A"
+        snapshot_confidence = self._coerce_float(bias.get("confidence"))
+        claim_confidence = max(0.3, min(0.9, snapshot_confidence if snapshot_confidence is not None else confidence))
+
+        claims = [
+            build_agent_claim(
+                agent_name=self.AGENT_NAME,
+                ticker=ticker_value,
+                query=query,
+                claim=(
+                    f"{ticker_value} aggregate news sentiment bias is {bias_label} "
+                    f"(average sentiment score {avg_text})."
+                ),
+                evidence_ids=[source_id],
+                stance=stance,
+                confidence=claim_confidence,
+                limitations=["Aggregate sentiment is only as complete as the available news sentiment feed and headlines."],
+                metadata={
+                    "claim_type": "sentiment_bias",
+                    "positive_ratio": bias.get("positive_ratio"),
+                    "negative_ratio": bias.get("negative_ratio"),
+                    "neutral_ratio": bias.get("neutral_ratio"),
+                    "sample_size": bias.get("sample_size"),
+                },
+            )
+        ]
+
+        catalyst_count = int(catalysts.get("count") or 0)
+        claims.append(
+            build_agent_claim(
+                agent_name=self.AGENT_NAME,
+                ticker=ticker_value,
+                query=query,
+                claim=f"{ticker_value} has {catalyst_count} aggregated news/calendar catalyst events in the current sentiment window.",
+                evidence_ids=[source_id],
+                stance="risk" if catalyst_count else "neutral",
+                confidence=min(0.85, confidence),
+                limitations=["Catalyst aggregation identifies timing/attention drivers; it does not prove price direction by itself."],
+                metadata={
+                    "claim_type": "catalyst_events",
+                    "count": catalyst_count,
+                    "calendar_event_count": catalysts.get("calendar_event_count"),
+                    "high_impact_news_count": catalysts.get("high_impact_news_count"),
+                },
+            )
+        )
+
+        price_status = str(price.get("status") or "unknown")
+        price_stance = "risk" if price_status == "divergence" else stance if price_status == "resonance" else "neutral"
+        claims.append(
+            build_agent_claim(
+                agent_name=self.AGENT_NAME,
+                ticker=ticker_value,
+                query=query,
+                claim=(
+                    f"{ticker_value} sentiment-price transmission status is {price_status}: "
+                    f"{price.get('analysis') or 'insufficient price signal.'}"
+                ),
+                evidence_ids=[source_id],
+                stance=price_stance,
+                confidence=min(0.8, confidence),
+                limitations=["Price transmission uses recent available price data; intraday or after-hours moves may be missing."],
+                metadata={
+                    "claim_type": "sentiment_price_divergence",
+                    "status": price_status,
+                    "price_change_pct": price.get("price_change_pct"),
+                    "price_source": price.get("source"),
+                    "window": price.get("window"),
+                },
+            )
+        )
+        return claims
 
     def _build_native_claims(
         self,
@@ -644,11 +1313,25 @@ class NewsAgent(BaseFinancialAgent):
         confidence: float,
     ) -> List[Dict[str, Any]]:
         claims: List[Dict[str, Any]] = []
+        for item in evidence:
+            if item.source == "news_sentiment_snapshot":
+                claims.extend(
+                    self._build_snapshot_claims(
+                        query=query,
+                        ticker=ticker,
+                        snapshot_item=item,
+                        confidence=confidence,
+                    )
+                )
+                break
+
         for item in evidence[:6]:
             source_id = str((item.meta or {}).get("source_id") or "").strip()
             if not source_id:
                 continue
             source_name = str(item.source or "news")
+            if source_name == "news_sentiment_snapshot":
+                continue
             headline = str(item.text or "").strip()
             if not headline:
                 continue
@@ -701,7 +1384,7 @@ class NewsAgent(BaseFinancialAgent):
                     metadata={"claim_type": claim_type, "source_reliability": round(score, 4)},
                 )
             )
-        return claims[:6]
+        return claims[:9]
 
     async def analyze_stream(self, query: str, ticker: str):
         """

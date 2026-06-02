@@ -97,6 +97,72 @@ def test_synthesize_llm_mode_includes_debate_context(monkeypatch):
     assert "估值风险与需求韧性冲突" in captured.get("prompt", "")
 
 
+def test_synthesize_price_snapshot_prefers_price_agent_structured_output(monkeypatch):
+    monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
+
+    from backend.graph.nodes.synthesize import synthesize
+
+    price_summary = (
+        "【价格状态】AAPL 当前价格: USD 150.0；日内上涨 +2.30%。\n"
+        "【趋势与动量】区间收益 1mo +8.20% / 3mo +12.50%；动量状态 positive。"
+    )
+    state = {
+        "query": "请做 AAPL 深度投资报告",
+        "output_mode": "investment_report",
+        "operation": {"name": "qa", "confidence": 0.8, "params": {}},
+        "subject": {"subject_type": "company", "tickers": ["AAPL"], "selection_payload": []},
+        "plan_ir": {
+            "steps": [
+                {"id": "p1", "kind": "agent", "name": "price_agent"},
+                {"id": "t1", "kind": "tool", "name": "get_stock_price"},
+            ]
+        },
+        "artifacts": {
+            "step_results": {
+                "p1": {
+                    "output": {
+                        "summary": price_summary,
+                        "confidence": 0.93,
+                        "data_sources": ["price_behavior_snapshot"],
+                        "evidence": [
+                            {
+                                "text": "PriceBehaviorSnapshot for AAPL",
+                                "source": "price_behavior_snapshot",
+                                "meta": {
+                                    "metric_key": "price_behavior_snapshot",
+                                    "snapshot": {
+                                        "snapshot_type": "PriceBehaviorSnapshot",
+                                        "ticker": "AAPL",
+                                        "quote": {"price": 150.0, "currency": "USD", "change_percent": 2.3},
+                                    },
+                                },
+                            }
+                        ],
+                        "claims": [
+                            {
+                                "claim": "AAPL price momentum is positive: 1mo +8.20%, 3mo +12.50%, state positive.",
+                                "metadata": {"claim_type": "price_momentum"},
+                            }
+                        ],
+                    }
+                },
+                "t1": {"output": {"ticker": "AAPL", "price": 999.0, "source": "legacy_quote"}},
+            },
+            "evidence_pool": [],
+        },
+        "trace": {},
+    }
+
+    out = _run(synthesize(state))
+    price_snapshot = str(((out.get("artifacts") or {}).get("render_vars") or {}).get("price_snapshot") or "")
+
+    assert "【价格状态】" in price_snapshot
+    assert "【趋势与动量】" in price_snapshot
+    assert "【结构化命题】" in price_snapshot
+    assert "price momentum is positive" in price_snapshot
+    assert "999" not in price_snapshot
+
+
 def test_synthesize_stub_produces_render_vars_without_placeholders(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "stub")
 

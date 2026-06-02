@@ -334,16 +334,18 @@ async def run_graph_pipeline(
 
             # 2. Run the graph（通过 Langfuse Trace 入口）
             runner = await deps.get_graph_runner()
+            graph_ui_context = dict(ui_context or {})
+            graph_ui_context.setdefault("run_id", run_id_value)
 
             from backend.graph.runner import run_graph_traced
-            timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=ui_context)
+            timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=graph_ui_context)
             try:
                 state = await asyncio.wait_for(
                     run_graph_traced(
                         runner,
                         thread_id=thread_id,
                         query=query,
-                        ui_context=ui_context or {},
+                        ui_context=graph_ui_context,
                         output_mode=output_mode,
                         strict_selection=strict_selection,
                         confirmation_mode=confirmation_mode,
@@ -404,7 +406,7 @@ async def run_graph_pipeline(
                 report = _annotate_report_source(
                     report,
                     source,
-                    ticker_override=_resolve_ticker_override(ui_context),
+                    ticker_override=_resolve_ticker_override(graph_ui_context),
                 )
             except Exception as exc:
                 logger.warning(
@@ -726,6 +728,9 @@ async def resume_graph_pipeline(
 
             # Build report from final state
             markdown, final_state = _ensure_deliverable_markdown(final_state)
+            final_ui_context = dict(final_state.get("ui_context") or {}) if isinstance(final_state.get("ui_context"), dict) else {}
+            final_ui_context.setdefault("run_id", run_id_value)
+            final_state = {**final_state, "ui_context": final_ui_context}
             report: dict[str, Any] | None = None
             try:
                 from backend.graph.report_builder import build_report_payload

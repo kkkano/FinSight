@@ -55,6 +55,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
     fallback_used = getattr(output, "fallback_used", None)
     risks = getattr(output, "risks", None)
     trace = getattr(output, "trace", None)
+    chart_specs = getattr(output, "chart_specs", None)
 
     serialized_evidence: list[dict[str, Any]] = []
     for item in evidence[:12]:
@@ -89,6 +90,7 @@ def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:
         "fallback_used": fallback_used,
         "risks": risks,
         "trace": trace,
+        "chart_specs": chart_specs if isinstance(chart_specs, list) else [],
         "evidence": serialized_evidence,
     }
 
@@ -163,6 +165,7 @@ def _build_agent_fallback_output(
             f"错误摘要: {safe_error}",
         ],
         "trace": [{"event": "agent_fallback", "agent": step_name, "error": safe_error}],
+        "chart_specs": [],
         "evidence": [],
     }
 
@@ -225,6 +228,18 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
     trace = payload.get("trace")
     if not isinstance(trace, list):
         payload["trace"] = []
+
+    chart_specs = payload.get("chart_specs")
+    if not isinstance(chart_specs, list):
+        chart_specs = []
+    payload["chart_specs"] = [
+        item
+        for item in chart_specs[:12]
+        if isinstance(item, dict)
+        and isinstance(item.get("type"), str)
+        and isinstance(item.get("title"), str)
+        and isinstance(item.get("data"), dict)
+    ]
 
     payload["claims"] = extract_claims_from_agent_output(payload, query=query, ticker=ticker)
 

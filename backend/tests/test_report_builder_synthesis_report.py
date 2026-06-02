@@ -189,6 +189,95 @@ def test_build_report_payload_agent_status_exposes_evidence_quality_and_skip_rea
     assert macro.get("escalation_not_needed") is True
 
 
+def test_build_report_payload_price_section_uses_structured_price_agent_output():
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["price_agent"]},
+        "plan_ir": {"steps": [{"id": "p1", "kind": "agent", "name": "price_agent"}]},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n## 综合投资观点\n- 观点\n",
+            "evidence_pool": [],
+            "errors": [],
+            "render_vars": {},
+            "step_results": {
+                "p1": {
+                    "output": {
+                        "summary": "legacy one-line quote should be replaced",
+                        "confidence": 0.91,
+                        "data_sources": ["price_behavior_snapshot"],
+                        "evidence": [
+                            {
+                                "text": "PriceBehaviorSnapshot for AAPL",
+                                "source": "price_behavior_snapshot",
+                                "timestamp": "2026-05-31T00:00:00",
+                                "meta": {
+                                    "metric_key": "price_behavior_snapshot",
+                                    "snapshot": {
+                                        "snapshot_type": "PriceBehaviorSnapshot",
+                                        "ticker": "AAPL",
+                                        "as_of": "2026-05-31T00:00:00",
+                                        "quote": {
+                                            "ticker": "AAPL",
+                                            "price": 150.0,
+                                            "currency": "USD",
+                                            "change_percent": 2.3,
+                                            "source": "fixture_quote",
+                                            "as_of": "2026-05-31T00:00:00",
+                                        },
+                                        "trend": {
+                                            "direction": "uptrend",
+                                            "returns": {"1mo": 8.2, "3mo": 12.5},
+                                        },
+                                        "momentum": {"state": "positive", "close_vs_sma20_pct": 3.4},
+                                        "volume_price": {
+                                            "volume_ratio20": 1.42,
+                                            "price_change_1d": 2.3,
+                                            "signal": "price_up_volume_confirmed",
+                                        },
+                                        "relative_strength": {"benchmarks": {"SPY": {"rs_1mo": 4.8, "rs_3mo": 7.1}}},
+                                        "volatility_structure": {"realized_volatility": {"20d": 24.2}, "atr14_pct": 2.1},
+                                        "options": {"iv_atm": 0.31, "put_call_ratio": 1.25},
+                                        "key_levels": {
+                                            "support_20d": 142.5,
+                                            "resistance_20d": 153.8,
+                                            "distance_to_support_20d_pct": 5.3,
+                                        },
+                                    },
+                                },
+                            }
+                        ],
+                        "claims": [
+                            {
+                                "claim": "AAPL price momentum is positive: 1mo +8.20%, 3mo +12.50%, state positive.",
+                                "metadata": {"claim_type": "price_momentum"},
+                            },
+                            {
+                                "claim": "AAPL relative strength versus SPY is 1mo +4.80% and 3mo +7.10%.",
+                                "metadata": {"claim_type": "relative_strength"},
+                            },
+                        ],
+                    }
+                }
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-price-structured")
+    sections = report.get("sections") or []
+    price_section = next(section for section in sections if section.get("agent_name") == "price_agent")
+    content = str((price_section.get("contents") or [{}])[0].get("content") or "")
+
+    assert "【价格状态】" in content
+    assert "【趋势与动量】" in content
+    assert "【量价关系】" in content
+    assert "【风险提示】" in content
+    assert "【结构化命题】" in content
+    assert "price momentum is positive" in content
+    assert "legacy one-line quote should be replaced" not in content
+
+
 def test_build_report_payload_adds_compare_and_conflict_hints_and_tags():
     state = {
         "output_mode": "investment_report",

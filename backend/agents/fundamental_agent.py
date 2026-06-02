@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictClaim, EvidenceItem
+from backend.agents.chart_specs import build_fundamental_chart_specs
 from backend.research.agent_quality_contract import assign_evidence_source_ids, build_agent_claim
 from backend.services.circuit_breaker import CircuitBreaker
 
@@ -416,6 +417,10 @@ class FundamentalAgent(BaseFinancialAgent):
             data_sources=data_sources or ["yfinance"],
             as_of=datetime.now(timezone.utc).isoformat(),
             claims=claims,
+            chart_specs=build_fundamental_chart_specs(
+                str(raw_data.get("ticker") or "") if isinstance(raw_data, dict) else "",
+                normalized,
+            ),
             evidence_quality=evidence_quality,
             fallback_used=fallback_used,
             risks=risks,
