@@ -550,7 +550,11 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
 
   if (eventType === 'quality_blocked' || stage === 'quality_blocked') {
     const qualityPatch = extractRunQualityPatch(result);
-    patch.currentStep = message || 'Report blocked by quality gate';
+    // P1-4: 执行失败（报告构建崩溃）≠ 质量拦截，fallback 文案区分两种情况
+    const fallbackMessage = result.failure_kind === 'execution_error'
+      ? '报告生成过程出错，请重试'
+      : 'Report blocked by quality gate';
+    patch.currentStep = message || fallbackMessage;
     patch.progress = Math.max(run.progress, 98);
     return mergePatchAndEstimateEta(run, {
       ...patch,

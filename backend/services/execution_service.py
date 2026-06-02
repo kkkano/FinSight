@@ -397,6 +397,8 @@ async def run_graph_pipeline(
 
             # 3. Build report payload
             report: dict[str, Any] | None = None
+            # P1-4: 记录报告构建崩溃（执行失败），与质量门控拦截区分
+            report_build_error: str | None = None
             try:
                 from backend.graph.report_builder import build_report_payload
 
@@ -409,6 +411,7 @@ async def run_graph_pipeline(
                     ticker_override=_resolve_ticker_override(graph_ui_context),
                 )
             except Exception as exc:
+                report_build_error = str(exc)
                 logger.warning(
                     "[execution_service] report build failed: %s",
                     exc,
@@ -432,7 +435,24 @@ async def run_graph_pipeline(
                 response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
             persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
-            if quality_blocked:
+            if report_build_error and is_report_mode:
+                # P1-4: 报告模式下构建崩溃 = 执行失败，必须显式告知用户，
+                # 不能伪装成"执行完成"（quality gate 对 None 报告不拦截）或"质量拦截"
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": f"报告生成过程出错：{report_build_error[:200]}",
+                        "failure_kind": "execution_error",
+                        "failure_detail": report_build_error,
+                        "quality": report_quality,
+                        "blocked_reason_codes": [],
+                        "publishable": False,
+                        "blocked_report_available": False,
+                        "allow_continue_when_blocked": True,
+                        "soft_blocked": False,
+                    }
+                )
+            elif quality_blocked:
                 blocked_reason_codes = [
                     str(item.get("code") or "").strip()
                     for item in (report_quality.get("reasons") or [])
@@ -442,6 +462,8 @@ async def run_graph_pipeline(
                     {
                         "type": "quality_blocked",
                         "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
+                        "failure_kind": "quality_gate",
+                        "failure_detail": None,
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": soft_blocked,
@@ -732,6 +754,8 @@ async def resume_graph_pipeline(
             final_ui_context.setdefault("run_id", run_id_value)
             final_state = {**final_state, "ui_context": final_ui_context}
             report: dict[str, Any] | None = None
+            # P1-4: 记录报告构建崩溃（执行失败），与质量门控拦截区分
+            report_build_error: str | None = None
             try:
                 from backend.graph.report_builder import build_report_payload
                 report = build_report_payload(
@@ -739,6 +763,7 @@ async def resume_graph_pipeline(
                 )
                 report = _annotate_report_source(report, source)
             except Exception as exc:
+                report_build_error = str(exc)
                 logger.warning("[resume_pipeline] report build failed: %s", exc)
             report_quality, quality_blocked = _apply_quality_gate(
                 report=report,
@@ -758,7 +783,24 @@ async def resume_graph_pipeline(
                 response_markdown = f"这轮没有合成出可用文字，但我已经保留了上下文。你可以直接重试：{query_preview}\n"
             persisted_report = report if soft_blocked else (None if quality_blocked else report)
 
-            if quality_blocked:
+            if report_build_error and is_report_mode:
+                # P1-4: 报告模式下构建崩溃 = 执行失败，必须显式告知用户，
+                # 不能伪装成"执行完成"（quality gate 对 None 报告不拦截）或"质量拦截"
+                await _queue_event(
+                    {
+                        "type": "quality_blocked",
+                        "message": f"报告生成过程出错：{report_build_error[:200]}",
+                        "failure_kind": "execution_error",
+                        "failure_detail": report_build_error,
+                        "quality": report_quality,
+                        "blocked_reason_codes": [],
+                        "publishable": False,
+                        "blocked_report_available": False,
+                        "allow_continue_when_blocked": True,
+                        "soft_blocked": False,
+                    }
+                )
+            elif quality_blocked:
                 blocked_reason_codes = [
                     str(item.get("code") or "").strip()
                     for item in (report_quality.get("reasons") or [])
@@ -768,6 +810,8 @@ async def resume_graph_pipeline(
                     {
                         "type": "quality_blocked",
                         "message": "Report quality warning" if soft_blocked else "Report blocked by quality gate",
+                        "failure_kind": "quality_gate",
+                        "failure_detail": None,
                         "quality": report_quality,
                         "blocked_reason_codes": [code for code in blocked_reason_codes if code],
                         "publishable": soft_blocked,

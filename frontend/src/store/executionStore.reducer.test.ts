@@ -256,4 +256,58 @@ describe('pipelineReducer', () => {
     expect(patch.currentStep).toBe('GOOGL:price；阻塞项:1');
     expect(patch.progress).toBe(8);
   });
+
+  it('distinguishes execution errors from quality gate blocks (P1-4)', () => {
+    const run = buildRun({ progress: 80 });
+    const step = {
+      eventType: 'quality_blocked',
+      message: '报告生成过程出错：agent adapter crashed: connection reset',
+      timestamp: '2026-02-19T00:00:05.000Z',
+      result: {
+        type: 'quality_blocked',
+        failure_kind: 'execution_error',
+        failure_detail: 'agent adapter crashed: connection reset',
+        quality: { state: 'block', reasons: [] },
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('quality_blocked')]);
+    expect(patch.currentStep).toContain('报告生成过程出错');
+    expect(patch.currentStep).not.toContain('quality gate');
+  });
+
+  it('falls back to execution-error wording when message missing (P1-4)', () => {
+    const run = buildRun({ progress: 80 });
+    const step = {
+      eventType: 'quality_blocked',
+      message: '',
+      timestamp: '2026-02-19T00:00:05.000Z',
+      result: {
+        type: 'quality_blocked',
+        failure_kind: 'execution_error',
+        failure_detail: 'boom',
+        quality: { state: 'block', reasons: [] },
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('quality_blocked')]);
+    expect(patch.currentStep).toBe('报告生成过程出错，请重试');
+  });
+
+  it('uses quality gate fallback message for normal quality blocks (P1-4)', () => {
+    const run = buildRun({ progress: 80 });
+    const step = {
+      eventType: 'quality_blocked',
+      message: '',
+      timestamp: '2026-02-19T00:00:05.000Z',
+      result: {
+        type: 'quality_blocked',
+        failure_kind: 'quality_gate',
+        quality: { state: 'block', reasons: [] },
+      },
+    };
+
+    const patch = pipelineReducer(run, step, [buildTimelineEvent('quality_blocked')]);
+    expect(patch.currentStep).toBe('Report blocked by quality gate');
+  });
 });
