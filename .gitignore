@@ -143,3 +143,15 @@ data/conversations.json
 # --- Deploy tarballs (local build artifacts) ---
 finsight_deploy_*.tar.gz
 *.tar.gz
+
+# --- 开发临时产物（截图/调试流/设计原型/MCP 缓存，本地保留不入库；2026-06 清理）---
+/*.png
+/design-preview/
+/*_stream_*.txt
+/price_*.txt
+/valuation_*.txt
+/auto_valuation_*.json
+.serena/
+.playwright-mcp/
+/backend/backend/
+/backend/data/memory/
