@@ -13,7 +13,8 @@ export interface SkillItem {
   insert_text: string;
 }
 
-const SKILL_TRIGGER_RE = /(^|\s)\/skill(?:\s+(\S*))?$/;
+// 输入一个 "/" 即触发技能提示；兼容旧的 "/skill"（可选前缀），"/chan" 等直接过滤
+const SKILL_TRIGGER_RE = /(^|\s)\/(?:skill\s*)?(\S*)$/;
 
 export function useSkillAutocomplete(
   inputText: string,

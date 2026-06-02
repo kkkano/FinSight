@@ -10,6 +10,7 @@
  * Row 5: BollingerVolumeCard
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import { TechnicalSummaryCard } from './technical/TechnicalSummaryCard';
 import { MovingAverageTable } from './technical/MovingAverageTable';
 import { OscillatorTable } from './technical/OscillatorTable';
@@ -17,6 +18,7 @@ import { SupportResistanceChart } from './technical/SupportResistanceChart';
 import { BollingerVolumeCard } from './technical/BollingerVolumeCard';
 import { TechnicalSubCharts } from './technical/TechnicalSubCharts';
 import { AiInsightCard } from './shared/AiInsightCard';
+import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
@@ -38,6 +40,11 @@ export function TechnicalTab() {
   const marketChart = dashboardData?.charts?.market_chart;
   const indicatorSeries = dashboardData?.indicator_series;
   const technicalInsight = insightsData?.technical ?? null;
+  const deepDive = useDashboardDeepDive({
+    tab: 'technical',
+    metric: technicalInsight?.score_label ?? null,
+    insight: technicalInsight,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -49,7 +56,12 @@ export function TechnicalTab() {
         error={insightsError}
         stale={insightsStale}
         onAskAbout={handleAskAbout}
+        onDeepDive={deepDive.startDeepDive}
+        deepDiveRunning={deepDive.isRunning}
+        deepDiveProgress={deepDive.progress}
+        deepDiveCurrentStep={deepDive.currentStep}
       />
+      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
 
       {/* K-line chart with support/resistance — full width */}
       {!technicals && technicalsFallbackReason && (

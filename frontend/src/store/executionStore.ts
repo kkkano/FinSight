@@ -790,7 +790,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       concurrentMode: override?.concurrentMode ?? prefs.concurrentMode,
       timeoutSeconds: override?.timeoutSeconds ?? prefs.timeoutSeconds,
     };
-    const request: ExecuteRequest = {
+    const request: ExecuteRequest & Record<string, unknown> = {
       query: params.query,
       tickers: params.tickers,
       output_mode: params.outputMode,
@@ -799,6 +799,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       agents: params.agents,
       budget: params.budget ?? requestPrefs.maxRounds,
       source: params.source,
+      ...(params.requestBody ?? {}),
       session_id: sessionId,
       run_id: runId,
       agent_preferences: requestPrefs,
@@ -980,6 +981,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         await apiClient.executeAgent(request, callbacks, {
           signal: abortController.signal,
           traceRawEnabled,
+          endpoint: params.endpoint,
         });
 
         const run = getRun();

@@ -7,6 +7,7 @@
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useLatestReport } from '../../../hooks/useLatestReport';
+import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import type { SelectionItem, TechnicalData, NewsItem, PeerMetrics } from '../../../types/dashboard';
 import { ScoreRing } from './overview/ScoreRing';
 import { AnalystRatingCard } from './overview/AnalystRatingCard';
@@ -17,6 +18,7 @@ import { HighlightsCard } from './overview/HighlightsCard';
 import { FearGreedGauge } from './overview/FearGreedGauge';
 import { AgentStatusOverview } from './overview/AgentStatusOverview';
 import { AiInsightCard } from './shared/AiInsightCard';
+import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { asRecord } from '../../../utils/record';
 
@@ -217,9 +219,27 @@ export function OverviewTab() {
   const peerItems = dashboardData?.peers?.peers ?? [];
   const overviewInsight = insightsData?.overview ?? null;
   const actionSuggestion = buildActionSuggestion(reportData, overviewInsight?.score, technicals);
+  const deepDive = useDashboardDeepDive({
+    tab: 'overview',
+    metric: overviewInsight?.score_label ?? null,
+    insight: overviewInsight,
+  });
 
   return (
     <div className="space-y-4">
+      {/* P5: 今天为何涨跌 一键 Agent 归因（复用 Phase3 深挖闭环 + 五维归因 prompt） */}
+      <button
+        type="button"
+        disabled={deepDive.isRunning}
+        onClick={() => deepDive.startDeepDive(
+          '今天为什么涨/跌？请从①价格行为(涨跌幅/量价配合/动量) ②新闻催化事件 ③大盘与行业联动 ④技术面信号 ⑤资金流向 五个维度归因，按重要性排序，并附关键证据与置信度。',
+        )}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border border-fin-primary/30 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/15 disabled:opacity-50 disabled:cursor-wait"
+      >
+        <span>📉</span>
+        <span>{deepDive.isRunning ? '归因分析中…' : '今天为何涨跌？一键 Agent 归因'}</span>
+      </button>
+
       {/* AI Overview Card (full width) */}
       <AiInsightCard
         tab="overview"
@@ -229,8 +249,13 @@ export function OverviewTab() {
         stale={insightsStale}
         actionSuggestion={actionSuggestion}
         onAskAbout={handleAskAbout}
+        onDeepDive={deepDive.startDeepDive}
+        deepDiveRunning={deepDive.isRunning}
+        deepDiveProgress={deepDive.progress}
+        deepDiveCurrentStep={deepDive.currentStep}
         onRefresh={insightsRefetch ?? undefined}
       />
+      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
 
       {/* Unified stacked columns (reduce empty white blocks caused by row-based grid) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">

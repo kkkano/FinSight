@@ -216,6 +216,10 @@ export interface StartExecutionParams {
   agents?: string[];
   source: string;
   budget?: number;
+  /** Optional SSE endpoint override. Defaults to `/api/execute`. */
+  endpoint?: string;
+  /** Extra request body fields for endpoint-specific bridges. */
+  requestBody?: Record<string, unknown>;
   agentPreferencesOverride?: {
     agents?: Record<string, AgentPreferenceDepth>;
     maxRounds?: number;

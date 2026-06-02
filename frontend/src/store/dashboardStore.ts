@@ -21,6 +21,11 @@ import type {
 import { STORAGE_KEYS } from '../types/dashboard';
 import { apiClient } from '../api/client';
 import { deriveUserIdFromSessionId, useStore } from './useStore';
+import {
+  buildDashboardOverlayKey,
+  type DashboardAgentOverlay,
+  type DashboardDeepDiveTab,
+} from '../utils/dashboardDeepDiveOverlay';
 
 // === Store 接口 ===
 interface DashboardStore {
@@ -34,6 +39,7 @@ interface DashboardStore {
   newsTagFilter: NewsTagGroup;      // Phase H: 主题筛选
   newsTimeRange: NewsTimeRange;     // Phase H: 时间范围
   dashboardData: DashboardData | null;
+  agentOverlaysBySymbolTab: Record<string, DashboardAgentOverlay>;
   isLoading: boolean;
   error: string | null;
   activeSelection: SelectionItem | null;  // 单选兼容：用于旧 UI（MiniChat pill）
@@ -63,6 +69,12 @@ interface DashboardStore {
   setNewsTagFilter: (tag: NewsTagGroup) => void;
   setNewsTimeRange: (range: NewsTimeRange) => void;
   setDashboardData: (data: DashboardData) => void;
+  setOverlay: (
+    symbol: string,
+    tab: DashboardDeepDiveTab,
+    overlay: DashboardAgentOverlay | null,
+  ) => void;
+  getOverlay: (symbol: string, tab: DashboardDeepDiveTab) => DashboardAgentOverlay | null;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setActiveSelection: (selection: SelectionItem | null) => void;
@@ -148,6 +160,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   newsTagFilter: loadFromStorage<NewsTagGroup>(STORAGE_KEYS.NEWS_TAG_FILTER, '全部'),
   newsTimeRange: loadFromStorage<NewsTimeRange>(STORAGE_KEYS.NEWS_TIME_RANGE, '7d'),
   dashboardData: null,
+  agentOverlaysBySymbolTab: {},
   isLoading: false,
   error: null,
   activeSelection: null,  // 当前选中的新闻/报告
@@ -273,6 +286,22 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
 
   // 设置聚合数据
   setDashboardData: (data) => set({ dashboardData: data }),
+
+  // 设置/读取 Dashboard Tab Agent 深挖回填结果
+  setOverlay: (symbol, tab, overlay) =>
+    set((state) => {
+      const key = buildDashboardOverlayKey(symbol, tab);
+      const next = { ...state.agentOverlaysBySymbolTab };
+      if (overlay) {
+        next[key] = overlay;
+      } else {
+        delete next[key];
+      }
+      return { agentOverlaysBySymbolTab: next };
+    }),
+  getOverlay: (symbol, tab) => (
+    get().agentOverlaysBySymbolTab[buildDashboardOverlayKey(symbol, tab)] ?? null
+  ),
 
   // 设置加载状态
   setLoading: (loading) => set({ isLoading: loading }),

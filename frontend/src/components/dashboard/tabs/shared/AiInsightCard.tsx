@@ -10,7 +10,7 @@
  *
  * Four states: loading → loaded → stale → error
  */
-import { MessageCircleQuestion, RefreshCw } from 'lucide-react';
+import { Loader2, MessageCircleQuestion, RefreshCw, Search } from 'lucide-react';
 
 import type { InsightCard, SelectionItem } from '../../../../types/dashboard';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
@@ -104,6 +104,11 @@ interface AiInsightCardProps {
   compact?: boolean;
   /** Callback when user wants to ask about this insight */
   onAskAbout?: (selection: SelectionItem) => void;
+  /** Callback to run Dashboard Agent deep dive for this tab */
+  onDeepDive?: () => void;
+  deepDiveRunning?: boolean;
+  deepDiveProgress?: number;
+  deepDiveCurrentStep?: string | null;
   /** Callback to force-refresh the AI insights */
   onRefresh?: () => void;
   actionSuggestion?: {
@@ -125,9 +130,64 @@ export function AiInsightCard({
   stale = false,
   compact = false,
   onAskAbout,
+  onDeepDive,
+  deepDiveRunning = false,
+  deepDiveProgress = 0,
+  deepDiveCurrentStep = null,
   onRefresh,
   actionSuggestion = null,
 }: AiInsightCardProps) {
+  const label = TAB_LABELS[tab] ?? 'AI 分析';
+  const icon = TAB_ICONS[tab] ?? '🤖';
+  const deepDivePercent = Math.max(0, Math.min(100, deepDiveProgress));
+
+  const renderDeepDiveButton = () => {
+    if (!onDeepDive) return null;
+    return (
+      <button
+        type="button"
+        title={deepDiveRunning ? 'Agent 深挖进行中' : 'Agent 深挖'}
+        aria-label={`${label} Agent 深挖`}
+        disabled={deepDiveRunning}
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all shrink-0 ${
+          deepDiveRunning
+            ? 'text-fin-muted bg-fin-border/30 cursor-wait'
+            : 'text-fin-primary bg-fin-primary/10 hover:bg-fin-primary/15'
+        }`}
+        onClick={onDeepDive}
+      >
+        {deepDiveRunning ? (
+          <Loader2 size={13} className="animate-spin" />
+        ) : (
+          <Search size={13} />
+        )}
+        <span>深挖</span>
+      </button>
+    );
+  };
+
+  const renderDeepDiveProgress = () => {
+    if (!deepDiveRunning) return null;
+    return (
+      <div className="mb-3 rounded-lg border border-fin-primary/25 bg-fin-primary/5 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 text-2xs">
+          <span className="text-fin-muted truncate">
+            {deepDiveCurrentStep ?? 'Agent 深挖执行中...'}
+          </span>
+          <span className="text-fin-primary tabular-nums">
+            {deepDivePercent}%
+          </span>
+        </div>
+        <div className="mt-1.5 h-1 rounded-full bg-fin-border overflow-hidden">
+          <div
+            className="h-full rounded-full bg-fin-primary transition-all duration-300"
+            style={{ width: `${deepDivePercent}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // Loading state
   if (loading && !insight) {
     return <InsightSkeleton />;
@@ -137,10 +197,14 @@ export function AiInsightCard({
   if (error && !insight) {
     return (
       <div className="bg-fin-card rounded-xl border border-fin-border p-4">
-        <div className="flex items-center gap-2 text-fin-muted text-sm">
-          <span>{TAB_ICONS[tab] ?? '🤖'}</span>
-          <span>{TAB_LABELS[tab] ?? 'AI 分析'}</span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-fin-muted text-sm">
+            <span>{icon}</span>
+            <span>{label}</span>
+          </div>
+          {renderDeepDiveButton()}
         </div>
+        {renderDeepDiveProgress()}
         <p className="text-fin-muted text-xs mt-2">
           AI 分析暂不可用
         </p>
@@ -149,10 +213,25 @@ export function AiInsightCard({
   }
 
   // No insight data
-  if (!insight) return null;
+  if (!insight) {
+    if (!onDeepDive) return null;
+    return (
+      <div className="bg-fin-card rounded-xl border border-fin-border p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-fin-muted text-sm">
+            <span>{icon}</span>
+            <span>{label}</span>
+          </div>
+          {renderDeepDiveButton()}
+        </div>
+        {renderDeepDiveProgress()}
+        <p className="text-fin-muted text-xs mt-2">
+          暂无快速评分，可直接触发 Agent 深挖。
+        </p>
+      </div>
+    );
+  }
 
-  const label = TAB_LABELS[tab] ?? 'AI 分析';
-  const icon = TAB_ICONS[tab] ?? '🤖';
   const evidenceDiagnostic = isEvidenceDiagnosticInsight(insight);
   const executionDiagnostic = isExecutionDiagnosticInsight(insight);
   const diagnosticInsight = evidenceDiagnostic || executionDiagnostic;
@@ -188,7 +267,7 @@ export function AiInsightCard({
             <span className="text-sm font-medium text-fin-text truncate">
               {label}
             </span>
-            <CardInfoTip content="基于 Digest Agent 对实时数据的 AI 分析，含评分、摘要和操作建议" />
+            <CardInfoTip content="快速评分：规则 + 单次 LLM 对实时数据打分（非自主 Agent，无多轮推理/工具调用）。点「深挖」可触发真正的多 Agent 深度分析" />
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span
@@ -202,11 +281,9 @@ export function AiInsightCard({
             >
               {insight.score_label}
             </span>
-            {!insight.model_generated && (
-              <span className="text-2xs text-fin-muted bg-fin-border/30 px-1.5 py-0.5 rounded">
-                规则评分
-              </span>
-            )}
+            <span className="text-2xs text-fin-muted bg-fin-border/30 px-1.5 py-0.5 rounded">
+              {insight.model_generated ? '快速评分' : '规则评分'}
+            </span>
           </div>
         </div>
         {onAskAbout && !diagnosticInsight && (
@@ -228,6 +305,7 @@ export function AiInsightCard({
             <MessageCircleQuestion size={15} />
           </button>
         )}
+        {renderDeepDiveButton()}
         {diagnosticInsight && (
           <CardInfoTip
             icon="alert"
@@ -248,6 +326,8 @@ export function AiInsightCard({
           </button>
         )}
       </div>
+
+      {renderDeepDiveProgress()}
 
       {/* Summary */}
       {!compact && insight.summary && (
@@ -322,7 +402,7 @@ export function AiInsightCard({
         <div className="flex items-center gap-1.5">
           <SourceTrustBadge modelGenerated={insight.model_generated} degraded={stale || Boolean(error)} />
           <span className="text-2xs text-fin-muted">
-            {insight.model_generated ? '基于 AI 分析' : '基于规则评分'}
+            {insight.model_generated ? '快速评分 (LLM)' : '规则评分'}
           </span>
         </div>
         {stale && (

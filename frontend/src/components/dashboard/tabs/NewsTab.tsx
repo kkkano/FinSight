@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { useDashboardStore } from '../../../store/dashboardStore';
 import { useLatestReport } from '../../../hooks/useLatestReport';
 import { useExecuteAgent } from '../../../hooks/useExecuteAgent';
+import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import type { NewsItem, SelectionItem, NewsTagGroup } from '../../../types/dashboard';
 import { NEWS_TAG_GROUP_MAP } from '../../../types/dashboard';
 import {
@@ -27,6 +28,8 @@ import { NewsSubTabs } from './news/NewsSubTabs';
 import { NewsTagChips } from './news/NewsTagChips';
 import { NewsTimeRange } from './news/NewsTimeRange';
 import { NewsCard } from './news/NewsCard';
+import { NewsSentimentOverview } from './news/NewsSentimentOverview';
+import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 
 // ---------------------------------------------------------------------------
 // Deduplicate news items by title+source key
@@ -127,11 +130,20 @@ export function NewsTab() {
       key_points: keyPoints.length > 0 ? keyPoints : ['新闻数据已更新，请刷新洞察获取最新摘要'],
     };
   }, [rawNewsInsight, totalNewsCount]);
+  const deepDive = useDashboardDeepDive({
+    tab: 'news',
+    metric: newsInsight?.score_label ?? newsTagFilter,
+    insight: newsInsight,
+  });
 
   // --- Sub-tab counts (before time/tag filtering) ---
   const allCombined = useMemo(
     () => deduplicateNews([...marketNews, ...impactNews]),
     [marketNews, impactNews],
+  );
+  const overviewNews = useMemo(
+    () => filterByTimeRange(allCombined, newsTimeRange),
+    [allCombined, newsTimeRange],
   );
   const breakingAll = useMemo(() => filterBreakingNews(allCombined), [allCombined]);
   const counts = useMemo(() => ({
@@ -198,6 +210,13 @@ export function NewsTab() {
   // --- Render ---
   return (
     <div className="space-y-4">
+      {/* 舆情总览：REST 未暴露 NewsSentimentSnapshot 时，先用新闻列表做客户端聚合。 */}
+      <NewsSentimentOverview
+        news={overviewNews}
+        timeRange={newsTimeRange}
+        ticker={ticker ?? undefined}
+      />
+
       {/* AI News Insight Card (Phase F) */}
       <AiInsightCard
         tab="news"
@@ -206,7 +225,12 @@ export function NewsTab() {
         error={insightsError}
         stale={insightsStale}
         onAskAbout={handleAskAbout}
+        onDeepDive={deepDive.startDeepDive}
+        deepDiveRunning={deepDive.isRunning}
+        deepDiveProgress={deepDive.progress}
+        deepDiveCurrentStep={deepDive.currentStep}
       />
+      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
       {/* Fallback: report-based summary */}
       {!newsInsight && !insightsLoading && (
         <AiNewsSummaryCard reportData={reportData} loading={reportLoading} />

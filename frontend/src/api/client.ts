@@ -105,6 +105,12 @@ export interface AgentPreferencesPayload {
   timeoutSeconds?: number;
 }
 
+interface ExecuteAgentOptions {
+  traceRawEnabled?: boolean;
+  signal?: AbortSignal;
+  endpoint?: string;
+}
+
 export interface AlertFeedEvent {
   id: string;
   email: string;
@@ -1134,11 +1140,11 @@ export const apiClient = {
    * Supports an optional ``AbortSignal`` for cancellation.
    */
   async executeAgent(
-    request: ExecuteRequest,
+    request: ExecuteRequest & Record<string, unknown>,
     callbacks: SSECallbacks,
-    opts: { traceRawEnabled?: boolean; signal?: AbortSignal } = {},
+    opts: ExecuteAgentOptions = {},
   ): Promise<void> {
-    const response = await fetch(buildApiUrl('/api/execute'), {
+    const response = await fetch(buildApiUrl(opts.endpoint ?? '/api/execute'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

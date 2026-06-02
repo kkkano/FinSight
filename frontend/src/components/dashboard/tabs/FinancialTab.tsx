@@ -9,6 +9,7 @@
  * Row 4: BalanceSheetSummary
  */
 import { useDashboardStore } from '../../../store/dashboardStore';
+import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive';
 import { IncomeTable } from './financial/IncomeTable';
 import { ProfitabilityChart } from './financial/ProfitabilityChart';
 import { ValuationGrid } from './financial/ValuationGrid';
@@ -16,6 +17,7 @@ import { BalanceSheetSummary } from './financial/BalanceSheetSummary';
 import { EarningsSurpriseChart } from './financial/EarningsSurpriseChart';
 import { AnalystTargetCard } from './financial/AnalystTargetCard';
 import { AiInsightCard } from './shared/AiInsightCard';
+import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import type { SelectionItem } from '../../../types/dashboard';
 
 // --- Component ---
@@ -39,6 +41,11 @@ export function FinancialTab() {
   const recommendations = dashboardData?.recommendations;
   const currentPrice = dashboardData?.technicals?.close ?? dashboardData?.snapshot?.index_level ?? null;
   const financialInsight = insightsData?.financial ?? null;
+  const deepDive = useDashboardDeepDive({
+    tab: 'financial',
+    metric: financialInsight?.score_label ?? null,
+    insight: financialInsight,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,7 +57,12 @@ export function FinancialTab() {
         error={insightsError}
         stale={insightsStale}
         onAskAbout={handleAskAbout}
+        onDeepDive={deepDive.startDeepDive}
+        deepDiveRunning={deepDive.isRunning}
+        deepDiveProgress={deepDive.progress}
+        deepDiveCurrentStep={deepDive.currentStep}
       />
+      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
 
       {/* Row 1: Income table full width */}
       <IncomeTable financials={financials} />

@@ -7,12 +7,14 @@
  */
 import { useDashboardStore } from '../../../store/dashboardStore.ts';
 import { useLatestReport } from '../../../hooks/useLatestReport.ts';
+import { useDashboardDeepDive } from '../../../hooks/useDashboardDeepDive.ts';
 import { PeerScoreGrid } from './peers/PeerScoreGrid.tsx';
 import { PeerComparisonTable } from './peers/PeerComparisonTable.tsx';
 import { ValuationBarChart } from './peers/ValuationBarChart.tsx';
 import { RevenueGrowthChart } from './peers/RevenueGrowthChart.tsx';
 import { AiPeerSummary } from './peers/AiPeerSummary.tsx';
 import { AiInsightCard } from './shared/AiInsightCard';
+import { DashboardAgentOverlayPanel } from './shared/DashboardAgentOverlayPanel';
 import type { SelectionItem } from '../../../types/dashboard';
 
 export function PeersTab() {
@@ -38,6 +40,11 @@ export function PeersTab() {
   const subjectSymbol = peerData?.subject_symbol ?? ticker ?? '';
   const peers = peerData?.peers ?? [];
   const peersInsight = insightsData?.peers ?? null;
+  const deepDive = useDashboardDeepDive({
+    tab: 'peers',
+    metric: peersInsight?.score_label ?? null,
+    insight: peersInsight,
+  });
 
   if (!dashboardData) {
     return (
@@ -57,7 +64,12 @@ export function PeersTab() {
           error={insightsError}
           stale={insightsStale}
           onAskAbout={handleAskAbout}
+          onDeepDive={deepDive.startDeepDive}
+          deepDiveRunning={deepDive.isRunning}
+          deepDiveProgress={deepDive.progress}
+          deepDiveCurrentStep={deepDive.currentStep}
         />
+        <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
         {!peersInsight && !insightsLoading && (
           <AiPeerSummary reportData={reportData} loading={reportLoading} />
         )}
@@ -80,7 +92,12 @@ export function PeersTab() {
         error={insightsError}
         stale={insightsStale}
         onAskAbout={handleAskAbout}
+        onDeepDive={deepDive.startDeepDive}
+        deepDiveRunning={deepDive.isRunning}
+        deepDiveProgress={deepDive.progress}
+        deepDiveCurrentStep={deepDive.currentStep}
       />
+      <DashboardAgentOverlayPanel overlay={deepDive.overlay} run={deepDive.run} />
       {/* Fallback: report-based peer summary (hidden when insight is present) */}
       {!peersInsight && !insightsLoading && (
         <AiPeerSummary reportData={reportData} loading={reportLoading} />
