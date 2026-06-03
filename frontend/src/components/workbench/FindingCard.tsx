@@ -6,8 +6,9 @@
  *
  * 交互：
  * - 点击卡片 → 标记 viewed（onView 回调，内部调 patchFindingStatus）
- * - 行动按钮 Phase 1 行为：
+ * - 行动按钮行为：
  *   - type === 'full_report' → 跳转 Chat 并带 ticker（onNavigateToChat 回调）
+ *   - type === 'rebalance'   → 滚动联动到调仓卡片（onNavigateToRebalance 回调）
  *   - 其他类型 → 显示但 disabled + tooltip "Phase 2 开放"
  */
 import {
@@ -21,7 +22,12 @@ import {
 } from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 
-import type { AgentAnalysis, Finding, FindingTriggerType } from '../../types/monitor';
+import type {
+  AgentAnalysis,
+  Finding,
+  FindingAction,
+  FindingTriggerType,
+} from '../../types/monitor';
 
 interface FindingCardProps {
   finding: Finding;
@@ -29,6 +35,8 @@ interface FindingCardProps {
   onView?: (finding: Finding) => void;
   /** 行动按钮：跳转 Chat 深挖（带 ticker） */
   onNavigateToChat?: (ticker: string) => void;
+  /** 行动按钮：联动到调仓卡片（滚动 + 高亮） */
+  onNavigateToRebalance?: () => void;
 }
 
 /** trigger_type 视觉映射（图标 + 主色 class，仅用 fin-* / Tailwind 调色板） */
@@ -106,9 +114,34 @@ export function resolveTriggerVisual(
   }
 }
 
-/** 行动按钮 Phase 1 是否可点击：仅 full_report 可用，其余 Phase 2 开放 */
+/**
+ * 行动按钮是否可点击。
+ * full_report → 跳 Chat 深挖；rebalance → 联动调仓卡片；其余仍为 Phase 2 待开放。
+ */
 export function isActionEnabled(actionType: string): boolean {
-  return actionType === 'full_report';
+  return actionType === 'full_report' || actionType === 'rebalance';
+}
+
+/**
+ * 解析一个行动按钮应触发的目标行为（纯函数，便于测试）。
+ * - 'none'      → 不可点击 / 无效（Phase 2 待开放，或 PORTFOLIO 级无具体标的）
+ * - 'rebalance' → 联动调仓卡片
+ * - 'chat'      → 带 ticker 跳 Chat（target 字段给出 ticker）
+ */
+export type ActionTarget =
+  | { kind: 'none' }
+  | { kind: 'rebalance' }
+  | { kind: 'chat'; ticker: string };
+
+export function resolveActionTarget(
+  action: FindingAction,
+  fallbackTarget: string,
+): ActionTarget {
+  if (!isActionEnabled(action.type)) return { kind: 'none' };
+  if (action.type === 'rebalance') return { kind: 'rebalance' };
+  const ticker = action.ticker || fallbackTarget;
+  if (ticker && ticker !== 'PORTFOLIO') return { kind: 'chat', ticker };
+  return { kind: 'none' };
 }
 
 /** agent 标识 → 中文展示名 */
@@ -118,6 +151,12 @@ export function resolveAgentLabel(agent: string): string {
       return '技术分析';
     case 'risk_agent':
       return '风险评估';
+    case 'news_agent':
+      return '舆情分析';
+    case 'deep_search_agent':
+      return '深度研究';
+    case 'macro_agent':
+      return '宏观分析';
     default:
       return agent || 'AI';
   }
@@ -221,7 +260,12 @@ function AgentAnalysisBlock({ analysis }: { analysis: AgentAnalysis }) {
   );
 }
 
-export function FindingCard({ finding, onView, onNavigateToChat }: FindingCardProps) {
+export function FindingCard({
+  finding,
+  onView,
+  onNavigateToChat,
+  onNavigateToRebalance,
+}: FindingCardProps) {
   const visual = resolveTriggerVisual(finding.trigger_type, finding.trigger_detail);
   const { Icon } = visual;
   const isNew = finding.status === 'new';
@@ -232,10 +276,16 @@ export function FindingCard({ finding, onView, onNavigateToChat }: FindingCardPr
   };
 
   const handleActionClick = (action: Finding['actions'][number]) => {
-    if (!isActionEnabled(action.type)) return;
-    const ticker = action.ticker || finding.target;
-    if (ticker && ticker !== 'PORTFOLIO') {
-      onNavigateToChat?.(ticker);
+    const target = resolveActionTarget(action, finding.target);
+    switch (target.kind) {
+      case 'rebalance':
+        onNavigateToRebalance?.();
+        break;
+      case 'chat':
+        onNavigateToChat?.(target.ticker);
+        break;
+      default:
+        break; // 'none'：不可点击 / 无具体标的
     }
   };
 

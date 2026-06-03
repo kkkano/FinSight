@@ -16,11 +16,17 @@ interface FindingsFeedProps {
   sessionId: string | null | undefined;
   /** 行动按钮跳转 Chat 深挖 */
   onNavigateToChat?: (ticker: string) => void;
+  /** 行动按钮联动调仓卡片（滚动 + 高亮） */
+  onNavigateToRebalance?: () => void;
 }
 
 type FeedFilter = 'all' | 'unread';
 
-export function FindingsFeed({ sessionId, onNavigateToChat }: FindingsFeedProps) {
+export function FindingsFeed({
+  sessionId,
+  onNavigateToChat,
+  onNavigateToRebalance,
+}: FindingsFeedProps) {
   const { findings, loading, error, scanning, scan, markViewed } = useFindings(sessionId);
   const [filter, setFilter] = useState<FeedFilter>('all');
 
@@ -130,6 +136,7 @@ export function FindingsFeed({ sessionId, onNavigateToChat }: FindingsFeedProps)
               finding={finding}
               onView={markViewed}
               onNavigateToChat={onNavigateToChat}
+              onNavigateToRebalance={onNavigateToRebalance}
             />
           ))
         )}

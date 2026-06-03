@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Newspaper } from 'lucide-react';
 
 import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
@@ -66,6 +67,9 @@ export function Workbench({
   const [qualityDrawerOpen, setQualityDrawerOpen] = useState(false);
   const [qualityFocusHint, setQualityFocusHint] = useState<string | null>(null);
 
+  // 调仓卡片高亮态：发现卡片「调仓建议」联动时短暂高亮 2 秒
+  const [rebalanceHighlight, setRebalanceHighlight] = useState(false);
+
   // 一键晨报
   const morningBrief = useMorningBrief(sessionId);
 
@@ -107,6 +111,16 @@ export function Workbench({
     [setDraft, onNavigateToChat, navigate],
   );
 
+  // 发现卡片「调仓建议」→ 滚动到调仓卡片并短暂高亮（2 秒后取消）
+  const handleNavigateToRebalance = useCallback(() => {
+    const el = document.getElementById('rebalance-card');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setRebalanceHighlight(true);
+    window.setTimeout(() => setRebalanceHighlight(false), 2000);
+  }, []);
+
   return (
     <div className="space-y-4">
       {/* Breadcrumb / navigation bar */}
@@ -133,21 +147,38 @@ export function Workbench({
       {/* 顶部：持仓摘要条（常驻） */}
       <PortfolioSummaryBar />
 
-      {/* 一键晨报（保留，折叠态由卡片内部控制） */}
-      <MorningBriefCard
-        brief={morningBrief.brief}
-        loading={morningBrief.loading}
-        error={morningBrief.error}
-        onGenerate={morningBrief.generate}
-      />
-
       {/* 主体：双列布局——左侧发现流 + 任务，右侧持仓管理 + 监控配置 + 其余 */}
       <div className="grid lg:grid-cols-3 gap-4">
-        {/* 左列（约 2/3）：今日发现流（核心，置顶）+ 每日任务 */}
+        {/* 左列（约 2/3）：每日晨报摘要（折叠，融入发现流）+ 今日发现流 + 每日任务 */}
         <div className="lg:col-span-2 space-y-4">
+          {/* 晨报融入发现流：默认折叠，点击展开（DailyDigest 化） */}
+          <details
+            className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden"
+            data-testid="morning-brief-details"
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-fin-text hover:bg-fin-hover/40 transition-colors">
+              <ChevronRight
+                size={15}
+                className="text-fin-muted transition-transform group-open:rotate-90"
+              />
+              <Newspaper size={15} className="text-amber-400" />
+              <span>每日晨报摘要</span>
+              <span className="ml-auto text-2xs text-fin-muted">点击展开</span>
+            </summary>
+            <div className="border-t border-fin-border p-3">
+              <MorningBriefCard
+                brief={morningBrief.brief}
+                loading={morningBrief.loading}
+                error={morningBrief.error}
+                onGenerate={morningBrief.generate}
+              />
+            </div>
+          </details>
+
           <FindingsFeed
             sessionId={sessionId}
             onNavigateToChat={handleNavigateToChatWithTicker}
+            onNavigateToRebalance={handleNavigateToRebalance}
           />
           <TaskSection
             symbol={symbol}
@@ -163,7 +194,16 @@ export function Workbench({
             onChanged={() => void portfolioSummary.refresh()}
           />
           <MonitorConfigPanel sessionId={sessionId} />
-          <RebalanceEntryCard />
+          {/* 调仓入口：发现卡片「调仓建议」联动滚动目标 + 短暂高亮 */}
+          <div
+            id="rebalance-card"
+            data-testid="rebalance-card-anchor"
+            className={`rounded-xl transition-shadow duration-300 ${
+              rebalanceHighlight ? 'ring-2 ring-fin-primary ring-offset-2 ring-offset-fin-bg' : ''
+            }`}
+          >
+            <RebalanceEntryCard />
+          </div>
           {/* 持仓收益追踪表（保留） */}
           <PortfolioPerformance
             data={portfolioSummary.data}
