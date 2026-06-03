@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Newspaper } from 'lucide-react';
 
-import { apiClient } from '../api/client';
 import { useStore } from '../store/useStore';
+import { migrateLegacyPortfolio } from '../utils/portfolioMigration';
 import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
 import { PortfolioPerformance } from '../components/workbench/PortfolioPerformance';
@@ -37,7 +37,7 @@ export function Workbench({
   onNavigateToChat,
 }: WorkbenchProps) {
   const navigate = useNavigate();
-  const { sessionId, portfolioPositions, setDraft } = useStore();
+  const { sessionId, setDraft } = useStore();
   const portfolioSummary = usePortfolioSummary(sessionId);
 
   const {
@@ -73,23 +73,22 @@ export function Workbench({
   // 一键晨报
   const morningBrief = useMorningBrief(sessionId);
 
-  // 组合同步：将本地（旧版 Watchlist/右侧面板入口）持仓推送到后端。
-  // ⚠️ 修复数据丢失 bug：只在本地确实有持仓时才同步——
-  // 新版 PortfolioEditor 直接写后端 portfolio.db，本地 store 往往是空的，
-  // 空状态全量同步会把后端持仓清空（sync 是先 DELETE 再插入的全量替换语义）。
+  // 旧版 localStorage 持仓 → 后端一次性迁移（工作台是持仓主场景，挂载时执行一次）。
+  // 仅当本地有数据且后端为空时迁移，迁移成功后清除本地 key 并刷新 summary。
   useEffect(() => {
-    const positions = Object.entries(portfolioPositions ?? {}).map(([ticker, shares]) => ({
-      ticker: ticker.trim().toUpperCase(),
-      shares: Number(shares) || 0,
-    })).filter((item) => item.ticker && item.shares > 0);
-
-    // 本地为空 = 用户没用旧入口录过持仓，跳过同步（绝不能清空后端数据）
-    if (positions.length === 0) return;
-
-    void apiClient.syncPortfolioPositions(sessionId, positions).catch(() => {
-      // keep UI responsive even when sync fails
+    if (!sessionId) return;
+    let cancelled = false;
+    void migrateLegacyPortfolio(sessionId).then((result) => {
+      if (!cancelled && result && result.migrated > 0) {
+        void portfolioSummary.refresh();
+      }
     });
-  }, [sessionId, portfolioPositions]);
+    return () => {
+      cancelled = true;
+    };
+    // 仅依赖 sessionId：每个会话只迁移一次。portfolioSummary.refresh 引用稳定，无需入依赖。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   const openQualityDrawer = useCallback((focusHint?: string | null) => {
     setQualityFocusHint(focusHint ?? null);

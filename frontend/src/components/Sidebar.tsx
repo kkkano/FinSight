@@ -20,6 +20,7 @@ import { apiClient } from '../api/client';
 import { getSupabaseClient } from '../api/supabaseClient';
 import { buildAnonymousSessionId, deriveUserIdFromSessionId, useStore } from '../store/useStore';
 import { useDashboardStore } from '../store/dashboardStore';
+import { usePortfolioSummary, buildPositionsMap } from '../hooks/usePortfolioSummary';
 import { parseQuotePayload } from '../utils/quote';
 import { useToast } from './ui';
 
@@ -90,7 +91,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { toast } = useToast();
   const {
     subscriptionEmail,
-    portfolioPositions,
     currentTicker,
     sessionId,
     authIdentity,
@@ -99,6 +99,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     setSessionId,
     setSubscriptionEmail,
   } = useStore();
+  // 持仓徽章统一读后端单一真相源（portfolio.db），只读
+  const { data: portfolioData } = usePortfolioSummary(sessionId);
+  const portfolioPositions = useMemo(() => buildPositionsMap(portfolioData), [portfolioData]);
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
   const navigate = useNavigate();
 

@@ -13,6 +13,7 @@ import { Plus, ExternalLink, X, RefreshCw, Package, Check } from 'lucide-react';
 import { useDashboardStore } from '../../store/dashboardStore';
 import { useStore } from '../../store/useStore';
 import { apiClient } from '../../api/client';
+import { usePortfolioSummary, buildPositionsMap } from '../../hooks/usePortfolioSummary';
 import type { WatchItem, ActiveAsset } from '../../types/dashboard';
 // 共享 UI 组件
 import { Button, Input, useToast } from '../ui';
@@ -64,8 +65,10 @@ interface WatchlistProps {
 export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
   const { watchlist, addWatchItemApi, removeWatchItemApi, setActiveAsset } =
     useDashboardStore();
-  const { portfolioPositions, setPortfolioPosition, removePortfolioPosition } =
-    useStore();
+  // 持仓统一读后端单一真相源（portfolio.db），不再读 localStorage
+  const sessionId = useStore((s) => s.sessionId);
+  const { data: portfolioData, refresh: refreshPortfolio } = usePortfolioSummary(sessionId);
+  const portfolioPositions = buildPositionsMap(portfolioData);
   const { toast } = useToast();
 
   // 添加模式状态
@@ -227,19 +230,31 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
     setEditingValue(current > 0 ? String(current) : '');
   };
 
-  const saveHoldings = () => {
+  const saveHoldings = async () => {
     if (!editingSymbol) return;
     const key = editingSymbol.toUpperCase();
     const parsed = Number(editingValue);
+    const shouldRemove = !editingValue.trim() || Number.isNaN(parsed) || parsed <= 0;
 
-    if (!editingValue.trim() || Number.isNaN(parsed) || parsed <= 0) {
-      removePortfolioPosition(key);
-    } else {
-      setPortfolioPosition(key, parsed);
-    }
-
+    // 先收起编辑态，写后端真相源（portfolio.db），成功后刷新共享缓存
     setEditingSymbol(null);
     setEditingValue('');
+
+    try {
+      if (shouldRemove) {
+        await apiClient.deletePortfolioPosition(sessionId, key);
+      } else {
+        await apiClient.updatePortfolioPosition(sessionId, key, parsed);
+      }
+      await refreshPortfolio();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存失败，请稍后重试';
+      toast({
+        type: 'error',
+        title: '保存持仓失败',
+        message,
+      });
+    }
   };
 
   const cancelEditHoldings = () => {
@@ -249,7 +264,7 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
 
   const handleHoldingsKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      saveHoldings();
+      void saveHoldings();
     } else if (e.key === 'Escape') {
       cancelEditHoldings();
     }
@@ -462,14 +477,14 @@ export function Watchlist({ activeSymbol, onSymbolSelect }: WatchlistProps) {
                         value={editingValue}
                         onChange={(e) => setEditingValue(e.target.value)}
                         onKeyDown={handleHoldingsKeyDown}
-                        onBlur={saveHoldings}
+                        onBlur={() => void saveHoldings()}
                         placeholder="股数（0=清除）"
                         className="flex-1 min-w-0 px-1.5 py-0.5 text-2xs rounded border border-fin-primary/50 bg-fin-bg text-fin-text text-right focus:outline-none focus:border-fin-primary"
                       />
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={saveHoldings}
+                        onClick={() => void saveHoldings()}
                         aria-label="确认持仓"
                         className="p-0.5 text-fin-success hover:text-fin-success"
                         title="确认"

@@ -5,7 +5,6 @@ import { apiClient } from '../api/client';
 type Theme = 'dark' | 'light';
 type LayoutMode = 'centered' | 'full';
 type ChatStyle = 'bubble' | 'flat';
-type PortfolioPositions = Record<string, number>;
 export type EntryMode = 'pending' | 'anonymous' | 'authenticated';
 export interface AuthIdentity {
   userId: string;
@@ -136,31 +135,6 @@ const getInitialTraceViewMode = (): TraceViewMode => {
   return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'expert';
 };
 
-const getInitialPortfolioPositions = (): PortfolioPositions => {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem('finsight-portfolio-positions');
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return {};
-    return Object.entries(parsed).reduce<PortfolioPositions>((acc, [ticker, shares]) => {
-      const normalized = ticker.trim().toUpperCase();
-      const value = Number(shares);
-      if (normalized && Number.isFinite(value) && value > 0) {
-        acc[normalized] = value;
-      }
-      return acc;
-    }, {});
-  } catch {
-    return {};
-  }
-};
-
-const persistPortfolioPositions = (positions: PortfolioPositions) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem('finsight-portfolio-positions', JSON.stringify(positions));
-};
-
 const applyThemeClass = (theme: Theme) => {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
@@ -173,7 +147,6 @@ const initialLayout = getInitialLayout();
 const initialSubscriptionEmail = getInitialSubscriptionEmail();
 const initialEntryMode = getInitialEntryMode();
 const initialSessionId = getInitialSessionId() || buildAnonymousSessionId();
-const initialPortfolioPositions = getInitialPortfolioPositions();
 const initialTraceRawEnabled = getInitialTraceRawEnabled();
 const initialTraceViewMode = getInitialTraceViewMode();
 const initialTraceRawShowRawJson = getInitialTraceRawShowRawJson();
@@ -228,9 +201,6 @@ interface AppState {
   setSessionId: (sessionId: string) => void;
   authIdentity: AuthIdentity | null;
   setAuthIdentity: (identity: AuthIdentity | null) => void;
-  portfolioPositions: PortfolioPositions;
-  setPortfolioPosition: (ticker: string, shares: number) => void;
-  removePortfolioPosition: (ticker: string) => void;
   // Agent Logs - 实时日志面板
   agentLogs: AgentLogEntry[];
   agentStatuses: Record<AgentLogSource, AgentStatus>;
@@ -584,7 +554,6 @@ export const useStore = create<AppState>((set) => ({
   entryMode: initialEntryMode,
   sessionId: initialSessionId,
   authIdentity: null,
-  portfolioPositions: initialPortfolioPositions,
   // Agent Logs 初始状态
   agentLogs: [],
   agentStatuses: createInitialAgentStatuses(),
@@ -1049,31 +1018,6 @@ export const useStore = create<AppState>((set) => ({
 
   setAuthIdentity: (identity) =>
     set(() => ({ authIdentity: identity })),
-
-  setPortfolioPosition: (ticker, shares) =>
-    set((state) => {
-      const key = ticker.trim().toUpperCase();
-      if (!key) return {};
-      const next = { ...state.portfolioPositions };
-      if (!Number.isFinite(shares) || shares <= 0) {
-        delete next[key];
-      } else {
-        next[key] = shares;
-      }
-      persistPortfolioPositions(next);
-      return { portfolioPositions: next };
-    }),
-
-  removePortfolioPosition: (ticker) =>
-    set((state) => {
-      const key = ticker.trim().toUpperCase();
-      if (!key) return {};
-      if (!state.portfolioPositions[key]) return {};
-      const next = { ...state.portfolioPositions };
-      delete next[key];
-      persistPortfolioPositions(next);
-      return { portfolioPositions: next };
-    }),
 
   setDraft: (text) =>
     set((state) => ({

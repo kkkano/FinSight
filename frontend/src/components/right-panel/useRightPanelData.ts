@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { deriveUserIdFromSessionId, useStore } from '../../store/useStore';
 import { useDashboardStore } from '../../store/dashboardStore';
+import { usePortfolioSummary, buildPositionsMap } from '../../hooks/usePortfolioSummary';
+import { useToast } from '../ui';
 import type {
   AlertEvent,
   AlertEventState,
@@ -65,8 +67,12 @@ export function useRightPanelData() {
   const [isPortfolioEditing, setIsPortfolioEditing] = useState(false);
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const dashboardWatchlist = useDashboardStore((s) => s.watchlist ?? []);
+  const { toast } = useToast();
 
-  const { subscriptionEmail, portfolioPositions, setPortfolioPosition, removePortfolioPosition, sessionId } = useStore();
+  const { subscriptionEmail, sessionId } = useStore();
+  // 持仓统一读后端单一真相源（portfolio.db）
+  const { data: portfolioData, refresh: refreshPortfolio } = usePortfolioSummary(sessionId);
+  const portfolioPositions = useMemo(() => buildPositionsMap(portfolioData), [portfolioData]);
   const trimmedSubscriptionEmail = subscriptionEmail.trim();
   const emailConfigured = Boolean(trimmedSubscriptionEmail);
   const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
@@ -219,17 +225,42 @@ export function useRightPanelData() {
   };
 
   const savePortfolioEdit = () => {
+    // 逐条写后端单一真相源（portfolio.db），全部完成后刷新共享缓存。
+    // 用单条 update/delete（而非全量 sync）保证渐进式安全。
+    const tasks: Array<Promise<unknown>> = [];
     watchlist.forEach((item) => {
       const key = item.ticker.trim().toUpperCase();
       const raw = positionDrafts[key];
+      if (raw === undefined) return;
       const value = Number(raw);
+      const existing = portfolioPositions[key] || 0;
       if (Number.isFinite(value) && value > 0) {
-        setPortfolioPosition(key, value);
-      } else if (raw !== undefined) {
-        removePortfolioPosition(key);
+        // 仅在数值有变化时写入，避免无谓的网络请求
+        if (value !== existing) {
+          tasks.push(apiClient.updatePortfolioPosition(sessionId, key, value));
+        }
+      } else if (existing > 0) {
+        // 清空草稿且后端原有持仓 → 删除
+        tasks.push(apiClient.deletePortfolioPosition(sessionId, key));
       }
     });
     setIsPortfolioEditing(false);
+
+    if (tasks.length === 0) return;
+    void Promise.allSettled(tasks)
+      .then((results) => {
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          toast({
+            type: 'error',
+            title: '部分持仓保存失败',
+            message: `${failed} 项未能写入，请稍后重试`,
+          });
+        }
+      })
+      .finally(() => {
+        void refreshPortfolio();
+      });
   };
 
   const eventState = useMemo<AlertEventState>(() => {

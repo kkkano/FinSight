@@ -12,6 +12,7 @@ import { Card } from '../ui/Card.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Badge } from '../ui/Badge.tsx';
 import { useStore } from '../../store/useStore.ts';
+import { usePortfolioSummary } from '../../hooks/usePortfolioSummary.ts';
 import { useRebalanceSuggestion } from '../../hooks/useRebalanceSuggestion.ts';
 import { RebalanceParamPanel } from './rebalance/RebalanceParamPanel.tsx';
 import { RebalanceResultView } from './rebalance/RebalanceResultView.tsx';
@@ -25,21 +26,25 @@ const RISK_TIER_LABELS: Record<RiskTier, string> = {
 
 export function RebalanceEntryCard() {
   const sessionId = useStore((s) => s.sessionId);
-  const portfolioPositions = useStore((s) => s.portfolioPositions);
+  // 持仓统一读后端单一真相源（portfolio.db），直接拿 positions 数组组装（带 avg_cost 更准确）
+  const { data: portfolioData } = usePortfolioSummary(sessionId);
 
   const { suggestion, loading, error, generate, updateStatus, clear } =
     useRebalanceSuggestion();
 
   const [showDetails, setShowDetails] = useState(false);
 
-  // Convert portfolioPositions map to the array format expected by API
+  // 将后端 positions 转为调仓 API 期望的数组格式（含成本价）
   const portfolio = useMemo(
     () =>
-      Object.entries(portfolioPositions).map(([ticker, shares]) => ({
-        ticker,
-        shares,
-      })),
-    [portfolioPositions],
+      (portfolioData?.positions ?? [])
+        .filter((pos) => Number(pos.shares) > 0)
+        .map((pos) => ({
+          ticker: pos.ticker,
+          shares: pos.shares,
+          ...(pos.avg_cost != null ? { avgCost: pos.avg_cost } : {}),
+        })),
+    [portfolioData],
   );
 
   const handleGenerate = useCallback(
