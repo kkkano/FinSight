@@ -24,6 +24,7 @@ import { SynthesisReportBlock } from './ReportCharts';
 import { EvidenceLedgerPanel } from './EvidenceLedgerPanel';
 import { ReportCockpit } from './ReportCockpit';
 import { DebateScorecard } from './DebateScorecard';
+import { FactCheckCard } from './FactCheckCard';
 import { HoldingsWatchPanel } from './HoldingsWatchPanel';
 import { useToast } from '../ui';
 
@@ -395,6 +396,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
                 onCollapse={collapseSynthesis}
               />
 
+              {report.fact_check && <FactCheckCard factCheck={report.fact_check} />}
+
               {hasResearchArtifacts && (
                 <div className="space-y-3">
                   <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />
@@ -447,6 +450,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
         {/* 深入区：研究产物 / 完整证据账本（Agent 分析详情已并入核心观点去重） */}
         <div className="mt-6 space-y-4">
+          {report.fact_check && <FactCheckCard factCheck={report.fact_check} />}
+
           {hasResearchArtifacts && (
             <div className="space-y-3">
               <EvidenceLedgerPanel ledger={researchArtifacts.evidenceLedger} />

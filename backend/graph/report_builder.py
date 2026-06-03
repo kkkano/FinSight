@@ -44,6 +44,58 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# P2-1 护城河前置：幻觉洗涤可见化最大展示条数
+_FACT_CHECK_MAX_CLAIMS = 20
+
+
+def _build_fact_check_payload(
+    verifier_result: dict[str, Any] | None,
+    verifier_claims: list[Any],
+) -> dict[str, Any]:
+    """把验证器结果转成前端可消费的 fact_check 结构。
+
+    数据来源是 synthesize 节点真实的二次事实核查输出（verifier_result），
+    不允许编造演示数据。验证器未运行 / 未发现问题时，返回
+    redaction_count==0 的「全部通过」状态，让前端始终能展示核查行为，
+    这是护城河「可解释性」可见化的核心。
+
+    Args:
+        verifier_result: state.artifacts["verifier_result"]，含 enabled/checked 等标志。
+        verifier_claims: 验证器检测到的不可信声明列表 [{"claim","reason"}, ...]，
+            这些声明已在正文中被替换为「[不可信声明]」占位符。
+
+    Returns:
+        {"verifier_claims": [...], "redaction_count": int, "verified_at": ISO 时间戳,
+         "enabled": bool, "checked": bool}
+    """
+    claims: list[dict[str, str]] = []
+    if isinstance(verifier_claims, list):
+        for item in verifier_claims:
+            if len(claims) >= _FACT_CHECK_MAX_CLAIMS:
+                break
+            if not isinstance(item, dict):
+                continue
+            claim_text = _safe_str(item.get("claim")).strip()
+            if not claim_text:
+                continue
+            reason_text = _safe_str(item.get("reason")).strip()
+            claims.append(
+                {
+                    "claim": claim_text[:240],
+                    "reason": reason_text[:240] if reason_text else "证据池中未找到明确支撑",
+                }
+            )
+
+    result_dict = verifier_result if isinstance(verifier_result, dict) else {}
+    return {
+        "verifier_claims": claims,
+        "redaction_count": len(claims),
+        "verified_at": _now_iso(),
+        "enabled": bool(result_dict.get("enabled")),
+        "checked": bool(result_dict.get("checked")),
+    }
+
+
 def _safe_str(value: Any) -> str:
     if value is None:
         return ""
@@ -2542,6 +2594,9 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         validated["agent_claims"] = run_result.get("claims", [])
         if debate:
             validated["debate"] = debate
+        # P2-1 护城河前置：把幻觉洗涤结果暴露到 top-level，前端 FactCheckCard 消费。
+        # 数据来自真实验证器输出；零问题时也展示「全部通过」状态以体现核查行为。
+        validated["fact_check"] = _build_fact_check_payload(verifier_result, verifier_claims)
         validated["core_viewpoints"] = _build_core_viewpoints(agent_summaries)
         # P0-3d: structured agent diagnostics for frontend observability
         agent_diagnostics: dict[str, dict[str, Any]] = {}

@@ -320,6 +320,14 @@ export interface ReportIR {
     data_sources?: string[];
   }>;
   conflict_disclosure?: string;
+  // P2-1 护城河前置：幻觉洗涤（事实核查）结果，由 FactCheckCard 消费
+  fact_check?: {
+    verifier_claims: Array<{ claim: string; reason: string }>;
+    redaction_count: number;
+    verified_at?: string;
+    enabled?: boolean;
+    checked?: boolean;
+  };
   agent_diagnostics?: Record<string, {
     status?: string;
     fallback_reason?: string | null;
