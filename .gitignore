@@ -105,7 +105,6 @@ data/*.db-shm
 data/*.db-wal
 data/*.sqlite
 data/memory/*.json
-!data/memory/anonymous.json
 backend/data/*.sqlite
 backend/data/*.db
 backend/data/*.bak
@@ -155,3 +154,10 @@ finsight_deploy_*.tar.gz
 .playwright-mcp/
 /backend/backend/
 /backend/data/memory/
+
+# --- 设计文档/实现计划（本地工作产物，不入库；2026-06 主人决定）---
+docs/plans/
+
+# --- 运行时数据补充 ---
+data/subscriptions.json
+data/memory/
