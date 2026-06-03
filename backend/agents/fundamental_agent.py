@@ -10,6 +10,20 @@ from backend.research.agent_quality_contract import assign_evidence_source_ids, 
 from backend.services.circuit_breaker import CircuitBreaker
 
 
+# 方向枚举 → 中文文案（用户可见 claim 中文化，B 类固定模板）
+_DIRECTION_CN: Dict[str, str] = {
+    "positive": "向好",
+    "negative": "转弱",
+    "mixed": "分化",
+    "neutral": "中性",
+}
+
+
+def _direction_cn(direction: str) -> str:
+    """将方向枚举映射为中文，未知值原样返回。"""
+    return _DIRECTION_CN.get(str(direction or "").strip().lower(), str(direction or ""))
+
+
 class FundamentalAgent(BaseFinancialAgent):
     AGENT_NAME = "fundamental"
     CACHE_TTL = 86400  # 24 hours
@@ -251,10 +265,11 @@ class FundamentalAgent(BaseFinancialAgent):
             or eps_revisions_payload.get("revision_signal")
             or "unknown"
         ).lower()
+        # EPS 修正趋势中文文案映射（B 类固定模板中文化）
         signal_text_map = {
-            "positive": "EPS revisions trend is positive.",
-            "neutral": "EPS revisions trend is neutral.",
-            "negative": "EPS revisions trend is negative.",
+            "positive": "EPS 预期修正趋势向好。",
+            "neutral": "EPS 预期修正趋势中性。",
+            "negative": "EPS 预期修正趋势转弱。",
         }
         if revision_signal in signal_text_map:
             summary_parts.append(signal_text_map[revision_signal])
@@ -264,7 +279,7 @@ class FundamentalAgent(BaseFinancialAgent):
             for key in ("Earnings Date", "earningsDate", "EarningsDate"):
                 value = calendar_payload.get(key)
                 if value:
-                    summary_parts.append(f"Upcoming earnings window: {value}")
+                    summary_parts.append(f"即将到来的财报窗口：{value}")
                     break
 
         summary_parts = [item for item in summary_parts if item]
@@ -491,13 +506,13 @@ class FundamentalAgent(BaseFinancialAgent):
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} growth quality is {direction}: revenue YoY "
-                        f"{revenue_yoy:.1%}" if revenue_yoy is not None else f"{ticker} revenue trend is available"
+                        f"{ticker} 成长质量{_direction_cn(direction)}：营收同比 "
+                        f"{revenue_yoy:.1%}。" if revenue_yoy is not None else f"{ticker} 营收趋势数据已获取。"
                     ),
                     evidence_ids=growth_evidence,
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Financial-statement snapshot; validate against primary filings for final investment work."],
+                    limitations=["财务报表快照，最终投资决策前请核对原始申报文件。"],
                     metadata={"claim_type": "growth_quality"},
                 )
             )
@@ -509,13 +524,13 @@ class FundamentalAgent(BaseFinancialAgent):
         if cash_flow_evidence and ocf_value is not None:
             if net_income_value is not None and ocf_value >= net_income_value:
                 stance = "bull"
-                claim_text = f"{ticker} operating cash flow covers net income, supporting earnings quality."
+                claim_text = f"{ticker} 经营现金流覆盖净利润，支撑盈利质量。"
             elif net_income_value is not None and ocf_value < net_income_value * 0.7:
                 stance = "bear"
-                claim_text = f"{ticker} operating cash flow trails net income materially, weakening earnings quality."
+                claim_text = f"{ticker} 经营现金流明显低于净利润，削弱盈利质量。"
             else:
                 stance = "neutral"
-                claim_text = f"{ticker} operating cash flow is available but needs context versus earnings."
+                claim_text = f"{ticker} 经营现金流数据已获取，但需结合盈利情况综合判断。"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
@@ -525,7 +540,7 @@ class FundamentalAgent(BaseFinancialAgent):
                     evidence_ids=cash_flow_evidence,
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Cash-flow quality claim uses available statement rows only."],
+                    limitations=["现金流质量结论仅基于可用报表行项目。"],
                     metadata={"claim_type": "cash_flow_quality"},
                 )
             )
@@ -538,16 +553,17 @@ class FundamentalAgent(BaseFinancialAgent):
                     eps_signal = str((item.meta or {}).get("revision_signal") or "").lower()
                     break
             stance = "bull" if eps_signal == "positive" else ("bear" if eps_signal == "negative" else "neutral")
+            eps_signal_cn = _direction_cn(eps_signal) if eps_signal else "数据已获取"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} EPS revision signal is {eps_signal or 'available'}, affecting forward earnings confidence.",
+                    claim=f"{ticker} EPS 预期修正信号为{eps_signal_cn}，影响前瞻盈利信心。",
                     evidence_ids=[eps_source_id],
                     stance=stance,
                     confidence=min(0.9, confidence),
-                    limitations=["EPS revision data is a forward-estimate signal, not a realized result."],
+                    limitations=["EPS 修正数据是前瞻预估信号，并非已实现结果。"],
                     metadata={"claim_type": "eps_revision"},
                 )
             )
@@ -565,7 +581,7 @@ class FundamentalAgent(BaseFinancialAgent):
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} liabilities/assets is {leverage:.1%}, shaping balance-sheet risk.",
+                    claim=f"{ticker} 负债/资产比为 {leverage:.1%}，影响资产负债表风险。",
                     evidence_ids=leverage_evidence,
                     stance=stance,
                     confidence=confidence,
@@ -836,7 +852,7 @@ class FundamentalAgent(BaseFinancialAgent):
             or "unknown"
         ).lower()
         if revision_signal == "negative":
-            risks.append("EPS revisions trend is negative; forward earnings expectations may be under pressure.")
+            risks.append("EPS 预期修正趋势转弱，前瞻盈利预期可能承压。")
         if isinstance(financials, dict) and financials.get("error") and not self._has_financial_tables(financials):
             risks.append("财务数据获取异常，建议核实原始财报。")
 

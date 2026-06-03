@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import re
-from typing import Any, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
 from backend.agents.chart_specs_extra import build_risk_chart_specs
@@ -32,6 +32,20 @@ class RiskLevel(str, Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+# 风险等级枚举 → 中文（用户可见 claim 中文化，B 类固定模板）
+_RISK_LEVEL_CN: Dict[str, str] = {
+    "low": "低",
+    "medium": "中等",
+    "high": "高",
+    "critical": "极高",
+}
+
+
+def _risk_level_cn(level: str) -> str:
+    """风险等级映射为中文，未知值原样返回。"""
+    return _RISK_LEVEL_CN.get(str(level or "").strip().lower(), str(level or ""))
 
 
 @dataclass(frozen=True)
@@ -672,11 +686,11 @@ class RiskAgent(BaseFinancialAgent):
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} aggregate risk score is {assessment.risk_score:.1f}/100 ({assessment.risk_level.value}).",
+                    claim=f"{ticker} 综合风险评分为 {assessment.risk_score:.1f}/100（{_risk_level_cn(assessment.risk_level.value)}风险）。",
                     evidence_ids=[source_ids[0]],
                     stance="risk",
                     confidence=confidence,
-                    limitations=["Rule-based aggregate risk score; validate drivers before portfolio action."],
+                    limitations=["基于规则的综合风险评分，调仓前请核实驱动因素。"],
                     metadata={"claim_type": "risk_score", "risk_level": assessment.risk_level.value},
                 )
             )
@@ -689,30 +703,30 @@ class RiskAgent(BaseFinancialAgent):
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} factor exposure is elevated: market beta={safe_float(beta.get('market'))}, "
-                        f"growth beta={safe_float(beta.get('growth'))}."
+                        f"{ticker} 因子暴露偏高：市场 beta={safe_float(beta.get('market'))}，"
+                        f"成长 beta={safe_float(beta.get('growth'))}。"
                     ),
                     evidence_ids=[source_ids[1]],
                     stance="risk",
                     confidence=confidence,
-                    limitations=["Factor exposure uses model snapshot and should be checked against portfolio weights."],
+                    limitations=["因子暴露基于模型快照，应与组合权重核对。"],
                     metadata={"claim_type": "factor_exposure"},
                 )
             )
 
         if len(source_ids) >= 3 and isinstance(stress_payload.get("scenarios"), list):
             worst_case = safe_float(stress_payload.get("worst_case_return"))
-            worst_text = f"{worst_case:.1%}" if worst_case is not None else "available"
+            worst_text = f"{worst_case:.1%}" if worst_case is not None else "数据已获取"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} stress-test downside is {worst_text}, indicating scenario loss sensitivity.",
+                    claim=f"{ticker} 压力测试下行幅度为 {worst_text}，反映情景下的损失敏感度。",
                     evidence_ids=[source_ids[2]],
                     stance="risk",
                     confidence=confidence,
-                    limitations=["Stress test is scenario based and not a forecast."],
+                    limitations=["压力测试基于情景假设，并非预测。"],
                     metadata={"claim_type": "stress_test"},
                 )
             )

@@ -11,6 +11,38 @@ from backend.research.agent_quality_contract import assign_evidence_source_ids, 
 from backend.services.circuit_breaker import CircuitBreaker
 
 
+# 价格行为枚举 → 中文（用户可见 claim 中文化，B 类固定模板）
+_PRICE_DIRECTION_CN: dict[str, str] = {
+    "positive": "偏强",
+    "negative": "偏弱",
+    "mixed": "分化",
+    "neutral": "中性",
+    "up": "上行",
+    "down": "下行",
+    "flat": "走平",
+    "bullish": "偏多",
+    "bearish": "偏空",
+}
+
+# 量价确认信号枚举 → 中文
+_VOLUME_SIGNAL_CN: dict[str, str] = {
+    "price_up_volume_confirmed": "价涨量增确认",
+    "price_down_distribution": "价跌放量派发",
+    "low_volume_move": "缩量波动",
+    "available": "数据已获取",
+}
+
+
+def _price_direction_cn(value: str) -> str:
+    """价格方向/状态枚举映射为中文，未知值原样返回。"""
+    return _PRICE_DIRECTION_CN.get(str(value or "").strip().lower(), str(value or ""))
+
+
+def _volume_signal_cn(value: str) -> str:
+    """量价信号枚举映射为中文，未知值原样返回。"""
+    return _VOLUME_SIGNAL_CN.get(str(value or "").strip().lower(), str(value or ""))
+
+
 class AllSourcesFailedError(Exception):
     pass
 
@@ -1089,7 +1121,7 @@ class PriceAgent(BaseFinancialAgent):
 
         def fmt_pct(value: Any) -> str:
             parsed = self._safe_float(value)
-            return f"{parsed:+.2f}%" if parsed is not None else "available"
+            return f"{parsed:+.2f}%" if parsed is not None else "暂无数据"
 
         claims: list[dict[str, Any]] = []
         trend = raw_data.get("trend") if isinstance(raw_data.get("trend"), dict) else {}
@@ -1115,13 +1147,13 @@ class PriceAgent(BaseFinancialAgent):
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} price momentum is {direction}: "
-                        f"1mo {fmt_pct(one_month)}, 3mo {fmt_pct(three_month)}, state {state}."
+                        f"{ticker} 价格动量{_price_direction_cn(direction)}："
+                        f"近 1 月 {fmt_pct(one_month)}，近 3 月 {fmt_pct(three_month)}，状态 {_price_direction_cn(state)}。"
                     ),
                     evidence_ids=[momentum_source],
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Price momentum uses historical returns and should not be treated as a forecast."],
+                    limitations=["价格动量基于历史收益率，不应视为预测。"],
                     metadata={"claim_type": "price_momentum"},
                 )
             )
@@ -1141,13 +1173,13 @@ class PriceAgent(BaseFinancialAgent):
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} relative strength versus {benchmark_name} is "
-                        f"1mo {fmt_pct(rs_1mo)} and 3mo {fmt_pct(rs_3mo)}."
+                        f"{ticker} 相对 {benchmark_name} 的相对强度："
+                        f"近 1 月 {fmt_pct(rs_1mo)}，近 3 月 {fmt_pct(rs_3mo)}。"
                     ),
                     evidence_ids=[rs_source],
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Relative strength currently uses benchmark ETFs; peer RS requires a separate peer universe."],
+                    limitations=["相对强度当前基于基准 ETF，同业相对强度需要单独的同业样本集。"],
                     metadata={"claim_type": "relative_strength", "benchmark": benchmark_name},
                 )
             )
@@ -1165,17 +1197,17 @@ class PriceAgent(BaseFinancialAgent):
                 stance = "neutral"
             else:
                 stance = "neutral"
-            ratio_text = f"{ratio:.2f}x" if ratio is not None else "available"
+            ratio_text = f"{ratio:.2f}x" if ratio is not None else "暂无数据"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} volume-price confirmation is {signal}; latest volume is {ratio_text} the 20-day average.",
+                    claim=f"{ticker} 量价确认为{_volume_signal_cn(signal)}；最新成交量为 20 日均量的 {ratio_text}。",
                     evidence_ids=[volume_source],
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Volume confirmation is a short-horizon behavior signal and can reverse quickly."],
+                    limitations=["量价确认是短周期行为信号，可能快速反转。"],
                     metadata={"claim_type": "volume_confirmation", "signal": signal},
                 )
             )
@@ -1188,18 +1220,18 @@ class PriceAgent(BaseFinancialAgent):
             iv_atm = self._safe_float(options.get("iv_atm") if options else volatility.get("option_iv_atm"))
             pcr = self._safe_float(options.get("put_call_ratio") if options else volatility.get("option_put_call_ratio"))
             stance = "risk" if (atr_pct is not None and atr_pct >= 4) or (iv_atm is not None and iv_atm >= 0.45) else "neutral"
-            iv_text = f"{iv_atm:.2%}" if iv_atm is not None else "available"
-            pcr_text = f"{pcr:.2f}" if pcr is not None else "available"
+            iv_text = f"{iv_atm:.2%}" if iv_atm is not None else "暂无数据"
+            pcr_text = f"{pcr:.2f}" if pcr is not None else "暂无数据"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
-                    claim=f"{ticker} volatility regime shows ATR14 {fmt_pct(atr_pct)}, ATM IV {iv_text}, PCR {pcr_text}.",
+                    claim=f"{ticker} 波动率状态显示 ATR14 {fmt_pct(atr_pct)}，ATM IV {iv_text}，PCR {pcr_text}。",
                     evidence_ids=[vol_source],
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Options fields may omit IV rank and full term structure when the tool does not provide them."],
+                    limitations=["当工具未提供时，期权字段可能缺失 IV rank 与完整期限结构。"],
                     metadata={"claim_type": "volatility_regime"},
                 )
             )
@@ -1214,21 +1246,21 @@ class PriceAgent(BaseFinancialAgent):
             near_support = distance_support is not None and 0 <= distance_support <= 3
             near_resistance = distance_resistance is not None and -3 <= distance_resistance <= 0
             stance = "risk" if near_support or near_resistance else "neutral"
-            support_text = f"{support:.2f}" if support is not None else "available"
-            resistance_text = f"{resistance:.2f}" if resistance is not None else "available"
+            support_text = f"{support:.2f}" if support is not None else "数据已获取"
+            resistance_text = f"{resistance:.2f}" if resistance is not None else "数据已获取"
             claims.append(
                 build_agent_claim(
                     agent_name=self.AGENT_NAME,
                     ticker=ticker,
                     query=query,
                     claim=(
-                        f"{ticker} key level risk centers on 20d support {support_text} "
-                        f"and 20d resistance {resistance_text}."
+                        f"{ticker} 关键价位风险集中于 20 日支撑 {support_text} "
+                        f"与 20 日压力 {resistance_text}。"
                     ),
                     evidence_ids=[level_source],
                     stance=stance,
                     confidence=confidence,
-                    limitations=["Key levels are derived from recent price ranges, not a full technical pattern model."],
+                    limitations=["关键价位由近期价格区间推导，并非完整技术形态模型。"],
                     metadata={
                         "claim_type": "key_level_risk",
                         "distance_to_support_20d_pct": distance_support,

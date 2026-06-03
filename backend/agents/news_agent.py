@@ -15,6 +15,33 @@ from backend.services.circuit_breaker import CircuitBreaker
 logger = logging.getLogger(__name__)
 
 
+# 舆情倾向枚举 → 中文（用户可见 claim 中文化，B 类固定模板）
+_BIAS_LABEL_CN: Dict[str, str] = {
+    "bullish": "偏多",
+    "bearish": "偏空",
+    "neutral": "中性",
+    "positive": "偏多",
+    "negative": "偏空",
+}
+
+# 情绪-价格传导状态枚举 → 中文
+_TRANSMISSION_STATUS_CN: Dict[str, str] = {
+    "divergence": "背离",
+    "resonance": "共振",
+    "unknown": "不明确",
+}
+
+
+def _bias_label_cn(label: str) -> str:
+    """舆情倾向枚举映射为中文，未知值原样返回。"""
+    return _BIAS_LABEL_CN.get(str(label or "").strip().lower(), str(label or ""))
+
+
+def _transmission_status_cn(status: str) -> str:
+    """情绪-价格传导状态映射为中文，未知值原样返回。"""
+    return _TRANSMISSION_STATUS_CN.get(str(status or "").strip().lower(), str(status or ""))
+
+
 @dataclass
 class NewsSentimentSnapshot:
     """整只股票的舆情聚合快照。"""
@@ -702,7 +729,7 @@ class NewsAgent(BaseFinancialAgent):
                 "price_change_pct": None,
                 "source": signal.get("source"),
                 "window": signal.get("window"),
-                "analysis": signal.get("todo") or "TODO: price signal unavailable.",
+                "analysis": signal.get("todo") or "价格信号暂不可用。",
             }
 
         if change_pct >= 0.5:
@@ -1175,9 +1202,9 @@ class NewsAgent(BaseFinancialAgent):
         avg_reliability = reliability_summary.get("avg_reliability")
         low_count = reliability_summary.get("low_reliability_count")
         if isinstance(avg_reliability, (int, float)) and float(avg_reliability) < 0.65:
-            risks.append("News source reliability is low; validate key claims with primary disclosures.")
+            risks.append("新闻来源可靠度偏低，请结合一手披露文件核实关键结论。")
         if isinstance(low_count, int) and low_count >= 2:
-            risks.append("Multiple low-reliability sources detected in this batch.")
+            risks.append("本批次中检测到多个低可靠度来源。")
 
         event_calendar = self._last_event_calendar if isinstance(self._last_event_calendar, dict) else {}
         if event_calendar:
@@ -1278,13 +1305,13 @@ class NewsAgent(BaseFinancialAgent):
                 ticker=ticker_value,
                 query=query,
                 claim=(
-                    f"{ticker_value} aggregate news sentiment bias is {bias_label} "
-                    f"(average sentiment score {avg_text})."
+                    f"{ticker_value} 整体新闻舆情倾向{_bias_label_cn(bias_label)}"
+                    f"（平均情绪分 {avg_text}）。"
                 ),
                 evidence_ids=[source_id],
                 stance=stance,
                 confidence=claim_confidence,
-                limitations=["Aggregate sentiment is only as complete as the available news sentiment feed and headlines."],
+                limitations=["聚合情绪的完整度受限于可用的新闻情绪数据源与标题。"],
                 metadata={
                     "claim_type": "sentiment_bias",
                     "positive_ratio": bias.get("positive_ratio"),
@@ -1301,11 +1328,11 @@ class NewsAgent(BaseFinancialAgent):
                 agent_name=self.AGENT_NAME,
                 ticker=ticker_value,
                 query=query,
-                claim=f"{ticker_value} has {catalyst_count} aggregated news/calendar catalyst events in the current sentiment window.",
+                claim=f"{ticker_value} 在当前舆情窗口内聚合了 {catalyst_count} 个新闻/日历催化事件。",
                 evidence_ids=[source_id],
                 stance="risk" if catalyst_count else "neutral",
                 confidence=min(0.85, confidence),
-                limitations=["Catalyst aggregation identifies timing/attention drivers; it does not prove price direction by itself."],
+                limitations=["催化事件聚合识别的是时点/关注度驱动因素，本身并不证明价格方向。"],
                 metadata={
                     "claim_type": "catalyst_events",
                     "count": catalyst_count,
@@ -1323,13 +1350,13 @@ class NewsAgent(BaseFinancialAgent):
                 ticker=ticker_value,
                 query=query,
                 claim=(
-                    f"{ticker_value} sentiment-price transmission status is {price_status}: "
-                    f"{price.get('analysis') or 'insufficient price signal.'}"
+                    f"{ticker_value} 情绪-价格传导状态为{_transmission_status_cn(price_status)}："
+                    f"{price.get('analysis') or '价格信号不足。'}"
                 ),
                 evidence_ids=[source_id],
                 stance=price_stance,
                 confidence=min(0.8, confidence),
-                limitations=["Price transmission uses recent available price data; intraday or after-hours moves may be missing."],
+                limitations=["情绪传导基于近期可用价格数据，可能缺失盘中或盘后波动。"],
                 metadata={
                     "claim_type": "sentiment_price_divergence",
                     "status": price_status,
@@ -1379,11 +1406,11 @@ class NewsAgent(BaseFinancialAgent):
                         agent_name=self.AGENT_NAME,
                         ticker=ticker,
                         query=query,
-                        claim=f"{ticker} has upcoming scheduled events that can change the news impact window.",
+                        claim=f"{ticker} 存在即将到来的日程事件，可能改变新闻影响窗口。",
                         evidence_ids=[source_id],
                         stance="risk",
                         confidence=min(0.85, confidence),
-                        limitations=["Event calendar marks timing risk; it does not prove direction by itself."],
+                        limitations=["事件日历标记的是时点风险，本身并不证明方向。"],
                         metadata={"claim_type": "event_calendar"},
                     )
                 )
@@ -1400,13 +1427,13 @@ class NewsAgent(BaseFinancialAgent):
             if is_primary_catalyst:
                 claim_type = "catalyst_candidate"
                 stance = "bull" if any(token in lowered for token in ("beat", "beats", "strong", "upgrade")) else "neutral"
-                claim_text = f"{ticker} news catalyst candidate: {headline}"
-                limitations = ["Catalyst classification needs confirmation from primary filings or management commentary."]
+                claim_text = f"{ticker} 候选新闻催化剂：{headline}"
+                limitations = ["催化剂分类需经一手申报文件或管理层评论确认。"]
             else:
                 claim_type = "noise_or_secondary_signal"
                 stance = "neutral"
-                claim_text = f"{ticker} secondary news signal or potential noise: {headline}"
-                limitations = ["Secondary market-media signal; avoid treating it as standalone investment evidence."]
+                claim_text = f"{ticker} 次要新闻信号或潜在噪音：{headline}"
+                limitations = ["次要市场媒体信号，请勿将其作为独立投资证据。"]
 
             claims.append(
                 build_agent_claim(

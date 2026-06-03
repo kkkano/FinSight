@@ -180,7 +180,8 @@ async def test_macro_agent_fallback_structured():
     agent = MacroAgent(mock_llm, mock_cache, mock_tools)
     result = await agent.research("inflation analysis", "N/A")
 
-    assert "fallback" in result.summary.lower() or "unavailable" in result.summary.lower()
+    # 兜底 summary 已中文化（P2-5 claim 中文化）：匹配中文兜底关键词
+    assert "兜底" in result.summary or "不可用" in result.summary
     assert "Web Search" in result.data_sources
     assert result.evidence is not None
     assert len(result.evidence) > 0
@@ -203,7 +204,8 @@ async def test_macro_agent_conflict_merge_prefers_fred():
 
     assert result.agent_name == "macro"
     assert result.evidence_quality.get("has_conflicts") is True
-    assert any("conflicting" in str(risk).lower() for risk in result.risks)
+    # 冲突风险文案已中文化（P2-5 claim 中文化）：匹配中文"冲突"关键词
+    assert any("冲突" in str(risk) for risk in result.risks)
 
 def test_deep_search_queries_dynamic():
     agent = DeepSearchAgent(None, MagicMock(), MagicMock())

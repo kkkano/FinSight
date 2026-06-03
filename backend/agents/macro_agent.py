@@ -298,19 +298,19 @@ class MacroAgent(BaseFinancialAgent):
 
         analysis = await self._llm_analyze(
             "\n".join(context_parts),
-            role="Senior macro analyst",
+            role="资深宏观分析师",
             focus=(
-                "Summarize macro cycle, policy direction, cross-asset implications, "
-                "major risks in next 1-3 months, and data confidence."
+                "总结宏观周期、政策方向、跨资产影响、未来 1-3 个月的主要风险，"
+                "以及数据可信度。使用简体中文输出。"
             ),
         )
         return analysis if analysis else deterministic
 
     def _deterministic_summary(self, data: Dict[str, Any]) -> str:
-        """Deterministic macro snapshot (fallback)."""
+        """确定性宏观快照（兜底文案，用户可见，B 类中文化）。"""
         status = str(data.get("status") or "").lower()
         if status == "error":
-            return "Unable to retrieve macro data from configured sources."
+            return "无法从已配置的数据源获取宏观数据。"
 
         if status == "fallback":
             names = [
@@ -318,41 +318,46 @@ class MacroAgent(BaseFinancialAgent):
                 for item in data.get("indicators", [])
                 if isinstance(item, dict) and item.get("name")
             ]
-            summary = "Primary macro sources unavailable; using fallback signals."
+            summary = "主要宏观数据源不可用，正在使用兜底信号。"
             if names:
-                summary += " Indicators: " + ", ".join(names[:6]) + "."
+                summary += " 指标：" + "、".join(names[:6]) + "。"
             return summary
 
-        parts: List[str] = ["US macro snapshot:"]
+        parts: List[str] = ["美国宏观快照："]
         if data.get("fed_rate_formatted"):
-            parts.append(f"Fed funds {data['fed_rate_formatted']}")
+            parts.append(f"联邦基金利率 {data['fed_rate_formatted']}")
         if data.get("cpi_formatted"):
             parts.append(f"CPI {data['cpi_formatted']}")
         if data.get("unemployment_formatted"):
-            parts.append(f"Unemployment {data['unemployment_formatted']}")
+            parts.append(f"失业率 {data['unemployment_formatted']}")
         if data.get("gdp_growth_formatted"):
-            parts.append(f"GDP growth {data['gdp_growth_formatted']}")
+            parts.append(f"GDP 增速 {data['gdp_growth_formatted']}")
         if data.get("treasury_10y_formatted"):
-            parts.append(f"10Y Treasury {data['treasury_10y_formatted']}")
+            parts.append(f"10 年期美债 {data['treasury_10y_formatted']}")
         if data.get("yield_spread_formatted"):
-            spread_line = f"10Y-2Y spread {data['yield_spread_formatted']}"
+            spread_line = f"10Y-2Y 利差 {data['yield_spread_formatted']}"
             if data.get("recession_warning"):
-                spread_line += " (inversion warning)"
+                spread_line += "（倒挂预警）"
             parts.append(spread_line)
 
         if data.get("market_sentiment"):
-            parts.append(f"Sentiment: {str(data['market_sentiment'])[:120]}")
+            parts.append(f"市场情绪：{str(data['market_sentiment'])[:120]}")
 
         official_releases = data.get("official_releases") if isinstance(data.get("official_releases"), list) else []
         if official_releases:
-            parts.append(f"Official releases: {len(official_releases)}")
+            parts.append(f"官方发布：{len(official_releases)} 条")
 
         conflicts = data.get("conflicts") or []
         if isinstance(conflicts, list) and conflicts:
             conflict_names = [str(item.get("indicator")) for item in conflicts if isinstance(item, dict)]
-            parts.append(f"Data conflicts: {', '.join(conflict_names[:3])}")
+            parts.append(f"数据冲突：{'、'.join(conflict_names[:3])}")
 
-        return ". ".join(part for part in parts if part).strip() + "."
+        # 首段为标题，其余用顿号串接，保持中文标点
+        if not parts:
+            return ""
+        head = parts[0]
+        body = "；".join(part for part in parts[1:] if part)
+        return f"{head}{body}。" if body else head
 
     def _format_output(self, summary: str, raw_data: Any) -> AgentOutput:
         evidence: List[EvidenceItem] = []
@@ -443,11 +448,11 @@ class MacroAgent(BaseFinancialAgent):
             fallback_used = str(raw_data.get("status") or "").lower() in {"fallback", "error"}
             conflicts = raw_data.get("conflicts") if isinstance(raw_data.get("conflicts"), list) else []
             if conflicts:
-                risks.append("Conflicting macro signals detected across sources.")
+                risks.append("多个数据源之间存在宏观信号冲突。")
             if raw_data.get("recession_warning"):
-                risks.append("Yield-curve inversion warning remains elevated.")
+                risks.append("收益率曲线倒挂预警仍处于高位。")
             if fallback_used:
-                risks.append("Primary macro source unavailable; using fallback signals.")
+                risks.append("主要宏观数据源不可用，正在使用兜底信号。")
                 fallback_reason = str(raw_data.get("fallback_detail") or raw_data.get("status") or "primary_source_unavailable")
             else:
                 fallback_reason = None
