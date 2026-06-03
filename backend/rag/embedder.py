@@ -235,6 +235,25 @@ class EmbeddingService:
         return "hash"
 
     @property
+    def is_hash_fallback(self) -> bool:
+        """是否「请求了 bge-m3 但实际降级到 hash」。
+
+        仅当用户期望真实向量模型（bge-m3）但 FlagEmbedding 不可用而退回 hash
+        时返回 True；显式配置 RAG_EMBEDDING=hash 时不算降级（用户主动选择）。
+        """
+        return self._use_bge and not self._check_bge()
+
+    @property
+    def fallback_reason(self) -> str | None:
+        """hash 降级时返回人类可读原因，否则 None。"""
+        if self.is_hash_fallback:
+            return (
+                f"embedding degraded to hash (requested '{self._requested_backend}', "
+                "FlagEmbedding unavailable)"
+            )
+        return None
+
+    @property
     def dim(self) -> int:
         if self._use_bge and self._check_bge():
             return _BGE_M3_DIM

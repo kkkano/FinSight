@@ -59,6 +59,64 @@ def test_health_endpoint(client):
     assert "timestamp" in data
 
 
+def test_health_rag_fallback_reason_marks_component_degraded(client, monkeypatch):
+    """
+    P1-10 残留缺口：RAG 存在 fallback_reason（如 embedding hash 降级）时，
+    /health 的 components.rag.status 必须诚实显示 degraded，
+    但整体 status 仍为 healthy（RAG 降级后服务仍可用）。
+    """
+    import backend.rag.hybrid_service as hybrid_service
+
+    class _FakeRagService:
+        backend_name = "memory"
+        embedding_model = "hash"
+        vector_dim = 256
+        fallback_reason = "embedding degraded to hash (requested 'bge-m3', FlagEmbedding unavailable)"
+
+        def count_documents(self):
+            return 0
+
+    monkeypatch.setattr(hybrid_service, "get_rag_service", lambda: _FakeRagService())
+    # 期望 backend 不是 postgres，避免触发「期望 postgres 但实际不是」的整体降级逻辑
+    monkeypatch.setenv("RAG_V2_BACKEND", "auto")
+
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    # 整体仍健康——RAG 组件降级不影响服务可用性
+    assert data.get("status") == "healthy"
+    rag = (data.get("components") or {}).get("rag") or {}
+    assert rag.get("status") == "degraded"
+    assert "fallback_reason" in rag
+    assert rag["fallback_reason"]
+
+
+def test_health_rag_no_fallback_reason_stays_ok(client, monkeypatch):
+    """
+    无 fallback_reason 时 rag.status 保持 ok（已有行为不回归）。
+    """
+    import backend.rag.hybrid_service as hybrid_service
+
+    class _FakeRagService:
+        backend_name = "memory"
+        embedding_model = "bge-m3"
+        vector_dim = 1024
+        fallback_reason = None
+
+        def count_documents(self):
+            return 3
+
+    monkeypatch.setattr(hybrid_service, "get_rag_service", lambda: _FakeRagService())
+    monkeypatch.setenv("RAG_V2_BACKEND", "auto")
+
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    rag = (data.get("components") or {}).get("rag") or {}
+    assert rag.get("status") == "ok"
+    assert "fallback_reason" not in rag
+
+
 def test_chat_empty_query_validation(client):
     """
     空 query 应在进入处理函数前被 Pydantic 拦截，返回 422。

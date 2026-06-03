@@ -75,10 +75,15 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
 
             rag_service = get_rag_service()
             rag_component: Dict[str, Any] = {"status": "ok", "backend": rag_service.backend_name, "embedding_model": getattr(rag_service, "embedding_model", "unknown"), "vector_dim": int(getattr(rag_service, "vector_dim", 0) or 0), "doc_count": int(rag_service.count_documents())}
-            if getattr(rag_service, "fallback_reason", None):
-                rag_component["fallback_reason"] = str(rag_service.fallback_reason)
+            # 存在降级原因（embedding hash 降级 / memory 降级等）时，组件级 status 诚实标记为 degraded，
+            # 但不影响整体 /health status——RAG 降级后服务仍可用。
+            fallback_reason = getattr(rag_service, "fallback_reason", None)
+            if fallback_reason:
+                rag_component["fallback_reason"] = str(fallback_reason)
+                rag_component["status"] = "degraded"
             expected_backend = str(os.getenv("RAG_V2_BACKEND", "auto")).strip().lower()
             if expected_backend == "postgres" and rag_service.backend_name != "postgres":
+                # 期望 postgres 但实际不是——这是真正影响整体可用性的降级。
                 rag_component["status"] = "degraded"
                 status = "degraded"
             try:

@@ -112,6 +112,17 @@ def _log_backend_fallback(*, reason: str, detail: str | None = None, backend_req
     log_fn("rag_backend_fallback %s", payload)
 
 
+def _merge_fallback_reason(existing: Optional[str], new_reason: str) -> str:
+    """合并多个降级原因（如 embedding hash 降级 + postgres 降级），用分号拼接、不覆盖已有原因。"""
+    new_reason = (new_reason or "").strip()
+    existing = (existing or "").strip()
+    if not existing:
+        return new_reason
+    if not new_reason or new_reason in existing:
+        return existing
+    return f"{existing}; {new_reason}"
+
+
 # ---------------------------------------------------------------------------
 # Embedding helpers (delegate to EmbeddingService)
 # ---------------------------------------------------------------------------
@@ -1056,7 +1067,11 @@ class HybridRAGService:
         self.rrf_k = max(1, int(rrf_k))
         self.backend_name = "memory"
         self.embedding_model = self._embedder.model_name
-        self.fallback_reason: Optional[str] = None
+        # embedding 层降级（请求 bge-m3 但 FlagEmbedding 不可用，实际退回 hash）也要诚实暴露。
+        # 用 embedder 自身的降级标记作为 fallback_reason 的初始值；后续 postgres 降级原因会拼接而非覆盖。
+        self.fallback_reason: Optional[str] = getattr(self._embedder, "fallback_reason", None)
+        # 标记 postgres 降级是否已记日志，与 fallback_reason 解耦（后者可能仅由 embedding 降级占用）。
+        postgres_fallback_logged = False
 
         if backend_norm == "memory":
             self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
@@ -1067,7 +1082,7 @@ class HybridRAGService:
             message = "postgres backend requested but no DSN configured"
             if not allow_memory_fallback:
                 raise ValueError(message)
-            self.fallback_reason = message
+            self.fallback_reason = _merge_fallback_reason(self.fallback_reason, message)
             _log_backend_fallback(
                 reason="postgres_dsn_missing",
                 detail=message,
@@ -1085,7 +1100,8 @@ class HybridRAGService:
             except Exception as exc:
                 if not allow_memory_fallback:
                     raise
-                self.fallback_reason = str(exc)
+                self.fallback_reason = _merge_fallback_reason(self.fallback_reason, str(exc))
+                postgres_fallback_logged = True
                 _log_backend_fallback(
                     reason="postgres_init_failed",
                     detail=str(exc),
@@ -1094,7 +1110,9 @@ class HybridRAGService:
 
         self._store = _InMemoryHybridStore(vector_dim=self.vector_dim, rrf_k=self.rrf_k, embedder=self._embedder)
         self.backend_name = "memory"
-        if wants_postgres and self.fallback_reason is None:
+        # 注意：此处用 backend 层标记判断是否记录 postgres 降级日志，
+        # 不能用 self.fallback_reason（它可能已被 embedding hash 降级占用，与 postgres 无关）。
+        if wants_postgres and not postgres_fallback_logged:
             _log_backend_fallback(
                 reason="postgres_unavailable_use_memory",
                 backend_requested=backend_norm,
