@@ -50,24 +50,24 @@ function flowColor(val: unknown): string {
 
 // --- Sub-tables ---
 
-function FundFlowTable({ rows }: { rows: RowData[] }) {
+export function FundFlowTable({ rows }: { rows: RowData[] }) {
   return (
     <table className="w-full text-xs">
       <thead>
         <tr className="text-fin-muted border-b border-fin-border">
-          <th className="pb-1.5 text-left font-medium">代码</th>
-          <th className="pb-1.5 text-left font-medium">名称</th>
-          <th className="pb-1.5 text-right font-medium">涨跌幅</th>
-          <th className="pb-1.5 text-right font-medium">主力净流入</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">代码</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">名称</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">涨跌幅</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">主力净流入</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-fin-border/30">
         {rows.map((row, i) => (
           <tr key={String(row.symbol ?? i)} className="hover:bg-fin-hover/30 transition-colors">
-            <td className="py-1.5 font-mono text-fin-muted">{String(row.symbol ?? '-')}</td>
-            <td className="py-1.5 text-fin-text max-w-[80px] truncate">{String(row.name ?? '-')}</td>
-            <td className={`py-1.5 text-right ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
-            <td className={`py-1.5 text-right ${flowColor(row.main_net_inflow)}`}>{fmtFlow(row.main_net_inflow)}</td>
+            <td className="py-1.5 font-mono text-fin-muted whitespace-nowrap">{String(row.symbol ?? '-')}</td>
+            <td className="py-1.5 text-fin-text max-w-[80px] truncate whitespace-nowrap">{String(row.name ?? '-')}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${flowColor(row.main_net_inflow)}`}>{fmtFlow(row.main_net_inflow)}</td>
           </tr>
         ))}
       </tbody>
@@ -75,26 +75,26 @@ function FundFlowTable({ rows }: { rows: RowData[] }) {
   );
 }
 
-function LimitBoardTable({ rows }: { rows: RowData[] }) {
+export function LimitBoardTable({ rows }: { rows: RowData[] }) {
   return (
     <table className="w-full text-xs">
       <thead>
         <tr className="text-fin-muted border-b border-fin-border">
-          <th className="pb-1.5 text-left font-medium">代码</th>
-          <th className="pb-1.5 text-left font-medium">名称</th>
-          <th className="pb-1.5 text-right font-medium">涨跌幅</th>
-          <th className="pb-1.5 text-right font-medium">换手率</th>
-          <th className="pb-1.5 text-right font-medium">量比</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">代码</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">名称</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">涨跌幅</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">换手率</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">量比</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-fin-border/30">
         {rows.map((row, i) => (
           <tr key={String(row.symbol ?? i)} className="hover:bg-fin-hover/30 transition-colors">
-            <td className="py-1.5 font-mono text-fin-muted">{String(row.symbol ?? '-')}</td>
-            <td className="py-1.5 text-fin-text max-w-[80px] truncate">{String(row.name ?? '-')}</td>
-            <td className={`py-1.5 text-right ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
-            <td className="py-1.5 text-right text-fin-text">{String(row.turnover_rate ?? '-')}</td>
-            <td className="py-1.5 text-right text-fin-text">{String(row.volume_ratio ?? '-')}</td>
+            <td className="py-1.5 font-mono text-fin-muted whitespace-nowrap">{String(row.symbol ?? '-')}</td>
+            <td className="py-1.5 text-fin-text max-w-[80px] truncate whitespace-nowrap">{String(row.name ?? '-')}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
+            <td className="py-1.5 text-right text-fin-text whitespace-nowrap tabular-nums">{String(row.turnover_rate ?? '-')}</td>
+            <td className="py-1.5 text-right text-fin-text whitespace-nowrap tabular-nums">{String(row.volume_ratio ?? '-')}</td>
           </tr>
         ))}
       </tbody>
@@ -102,26 +102,26 @@ function LimitBoardTable({ rows }: { rows: RowData[] }) {
   );
 }
 
-function LhbTable({ rows }: { rows: RowData[] }) {
+export function LhbTable({ rows }: { rows: RowData[] }) {
   return (
     <table className="w-full text-xs">
       <thead>
         <tr className="text-fin-muted border-b border-fin-border">
-          <th className="pb-1.5 text-left font-medium">代码</th>
-          <th className="pb-1.5 text-left font-medium">名称</th>
-          <th className="pb-1.5 text-right font-medium">涨跌幅</th>
-          <th className="pb-1.5 text-right font-medium">净买入</th>
-          <th className="pb-1.5 text-left font-medium pl-2">上榜原因</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">代码</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">名称</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">涨跌幅</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">净买入</th>
+          <th className="pb-1.5 text-left font-medium pl-2 whitespace-nowrap">上榜原因</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-fin-border/30">
         {rows.map((row, i) => (
           <tr key={String(row.symbol ?? i)} className="hover:bg-fin-hover/30 transition-colors">
-            <td className="py-1.5 font-mono text-fin-muted">{String(row.symbol ?? '-')}</td>
-            <td className="py-1.5 text-fin-text max-w-[70px] truncate">{String(row.name ?? '-')}</td>
-            <td className={`py-1.5 text-right ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
-            <td className={`py-1.5 text-right ${flowColor(row.net_buy)}`}>{fmtFlow(row.net_buy)}</td>
-            <td className="py-1.5 pl-2 text-fin-muted max-w-[100px] truncate" title={String(row.reason ?? '')}>
+            <td className="py-1.5 font-mono text-fin-muted whitespace-nowrap">{String(row.symbol ?? '-')}</td>
+            <td className="py-1.5 text-fin-text max-w-[70px] truncate whitespace-nowrap">{String(row.name ?? '-')}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${flowColor(row.net_buy)}`}>{fmtFlow(row.net_buy)}</td>
+            <td className="py-1.5 pl-2 text-fin-muted max-w-[100px] truncate whitespace-nowrap" title={String(row.reason ?? '')}>
               {String(row.reason ?? '-')}
             </td>
           </tr>
@@ -131,24 +131,24 @@ function LhbTable({ rows }: { rows: RowData[] }) {
   );
 }
 
-function ConceptTable({ rows }: { rows: RowData[] }) {
+export function ConceptTable({ rows }: { rows: RowData[] }) {
   return (
     <table className="w-full text-xs">
       <thead>
         <tr className="text-fin-muted border-b border-fin-border">
-          <th className="pb-1.5 text-left font-medium">板块名称</th>
-          <th className="pb-1.5 text-right font-medium">涨跌幅</th>
-          <th className="pb-1.5 text-right font-medium">主力净流入</th>
-          <th className="pb-1.5 text-right font-medium">涨/跌家数</th>
+          <th className="pb-1.5 text-left font-medium whitespace-nowrap">板块名称</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">涨跌幅</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">主力净流入</th>
+          <th className="pb-1.5 text-right font-medium whitespace-nowrap">涨/跌家数</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-fin-border/30">
         {rows.map((row, i) => (
           <tr key={String(row.concept_code ?? i)} className="hover:bg-fin-hover/30 transition-colors">
-            <td className="py-1.5 text-fin-text max-w-[110px] truncate">{String(row.concept_name ?? '-')}</td>
-            <td className={`py-1.5 text-right ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
-            <td className={`py-1.5 text-right ${flowColor(row.main_net_inflow)}`}>{fmtFlow(row.main_net_inflow)}</td>
-            <td className="py-1.5 text-right">
+            <td className="py-1.5 text-fin-text max-w-[110px] truncate whitespace-nowrap">{String(row.concept_name ?? '-')}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${pctColor(row.change_percent)}`}>{fmtPct(row.change_percent)}</td>
+            <td className={`py-1.5 text-right whitespace-nowrap tabular-nums ${flowColor(row.main_net_inflow)}`}>{fmtFlow(row.main_net_inflow)}</td>
+            <td className="py-1.5 text-right whitespace-nowrap tabular-nums">
               <span className="text-fin-success">{String(row.up_count ?? '-')}</span>
               <span className="text-fin-muted mx-0.5">/</span>
               <span className="text-fin-danger">{String(row.down_count ?? '-')}</span>
