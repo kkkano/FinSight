@@ -46,6 +46,16 @@ export function buildDashboardOverlayKey(symbol: string, tab: DashboardDeepDiveT
   return `${String(symbol || '').trim().toUpperCase()}_${tab}`;
 }
 
+/**
+ * 防御：清洗 startDeepDive 的 override 问题参数。
+ * onClick={startDeepDive} 这种直接绑定会让 React 把 MouseEvent 传进来——
+ * 事件对象一旦进入请求体，JSON.stringify 会因 React fiber 循环引用而崩溃。
+ * 只有非空字符串才是合法的 override 问题，其余一律视为未提供。
+ */
+export function sanitizeOverrideQuestion(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

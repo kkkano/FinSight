@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { InsightCard } from '../../../../types/dashboard';
+import { sanitizeOverrideQuestion } from '../../../../utils/dashboardDeepDiveOverlay';
 import { AiInsightCard, confidenceColorClass, formatAsOf } from './AiInsightCard';
 
 const baseInsight: InsightCard = {
@@ -43,6 +44,25 @@ describe('AiInsightCard honesty labels', () => {
     );
 
     expect(html).toContain('深挖');
+  });
+});
+
+describe('深挖按钮事件对象防御（修复 Converting circular structure to JSON）', () => {
+  it('sanitizeOverrideQuestion：事件对象/DOM 元素等非字符串一律清洗为 null', () => {
+    // 模拟 React MouseEvent（带循环引用的对象，JSON.stringify 会崩）
+    const fakeEvent: Record<string, unknown> = { type: 'click' };
+    fakeEvent.target = { ownerEvent: fakeEvent };
+
+    expect(sanitizeOverrideQuestion(fakeEvent)).toBeNull();
+    expect(sanitizeOverrideQuestion(undefined)).toBeNull();
+    expect(sanitizeOverrideQuestion(null)).toBeNull();
+    expect(sanitizeOverrideQuestion(123)).toBeNull();
+    expect(sanitizeOverrideQuestion('')).toBeNull();
+    expect(sanitizeOverrideQuestion('   ')).toBeNull();
+  });
+
+  it('sanitizeOverrideQuestion：合法字符串原样保留', () => {
+    expect(sanitizeOverrideQuestion('为什么今天大涨？')).toBe('为什么今天大涨？');
   });
 });
 

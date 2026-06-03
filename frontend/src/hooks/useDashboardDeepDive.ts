@@ -8,6 +8,7 @@ import type { ExecutionRun } from '../types/execution';
 import {
   buildDashboardAgentOverlay,
   buildDashboardOverlayKey,
+  sanitizeOverrideQuestion,
   type DashboardAgentOverlay,
   type DashboardDeepDiveTab,
 } from '../utils/dashboardDeepDiveOverlay';
@@ -187,7 +188,9 @@ export function useDashboardDeepDive({
   const startDeepDive = useCallback((overrideQuestion?: string) => {
     if (!symbol || overlayRunning || run?.status === 'running' || run?.status === 'interrupted') return;
 
-    const effectiveQuestion = overrideQuestion ?? userQuestion ?? null;
+    // 防御性清洗：直接绑定 onClick 时这里收到的是 MouseEvent，不能进请求体
+    const effectiveQuestion = sanitizeOverrideQuestion(overrideQuestion)
+      ?? sanitizeOverrideQuestion(userQuestion);
     const label = TAB_LABELS[tab];
     const query = `Dashboard ${label} 深挖：${symbol}${metric ? ` / ${metric}` : ''}`;
     const runId = execute({

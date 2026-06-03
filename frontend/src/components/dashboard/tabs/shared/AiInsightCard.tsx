@@ -161,6 +161,8 @@ export function AiInsightCard({
 
   const renderDeepDiveButton = () => {
     if (!onDeepDive) return null;
+    // onClick 必须用箭头函数包裹：直接绑定会把 MouseEvent 传给 startDeepDive(overrideQuestion?)，
+    // 事件对象进入请求体后 JSON.stringify 会因 React fiber 循环引用而崩溃
     return (
       <button
         type="button"
@@ -172,7 +174,7 @@ export function AiInsightCard({
             ? 'text-fin-muted bg-fin-border/30 cursor-wait'
             : 'text-fin-primary bg-fin-primary/10 hover:bg-fin-primary/15'
         }`}
-        onClick={onDeepDive}
+        onClick={() => onDeepDive()}
       >
         {deepDiveRunning ? (
           <Loader2 size={13} className="animate-spin" />
