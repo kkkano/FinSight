@@ -1465,18 +1465,19 @@ export const apiClient = {
     return response.data;
   },
 
-  /** 更新单个持仓（股数 / 成本价）—— PUT /api/portfolio/positions/{ticker} */
+  /** 更新单个持仓（股数 / 成本价）—— PUT /api/portfolio/positions/{ticker}?session_id= */
   async updatePortfolioPosition(
     sessionId: string,
     ticker: string,
     shares: number,
     avgCost?: number | null,
   ): Promise<{ success: boolean; session_id: string; position?: PortfolioSummaryPosition }> {
-    const response = await api.put(`/api/portfolio/positions/${encodeURIComponent(ticker)}`, {
-      session_id: sessionId,
-      shares,
-      avg_cost: avgCost ?? null,
-    });
+    // 注意：后端的 session_id 是 query 参数（不是 body 字段），放错位置会 422
+    const response = await api.put(
+      `/api/portfolio/positions/${encodeURIComponent(ticker)}`,
+      { shares, avg_cost: avgCost ?? null },
+      { params: { session_id: sessionId } },
+    );
     return response.data;
   },
 
