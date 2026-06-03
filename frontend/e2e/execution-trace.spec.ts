@@ -8,6 +8,20 @@ const fulfillJson = async (route: any, payload: unknown) => {
   });
 };
 
+// On the dashboard the execution panel auto-collapses once a run terminates
+// (done/error). Clicking the collapsed toggle mirrors what a real user does to
+// inspect the trace. If the run is still running/interrupted the panel may
+// already be auto-expanded, in which case the toggle is absent and we skip.
+const expandExecutionPanel = async (page: any) => {
+  const toggle = page.getByRole('button', { name: '执行追踪（已折叠）' });
+  try {
+    await toggle.waitFor({ state: 'visible', timeout: 8000 });
+    await toggle.click();
+  } catch {
+    // Panel already expanded (running/interrupted auto-expand) — nothing to do.
+  }
+};
+
 const buildDashboardPayload = (symbol = 'AAPL') => ({
   success: true,
   state: {
@@ -167,8 +181,9 @@ test('traceViewMode=expert 时展示执行面板并消费计划/决策事件', a
     });
   });
 
-  await page.goto('/workbench?symbol=AAPL');
-  await page.getByRole('button', { name: '分析' }).click();
+  await page.goto('/dashboard/AAPL');
+  await page.getByRole('button', { name: '快速分析' }).click();
+  await expandExecutionPanel(page);
 
   await expect(page.getByText('计划摘要')).toBeVisible();
   await expect(page.getByText('决策说明', { exact: true })).toBeVisible();
@@ -212,8 +227,9 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
     });
   });
 
-  await page.goto('/workbench?symbol=AAPL');
-  await page.getByRole('button', { name: '分析' }).click();
+  await page.goto('/dashboard/AAPL');
+  await page.getByRole('button', { name: '快速分析' }).click();
+  await expandExecutionPanel(page);
 
   await expect(page.getByText('Planner selection summary')).toBeVisible();
   await expect(page.getByText('Planner selected one agent.')).toBeVisible();
@@ -243,8 +259,9 @@ test('interrupt 事件会停在等待确认状态', async ({ page }) => {
     });
   });
 
-  await page.goto('/workbench?symbol=AAPL');
-  await page.getByRole('button', { name: '分析' }).click();
+  await page.goto('/dashboard/AAPL');
+  await page.getByRole('button', { name: '快速分析' }).click();
+  await expandExecutionPanel(page);
 
   await expect(page.getByText('Need confirmation to continue').first()).toBeVisible();
 });

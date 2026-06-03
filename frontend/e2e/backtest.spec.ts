@@ -27,6 +27,6 @@ test('phase-labs backtest panel renders metrics after run', async ({ page }) => 
 
   await page.goto('/phase-labs');
   await page.getByRole('button', { name: '运行回测' }).click();
-  await expect(page.getByText('总收益(%)')).toBeVisible();
-  await expect(page.getByText('12.3')).toBeVisible();
+  await expect(page.getByText('总收益', { exact: true })).toBeVisible();
+  await expect(page.getByText('12.30%')).toBeVisible();
 });

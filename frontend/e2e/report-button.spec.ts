@@ -146,6 +146,21 @@ const parseRequestBody = (route: any) => {
   }
 };
 
+// The right context panel (which hosts the mini chat) now defaults to collapsed
+// (store `showRightPanel: false`). On desktop a collapsed panel renders a
+// `context-panel-expand` toggle; click it so the mini chat / panel content is
+// reachable. No-op when the panel is already expanded.
+const ensureRightPanelExpanded = async (page: any) => {
+  const expandButton = page.getByTestId('context-panel-expand');
+  try {
+    await expandButton.waitFor({ state: 'visible', timeout: 8000 });
+    await expandButton.click();
+  } catch {
+    // Panel already expanded — nothing to do.
+  }
+  await expect(page.getByTestId('context-panel')).toBeVisible();
+};
+
 test.beforeEach(async ({ page }) => {
   let workbenchIndexItems: any[] = [
     {
@@ -278,6 +293,7 @@ test('MiniChat: report toggle + send uses options.output_mode=investment_report'
   });
 
   await page.goto('/dashboard/AAPL');
+  await ensureRightPanelExpanded(page);
 
   await page.getByTestId('mini-chat-input').fill('分析影响');
   await page.getByTestId('mini-chat-report-toggle-btn').click();
@@ -291,6 +307,7 @@ test('Legacy /?symbol=AAPL route redirects to dashboard route', async ({ page })
   await page.goto('/?symbol=AAPL');
 
   await expect(page).toHaveURL(/\/dashboard\/AAPL(?:\?symbol=AAPL)?$/);
+  await ensureRightPanelExpanded(page);
   await expect(page.getByTestId('mini-chat-input')).toBeVisible();
 });
 
@@ -306,6 +323,7 @@ test('Route switch: sidebar can switch between chat and dashboard', async ({ pag
 
 test('Context panel tabs can switch and panel can collapse/expand', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
+  await ensureRightPanelExpanded(page);
 
   const panel = page.getByTestId('context-panel');
   await expect(panel).toBeVisible();
@@ -350,6 +368,7 @@ test('Session continuity: chat and mini chat share session_id', async ({ page })
 
   await page.getByTestId('sidebar-nav-dashboard').click();
   await expect(page).toHaveURL(/\/dashboard\/[A-Z0-9._-]+$/);
+  await ensureRightPanelExpanded(page);
 
   await page.getByTestId('mini-chat-input').fill('再来一条消息');
   await page.getByTestId('mini-chat-send-btn').click();
@@ -368,6 +387,7 @@ test('Selection reference: ask-from-news keeps selection context in request', as
   });
 
   await page.goto('/dashboard/AAPL');
+  await ensureRightPanelExpanded(page);
   await page.getByTestId('dashboard-tab-news').click();
   const selectButton = page.locator('[data-testid^="news-select-"]').first();
   await expect(selectButton).toBeVisible();
