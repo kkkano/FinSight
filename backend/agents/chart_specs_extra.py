@@ -257,8 +257,121 @@ def build_risk_chart_specs(
     return specs
 
 
+# ---------------------------------------------------------------------------
+#  deep_search：搜索结果时间分布柱状图 + 来源分布饼图
+# ---------------------------------------------------------------------------
+def _parse_doc_date(value: Any) -> str | None:
+    """从文档的 published_date 解析出 YYYY-MM-DD；无法解析返回 None。
+
+    与 DeepSearchAgent._freshness_score 同构的容错策略：兼容尾部 Z、
+    纯日期、带时间的 ISO 串。任何异常一律降级为 None（诚实，不编造日期）。
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    # 优先匹配前缀里的 YYYY-MM-DD（覆盖 "2026-05-01"、"2026-05-01T08:00:00Z" 等）
+    prefix = text[:10]
+    try:
+        from datetime import date as _date
+
+        _date.fromisoformat(prefix)
+        return prefix
+    except (ValueError, TypeError):
+        pass
+    # 退路：尝试完整 ISO 解析（兼容尾部 Z）
+    try:
+        from datetime import datetime as _datetime
+
+        normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+        return _datetime.fromisoformat(normalized).date().isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
+def build_deepsearch_chart_specs(
+    docs: list[dict[str, Any]] | None, query: str = ""
+) -> list[dict[str, Any]]:
+    """深度搜索图表：搜索结果时间分布（bar）+ 来源分布（pie）。
+
+    数据来源：DeepSearchAgent._format_output 传入的 raw_data 文档列表，每项含
+    {title, url, snippet, source, published_date, confidence, degraded, ...}。
+
+    - bar：按 published_date(YYYY-MM-DD) 分组计数，只保留最近 14 天；无法解析
+      日期的文档归入「未知日期」组，但若全部都是未知日期则不画这张图。
+    - pie：按 source 分组计数，仅在 >=2 个不同来源时才画。
+
+    诚实原则：docs 非 list / 为空 / 全部不是 dict / 缺关键字段 → 返回空列表，
+    绝不编造数据。
+    """
+    if not isinstance(docs, list) or not docs:
+        return []
+
+    valid_docs = [doc for doc in docs if isinstance(doc, dict)]
+    if not valid_docs:
+        return []
+
+    specs: list[dict[str, Any]] = []
+    query_label = str(query or "").strip()
+
+    # 1) 搜索结果时间分布（bar）：最近 14 天 + 未知日期组
+    date_counts: dict[str, int] = {}
+    unknown_count = 0
+    for doc in valid_docs:
+        parsed = _parse_doc_date(doc.get("published_date"))
+        if parsed is None:
+            unknown_count += 1
+        else:
+            date_counts[parsed] = date_counts.get(parsed, 0) + 1
+
+    # 已解析日期按时间升序取最近 14 个
+    sorted_dates = sorted(date_counts.keys())[-14:]
+    has_real_dates = bool(sorted_dates)
+    if has_real_dates:
+        labels = list(sorted_dates)
+        values = [date_counts[d] for d in sorted_dates]
+        # 仅当存在真实日期时，未知日期才作为额外一组补在末尾
+        if unknown_count > 0:
+            labels.append("未知日期")
+            values.append(unknown_count)
+        title = "搜索结果时间分布"
+        if query_label:
+            title = f"搜索结果时间分布 · {query_label}"
+        specs.append(
+            {
+                "type": "bar",
+                "title": title,
+                "data": {"labels": labels, "values": values},
+            }
+        )
+
+    # 2) 来源分布（pie）：>=2 个不同来源才画
+    source_counts: dict[str, int] = {}
+    for doc in valid_docs:
+        source = str(doc.get("source") or "").strip()
+        if not source:
+            continue
+        source_counts[source] = source_counts.get(source, 0) + 1
+
+    if len(source_counts) >= 2:
+        # 按计数降序，计数相同按来源名稳定排序
+        ordered = sorted(source_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        specs.append(
+            {
+                "type": "pie",
+                "title": "信息来源分布",
+                "data": {
+                    "labels": [name for name, _ in ordered],
+                    "values": [count for _, count in ordered],
+                },
+            }
+        )
+
+    return specs
+
+
 __all__ = [
     "build_technical_chart_specs",
     "build_macro_chart_specs",
     "build_risk_chart_specs",
+    "build_deepsearch_chart_specs",
 ]

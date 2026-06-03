@@ -20,6 +20,7 @@ except ImportError:
 
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.agents.chart_specs_extra import build_deepsearch_chart_specs
 from backend.orchestration.trace_schema import create_trace_event
 from backend.security.ssrf import is_safe_url
 from backend.services.circuit_breaker import CircuitBreaker
@@ -392,6 +393,12 @@ queries 要求：
         if has_conflicts:
             risks.append("多源证据信号存在冲突，建议核实原始财报或电话会议。")
 
+        # 深度搜索图表：时间分布(bar) + 来源分布(pie)，数据不足时为空列表
+        chart_specs = build_deepsearch_chart_specs(
+            raw_data if isinstance(raw_data, list) else None,
+            query or "",
+        )
+
         output = AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -403,6 +410,7 @@ queries 要求：
             fallback_used=fallback_used,
             risks=risks,
             trace=trace or [],
+            chart_specs=chart_specs,
         )
         self._attach_evidence_ledger(output, query=query or summary, ticker=ticker)
         return output

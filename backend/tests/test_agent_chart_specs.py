@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from backend.agents.chart_specs_extra import (
+    build_deepsearch_chart_specs,
     build_macro_chart_specs,
     build_risk_chart_specs,
     build_technical_chart_specs,
 )
+from backend.agents.deep_search_agent import DeepSearchAgent
 from backend.agents.fundamental_agent import FundamentalAgent
 from backend.agents.macro_agent import MacroAgent
 from backend.agents.news_agent import NewsAgent, NewsSentimentSnapshot
@@ -296,3 +298,122 @@ def test_risk_agent_dimension_scores_normalization() -> None:
     assert scores["news"] == 50.0
     assert scores["macro"] == 0.0
     assert set(scores.keys()) == set(RiskAgent.CATEGORY_WEIGHTS.keys())
+
+
+# --- deep_search：时间分布(bar) + 来源分布(pie) chart specs ---
+
+
+def _deep_docs() -> list[dict[str, object]]:
+    """3 个文档、2 个来源(reuters x2 / bloomberg x1)、3 个不同日期。"""
+    return [
+        {
+            "title": "Apple Q2 beats",
+            "url": "https://reuters.com/a",
+            "snippet": "...",
+            "source": "reuters",
+            "published_date": "2026-05-01T08:00:00Z",
+        },
+        {
+            "title": "Apple services growth",
+            "url": "https://reuters.com/b",
+            "snippet": "...",
+            "source": "reuters",
+            "published_date": "2026-05-02",
+        },
+        {
+            "title": "Apple supply chain note",
+            "url": "https://bloomberg.com/c",
+            "snippet": "...",
+            "source": "bloomberg",
+            "published_date": "2026-05-03T12:30:00+00:00",
+        },
+    ]
+
+
+def test_build_deepsearch_chart_specs_full_data_returns_bar_and_pie() -> None:
+    # 正常 docs：3 文档 / 2 来源 / 3 个不同日期 -> bar + pie 两张图
+    specs = build_deepsearch_chart_specs(_deep_docs(), query="AAPL earnings")
+    types = [item["type"] for item in specs]
+    assert types == ["bar", "pie"]
+
+    bar = specs[0]
+    # query 非空时标题拼上 query
+    assert bar["title"] == "搜索结果时间分布 · AAPL earnings"
+    # 三个日期升序、每个计数为 1
+    assert bar["data"]["labels"] == ["2026-05-01", "2026-05-02", "2026-05-03"]
+    assert bar["data"]["values"] == [1, 1, 1]
+
+    pie = specs[1]
+    assert pie["title"] == "信息来源分布"
+    # reuters(2) 计数高于 bloomberg(1)，降序在前
+    assert pie["data"]["labels"] == ["reuters", "bloomberg"]
+    assert pie["data"]["values"] == [2, 1]
+
+
+def test_build_deepsearch_chart_specs_single_source_skips_pie() -> None:
+    # 仅 1 个来源 -> 只有 bar，没有 pie
+    docs = [
+        {"source": "reuters", "published_date": "2026-05-01"},
+        {"source": "reuters", "published_date": "2026-05-02"},
+    ]
+    specs = build_deepsearch_chart_specs(docs)
+    types = [item["type"] for item in specs]
+    assert types == ["bar"]
+    assert "pie" not in types
+    # query 为空 -> 标题不拼 query
+    assert specs[0]["title"] == "搜索结果时间分布"
+
+
+def test_build_deepsearch_chart_specs_empty_or_none_returns_empty() -> None:
+    # 空列表 / None / 全部非 dict -> []
+    assert build_deepsearch_chart_specs([]) == []
+    assert build_deepsearch_chart_specs(None) == []
+    assert build_deepsearch_chart_specs(["not-a-dict", 123]) == []
+
+
+def test_build_deepsearch_chart_specs_missing_or_bad_date_does_not_crash() -> None:
+    # 文档缺 published_date / 日期无法解析：不崩溃；全部未知日期则不出 bar
+    docs = [
+        {"source": "reuters"},  # 缺 published_date
+        {"source": "bloomberg", "published_date": "not-a-date"},  # 无法解析
+    ]
+    specs = build_deepsearch_chart_specs(docs)
+    types = [item["type"] for item in specs]
+    # 全部未知日期 -> 不画 bar；但 2 个来源 -> 仍出 pie
+    assert "bar" not in types
+    assert types == ["pie"]
+
+
+def test_build_deepsearch_chart_specs_mixed_known_and_unknown_date() -> None:
+    # 部分可解析 + 部分未知：bar 末尾补「未知日期」组
+    docs = [
+        {"source": "reuters", "published_date": "2026-05-01"},
+        {"source": "reuters", "published_date": None},
+        {"source": "reuters", "published_date": "bad"},
+    ]
+    specs = build_deepsearch_chart_specs(docs)
+    bar = next(item for item in specs if item["type"] == "bar")
+    assert bar["data"]["labels"] == ["2026-05-01", "未知日期"]
+    assert bar["data"]["values"] == [1, 2]
+
+
+def test_deep_search_agent_format_output_attaches_chart_specs() -> None:
+    # 集成测试：DeepSearchAgent._format_output 应挂上 chart_specs
+    agent = DeepSearchAgent(None, _Cache(), _Tools())
+    output = agent._format_output(
+        "深度研究摘要",
+        _deep_docs(),
+        query="AAPL earnings",
+    )
+    types = [item["type"] for item in output.chart_specs]
+    assert types == ["bar", "pie"]
+    # query 透传到标题
+    bar = output.chart_specs[0]
+    assert "AAPL earnings" in bar["title"]
+
+
+def test_deep_search_agent_format_output_no_data_chart_specs_empty() -> None:
+    # raw_data 非 list（无可画数据）-> chart_specs 为空列表，不崩溃
+    agent = DeepSearchAgent(None, _Cache(), _Tools())
+    output = agent._format_output("空研究", None, query=None)
+    assert output.chart_specs == []
