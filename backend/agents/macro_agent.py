@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, ConflictClaim, EvidenceItem
+from backend.agents.chart_specs_extra import build_macro_chart_specs
 from backend.services.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
@@ -505,6 +506,9 @@ class MacroAgent(BaseFinancialAgent):
         if fallback_used:
             confidence = min(confidence, 0.6)
 
+        # P2-8：宏观指标横截面柱状图（各指标当前读数），无有效数值时返回 []
+        chart_specs = build_macro_chart_specs(raw_data) if isinstance(raw_data, dict) else []
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -512,6 +516,7 @@ class MacroAgent(BaseFinancialAgent):
             confidence=confidence,
             data_sources=sorted(set(data_sources)),
             as_of=datetime.now(timezone.utc).isoformat(),
+            chart_specs=chart_specs,
             evidence_quality=evidence_quality,
             fallback_used=fallback_used,
             risks=risks,

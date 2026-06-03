@@ -4,6 +4,7 @@ import os
 import pandas as pd
 
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, ConflictClaim, EvidenceItem
+from backend.agents.chart_specs_extra import build_technical_chart_specs
 from backend.services.circuit_breaker import CircuitBreaker
 
 
@@ -386,6 +387,14 @@ class TechnicalAgent(BaseFinancialAgent):
         confidence = 0.85 if evidence else 0.3
         risks = self._build_risks(raw_data, evidence)
 
+        # P2-8：技术分析图表（K线 + 均线对比 + RSI 仪表盘），数据不足返回 []
+        chart_specs: List[dict] = []
+        if isinstance(raw_data, dict):
+            chart_specs = build_technical_chart_specs(
+                str(raw_data.get("ticker") or ""),
+                raw_data,
+            )
+
         return AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=summary,
@@ -393,6 +402,7 @@ class TechnicalAgent(BaseFinancialAgent):
             confidence=confidence,
             data_sources=data_sources or ["kline"],
             as_of=datetime.now().isoformat(),
+            chart_specs=chart_specs,
             fallback_used=fallback_used,
             risks=risks,
             conflict_flags=conflict_flags,

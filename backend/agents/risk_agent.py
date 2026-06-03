@@ -16,6 +16,7 @@ import re
 from typing import Any, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
+from backend.agents.chart_specs_extra import build_risk_chart_specs
 from backend.research.agent_quality_contract import (
     apply_agent_quality_contract,
     assign_evidence_source_ids,
@@ -283,6 +284,20 @@ class RiskAgent(BaseFinancialAgent):
             category_factor = min(1.0, severity_sum)
             score += weight * category_factor
         return round(min(100.0, score), 2)
+
+    @classmethod
+    def _dimension_scores(cls, signals: list[RiskSignal]) -> dict[str, float]:
+        """各风险维度独立归一到 0-100（用于雷达图）。
+
+        每个维度取该维度所有信号 severity 之和并 cap 到 1.0，再 ×100，
+        反映该维度的风险饱和度。无信号的维度记 0，供雷达图等尺度对比。
+        """
+        scores: dict[str, float] = {}
+        for category in cls.CATEGORY_WEIGHTS:
+            bucket = [s for s in signals if s.category == category]
+            severity_sum = sum(max(0.0, min(1.0, float(s.severity))) for s in bucket)
+            scores[category] = round(min(1.0, severity_sum) * 100.0, 2)
+        return scores
 
     @classmethod
     def _build_summary(cls, ticker: str, score: float, level: RiskLevel, signals: list[RiskSignal]) -> str:
@@ -609,6 +624,14 @@ class RiskAgent(BaseFinancialAgent):
             confidence=0.75 if quote is not None else 0.45,
         )
 
+        # P2-8：风险维度雷达图 + 综合风险仪表盘，维度/评分不足时返回 []
+        chart_specs = build_risk_chart_specs(
+            clean_ticker,
+            assessment.risk_score,
+            assessment.risk_level.value,
+            self._dimension_scores(assessment.signals),
+        )
+
         output = AgentOutput(
             agent_name=self.AGENT_NAME,
             summary=assessment.summary,
@@ -617,6 +640,7 @@ class RiskAgent(BaseFinancialAgent):
             data_sources=list(dict.fromkeys(data_sources)),
             as_of=assessment.assessed_at,
             claims=claims,
+            chart_specs=chart_specs,
             fallback_used=fallback_used,
             risks=[signal.description for signal in assessment.signals],
             fallback_reason="quote_unavailable" if quote is None else None,
