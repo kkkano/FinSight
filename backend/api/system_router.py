@@ -18,11 +18,12 @@ class SystemRouterDeps:
     get_orchestrator_safe: Callable[[], Any]
     get_planner_ab_metrics: Callable[[], Dict[str, Any]]
     get_rag_observability_store: Callable[[], Any]
-    get_cost_audit_store: Callable[[], Any]
     require_rag_read_access: Callable[[Request], Dict[str, Any]]
     require_rag_mutation_access: Callable[[Request], Dict[str, Any]]
     memory_service: Any
     logger: Any
+    # P2-7: 成本审计 store（可选注入——未注入时 cost-audit 端点 503，不破坏现有构造方）
+    get_cost_audit_store: Callable[[], Any] | None = None
 
 
 def create_system_router(deps: SystemRouterDeps) -> APIRouter:
@@ -230,6 +231,8 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
     def cost_audit(request: Request, days: int = Query(default=7, ge=1, le=90)):
         # 复用 RAG 只读访问保护：内部 API key 或已登录用户（Supabase / dev 认证）。
         _require_rag_read_access(request)
+        if deps.get_cost_audit_store is None:
+            raise HTTPException(status_code=503, detail="cost audit store not configured")
         store = deps.get_cost_audit_store()
         daily = store.daily_summary(days=days)
         top_requests = store.top_requests(days=days, limit=20)
