@@ -62,11 +62,26 @@
 发现卡片带 AI 分析推给用户 → 行动按钮跳 Chat 深挖。
 "Agent 主动盯盘"从 spec 变成了现实。
 
-### 第四批：P2 产品力
+### 第四批：P2 产品力（2026-06-03 早晨主人指令"推进P2"后继续）
 
-| 任务 | 状态 |
-|------|------|
-| 未开始 | 时间用于工作台 Phase 1/2（主人最痛的点），P2 留待后续会话 |
+| # | 任务 | Commit | 说明 |
+|---|------|--------|------|
+| P2-2 | 执行追踪默认可见 | `6cc1f1f` | traceViewMode 默认 'expert'——护城河（执行追踪）不再是彩蛋 |
+| P2-4 | Dashboard 置信度/数据时点 | `6cc1f1f` | AiInsightCard Footer 显示置信度（颜色编码）+ as_of——后端一直在发，前端之前丢弃 |
+| P2-1 | 幻觉洗涤可见化 | `89f84ea` | report.fact_check 暴露 verifier claims + FactCheckCard 组件（零问题也展示"✓通过核查"）；synthesize.py 零改动（数据已在 artifacts，只是从未暴露） |
+| P2-3 | 章节数据化（prompt 层） | `11e4f0d` | 催化剂加【已确认/预期/传言】标记/风险加触发阈值（带[阈值待补]防编造兜底）/结论加观察点清单表格；两条 prompt 链路都改 |
+
+**P2 最终验证（2026-06-03 10:20）**：
+- 后端全量回归：**1641 passed / 8 skipped / 0 failed / 0 errors**（7 分 05 秒）
+- 前端全量：**99 passed（23 文件）** + 构建绿
+- P2 净增 10 个测试（fact_check 6 + prompt 结构 5，减去重构整合 1）
+
+**调查发现（修正路线图）**：证据账本已默认展开✅、冲突检测已在报告正文✅——
+比路线图预想的好，无需改造。真正的缺口是幻觉洗涤黑盒（P2-1 已修）。
+
+**P2 未做项**（留待后续）：P2-5 英文 claim 中文化（L）/ P2-6 半成品处置（M-L）/
+P2-7 成本审计面板（M）/ P2-8 agent 图表（M）/ P2-9 移动端（M-L）/
+P2-10 A股体验（L）/ P2-11 价差提示（M）/ P2-12 质量徽章（L）
 
 ---
 
@@ -162,5 +177,13 @@ b9aa111 fix(tests): isolate TECHNICAL_AGENT_LLM_SUMMARY_ENABLED env in determini
 ad752c6 refactor: remove SupervisorAgent dead code and legacy archive (~8,200 lines)
 ```
 
-注：本报告自身在第 12 个 commit（docs）中提交。
+**P2 追加 commit（2026-06-03 早晨）：**
+
+```
+11e4f0d feat(report): structured constraints for catalysts/risks/conclusion sections (P2-3)
+89f84ea feat(report): expose hallucination fact-check results to users (P2-1)
+6cc1f1f feat(frontend): expert trace mode by default + dashboard confidence/as_of visibility (P2-2, P2-4)
+```
+
+注：本报告自身随 docs commit 提交并随 P2 进展更新。
 所有 commit 均未 push，等主人检查后决定。
