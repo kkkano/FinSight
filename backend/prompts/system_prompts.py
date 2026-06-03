@@ -7,7 +7,7 @@ System Prompts - 系统提示词
 - FORUM_SYNTHESIS_PROMPT: 报告合成 (Supervisor → Forum 流程)
 
 已废弃/删除的 Prompts (2026-01-24):
-- CLASSIFICATION_PROMPT: 已整合到 intent_classifier.py 内部
+- CLASSIFICATION_PROMPT: 已废弃 (旧 intent 分类逻辑已移除)
 - CHAT_SYSTEM_PROMPT: 未实际使用
 - REPORT_SYSTEM_PROMPT: 随 report_handler.py 一同废弃
 - ALERT_SYSTEM_PROMPT: 未实际使用
