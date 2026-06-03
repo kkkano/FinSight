@@ -22,11 +22,13 @@ import {
 } from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 
-import type {
-  AgentAnalysis,
-  Finding,
-  FindingAction,
-  FindingTriggerType,
+import {
+  extractMarketSession,
+  type AgentAnalysis,
+  type Finding,
+  type FindingAction,
+  type FindingTriggerType,
+  type MarketSession,
 } from '../../types/monitor';
 
 interface FindingCardProps {
@@ -111,6 +113,34 @@ export function resolveTriggerVisual(
         badgeClass: 'bg-fin-border/30 text-fin-muted',
         label: '发现',
       };
+  }
+}
+
+/**
+ * 解析交易时段 badge（纯函数，便于 renderToStaticMarkup 测试）。
+ * - pre_market → 醒目橙色「盘前」（傍晚提醒、开盘前决策，对国内用户价值最高）
+ * - after_hours → 低调靛蓝「盘后」（不抢眼）
+ * - regular / closed / null → 不显示（盘中是常态，无需标注）
+ *
+ * 配色用 Tailwind 调色板（orange-* / indigo-*），可带 alpha；
+ * fin-* hex 变量不能带 alpha，故时段 badge 不用 fin-* token。
+ */
+export function resolveSessionBadge(
+  session: MarketSession | null,
+): { label: string; className: string } | null {
+  switch (session) {
+    case 'pre_market':
+      return {
+        label: '盘前',
+        className: 'bg-orange-500/10 text-orange-500 border border-orange-500/30',
+      };
+    case 'after_hours':
+      return {
+        label: '盘后',
+        className: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20',
+      };
+    default:
+      return null;
   }
 }
 
@@ -269,6 +299,8 @@ export function FindingCard({
   const visual = resolveTriggerVisual(finding.trigger_type, finding.trigger_detail);
   const { Icon } = visual;
   const isNew = finding.status === 'new';
+  // 交易时段 badge（盘前/盘后才显示，盘中/闭市/缺失返回 null）
+  const sessionBadge = resolveSessionBadge(extractMarketSession(finding.trigger_detail));
 
   const handleCardClick = () => {
     // 仅未读时触发标记，避免重复请求
@@ -319,6 +351,15 @@ export function FindingCard({
             <span className={`shrink-0 px-1.5 py-0.5 rounded text-2xs font-medium ${visual.badgeClass}`}>
               {visual.label}
             </span>
+            {sessionBadge && (
+              <span
+                data-testid="finding-session-badge"
+                className={`shrink-0 px-1.5 py-0.5 rounded text-2xs font-semibold ${sessionBadge.className}`}
+                title="交易时段"
+              >
+                {sessionBadge.label}
+              </span>
+            )}
             {isNew && (
               <span
                 data-testid="finding-new-dot"

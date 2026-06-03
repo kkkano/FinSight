@@ -7,8 +7,10 @@ import {
   isActionEnabled,
   resolveActionTarget,
   resolveAgentLabel,
+  resolveSessionBadge,
   resolveTriggerVisual,
 } from './FindingCard';
+import { extractMarketSession } from '../../types/monitor';
 import type { AgentAnalysis, Finding } from '../../types/monitor';
 
 /** 把 JSX 渲染为压缩空白后的静态 HTML 字符串 */
@@ -307,5 +309,86 @@ describe('FindingCard agent_analysis (Phase 2)', () => {
     const html = renderToStaticMarkup(<FindingCard finding={finding} />);
     expect(html).toContain('风险评估');
     expect(html).toContain('NVDA 风险评分');
+  });
+});
+
+// ── 交易时段标注（盘前/盘后 badge） ──────────────────────────────
+
+describe('extractMarketSession', () => {
+  it('extracts a valid session string', () => {
+    expect(extractMarketSession({ market_session: 'pre_market' })).toBe('pre_market');
+    expect(extractMarketSession({ market_session: 'after_hours' })).toBe('after_hours');
+    expect(extractMarketSession({ market_session: 'regular' })).toBe('regular');
+    expect(extractMarketSession({ market_session: 'closed' })).toBe('closed');
+  });
+
+  it('returns null when the field is missing', () => {
+    expect(extractMarketSession({ change_pct: -5.2 })).toBeNull();
+  });
+
+  it('returns null for invalid values (number / garbage string)', () => {
+    expect(extractMarketSession({ market_session: 42 })).toBeNull();
+    expect(extractMarketSession({ market_session: 'lunch_break' })).toBeNull();
+    expect(extractMarketSession({ market_session: '' })).toBeNull();
+  });
+});
+
+describe('resolveSessionBadge', () => {
+  it('returns an orange 盘前 badge for pre_market', () => {
+    const badge = resolveSessionBadge('pre_market');
+    expect(badge?.label).toBe('盘前');
+    expect(badge?.className).toContain('orange');
+  });
+
+  it('returns an indigo 盘后 badge for after_hours', () => {
+    const badge = resolveSessionBadge('after_hours');
+    expect(badge?.label).toBe('盘后');
+    expect(badge?.className).toContain('indigo');
+  });
+
+  it('returns null for regular / closed / null (盘中为常态不标注)', () => {
+    expect(resolveSessionBadge('regular')).toBeNull();
+    expect(resolveSessionBadge('closed')).toBeNull();
+    expect(resolveSessionBadge(null)).toBeNull();
+  });
+});
+
+describe('FindingCard market session badge', () => {
+  it('renders the 盘前 badge when market_session=pre_market', () => {
+    const finding = makeFinding({
+      target: 'NVDA',
+      title: 'NVDA 盘前下跌 5.2%',
+      trigger_detail: { change_pct: -5.2, threshold: 5.0, market_session: 'pre_market' },
+    });
+    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
+    expect(html).toContain('data-testid="finding-session-badge"');
+    expect(html).toContain('盘前');
+  });
+
+  it('renders the 盘后 badge when market_session=after_hours', () => {
+    const finding = makeFinding({
+      target: 'NVDA',
+      title: 'NVDA 盘后下跌 5.2%',
+      trigger_detail: { change_pct: -5.2, threshold: 5.0, market_session: 'after_hours' },
+    });
+    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
+    expect(html).toContain('data-testid="finding-session-badge"');
+    expect(html).toContain('盘后');
+  });
+
+  it('does not render a session badge for market_session=regular', () => {
+    const finding = makeFinding({
+      trigger_detail: { change_pct: -5.2, threshold: 5.0, market_session: 'regular' },
+    });
+    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
+    expect(html).not.toContain('data-testid="finding-session-badge"');
+  });
+
+  it('does not render a session badge when market_session is missing', () => {
+    const finding = makeFinding({
+      trigger_detail: { change_pct: -5.2, threshold: 5.0 },
+    });
+    const html = renderToStaticMarkup(<FindingCard finding={finding} />);
+    expect(html).not.toContain('data-testid="finding-session-badge"');
   });
 });

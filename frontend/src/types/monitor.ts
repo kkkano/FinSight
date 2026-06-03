@@ -16,6 +16,31 @@ export type FindingTriggerType =
 /** 发现处理状态 */
 export type FindingStatus = 'new' | 'viewed' | 'acted';
 
+/** 交易时段（后端 market_hours.py 对齐） */
+export type MarketSession = 'pre_market' | 'regular' | 'after_hours' | 'closed';
+
+/** 全部合法交易时段取值（运行时校验用） */
+const MARKET_SESSIONS: readonly MarketSession[] = [
+  'pre_market',
+  'regular',
+  'after_hours',
+  'closed',
+];
+
+/**
+ * 从 trigger_detail 提取交易时段标注。
+ * 后端在 trigger_detail.market_session 写入时段；缺失或非法值（数字/乱字符串）返回 null。
+ */
+export function extractMarketSession(
+  detail: Record<string, unknown>,
+): MarketSession | null {
+  const raw = detail?.market_session;
+  if (typeof raw !== 'string') return null;
+  return MARKET_SESSIONS.includes(raw as MarketSession)
+    ? (raw as MarketSession)
+    : null;
+}
+
 /** L2 agent 深析结果（Phase 2） */
 export interface AgentAnalysis {
   /** agent 标识，如 technical_agent / risk_agent */
@@ -49,7 +74,11 @@ export interface Finding {
   /** 标的 ticker 或 "PORTFOLIO" */
   target: string;
   trigger_type: FindingTriggerType;
-  /** 触发明细，如 {"change_pct": -5.2, "threshold": 5.0} */
+  /**
+   * 触发明细，如 {"change_pct": -5.2, "threshold": 5.0}。
+   * 可选字段 market_session?: MarketSession —— 后端交易时段感知写入（盘前/盘中/盘后/闭市），
+   * 用 extractMarketSession 提取。
+   */
   trigger_detail: Record<string, unknown>;
   /** 标题，如 "TSLA 单日下跌 5.2%" */
   title: string;
