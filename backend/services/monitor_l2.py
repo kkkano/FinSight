@@ -10,9 +10,12 @@ L1 规则引擎（monitor_engine）产出 Finding 后，对部分类型调用专
   3. 单日预算 MONITOR_L2_DAILY_LIMIT（默认 20，0=禁用）
 
 路由规则：
-  - price_move    → TechnicalAgent（价格异动技术面）
-  - concentration → RiskAgent（最大持仓的集中度风险）
-  - 其他          → 不分析（返回 None）
+  - price_move      → TechnicalAgent（价格异动技术面）
+  - concentration   → RiskAgent（最大持仓的集中度风险）
+  - sentiment_shift → NewsAgent（舆情分析）
+  - earnings_near   → DeepSearchAgent（财报前瞻深挖）
+  - macro_event     → MacroAgent（宏观事件对市场影响）
+  - 其他            → 不分析（返回 None）
 
 诚实原则：agent 调用失败 / 无置信度时如实标注，禁止编造 confidence。
 
@@ -125,7 +128,7 @@ def _now_iso() -> str:
 
 
 def _build_agent(agent_kind: str):
-    """按标准模式实例化 agent（technical / risk）。
+    """按标准模式实例化 agent（technical / risk / news / deep_search / macro）。
 
     LLM 不可用时回退 llm=None（agent 内部以确定性逻辑兜底），不阻断 L2。
     实例化彻底失败时返回 None，由上层跳过该 Finding。
@@ -135,6 +138,9 @@ def _build_agent(agent_kind: str):
         import backend.tools as tools_module
         from backend.agents.technical_agent import TechnicalAgent
         from backend.agents.risk_agent import RiskAgent
+        from backend.agents.news_agent import NewsAgent
+        from backend.agents.deep_search_agent import DeepSearchAgent
+        from backend.agents.macro_agent import MacroAgent
     except Exception:  # noqa: BLE001 - 依赖导入失败时 L2 整体跳过
         logger.warning("[MonitorL2] failed to import agent dependencies", exc_info=True)
         return None
@@ -153,6 +159,12 @@ def _build_agent(agent_kind: str):
         return TechnicalAgent(llm, cache, tools_module)
     if agent_kind == "risk":
         return RiskAgent(llm, cache, tools_module)
+    if agent_kind == "news":
+        return NewsAgent(llm, cache, tools_module)
+    if agent_kind == "deep_search":
+        return DeepSearchAgent(llm, cache, tools_module)
+    if agent_kind == "macro":
+        return MacroAgent(llm, cache, tools_module)
     return None
 
 
@@ -177,13 +189,34 @@ def _route(finding: dict) -> tuple[str, str, str, str] | None:
             return None
         return ("risk", "risk_agent", "持仓集中度风险评估", ticker)
 
+    if trigger_type == "sentiment_shift":
+        # 舆情突变对触发 ticker 做新闻舆情深析
+        ticker = str(finding.get("target") or "").strip().upper()
+        if not ticker:
+            return None
+        return ("news", "news_agent", f"{ticker} 舆情分析", ticker)
+
+    if trigger_type == "earnings_near":
+        # 财报临近对触发 ticker 做财报前瞻深挖
+        ticker = str(finding.get("target") or "").strip().upper()
+        if not ticker:
+            return None
+        return ("deep_search", "deep_search_agent", f"{ticker} 财报前瞻分析", ticker)
+
+    if trigger_type == "macro_event":
+        # 宏观事件不绑定单只股票；ticker 取持仓第一个（detail 不带持仓时回退 SPY）
+        ticker = str(detail.get("ticker") or "SPY").strip().upper() or "SPY"
+        return ("macro", "macro_agent", "近期宏观事件对市场的影响分析", ticker)
+
     return None
 
 
 async def run_l2_analysis(finding: dict) -> dict | None:
     """对一条 L1 Finding 做 L2 agent 深度分析。
 
-    路由：price_move → TechnicalAgent；concentration → RiskAgent；其余 → None。
+    路由：price_move → TechnicalAgent；concentration → RiskAgent；
+    sentiment_shift → NewsAgent；earnings_near → DeepSearchAgent；
+    macro_event → MacroAgent；其余 → None。
     失败处理：agent 调用异常 → logger.warning + 返回 None（不影响 Finding 本身）。
 
     返回 agent_analysis dict（诚实原则：confidence 可能为 None，原样透传不编造）。

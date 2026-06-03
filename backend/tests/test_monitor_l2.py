@@ -113,12 +113,76 @@ def test_route_concentration_uses_risk_agent(monkeypatch):
     assert agent.calls == [("持仓集中度风险评估", "NVDA")]
 
 
+def test_route_sentiment_shift_uses_news_agent(monkeypatch):
+    captured = {}
+    agent = _FakeAgent(_FakeAgentOutput("舆情分析", 0.7, ["alpha_vantage"]))
+
+    def fake_build(kind: str):
+        captured["kind"] = kind
+        return agent
+
+    monkeypatch.setattr(monitor_l2, "_build_agent", fake_build)
+
+    finding = {
+        "id": "f-sent", "session_id": "sess-a", "target": "AAPL",
+        "trigger_type": "sentiment_shift", "trigger_detail": {"score": -0.5},
+    }
+    result = _run(monitor_l2.run_l2_analysis(finding))
+    assert captured["kind"] == "news"
+    assert result is not None
+    assert result["agent"] == "news_agent"
+    assert agent.calls == [("AAPL 舆情分析", "AAPL")]
+
+
+def test_route_earnings_near_uses_deep_search_agent(monkeypatch):
+    captured = {}
+    agent = _FakeAgent(_FakeAgentOutput("财报前瞻", 0.6, ["sec_filings"]))
+
+    def fake_build(kind: str):
+        captured["kind"] = kind
+        return agent
+
+    monkeypatch.setattr(monitor_l2, "_build_agent", fake_build)
+
+    finding = {
+        "id": "f-earn", "session_id": "sess-a", "target": "AAPL",
+        "trigger_type": "earnings_near", "trigger_detail": {"earnings_date": "2026-06-05"},
+    }
+    result = _run(monitor_l2.run_l2_analysis(finding))
+    assert captured["kind"] == "deep_search"
+    assert result is not None
+    assert result["agent"] == "deep_search_agent"
+    assert agent.calls == [("AAPL 财报前瞻分析", "AAPL")]
+
+
+def test_route_macro_event_uses_macro_agent(monkeypatch):
+    captured = {}
+    agent = _FakeAgent(_FakeAgentOutput("宏观影响", 0.65, ["macro_calendar"]))
+
+    def fake_build(kind: str):
+        captured["kind"] = kind
+        return agent
+
+    monkeypatch.setattr(monitor_l2, "_build_agent", fake_build)
+
+    finding = {
+        "id": "f-macro", "session_id": "sess-a", "target": "MACRO",
+        "trigger_type": "macro_event", "trigger_detail": {"events": [{"date": "2026-06-04", "title": "CPI"}]},
+    }
+    result = _run(monitor_l2.run_l2_analysis(finding))
+    assert captured["kind"] == "macro"
+    assert result is not None
+    assert result["agent"] == "macro_agent"
+    # ticker 回退 SPY（detail 不带 ticker）
+    assert agent.calls == [("近期宏观事件对市场的影响分析", "SPY")]
+
+
 def test_unsupported_trigger_returns_none(monkeypatch):
     # 不应实例化任何 agent
     monkeypatch.setattr(
         monitor_l2, "_build_agent", lambda kind: pytest.fail("should not build agent")
     )
-    finding = {"id": "f-x", "session_id": "s", "target": "X", "trigger_type": "macro_event", "trigger_detail": {}}
+    finding = {"id": "f-x", "session_id": "s", "target": "X", "trigger_type": "unknown_kind", "trigger_detail": {}}
     assert _run(monitor_l2.run_l2_analysis(finding)) is None
 
 

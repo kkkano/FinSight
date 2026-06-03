@@ -36,6 +36,17 @@ def patched_env(tmp_path, monkeypatch):
         "fetch_price_snapshot",
         lambda ticker: PriceSnapshot(ticker=ticker, price=100.0, change_percent=0.5),
     )
+    # 默认：舆情/日历数据源返回「无数据」，避免现有测试触发真实外部 API
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_news_sentiment_score",
+        lambda ticker, limit=10: {"ticker": ticker, "score": None, "label": None, "article_count": 0, "error": "no data found."},
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_event_calendar",
+        lambda ticker, days_ahead=7: {"ticker": ticker, "earnings_events": [], "dividend_events": [], "macro_events": [], "error": "no_calendar_events"},
+    )
     return store
 
 
@@ -227,3 +238,171 @@ def test_run_monitor_scan_cycle_smoke(patched_env, monkeypatch):
     monkeypatch.setattr(monitor_engine, "list_session_ids", lambda: [])
     # 不应抛异常
     monitor_engine.run_monitor_scan_cycle()
+
+
+# ── 舆情突变 ──────────────────────────────────────────────────
+
+
+def _trigger_type(findings: list[dict], trigger_type: str) -> list[dict]:
+    return [f for f in findings if f["trigger_type"] == trigger_type]
+
+
+def test_sentiment_shift_triggers_on_strong_negative(patched_env, monkeypatch):
+    """平均分 -0.5（绝对值 > 0.35 阈值）触发 sentiment_shift。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_news_sentiment_score",
+        lambda ticker, limit=10: {
+            "ticker": ticker, "score": -0.5, "label": "Bearish", "article_count": 8, "error": None,
+        },
+    )
+
+    findings = _run("sess-a")
+    sent = _trigger_type(findings, "sentiment_shift")
+    assert len(sent) == 1
+    f = sent[0]
+    assert f["target"] == "AAPL"
+    assert f["trigger_detail"]["score"] == -0.5
+    assert "强负面" in f["title"]
+    assert any(a["type"] == "full_report" for a in f["actions"])
+
+
+def test_sentiment_shift_within_threshold_no_finding(patched_env, monkeypatch):
+    """平均分 0.1（绝对值 < 0.35）不触发。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_news_sentiment_score",
+        lambda ticker, limit=10: {
+            "ticker": ticker, "score": 0.1, "label": "Neutral", "article_count": 6, "error": None,
+        },
+    )
+    assert _trigger_type(_run("sess-a"), "sentiment_shift") == []
+
+
+def test_sentiment_shift_none_score_no_finding(patched_env, monkeypatch):
+    """score 为 None（数据不可用）→ 跳过不触发（诚实原则）。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_news_sentiment_score",
+        lambda ticker, limit=10: {
+            "ticker": ticker, "score": None, "label": None, "article_count": 0, "error": "rate limited",
+        },
+    )
+    assert _trigger_type(_run("sess-a"), "sentiment_shift") == []
+
+
+def test_sentiment_rule_disabled_by_env(patched_env, monkeypatch):
+    """MONITOR_SENTIMENT_RULE_ENABLED=false 时舆情规则整条跳过，不调数据源。"""
+    monkeypatch.setenv("MONITOR_SENTIMENT_RULE_ENABLED", "false")
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+
+    def boom(ticker, limit=10):
+        raise AssertionError("get_news_sentiment_score should not be called when rule disabled")
+
+    monkeypatch.setattr(monitor_engine, "get_news_sentiment_score", boom)
+    assert _trigger_type(_run("sess-a"), "sentiment_shift") == []
+
+
+# ── 财报临近 ──────────────────────────────────────────────────
+
+
+def _earnings_calendar(days_from_now: int):
+    """构造一个 earnings_events 含 N 天后财报日的 calendar 返回。"""
+    from datetime import datetime, timedelta, timezone
+
+    earnings_date = (datetime.now(timezone.utc).date() + timedelta(days=days_from_now)).isoformat()
+
+    def _cal(ticker, days_ahead=7):
+        return {
+            "ticker": ticker,
+            "earnings_events": [{"date": earnings_date, "title": "Earnings Date", "source": "yfinance_earnings_dates"}],
+            "dividend_events": [],
+            "macro_events": [],
+            "error": None,
+        }
+
+    return _cal
+
+
+def test_earnings_near_triggers_within_window(patched_env, monkeypatch):
+    """财报 2 天后（<= 3 天窗口）触发 earnings_near。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(monitor_engine, "get_event_calendar", _earnings_calendar(2))
+
+    findings = _run("sess-a")
+    earn = _trigger_type(findings, "earnings_near")
+    assert len(earn) == 1
+    assert earn[0]["target"] == "AAPL"
+    assert earn[0]["trigger_detail"]["days_until"] == 2
+
+
+def test_earnings_near_outside_window_no_finding(patched_env, monkeypatch):
+    """财报 5 天后（> 3 天窗口）不触发。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(monitor_engine, "get_event_calendar", _earnings_calendar(5))
+    assert _trigger_type(_run("sess-a"), "earnings_near") == []
+
+
+# ── 宏观事件 ──────────────────────────────────────────────────
+
+
+def _macro_calendar(macro_events):
+    def _cal(ticker, days_ahead=7):
+        return {
+            "ticker": ticker,
+            "earnings_events": [],
+            "dividend_events": [],
+            "macro_events": macro_events,
+            "error": None,
+        }
+
+    return _cal
+
+
+def test_macro_event_triggers_within_window(patched_env, monkeypatch):
+    """宏观事件 1 天后（<= 2 天）触发 macro_event（target=MACRO，单条聚合）。"""
+    from datetime import datetime, timedelta, timezone
+
+    event_date = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_event_calendar",
+        _macro_calendar([{"date": event_date, "title": "CPI release", "source": "search_macro_calendar"}]),
+    )
+
+    findings = _run("sess-a")
+    macro = _trigger_type(findings, "macro_event")
+    assert len(macro) == 1
+    assert macro[0]["target"] == "MACRO"
+    assert macro[0]["trigger_detail"]["events"][0]["title"] == "CPI release"
+
+
+def test_macro_event_placeholder_date_none_filtered(patched_env, monkeypatch):
+    """date=None 的 macro_watchlist 占位符被过滤，不触发。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_event_calendar",
+        _macro_calendar([{"date": None, "title": "Monitor upcoming CPI release window", "source": "macro_watchlist"}]),
+    )
+    assert _trigger_type(_run("sess-a"), "macro_event") == []

@@ -1458,15 +1458,20 @@ def get_event_calendar(ticker: str, days_ahead: int = 30) -> Dict[str, Any]:
     return result
 
 
-def get_news_sentiment(ticker: str, limit: int = 5) -> str:
-    """
-    获取新闻情绪 (Alpha Vantage NEWS_SENTIMENT)
+def _fetch_av_sentiment_feed(ticker: str, limit: int) -> Dict[str, Any]:
+    """拉取 Alpha Vantage NEWS_SENTIMENT 原始 feed（供文本/结构化两个出口共用）。
+
+    返回统一形态：
+        {"feed": list | None, "error": str | None}
+    - 成功：feed 为文章列表（可能为空列表），error=None
+    - 失败/限流/无数据：feed=None，error 为人类可读原因
+
+    诚实原则：不在此处编造任何分数，只负责把原始数据/错误如实带出。
     """
     if not ticker:
-        return "News Sentiment: ticker is required."
-
+        return {"feed": None, "error": "ticker is required."}
     if not ALPHA_VANTAGE_API_KEY:
-        return "News Sentiment: ALPHA_VANTAGE_API_KEY not configured."
+        return {"feed": None, "error": "ALPHA_VANTAGE_API_KEY not configured."}
 
     try:
         url = "https://www.alphavantage.co/query"
@@ -1482,23 +1487,46 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
         if not data or 'feed' not in data or not data.get('feed'):
             if isinstance(data, dict):
                 if data.get('Note'):
-                    return f"News Sentiment: rate limited ({data.get('Note')})"
+                    return {"feed": None, "error": f"rate limited ({data.get('Note')})"}
                 if data.get('Information'):
-                    return f"News Sentiment: {data.get('Information')}"
+                    return {"feed": None, "error": str(data.get('Information'))}
                 if data.get('Error Message'):
-                    return f"News Sentiment: {data.get('Error Message')}"
-            return "News Sentiment: no data found."
+                    return {"feed": None, "error": str(data.get('Error Message'))}
+            return {"feed": None, "error": "no data found."}
 
-        def _extract_sentiment(item: Dict[str, Any], symbol: str):
-            symbol_upper = symbol.upper()
-            for ts in item.get('ticker_sentiment', []):
-                if ts.get('ticker', '').upper() == symbol_upper:
-                    return ts.get('ticker_sentiment_score'), ts.get('ticker_sentiment_label')
-            return item.get('overall_sentiment_score'), item.get('overall_sentiment_label')
+        return {"feed": data.get('feed', []), "error": None}
+    except Exception as e:
+        return {"feed": None, "error": f"fetch failed ({str(e)})"}
+
+
+def _extract_ticker_sentiment(item: Dict[str, Any], symbol: str):
+    """从单篇文章里取目标 ticker 的情绪分数/标签，缺失则回退整体情绪。"""
+    symbol_upper = symbol.upper()
+    for ts in item.get('ticker_sentiment', []):
+        if ts.get('ticker', '').upper() == symbol_upper:
+            return ts.get('ticker_sentiment_score'), ts.get('ticker_sentiment_label')
+    return item.get('overall_sentiment_score'), item.get('overall_sentiment_label')
+
+
+def get_news_sentiment(ticker: str, limit: int = 5) -> str:
+    """
+    获取新闻情绪 (Alpha Vantage NEWS_SENTIMENT)
+    """
+    if not ticker:
+        return "News Sentiment: ticker is required."
+
+    if not ALPHA_VANTAGE_API_KEY:
+        return "News Sentiment: ALPHA_VANTAGE_API_KEY not configured."
+
+    try:
+        fetched = _fetch_av_sentiment_feed(ticker, limit)
+        if fetched.get("error") or fetched.get("feed") is None:
+            return f"News Sentiment: {fetched.get('error') or 'no data found.'}"
+        feed = fetched["feed"]
 
         lines = []
         scores: List[float] = []
-        for i, item in enumerate(data.get('feed', [])[:limit], 1):
+        for i, item in enumerate(feed[:limit], 1):
             title = item.get('title', 'No title')
             source = item.get('source', 'Unknown')
             time_published = item.get('time_published', '')
@@ -1508,7 +1536,7 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
             else:
                 date_str = 'Unknown date'
             url = item.get('url') or item.get('link') or ''
-            score, label = _extract_sentiment(item, ticker)
+            score, label = _extract_ticker_sentiment(item, ticker)
             sentiment_desc = "N/A"
             try:
                 if score is not None:
@@ -1533,6 +1561,65 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
     except Exception as e:
         return f"News Sentiment: fetch failed ({str(e)})"
 
+
+def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
+    """结构化版本的新闻舆情分数（供监控引擎等程序化调用）。
+
+    与 get_news_sentiment 复用同一份 Alpha Vantage 抓取逻辑（_fetch_av_sentiment_feed），
+    但返回结构化结果而非文本，便于规则引擎做阈值判断。
+
+    返回:
+        {"ticker": str, "score": float | None, "label": str | None,
+         "article_count": int, "error": str | None}
+    - score 为 N 篇文章中目标 ticker_sentiment_score 的平均值（保留 4 位小数）
+    - 拿不到数据/限流/无情绪分时 score=None + error 说明原因（诚实原则：绝不编造分数）
+    - label 依平均分粗分档：>=0.15 Bullish / <=-0.15 Bearish / 其余 Neutral
+    """
+    symbol = str(ticker or "").strip().upper()
+    result: Dict[str, Any] = {
+        "ticker": symbol,
+        "score": None,
+        "label": None,
+        "article_count": 0,
+        "error": None,
+    }
+    if not symbol:
+        result["error"] = "ticker is required."
+        return result
+
+    fetched = _fetch_av_sentiment_feed(symbol, limit)
+    if fetched.get("error") or fetched.get("feed") is None:
+        result["error"] = fetched.get("error") or "no data found."
+        return result
+
+    feed = fetched["feed"]
+    scores: List[float] = []
+    for item in feed[:limit]:
+        score, _label = _extract_ticker_sentiment(item, symbol)
+        if score is None:
+            continue
+        try:
+            scores.append(float(score))
+        except (TypeError, ValueError):
+            continue
+
+    if not scores:
+        # 有文章但没有可用情绪分（如全部字段缺失）—— 视为数据不可用，不编造 0
+        result["error"] = "no sentiment scores in feed."
+        return result
+
+    avg = sum(scores) / len(scores)
+    if avg >= 0.15:
+        label = "Bullish"
+    elif avg <= -0.15:
+        label = "Bearish"
+    else:
+        label = "Neutral"
+
+    result["score"] = round(avg, 4)
+    result["label"] = label
+    result["article_count"] = len(scores)
+    return result
 
 
 def get_market_news_headlines(limit: int = 5) -> str:
