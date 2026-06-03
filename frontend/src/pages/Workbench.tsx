@@ -15,6 +15,7 @@ import { TaskSection } from '../components/workbench/TaskSection';
 import { FindingsFeed } from '../components/workbench/FindingsFeed';
 import { PortfolioEditor } from '../components/workbench/PortfolioEditor';
 import { MonitorConfigPanel } from '../components/workbench/MonitorConfigPanel';
+import { MacroCalendarPanel } from '../components/workbench/MacroCalendarPanel';
 import { ReportView } from '../components/report/ReportView';
 import { WorkbenchQualityDrawer } from '../components/workbench/WorkbenchQualityDrawer';
 import { usePortfolioSummary } from '../hooks/usePortfolioSummary';
@@ -199,6 +200,8 @@ export function Workbench({
             onChanged={() => void portfolioSummary.refresh()}
           />
           <MonitorConfigPanel sessionId={sessionId} />
+          {/* 宏观日历：未来 14 天财报/分红/宏观事件时间线 */}
+          <MacroCalendarPanel sessionId={sessionId} />
           {/* 调仓入口：发现卡片「调仓建议」联动滚动目标 + 短暂高亮 */}
           <div
             id="rebalance-card"

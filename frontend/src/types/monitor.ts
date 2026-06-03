@@ -143,3 +143,46 @@ export interface PatchMonitorTargetParams {
   config?: Record<string, number>;
   enabled?: boolean;
 }
+
+/** 宏观日历事件类型 */
+export type MacroEventKind = 'macro' | 'earnings' | 'dividend';
+
+/** 宏观日历事件（GET /api/monitor/macro-calendar） */
+export interface MacroCalendarEvent {
+  /** 事件日期，ISO 日期字符串 YYYY-MM-DD */
+  date: string;
+  /** 事件标题，如 "FOMC 利率决议" */
+  title: string;
+  /** 距今天数（>=0） */
+  days_until: number;
+  /** 事件类型：宏观 / 财报 / 分红 */
+  kind: MacroEventKind;
+  /** 关联标的；宏观事件可为 null */
+  ticker: string | null;
+  /** 数据来源标签 */
+  source?: string;
+}
+
+/** GET /api/monitor/macro-calendar 响应 */
+export interface MacroCalendarResponse {
+  success: boolean;
+  events: MacroCalendarEvent[];
+  /** 数据生成时刻，ISO 时间字符串 */
+  as_of?: string;
+}
+
+/** GET /api/monitor/settings 响应 —— 通知设置 */
+export interface MonitorSettingsResponse {
+  success: boolean;
+  /** 通知邮箱；未设置为 null */
+  notify_email: string | null;
+  /** 是否启用邮件通知 */
+  notify_enabled: boolean;
+  /** 服务器是否已配置 SMTP（未配置时不可启用邮件通知） */
+  smtp_configured: boolean;
+}
+
+/** PUT /api/monitor/settings 响应 */
+export interface UpdateMonitorSettingsResponse {
+  success: boolean;
+}

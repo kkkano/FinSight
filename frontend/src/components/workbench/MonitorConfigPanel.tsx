@@ -6,10 +6,13 @@
  * - 持仓自动监控说明文案
  */
 import { useState, type KeyboardEvent } from 'react';
-import { Plus, Radio, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Radio, Trash2, X } from 'lucide-react';
 
 import { useMonitorTargets } from '../../hooks/useMonitorTargets';
+import { useToast } from '../ui';
 import type { MonitorTarget, MonitorTargetType } from '../../types/monitor';
+import { ThresholdEditForm } from './ThresholdEditForm';
+import { NotificationSettings } from './NotificationSettings';
 
 interface MonitorConfigPanelProps {
   sessionId: string | null | undefined;
@@ -36,11 +39,31 @@ function describeThreshold(config: Record<string, number>): string {
 export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
   const { targets, loading, error, createTarget, patchTarget, deleteTarget } =
     useMonitorTargets(sessionId);
+  const { toast } = useToast();
 
   const [adding, setAdding] = useState(false);
   const [ticker, setTicker] = useState('');
   const [threshold, setThreshold] = useState(String(DEFAULT_PRICE_MOVE_PCT));
   const [submitting, setSubmitting] = useState(false);
+  /** 当前展开内联编辑阈值的 target id */
+  const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+  const [savingThreshold, setSavingThreshold] = useState(false);
+
+  /** 保存阈值：合并入现有 config 后 PATCH，成功收起表单，失败 toast */
+  const handleSaveThreshold = async (
+    target: MonitorTarget,
+    config: Record<string, number>,
+  ) => {
+    setSavingThreshold(true);
+    const ok = await patchTarget(target.id, { config: { ...target.config, ...config } });
+    setSavingThreshold(false);
+    if (ok) {
+      setEditingTargetId(null);
+      toast({ type: 'success', title: '监控阈值已更新' });
+    } else {
+      toast({ type: 'error', title: '更新阈值失败', message: '请检查数值是否在允许范围内' });
+    }
+  };
 
   const resetForm = () => {
     setTicker('');
@@ -162,55 +185,76 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
           </div>
         ) : (
           targets.map((target: MonitorTarget) => (
-            <div
-              key={target.id}
-              className="group flex items-center justify-between gap-2 px-4 py-2.5"
-              data-testid={`monitor-target-${target.id}`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-fin-text truncate">
-                    {target.ticker || 'PORTFOLIO'}
-                  </span>
-                  <span className="shrink-0 px-1.5 py-0.5 rounded text-2xs bg-fin-border/30 text-fin-muted">
-                    {TYPE_LABEL[target.type]}
-                  </span>
+            <div key={target.id} data-testid={`monitor-target-${target.id}`}>
+              <div className="group flex items-center justify-between gap-2 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-fin-text truncate">
+                      {target.ticker || 'PORTFOLIO'}
+                    </span>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-2xs bg-fin-border/30 text-fin-muted">
+                      {TYPE_LABEL[target.type]}
+                    </span>
+                  </div>
+                  <div className="text-2xs text-fin-muted mt-0.5">{describeThreshold(target.config)}</div>
                 </div>
-                <div className="text-2xs text-fin-muted mt-0.5">{describeThreshold(target.config)}</div>
-              </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                {/* 开关 */}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={target.enabled}
-                  aria-label={`${target.ticker || 'PORTFOLIO'} 监控开关`}
-                  onClick={() => void patchTarget(target.id, { enabled: !target.enabled })}
-                  data-testid={`monitor-toggle-${target.id}`}
-                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                    target.enabled ? 'bg-fin-primary' : 'bg-fin-border'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                      target.enabled ? 'translate-x-3.5' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                {/* 删除（持仓 / 自选自动纳入的不可删，仅 custom 可删） */}
-                {target.type === 'custom' && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* 编辑阈值 */}
                   <button
                     type="button"
-                    onClick={() => void deleteTarget(target.id)}
-                    aria-label={`删除 ${target.ticker || 'PORTFOLIO'} 监控`}
-                    title="删除"
-                    className="p-1 rounded text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-all"
+                    onClick={() =>
+                      setEditingTargetId((prev) => (prev === target.id ? null : target.id))
+                    }
+                    aria-label={`编辑 ${target.ticker || 'PORTFOLIO'} 阈值`}
+                    title="编辑阈值"
+                    data-testid={`monitor-edit-${target.id}`}
+                    className="p-1 rounded text-fin-muted hover:text-fin-primary transition-colors"
                   >
-                    <Trash2 size={12} />
+                    <Pencil size={12} />
                   </button>
-                )}
+                  {/* 开关 */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={target.enabled}
+                    aria-label={`${target.ticker || 'PORTFOLIO'} 监控开关`}
+                    onClick={() => void patchTarget(target.id, { enabled: !target.enabled })}
+                    data-testid={`monitor-toggle-${target.id}`}
+                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                      target.enabled ? 'bg-fin-primary' : 'bg-fin-border'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                        target.enabled ? 'translate-x-3.5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                  {/* 删除（持仓 / 自选自动纳入的不可删，仅 custom 可删） */}
+                  {target.type === 'custom' && (
+                    <button
+                      type="button"
+                      onClick={() => void deleteTarget(target.id)}
+                      aria-label={`删除 ${target.ticker || 'PORTFOLIO'} 监控`}
+                      title="删除"
+                      className="p-1 rounded text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* 内联阈值编辑表单 */}
+              {editingTargetId === target.id && (
+                <ThresholdEditForm
+                  target={target}
+                  saving={savingThreshold}
+                  onSave={(config) => void handleSaveThreshold(target, config)}
+                  onCancel={() => setEditingTargetId(null)}
+                />
+              )}
             </div>
           ))
         )}
@@ -220,6 +264,9 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
       <div className="px-4 py-2.5 border-t border-fin-border text-2xs text-fin-muted leading-relaxed">
         持仓标的自动纳入监控，无需手动添加。
       </div>
+
+      {/* 邮件通知设置分区 */}
+      <NotificationSettings sessionId={sessionId} />
     </div>
   );
 }

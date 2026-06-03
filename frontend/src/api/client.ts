@@ -11,6 +11,9 @@ import type {
   MonitorTargetResponse,
   CreateMonitorTargetParams,
   PatchMonitorTargetParams,
+  MacroCalendarResponse,
+  MonitorSettingsResponse,
+  UpdateMonitorSettingsResponse,
 } from '../types/monitor';
 import { API_BASE_URL, buildApiUrl } from '../config/runtime';
 import { getRagInspectorDevAccessToken } from '../auth/devAuth';
@@ -1623,6 +1626,39 @@ export const apiClient = {
       `/api/monitor/targets/${encodeURIComponent(targetId)}`,
       { params: { session_id: sessionId } },
     );
+    return response.data;
+  },
+
+  /** 获取宏观日历（财报/分红/宏观事件）—— GET /api/monitor/macro-calendar */
+  async getMonitorMacroCalendar(
+    sessionId: string,
+    daysAhead = 14,
+  ): Promise<MacroCalendarResponse> {
+    const response = await api.get<MacroCalendarResponse>('/api/monitor/macro-calendar', {
+      params: { session_id: sessionId, days_ahead: daysAhead },
+    });
+    return response.data;
+  },
+
+  /** 获取通知设置（邮箱 / 开关 / SMTP 是否就绪）—— GET /api/monitor/settings */
+  async getMonitorSettings(sessionId: string): Promise<MonitorSettingsResponse> {
+    const response = await api.get<MonitorSettingsResponse>('/api/monitor/settings', {
+      params: { session_id: sessionId },
+    });
+    return response.data;
+  },
+
+  /** 更新通知设置 —— PUT /api/monitor/settings（SMTP 未配置时启用会返回 422） */
+  async updateMonitorSettings(
+    sessionId: string,
+    notifyEmail: string | null,
+    notifyEnabled: boolean,
+  ): Promise<UpdateMonitorSettingsResponse> {
+    const response = await api.put<UpdateMonitorSettingsResponse>('/api/monitor/settings', {
+      session_id: sessionId,
+      notify_email: notifyEmail,
+      notify_enabled: notifyEnabled,
+    });
     return response.data;
   },
 
