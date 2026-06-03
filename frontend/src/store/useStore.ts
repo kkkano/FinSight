@@ -129,9 +129,11 @@ const getInitialTraceRawShowRawJson = (): boolean => {
   return raw === 'true';
 };
 const getInitialTraceViewMode = (): TraceViewMode => {
-  if (typeof window === 'undefined') return 'user';
+  // P2-2: 执行追踪（专家模式）默认可见——这是 FinSight 的护城河
+  // （用户关心"AI 怎么得出结论"），不再藏在循环切换的彩蛋里
+  if (typeof window === 'undefined') return 'expert';
   const raw = window.localStorage.getItem('finsight-trace-view-mode');
-  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'user';
+  return raw === 'user' || raw === 'expert' || raw === 'dev' ? (raw as TraceViewMode) : 'expert';
 };
 
 const getInitialPortfolioPositions = (): PortfolioPositions => {

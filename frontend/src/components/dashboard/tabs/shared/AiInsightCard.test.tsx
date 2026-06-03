@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { InsightCard } from '../../../../types/dashboard';
-import { AiInsightCard } from './AiInsightCard';
+import { AiInsightCard, confidenceColorClass, formatAsOf } from './AiInsightCard';
 
 const baseInsight: InsightCard = {
   agent_name: 'technical_digest',
@@ -43,5 +43,28 @@ describe('AiInsightCard honesty labels', () => {
     );
 
     expect(html).toContain('深挖');
+  });
+});
+
+describe('AiInsightCard confidence & as_of visibility (P2-4)', () => {
+  it('在 Footer 直接展示置信度百分比与数据时点', () => {
+    const html = renderToStaticMarkup(
+      <AiInsightCard tab="technical" insight={baseInsight} />,
+    );
+
+    expect(html).toContain('置信度 80%');
+    expect(html).toContain('数据时点');
+  });
+
+  it('置信度颜色编码：高绿 / 中黄 / 低红', () => {
+    expect(confidenceColorClass(0.9)).toBe('text-fin-success');
+    expect(confidenceColorClass(0.6)).toBe('text-fin-warning');
+    expect(confidenceColorClass(0.3)).toBe('text-fin-danger');
+  });
+
+  it('formatAsOf 输出短格式时间，无效输入返回空字符串', () => {
+    expect(formatAsOf('2026-05-31T08:15:00+00:00')).toMatch(/^\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(formatAsOf('not-a-date')).toBe('');
+    expect(formatAsOf('')).toBe('');
   });
 });
