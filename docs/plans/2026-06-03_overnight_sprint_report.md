@@ -214,6 +214,23 @@ ad752c6 refactor: remove SupervisorAgent dead code and legacy archive (~8,200 li
 |-----|------|------|
 | 浏览器保存持仓报 422 | 前端把 session_id 放 body，后端 PUT 端点期望 query 参数（浮浮酱给前端 implementer 的契约写错） | client.ts updatePortfolioPosition 改为 query 传参，浏览器复测通过 |
 
+### Agent 联动补全（2026-06-03 上午，主人指令"接上"）
+
+| 联动 | 数据源 | 实测结果 |
+|------|--------|---------|
+| 舆情突变 → **NewsAgent** | Alpha Vantage（新增结构化工具+1h缓存） | ✅ **真实触发**："NVDA 舆情强正面 +0.36" → NewsAgent 自动产出完整舆情简报（偏多+0.37·高热·5条催化·88%正面占比） |
+| 财报临近 → **DeepSearchAgent** | yfinance earnings calendar | ✅ 代码+测试验证（实测需等财报季，当前无 3 天内财报） |
+| 宏观事件 → **MacroAgent** | 宏观日历搜索 | ✅ 代码+测试验证（实测需等 CPI/FOMC 临近窗口） |
+| 调仓建议按钮闭环 | —— | ✅ 浏览器验证：按钮启用+点击滚动到调仓卡片 |
+| 晨报融入发现流 | —— | ✅ 浏览器验证：折叠为发现流顶部摘要 |
+
+**联动后格局**：7 个 agent 中 5 个有专属盯盘规则（Technical/Risk/News/DeepSearch/Macro），
+Price/Fundamental 在报告模式和 L3 全面体检中调用。
+
+**测试发现并修复的第 2 个问题（commit 0cc7416）**：Alpha Vantage 免费配额（25次/天+1次/秒）
+扛不住 15 分钟扫描频率 → 加 1 小时舆情缓存 + 1.2 秒调用间隔；
+限流时诚实跳过不报警（设计如此），配额日均用量从 96×N 降到 ≤24×N。
+
 ### 测试中观察到的已知降级行为（非 bug）
 
 - 本地无 FlagEmbedding 模块 → RAG 自动降级 hash embedding（日志正确记录 fallback_reason，P1-10 行为符合预期）
