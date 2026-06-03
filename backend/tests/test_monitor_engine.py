@@ -17,6 +17,25 @@ import pytest
 from backend.services import monitor_engine
 from backend.services.alert_scheduler import PriceSnapshot
 from backend.services.monitor_store import MonitorStore
+from backend.services.session_price import SessionPriceSnapshot
+
+
+def _session_snap_from_regular(ticker: str, session: str):
+    """把 monitor_engine.fetch_price_snapshot 的 mock 结果适配成时段感知快照。
+
+    测试只需 mock fetch_price_snapshot（常规价），价格规则用的
+    fetch_session_aware_price_snapshot 会经此委托复用同一份 mock 数据。
+    """
+    snap = monitor_engine.fetch_price_snapshot(ticker)
+    if snap is None:
+        return None
+    return SessionPriceSnapshot(
+        ticker=ticker,
+        price=snap.price,
+        change_percent=snap.change_percent,
+        market_session=session,
+        price_basis="regular" if session == "regular" else "regular_fallback",
+    )
 
 
 @pytest.fixture()
@@ -28,13 +47,20 @@ def patched_env(tmp_path, monkeypatch):
     store = MonitorStore(db_path=str(tmp_path / "monitor_engine_test.db"))
     monkeypatch.setattr(monitor_engine, "get_monitor_store", lambda: store)
 
+    # 默认时段：盘中（避免落到 closed 跳过价格规则导致现有用例失真）
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "regular")
+
     # 默认：无持仓
     monkeypatch.setattr(monitor_engine, "get_positions", lambda sid: [])
-    # 默认：价格无异动
+    # 默认：价格无异动（常规价）
     monkeypatch.setattr(
         monitor_engine,
         "fetch_price_snapshot",
         lambda ticker: PriceSnapshot(ticker=ticker, price=100.0, change_percent=0.5),
+    )
+    # 价格异动规则用时段感知价格：委托复用上面的 fetch_price_snapshot mock
+    monkeypatch.setattr(
+        monitor_engine, "fetch_session_aware_price_snapshot", _session_snap_from_regular
     )
     # 默认：舆情/日历数据源返回「无数据」，避免现有测试触发真实外部 API
     monkeypatch.setattr(
@@ -406,3 +432,142 @@ def test_macro_event_placeholder_date_none_filtered(patched_env, monkeypatch):
         _macro_calendar([{"date": None, "title": "Monitor upcoming CPI release window", "source": "macro_watchlist"}]),
     )
     assert _trigger_type(_run("sess-a"), "macro_event") == []
+
+
+# ── 交易时段感知调度 ──────────────────────────────────────────
+
+
+def test_closed_session_skips_price_rule(patched_env, monkeypatch):
+    """闭市时段：价格异动规则不执行（价格函数不应被调用），价格 finding 为空。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "TSLA", "shares": 10, "avg_cost": 200.0}]
+    )
+
+    def boom(ticker, session):
+        raise AssertionError("price fetch should not be called when market is closed")
+
+    monkeypatch.setattr(monitor_engine, "fetch_session_aware_price_snapshot", boom)
+
+    # 直接传 closed 时段
+    findings = asyncio.run(monitor_engine.run_l1_scan("sess-a", market_session="closed"))
+    assert _price_moves(findings) == []
+
+
+def test_pre_market_price_move_title_and_detail(patched_env, monkeypatch):
+    """盘前价格异动：title 含「盘前」，trigger_detail 含 market_session + price_basis。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "NVDA", "shares": 10, "avg_cost": 100.0}]
+    )
+
+    def pre_snap(ticker, session):
+        return SessionPriceSnapshot(
+            ticker=ticker, price=120.0, change_percent=8.0,
+            market_session="pre_market", price_basis="pre_market",
+        )
+
+    monkeypatch.setattr(monitor_engine, "fetch_session_aware_price_snapshot", pre_snap)
+
+    findings = asyncio.run(monitor_engine.run_l1_scan("sess-a", market_session="pre_market"))
+    moves = _price_moves(findings)
+    assert len(moves) == 1
+    f = moves[0]
+    assert "盘前" in f["title"]
+    assert f["trigger_detail"]["market_session"] == "pre_market"
+    assert f["trigger_detail"]["price_basis"] == "pre_market"
+
+
+def test_after_hours_price_move_title(patched_env, monkeypatch):
+    """盘后价格异动：title 含「盘后」。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 10, "avg_cost": 100.0}]
+    )
+
+    def post_snap(ticker, session):
+        return SessionPriceSnapshot(
+            ticker=ticker, price=80.0, change_percent=-9.0,
+            market_session="after_hours", price_basis="post_market",
+        )
+
+    monkeypatch.setattr(monitor_engine, "fetch_session_aware_price_snapshot", post_snap)
+
+    findings = asyncio.run(monitor_engine.run_l1_scan("sess-a", market_session="after_hours"))
+    moves = _price_moves(findings)
+    assert len(moves) == 1
+    assert "盘后" in moves[0]["title"]
+
+
+def test_regular_price_move_title_uses_single_day(patched_env, monkeypatch):
+    """盘中价格异动：title 仍用「单日」（向后兼容文案）。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "TSLA", "shares": 10, "avg_cost": 200.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "fetch_price_snapshot",
+        lambda ticker: PriceSnapshot(ticker=ticker, price=180.0, change_percent=-6.0),
+    )
+
+    findings = asyncio.run(monitor_engine.run_l1_scan("sess-a", market_session="regular"))
+    moves = _price_moves(findings)
+    assert len(moves) == 1
+    assert "单日" in moves[0]["title"]
+    assert moves[0]["trigger_detail"]["market_session"] == "regular"
+
+
+# ── dispatcher 节流 ───────────────────────────────────────────
+
+
+def test_dispatch_throttles_within_interval(monkeypatch):
+    """距上次扫描不足时段间隔 → 本心跳跳过扫描。"""
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "regular")
+    monkeypatch.setattr(monitor_engine, "get_scan_interval_minutes", lambda s: 15.0)
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        monitor_engine, "run_monitor_scan_cycle", lambda market_session=None: called.__setitem__("n", called["n"] + 1)
+    )
+
+    # 模拟刚刚扫过（monotonic now）
+    import time as _t
+    monkeypatch.setattr(monitor_engine, "_last_scan_at", _t.monotonic())
+
+    monitor_engine.run_monitor_dispatch_cycle()
+    assert called["n"] == 0  # 间隔未到，跳过
+
+
+def test_dispatch_scans_when_interval_elapsed(monkeypatch):
+    """距上次扫描超过时段间隔 → 执行扫描并更新 _last_scan_at。"""
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "pre_market")
+    monkeypatch.setattr(monitor_engine, "get_scan_interval_minutes", lambda s: 10.0)
+
+    captured = {"session": None, "n": 0}
+
+    def fake_cycle(market_session=None):
+        captured["session"] = market_session
+        captured["n"] += 1
+
+    monkeypatch.setattr(monitor_engine, "run_monitor_scan_cycle", fake_cycle)
+
+    # 上次扫描在 20 分钟前（超过 10 分钟间隔）
+    import time as _t
+    monkeypatch.setattr(monitor_engine, "_last_scan_at", _t.monotonic() - 20 * 60)
+
+    monitor_engine.run_monitor_dispatch_cycle()
+    assert captured["n"] == 1
+    assert captured["session"] == "pre_market"  # 当前时段透传给扫描
+    assert monitor_engine._last_scan_at is not None
+
+
+def test_dispatch_first_run_scans(monkeypatch):
+    """首次运行（_last_scan_at 为 None）→ 立即扫描。"""
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "regular")
+    monkeypatch.setattr(monitor_engine, "get_scan_interval_minutes", lambda s: 15.0)
+    monkeypatch.setattr(monitor_engine, "_last_scan_at", None)
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        monitor_engine, "run_monitor_scan_cycle", lambda market_session=None: called.__setitem__("n", called["n"] + 1)
+    )
+
+    monitor_engine.run_monitor_dispatch_cycle()
+    assert called["n"] == 1

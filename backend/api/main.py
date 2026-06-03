@@ -927,18 +927,20 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[Scheduler] HEALTH_PROBE_ENABLED is false; skip start.")
 
-    # Workbench Phase 1: L1 monitor scan scheduler（盯盘规则引擎，零 LLM 成本）
+    # Workbench: 交易时段感知 L1 盯盘调度（零 LLM 成本）
+    # 调度心跳固定 5 分钟，实际扫描频率由 dispatcher 按时段间隔节流
+    # （盘前 10 / 盘中 15 / 盘后 30 / 闭市 60 分钟）。
     monitor_enabled = _env_bool("MONITOR_SCAN_ENABLED", "true")
     if monitor_enabled:
-        from backend.services.monitor_engine import run_monitor_scan_cycle
+        from backend.services.monitor_engine import run_monitor_dispatch_cycle
 
-        monitor_interval = float(os.getenv("MONITOR_SCAN_INTERVAL_MINUTES", "15"))
+        heartbeat_interval = float(os.getenv("MONITOR_DISPATCH_HEARTBEAT_MINUTES", "5"))
         sched = start_interval_scheduler(
-            run_monitor_scan_cycle,
-            interval_minutes=monitor_interval,
+            run_monitor_dispatch_cycle,
+            interval_minutes=heartbeat_interval,
             enabled=True,
-            job_id="monitor_l1_scan",
-            job_label="workbench L1 monitor scan",
+            job_id="monitor_l1_dispatch",
+            job_label="workbench L1 session-aware monitor dispatch",
         )
         if sched:
             _schedulers.append(sched)

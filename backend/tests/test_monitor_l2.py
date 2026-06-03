@@ -313,6 +313,18 @@ def test_l1_scan_chains_l2_and_persists(tmp_path, monkeypatch):
         "fetch_price_snapshot",
         lambda ticker: PriceSnapshot(ticker=ticker, price=180.0, change_percent=-6.0),
     )
+    # 交易时段感知：固定盘中时段 + 价格规则委托复用上面的常规价 mock
+    from backend.services.session_price import SessionPriceSnapshot
+
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "regular")
+    monkeypatch.setattr(
+        monitor_engine,
+        "fetch_session_aware_price_snapshot",
+        lambda ticker, session: SessionPriceSnapshot(
+            ticker=ticker, price=180.0, change_percent=-6.0,
+            market_session=session, price_basis="regular",
+        ),
+    )
 
     # 强制 L2 启用 + 充足预算
     monkeypatch.setenv("MONITOR_L2_ENABLED", "true")
@@ -357,6 +369,18 @@ def test_l1_scan_skips_l2_when_disabled(tmp_path, monkeypatch):
         monitor_engine,
         "fetch_price_snapshot",
         lambda ticker: PriceSnapshot(ticker=ticker, price=180.0, change_percent=-6.0),
+    )
+    # 交易时段感知：固定盘中时段 + 价格规则委托复用上面的常规价 mock
+    from backend.services.session_price import SessionPriceSnapshot
+
+    monkeypatch.setattr(monitor_engine, "get_market_session", lambda *a, **k: "regular")
+    monkeypatch.setattr(
+        monitor_engine,
+        "fetch_session_aware_price_snapshot",
+        lambda ticker, session: SessionPriceSnapshot(
+            ticker=ticker, price=180.0, change_percent=-6.0,
+            market_session=session, price_basis="regular",
+        ),
     )
     monkeypatch.setenv("MONITOR_L2_ENABLED", "false")
 

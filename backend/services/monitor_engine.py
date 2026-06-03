@@ -31,12 +31,21 @@ import uuid
 from datetime import datetime, timezone
 
 from backend.services.alert_scheduler import fetch_price_snapshot
+from backend.services.market_hours import (
+    get_market_session,
+    get_scan_interval_minutes,
+    price_rules_active,
+)
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_store import get_monitor_store
 from backend.services.portfolio_store import get_positions, list_session_ids
+from backend.services.session_price import fetch_session_aware_price_snapshot
 from backend.tools import get_event_calendar, get_news_sentiment_score
 
 logger = logging.getLogger(__name__)
+
+# Dispatcher 内存态：上次实际扫描的单调时间戳（重启重置无妨，下个心跳即恢复节奏）
+_last_scan_at: float | None = None
 
 # 默认阈值（可被 MonitorTarget.config 覆盖）
 DEFAULT_PRICE_MOVE_PCT = 5.0
@@ -118,13 +127,26 @@ def _portfolio_concentration_config(targets: list[dict]) -> dict:
     return {}
 
 
+# 各时段价格异动文案前缀（盘前/盘后区分于盘中"单日"，便于用户判断）
+_SESSION_MOVE_PREFIX = {
+    "pre_market": "盘前",
+    "after_hours": "盘后",
+    "regular": "单日",
+}
+
+
 async def _scan_price_move(
     session_id: str,
     store,
     positions: list[dict],
     config_map: dict[str, dict],
+    market_session: str = "regular",
 ) -> list[dict]:
-    """价格异动规则：覆盖持仓 + watchlist target 的全部 ticker。"""
+    """价格异动规则：覆盖持仓 + watchlist target 的全部 ticker。
+
+    market_session 决定取哪个时段的价格（盘前价/盘后价/常规价）及文案前缀。
+    闭市时段由调用方跳过本规则（price_rules_active 为 False）。
+    """
     findings: list[dict] = []
 
     tickers: set[str] = {
@@ -132,11 +154,13 @@ async def _scan_price_move(
     }
     tickers |= set(config_map.keys())
 
+    prefix = _SESSION_MOVE_PREFIX.get(market_session, "单日")
+
     for ticker in sorted(tickers):
         try:
             threshold = float(config_map.get(ticker, {}).get("price_move_pct") or DEFAULT_PRICE_MOVE_PCT)
 
-            snap = fetch_price_snapshot(ticker)
+            snap = fetch_session_aware_price_snapshot(ticker, market_session)
             if snap is None or snap.change_percent is None:
                 continue
             change_pct = float(snap.change_percent)
@@ -155,9 +179,11 @@ async def _scan_price_move(
                     "change_pct": round(change_pct, 4),
                     "threshold": threshold,
                     "price": snap.price,
+                    "market_session": market_session,
+                    "price_basis": snap.price_basis,
                 },
-                title=f"{ticker} 单日{direction} {abs(change_pct):.1f}%",
-                summary=f"{ticker} 今日{direction} {abs(change_pct):.1f}%，已超过 {threshold:.0f}% 盯盘阈值。",
+                title=f"{ticker} {prefix}{direction} {abs(change_pct):.1f}%",
+                summary=f"{ticker} {prefix}{direction} {abs(change_pct):.1f}%，已超过 {threshold:.0f}% 盯盘阈值。",
                 actions=[
                     {"type": "full_report", "label": "全面体检", "ticker": ticker},
                     {"type": "chart", "label": "看图表", "ticker": ticker},
@@ -468,11 +494,23 @@ async def _run_l2_for_findings(store, findings: list[dict]) -> None:
             finding["agent_analysis"] = analysis  # 返回值里也带上
 
 
-async def run_l1_scan(session_id: str, enable_l2: bool = True) -> list[dict]:
+async def run_l1_scan(
+    session_id: str,
+    enable_l2: bool = True,
+    market_session: str | None = None,
+) -> list[dict]:
     """对单个 session 跑 L1 规则扫描，返回本次新产生的 findings。
+
+    market_session 为 None 时自动判定当前时段（向后兼容：API 手动扫描不传也能跑）。
+    - 闭市时段（price_rules_active 为 False）跳过价格异动规则，只扫舆情/财报/宏观/集中度
+    - 价格规则用对应时段的价格（盘前价/盘后价/常规价）
+    - 所有本次 finding 的 trigger_detail 统一注入 market_session（前端可据此区分时段来源）
 
     enable_l2=True 时（默认），对新 finding 串联 L2 agent 深析（受成本护栏限制）。
     """
+    if market_session is None:
+        market_session = get_market_session()
+
     store = get_monitor_store()
     positions = get_positions(session_id)
     targets = store.list_targets(session_id)
@@ -485,11 +523,19 @@ async def run_l1_scan(session_id: str, enable_l2: bool = True) -> list[dict]:
     conc_config = _portfolio_concentration_config(targets)
 
     findings: list[dict] = []
-    findings += await _scan_price_move(session_id, store, positions, config_map)
+    # 价格异动：闭市价格不动，跳过（不调价格 API，省请求且不报无意义异动）
+    if price_rules_active(market_session):
+        findings += await _scan_price_move(
+            session_id, store, positions, config_map, market_session
+        )
     findings += await _scan_concentration(session_id, store, positions, conc_config)
     findings += await _scan_sentiment_shift(session_id, store, positions, config_map)
     findings += await _scan_earnings_near(session_id, store, positions, config_map)
     findings += await _scan_macro_event(session_id, store, positions)
+
+    # 说明：market_session 只写入价格异动规则的 trigger_detail（已在 _scan_price_move
+    # 落库时带上，库与内存一致）。非价格规则（财报/宏观/集中度/舆情）与时段语义无关，
+    # 不强行注入，避免库内存不一致 + 冗余字段（DRY / 诚实一致性）。
 
     # Phase 2: L2 agent 自动深析（有成本护栏）
     if enable_l2 and findings:
@@ -498,8 +544,15 @@ async def run_l1_scan(session_id: str, enable_l2: bool = True) -> list[dict]:
     return findings
 
 
-def run_monitor_scan_cycle() -> None:
-    """调度入口（同步包装）：扫描所有有持仓的 session。"""
+def run_monitor_scan_cycle(market_session: str | None = None) -> None:
+    """调度入口（同步包装）：扫描所有有持仓的 session（时段感知）。
+
+    market_session 为 None 时自动判定当前时段并透传给每个 session 的扫描，
+    使闭市跳过价格规则、盘前/盘后用对应时段价格。保留本函数供手动调用 / 向后兼容。
+    """
+    if market_session is None:
+        market_session = get_market_session()
+
     try:
         session_ids = list_session_ids()
     except Exception as exc:  # noqa: BLE001
@@ -514,7 +567,7 @@ def run_monitor_scan_cycle() -> None:
         total = 0
         for sid in session_ids:
             try:
-                produced = await run_l1_scan(sid)
+                produced = await run_l1_scan(sid, market_session=market_session)
                 total += len(produced)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[MonitorEngine] L1 scan failed for session %s: %s", sid, exc)
@@ -522,9 +575,54 @@ def run_monitor_scan_cycle() -> None:
 
     try:
         produced = asyncio.run(_scan_all())
-        logger.info("[MonitorEngine] L1 scan cycle done: sessions=%s findings=%s", len(session_ids), produced)
+        logger.info(
+            "[MonitorEngine] L1 scan cycle done: session_state=%s sessions=%s findings=%s",
+            market_session,
+            len(session_ids),
+            produced,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("[MonitorEngine] L1 scan cycle error: %s", exc)
 
 
-__all__ = ["run_l1_scan", "run_monitor_scan_cycle"]
+def run_monitor_dispatch_cycle() -> None:
+    """调度心跳入口（每 ~5 分钟被 APScheduler 调一次）。
+
+    分时段调度的核心：心跳频率固定，实际扫描频率按时段间隔（pre_market 10 /
+    regular 15 / after_hours 30 / closed 60 分钟）由本函数节流：
+      1. 判定当前时段 + 该时段扫描间隔
+      2. 距上次实际扫描不足 interval → 本心跳跳过（节流，避免高频扫）
+      3. 否则执行 run_monitor_scan_cycle(session) 并更新 _last_scan_at
+    """
+    global _last_scan_at
+
+    session = get_market_session()
+    interval_minutes = get_scan_interval_minutes(session)
+
+    import time as _time
+
+    now = _time.monotonic()
+    if _last_scan_at is not None and (now - _last_scan_at) < interval_minutes * 60.0:
+        elapsed_min = (now - _last_scan_at) / 60.0
+        logger.info(
+            "[MonitorEngine] dispatch: session=%s interval=%smin elapsed=%.1fmin -> skip (throttled)",
+            session,
+            interval_minutes,
+            elapsed_min,
+        )
+        return
+
+    logger.info(
+        "[MonitorEngine] dispatch: session=%s interval=%smin -> scanning",
+        session,
+        interval_minutes,
+    )
+    run_monitor_scan_cycle(market_session=session)
+    _last_scan_at = _time.monotonic()
+
+
+__all__ = [
+    "run_l1_scan",
+    "run_monitor_scan_cycle",
+    "run_monitor_dispatch_cycle",
+]
