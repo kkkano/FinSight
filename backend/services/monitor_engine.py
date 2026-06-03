@@ -303,6 +303,10 @@ async def _scan_sentiment_shift(
             findings.append(finding)
         except Exception as exc:  # noqa: BLE001 - 单 ticker 失败不影响其他
             logger.warning("[MonitorEngine] sentiment_shift scan failed for %s: %s", ticker, exc)
+        finally:
+            # Alpha Vantage 免费版限制 1 请求/秒：连续 ticker 之间留间隔，
+            # 避免第二个 ticker 必然撞限流（缓存命中时多等 1.2s 对后台扫描无影响）
+            await asyncio.sleep(1.2)
 
     return findings
 

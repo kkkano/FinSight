@@ -1562,6 +1562,18 @@ def get_news_sentiment(ticker: str, limit: int = 5) -> str:
         return f"News Sentiment: fetch failed ({str(e)})"
 
 
+# 舆情分数进程内缓存：Alpha Vantage 免费版 25 次/天 + 1 次/秒，
+# 监控引擎每 15 分钟扫描会迅速烧光配额。成功结果缓存 1 小时（可用环境变量覆盖）。
+_SENTIMENT_SCORE_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+
+
+def _sentiment_cache_ttl_seconds() -> float:
+    try:
+        return float(os.getenv("NEWS_SENTIMENT_CACHE_TTL_SECONDS", "3600"))
+    except (TypeError, ValueError):
+        return 3600.0
+
+
 def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
     """结构化版本的新闻舆情分数（供监控引擎等程序化调用）。
 
@@ -1574,6 +1586,7 @@ def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
     - score 为 N 篇文章中目标 ticker_sentiment_score 的平均值（保留 4 位小数）
     - 拿不到数据/限流/无情绪分时 score=None + error 说明原因（诚实原则：绝不编造分数）
     - label 依平均分粗分档：>=0.15 Bullish / <=-0.15 Bearish / 其余 Neutral
+    - 成功结果进程内缓存 1 小时（NEWS_SENTIMENT_CACHE_TTL_SECONDS），节省 AV 免费配额
     """
     symbol = str(ticker or "").strip().upper()
     result: Dict[str, Any] = {
@@ -1586,6 +1599,15 @@ def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
     if not symbol:
         result["error"] = "ticker is required."
         return result
+
+    # 缓存命中（只缓存成功结果，失败/限流不缓存以便尽快重试）
+    ttl = _sentiment_cache_ttl_seconds()
+    cached = _SENTIMENT_SCORE_CACHE.get(symbol)
+    if cached and ttl > 0:
+        cached_at, cached_result = cached
+        if time.time() - cached_at < ttl:
+            return dict(cached_result)
+        _SENTIMENT_SCORE_CACHE.pop(symbol, None)
 
     fetched = _fetch_av_sentiment_feed(symbol, limit)
     if fetched.get("error") or fetched.get("feed") is None:
@@ -1619,6 +1641,9 @@ def get_news_sentiment_score(ticker: str, limit: int = 10) -> Dict[str, Any]:
     result["score"] = round(avg, 4)
     result["label"] = label
     result["article_count"] = len(scores)
+    # 写入缓存（仅成功结果）
+    if _sentiment_cache_ttl_seconds() > 0:
+        _SENTIMENT_SCORE_CACHE[symbol] = (time.time(), dict(result))
     return result
 
 
