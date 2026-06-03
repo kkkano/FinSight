@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from typing import Any
 
@@ -71,8 +72,16 @@ _FALLBACK_DIMENSION_TO_DATA_KIND = {
     "sentiment": "financial",
 }
 
-# LLM 决策超时（秒）。超时即回退关键词匹配。
-_LLM_DECIDE_TIMEOUT_SEC = 8.0
+def _llm_decide_timeout_sec() -> float:
+    """LLM 决策超时（秒）。超时即回退关键词匹配。
+
+    默认 45 秒：本项目的 LLM（mimo-v2.5）是推理模型，思考时间长，
+    8 秒级别的超时会导致 LLM 路径永远失败、全部走关键词回退。
+    """
+    try:
+        return float(os.getenv("CHART_INTELLIGENCE_TIMEOUT_SEC", "45"))
+    except (TypeError, ValueError):
+        return 45.0
 
 
 def _build_prompt(query: str, ticker: str | None) -> str:
@@ -126,10 +135,17 @@ def _build_prompt(query: str, ticker: str | None) -> str:
 
 
 def _extract_json(text: str) -> dict[str, Any] | None:
-    """从 LLM 文本里抽取第一个 JSON 对象。容忍 ```json 代码块包裹。"""
+    """从 LLM 文本里抽取第一个 JSON 对象。
+
+    容忍：```json 代码块包裹、推理模型的 <think>...</think> 思考前缀、前后多余文字。
+    """
     if not text:
         return None
     cleaned = text.strip()
+    # 剥离推理模型（mimo 等）的思考标签（可能未闭合——被 max_tokens 截断时只剩开头）
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<think>.*$", "", cleaned, flags=re.DOTALL)
+    cleaned = cleaned.strip()
     # 去掉 markdown 代码块围栏
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -241,7 +257,10 @@ def _keyword_fallback(query: str, ticker: str | None) -> dict[str, Any]:
     if chart_type == "tree":
         chart_type = "bar"
 
-    should_generate = bool(chart_type) and confidence >= 0.35
+    # 修复旧检测器的倒挂 bug：匹配到明确类型就应该生成
+    # （旧逻辑要求置信度 >= 0.35，导致单关键词命中 0.33 的正确类型反而不出图，
+    #   而默认回退的 line 0.5 反而出图——用户看到的全是折线图）
+    should_generate = bool(chart_type)
     if not should_generate or not chart_type:
         return {
             "should_generate": False,
@@ -279,9 +298,11 @@ async def _llm_decide(query: str, ticker: str | None) -> dict[str, Any] | None:
         logger.warning("[ChartIntelligence] LLM 依赖导入失败: %s", exc)
         return None
 
+    timeout_sec = _llm_decide_timeout_sec()
     try:
-        # 低温 + 限制 token，要求简洁 JSON。
-        llm = create_llm(temperature=0.1, max_tokens=256, request_timeout=int(_LLM_DECIDE_TIMEOUT_SEC) + 2)
+        # 低温；max_tokens 必须给足——mimo 是推理模型，思考过程也消耗输出 token，
+        # 256 会导致 JSON 被截断（实测教训）。
+        llm = create_llm(temperature=0.1, max_tokens=2048, request_timeout=int(timeout_sec) + 5)
     except Exception as exc:
         logger.warning("[ChartIntelligence] create_llm 失败: %s", exc)
         return None
@@ -298,10 +319,10 @@ async def _llm_decide(query: str, ticker: str | None) -> dict[str, Any] | None:
                 acquire_token=False,
                 agent_name="chart_intelligence",
             ),
-            timeout=_LLM_DECIDE_TIMEOUT_SEC,
+            timeout=timeout_sec,
         )
     except asyncio.TimeoutError:
-        logger.info("[ChartIntelligence] LLM 决策超时 %.1fs，回退关键词匹配", _LLM_DECIDE_TIMEOUT_SEC)
+        logger.info("[ChartIntelligence] LLM 决策超时 %.1fs，回退关键词匹配", timeout_sec)
         return None
     except Exception as exc:
         logger.info("[ChartIntelligence] LLM 决策失败: %s，回退关键词匹配", exc)
