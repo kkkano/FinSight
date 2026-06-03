@@ -10,6 +10,7 @@ import { FileText, Loader2, Star, Zap } from 'lucide-react';
 import { useExecuteAgent } from '../../hooks/useExecuteAgent';
 import { useDashboardStore } from '../../store/dashboardStore';
 import type { SnapshotData, ChartPoint, ValuationData } from '../../types/dashboard';
+import { formatMarketCapForMarket, formatPriceForMarket } from '../../utils/format';
 import { useToast } from '../ui';
 import { MiniPriceChart } from './tabs/overview/MiniPriceChart';
 
@@ -27,30 +28,12 @@ interface StockHeaderProps {
 
 // --- Helpers ---
 
-/** Format a number as compact currency (e.g. $1.2T, $340.5B) */
-const formatMarketCap = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '--';
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-  return `$${value.toLocaleString()}`;
-};
-
 /** Derive the latest close price from chart data */
 const getLastClose = (charts: Record<string, ChartPoint[]>): number | null => {
   const marketChart = charts?.market_chart;
   if (!Array.isArray(marketChart) || marketChart.length === 0) return null;
   const last = marketChart[marketChart.length - 1];
   return last?.close ?? last?.value ?? null;
-};
-
-/** Format price with 2 decimal places */
-const formatPrice = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '--';
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 };
 
 // --- Component ---
@@ -145,12 +128,12 @@ export function StockHeader({
           <div className="flex items-center gap-3 shrink-0">
             {closePrice !== null && (
               <span className="text-lg font-semibold text-fin-text tabular-nums">
-                ${formatPrice(closePrice)}
+                {formatPriceForMarket(closePrice, ticker)}
               </span>
             )}
             {marketCap !== null && (
               <span className="text-xs text-fin-muted">
-                {formatMarketCap(marketCap)}
+                {formatMarketCapForMarket(marketCap, ticker)}
               </span>
             )}
             {/* Mini sparkline */}

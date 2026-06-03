@@ -6,6 +6,13 @@ import pandas as pd
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, ConflictClaim, EvidenceItem
 from backend.agents.chart_specs_extra import build_technical_chart_specs
 from backend.services.circuit_breaker import CircuitBreaker
+from backend.tools.technical import calculate_kdj
+
+
+def _is_cn_or_hk_ticker(ticker: str) -> bool:
+    """判断是否为 A股(.SS/.SZ/.BJ) 或港股(.HK) 标的——KDJ 仅对这些市场补充展示。"""
+    symbol = str(ticker or "").strip().upper()
+    return symbol.endswith((".SS", ".SZ", ".BJ", ".HK"))
 
 
 class TechnicalAgent(BaseFinancialAgent):
@@ -157,6 +164,17 @@ class TechnicalAgent(BaseFinancialAgent):
             ),
             f"趋势: {trend_cn}。",
         ]
+        # KDJ：仅 A股/港股标的补充展示（A股技术分析常用随机指标）
+        if (
+            _is_cn_or_hk_ticker(str(data.get("ticker") or ""))
+            and indicators.get("kdj_k") is not None
+            and indicators.get("kdj_d") is not None
+            and indicators.get("kdj_j") is not None
+        ):
+            parts.append(
+                f"KDJ: K {indicators['kdj_k']:.2f} / D {indicators['kdj_d']:.2f} / "
+                f"J {indicators['kdj_j']:.2f}（{indicators.get('kdj_signal') or '中性'}）。"
+            )
         if indicators.get("pct_from_ma20") is not None:
             parts.append(f"价格相对MA20偏离 {indicators['pct_from_ma20']:+.2f}%。")
         if indicators.get("support") is not None or indicators.get("resistance") is not None:
@@ -256,6 +274,22 @@ class TechnicalAgent(BaseFinancialAgent):
                     url=_yf_history_url,  # Yahoo Finance 历史数据页面，供证据池点击跳转
                     timestamp=timestamp,
                 ))
+                # KDJ：仅 A股/港股标的补充证据（A股技术分析常用）
+                if (
+                    _is_cn_or_hk_ticker(_ticker)
+                    and indicators.get("kdj_k") is not None
+                    and indicators.get("kdj_d") is not None
+                    and indicators.get("kdj_j") is not None
+                ):
+                    evidence.append(EvidenceItem(
+                        text=(
+                            f"KDJ K {indicators['kdj_k']:.2f} | D {indicators['kdj_d']:.2f} "
+                            f"| J {indicators['kdj_j']:.2f} | 信号 {indicators.get('kdj_signal') or '中性'}"
+                        ),
+                        source=source,
+                        url=_yf_history_url,
+                        timestamp=timestamp,
+                    ))
                 support_text = (
                     f"支撑 {indicators['support']:.2f}"
                     if indicators.get("support") is not None
@@ -464,6 +498,10 @@ class TechnicalAgent(BaseFinancialAgent):
 
         momentum = "bullish" if macd is not None and signal is not None and macd > signal else "bearish"
 
+        # KDJ（A股/港股技术分析常用），基于 kline_data 的 high/low/close
+        kdj = calculate_kdj(kline_data)
+        kdj_latest = kdj.get("latest") if isinstance(kdj, dict) else None
+
         return {
             "close": close,
             "ma20": ma20,
@@ -482,6 +520,10 @@ class TechnicalAgent(BaseFinancialAgent):
             "latest_volume": latest_volume,
             "avg_volume20": avg_volume20,
             "volume_ratio20": volume_ratio20,
+            "kdj_k": kdj_latest.get("k") if isinstance(kdj_latest, dict) else None,
+            "kdj_d": kdj_latest.get("d") if isinstance(kdj_latest, dict) else None,
+            "kdj_j": kdj_latest.get("j") if isinstance(kdj_latest, dict) else None,
+            "kdj_signal": kdj_latest.get("signal") if isinstance(kdj_latest, dict) else None,
             "last_time": last_time,
         }
 

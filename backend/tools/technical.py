@@ -149,6 +149,133 @@ def _calc_williams_r(
     return safe_float(wr.iloc[-1])
 
 
+def calculate_kdj(
+    kline_data: Any,
+    n: int = 9,
+    m1: int = 3,
+    m2: int = 3,
+) -> dict[str, Any]:
+    """KDJ 随机指标（A股技术分析常用）。
+
+    计算逻辑：
+    - RSV = (收盘价 - n日最低价) / (n日最高价 - n日最低价) * 100
+    - K = RSV 的 m1 日移动平均（这里用经典递推 EMA：K = (2*K_prev + RSV) / 3）
+    - D = K 的 m2 日移动平均（D = (2*D_prev + K) / 3）
+    - J = 3*K - 2*D
+
+    Args:
+        kline_data: K线数据，可为 OHLCV DataFrame，或包含 high/low/close 键的 dict 列表。
+        n: RSV 回看窗口（默认 9）。
+        m1/m2: K/D 平滑参数（默认 3）。
+
+    Returns:
+        {"k": [...], "d": [...], "j": [...],
+         "latest": {"k", "d", "j", "signal"}}
+        signal 取值：超买(J>100) / 超卖(J<0) / 金叉 / 死叉 / 中性。
+        数据不足时返回空 dict。
+    """
+    # 统一成 high / low / close 三条 pandas.Series
+    high, low, close = _extract_hlc(kline_data)
+    if high is None or low is None or close is None:
+        return {}
+    if len(close) < n:
+        return {}
+
+    lowest_low = low.rolling(window=n, min_periods=1).min()
+    highest_high = high.rolling(window=n, min_periods=1).max()
+    denom = (highest_high - lowest_low).replace(0, np.nan)
+    rsv = ((close - lowest_low) / denom) * 100.0
+    # 起始无波动区间用 50 兜底，避免 NaN 污染递推
+    rsv = rsv.fillna(50.0)
+
+    # 经典 KDJ 递推平滑（等价于 alpha=1/3 的 EMA，alpha=1/m1）
+    k_series = rsv.ewm(alpha=1.0 / m1, adjust=False).mean()
+    d_series = k_series.ewm(alpha=1.0 / m2, adjust=False).mean()
+    j_series = 3.0 * k_series - 2.0 * d_series
+
+    def _to_list(s: pd.Series) -> list[float | None]:
+        return [safe_float(v) if not pd.isna(v) else None for v in s]
+
+    k_latest = safe_float(k_series.iloc[-1])
+    d_latest = safe_float(d_series.iloc[-1])
+    j_latest = safe_float(j_series.iloc[-1])
+
+    signal = _kdj_signal(k_series, d_series, j_latest)
+
+    return {
+        "k": _to_list(k_series),
+        "d": _to_list(d_series),
+        "j": _to_list(j_series),
+        "latest": {
+            "k": k_latest,
+            "d": d_latest,
+            "j": j_latest,
+            "signal": signal,
+        },
+    }
+
+
+def _kdj_signal(k_series: pd.Series, d_series: pd.Series, j_latest: Optional[float]) -> str:
+    """根据 K/D 交叉与 J 值位置给出 KDJ 信号判断。"""
+    if j_latest is not None:
+        if j_latest > 100:
+            return "超买"
+        if j_latest < 0:
+            return "超卖"
+    # 金叉/死叉：比较最近两根 K 与 D 的相对位置
+    if len(k_series) >= 2 and len(d_series) >= 2:
+        k_now, k_prev = k_series.iloc[-1], k_series.iloc[-2]
+        d_now, d_prev = d_series.iloc[-1], d_series.iloc[-2]
+        if not (pd.isna(k_now) or pd.isna(k_prev) or pd.isna(d_now) or pd.isna(d_prev)):
+            if k_prev <= d_prev and k_now > d_now:
+                return "金叉"
+            if k_prev >= d_prev and k_now < d_now:
+                return "死叉"
+    return "中性"
+
+
+def _extract_hlc(
+    kline_data: Any,
+) -> tuple[Optional[pd.Series], Optional[pd.Series], Optional[pd.Series]]:
+    """从 DataFrame 或 dict 列表中提取 high/low/close 三条序列。"""
+    # DataFrame 路径
+    if isinstance(kline_data, pd.DataFrame):
+        if kline_data.empty:
+            return None, None, None
+        col_map = {c: c.title() for c in kline_data.columns}
+        df = kline_data.rename(columns=col_map)
+        if not {"High", "Low", "Close"}.issubset(set(df.columns)):
+            return None, None, None
+        return (
+            df["High"].astype(float),
+            df["Low"].astype(float),
+            df["Close"].astype(float),
+        )
+    # dict 列表路径（technical_agent 的 kline_data 格式）
+    if isinstance(kline_data, (list, tuple)):
+        highs: list[float] = []
+        lows: list[float] = []
+        closes: list[float] = []
+        for item in kline_data:
+            if not isinstance(item, dict):
+                continue
+            h = item.get("high")
+            l_val = item.get("low")
+            c = item.get("close")
+            if h is None or l_val is None or c is None:
+                continue
+            try:
+                highs.append(float(h))
+                lows.append(float(l_val))
+                closes.append(float(c))
+            except (TypeError, ValueError):
+                continue
+        if not closes:
+            return None, None, None
+        return pd.Series(highs), pd.Series(lows), pd.Series(closes)
+    return None, None, None
+
+
 def _calc_bollinger_bands(
     close: pd.Series,
     period: int = 20,
@@ -245,6 +372,10 @@ def compute_technical_indicators(df: pd.DataFrame) -> dict[str, Any]:
     # Stochastic
     stoch_k, stoch_d = _calc_stochastic(high, low, close)
 
+    # KDJ（A股常用随机指标）
+    kdj = calculate_kdj(df)
+    kdj_latest = kdj.get("latest") if isinstance(kdj, dict) else None
+
     # ADX
     adx = _calc_adx(high, low, close)
 
@@ -304,6 +435,11 @@ def compute_technical_indicators(df: pd.DataFrame) -> dict[str, Any]:
         # Stochastic
         "stoch_k": stoch_k,
         "stoch_d": stoch_d,
+        # KDJ（A股常用）
+        "kdj_k": kdj_latest.get("k") if isinstance(kdj_latest, dict) else None,
+        "kdj_d": kdj_latest.get("d") if isinstance(kdj_latest, dict) else None,
+        "kdj_j": kdj_latest.get("j") if isinstance(kdj_latest, dict) else None,
+        "kdj_signal": kdj_latest.get("signal") if isinstance(kdj_latest, dict) else None,
         # ADX
         "adx": adx,
         # CCI

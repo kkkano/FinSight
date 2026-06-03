@@ -7,25 +7,18 @@
  * Gracefully degrades to "--" when data is null or missing.
  */
 import type { ValuationData, SnapshotData } from '../../types/dashboard';
+import { currencySymbolForTicker, formatMarketCapForMarket } from '../../utils/format';
 
 // --- Props ---
 
 interface MetricsBarProps {
   valuation?: ValuationData | null;
   snapshot?: SnapshotData | null;
+  ticker?: string | null;
   loading?: boolean;
 }
 
 // --- Helpers ---
-
-/** Format large numbers into compact currency */
-const fmtCap = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '--';
-  if (v >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-  return `$${v.toLocaleString()}`;
-};
 
 /** Format a ratio (PE, PB, etc.) to 1 decimal */
 const fmtRatio = (v: number | null | undefined): string => {
@@ -61,19 +54,25 @@ interface MetricDef {
 function buildMetrics(
   valuation: ValuationData | null | undefined,
   snapshot: SnapshotData | null | undefined,
+  ticker: string | null | undefined,
 ): MetricDef[] {
   const v = valuation ?? {};
   const s = snapshot ?? {};
 
+  // 市场感知币种前缀：A股 ¥ / 港股 HK$ / 其余 $
+  const cur = currencySymbolForTicker(ticker);
+
   const w52Low = fmtPrice(v.week52_low);
   const w52High = fmtPrice(v.week52_high);
-  const rangeStr = w52Low === '--' && w52High === '--' ? '--' : `${w52Low} - ${w52High}`;
+  // 范围只在最前面加一次币种前缀，避免 "¥1 - ¥2" 冗余
+  const rangeStr =
+    w52Low === '--' && w52High === '--' ? '--' : `${cur}${w52Low} - ${w52High}`;
 
   return [
-    { label: '总市值', value: fmtCap(v.market_cap) },
+    { label: '总市值', value: formatMarketCapForMarket(v.market_cap, ticker) },
     { label: 'P/E', value: fmtRatio(v.trailing_pe) },
     { label: 'P/B', value: fmtRatio(v.price_to_book) },
-    { label: 'EPS', value: s.eps !== null && s.eps !== undefined ? `$${s.eps.toFixed(2)}` : '--' },
+    { label: 'EPS', value: s.eps !== null && s.eps !== undefined ? `${cur}${s.eps.toFixed(2)}` : '--' },
     { label: '股息率', value: formatDividendYield(v.dividend_yield) },
     { label: '52周范围', value: rangeStr },
     { label: 'Beta', value: fmtRatio(v.beta) },
@@ -82,7 +81,7 @@ function buildMetrics(
 
 // --- Component ---
 
-export function MetricsBar({ valuation, snapshot, loading }: MetricsBarProps) {
+export function MetricsBar({ valuation, snapshot, ticker, loading }: MetricsBarProps) {
   if (loading) {
     return (
       <div className="flex items-stretch gap-0 border-b border-fin-border bg-fin-card overflow-x-auto scrollbar-hide">
@@ -99,7 +98,7 @@ export function MetricsBar({ valuation, snapshot, loading }: MetricsBarProps) {
     );
   }
 
-  const metrics = buildMetrics(valuation, snapshot);
+  const metrics = buildMetrics(valuation, snapshot, ticker);
 
   return (
     <div className="flex items-stretch gap-0 border-b border-fin-border bg-fin-card overflow-x-auto scrollbar-hide">

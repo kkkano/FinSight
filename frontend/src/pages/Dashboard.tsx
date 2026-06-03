@@ -13,6 +13,7 @@ import { useDashboardInsights } from '../hooks/useDashboardInsights';
 import { useDashboardStore } from '../store/dashboardStore';
 import { Watchlist } from '../components/dashboard/Watchlist';
 import { StockHeader } from '../components/dashboard/StockHeader';
+import { CNMarketNotice } from '../components/dashboard/CNMarketNotice';
 import { MetricsBar } from '../components/dashboard/MetricsBar';
 import { DashboardTabs } from '../components/dashboard/DashboardTabs';
 import { DataSourceTrace } from '../components/dashboard/DataSourceTrace';
@@ -287,9 +288,12 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
             loading={isLoading && !dashboardData}
           />
 
+          <CNMarketNotice ticker={activeAsset?.symbol || currentSymbol} />
+
           <MetricsBar
             valuation={valuation}
             snapshot={snapshot}
+            ticker={activeAsset?.symbol || currentSymbol}
             loading={isLoading && !dashboardData}
           />
 
