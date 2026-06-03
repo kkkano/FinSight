@@ -784,7 +784,9 @@ class SimpleRateLimiter:
     @classmethod
     def from_env(cls) -> "SimpleRateLimiter":
         enabled = _env_bool("RATE_LIMIT_ENABLED", "true")  # P0-7: 公网产品限流默认开启
-        limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+        # 默认 300/分钟：Dashboard/A股页一次加载就有 10-20 个数据请求 + 轮询，
+        # 120 对单个真实用户太紧（修复真实 IP 识别后限流桶已按用户隔离）
+        limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "300"))
         window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
         return cls(limit_per_window=limit, window_seconds=window_seconds, enabled=enabled)
 
@@ -1016,15 +1018,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS 闁板秶鐤?
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_allow_origins(),
-    allow_origin_regex=_cors_allow_origin_regex(),
-    allow_credentials=_cors_allow_credentials(),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _resolve_client_ip(request: Request) -> str:
+    """解析真实客户端 IP（Cloudflare Tunnel / 反向代理感知）。
+
+    线上架构是 Cloudflare Tunnel -> cloudflared -> 容器，request.client.host
+    拿到的是隧道/容器网络 IP——所有真实用户共享同一个值，会导致限流桶被
+    全体用户共享（一个用户的正常浏览就能把全站打进限流）。
+    优先级：CF-Connecting-IP > X-Forwarded-For 首个 > X-Real-IP > 连接对端。
+    """
+    cf_ip = str(request.headers.get("CF-Connecting-IP") or "").strip()
+    if cf_ip:
+        return cf_ip
+    forwarded = str(request.headers.get("X-Forwarded-For") or "").strip()
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    real_ip = str(request.headers.get("X-Real-IP") or "").strip()
+    if real_ip:
+        return real_ip
+    return request.client.host if request.client else "anonymous"
+
 
 @app.middleware("http")
 async def security_gate(request: Request, call_next):
@@ -1047,12 +1061,12 @@ async def security_gate(request: Request, call_next):
             else:
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
-    # 解析客户端标识（限流 + 并发限制共用）
+    # 解析客户端标识（限流 + 并发限制共用）——必须用真实 IP（Cloudflare/代理感知）
     request_identity = getattr(request.state, "rag_authenticated_user", None)
     if isinstance(request_identity, dict) and request_identity.get("user_id"):
         client_id = f"user:{request_identity['user_id']}"
     else:
-        client_id = api_key or (request.client.host if request.client else "anonymous")
+        client_id = api_key or _resolve_client_ip(request)
 
     if _rate_limiter.enabled:
         allowed, retry_after = _rate_limiter.allow(client_id)
@@ -1090,6 +1104,19 @@ async def security_gate(request: Request, call_next):
         return response
 
     return await call_next(request)
+
+
+# CORS —— 必须注册在 security_gate 之后（add_middleware 是 prepend，后注册 = 最外层）。
+# 这样 security_gate 直接返回的 429/401/503 响应也会被 CORS 包裹；
+# 否则浏览器把这些响应报成 CORS 错误，掩盖真实的限流提示（线上事故 2026-06-03）。
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_allow_origins(),
+    allow_origin_regex=_cors_allow_origin_regex(),
+    allow_credentials=_cors_allow_credentials(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # === API routers ===
 
