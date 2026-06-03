@@ -17,13 +17,19 @@ tempfile.tempdir = str(_PYTEST_TMP)
 
 # Keep test runtime deterministic and avoid async sqlite destructor noise in
 # short-lived TestClient lifecycles unless a test explicitly overrides backend.
-os.environ.setdefault("LANGGRAPH_CHECKPOINTER_BACKEND", "memory")
-os.environ.setdefault("LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK", "true")
+#
+# These are HARD isolation guarantees: force-override even when the outer shell
+# already exports them. Using setdefault here was a silent footgun — an external
+# env (e.g. a dev shell with LANGGRAPH_CHECKPOINTER_BACKEND=postgres or
+# MONITOR_SCAN_ENABLED=true) would make the whole suite connect to the real
+# Postgres checkpointer / fire real price-API scans during TestClient startup.
+os.environ["LANGGRAPH_CHECKPOINTER_BACKEND"] = "memory"
+os.environ["LANGGRAPH_CHECKPOINTER_ALLOW_MEMORY_FALLBACK"] = "true"
 
-# 工作台 L1 盯盘扫描器默认开启（生产），测试里关掉后台自动扫描，
+# 工作台 L1 盯盘扫描器默认开启（生产），测试里强制关掉后台自动扫描，
 # 避免 TestClient 启动时触发真实价格抓取（网络）/读真实 portfolio.db。
 # 手动 /api/monitor/scan 端点不受此开关影响。
-os.environ.setdefault("MONITOR_SCAN_ENABLED", "false")
+os.environ["MONITOR_SCAN_ENABLED"] = "false"
 
 
 @pytest.fixture(autouse=True)

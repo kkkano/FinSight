@@ -1,1 +1,0 @@
-# FinSight Regression Test Suite
