@@ -177,6 +177,51 @@ b9aa111 fix(tests): isolate TECHNICAL_AGENT_LLM_SUMMARY_ENABLED env in determini
 ad752c6 refactor: remove SupervisorAgent dead code and legacy archive (~8,200 lines)
 ```
 
+---
+
+## 八、本地冒烟测试 + 并发测试（2026-06-03 上午，localhost 实测）
+
+> 环境：后端 127.0.0.1:8001 + 前端 localhost:5179（全部功能开启，.env 线上同步配置）
+
+### 冒烟测试（11 项全过）
+
+| # | 测试项 | 结果 | 数据 |
+|---|--------|------|------|
+| 1 | 启动自检 P1-1/P1-3 | ✅ | LLM endpoint OK + 6/6 数据源 key |
+| 2 | /health 健康检查 | ✅ | 全组件 ok，live_tools=active |
+| 3 | 持仓 CRUD + 实时价格 | ✅ | NVDA 实时价 $222.82，盈亏 $10,232 |
+| 4 | L1 规则扫描（集中度） | ✅ | 9 秒产生发现"NVDA 占比 100%" |
+| 5 | L2 RiskAgent 自动深析 | ✅ | 风险评分 49.2/100 (medium) + 置信度 0.75 + 压力测试 -51.9% |
+| 6 | 发现流：查询/已读/4h去重/session隔离 | ✅ | 全部符合预期 |
+| 7 | Chat 流式舆情简报 | ✅ | 53.9s，完整事件链（plan→3 agents→token→done） |
+| 8 | Dashboard insights（P2-4 字段） | ✅ | confidence=0.4 + as_of 时间戳都在 |
+| 9 | 报告生成 + fact_check（P2-1） | ✅ | 236s 完成，fact_check 字段完整暴露 |
+| 10 | **P1-7 报告缓存命中** | ✅ | **第一次 236s → 第二次 0.1s**（cached=true，零成本） |
+| 11 | 浏览器端全流程（录入→扫描→发现卡片+AI分析） | ✅ | 发现卡片完整渲染（标题/摘要/AI分析/置信度/数据源/行动按钮） |
+
+### 并发/防护测试（4 项全过）
+
+| # | 测试项 | 结果 | 数据 |
+|---|--------|------|------|
+| 1 | P1-6 单客户端并发限制（上限2） | ✅ | 4 并发请求 → 2×200 + 2×429（带 Retry-After: 15 + 中文提示） |
+| 2 | 并发槽位释放（SSE 感知） | ✅ | 断开连接后新请求立即可进 |
+| 3 | 断开请求自动取消 | ✅ | 后端日志"graph run cancelled"（不白烧 token） |
+| 4 | HTTP 频率限流（120/min） | ✅ | 140 个快速请求 → 107 过 + 33 个 429 |
+
+### 发现并修复的 BUG（1 个，commit 7b143ed）
+
+| BUG | 根因 | 修复 |
+|-----|------|------|
+| 浏览器保存持仓报 422 | 前端把 session_id 放 body，后端 PUT 端点期望 query 参数（浮浮酱给前端 implementer 的契约写错） | client.ts updatePortfolioPosition 改为 query 传参，浏览器复测通过 |
+
+### 测试中观察到的已知降级行为（非 bug）
+
+- 本地无 FlagEmbedding 模块 → RAG 自动降级 hash embedding（日志正确记录 fallback_reason，P1-10 行为符合预期）
+- Dashboard LLM digest 8 秒超时 → 自动降级规则评分（model_generated=false，符合降级设计）
+- done 事件 metrics 中 "token" 关键字被脱敏为 ***（过度保护，不影响功能，可后续优化）
+
+---
+
 **P2 追加 commit（2026-06-03 早晨）：**
 
 ```
