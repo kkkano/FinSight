@@ -437,6 +437,20 @@ def _to_yahoo_cn_symbol(ticker: str) -> str:
     return t
 
 
+# tool 层降级信息注册表：记录每个 ticker 最近一次取数用的源（供 agent 读取，传播到报告）
+# key 统一大写 strip，value = {"source": 源函数名 or None, "attempt": 第几个源, "is_degraded": 是否降级}
+_last_fetch_info: dict[str, dict[str, Any]] = {}
+
+
+def get_last_fetch_info(ticker: str) -> dict[str, Any] | None:
+    """返回最近一次 get_stock_price(ticker) 的取数信息：{source, attempt, is_degraded}。
+
+    供 agent 读取，把 tool 层的多源降级情况传播到报告。
+    未取过该 ticker 时返回 None。
+    """
+    return _last_fetch_info.get(str(ticker).upper().strip())
+
+
 def get_stock_price(ticker: str) -> str:
     """
     使用多数据源策略获取股票价格，以提高稳定性。
@@ -444,6 +458,8 @@ def get_stock_price(ticker: str) -> str:
     """
     logger.info(f"Fetching price for {ticker} with multi-source strategy...")
     upper = ticker.upper()
+    # 取数信息注册表的 key：以原始入参 ticker 统一大写 strip 为准（调用方按原始 ticker 查询）
+    ticker_key = str(ticker).upper().strip()
 
     # 判断资产类型
     is_index = ticker.startswith('^')
@@ -514,6 +530,12 @@ def get_stock_price(ticker: str) -> str:
             result = source_func(ticker)
             if result:
                 logger.info(f"  OK source #{i} ({source_func.__name__})")
+                # 记录本次取数用的源：i > 1 即非首选源 = 降级（供 agent 传播到报告）
+                _last_fetch_info[ticker_key] = {
+                    "source": source_func.__name__,
+                    "attempt": i,
+                    "is_degraded": i > 1,
+                }
                 # 追加两档分批价，保证有具体数字
                 price_num = None
                 import re
@@ -532,7 +554,13 @@ def get_stock_price(ticker: str) -> str:
         except Exception as e:
             logger.info(f"  FAIL source #{i} ({source_func.__name__}) failed: {e}")
             continue
-            
+
+    # 全部源失败：记录降级信息（source=None 表示无可用源）
+    _last_fetch_info[ticker_key] = {
+        "source": None,
+        "attempt": len(sources),
+        "is_degraded": True,
+    }
     return f"Error: All data sources failed to retrieve the price for {ticker}. Please try again later."
 
 # ============================================

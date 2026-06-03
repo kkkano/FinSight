@@ -1271,6 +1271,36 @@ class PriceAgent(BaseFinancialAgent):
 
         return claims
 
+    def _resolve_tool_fallback(
+        self,
+        ticker: str,
+        *,
+        fallback_used: bool,
+        fallback_reason: Optional[str],
+    ) -> tuple[bool, Optional[str]]:
+        """查询 tool 层（get_stock_price）最近一次取数的降级信息，传播到 AgentOutput。
+
+        当 tool 层用了非首选源（is_degraded=True 且 source 非 None）时，置 fallback_used=True，
+        并补充降级原因。若 AgentOutput 已因其他原因带有 fallback_reason，则保留已有原因（已有优先）。
+        """
+        get_info = getattr(self.tools, "get_last_fetch_info", None) if self.tools else None
+        if not callable(get_info) or not ticker:
+            return fallback_used, fallback_reason
+        try:
+            info = get_info(ticker)
+        except Exception:
+            return fallback_used, fallback_reason
+        if not isinstance(info, dict):
+            return fallback_used, fallback_reason
+
+        source = info.get("source")
+        if info.get("is_degraded") and source:
+            attempt = info.get("attempt")
+            tool_reason = f"主数据源不可用，已降级到备用源 {source}（第{attempt}优先级）"
+            # 已有 fallback_reason 优先，不覆盖
+            return True, fallback_reason or tool_reason
+        return fallback_used, fallback_reason
+
     def _format_snapshot_output(self, summary: str, raw_data: dict[str, Any]) -> AgentOutput:
         quote = raw_data.get("quote") if isinstance(raw_data.get("quote"), dict) else {}
         source = str(quote.get("source") or raw_data.get("source") or "price_behavior_snapshot")
@@ -1471,6 +1501,10 @@ class PriceAgent(BaseFinancialAgent):
             )
 
         fallback_reason = raw_data.get("fallback_reason") if fallback_used else None
+        # 传播 tool 层（get_stock_price）多源降级信息（已有 reason 优先）
+        fallback_used, fallback_reason = self._resolve_tool_fallback(
+            ticker, fallback_used=fallback_used, fallback_reason=fallback_reason
+        )
         confidence = 1.0 if not fallback_used else 0.5
         assign_evidence_source_ids(evidence, agent_name=self.AGENT_NAME)
         claims = self._build_native_claims(raw_data=raw_data, evidence=evidence, confidence=confidence)
@@ -1584,6 +1618,16 @@ class PriceAgent(BaseFinancialAgent):
                 fallback_reason = str(raw_data.get("fallback_detail") or raw_data.get("error") or "primary_source_unavailable")
             else:
                 fallback_reason = "no_structured_data"
+
+        # 传播 tool 层（get_stock_price）多源降级信息（已有 reason 优先）
+        fallback_ticker = str(
+            (raw_data.get("ticker") if isinstance(raw_data, dict) else None)
+            or self._current_ticker
+            or ""
+        ).strip().upper()
+        fallback_used, fallback_reason = self._resolve_tool_fallback(
+            fallback_ticker, fallback_used=fallback_used, fallback_reason=fallback_reason
+        )
 
         return AgentOutput(
             agent_name=self.AGENT_NAME,
