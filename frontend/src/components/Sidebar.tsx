@@ -6,6 +6,7 @@ import {
   Search,
   FileText,
   LayoutDashboard,
+  LineChart,
   LogOut,
   MessageSquare,
   Plus,
@@ -34,7 +35,8 @@ interface SidebarProps {
   onDashboardClick?: (symbol: string) => void;
   onChatClick?: () => void;
   onWorkbenchClick?: () => void;
-  currentView?: 'chat' | 'dashboard' | 'workbench';
+  onCnMarketClick?: () => void;
+  currentView?: 'chat' | 'dashboard' | 'workbench' | 'cn-market';
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
 }
@@ -63,12 +65,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   onDashboardClick,
   onChatClick,
   onWorkbenchClick,
+  onCnMarketClick,
   currentView,
   isMobileOpen = false,
   onMobileClose,
 }) => {
   const [activeTab, setActiveTab] = useState(
-    currentView === 'dashboard' ? 'dashboard' : currentView === 'workbench' ? 'workbench' : 'chat',
+    currentView === 'dashboard'
+      ? 'dashboard'
+      : currentView === 'workbench'
+        ? 'workbench'
+        : currentView === 'cn-market'
+          ? 'cn-market'
+          : 'chat',
   );
   const [userName, setUserName] = useState('用户');
   const [riskPreference, setRiskPreference] = useState('balanced');
@@ -104,6 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     if (currentView === 'dashboard') setActiveTab('dashboard');
     else if (currentView === 'workbench') setActiveTab('workbench');
+    else if (currentView === 'cn-market') setActiveTab('cn-market');
     else if (currentView === 'chat') setActiveTab('chat');
   }, [currentView]);
 
@@ -347,6 +357,17 @@ const Sidebar: React.FC<SidebarProps> = ({
           />
 
           <NavItem
+            icon={<LineChart size={18} />}
+            label="A 股市场"
+            testId="sidebar-nav-cn-market"
+            active={activeTab === 'cn-market'}
+            onClick={() => {
+              setActiveTab('cn-market');
+              onCnMarketClick?.();
+            }}
+          />
+
+          <NavItem
             icon={<Command size={18} />}
             label="命令面板"
             testId="sidebar-nav-command-palette"
@@ -370,11 +391,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <NavItem
             icon={<BarChart2 size={18} />}
-            label="功能面板"
-            testId="sidebar-nav-cn-market"
-            active={activeTab === 'cn-market'}
+            label="实验面板"
+            testId="sidebar-nav-phase-labs"
+            active={activeTab === 'phase-labs'}
             onClick={() => {
-              setActiveTab('cn-market');
+              setActiveTab('phase-labs');
               navigate('/phase-labs');
             }}
           />

@@ -47,6 +47,7 @@ function ChatRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(symbol) => navigate(`/dashboard/${encodeURIComponent(symbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}
+      navigateToCnMarket={() => navigate('/cn-market')}
     />
   );
 }
@@ -61,6 +62,7 @@ function DashboardRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}
+      navigateToCnMarket={() => navigate('/cn-market')}
     />
   );
 }
@@ -74,6 +76,21 @@ function WorkbenchRoute() {
       navigateToChat={() => navigate('/chat')}
       navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
       navigateToWorkbench={() => navigate('/workbench')}
+      navigateToCnMarket={() => navigate('/cn-market')}
+    />
+  );
+}
+
+function CnMarketRoute() {
+  const navigate = useNavigate();
+  return (
+    <WorkspaceShell
+      view="cn-market"
+      dashboardSymbol={null}
+      navigateToChat={() => navigate('/chat')}
+      navigateToDashboard={(nextSymbol) => navigate(`/dashboard/${encodeURIComponent(nextSymbol)}`)}
+      navigateToWorkbench={() => navigate('/workbench')}
+      navigateToCnMarket={() => navigate('/cn-market')}
     />
   );
 }
@@ -235,6 +252,7 @@ function App() {
         <Route path="/welcome" element={<WelcomeRoute />} />
         <Route path="/chat" element={<EntryGuard><ChatRoute /></EntryGuard>} />
         <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
+        <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />
         <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
         <Route path="/phase-labs" element={<EntryGuard><PhaseLabsRoute /></EntryGuard>} />
         <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />

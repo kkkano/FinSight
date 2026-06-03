@@ -12,11 +12,12 @@ import { API_BASE_URL } from '../../config/runtime';
 import { ChatWorkspace } from './ChatWorkspace';
 import { DashboardWorkspace } from './DashboardWorkspace';
 import { WorkbenchWorkspace } from './WorkbenchWorkspace';
+import { CNMarketWorkspace } from './CNMarketWorkspace';
 import { ExecutionBanner } from '../execution/ExecutionBanner';
 import { AiDisclaimer } from '../common/AiDisclaimer';
 import { buildWorkspaceHealthStatus, type WorkspaceHealthStatus } from './workspaceHealth';
 
-export type WorkspaceView = 'chat' | 'dashboard' | 'workbench';
+export type WorkspaceView = 'chat' | 'dashboard' | 'workbench' | 'cn-market';
 
 type WorkspaceShellProps = {
   view: WorkspaceView;
@@ -25,6 +26,7 @@ type WorkspaceShellProps = {
   navigateToChat: () => void;
   navigateToDashboard: (symbol: string) => void;
   navigateToWorkbench: () => void;
+  navigateToCnMarket: () => void;
 };
 
 const DEFAULT_PANEL_WIDTH = 380;
@@ -54,6 +56,7 @@ export function WorkspaceShell({
   navigateToChat,
   navigateToDashboard,
   navigateToWorkbench,
+  navigateToCnMarket,
 }: WorkspaceShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -202,6 +205,7 @@ export function WorkspaceShell({
         onDashboardClick={(s) => { openDashboard(s); setIsSidebarOpen(false); }}
         onChatClick={() => { navigateToChat(); setIsSidebarOpen(false); }}
         onWorkbenchClick={() => { navigateToWorkbench(); setIsSidebarOpen(false); }}
+        onCnMarketClick={() => { navigateToCnMarket(); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
         onMobileClose={() => setIsSidebarOpen(false)}
@@ -259,6 +263,8 @@ export function WorkspaceShell({
               onNavigateToChat={navigateToChat}
               contextPanel={contextPanelProps}
             />
+          ) : view === 'cn-market' ? (
+            <CNMarketWorkspace />
           ) : (
             <ChatWorkspace
               isMobile={isMobile}
