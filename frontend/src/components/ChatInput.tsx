@@ -133,6 +133,21 @@ const isInlineChartRenderable = (
   if (!dataKind) return true;
   return INLINE_RENDERABLE_DATA_KINDS.has(dataKind);
 };
+
+// SmartChart 数据路径：pie/bar 等非 kline 图表，数据来自 /api/chart/data。
+// InlineChart 只有 K 线数据源，画不了这些；但 SmartChart 支持，只要能拿到 {labels, values}。
+const SMARTCHART_DATA_TYPES = new Set(['pie', 'bar']);
+const SMARTCHART_DATA_KINDS = new Set(['composition', 'comparison']);
+
+// 纯函数：判断某 (chartType, dataKind) 是否应走 SmartChart 数据路径。
+// 提取为纯函数便于单测（ChatInput 整体依赖 store/SSE，难以直接测）。
+export const shouldUseSmartChartData = (
+  chartType: string | null,
+  dataKind: string | null,
+): boolean => {
+  if (!chartType || !dataKind) return false;
+  return SMARTCHART_DATA_TYPES.has(chartType) && SMARTCHART_DATA_KINDS.has(dataKind);
+};
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -315,7 +330,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
   const shouldGenerateChart = async (
     query: string,
     currentTicker?: string | null,
-  ): Promise<{ tickers: string[]; chartType: string | null }> => {
+  ): Promise<{
+    tickers: string[];
+    chartType: string | null;
+    // 走 SmartChart 数据路径时携带：图表类型 / 取数方式 / 标题，供后续拉数注入 <chart> 标记。
+    smartChart?: { chartType: string; dataKind: string; title: string } | null;
+  }> => {
     try {
       const response = await apiClient.detectChartType(query, currentTicker || undefined);
       const apiCandidates = Array.isArray(response?.ticker_candidates)
@@ -331,11 +351,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       if (response.success && response.should_generate) {
         const chartType = response.chart_type || 'line';
         const dataKind = typeof response.data_kind === 'string' ? response.data_kind : null;
-        // 诚实原则：仅在 InlineChart 能真出图时注入图表标记，否则跳过。
+        // 诚实原则：仅在 InlineChart 能真出图时注入 [CHART] 标记。
         if (isInlineChartRenderable(chartType, dataKind)) {
           return { tickers: merged, chartType };
         }
-        return { tickers: merged, chartType: null };
+        // pie/bar 等非 kline 图表走 SmartChart 数据路径（后续按 data_kind 拉真实数据）。
+        if (shouldUseSmartChartData(chartType, dataKind)) {
+          const title = typeof response.title === 'string' && response.title.trim()
+            ? response.title.trim()
+            : '';
+          return {
+            tickers: merged,
+            chartType: null,
+            smartChart: { chartType, dataKind: dataKind as string, title },
+          };
+        }
+        return { tickers: merged, chartType: null, smartChart: null };
       }
     } catch (error) {
       console.error('Chart detection failed:', error);
@@ -343,11 +374,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
     const lowerQuery = query.toLowerCase();
     const hasChartKeyword = chartKeywords.some((keyword) => lowerQuery.includes(keyword));
-    if (!hasChartKeyword) return { tickers: [], chartType: null };
+    if (!hasChartKeyword) return { tickers: [], chartType: null, smartChart: null };
 
     const localCandidates = extractTickers(query);
     const contextual = currentTicker ? [currentTicker] : [];
-    return { tickers: mergeTickerCandidates(localCandidates, contextual), chartType: 'line' };
+    return { tickers: mergeTickerCandidates(localCandidates, contextual), chartType: 'line', smartChart: null };
   };
 
   const handleSend = async () => {
@@ -667,6 +698,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               });
               if (targetTickers.length === 1) {
                 setTicker(targetTickers[0]);
+              }
+            }
+          } else if (chartInfo.smartChart && !forceMulti) {
+            // SmartChart 数据路径（pie/bar）：按 data_kind 拉真实数据，成功才注入 <chart> 标记。
+            // 时机与 [CHART:...] 一致——收到回复后追加到消息内容，由 ChatList 的 parseSmartChartBlocks 渲染。
+            const smartTicker = tickers[0] || nextFocus || currentTicker || null;
+            if (smartTicker && !/<chart\s+/i.test(fullContent)) {
+              try {
+                const { chartType, dataKind, title } = chartInfo.smartChart;
+                const result = await apiClient.getChartData(smartTicker, dataKind);
+                if (result?.success && result.data && Array.isArray(result.data.values) && result.data.values.length > 0) {
+                  const safeTitle = (title || `${smartTicker} 图表`).replace(/"/g, '');
+                  fullContent += `\n\n<chart type="${chartType}" title="${safeTitle}">${JSON.stringify(result.data)}</chart>`;
+                  setTicker(smartTicker);
+                }
+                // 失败 / 无数据：诚实跳过，不出图（与现有 InlineChart 跳过行为一致）。
+              } catch (chartErr) {
+                console.error('SmartChart data fetch failed:', chartErr);
               }
             }
           }

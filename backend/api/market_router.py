@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import traceback
 from dataclasses import dataclass
@@ -177,6 +178,105 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "ticker_candidates": ticker_candidates,
                 "resolved_ticker": resolved_ticker,
             }
+
+    @router.post("/api/chart/data")
+    async def get_chart_data(payload: dict[str, Any]):
+        """按 data_kind 返回图表数据（pie/bar 等非 kline 图表的数据源）。
+
+        诚实原则：数据拿不到就返回 success=False + fallback_reason，绝不编造。
+        - composition（pie）：FMP 营收分部 → {labels, values, unit:"$"}
+        - comparison（bar）：同行估值对比 → {labels, values, unit:"x"}
+        其余 data_kind → success=False。
+        """
+        # ticker 校验复用现有逻辑（非法直接 400，与其它端点行为一致）。
+        raw_ticker = payload.get("ticker")
+        ticker = _validate_ticker_or_400(str(raw_ticker) if raw_ticker is not None else "")
+        data_kind = str(payload.get("data_kind") or "").strip().lower()
+        fields = str(payload.get("fields") or "").strip()
+
+        # 前端图表显示上限：分部/对比对象最多 8 个，超出截断。
+        max_items = 8
+
+        if data_kind == "composition":
+            try:
+                from backend.tools.fmp import (
+                    get_revenue_product_segmentation,
+                    is_fmp_configured,
+                )
+
+                # FMP key 未配置时优雅返回，绝不 500。
+                if not is_fmp_configured():
+                    return {
+                        "success": False,
+                        "fallback_reason": "fmp_not_configured",
+                    }
+
+                # FMP 调用是同步阻塞（requests），放到线程池避免卡住事件循环。
+                segments = await asyncio.to_thread(get_revenue_product_segmentation, ticker)
+            except Exception as exc:
+                deps.logger.warning("[ChartData] composition 获取失败 %s: %s", ticker, exc)
+                return {"success": False, "fallback_reason": f"composition_error: {exc}"}
+
+            if not segments:
+                # 小盘股 / FMP 无该公司分部数据：诚实跳过。
+                return {"success": False, "fallback_reason": "no_segmentation_data"}
+
+            top = segments[:max_items]
+            labels = [str(seg.get("segment") or "") for seg in top]
+            values = [float(seg.get("revenue") or 0) for seg in top]
+            return {
+                "success": True,
+                "data": {"labels": labels, "values": values, "unit": "$"},
+                "source": "fmp",
+            }
+
+        if data_kind == "comparison":
+            try:
+                from backend.dashboard.peer_service import fetch_peer_comparison
+
+                # peer 对比内部用 ThreadPoolExecutor，同样放到线程池调度。
+                comparison = await asyncio.to_thread(fetch_peer_comparison, ticker, None)
+            except Exception as exc:
+                deps.logger.warning("[ChartData] comparison 获取失败 %s: %s", ticker, exc)
+                return {"success": False, "fallback_reason": f"comparison_error: {exc}"}
+
+            if not comparison or not isinstance(comparison, dict):
+                return {"success": False, "fallback_reason": "no_peer_data"}
+
+            peers = comparison.get("peers") or []
+            # 默认对比指标 trailing_pe（市盈率），可由 fields 指定其它数值指标。
+            metric = fields or "trailing_pe"
+            labels: list[str] = []
+            values: list[float] = []
+            for row in peers:
+                if not isinstance(row, dict):
+                    continue
+                value = row.get(metric)
+                if value is None:
+                    continue
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    continue
+                labels.append(str(row.get("symbol") or row.get("name") or ""))
+                values.append(numeric)
+                if len(labels) >= max_items:
+                    break
+
+            if not values:
+                # 该指标全员缺失：诚实跳过，不拿别的指标冒充。
+                return {"success": False, "fallback_reason": f"no_metric_data: {metric}"}
+
+            # PE/估值倍数类用 "x" 单位，市值类用 "$"。
+            unit = "$" if metric in ("market_cap",) else "x"
+            return {
+                "success": True,
+                "data": {"labels": labels, "values": values, "unit": unit},
+                "source": "peer_comparison",
+            }
+
+        # 其它 data_kind 暂不支持（kline/technical 走 InlineChart 自有数据源）。
+        return {"success": False, "reason": "unsupported_data_kind"}
 
     @router.get("/api/stock/price/{ticker}")
     def get_price(ticker: str):

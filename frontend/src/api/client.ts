@@ -714,6 +714,31 @@ export const apiClient = {
     }
   },
 
+  // 按 data_kind 拉取非 kline 图表数据（pie=营收构成 / bar=同行对比）。
+  // 诚实原则：拿不到数据时返回 success=false，前端跳过出图。
+  async getChartData(
+    ticker: string,
+    dataKind: string,
+    fields?: string,
+  ): Promise<{
+    success: boolean;
+    data?: { labels: string[]; values: number[]; unit?: string };
+    source?: string;
+    fallback_reason?: string;
+  }> {
+    try {
+      const response = await api.post('/api/chart/data', {
+        ticker,
+        data_kind: dataKind,
+        fields,
+      });
+      return response.data;
+    } catch {
+      // 调用失败不阻断流程，等价于诚实跳过。
+      return { success: false, fallback_reason: 'request_failed' };
+    }
+  },
+
   // 获取用户配置
   async getConfig(): Promise<any> {
     const response = await api.get('/api/config');
