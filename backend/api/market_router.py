@@ -70,7 +70,7 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Market"])
 
     @router.post("/api/chart/detect")
-    def detect_chart(payload: dict[str, Any]):
+    async def detect_chart(payload: dict[str, Any]):
         query = str(payload.get("query") or "").strip()
         ticker = payload.get("ticker")
         ticker_value = str(ticker).strip() if ticker is not None else None
@@ -83,11 +83,40 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "should_generate": False,
                 "chart_type": None,
                 "data_dimension": None,
+                "data_kind": "none",
+                "detector": "keyword_fallback",
+                "title": "",
                 "confidence": 0.0,
                 "reason": "empty_query",
                 "ticker_candidates": ticker_candidates,
                 "resolved_ticker": resolved_ticker,
             }
+
+        # 决策主路径：LLM 理解 query 语义（内部自带关键词回退 + 8s 超时）。
+        try:
+            from backend.api.chart_intelligence import decide_chart
+
+            decision = await decide_chart(query, ticker_value or None)
+            chart_type = decision.get("chart_type")
+            confidence = max(0.0, min(1.0, float(decision.get("confidence") or 0.0)))
+            return {
+                "success": True,
+                "should_generate": bool(decision.get("should_generate")),
+                "chart_type": chart_type,
+                # data_dimension 为旧字段，保留向后兼容（前端不再依赖，但仍透传 data_kind 供其映射）
+                "data_dimension": decision.get("data_kind"),
+                "data_kind": decision.get("data_kind") or "none",
+                "detector": decision.get("detector") or "llm",
+                "title": str(decision.get("title") or ""),
+                "confidence": confidence,
+                "reason": str(decision.get("reason") or ""),
+                "ticker_candidates": ticker_candidates,
+                "resolved_ticker": resolved_ticker,
+            }
+        except Exception as exc:
+            # decide_chart 已内置回退；走到这里说明导入或调用层异常，
+            # 再退一步直接用注入的关键词检测器，绝不阻断前端流程。
+            deps.logger.warning("[ChartDetect] decide_chart 异常，降级关键词检测: %s", exc)
 
         if deps.detect_chart_type is None:
             return {
@@ -95,6 +124,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "should_generate": False,
                 "chart_type": None,
                 "data_dimension": None,
+                "data_kind": "none",
+                "detector": "keyword_fallback",
+                "title": "",
                 "confidence": 0.0,
                 "reason": "chart_detector_unavailable",
                 "ticker_candidates": ticker_candidates,
@@ -122,6 +154,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "should_generate": should_generate,
                 "chart_type": chart_type,
                 "data_dimension": data_dimension,
+                "data_kind": data_dimension or "none",
+                "detector": "keyword_fallback",
+                "title": "",
                 "confidence": confidence,
                 "reason": reason,
                 "ticker_candidates": ticker_candidates,
@@ -134,6 +169,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "should_generate": False,
                 "chart_type": None,
                 "data_dimension": None,
+                "data_kind": "none",
+                "detector": "keyword_fallback",
+                "title": "",
                 "confidence": 0.0,
                 "reason": str(exc),
                 "ticker_candidates": ticker_candidates,

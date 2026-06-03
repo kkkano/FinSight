@@ -120,6 +120,19 @@ const hasActionableResearchInput = (text: string): boolean => {
 };
 
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '图表', 'k线'];
+// InlineChart 唯一数据源是 K 线，只能真实渲染以下类型；其余类型诚实跳过，避免错配。
+const INLINE_RENDERABLE_TYPES = new Set(['line', 'candlestick', 'area']);
+const INLINE_RENDERABLE_DATA_KINDS = new Set(['kline', 'technical']);
+
+const isInlineChartRenderable = (
+  chartType: string | null,
+  dataKind: string | null,
+): boolean => {
+  if (!chartType) return false;
+  if (!INLINE_RENDERABLE_TYPES.has(chartType)) return false;
+  if (!dataKind) return true;
+  return INLINE_RENDERABLE_DATA_KINDS.has(dataKind);
+};
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -316,10 +329,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       const merged = mergeTickerCandidates(apiCandidates, resolvedTicker, localCandidates, contextual);
 
       if (response.success && response.should_generate) {
-        return {
-          tickers: merged,
-          chartType: response.chart_type || 'line',
-        };
+        const chartType = response.chart_type || 'line';
+        const dataKind = typeof response.data_kind === 'string' ? response.data_kind : null;
+        // 诚实原则：仅在 InlineChart 能真出图时注入图表标记，否则跳过。
+        if (isInlineChartRenderable(chartType, dataKind)) {
+          return { tickers: merged, chartType };
+        }
+        return { tickers: merged, chartType: null };
       }
     } catch (error) {
       console.error('Chart detection failed:', error);

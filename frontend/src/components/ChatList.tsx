@@ -16,6 +16,25 @@ import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/i
 const chartKeywords = ['trend', 'chart', 'kline', 'k-line', '走势', '趋势', '图表'];
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
+// InlineChart 唯一数据源是 K 线（fetchKline），只能真实渲染以下类型。
+// 其余类型（pie/bar/radar/gauge/scatter...）若强行注入会被画成股价折线，
+// 造成"标题说营收构成、图画股价"的错配，因此诚实跳过。
+const INLINE_RENDERABLE_TYPES = new Set(['line', 'candlestick', 'area']);
+// 仅 K 线 / 技术取数方式能被 InlineChart 真出图。
+const INLINE_RENDERABLE_DATA_KINDS = new Set(['kline', 'technical']);
+
+// 决定 chart_type + data_kind 是否能被 InlineChart 诚实地真出图。
+const isInlineChartRenderable = (
+  chartType: string | null,
+  dataKind: string | null,
+): boolean => {
+  if (!chartType) return false;
+  if (!INLINE_RENDERABLE_TYPES.has(chartType)) return false;
+  // data_kind 缺省（如旧后端 / 关键词回退未给）时，按类型保守放行 line/candlestick/area。
+  if (!dataKind) return true;
+  return INLINE_RENDERABLE_DATA_KINDS.has(dataKind);
+};
+
 const shouldGenerateChart = async (
   query: string,
   currentTicker?: string | null,
@@ -33,10 +52,13 @@ const shouldGenerateChart = async (
     const merged = mergeTickerCandidates(apiCandidates, resolvedTicker, localCandidates, contextual);
 
     if (response.success && response.should_generate) {
-      return {
-        tickers: merged,
-        chartType: response.chart_type || 'line',
-      };
+      const chartType = response.chart_type || 'line';
+      const dataKind = typeof response.data_kind === 'string' ? response.data_kind : null;
+      // 诚实原则：只在 InlineChart 能真出图时注入图表标记，否则跳过（chartType=null）。
+      if (isInlineChartRenderable(chartType, dataKind)) {
+        return { tickers: merged, chartType };
+      }
+      return { tickers: merged, chartType: null };
     }
   } catch {
     console.error('Chart detection failed');
