@@ -10,6 +10,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { getSupabaseClient } from './api/supabaseClient';
 import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
 import { RagInspectorPage } from './pages/RagInspectorPage';
+import { CostAuditPage } from './pages/CostAuditPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
@@ -254,6 +255,7 @@ function App() {
         <Route path="/workbench" element={<EntryGuard><WorkbenchRoute /></EntryGuard>} />
         <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />
         <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
+        <Route path="/cost-audit" element={<AuthenticatedGuard><CostAuditPage /></AuthenticatedGuard>} />
         <Route path="/phase-labs" element={<EntryGuard><PhaseLabsRoute /></EntryGuard>} />
         <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />

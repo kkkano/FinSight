@@ -18,6 +18,7 @@ class SystemRouterDeps:
     get_orchestrator_safe: Callable[[], Any]
     get_planner_ab_metrics: Callable[[], Dict[str, Any]]
     get_rag_observability_store: Callable[[], Any]
+    get_cost_audit_store: Callable[[], Any]
     require_rag_read_access: Callable[[Request], Dict[str, Any]]
     require_rag_mutation_access: Callable[[Request], Dict[str, Any]]
     memory_service: Any
@@ -223,5 +224,27 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
         if not item:
             raise HTTPException(status_code=404, detail='source document not found')
         return {'status': 'ok', 'data': item, 'timestamp': _now()}
+
+    # ── P2-7: LLM 成本审计 ─────────────────────────────────────
+    @router.get("/cost-audit")
+    def cost_audit(request: Request, days: int = Query(default=7, ge=1, le=90)):
+        # 复用 RAG 只读访问保护：内部 API key 或已登录用户（Supabase / dev 认证）。
+        _require_rag_read_access(request)
+        store = deps.get_cost_audit_store()
+        daily = store.daily_summary(days=days)
+        top_requests = store.top_requests(days=days, limit=20)
+        totals = store.totals(days=days)
+        return {
+            "status": "ok",
+            "data": {
+                "days": days,
+                "daily": daily,
+                "top_requests": top_requests,
+                "total_cost_usd": totals.get("total_cost_usd", 0.0),
+                "total_tokens": totals.get("total_tokens", 0),
+                "request_count": totals.get("request_count", 0),
+            },
+            "timestamp": _now(),
+        }
 
     return router

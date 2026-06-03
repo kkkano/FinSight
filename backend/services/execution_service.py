@@ -693,6 +693,22 @@ async def run_graph_pipeline(
                 }
             )
 
+            # P2-7: 持久化本次请求的 LLM 成本审计（失败绝不影响主流程）。
+            try:
+                from backend.services.cost_audit import get_cost_audit_store
+
+                get_cost_audit_store().record(
+                    session_id=thread_id,
+                    source=source,
+                    summary=token_acc.summary(),
+                )
+            except Exception as audit_exc:  # noqa: BLE001 — 审计为旁路，吞掉所有异常
+                logger.warning(
+                    "[execution_service] cost audit record failed thread_id=%s: %s",
+                    thread_id,
+                    audit_exc,
+                )
+
             # P1-7: 缓存成功生成的报告（仅 report 模式 + 显式 ticker 请求 + 无失败/拦截）
             if (
                 is_report_mode

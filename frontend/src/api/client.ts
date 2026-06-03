@@ -1153,6 +1153,12 @@ export const apiClient = {
     return response.data;
   },
 
+  // P2-7: LLM 成本审计（每日趋势 / Top 消耗 / 汇总）
+  async getCostAudit(days: number = 7): Promise<any> {
+    const response = await api.get('/cost-audit', { params: { days } });
+    return response.data;
+  },
+
   // 流式发送消息 - SSE 逐字输出（委托给共享 parseSSEStream）
   async sendMessageStream(
     query: string,

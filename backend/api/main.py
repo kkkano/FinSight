@@ -56,6 +56,7 @@ from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 from backend.services.portfolio_store import get_positions as get_portfolio_positions
 from backend.services.report_index import get_report_index_store
 from backend.services.conversation_store import get_conversation_store
+from backend.services.cost_audit import get_cost_audit_store
 
 logger = logging.getLogger(__name__)
 
@@ -1133,6 +1134,7 @@ system_router = create_system_router(
         get_orchestrator_safe=_get_orchestrator_safe,
         get_planner_ab_metrics=get_planner_ab_metrics,
         get_rag_observability_store=lambda: get_rag_observability_store(),
+        get_cost_audit_store=lambda: get_cost_audit_store(),
         require_rag_read_access=lambda request: _require_rag_read_access(request),
         require_rag_mutation_access=lambda request: _require_rag_mutation_access(request),
         memory_service=memory_service,
