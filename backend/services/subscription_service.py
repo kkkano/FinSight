@@ -291,18 +291,33 @@ class SubscriptionService:
         logger.info(f"✅ 用户 {email} 已取消订阅 {ticker or '所有股票'}")
         return True
     
-    def get_subscriptions(self, email: Optional[str] = None) -> List[Dict]:
+    def get_subscriptions(self, email: Optional[str] = None, include_all: Optional[bool] = None) -> List[Dict]:
         """
         获取订阅列表
-        
+
+        ⚠️ 安全护栏（防全站 PII dump）：
+        `email=None` 的「返回全部订阅」分支仅供**内部调度器**（如 alert_scheduler
+        遍历所有订阅跑盯盘）使用。公网入口（/api/subscriptions）绝不允许把全量
+        订阅返回给匿名调用方——否则任意用户可一次性 dump 全站邮箱 + 持仓。
+
+        include_all 三态语义（兼顾向后兼容 + 公网安全）：
+        - None（默认，旧无参内部调用）：email=None 时返回全量（保留调度器行为）
+        - True：显式索取全量（与默认等价，仅用于内部代码自文档化意图）
+        - False：**显式禁止全量**——email=None 时强制返回空列表。
+          公网 router 必须传 include_all=False 作为纵深防御。
+
         Args:
-            email: 用户邮箱（如果为 None，返回所有订阅）
-            
+            email: 用户邮箱（精确匹配）
+            include_all: 见上方三态语义
+
         Returns:
             订阅列表
         """
         if email is None:
-            # 返回所有订阅
+            if include_all is False:
+                # 公网纵深防御：显式禁止全量时返回空，绝不 dump 全站 PII。
+                return []
+            # 内部调度器（include_all 为 None/True）遍历全量订阅。
             all_subs = []
             for email_key, subs in self.subscriptions.items():
                 all_subs.extend(subs)

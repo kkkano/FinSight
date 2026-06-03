@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import traceback
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -164,6 +163,7 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "resolved_ticker": resolved_ticker,
             }
         except Exception as exc:
+            # 异常细节进日志，对外用稳定 reason code，不回传 str(exc)。
             deps.logger.warning("[ChartDetect] failed: %s", exc)
             return {
                 "success": False,
@@ -174,7 +174,7 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 "detector": "keyword_fallback",
                 "title": "",
                 "confidence": 0.0,
-                "reason": str(exc),
+                "reason": "chart_detect_error",
                 "ticker_candidates": ticker_candidates,
                 "resolved_ticker": resolved_ticker,
             }
@@ -214,8 +214,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 # FMP 调用是同步阻塞（requests），放到线程池避免卡住事件循环。
                 segments = await asyncio.to_thread(get_revenue_product_segmentation, ticker)
             except Exception as exc:
+                # 异常细节进日志，对外只给稳定的 reason code，不回传 str(exc)。
                 deps.logger.warning("[ChartData] composition 获取失败 %s: %s", ticker, exc)
-                return {"success": False, "fallback_reason": f"composition_error: {exc}"}
+                return {"success": False, "fallback_reason": "composition_error"}
 
             if not segments:
                 # 小盘股 / FMP 无该公司分部数据：诚实跳过。
@@ -237,8 +238,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
                 # peer 对比内部用 ThreadPoolExecutor，同样放到线程池调度。
                 comparison = await asyncio.to_thread(fetch_peer_comparison, ticker, None)
             except Exception as exc:
+                # 异常细节进日志，对外只给稳定的 reason code，不回传 str(exc)。
                 deps.logger.warning("[ChartData] comparison 获取失败 %s: %s", ticker, exc)
-                return {"success": False, "fallback_reason": f"comparison_error: {exc}"}
+                return {"success": False, "fallback_reason": "comparison_error"}
 
             if not comparison or not isinstance(comparison, dict):
                 return {"success": False, "fallback_reason": "no_peer_data"}
@@ -353,7 +355,9 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
 
             return {"ticker": normalized_ticker, "data": kline_data, "cached": False}
         except Exception as exc:
-            return {"ticker": normalized_ticker, "data": {"error": str(exc)}, "cached": False}
+            # 内部异常只进日志，对外用通用错误描述，不回传原始 str(exc)。
+            deps.logger.error("[Market] get_kline_data 失败 %s: %s", normalized_ticker, exc, exc_info=True)
+            return {"ticker": normalized_ticker, "data": {"error": "K线数据获取失败"}, "cached": False}
 
     @router.post("/api/export/pdf")
     async def export_pdf(request: dict):
@@ -393,9 +397,12 @@ def create_market_router(deps: MarketRouterDeps) -> APIRouter:
         except HTTPException:
             raise
         except ImportError as exc:
-            raise HTTPException(status_code=503, detail=f"PDF export unavailable: {str(exc)}") from exc
+            # 依赖缺失：记日志，对外只说服务暂不可用，不回传模块名等内部细节。
+            deps.logger.error("[Market] export_pdf 依赖缺失: %s", exc, exc_info=True)
+            raise HTTPException(status_code=503, detail="PDF 导出服务暂不可用") from exc
         except Exception as exc:
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            # 内部异常只进日志，对外返回通用消息（不再 print 堆栈 / 回传 str(exc)）。
+            deps.logger.error("[Market] export_pdf 失败: %s", exc, exc_info=True)
+            raise HTTPException(status_code=500, detail="PDF 导出失败，请稍后重试") from exc
 
     return router

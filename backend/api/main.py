@@ -1033,6 +1033,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+def _trust_proxy_headers() -> bool:
+    """是否信任反向代理注入的客户端 IP 头（CF-Connecting-IP / X-Forwarded-For 等）。
+
+    ⚠️ 安全前提：这些头由请求方任意设置，只有当服务**确实部署在可信代理之后**
+    （如线上的 Cloudflare Tunnel）时才能信任——可信代理会覆写/剥离伪造值。
+    若服务直连公网（无可信代理），攻击者可随意伪造 CF-Connecting-IP 来给每个请求
+    换一个「客户端 IP」，从而绕过基于 IP 的限流。此时应把开关关闭，回退到连接对端 IP。
+
+    默认 true：保持线上 Cloudflare 部署行为不变（向后兼容）。
+    直连公网部署应显式设置 TRUST_PROXY_HEADERS=false。
+    """
+    return _env_bool("TRUST_PROXY_HEADERS", "true")
+
+
 def _resolve_client_ip(request: Request) -> str:
     """解析真实客户端 IP（Cloudflare Tunnel / 反向代理感知）。
 
@@ -1040,18 +1054,23 @@ def _resolve_client_ip(request: Request) -> str:
     拿到的是隧道/容器网络 IP——所有真实用户共享同一个值，会导致限流桶被
     全体用户共享（一个用户的正常浏览就能把全站打进限流）。
     优先级：CF-Connecting-IP > X-Forwarded-For 首个 > X-Real-IP > 连接对端。
+
+    安全护栏：仅当 TRUST_PROXY_HEADERS=true（默认，线上在 Cloudflare 后）时才
+    信任上述代理头；关闭时直接回退连接对端 IP，防止攻击者伪造头绕过限流。
     """
-    cf_ip = str(request.headers.get("CF-Connecting-IP") or "").strip()
-    if cf_ip:
-        return cf_ip
-    forwarded = str(request.headers.get("X-Forwarded-For") or "").strip()
-    if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
-    real_ip = str(request.headers.get("X-Real-IP") or "").strip()
-    if real_ip:
-        return real_ip
+    if _trust_proxy_headers():
+        cf_ip = str(request.headers.get("CF-Connecting-IP") or "").strip()
+        if cf_ip:
+            return cf_ip
+        forwarded = str(request.headers.get("X-Forwarded-For") or "").strip()
+        if forwarded:
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+        real_ip = str(request.headers.get("X-Real-IP") or "").strip()
+        if real_ip:
+            return real_ip
+    # 不信任代理头（或头缺失）：用真实连接对端 IP，攻击者无法靠换头绕过限流。
     return request.client.host if request.client else "anonymous"
 
 
