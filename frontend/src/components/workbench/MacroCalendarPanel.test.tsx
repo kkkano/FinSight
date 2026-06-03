@@ -4,9 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MacroCalendarPanel,
   MacroEventTimeline,
-  describeDaysUntil,
-  groupByDate,
 } from './MacroCalendarPanel';
+import { describeDaysUntil, groupByDate } from './macroCalendarHelpers';
 import type { MacroCalendarEvent } from '../../types/monitor';
 
 // 静态渲染不触发 useEffect / 真实请求，但 mock 掉以隔离副作用

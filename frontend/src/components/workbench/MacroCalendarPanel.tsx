@@ -13,7 +13,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarClock, RefreshCw } from 'lucide-react';
 
 import { apiClient } from '../../api/client';
-import type { MacroCalendarEvent, MacroEventKind } from '../../types/monitor';
+import type { MacroCalendarEvent } from '../../types/monitor';
+import { KIND_VISUAL, describeDaysUntil, groupByDate } from './macroCalendarHelpers';
 
 interface MacroCalendarPanelProps {
   sessionId: string | null | undefined;
@@ -21,36 +22,6 @@ interface MacroCalendarPanelProps {
 
 /** 未来天数窗口（与契约默认对齐） */
 const DAYS_AHEAD = 14;
-
-/** kind badge 文案 + 配色（紫/琥珀/绿用 Tailwind 原生色，避免 fin-* alpha 陷阱） */
-export const KIND_VISUAL: Record<MacroEventKind, { label: string; cls: string }> = {
-  macro: { label: '宏观', cls: 'bg-purple-500/15 text-purple-300' },
-  earnings: { label: '财报', cls: 'bg-amber-500/15 text-amber-300' },
-  dividend: { label: '分红', cls: 'bg-green-500/15 text-green-300' },
-};
-
-/** 把 days_until 渲染成「今天 / 明天 / N 天后」 */
-export function describeDaysUntil(days: number): string {
-  if (days <= 0) return '今天';
-  if (days === 1) return '明天';
-  return `${days} 天后`;
-}
-
-/** 按日期分组（保持后端返回的顺序，假定已按日期升序） */
-export function groupByDate(
-  events: MacroCalendarEvent[],
-): Array<[string, MacroCalendarEvent[]]> {
-  const map = new Map<string, MacroCalendarEvent[]>();
-  for (const ev of events) {
-    const list = map.get(ev.date);
-    if (list) {
-      list.push(ev);
-    } else {
-      map.set(ev.date, [ev]);
-    }
-  }
-  return Array.from(map.entries());
-}
 
 /**
  * 事件时间线（纯展示组件，便于单测）。

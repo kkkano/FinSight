@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { InsightCard } from '../../../../types/dashboard';
 import { sanitizeOverrideQuestion } from '../../../../utils/dashboardDeepDiveOverlay';
-import { AiInsightCard, confidenceColorClass, formatAsOf } from './AiInsightCard';
+import { AiInsightCard } from './AiInsightCard';
+import { confidenceColorClass, formatAsOf } from './aiInsightFormat';
 
 const baseInsight: InsightCard = {
   agent_name: 'technical_digest',

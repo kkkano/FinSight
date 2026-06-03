@@ -1,15 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { FindingCard } from './FindingCard';
 import {
-  FindingCard,
   formatConfidence,
   isActionEnabled,
   resolveActionTarget,
   resolveAgentLabel,
   resolveSessionBadge,
   resolveTriggerVisual,
-} from './FindingCard';
+} from './findingCardHelpers';
 import { extractMarketSession } from '../../types/monitor';
 import type { AgentAnalysis, Finding } from '../../types/monitor';
 
