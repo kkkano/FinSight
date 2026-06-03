@@ -26,6 +26,8 @@ import { ReportCockpit } from './ReportCockpit';
 import { DebateScorecard } from './DebateScorecard';
 import { FactCheckCard } from './FactCheckCard';
 import { HoldingsWatchPanel } from './HoldingsWatchPanel';
+import { PriceDriftBanner } from './PriceDriftBanner';
+import { QualityBadge } from './QualityBadge';
 import { useToast } from '../ui';
 
 export interface ReportViewProps {
@@ -118,6 +120,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
 
   const sections = useMemo(() => report.sections ?? [], [report.sections]);
   const metricItems = useMemo(() => extractMetrics(sections), [sections]);
+  // P2-11: best-effort 提取报告生成时刻的价格。报告无顶层结构化价格字段，
+  // 这里从顶层/meta 防御性读取，拿不到就传 undefined，banner 退化为「时效提示」。
+  const reportPrice = useMemo(() => {
+    const candidates: unknown[] = [
+      (report as any).price,
+      (report as any).report_price,
+      (report as any).current_price,
+      readObject(report.meta)?.price,
+      readObject(report.meta)?.report_price,
+    ];
+    for (const c of candidates) {
+      const num = typeof c === 'string' ? Number(c) : c;
+      if (typeof num === 'number' && Number.isFinite(num) && num > 0) return num;
+    }
+    return undefined;
+  }, [report]);
   const sourceSummary = useMemo(() => buildSourceSummary(report.citations), [report.citations]);
   const evidenceBadges = useMemo(() => buildEvidenceBadges(report.citations || []), [report.citations]);
   const reportHints = useMemo(() => extractReportHints(report), [report]);
@@ -385,6 +403,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
               fullscreen
             />
 
+            {/* P2-12 质量徽章 + P2-11 价差提示（全屏模式） */}
+            {report.report_quality && <QualityBadge quality={report.report_quality} />}
+            <PriceDriftBanner
+              ticker={report.ticker}
+              reportPrice={reportPrice}
+              reportGeneratedAt={report.generated_at}
+            />
+
             {queryCoverageWarningNode}
 
             <div className="space-y-4">
@@ -444,6 +470,22 @@ export const ReportView: React.FC<ReportViewProps> = ({ report }) => {
           evidenceBadges={evidenceBadges}
           metricItems={metricItems}
         />
+
+        {/* P2-12 质量徽章：报告顶部一眼可见的质量门控状态 */}
+        {report.report_quality && (
+          <div className="mt-3">
+            <QualityBadge quality={report.report_quality} />
+          </div>
+        )}
+
+        {/* P2-11 价差提示：报告渲染后异步检查实时价，显著时显示琥珀 banner */}
+        <div className="mt-3">
+          <PriceDriftBanner
+            ticker={report.ticker}
+            reportPrice={reportPrice}
+            reportGeneratedAt={report.generated_at}
+          />
+        </div>
 
         {queryCoverageWarningNode && <div className="mt-4">{queryCoverageWarningNode}</div>}
         {warningNode && <div className="mt-4">{warningNode}</div>}

@@ -1176,10 +1176,20 @@ config_router = create_config_router(
     )
 )
 
+def _safe_fetch_price_snapshot(ticker: str):
+    """价差接口用的实时价获取器：导入或拉取失败时诚实降级为 None，不影响主流程。"""
+    try:
+        from backend.services.alert_scheduler import fetch_price_snapshot
+        return fetch_price_snapshot(ticker)
+    except Exception:
+        return None
+
+
 report_router = create_report_router(
     ReportRouterDeps(
         resolve_thread_id=_resolve_thread_id,
         get_report_index_store=lambda: get_report_index_store(),
+        fetch_price_snapshot=_safe_fetch_price_snapshot,
     )
 )
 

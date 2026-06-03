@@ -778,6 +778,31 @@ export const apiClient = {
     return response.data;
   },
 
+  // P2-11 报告与实时价差提示：拉实时价并与报告生成时刻对比。
+  // report_price 可选，缺失时后端只做「报告时效」判定（report_age_hours >= 24）。
+  async checkPriceDrift(params: {
+    ticker: string;
+    reportPrice?: number | null;
+    reportGeneratedAt?: string;
+  }): Promise<{
+    ticker: string;
+    report_price: number | null;
+    current_price: number | null;
+    drift_pct: number | null;
+    report_age_hours: number | null;
+    threshold_pct: number;
+    significant: boolean;
+  }> {
+    const response = await api.get('/api/reports/price-drift', {
+      params: {
+        ticker: params.ticker,
+        report_price: params.reportPrice ?? undefined,
+        report_generated_at: params.reportGeneratedAt,
+      },
+    });
+    return response.data;
+  },
+
   async createConversation(
     sessionId?: string,
     payload?: {

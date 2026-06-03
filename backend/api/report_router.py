@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
 # 防御性校验: report_id 仅允许安全字符
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
+# 价差接口的 ticker 校验：字母数字 + 常见交易代码符号（^ . - =）
+_SAFE_TICKER_PATTERN = re.compile(r"^[A-Za-z0-9.\-=^]{1,24}$")
 
 
 def _validate_report_id(report_id: str) -> str:
@@ -17,10 +21,52 @@ def _validate_report_id(report_id: str) -> str:
     return report_id
 
 
+def _parse_report_generated_at(value: Optional[str]) -> Optional[datetime]:
+    """解析报告生成时间戳，支持 ISO8601（含 Z 后缀），失败时返回 None（诚实降级）。"""
+    if not value or not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    # 兼容末尾 Z（UTC）写法
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    # 无时区信息时按 UTC 处理，保证后续做差不抛 naive/aware 混用错误
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _compute_report_age_hours(generated_at: Optional[datetime]) -> Optional[float]:
+    """计算报告距今的小时数，时间无法解析时返回 None。"""
+    if generated_at is None:
+        return None
+    now = datetime.now(timezone.utc)
+    delta = now - generated_at
+    return round(delta.total_seconds() / 3600.0, 2)
+
+
+def _get_drift_threshold_pct() -> float:
+    """读取价差显著阈值（百分比），环境变量缺失或非法时回退 2.0。"""
+    raw = os.environ.get("REPORT_PRICE_DRIFT_THRESHOLD_PCT", "2.0")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 2.0
+    # 阈值必须为正数，否则视为配置异常回退默认
+    return value if value > 0 else 2.0
+
+
 @dataclass(frozen=True)
 class ReportRouterDeps:
     resolve_thread_id: Callable[[Optional[str]], str]
     get_report_index_store: Callable[[], Any]
+    # 价格快照获取器（注入式，便于测试 mock）；返回对象需带 .price 属性或为 None
+    fetch_price_snapshot: Optional[Callable[[str], Any]] = None
 
 
 def create_report_router(deps: ReportRouterDeps) -> APIRouter:
@@ -218,6 +264,73 @@ def create_report_router(deps: ReportRouterDeps) -> APIRouter:
                 },
                 "summary": {"a": summary_a, "b": summary_b},
             },
+        }
+
+    # ------------------------------------------------------------------
+    # GET /api/reports/price-drift — 报告价格与实时价差提示
+    # ------------------------------------------------------------------
+
+    @router.get("/api/reports/price-drift")
+    async def check_price_drift(
+        ticker: str,
+        report_price: Optional[float] = None,
+        report_generated_at: Optional[str] = None,
+    ):
+        """
+        轻量价差检查：拉取实时价，与报告生成时刻的价格对比，提示用户结论是否需要重新评估。
+
+        诚实原则：
+        - 实时价拿不到 → current_price=null + significant=false，不报错、不编造。
+        - report_price 缺失 → 只做「报告时效」提示（report_age_hours >= 24 触发）。
+
+        significant 判定（任一成立即为真）：
+        - abs(drift_pct) >= REPORT_PRICE_DRIFT_THRESHOLD_PCT（默认 2.0）
+        - report_age_hours >= 24
+        """
+        ticker_clean = (ticker or "").strip()
+        if not ticker_clean or not _SAFE_TICKER_PATTERN.fullmatch(ticker_clean):
+            raise HTTPException(status_code=422, detail="ticker format invalid")
+
+        # 报告时效（与价格无关，时间能解析就算）
+        generated_at = _parse_report_generated_at(report_generated_at)
+        report_age_hours = _compute_report_age_hours(generated_at)
+
+        # 拉取实时价（注入器缺失或抛错时诚实降级为 None）
+        current_price: Optional[float] = None
+        fetcher = deps.fetch_price_snapshot
+        if fetcher is not None:
+            try:
+                snapshot = fetcher(ticker_clean)
+            except Exception:
+                snapshot = None
+            if snapshot is not None:
+                raw_price = getattr(snapshot, "price", None)
+                if isinstance(raw_price, (int, float)) and raw_price > 0:
+                    current_price = float(raw_price)
+
+        # 价差百分比：仅在报告价 + 实时价都有效时计算
+        drift_pct: Optional[float] = None
+        if (
+            isinstance(report_price, (int, float))
+            and report_price > 0
+            and current_price is not None
+        ):
+            drift_pct = round((current_price - report_price) / report_price * 100.0, 2)
+
+        # significant 判定
+        threshold = _get_drift_threshold_pct()
+        price_significant = drift_pct is not None and abs(drift_pct) >= threshold
+        age_significant = report_age_hours is not None and report_age_hours >= 24.0
+        significant = bool(price_significant or age_significant)
+
+        return {
+            "ticker": ticker_clean,
+            "report_price": report_price,
+            "current_price": current_price,
+            "drift_pct": drift_pct,
+            "report_age_hours": report_age_hours,
+            "threshold_pct": threshold,
+            "significant": significant,
         }
 
     return router
