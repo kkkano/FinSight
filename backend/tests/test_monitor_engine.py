@@ -571,3 +571,169 @@ def test_dispatch_first_run_scans(monkeypatch):
 
     monitor_engine.run_monitor_dispatch_cycle()
     assert called["n"] == 1
+
+
+# ── Phase 3：自定义天数窗口 ───────────────────────────────────
+
+
+def test_earnings_near_custom_days_from_config(patched_env, monkeypatch):
+    """config.earnings_near_days=7 时，6 天后的财报（默认 3 天窗口外）也触发。"""
+    import uuid
+    from datetime import datetime, timezone
+
+    patched_env.upsert_target(
+        {
+            "id": uuid.uuid4().hex,
+            "session_id": "sess-a",
+            "type": "holding",
+            "ticker": "AAPL",
+            "config": {"earnings_near_days": 7},
+            "enabled": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    # 6 天后财报：默认 3 天窗口外，但 config 设了 7 天 → 应触发
+    monkeypatch.setattr(monitor_engine, "get_event_calendar", _earnings_calendar(6))
+
+    earn = _trigger_type(_run("sess-a"), "earnings_near")
+    assert len(earn) == 1
+    assert earn[0]["trigger_detail"]["days_until"] == 6
+    assert earn[0]["trigger_detail"]["threshold_days"] == 7
+
+
+def test_earnings_near_default_days_excludes_beyond_3(patched_env, monkeypatch):
+    """无 config 时仍用默认 3 天窗口：6 天后财报不触发（回归保护）。"""
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(monitor_engine, "get_event_calendar", _earnings_calendar(6))
+    assert _trigger_type(_run("sess-a"), "earnings_near") == []
+
+
+def test_macro_event_custom_days_from_portfolio_config(patched_env, monkeypatch):
+    """PORTFOLIO 级 config.macro_event_days=10 时，5 天后宏观事件（默认 2 天外）触发。"""
+    import uuid
+    from datetime import datetime, timedelta, timezone
+
+    # PORTFOLIO 级 target（ticker 为空）承载 macro_event_days
+    patched_env.upsert_target(
+        {
+            "id": uuid.uuid4().hex,
+            "session_id": "sess-a",
+            "type": "portfolio",
+            "ticker": None,
+            "config": {"macro_event_days": 10},
+            "enabled": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    event_date = (datetime.now(timezone.utc).date() + timedelta(days=5)).isoformat()
+    monkeypatch.setattr(
+        monitor_engine, "get_positions", lambda sid: [{"ticker": "AAPL", "shares": 5, "avg_cost": 150.0}]
+    )
+    monkeypatch.setattr(
+        monitor_engine,
+        "get_event_calendar",
+        _macro_calendar([{"date": event_date, "title": "FOMC decision", "source": "search_macro_calendar"}]),
+    )
+
+    macro = _trigger_type(_run("sess-a"), "macro_event")
+    assert len(macro) == 1
+    assert macro[0]["trigger_detail"]["threshold_days"] == 10
+    assert macro[0]["trigger_detail"]["events"][0]["days_until"] == 5
+
+
+# ── Phase 3：通知推送 ─────────────────────────────────────────
+
+
+class _FakeEmailService:
+    """记录 send_email 调用的假邮件服务，永远成功。"""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def send_email(self, to_email, subject, html_content, text_content=None):
+        self.calls.append((to_email, subject, html_content, text_content))
+        return True, "none", None
+
+
+@pytest.fixture()
+def reset_notify_cooldown():
+    """每个通知测试前后清空冷却内存态，避免互相污染。"""
+    monitor_engine._notify_last_sent.clear()
+    yield
+    monitor_engine._notify_last_sent.clear()
+
+
+def _make_finding(session_id="sess-n", title="TSLA 单日下跌 6.0%"):
+    return {
+        "id": "fid-1",
+        "session_id": session_id,
+        "title": title,
+        "summary": "测试摘要",
+    }
+
+
+def test_notify_sends_when_enabled_and_configured(
+    patched_env, monkeypatch, reset_notify_cooldown
+):
+    """settings 开启 + 邮箱 + SMTP 配置 → 发送一封汇总邮件。"""
+    monkeypatch.setenv("SMTP_USER", "u@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "pw")
+    patched_env.upsert_settings("sess-n", "owner@example.com", True)
+
+    fake = _FakeEmailService()
+    monkeypatch.setattr(monitor_engine, "get_email_service", lambda: fake)
+
+    monitor_engine._notify_findings("sess-n", [_make_finding()])
+    assert len(fake.calls) == 1
+    to_email, subject, _html, _text = fake.calls[0]
+    assert to_email == "owner@example.com"
+    assert "1 条新异常" in subject
+
+
+def test_notify_cooldown_blocks_second_send(
+    patched_env, monkeypatch, reset_notify_cooldown
+):
+    """冷却期内（1 小时）同 session 第二次不再发送。"""
+    monkeypatch.setenv("SMTP_USER", "u@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "pw")
+    patched_env.upsert_settings("sess-n", "owner@example.com", True)
+
+    fake = _FakeEmailService()
+    monkeypatch.setattr(monitor_engine, "get_email_service", lambda: fake)
+
+    monitor_engine._notify_findings("sess-n", [_make_finding()])
+    monitor_engine._notify_findings("sess-n", [_make_finding(title="第二条")])
+    assert len(fake.calls) == 1  # 冷却内只发了第一封
+
+
+def test_notify_skips_when_smtp_unconfigured(
+    patched_env, monkeypatch, reset_notify_cooldown
+):
+    """SMTP 未配置 → 静默跳过，不调 send_email。"""
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+    patched_env.upsert_settings("sess-n", "owner@example.com", True)
+
+    fake = _FakeEmailService()
+    monkeypatch.setattr(monitor_engine, "get_email_service", lambda: fake)
+
+    monitor_engine._notify_findings("sess-n", [_make_finding()])
+    assert fake.calls == []
+
+
+def test_notify_skips_when_disabled(patched_env, monkeypatch, reset_notify_cooldown):
+    """notify_enabled=False → 不发送。"""
+    monkeypatch.setenv("SMTP_USER", "u@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "pw")
+    patched_env.upsert_settings("sess-n", "owner@example.com", False)
+
+    fake = _FakeEmailService()
+    monkeypatch.setattr(monitor_engine, "get_email_service", lambda: fake)
+
+    monitor_engine._notify_findings("sess-n", [_make_finding()])
+    assert fake.calls == []

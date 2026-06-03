@@ -100,6 +100,13 @@ class MonitorStore:
 
             CREATE INDEX IF NOT EXISTS idx_targets_session
                 ON monitor_targets(session_id);
+
+            CREATE TABLE IF NOT EXISTS monitor_settings (
+                session_id     TEXT PRIMARY KEY,
+                notify_email   TEXT,
+                notify_enabled INTEGER NOT NULL DEFAULT 0,
+                updated_at     TEXT NOT NULL
+            );
             """
         )
         conn.commit()
@@ -264,6 +271,38 @@ class MonitorStore:
         )
         self._db().commit()
         return cursor.rowcount > 0
+
+    # ── MonitorSettings（session 级通知设置）──────────────────
+
+    def get_settings(self, session_id: str) -> dict[str, Any]:
+        """读取 session 的通知设置；无记录时返回默认（未配置邮箱、关闭）。"""
+        row = self._db().execute(
+            "SELECT notify_email, notify_enabled FROM monitor_settings WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return {"notify_email": None, "notify_enabled": False}
+        return {"notify_email": row[0], "notify_enabled": bool(row[1])}
+
+    def upsert_settings(
+        self, session_id: str, notify_email: str | None, notify_enabled: bool
+    ) -> None:
+        """按 session_id upsert 通知设置。"""
+        self._db().execute(
+            """INSERT INTO monitor_settings (session_id, notify_email, notify_enabled, updated_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(session_id) DO UPDATE SET
+                   notify_email=excluded.notify_email,
+                   notify_enabled=excluded.notify_enabled,
+                   updated_at=excluded.updated_at""",
+            (
+                session_id,
+                notify_email,
+                1 if notify_enabled else 0,
+                _now_iso(),
+            ),
+        )
+        self._db().commit()
 
 
 # ── 全局单例 ──────────────────────────────────────────────────

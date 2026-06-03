@@ -36,6 +36,7 @@ from backend.services.market_hours import (
     get_scan_interval_minutes,
     price_rules_active,
 )
+from backend.services.email_service import get_email_service
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_store import get_monitor_store
 from backend.services.portfolio_store import get_positions, list_session_ids
@@ -46,6 +47,10 @@ logger = logging.getLogger(__name__)
 
 # Dispatcher 内存态：上次实际扫描的单调时间戳（重启重置无妨，下个心跳即恢复节奏）
 _last_scan_at: float | None = None
+
+# 通知冷却内存态：session_id -> 上次发信的单调时间戳（重启重置无妨）
+_notify_last_sent: dict[str, float] = {}
+NOTIFY_COOLDOWN_SECONDS = 3600.0  # 同 session 1 小时内最多发 1 封
 
 # 默认阈值（可被 MonitorTarget.config 覆盖）
 DEFAULT_PRICE_MOVE_PCT = 5.0
@@ -337,6 +342,15 @@ async def _scan_sentiment_shift(
     return findings
 
 
+def _clamp_days(raw: Any, default: int) -> int:
+    """把 config 里的天数窗口归一化到 1-30 范围；非法/缺失回退默认值。"""
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(30, val))
+
+
 async def _scan_earnings_near(
     session_id: str,
     store,
@@ -346,13 +360,19 @@ async def _scan_earnings_near(
     """规则 4：财报临近。
 
     对持仓 + watchlist ticker 调 get_event_calendar(days_ahead=7)，
-    earnings_events 里有 date 距今 <= 3 天（含今天）则触发。
+    earnings_events 里有 date 距今 <= N 天（含今天）则触发。
+    N 默认 EARNINGS_NEAR_DAYS(3)，可被 per-ticker config.earnings_near_days 覆盖（1-30）。
     """
     findings: list[dict] = []
 
     for ticker in _holding_watchlist_tickers(positions, config_map):
         try:
-            calendar = get_event_calendar(ticker, days_ahead=7)
+            near_days = _clamp_days(
+                config_map.get(ticker, {}).get("earnings_near_days"), EARNINGS_NEAR_DAYS
+            )
+
+            # calendar 取数窗口至少覆盖 near_days（默认 7，自定义天数更大时跟着放宽）
+            calendar = get_event_calendar(ticker, days_ahead=max(7, near_days))
             if not isinstance(calendar, dict):
                 continue
             events = calendar.get("earnings_events") or []
@@ -365,7 +385,7 @@ async def _scan_earnings_near(
                 if not ev_date:  # 过滤无日期占位
                     continue
                 days = _days_until(ev_date)
-                if days is None or days < 0 or days > EARNINGS_NEAR_DAYS:
+                if days is None or days < 0 or days > near_days:
                     continue
                 if nearest is None or days < nearest[0]:
                     nearest = (days, str(ev_date)[:10])
@@ -385,7 +405,7 @@ async def _scan_earnings_near(
                 trigger_detail={
                     "earnings_date": earnings_date,
                     "days_until": days,
-                    "threshold_days": EARNINGS_NEAR_DAYS,
+                    "threshold_days": near_days,
                 },
                 title=f"{ticker} 财报临近：{earnings_date}",
                 summary=f"{ticker} 将于 {earnings_date}（{when}）公布财报，建议提前关注前瞻与持仓风险。",
@@ -406,16 +426,23 @@ async def _scan_macro_event(
     session_id: str,
     store,
     positions: list[dict],
+    portfolio_config: dict | None = None,
 ) -> list[dict]:
     """规则 5：宏观事件（PORTFOLIO 级，target='MACRO'）。
 
     调一次 get_event_calendar（任一持仓 ticker，没持仓用 'SPY'）拿 macro_events，
     过滤掉 date=None 占位符（source='macro_watchlist' 兜底），
-    有 date 距今 <= 2 天的事件则触发。多个事件聚合成一条 Finding（避免刷屏）。
+    有 date 距今 <= N 天的事件则触发。N 默认 MACRO_EVENT_DAYS(2)，
+    可被 PORTFOLIO 级 config.macro_event_days 覆盖（1-30）。
+    多个事件聚合成一条 Finding（避免刷屏）。
     去重 key：target='MACRO' + trigger_type='macro_event'。
     """
     findings: list[dict] = []
     try:
+        macro_days = _clamp_days(
+            (portfolio_config or {}).get("macro_event_days"), MACRO_EVENT_DAYS
+        )
+
         probe_ticker = "SPY"
         for p in positions:
             t = str(p.get("ticker", "")).strip().upper()
@@ -423,7 +450,8 @@ async def _scan_macro_event(
                 probe_ticker = t
                 break
 
-        calendar = get_event_calendar(probe_ticker, days_ahead=7)
+        # calendar 取数窗口至少覆盖 macro_days
+        calendar = get_event_calendar(probe_ticker, days_ahead=max(7, macro_days))
         if not isinstance(calendar, dict):
             return findings
         macro_events = calendar.get("macro_events") or []
@@ -436,7 +464,7 @@ async def _scan_macro_event(
             if not ev_date:  # 过滤 date=None 的 macro_watchlist 占位符
                 continue
             days = _days_until(ev_date)
-            if days is None or days < 0 or days > MACRO_EVENT_DAYS:
+            if days is None or days < 0 or days > macro_days:
                 continue
             upcoming.append(
                 {"date": str(ev_date)[:10], "title": str(ev.get("title") or "宏观事件")[:160], "days_until": days}
@@ -458,7 +486,7 @@ async def _scan_macro_event(
             trigger_type="macro_event",
             trigger_detail={
                 "events": upcoming,
-                "threshold_days": MACRO_EVENT_DAYS,
+                "threshold_days": macro_days,
             },
             title=f"宏观事件临近：{head['title']}",
             summary=f"{head['date']}（{when}）有宏观事件「{head['title']}」{extra}，可能引发市场波动。",
@@ -492,6 +520,99 @@ async def _run_l2_for_findings(store, findings: list[dict]) -> None:
             budget.record_spend()
             store.update_finding_analysis(finding["session_id"], finding["id"], analysis)
             finding["agent_analysis"] = analysis  # 返回值里也带上
+
+
+def _smtp_configured() -> bool:
+    """SMTP 是否已配置：SMTP_USER 和 SMTP_PASSWORD 环境变量都非空。"""
+    return bool(os.getenv("SMTP_USER")) and bool(os.getenv("SMTP_PASSWORD"))
+
+
+def _notify_findings(session_id: str, findings: list[dict]) -> None:
+    """把本轮新 findings 汇总成一封邮件发出（受开关 + SMTP 配置 + 冷却限制）。
+
+    - 仅当 settings.notify_enabled 且 notify_email 非空 且 SMTP 已配置时才发
+    - 冷却：同 session 1 小时内最多发 1 封（内存 _notify_last_sent 记录，超频跳过）
+    - 发送失败（网络/SMTP）不影响扫描主流程（try/except + log）
+    诚实原则：拿不到配置或未开启时静默跳过，不报错。
+    """
+    try:
+        if not findings:
+            return
+
+        store = get_monitor_store()
+        settings = store.get_settings(session_id)
+        notify_email = settings.get("notify_email")
+        if not settings.get("notify_enabled") or not notify_email:
+            return
+        if not _smtp_configured():
+            # SMTP 未配置：静默跳过（不视为错误，settings 已在 API 层拦截启用）
+            return
+
+        # 冷却：距上次发信不足 1 小时则跳过
+        import time as _time
+
+        now = _time.monotonic()
+        last = _notify_last_sent.get(session_id)
+        if last is not None and (now - last) < NOTIFY_COOLDOWN_SECONDS:
+            logger.info(
+                "[MonitorEngine] notify cooldown active for session %s, skip (%.0fs left)",
+                session_id,
+                NOTIFY_COOLDOWN_SECONDS - (now - last),
+            )
+            return
+
+        # 组装邮件：标题 + 逐条 title/summary
+        count = len(findings)
+        subject = f"FinSight 盯盘发现 {count} 条新异常"
+        lines_html: list[str] = []
+        lines_text: list[str] = []
+        for f in findings:
+            title = str(f.get("title") or "盯盘发现")
+            summary = str(f.get("summary") or "")
+            lines_html.append(
+                f"<li><strong>{title}</strong><br/>"
+                f"<span style='color:#555'>{summary}</span></li>"
+            )
+            lines_text.append(f"- {title}\n  {summary}")
+
+        html_content = (
+            "<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body>"
+            "<div style='max-width:600px;margin:0 auto;font-family:Arial,sans-serif;"
+            "line-height:1.6;color:#333'>"
+            "<h2 style='color:#2196F3'>FinSight 盯盘提醒</h2>"
+            f"<p>本轮扫描发现 <strong>{count}</strong> 条新异常：</p>"
+            f"<ul>{''.join(lines_html)}</ul>"
+            "<p style='color:#999;font-size:12px;margin-top:24px'>"
+            "此邮件由 FinSight 盯盘系统自动发送。</p>"
+            "</div></body></html>"
+        )
+        text_content = (
+            f"FinSight 盯盘提醒\n\n本轮扫描发现 {count} 条新异常：\n\n"
+            + "\n\n".join(lines_text)
+            + "\n\n---\n此邮件由 FinSight 盯盘系统自动发送。"
+        )
+
+        email_service = get_email_service()
+        success, error_type, error_msg = email_service.send_email(
+            notify_email, subject, html_content, text_content
+        )
+        if success:
+            _notify_last_sent[session_id] = now
+            logger.info(
+                "[MonitorEngine] notify sent for session %s (%s findings) to %s",
+                session_id,
+                count,
+                notify_email,
+            )
+        else:
+            logger.warning(
+                "[MonitorEngine] notify send failed for session %s: %s (%s)",
+                session_id,
+                error_msg,
+                error_type,
+            )
+    except Exception as exc:  # noqa: BLE001 - 通知失败绝不影响扫描主流程
+        logger.warning("[MonitorEngine] notify findings failed for %s: %s", session_id, exc)
 
 
 async def run_l1_scan(
@@ -531,7 +652,8 @@ async def run_l1_scan(
     findings += await _scan_concentration(session_id, store, positions, conc_config)
     findings += await _scan_sentiment_shift(session_id, store, positions, config_map)
     findings += await _scan_earnings_near(session_id, store, positions, config_map)
-    findings += await _scan_macro_event(session_id, store, positions)
+    # 宏观天数窗口复用 PORTFOLIO 级 config（与集中度同一份 conc_config）
+    findings += await _scan_macro_event(session_id, store, positions, conc_config)
 
     # 说明：market_session 只写入价格异动规则的 trigger_detail（已在 _scan_price_move
     # 落库时带上，库与内存一致）。非价格规则（财报/宏观/集中度/舆情）与时段语义无关，
@@ -540,6 +662,10 @@ async def run_l1_scan(
     # Phase 2: L2 agent 自动深析（有成本护栏）
     if enable_l2 and findings:
         await _run_l2_for_findings(store, findings)
+
+    # Phase 3: 新 finding 邮件通知（受 session 级开关 + 冷却限制，失败不影响主流程）
+    if findings:
+        _notify_findings(session_id, findings)
 
     return findings
 
@@ -625,4 +751,5 @@ __all__ = [
     "run_l1_scan",
     "run_monitor_scan_cycle",
     "run_monitor_dispatch_cycle",
+    "_notify_findings",
 ]
