@@ -174,6 +174,21 @@ def _redact_sensitive_payload(value: Any) -> Any:
         for key, inner in value.items():
             key_text = str(key).lower()
             if any(fragment in key_text for fragment in _SENSITIVE_KEY_FRAGMENTS):
+                # token 计数等数值型指标不是凭据（如 total_tokens/prompt_tokens），不脱敏。
+                # 注意 bool 是 int 的子类，需单独判断后一并放行（计数场景不会出现 bool，但保持类型透明）。
+                if isinstance(inner, bool) or isinstance(inner, (int, float)):
+                    redacted[key] = inner
+                    continue
+                # 容器类型递归处理（如 tokens_by_model = {"gpt-4": 123}），不整体抹掉，
+                # 这样嵌套结构里若真有字符串凭据仍会在递归中被脱敏。
+                if isinstance(inner, (dict, list)):
+                    redacted[key] = _redact_sensitive_payload(inner)
+                    continue
+                # 纯数字字符串也是计数不是凭据（如 "12345"），保留原值。
+                if isinstance(inner, str) and inner.strip().isdigit():
+                    redacted[key] = inner
+                    continue
+                # 其余情况（真正的字符串凭据，如 "sk-xxx"/"Bearer xxx"）仍然脱敏。
                 redacted[key] = _mask_secret(str(inner)) if inner is not None else "***"
                 continue
             redacted[key] = _redact_sensitive_payload(inner)
