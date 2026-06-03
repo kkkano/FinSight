@@ -991,7 +991,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           disabled={isChatLoading}
           aria-label="输入聊天消息"
           rows={1}
-          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted resize-none overflow-y-hidden max-h-[160px]"
+          /* 移动端触摸目标：min-h-[44px] 确保输入框可点击区域 ≥44px */
+          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted resize-none overflow-y-hidden min-h-[44px] max-h-[160px]"
         />
 
         <div className="absolute right-2 flex items-center gap-2">
@@ -1000,7 +1001,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               data-testid="chat-stop-btn"
               onClick={cancelChatStream}
               aria-label="停止生成"
-              className="p-2 bg-fin-danger text-white rounded-lg hover:bg-red-600 transition-colors"
+              /* 移动端触摸目标：max-lg 下放大到 44px 满足可点击区域 */
+              className="p-2 max-lg:min-h-[44px] max-lg:min-w-[44px] flex items-center justify-center bg-fin-danger text-white rounded-lg hover:bg-red-600 transition-colors"
               title="停止生成"
             >
               <Square size={16} fill="currentColor" />
@@ -1011,7 +1013,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               onClick={() => handleSend()}
               disabled={!input.trim()}
               aria-label={outputMode === 'investment_report' ? '发送并生成报告' : '发送消息'}
-              className="p-2 bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              /* 移动端触摸目标：max-lg 下放大到 44px 满足可点击区域 */
+              className="p-2 max-lg:min-h-[44px] max-lg:min-w-[44px] flex items-center justify-center bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title={outputMode === 'investment_report' ? '发送并生成报告' : '发送'}
             >
               <SendHorizontal size={18} />

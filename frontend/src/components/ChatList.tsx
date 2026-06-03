@@ -592,6 +592,12 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
           a: ({ href, children }) => (
             <SourceLink href={href || ''} label={children} />
           ),
+          /* 移动端：长报告 markdown 表格加横向滚动容器，避免窄屏溢出撑破布局 */
+          table: ({ children }) => (
+            <div className="overflow-x-auto scrollbar-hide">
+              <table>{children}</table>
+            </div>
+          ),
         }}
       >
         {normalizeMarkdown(textContent)}

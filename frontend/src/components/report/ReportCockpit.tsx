@@ -138,7 +138,19 @@ const ViewpointRow: React.FC<{ vp: CoreViewpoint }> = ({ vp }) => {
       {hasDetail && open && (
         <div className="mt-2.5 pt-2.5 border-t border-fin-border">
           <div className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed text-fin-text-secondary prose-headings:text-fin-text prose-headings:text-[13px] prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-strong:text-fin-text prose-p:my-1.5 prose-li:my-0.5 prose-ol:my-1 prose-ul:my-1 prose-a:text-fin-primary">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{normalizeMarkdown(vp.detail)}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                /* 移动端：markdown 表格加横向滚动容器，避免窄屏溢出 */
+                table: ({ children }) => (
+                  <div className="overflow-x-auto scrollbar-hide">
+                    <table>{children}</table>
+                  </div>
+                ),
+              }}
+            >
+              {normalizeMarkdown(vp.detail)}
+            </ReactMarkdown>
           </div>
         </div>
       )}

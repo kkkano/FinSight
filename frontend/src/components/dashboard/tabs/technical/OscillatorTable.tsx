@@ -117,29 +117,32 @@ export function OscillatorTable({ technicals }: OscillatorTableProps) {
     <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
       <div className="text-xs font-medium text-fin-muted mb-3">震荡指标</div>
 
-      <table className="w-full text-2xs">
-        <thead>
-          <tr className="border-b border-fin-border">
-            <th className="text-left py-2 text-fin-muted font-medium">指标</th>
-            <th className="text-right py-2 text-fin-muted font-medium">数值</th>
-            <th className="text-right py-2 text-fin-muted font-medium">信号</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const display = SIGNAL_DISPLAY[row.signal];
-            return (
-              <tr key={row.label} className="border-b border-fin-border/50 last:border-b-0">
-                <td className="py-2 text-fin-text font-medium">{row.label}</td>
-                <td className="text-right py-2 tabular-nums text-fin-text">{fmtVal(row.value)}</td>
-                <td className={`text-right py-2 font-medium ${display.className}`}>
-                  {display.label}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}
+      <div className="overflow-x-auto scrollbar-hide">
+        <table className="w-full text-2xs">
+          <thead>
+            <tr className="border-b border-fin-border">
+              <th className="text-left py-2 text-fin-muted font-medium">指标</th>
+              <th className="text-right py-2 text-fin-muted font-medium">数值</th>
+              <th className="text-right py-2 text-fin-muted font-medium">信号</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const display = SIGNAL_DISPLAY[row.signal];
+              return (
+                <tr key={row.label} className="border-b border-fin-border/50 last:border-b-0">
+                  <td className="py-2 text-fin-text font-medium">{row.label}</td>
+                  <td className="text-right py-2 tabular-nums text-fin-text">{fmtVal(row.value)}</td>
+                  <td className={`text-right py-2 font-medium ${display.className}`}>
+                    {display.label}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

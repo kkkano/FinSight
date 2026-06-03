@@ -165,26 +165,29 @@ function PeerSnapshotCard({ peers, subjectSymbol }: { peers: PeerMetrics[]; subj
   return (
     <div className="bg-fin-card rounded-xl border border-fin-border p-4">
       <div className="text-xs font-medium text-fin-muted mb-2.5">同行对比</div>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-fin-muted border-b border-fin-border/50">
-            <th className="pb-1.5 text-left font-medium">代码</th>
-            <th className="pb-1.5 text-right font-medium">市盈率</th>
-            <th className="pb-1.5 text-right font-medium">市值</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-fin-border/20">
-          {items.map((p) => (
-            <tr key={p.symbol} className={p.symbol === subjectSymbol ? 'text-fin-primary' : ''}>
-              <td className="py-1.5 font-medium truncate max-w-[70px]" title={p.name}>
-                {p.symbol}
-              </td>
-              <td className="py-1.5 text-right text-fin-text/80">{fmtPE(p.trailing_pe ?? p.forward_pe)}</td>
-              <td className="py-1.5 text-right text-fin-text/80">{fmtMktCap(p.market_cap)}</td>
+      {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}
+      <div className="overflow-x-auto scrollbar-hide">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-fin-muted border-b border-fin-border/50">
+              <th className="pb-1.5 text-left font-medium">代码</th>
+              <th className="pb-1.5 text-right font-medium">市盈率</th>
+              <th className="pb-1.5 text-right font-medium">市值</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-fin-border/20">
+            {items.map((p) => (
+              <tr key={p.symbol} className={p.symbol === subjectSymbol ? 'text-fin-primary' : ''}>
+                <td className="py-1.5 font-medium truncate max-w-[70px]" title={p.name}>
+                  {p.symbol}
+                </td>
+                <td className="py-1.5 text-right text-fin-text/80">{fmtPE(p.trailing_pe ?? p.forward_pe)}</td>
+                <td className="py-1.5 text-right text-fin-text/80">{fmtMktCap(p.market_cap)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

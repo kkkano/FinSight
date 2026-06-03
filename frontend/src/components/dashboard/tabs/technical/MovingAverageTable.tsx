@@ -82,30 +82,33 @@ export function MovingAverageTable({ technicals }: MovingAverageTableProps) {
         )}
       </div>
 
-      <table className="w-full text-2xs">
-        <thead>
-          <tr className="border-b border-fin-border">
-            <th className="text-left py-2 text-fin-muted font-medium">指标</th>
-            <th className="text-right py-2 text-fin-muted font-medium">数值</th>
-            <th className="text-right py-2 text-fin-muted font-medium">信号</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const signal = getSignal(close, row.value);
-            const display = SIGNAL_DISPLAY[signal];
-            return (
-              <tr key={row.label} className="border-b border-fin-border/50 last:border-b-0">
-                <td className="py-2 text-fin-text font-medium">{row.label}</td>
-                <td className="text-right py-2 tabular-nums text-fin-text">{fmtPrice(row.value)}</td>
-                <td className={`text-right py-2 font-medium ${display.className}`}>
-                  {display.label}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* 移动端：表格横向滚动容器，避免窄屏内容溢出截断 */}
+      <div className="overflow-x-auto scrollbar-hide">
+        <table className="w-full text-2xs">
+          <thead>
+            <tr className="border-b border-fin-border">
+              <th className="text-left py-2 text-fin-muted font-medium">指标</th>
+              <th className="text-right py-2 text-fin-muted font-medium">数值</th>
+              <th className="text-right py-2 text-fin-muted font-medium">信号</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const signal = getSignal(close, row.value);
+              const display = SIGNAL_DISPLAY[signal];
+              return (
+                <tr key={row.label} className="border-b border-fin-border/50 last:border-b-0">
+                  <td className="py-2 text-fin-text font-medium">{row.label}</td>
+                  <td className="text-right py-2 tabular-nums text-fin-text">{fmtPrice(row.value)}</td>
+                  <td className={`text-right py-2 font-medium ${display.className}`}>
+                    {display.label}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

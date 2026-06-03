@@ -27,8 +27,8 @@ export function BacktestTradesTable({ trades }: BacktestTradesTableProps) {
   }
 
   return (
-    <div className="max-h-64 overflow-y-auto rounded-lg border border-fin-border">
-      <table className="w-full text-xs">
+    <div className="max-h-64 overflow-auto rounded-lg border border-fin-border">
+      <table className="w-full min-w-[480px] text-xs">
         <thead className="sticky top-0 bg-fin-card">
           <tr className="text-fin-muted">
             <th className="px-2 py-1.5 text-left font-medium">方向</th>
