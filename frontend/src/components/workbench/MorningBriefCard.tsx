@@ -147,7 +147,7 @@ function EmptyState({
         type="button"
         onClick={onGenerate}
         disabled={loading}
-        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-fin-primary/15 text-fin-primary hover:bg-fin-primary/25 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-fin-primary/15 text-fin-primary hover:bg-fin-primary/25 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         {loading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -279,10 +279,12 @@ export function MorningBriefCard({ brief, loading, error, onGenerate }: MorningB
   }, [onGenerate]);
 
   return (
-    <Card className="p-4 space-y-2" data-testid="morning-brief-card">
+    <Card className="p-4 space-y-2 shadow-sm" data-testid="morning-brief-card">
       {/* 标题栏 */}
       <div className="flex items-center gap-2">
-        <Sun className="w-4 h-4 text-amber-400" />
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-400">
+          <Sun className="w-3.5 h-3.5" />
+        </span>
         <span className="text-sm font-semibold text-fin-text">今日晨报</span>
         {brief?.date && (
           <span className="text-2xs text-fin-muted ml-auto">{brief.date}</span>

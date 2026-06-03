@@ -94,11 +94,13 @@ export function MacroCalendarPanel({ sessionId }: MacroCalendarPanelProps) {
   }, [load]);
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden">
+    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-purple-500/5 to-transparent">
         <div className="flex items-center gap-2">
-          <CalendarClock size={14} className="text-fin-primary" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-purple-500/10 text-purple-400">
+            <CalendarClock size={14} />
+          </span>
           <span className="text-xs font-semibold text-fin-text">宏观日历</span>
         </div>
         <button
@@ -108,7 +110,7 @@ export function MacroCalendarPanel({ sessionId }: MacroCalendarPanelProps) {
           aria-label="刷新宏观日历"
           title="刷新"
           data-testid="macro-calendar-refresh"
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           刷新

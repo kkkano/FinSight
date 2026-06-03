@@ -168,16 +168,23 @@ export function FindingCard({
       }}
       data-testid="finding-card"
       data-status={finding.status}
-      className={`relative text-left w-full rounded-xl border bg-fin-card px-4 py-3 transition-colors cursor-pointer ${
+      className={`relative text-left w-full overflow-hidden rounded-xl border bg-fin-card pl-[15px] pr-4 py-3 transition-all cursor-pointer hover:shadow-md ${
         isNew
-          ? 'border-fin-primary/40 hover:border-fin-primary/60'
-          : 'border-fin-border hover:border-fin-border'
+          ? 'border-fin-primary/40 hover:border-fin-primary/60 shadow-sm'
+          : 'border-fin-border hover:border-fin-primary/30'
       }`}
     >
+      {/* 左侧 severity 强调色条：复用 trigger 视觉主色，给卡片视觉锚点 */}
+      <span
+        aria-hidden
+        className={`absolute inset-y-0 left-0 w-1 ${visual.stripeClass}`}
+      />
       {/* 头部：图标 + 标题 + 类型角标 + 未读圆点 */}
       <div className="flex items-start gap-2.5">
-        <span className={`mt-0.5 shrink-0 ${visual.accentClass}`}>
-          <Icon size={16} />
+        <span
+          className={`mt-0.5 shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg ${visual.badgeClass}`}
+        >
+          <Icon size={16} className={visual.accentClass} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">

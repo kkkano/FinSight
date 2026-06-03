@@ -165,7 +165,7 @@ export function StockHeader({
           type="button"
           onClick={handleQuickAnalysis}
           disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-border text-fin-muted hover:text-fin-primary hover:border-fin-primary/50 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRunning && runId ? (
             <Loader2 size={12} className="animate-spin" />
@@ -189,7 +189,7 @@ export function StockHeader({
           type="button"
           onClick={handleDeepAnalysis}
           disabled={isRunning}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-fin-primary/40 bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRunning && runId ? (
             <Loader2 size={12} className="animate-spin" />

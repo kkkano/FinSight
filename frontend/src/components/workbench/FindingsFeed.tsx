@@ -41,11 +41,13 @@ export function FindingsFeed({
   );
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden">
+    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
       {/* 头部 */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-fin-border flex-wrap">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-fin-border bg-gradient-to-r from-fin-primary/5 to-transparent flex-wrap">
         <div className="flex items-center gap-2">
-          <RadarIcon size={15} className="text-fin-primary" />
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-fin-primary/10 text-fin-primary">
+            <RadarIcon size={15} />
+          </span>
           <span className="text-sm font-semibold text-fin-text">今日发现</span>
           {unreadCount > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-2xs font-medium bg-fin-primary/10 text-fin-primary">
@@ -89,7 +91,7 @@ export function FindingsFeed({
             onClick={() => void scan()}
             disabled={scanning || !sessionId}
             data-testid="findings-scan-button"
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {scanning ? (
               <Loader2 size={13} className="animate-spin" />

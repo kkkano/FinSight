@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Newspaper } from 'lucide-react';
+import { ChevronRight, FileText, Newspaper } from 'lucide-react';
 
 import { useStore } from '../store/useStore';
 import { migrateLegacyPortfolio } from '../utils/portfolioMigration';
@@ -130,7 +130,7 @@ export function Workbench({
   return (
     <div className="space-y-4">
       {/* Breadcrumb / navigation bar */}
-      <Card className="px-4 py-3">
+      <Card className="px-4 py-3 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-fin-muted">
             {fromDashboard
@@ -159,15 +159,17 @@ export function Workbench({
         <div className="lg:col-span-2 space-y-4">
           {/* 晨报融入发现流：默认折叠，点击展开（DailyDigest 化） */}
           <details
-            className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden"
+            className="group rounded-xl border border-fin-border bg-fin-card overflow-hidden shadow-sm"
             data-testid="morning-brief-details"
           >
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-fin-text hover:bg-fin-hover/40 transition-colors">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-fin-text bg-gradient-to-r from-amber-500/5 to-transparent hover:bg-fin-hover/40 transition-colors">
               <ChevronRight
                 size={15}
                 className="text-fin-muted transition-transform group-open:rotate-90"
               />
-              <Newspaper size={15} className="text-amber-400" />
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-500/10 text-amber-400">
+                <Newspaper size={14} />
+              </span>
               <span>每日晨报摘要</span>
               <span className="ml-auto text-2xs text-fin-muted">点击展开</span>
             </summary>
@@ -233,12 +235,17 @@ export function Workbench({
         </div>
       </div>
 
-      <Card className="p-4 space-y-3" data-testid="workbench-report-view">
+      <Card className="p-4 space-y-3 shadow-sm" data-testid="workbench-report-view">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="text-sm font-semibold text-fin-text">工作台报告视图</div>
-            <div className="text-2xs text-fin-muted mt-0.5">
-              已选择报告：{selectedReportId || '--'}
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fin-primary/10 text-fin-primary">
+              <FileText size={16} />
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-fin-text">工作台报告视图</div>
+              <div className="text-2xs text-fin-muted mt-0.5">
+                已选择报告：{selectedReportId || '--'}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">

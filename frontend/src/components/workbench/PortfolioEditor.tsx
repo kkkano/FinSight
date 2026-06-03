@@ -89,11 +89,13 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
   );
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden">
+    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-emerald-500/5 to-transparent">
         <div className="flex items-center gap-2">
-          <Wallet size={14} className="text-fin-primary" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
+            <Wallet size={14} />
+          </span>
           <span className="text-xs font-semibold text-fin-text">持仓管理</span>
         </div>
         <button
@@ -104,7 +106,7 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
           }}
           disabled={adding || saving}
           data-testid="portfolio-add-button"
-          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           <Plus size={13} />
           添加持仓

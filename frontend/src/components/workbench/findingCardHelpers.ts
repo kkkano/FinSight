@@ -27,6 +27,8 @@ export interface TriggerVisual {
   accentClass: string;
   /** 角标背景色 */
   badgeClass: string;
+  /** 卡片左侧强调色条背景（视觉锚点，与 accent 同色系） */
+  stripeClass: string;
   /** 中文类型名 */
   label: string;
 }
@@ -48,12 +50,14 @@ export function resolveTriggerVisual(
             Icon: TrendingUp,
             accentClass: 'text-fin-success',
             badgeClass: 'bg-fin-success/10 text-fin-success',
+            stripeClass: 'bg-fin-success',
             label: '价格异动',
           }
         : {
             Icon: TrendingDown,
             accentClass: 'text-fin-danger',
             badgeClass: 'bg-fin-danger/10 text-fin-danger',
+            stripeClass: 'bg-fin-danger',
             label: '价格异动',
           };
     }
@@ -62,6 +66,7 @@ export function resolveTriggerVisual(
         Icon: AlertTriangle,
         accentClass: 'text-fin-warning',
         badgeClass: 'bg-fin-warning/10 text-fin-warning',
+        stripeClass: 'bg-fin-warning',
         label: '集中度风险',
       };
     case 'sentiment_shift':
@@ -69,6 +74,7 @@ export function resolveTriggerVisual(
         Icon: MessageSquareWarning,
         accentClass: 'text-fin-primary',
         badgeClass: 'bg-fin-primary/10 text-fin-primary',
+        stripeClass: 'bg-fin-primary',
         label: '舆情突变',
       };
     case 'earnings_near':
@@ -76,6 +82,7 @@ export function resolveTriggerVisual(
         Icon: CalendarClock,
         accentClass: 'text-amber-400',
         badgeClass: 'bg-amber-500/10 text-amber-400',
+        stripeClass: 'bg-amber-400/70',
         label: '财报临近',
       };
     case 'macro_event':
@@ -83,6 +90,7 @@ export function resolveTriggerVisual(
         Icon: Globe,
         accentClass: 'text-sky-400',
         badgeClass: 'bg-sky-500/10 text-sky-400',
+        stripeClass: 'bg-sky-400/70',
         label: '宏观事件',
       };
     default:
@@ -90,6 +98,7 @@ export function resolveTriggerVisual(
         Icon: AlertTriangle,
         accentClass: 'text-fin-muted',
         badgeClass: 'bg-fin-border/30 text-fin-muted',
+        stripeClass: 'bg-fin-border',
         label: '发现',
       };
   }

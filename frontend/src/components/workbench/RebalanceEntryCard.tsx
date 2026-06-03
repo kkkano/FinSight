@@ -68,9 +68,11 @@ export function RebalanceEntryCard() {
   if (!suggestion && !showDetails) {
     return (
       <div className="space-y-3">
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-3 text-fin-text font-semibold text-sm">
-            <Scale size={16} className="text-fin-primary" />
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-fin-primary/10 text-fin-primary">
+              <Scale size={15} />
+            </span>
             AI 智能调仓
           </div>
           <p className="text-xs text-fin-muted mb-3">
@@ -105,9 +107,11 @@ export function RebalanceEntryCard() {
   // Suggestion exists — show summary preview or full details
   if (suggestion && !showDetails) {
     return (
-      <Card className="p-4 space-y-3">
+      <Card className="p-4 space-y-3 shadow-sm">
         <div className="flex items-center gap-2 text-fin-text font-semibold text-sm">
-          <Scale size={16} className="text-fin-primary" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-fin-primary/10 text-fin-primary">
+            <Scale size={15} />
+          </span>
           AI 智能调仓
           <Badge variant="info" className="ml-auto">
             {RISK_TIER_LABELS[suggestion.risk_tier]}

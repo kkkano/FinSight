@@ -99,11 +99,13 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
     'min-w-0 px-2 py-1 text-xs rounded-lg border border-fin-border bg-fin-bg text-fin-text placeholder:text-fin-muted focus:outline-none focus:border-fin-primary focus:ring-1 focus:ring-fin-primary/30';
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden">
+    <div className="bg-fin-card border border-fin-border rounded-xl overflow-hidden shadow-sm">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-fin-primary/5 to-transparent">
         <div className="flex items-center gap-2">
-          <Radio size={14} className="text-fin-primary" />
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-fin-primary/10 text-fin-primary">
+            <Radio size={14} />
+          </span>
           <span className="text-xs font-semibold text-fin-text">监控配置</span>
         </div>
         <button
@@ -111,7 +113,7 @@ export function MonitorConfigPanel({ sessionId }: MonitorConfigPanelProps) {
           onClick={() => setAdding(true)}
           disabled={adding}
           data-testid="monitor-add-button"
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-fin-primary/10 text-fin-primary hover:bg-fin-primary/20 hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           <Plus size={13} />
           添加监控
