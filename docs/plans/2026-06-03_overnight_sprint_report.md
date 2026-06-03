@@ -231,6 +231,27 @@ Price/Fundamental 在报告模式和 L3 全面体检中调用。
 扛不住 15 分钟扫描频率 → 加 1 小时舆情缓存 + 1.2 秒调用间隔；
 限流时诚实跳过不报警（设计如此），配额日均用量从 96×N 降到 ≤24×N。
 
+### 交易时段感知盯盘（2026-06-03 中午，独立 goal：finsight-market-hours-goal）
+
+| 内容 | Commit | 说明 |
+|------|--------|------|
+| 时段判断 + 盘前价格 + Dispatcher | 后端 commit | market_hours.py（27测试）+ session_price.py（v8 chart includePrePost 盘前价）+ 5分钟心跳节流调度 |
+| 盘前/盘后 badge | `faac7d4` | 发现卡片橙色"盘前"/靛蓝"盘后"标注 |
+
+**分时段调度表**：盘前(美东4:00-9:30=北京16:00-21:30) 10min 全规则 / 盘中 15min / 盘后 30min /
+闭市·周末·节假日 60min 且跳过价格规则。
+
+**实测**：当前时段正确判断为 closed（美东深夜），调度日志
+`dispatch: session=closed interval=60.0min`，价格规则被跳过 ✅
+
+**重要技术发现**：Yahoo v7 quote 端点已 401 失效（preMarketPrice 字段拿不到）；
+盘前真实价格唯一途径是 v8 chart `includePrePost=true` 按 currentTradingPeriod 切窗口（已实现）；
+拿不到时诚实标注 `price_basis=regular_fallback`，绝不冒充盘前价。
+
+**新增环境变量**：MONITOR_DISPATCH_HEARTBEAT_MINUTES=5 / MONITOR_INTERVAL_PRE_MARKET=10 /
+MONITOR_INTERVAL_REGULAR=15 / MONITOR_INTERVAL_AFTER_HOURS=30 / MONITOR_INTERVAL_CLOSED=60 /
+NEWS_SENTIMENT_CACHE_TTL_SECONDS=3600（旧的 MONITOR_SCAN_INTERVAL_MINUTES 不再被读取）
+
 ### 测试中观察到的已知降级行为（非 bug）
 
 - 本地无 FlagEmbedding 模块 → RAG 自动降级 hash embedding（日志正确记录 fallback_reason，P1-10 行为符合预期）
