@@ -489,7 +489,6 @@ export interface DashboardInsightsResponse {
 // === localStorage 键 ===
 export const STORAGE_KEYS = {
   ACTIVE_ASSET: 'fs_dashboard_active_v1',
-  WATCHLIST: 'fs_dashboard_watchlist_v1',
   LAYOUT: 'fs_dashboard_layout_v1',
   NEWS_MODE: 'fs_dashboard_news_mode_v1',
   NEWS_SUB_TAB: 'fs_dashboard_news_sub_tab_v1',

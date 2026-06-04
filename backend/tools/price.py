@@ -1165,7 +1165,7 @@ def _fallback_price_value(ticker: str) -> Optional[float]:
     # 搜索兜底
     try:
         search_result = search(f"{ticker} index level today")
-        m = re.search(r"(\\d{3,6}(?:,\\d{3})*(?:\\.\\d+)?)", search_result or "")
+        m = re.search(r"(\d{3,6}(?:,\d{3})*(?:\.\d+)?)", search_result or "")
         if m:
             val = float(m.group(1).replace(",", ""))
             if val <= 0 or val > 1e8:

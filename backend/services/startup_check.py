@@ -32,6 +32,8 @@ class StartupCheckResult:
     llm_error: str | None = None
     missing_keys: list[str] = field(default_factory=list)
     configured_keys: list[str] = field(default_factory=list)
+    # P3: agent LLM 分析总开关是否启用（关闭则所有 agent 退化成只列数据，护城河功能失效）
+    agent_llm_analyze_enabled: bool = True
 
 
 _startup_result: StartupCheckResult | None = None
@@ -69,6 +71,16 @@ def _check_llm_endpoint() -> tuple[bool, str | None]:
         return False, f"LLM endpoint resolution failed: {exc}"
 
 
+def _check_agent_llm_analyze() -> bool:
+    """P3: 检查 AGENT_LLM_ANALYZE_ENABLED 是否启用。
+
+    默认 false（见 base_agent.py），漏配则所有 agent 退化成只罗列原始数据，
+    失去 LLM 解读这一护城河能力。返回是否启用。
+    """
+    raw = os.getenv("AGENT_LLM_ANALYZE_ENABLED", "false")
+    return str(raw).strip().lower() in ("true", "1", "yes", "on")
+
+
 def _check_data_source_keys() -> tuple[list[str], list[str]]:
     """P1-1: 检查重要数据源 key 配置状态，返回 (已配置, 缺失)。"""
     missing: list[str] = []
@@ -88,6 +100,7 @@ def run_startup_checks() -> StartupCheckResult:
 
     llm_available, llm_error = _check_llm_endpoint()
     configured, missing = _check_data_source_keys()
+    agent_llm_enabled = _check_agent_llm_analyze()
 
     if llm_available:
         logger.info("[StartupCheck] LLM endpoint: OK")
@@ -111,10 +124,20 @@ def run_startup_checks() -> StartupCheckResult:
             IMPORTANT_DATA_SOURCE_KEYS[key],
         )
 
+    if agent_llm_enabled:
+        logger.info("[StartupCheck] AGENT_LLM_ANALYZE_ENABLED: ON（agent LLM 分析已启用）")
+    else:
+        logger.warning(
+            "[StartupCheck] AGENT_LLM_ANALYZE_ENABLED 未启用 — agent LLM 分析已关闭，"
+            "所有 agent 将退化成只罗列原始数据，护城河功能退化。"
+            "如需启用请设置 AGENT_LLM_ANALYZE_ENABLED=true",
+        )
+
     _startup_result = StartupCheckResult(
         llm_available=llm_available,
         llm_error=llm_error,
         missing_keys=missing,
         configured_keys=configured,
+        agent_llm_analyze_enabled=agent_llm_enabled,
     )
     return _startup_result

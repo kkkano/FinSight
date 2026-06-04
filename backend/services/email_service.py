@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import smtplib
@@ -112,6 +113,10 @@ class EmailService:
         else:
             subject = f"🔔 {ticker} 提醒"
 
+        # 转义用户/agent 可控内容，防止 HTML 注入（ticker、message 直插 HTML body）
+        ticker_html = html.escape(str(ticker))
+        message_html = html.escape(str(message))
+
         change_class = "positive" if change_percent is not None and change_percent >= 0 else "negative"
         price_html = f'<div class="price">当前价格: ${current_price:.2f}</div>' if current_price is not None else ""
         change_html = (
@@ -145,11 +150,11 @@ class EmailService:
                     <h1>FinSight 股票提醒</h1>
                 </div>
                 <div class="content">
-                    <div class="ticker">{ticker}</div>
+                    <div class="ticker">{ticker_html}</div>
                     {price_html}
                     {change_html}
                     <div class="message">
-                        <p>{message}</p>
+                        <p>{message_html}</p>
                     </div>
                     <div class="footer">
                         <p>此邮件由 FinSight AI 自动发送</p>

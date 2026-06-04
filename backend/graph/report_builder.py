@@ -2451,6 +2451,53 @@ def _build_report_payload_impl(*, state: dict[str, Any], query: str, thread_id: 
         if "quality_gap" not in report_tags:
             report_tags.append("quality_gap")
 
+    # --- 数据完整性披露：汇总 optional 步骤的静默失败 ---
+    # executor 对 optional 步骤失败只 append 到 artifacts["errors"] 后 continue，不 raise。
+    # 这些 errors 仅当 step_id 命中某个 agent 步骤时才会显示为该 agent 的 error 状态；
+    # 而非 agent 的 optional 步骤（如数据源拉取）失败会成为"孤儿 error"，对用户完全不可见。
+    # 这里把孤儿失败汇总成一条数据完整性风险，让"某数据源静默缺失"可见。
+    _agent_step_ids: set[str] = set()
+    for _step in plan_steps:
+        if not isinstance(_step, dict):
+            continue
+        if _step.get("kind") == "agent" and isinstance(_step.get("id"), str) and _step.get("id").strip():
+            _agent_step_ids.add(_step.get("id").strip())
+
+    orphan_failures: list[str] = []
+    for _err in errors:
+        if not isinstance(_err, dict):
+            continue
+        if not bool(_err.get("optional")):
+            continue
+        _sid = _safe_str(_err.get("step_id") or "").strip()
+        if _sid and _sid in _agent_step_ids:
+            continue  # 已通过 agent 状态暴露，跳过
+        _name = _safe_str(_err.get("name") or _err.get("kind") or _sid or "未知步骤").strip()
+        _etype = _safe_str(_err.get("error_type") or "").strip()
+        label = f"{_name}（{_etype}）" if _etype else _name
+        if label and label not in orphan_failures:
+            orphan_failures.append(label)
+
+    if orphan_failures:
+        shown = orphan_failures[:6]
+        gap_text = "；".join(shown)
+        more = f" 等共 {len(orphan_failures)} 项" if len(orphan_failures) > len(shown) else ""
+        completeness_risk = (
+            f"以下可选数据步骤静默失败、对应数据源缺失：{gap_text}{more}。"
+            "相关维度的数据可能不完整，请结合数据完整性谨慎解读结论。"
+        )
+        if completeness_risk not in risks:
+            risks.insert(0, completeness_risk)
+        synthesis_report = (
+            f"{synthesis_report.rstrip()}\n\n"
+            "## 数据完整性说明\n"
+            f"- 本轮有 {len(orphan_failures)} 项可选数据步骤未成功获取，相关数据源静默缺失：\n"
+            + "\n".join(f"  - {item}" for item in shown)
+            + (f"\n  - …等共 {len(orphan_failures)} 项\n" if len(orphan_failures) > len(shown) else "\n")
+        )
+        if "data_completeness_gap" not in report_tags:
+            report_tags.append("data_completeness_gap")
+
     # --- Conflict disclosure gate: inject conflicts into report ---
     conflict_disclosure = _safe_str(render_vars.get("conflict_disclosure") or "").strip()
     is_degraded_conflict = "冲突检测降级" in conflict_disclosure

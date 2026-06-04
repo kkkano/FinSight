@@ -175,6 +175,8 @@ export const InlineChart: React.FC<InlineChartProps> = ({
 }) => {
   const chartTheme = useChartTheme();
   const [data, setData] = useState<KlineData[]>([]);
+  // 数据来源标记：price_fallback* 表示后端全源失败后生成的合成占位 K 线（非真实行情）
+  const [dataSource, setDataSource] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const onDataReadyRef = useRef(onDataReady);
   const lastSummaryRef = useRef<string>('');
@@ -192,9 +194,12 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         const res = await apiClient.fetchKline(ticker, period, interval);
         const responseData = res as any;
         const kline = responseData?.data?.kline_data ?? responseData?.kline_data ?? [];
+        // 读取后端 source 标记（price_fallback / price_fallback_hourly = 合成占位行情）
+        const source = responseData?.data?.source ?? responseData?.source ?? null;
 
         if (!active) return;
         setData(kline);
+        setDataSource(typeof source === 'string' ? source : null);
         if (kline.length) {
           const summary = generateDataSummary(ticker, kline);
           if (summary && summary !== lastSummaryRef.current) {
@@ -230,6 +235,9 @@ export const InlineChart: React.FC<InlineChartProps> = ({
     return null;
   }
 
+  // 合成占位数据：后端全源失败后用最新价生成的等值序列，非真实行情，必须显著标注
+  const isSynthetic = typeof dataSource === 'string' && dataSource.startsWith('price_fallback');
+
   const option = chartType === 'candlestick'
     ? buildCandleOption(data, chartTheme)
     : buildLineOption(data, chartTheme, chartType === 'area');
@@ -239,6 +247,11 @@ export const InlineChart: React.FC<InlineChartProps> = ({
       <div className="text-xs text-fin-muted mb-2">
         {ticker} {chartLabels[chartType] || 'Chart'} ({period})
       </div>
+      {isSynthetic && (
+        <div className="mb-2 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-600 text-xs font-medium">
+          ⚠ 合成占位 · 非真实行情：实时数据源全部失败，下图为按最新价生成的等值占位序列，仅供形态参考，不可用于交易决策。
+        </div>
+      )}
       <ReactECharts option={option} style={{ height: '300px', width: '100%' }} />
     </div>
   );

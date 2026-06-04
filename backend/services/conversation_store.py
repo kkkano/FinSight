@@ -17,11 +17,24 @@ def _now() -> float:
     return time.time()
 
 
+def _data_dir() -> Path:
+    """解析数据目录：优先 FINSIGHT_DATA_DIR，否则锚定到仓库根 /data。
+
+    避免相对 Path("data") 受进程 CWD 影响导致的 split-brain
+    （与 portfolio_store/monitor_store/cost_audit_store 同一锚定模式）。
+    conversation_store.py 位于 backend/services/，parents[2] 即仓库根。
+    """
+    env_dir = os.getenv("FINSIGHT_DATA_DIR")
+    if env_dir and env_dir.strip():
+        return Path(env_dir.strip())
+    return Path(__file__).resolve().parents[2] / "data"
+
+
 def _store_path() -> Path:
     configured = os.getenv("CONVERSATION_STORE_PATH")
     if configured and configured.strip():
         return Path(configured.strip())
-    return Path("data") / "conversations.json"
+    return _data_dir() / "conversations.json"
 
 
 def _sanitize_message(item: Any) -> dict[str, Any] | None:

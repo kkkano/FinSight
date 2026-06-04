@@ -542,3 +542,79 @@ def test_build_report_payload_uses_internal_citations_when_agent_evidence_has_no
     }
     assert "EVIDENCE_COVERAGE_BELOW_MIN" not in codes
     assert "KEY_SECTION_SOURCES_BELOW_MIN" not in codes
+
+
+def test_optional_non_agent_failure_surfaced_as_data_completeness_gap():
+    """P2: optional 的非 agent 步骤静默失败（孤儿 error）应汇总进数据完整性风险与 tag。"""
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["fundamental_agent"]},
+        "plan_ir": {
+            "steps": [
+                {"id": "s1", "kind": "agent", "name": "fundamental_agent"},
+                {"id": "d1", "kind": "tool", "name": "fetch_macro_data"},
+            ]
+        },
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n正文。\n",
+            "evidence_pool": [],
+            "errors": [
+                # 孤儿 optional 失败：step_id 不属于任何 agent 步骤
+                {
+                    "step_id": "d1",
+                    "kind": "tool",
+                    "name": "fetch_macro_data",
+                    "error": "timeout",
+                    "error_type": "TimeoutError",
+                    "optional": True,
+                },
+            ],
+            "render_vars": {},
+            "step_results": {
+                "s1": {"output": {"summary": "ok", "confidence": 0.8, "data_sources": ["yfinance"]}},
+            },
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-orphan")
+    assert isinstance(report, dict)
+
+    tags = report.get("tags") or []
+    assert "data_completeness_gap" in tags
+
+    risks = report.get("risks") or []
+    assert any("fetch_macro_data" in str(r) for r in risks)
+
+
+def test_agent_step_failure_not_double_counted_as_orphan():
+    """命中 agent 的失败已通过 agent 状态暴露，不应再触发数据完整性 gap。"""
+    state = {
+        "output_mode": "investment_report",
+        "subject": {"subject_type": "company", "tickers": ["AAPL"]},
+        "policy": {"allowed_agents": ["fundamental_agent"]},
+        "plan_ir": {"steps": [{"id": "s1", "kind": "agent", "name": "fundamental_agent"}]},
+        "artifacts": {
+            "draft_markdown": "## 投资研报：AAPL\n\n正文。\n",
+            "evidence_pool": [],
+            "errors": [
+                {
+                    "step_id": "s1",
+                    "kind": "agent",
+                    "name": "fundamental_agent",
+                    "error": "boom",
+                    "error_type": "RuntimeError",
+                    "optional": True,
+                },
+            ],
+            "render_vars": {},
+            "step_results": {},
+        },
+        "trace": {},
+    }
+
+    report = build_report_payload(state=state, query="analyze AAPL", thread_id="t-agenterr")
+    assert isinstance(report, dict)
+    tags = report.get("tags") or []
+    assert "data_completeness_gap" not in tags

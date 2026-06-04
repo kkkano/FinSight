@@ -101,6 +101,39 @@ class TestDataSourceKeyCheck:
         assert keys[1] in result.missing_keys
 
 
+class TestAgentLLMAnalyzeCheck:
+    """P3: AGENT_LLM_ANALYZE_ENABLED 启动校验（关闭则 agent 退化成只列数据）"""
+
+    def test_disabled_by_default(self, monkeypatch):
+        monkeypatch.delenv("AGENT_LLM_ANALYZE_ENABLED", raising=False)
+        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
+            result = run_startup_checks()
+        assert result.agent_llm_analyze_enabled is False
+
+    def test_enabled_when_true(self, monkeypatch):
+        monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "true")
+        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
+            result = run_startup_checks()
+        assert result.agent_llm_analyze_enabled is True
+
+    def test_enabled_accepts_truthy_variants(self, monkeypatch):
+        for raw in ("1", "yes", "on", "TRUE", "On"):
+            startup_check._reset_for_testing()
+            monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", raw)
+            with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
+                result = run_startup_checks()
+            assert result.agent_llm_analyze_enabled is True, raw
+
+    def test_warning_logged_when_disabled(self, monkeypatch, caplog):
+        import logging
+
+        monkeypatch.setenv("AGENT_LLM_ANALYZE_ENABLED", "false")
+        with patch("backend.llm_config.load_user_endpoints", return_value=[object()]):
+            with caplog.at_level(logging.WARNING, logger="backend.services.startup_check"):
+                run_startup_checks()
+        assert any("AGENT_LLM_ANALYZE_ENABLED" in r.message for r in caplog.records)
+
+
 class TestIsLLMAvailable:
     """P1-3: chat_router 快速失败依赖的状态查询"""
 

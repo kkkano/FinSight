@@ -26,6 +26,25 @@ type PersistedMorningBrief = {
   generatedAt: string | null;
 };
 
+/**
+ * 判断晨报生成时间是否仍属于「当日」有效。
+ *
+ * 晨报是按当天行情/新闻生成的，跨天后昨天的晨报不应在今早复用，
+ * 否则会把昨天的晨报当成今早的展示（误导）。
+ * 以本地日期边界为准：生成日期 !== 今天 即视为过期。
+ */
+const isBriefFresh = (generatedAt: string | null): boolean => {
+  if (!generatedAt) return false;
+  const generated = new Date(generatedAt);
+  if (Number.isNaN(generated.getTime())) return false;
+  const now = new Date();
+  return (
+    generated.getFullYear() === now.getFullYear() &&
+    generated.getMonth() === now.getMonth() &&
+    generated.getDate() === now.getDate()
+  );
+};
+
 const loadPersistedBrief = (sessionId: string): PersistedMorningBrief | null => {
   if (typeof window === 'undefined') return null;
   try {
@@ -33,9 +52,17 @@ const loadPersistedBrief = (sessionId: string): PersistedMorningBrief | null => 
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistedMorningBrief>;
     if (!parsed || typeof parsed !== 'object' || !parsed.brief) return null;
+    const brief = parsed.brief as MorningBriefData;
+    const generatedAt =
+      typeof parsed.generatedAt === 'string' ? parsed.generatedAt : brief.generated_at ?? null;
+    // TTL：跨当日边界则视为过期，丢弃缓存（同时清理 localStorage，触发重新生成）
+    if (!isBriefFresh(generatedAt)) {
+      window.localStorage.removeItem(buildStorageKey(sessionId));
+      return null;
+    }
     return {
-      brief: parsed.brief as MorningBriefData,
-      generatedAt: typeof parsed.generatedAt === 'string' ? parsed.generatedAt : null,
+      brief,
+      generatedAt,
     };
   } catch {
     return null;
