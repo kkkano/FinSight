@@ -9,9 +9,7 @@
 # Ports exposed to host:
 #   80    frontend  (HTTP, SPA + API proxy)
 #   8000  backend   (direct API access, optional)
-#   5432  postgres  (local debug only — consider removing in prod)
-
-version: "3.9"
+#   5432  postgres  (容器内网访问，不暴露宿主机)
 
 services:
 
@@ -26,8 +24,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finsight_pass}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"        # remove in strict-prod
+    # 不暴露 5432 到宿主机：容器间走 finsight-net 的服务名 DNS（postgres:5432）即可。
+    # 弱默认密码下暴露宿主机端口有风险。若需本地工具直连调试，临时取消下面两行注释：
+    #   ports:
+    #     - "127.0.0.1:5432:5432"   # 仅绑回环，按需打开
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finsight}"]
       interval: 10s
@@ -56,7 +56,8 @@ services:
       FINSIGHT_CONFIG_DIR:          /app/data
       # Default LLM endpoint (OpenAI-compatible). Override in .env.server to use your own.
       # On first boot, these are written to user_config.json so the Settings UI is pre-filled.
-      OPENAI_COMPATIBLE_API_KEY:    ${OPENAI_COMPATIBLE_API_KEY:-}
+      # 注：OPENAI_COMPATIBLE_API_KEY 由 env_file (.env.server) 提供，不在此用 ${VAR:-} 兜底，
+      #     避免漏带 --env-file 时空值 shadow 掉 env_file 的真实值。
       OPENAI_COMPATIBLE_API_BASE:   ${OPENAI_COMPATIBLE_API_BASE:-https://token-plan-cn.xiaomimimo.com/v1}
       OPENAI_COMPATIBLE_MODEL:      ${OPENAI_COMPATIBLE_MODEL:-mimo-v2.5-pro}
       # HuggingFace mirror (bypasses GFW, used by BGE-M3 / reranker model downloads)
@@ -67,9 +68,9 @@ services:
       RAG_V2_POSTGRES_DSN:          postgresql+psycopg://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       LANGGRAPH_CHECKPOINT_POSTGRES_DSN: postgresql://${POSTGRES_USER:-finsight}:${POSTGRES_PASSWORD:-finsight_pass}@postgres:5432/${POSTGRES_DB:-finsight}
       # Supabase runtime auth for /diagnostics/rag/*
-      # Keep these values aligned with frontend VITE_SUPABASE_* so backend can validate Bearer access tokens.
-      SUPABASE_URL:                 ${SUPABASE_URL:-}
-      SUPABASE_PUBLISHABLE_KEY:     ${SUPABASE_PUBLISHABLE_KEY:-}
+      # SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY 由 env_file (.env.server) 提供，
+      # 不在此用 ${VAR:-} 空兜底，避免 shadow env_file 的真实值。
+      # 须与前端 VITE_SUPABASE_* 指向同一 Supabase 项目，后端才能校验 Bearer access token。
       RAG_OBSERVABILITY_AUTH_CACHE_SECONDS: ${RAG_OBSERVABILITY_AUTH_CACHE_SECONDS:-60}
     volumes:
       - backend_data:/app/data
@@ -102,6 +103,12 @@ services:
         # Must point to the same Supabase project as backend SUPABASE_* runtime env.
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
+        # RAG Inspector 本地开发密码 token（敏感，默认空——生产走 Supabase 登录）
+        VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN: ${VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN:-}
+        # SSE 与对话历史调参（合理默认，按需在 .env 覆盖）
+        VITE_SSE_IDLE_DONE_FALLBACK_MS: ${VITE_SSE_IDLE_DONE_FALLBACK_MS:-8000}
+        VITE_SSE_READ_TIMEOUT_MS: ${VITE_SSE_READ_TIMEOUT_MS:-30000}
+        VITE_CHAT_HISTORY_MAX_MESSAGES: ${VITE_CHAT_HISTORY_MAX_MESSAGES:-12}
     container_name: finsight-frontend
     restart: unless-stopped
     ports:

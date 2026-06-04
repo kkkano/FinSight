@@ -106,7 +106,9 @@ def _derive_quality_fields(report: dict[str, Any]) -> tuple[str, int, str]:
 
 class ReportIndexStore:
     def __init__(self) -> None:
-        path = os.getenv("REPORT_INDEX_SQLITE_PATH", "backend/data/report_index.sqlite")
+        # 默认落在 data/ 目录（容器内映射到挂载卷 /app/data），与其他 store 一致，
+        # 避免落在卷外导致每次 --build 丢失报告索引。
+        path = os.getenv("REPORT_INDEX_SQLITE_PATH", "data/report_index.sqlite")
         self._path = os.path.abspath(path)
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         self._lock = threading.Lock()

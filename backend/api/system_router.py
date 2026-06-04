@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict
 import os
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 
 @dataclass(frozen=True)
@@ -98,7 +98,13 @@ def create_system_router(deps: SystemRouterDeps) -> APIRouter:
             status = "degraded"
             components["rag"] = {"status": "error", "error": str(exc)}
 
-        return {"status": status, "components": components, "timestamp": _now()}
+        payload = {"status": status, "components": components, "timestamp": _now()}
+        # 整体降级/错误时返回 503，让 Docker healthcheck / Cloudflare 真实反映后端状态。
+        # （仅 orchestrator 不可用 / 期望 postgres 实际降级 / RAG 整体异常会把整体 status
+        #  置为 degraded；RAG 组件级降级如 hash embedding 不改整体 status，仍返回 200。）
+        if status != "healthy":
+            return JSONResponse(status_code=503, content=payload)
+        return payload
 
     @router.get("/metrics")
     def metrics_endpoint():

@@ -1710,6 +1710,10 @@ async def execute_plan_stub(state: GraphState) -> dict:
                 rag_hits = pre_rerank_hits[:rerank_top_n]
                 reranker_used = False
                 try:
+                    # ⚠️ reranker 主开关默认关闭。即便 .env 配了 RAG_RERANKER 模型，
+                    # 检索结果也不会经过 bge-reranker 重排（模型会被加载占内存却不生效）。
+                    # 要真正启用重排提质，必须显式设置 RAG_ENABLE_RERANKER=true；
+                    # 若不打算用 reranker，建议把 RAG_RERANKER* 配置删掉以省内存。
                     rerank_enabled = str(os.getenv("RAG_ENABLE_RERANKER", "false")).strip().lower() in {
                         "1",
                         "true",
