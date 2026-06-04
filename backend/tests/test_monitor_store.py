@@ -219,3 +219,82 @@ def test_target_portfolio_level_null_ticker(store: MonitorStore):
     rows = store.list_targets("sess-a")
     assert rows[0]["ticker"] is None
     assert rows[0]["config"]["concentration_pct"] == 80.0
+
+
+# ── 默认数据目录路径锚定（CWD split-brain 修复回归）─────────────
+
+
+def test_default_db_dir_anchored_to_repo_root_not_cwd(monkeypatch):
+    """默认数据目录应基于 __file__ 锚定到仓库根/data，绝对路径、与启动 CWD 无关。
+
+    回归曾出现的 split-brain（data/portfolio.db 与 backend/data/portfolio.db 两份）。
+    """
+    import importlib
+    from pathlib import Path
+
+    # 清掉环境变量覆盖，强制走默认锚定
+    monkeypatch.delenv("FINSIGHT_DATA_DIR", raising=False)
+
+    from backend.services import portfolio_store, monitor_store, cost_audit
+
+    importlib.reload(portfolio_store)
+    importlib.reload(monitor_store)
+    importlib.reload(cost_audit)
+
+    repo_root = Path(__file__).resolve().parents[2]  # backend/tests/ -> 仓库根
+    expected_data = repo_root / "data"
+
+    # 三个 store 默认目录都绝对、都锚定到同一个仓库根/data（单一真相源）
+    assert monitor_store._DEFAULT_DB_DIR.is_absolute()
+    assert monitor_store._DEFAULT_DB_DIR == expected_data
+    assert portfolio_store._DB_DIR.is_absolute()
+    assert portfolio_store._DB_DIR == expected_data
+    assert cost_audit._DEFAULT_DB_DIR.is_absolute()
+    assert cost_audit._DEFAULT_DB_DIR == expected_data
+
+
+def test_env_override_still_respected(monkeypatch, tmp_path):
+    """显式 FINSIGHT_DATA_DIR 仍优先于默认锚定（容器挂载 / 自定义路径不被破坏）。"""
+    import importlib
+
+    monkeypatch.setenv("FINSIGHT_DATA_DIR", str(tmp_path))
+    from backend.services import monitor_store
+
+    importlib.reload(monitor_store)
+    try:
+        assert monitor_store._DEFAULT_DB_DIR == tmp_path
+    finally:
+        monkeypatch.delenv("FINSIGHT_DATA_DIR", raising=False)
+        importlib.reload(monitor_store)
+
+
+# ── 通知冷却落库（重启 / 多 worker 不重发回归）─────────────────
+
+
+def test_notify_cooldown_roundtrip(store: MonitorStore):
+    """set/get 冷却时间戳 round-trip：写入后可读回 aware datetime。"""
+    assert store.get_last_notified_at("sess-x") is None
+    store.set_last_notified_at("sess-x")
+    got = store.get_last_notified_at("sess-x")
+    assert got is not None
+    assert got.tzinfo is not None  # 必须是 aware（UTC），否则后续相减会抛 TypeError
+
+
+def test_notify_cooldown_persists_to_new_instance(tmp_path):
+    """同一 db 文件、新建 store 实例仍能读回冷却时间戳（模拟重启 / 多 worker）。"""
+    db_file = str(tmp_path / "cooldown.db")
+    s1 = MonitorStore(db_path=db_file)
+    fixed = datetime(2026, 6, 4, 12, 0, 0, tzinfo=timezone.utc)
+    s1.set_last_notified_at("sess-x", fixed)
+
+    s2 = MonitorStore(db_path=db_file)
+    assert s2.get_last_notified_at("sess-x") == fixed
+
+
+def test_notify_cooldown_upsert_overwrites(store: MonitorStore):
+    """重复 set 覆盖为最新时间戳（同 session 单行）。"""
+    t1 = datetime(2026, 6, 4, 10, 0, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 6, 4, 11, 0, 0, tzinfo=timezone.utc)
+    store.set_last_notified_at("sess-x", t1)
+    store.set_last_notified_at("sess-x", t2)
+    assert store.get_last_notified_at("sess-x") == t2

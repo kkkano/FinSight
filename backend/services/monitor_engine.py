@@ -45,11 +45,16 @@ from backend.tools import get_event_calendar, get_news_sentiment_score
 
 logger = logging.getLogger(__name__)
 
-# Dispatcher 内存态：上次实际扫描的单调时间戳（重启重置无妨，下个心跳即恢复节奏）
+# Dispatcher 内存态：上次实际扫描的单调时间戳。
+# ⚠️ 仅单 worker 有效：多 worker 部署时各进程有独立 _last_scan_at，会各自按间隔扫描
+# （重复扫描，但扫描本身幂等——Finding 有 has_recent_finding 去重，无外部副作用）。
+# 邮件通知的去重才是关键（有外部副作用），已落库到 monitor.db notify_cooldown 表（见下）。
+# 重启重置无妨，下个心跳即恢复节奏。
 _last_scan_at: float | None = None
 
-# 通知冷却内存态：session_id -> 上次发信的单调时间戳（重启重置无妨）
-_notify_last_sent: dict[str, float] = {}
+# 通知冷却阈值：同 session 该窗口内最多发 1 封。
+# 冷却时间戳已落库（monitor_store.notify_cooldown），跨重启 / 多 worker 共享，
+# 不再用进程内 dict（重启会立即重发、多 worker 各自冷却互不可见）。
 NOTIFY_COOLDOWN_SECONDS = 3600.0  # 同 session 1 小时内最多发 1 封
 
 # 默认阈值（可被 MonitorTarget.config 覆盖）
@@ -531,7 +536,7 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
     """把本轮新 findings 汇总成一封邮件发出（受开关 + SMTP 配置 + 冷却限制）。
 
     - 仅当 settings.notify_enabled 且 notify_email 非空 且 SMTP 已配置时才发
-    - 冷却：同 session 1 小时内最多发 1 封（内存 _notify_last_sent 记录，超频跳过）
+    - 冷却：同 session 1 小时内最多发 1 封（落库 monitor.db notify_cooldown，超频跳过）
     - 发送失败（网络/SMTP）不影响扫描主流程（try/except + log）
     诚实原则：拿不到配置或未开启时静默跳过，不报错。
     """
@@ -548,18 +553,19 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
             # SMTP 未配置：静默跳过（不视为错误，settings 已在 API 层拦截启用）
             return
 
-        # 冷却：距上次发信不足 1 小时则跳过
-        import time as _time
-
-        now = _time.monotonic()
-        last = _notify_last_sent.get(session_id)
-        if last is not None and (now - last) < NOTIFY_COOLDOWN_SECONDS:
-            logger.info(
-                "[MonitorEngine] notify cooldown active for session %s, skip (%.0fs left)",
-                session_id,
-                NOTIFY_COOLDOWN_SECONDS - (now - last),
-            )
-            return
+        # 冷却：距上次发信不足 1 小时则跳过。时间戳落库（跨重启 / 多 worker 共享）。
+        now = datetime.now(timezone.utc)
+        last = store.get_last_notified_at(session_id)
+        if last is not None:
+            elapsed = (now - last).total_seconds()
+            # elapsed < 0 视为时钟回拨/异常未来戳：保守按冷却中处理，避免重发
+            if elapsed < NOTIFY_COOLDOWN_SECONDS:
+                logger.info(
+                    "[MonitorEngine] notify cooldown active for session %s, skip (%.0fs left)",
+                    session_id,
+                    NOTIFY_COOLDOWN_SECONDS - elapsed,
+                )
+                return
 
         # 组装邮件：标题 + 逐条 title/summary
         count = len(findings)
@@ -597,7 +603,7 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
             notify_email, subject, html_content, text_content
         )
         if success:
-            _notify_last_sent[session_id] = now
+            store.set_last_notified_at(session_id, now)
             logger.info(
                 "[MonitorEngine] notify sent for session %s (%s findings) to %s",
                 session_id,

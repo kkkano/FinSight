@@ -441,6 +441,68 @@ const getInitialMessages = (sessionId: string): Message[] => {
   return loadMessagesForSession(sessionId);
 };
 
+/** 本地是否仅有「欢迎语 / 空」——据此判断要不要回后端找回历史。 */
+const isEmptyLocalHistory = (messages: Message[]): boolean => {
+  if (!messages.length) return true;
+  return messages.every((m) => m.id === WELCOME_MESSAGE.id);
+};
+
+/** 把后端 sanitize 过的消息行（{id, role, content, timestamp}）还原为 Message。 */
+const deserializeBackendMessages = (raw: unknown): Message[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: Message[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const role = String(row.role || '').trim();
+    const content = String(row.content || '').trim();
+    if ((role !== 'user' && role !== 'assistant') || !content) continue;
+    out.push({
+      id: String(row.id || '') || `srv-${Date.now()}-${out.length}`,
+      role: role as Message['role'],
+      content,
+      timestamp: typeof row.timestamp === 'number' ? row.timestamp : Date.now(),
+    });
+  }
+  return out;
+};
+
+/**
+ * 后端回退：本地无历史时异步拉后端会话快照回填（换设备 / 清缓存找回）。
+ *
+ * 原则（不破坏现有同步加载逻辑）：
+ *   - 调用方只在「本地加载结果为空」时触发，本地有就用本地，本地空才回后端
+ *   - 拉到非空历史后，仅当此刻仍停留在同一 session 且本地仍为空时才填充（避免覆盖用户已新发的消息 / 切走的会话）
+ *   - 拿到的历史写回 localStorage 作为缓存（syncBackend=false：不要再反向写后端，避免回环）
+ *   - 任何失败静默忽略，保持纯回退语义
+ */
+const hydrateMessagesFromBackend = (sessionId: string): void => {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return;
+  void apiClient
+    .getConversation(sid)
+    .then((resp) => {
+      const conversation = resp?.conversation as Record<string, unknown> | undefined;
+      const restored = deserializeBackendMessages(conversation?.messages);
+      if (!restored.length) return;
+
+      const state = useStore.getState();
+      // 仅当仍在该 session 且本地仍为空时回填（防竞态覆盖）
+      if (state.sessionId !== sid || !isEmptyLocalHistory(state.messages)) return;
+
+      persistMessages(restored, sid, { syncBackend: false });
+      useStore.setState({
+        messages: restored,
+        conversationSummaries: upsertConversationSummary(
+          state.conversationSummaries,
+          sid,
+          restored,
+        ),
+      });
+    })
+    .catch(() => undefined);
+};
+
 const persistMessages = (
   messages: Message[],
   sessionId: string,
@@ -897,7 +959,9 @@ export const useStore = create<AppState>((set) => ({
       return { entryMode: mode };
     }),
 
-  setSessionId: (sessionId) =>
+  setSessionId: (sessionId) => {
+    let needHydrate = false;
+    let hydrateSid = '';
     set((state) => {
       const normalized = String(sessionId || '').trim() || buildAnonymousSessionId();
       const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
@@ -905,6 +969,11 @@ export const useStore = create<AppState>((set) => ({
         window.localStorage.setItem('finsight-session-id', normalized);
       }
       createBackendConversation(normalized, messages);
+      // 本地无历史 → 标记需回后端回退（在 set 外异步执行，避免 reducer 内副作用）
+      if (isEmptyLocalHistory(messages)) {
+        needHydrate = true;
+        hydrateSid = normalized;
+      }
       const sessionStatus = statusForSession(state.chatStatusBySession, normalized);
       return {
         sessionId: normalized,
@@ -918,15 +987,24 @@ export const useStore = create<AppState>((set) => ({
         abortController: state.abortControllersBySession[normalized] || null,
         draft: state.draftBySession[normalized] || '',
       };
-    }),
+    });
+    if (needHydrate) hydrateMessagesFromBackend(hydrateSid);
+  },
 
-  selectConversation: (sessionId) =>
+  selectConversation: (sessionId) => {
+    let needHydrate = false;
+    let hydrateSid = '';
     set((state) => {
       const normalized = String(sessionId || '').trim();
       if (!normalized) return {};
       const messages = loadMessagesForSession(normalized, { preserveLoading: Boolean(state.chatLoadingBySession[normalized]) });
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('finsight-session-id', normalized);
+      }
+      // 本地无历史 → 标记需回后端回退（切换到旧会话时找回历史的核心路径）
+      if (isEmptyLocalHistory(messages)) {
+        needHydrate = true;
+        hydrateSid = normalized;
       }
       const sessionStatus = statusForSession(state.chatStatusBySession, normalized);
       return {
@@ -950,7 +1028,9 @@ export const useStore = create<AppState>((set) => ({
           updatedAt: null,
         },
       };
-    }),
+    });
+    if (needHydrate) hydrateMessagesFromBackend(hydrateSid);
+  },
 
   deleteConversation: (sessionId) =>
     set((state) => {

@@ -100,12 +100,22 @@ export async function migrateLegacyPortfolio(
     return null;
   }
 
-  // 后端为空 + 本地有数据 → 全量写入后端（迁移是唯一允许用 sync 全量替换的场景）
+  // 后端为空 + 本地有数据 → 逐条 upsert 写入后端。
+  // 不用全量 sync（DELETE+INSERT）：迁移 await 窗口内用户若同时录入新持仓，
+  // 全量替换会把用户刚录入的冲掉。逐条 upsert 只新增/更新本地这几条，不动其他。
   try {
-    await apiClient.syncPortfolioPositions(
-      sid,
-      localData.map((item) => ({ ticker: item.ticker, shares: item.shares })),
-    );
+    // 写入前二次校验后端仍为空（缩小竞态窗口：首次查询到此刻间可能已有录入）。
+    // 若已非空，说明用户在窗口内录入了 → 放弃迁移、丢弃本地旧数据（后端为准）。
+    const recheck = await apiClient.getPortfolioSummary(sid);
+    const recheckPositions = Array.isArray(recheck?.positions) ? recheck.positions : [];
+    if (!shouldMigrate(localData, recheckPositions)) {
+      clearLegacyKey();
+      return null;
+    }
+
+    for (const item of localData) {
+      await apiClient.updatePortfolioPosition(sid, item.ticker, item.shares);
+    }
   } catch (error) {
     // 写入失败：保留本地数据，下次再试
     console.error('迁移本地持仓到后端失败:', error);

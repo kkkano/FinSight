@@ -35,7 +35,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR", "data"))
+# 数据目录默认值以本文件位置锚定到「仓库根/data」，避免依赖启动 CWD 造成 split-brain。
+# 层级：backend/services/cost_audit.py → parents[0]=services, [1]=backend, [2]=仓库根。
+# Docker 下 WORKDIR=/app、代码在 /app/backend/services/，parents[2]=/app，/app/data 与挂载一致。
+_DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+_DEFAULT_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR") or _DEFAULT_DATA_DIR)
 _DEFAULT_DB_PATH = _DEFAULT_DB_DIR / "cost_audit.db"
 
 # 允许的来源枚举（未知来源归一为 other，避免脏数据污染分组统计）。

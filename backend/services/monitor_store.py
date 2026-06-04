@@ -24,7 +24,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR", "data"))
+# 数据目录默认值以本文件位置锚定到「仓库根/data」，避免依赖启动 CWD 造成 split-brain。
+# 层级：backend/services/monitor_store.py → parents[0]=services, [1]=backend, [2]=仓库根。
+# Docker 下 WORKDIR=/app、代码在 /app/backend/services/，parents[2]=/app，/app/data 与挂载一致。
+_DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+_DEFAULT_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR") or _DEFAULT_DATA_DIR)
 _DEFAULT_DB_PATH = _DEFAULT_DB_DIR / "monitor.db"
 
 
@@ -106,6 +110,14 @@ class MonitorStore:
                 notify_email   TEXT,
                 notify_enabled INTEGER NOT NULL DEFAULT 0,
                 updated_at     TEXT NOT NULL
+            );
+
+            -- 邮件通知冷却落库：last_notified_at 存上次成功发信的 ISO UTC 时间戳。
+            -- 用绝对时间（而非进程内 monotonic），使冷却跨进程重启 / 多 worker 共享生效，
+            -- 避免重启后立即重发、多 worker 各自冷却互不可见导致重复发信。
+            CREATE TABLE IF NOT EXISTS notify_cooldown (
+                session_id       TEXT PRIMARY KEY,
+                last_notified_at TEXT NOT NULL
             );
             """
         )
@@ -301,6 +313,41 @@ class MonitorStore:
                 1 if notify_enabled else 0,
                 _now_iso(),
             ),
+        )
+        self._db().commit()
+
+    # ── 邮件通知冷却（落库，跨重启 / 多 worker 共享）──────────────
+
+    def get_last_notified_at(self, session_id: str) -> datetime | None:
+        """读取 session 上次成功发信时间（UTC aware datetime）；无记录返回 None。"""
+        row = self._db().execute(
+            "SELECT last_notified_at FROM notify_cooldown WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if row is None or not row[0]:
+            return None
+        try:
+            ts = datetime.fromisoformat(str(row[0]))
+        except (TypeError, ValueError):
+            return None
+        # 容错：历史/异常写入的 naive 时间戳按 UTC 处理，保证比较不抛 TypeError
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts
+
+    def set_last_notified_at(
+        self, session_id: str, when: datetime | None = None
+    ) -> None:
+        """记录 session 本次成功发信时间（默认现在，UTC）。"""
+        moment = when or datetime.now(timezone.utc)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        self._db().execute(
+            """INSERT INTO notify_cooldown (session_id, last_notified_at)
+               VALUES (?, ?)
+               ON CONFLICT(session_id) DO UPDATE SET
+                   last_notified_at=excluded.last_notified_at""",
+            (session_id, moment.isoformat()),
         )
         self._db().commit()
 

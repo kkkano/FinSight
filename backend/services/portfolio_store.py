@@ -18,7 +18,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR", "data"))
+# 数据目录默认值以本文件位置锚定到「仓库根/data」，避免依赖启动 CWD 造成
+# split-brain（曾出现 data/portfolio.db 与 backend/data/portfolio.db 两份）。
+# 层级：backend/services/portfolio_store.py → parents[0]=services, [1]=backend, [2]=仓库根。
+# Docker 下 WORKDIR=/app、代码在 /app/backend/services/，parents[2]=/app，/app/data 与挂载一致。
+_DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+_DB_DIR = Path(os.getenv("FINSIGHT_DATA_DIR") or _DEFAULT_DATA_DIR)
 _DB_PATH = _DB_DIR / "portfolio.db"
 
 

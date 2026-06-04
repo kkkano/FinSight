@@ -662,10 +662,9 @@ class _FakeEmailService:
 
 @pytest.fixture()
 def reset_notify_cooldown():
-    """每个通知测试前后清空冷却内存态，避免互相污染。"""
-    monitor_engine._notify_last_sent.clear()
+    """冷却已落库（monitor_store.notify_cooldown），且每个 patched_env 用独立 tmp_path 库，
+    天然隔离、无需手动清理。保留本 fixture 名供既有用例签名兼容（no-op）。"""
     yield
-    monitor_engine._notify_last_sent.clear()
 
 
 def _make_finding(session_id="sess-n", title="TSLA 单日下跌 6.0%"):
@@ -737,3 +736,31 @@ def test_notify_skips_when_disabled(patched_env, monkeypatch, reset_notify_coold
 
     monitor_engine._notify_findings("sess-n", [_make_finding()])
     assert fake.calls == []
+
+
+def test_notify_cooldown_persists_across_store_instances(
+    patched_env, monkeypatch, reset_notify_cooldown
+):
+    """冷却落库：第一封发出后，模拟进程重启（新建指向同一 db 的 store 实例），
+    冷却仍生效不重发——验证落库而非内存态（多 worker / 重启场景关键修复）。"""
+    from backend.services.monitor_store import MonitorStore
+
+    monkeypatch.setenv("SMTP_USER", "u@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "pw")
+    patched_env.upsert_settings("sess-n", "owner@example.com", True)
+
+    fake = _FakeEmailService()
+    monkeypatch.setattr(monitor_engine, "get_email_service", lambda: fake)
+
+    # 第一封：正常发出并落库冷却时间戳
+    monitor_engine._notify_findings("sess-n", [_make_finding()])
+    assert len(fake.calls) == 1
+
+    # 模拟重启：用新 store 实例（同一 db 文件）替换单例引用
+    restarted = MonitorStore(db_path=str(patched_env._db_path))
+    monkeypatch.setattr(monitor_engine, "get_monitor_store", lambda: restarted)
+
+    # 重启后冷却时间戳应可读回，第二封被冷却拦截
+    assert restarted.get_last_notified_at("sess-n") is not None
+    monitor_engine._notify_findings("sess-n", [_make_finding(title="重启后第二条")])
+    assert len(fake.calls) == 1  # 仍只有第一封，重启未重发

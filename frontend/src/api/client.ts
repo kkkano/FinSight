@@ -851,6 +851,22 @@ export const apiClient = {
     return response.data;
   },
 
+  /**
+   * 读取后端会话快照 —— GET /api/conversations/{id}。
+   * 用作 localStorage 为空时的回退真相源（换设备 / 清缓存后找回历史消息）。
+   * conversation.messages 形如 [{ id, role, content, timestamp }]（后端已 sanitize）。
+   */
+  async getConversation(sessionId: string): Promise<{
+    success: boolean;
+    session_id: string;
+    conversation?: Record<string, unknown>;
+  }> {
+    const response = await api.get(
+      `/api/conversations/${encodeURIComponent(sessionId)}`,
+    );
+    return response.data;
+  },
+
   async patchConversation(
     sessionId: string,
     payload: {
