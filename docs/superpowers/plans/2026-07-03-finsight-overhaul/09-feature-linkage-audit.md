@@ -1,0 +1,220 @@
+# 09 功能联动与摆设功能审计 Implementation Plan
+
+> **For agentic workers:** 本文档 = 审计结论 + 处置任务。每个条目自带证据（文件:行号）、处置决定与验收标准，按编号执行，每条一次 commit。执行者无需重新判断"该不该做"——处置决定已做出；只有标注【盘点】的条目需要先跑盘点步骤再按分支执行。
+
+**基线 commit:** `4a1c055`
+**Goal:** 解决三个"感觉"问题的根源：①"图表不是真实数据"→ 图表真实性治理；②"功能之间没联动"→ 打通八条数据流；③"工作台不知道干嘛/一堆摆设"→ 逐件处置（打通/收纳/删除）+ 工作台信息架构重做。
+
+**Architecture:** Part A 图表真实性（最高优先）→ Part B 联动矩阵（八条打通线）→ Part C 摆设处置清单（12 件）。依赖：Part A 的徽标依赖 08 文档 Task 2 的 SourceBadge；Part B 部分条目依赖 WP6 F2 watchlist。
+
+## Global Constraints
+
+- 删除组件前必须 `grep -rn "组件名" frontend/src backend --include="*.ts*"` 确认零引用（测试文件除外，随组件一起删）。
+- 所有"打通"新增的跳转必须双向可回（浏览器返回键正常），带上下文的跳转用 URL 参数而非仅内存状态（可分享、可刷新）。
+- 每条目完成跑 `cd frontend && pnpm test --run && pnpm build`；涉及后端的加 `python -m pytest backend/tests -x -q`。
+
+---
+
+## Part A: 图表真实性治理（"图表感觉都不是真实数据"的根源）
+
+**证据链:**
+- `frontend/src/components/SmartChart.tsx:2-7`：组件自述支持两种模式——`<chart>`（**LLM 内联生成的 JSON 数据**）与 `<chart_ref>`（真实 API 数据引用）。
+- `SmartChart.tsx:193-200`：inline 正则把 LLM 输出里的 JSON 直接当图表数据渲染。**也就是说：模型可以现编一串价格数字画成 K 线，界面上与真实数据毫无区分。**主人的直觉完全正确。
+- `InlineChart.tsx:27-146`：K线/收益曲线的构建函数消费的就是这些 LLM 生成的 `KlineData`。
+
+**处置决定（三层防线）:**
+
+### A-1: 价格类 inline 图表禁止直接渲染，强制转真数据
+
+**Files:**
+- Modify: `frontend/src/components/ChatList.tsx`（图表块渲染分支）、`frontend/src/utils/chartIntent.ts`（WP4 T6 产物；若未做 WP4，改 ChatList 内联逻辑）
+
+- [ ] Step 1: 渲染层规则——解析出的 chart block 若 `mode === 'inline'` 且 `type` 属于 `{candlestick, kline, line_price, ohlc}`（价格语义类，对照 SmartChart 的 type 枚举 `grep -n "type ===" SmartChart.tsx` 列全）：**不渲染该 inline 块**，改为触发现有的真数据通道（`detectChartType + getChartData` 流程，ChatInput onDone 已有该管线）用同一 ticker 重取重画；取不到真数据则显示 EmptyState「行情图暂不可用」+ 重试按钮。
+- [ ] Step 2: 非价格类 inline（概念占比饼图、流程示意等）允许渲染，但**必挂** `<SourceBadge synthetic={true}/>`（「AI示意」黄标，08 Task 2/6 已定义）。
+- [ ] Step 3: vitest：inline candlestick block → 断言不渲染 ECharts 且触发真数据回调；inline pie → 渲染且含「AI示意」文案。
+- [ ] Commit: `fix(charts): price-like inline charts must use real data channel; synthetic badge on AI-generated illustrations`
+
+### A-2: 后端图表指令改为 chart_ref 优先
+
+**Files:**
+- Modify: 图表指令注入点（`grep -rn "chart_ref\|<chart" backend/graph/nodes/chat_renderer.py backend/graph/nodes/synthesize.py backend/prompts -l` 定位 prompt/模板）
+
+- [ ] Step 1: prompt 规则改写：要求模型对价格/行情/财务序列一律输出 `<chart_ref source=… fields=…/>`，`<chart>` 内联仅允许"无真实数据源的概念示意"，且必须在 JSON 外附一句"（示意图，非真实数据）"。
+- [ ] Step 2: 金样/既有图表测试回归（`python -m pytest backend/tests -k chart -q`）。
+- [ ] Commit: `fix(prompt): chart_ref-first policy — LLM may not fabricate price series for inline charts`
+
+### A-3: Dashboard 数据来源审计（一次性盘点 + 补标注）
+
+- [ ] Step 1【盘点】: 逐 tab（Overview/Financial/Technical/News/Research/Peers）追一条数据链：组件 → hook → `/api/dashboard/*` → 后端 service → 数据源；把结论写进 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-dashboard-data-sources.md`（表：tab | 数据 | 真实来源 | 降级路径 | 是否已标注）。
+- [ ] Step 2: 据表给每个数据卡/图表补 `<SourceBadge/>`（大概率全是真数据，问题只是"没标"，标注即可消除"假数据感"）；AI 洞察卡片统一标注「AI 评分 · 基于 {n} 项真实指标 · 置信度 {x}%」（字段从 `/api/dashboard/insights` 响应取，`grep -n "confidence" backend/dashboard` 对齐）。
+- [ ] Commit: `feat(dashboard): provenance badges on every data card, insight cards disclose basis and confidence`
+
+---
+
+## Part B: 联动矩阵（八条打通线）
+
+**现状总诊断:** 每个功能都是终点站，没有下一步。下表每行 = 一条要打通的数据流。
+
+| # | 从 → 到 | 现状证据 | 打通后行为 |
+|---|---------|----------|-----------|
+| B-1 | 对话中的 ticker → 看板 | AI 回答中 ticker 是纯文本 | 点 ticker 直达 `/dashboard/AAPL` |
+| B-2 | 看板 → 对话 | dashboard 无提问入口；MiniChat 只挂在 RightPanel（`grep -rln "MiniChat"` 仅 RightPanel.tsx） | 看板每个 tab 右上「问 AI」带上下文提问 |
+| B-3 | 报告 → 工作台归档 | chat 生成的报告与 workbench ReportSection 列表无互链 | 报告消息尾部「已归档到工作台 · 查看」 |
+| B-4 | 监控发现 → 对话 | FindingCard.tsx:150 有 `case 'chat'` 但上下文不全 | 发现卡「问 AI」带 finding 全文入对话 |
+| B-5 | 筛选器结果 → 看板/自选/对话 | screener 结果行是死数据 | 行内三个动作：看板/加自选/问 AI |
+| B-6 | 持仓 → 对话 | 后端 `_positions_from_ui_context` 支持 positions（understand_request.py:2083），前端是否传？【盘点】 | 「分析我的持仓」一键带真实持仓提问 |
+| B-7 | 晨报 → 对话/报告 | MorningBriefCard 是只读卡 | 晨报每条要点可「深入分析」 |
+| B-8 | 自选股 → 快捷建议/晨报/监控 | WP6 F2 已 spec | （执行归 WP6，此处仅登记） |
+
+### B-1: ticker 链接化
+
+**Files:** Create `frontend/src/components/common/TickerLink.tsx`；Modify ChatList 的 markdown 渲染（ReactMarkdown components 映射处，`grep -n "ReactMarkdown\|components=" ChatList.tsx`）
+
+- [ ] Step 1: `TickerLink`：`<a>` 样式 `font-mono text-t-accent hover:underline cursor-pointer`，onClick → `navigate('/dashboard/' + ticker)`。
+- [ ] Step 2: markdown 后处理：对 AI 消息文本用已有 `extractTickers`（utils/ticker.ts）识别的 ticker 集合做精确词替换为 TickerLink（只替换本条消息确认过的 ticker，避免误伤普通大写词；在 ReactMarkdown 的 `text` 节点 renderer 里做）。
+- [ ] Step 3: vitest：含 "AAPL" 的消息渲染出可点链接，"CEO" 不变。
+- [ ] Commit: `feat(linkage): tickers in chat replies deep-link to dashboard`
+
+### B-2: 看板「问 AI」
+
+**Files:** Modify `frontend/src/pages/Dashboard.tsx`（顶栏），复用 `MiniChat.tsx`
+
+- [ ] Step 1: Dashboard 顶栏加 ghost 按钮「问 AI」→ 打开右侧 MiniChat（或滑出面板），预填上下文：`ui_context.active_symbol = 当前symbol`、输入框预置 `关于 {symbol} 的{当前tab中文名}，` 让用户接着问。
+- [ ] Step 2: 确认 MiniChat 发送时把 `active_symbol` 写进请求 ui_context（`grep -n "active_symbol" frontend/src/components/MiniChat.tsx frontend/src/api/client.ts`；后端 understand_request 的 active_symbol 兜底机制立即生效——这是把现有后端能力接上前端的零成本联动）。
+- [ ] Commit: `feat(linkage): ask-AI from dashboard with active symbol context`
+
+### B-3: 报告 ↔ 工作台互链
+
+**Files:** Modify ChatList（报告消息尾部）、`frontend/src/components/workbench/ReportSection.tsx`
+
+- [ ] Step 1【盘点】: 确认 chat 深度报告落库路径：`grep -rn "report_index\|save_report" backend/api/chat_router.py backend/graph` → 找到 report_id 在 SSE done 事件或响应里的字段名。
+- [ ] Step 2: 报告消息 done 后尾部渲染一行 `已归档 · 在工作台查看 →`（拿 Step 1 的 report_id 跳 `/workbench?report={id}`）；Workbench 读该参数自动展开对应报告。
+- [ ] Step 3: 反向：ReportSection 每条报告加「继续追问」→ 跳 `/chat` 并预填 `基于报告《{title}》，`（thread 上下文里 report 已可被 RAG 召回，零后端改动）。
+- [ ] Commit: `feat(linkage): chat reports link to workbench archive and back`
+
+### B-4: 发现卡上下文完整化
+
+**Files:** Modify `frontend/src/components/workbench/FindingCard.tsx:150` 附近
+
+- [ ] Step 1: 现有 `case 'chat'` 的跳转只带标题（读代码确认），改为把 finding 的 `title + summary + ticker + 触发规则` 拼成预填问题：`监控发现：{title}（{ticker}）。{summary}。帮我分析这个发现的影响和应对。`，并设 `ui_context.active_symbol = ticker`。
+- [ ] Commit: `feat(linkage): monitor findings open chat with full context`
+
+### B-5: 筛选器结果行动作
+
+**Files:** Modify `frontend/src/components/screener/**` 结果表组件（`ls frontend/src/components/screener/`）
+
+- [ ] Step 1: 结果表每行尾部三个 ghost 图标按钮：看板（navigate）/ 加自选（WP6 F2 的 `POST /api/watchlist`，未做 WP6 前该按钮隐藏）/ 问 AI（`/chat` 预填 `分析一下 {ticker}，它在筛选条件"{当前筛选条件摘要}"下入选`）。
+- [ ] Commit: `feat(linkage): screener rows act — dashboard / watchlist / ask-AI`
+
+### B-6: 持仓上下文接线【盘点】
+
+- [ ] Step 1【盘点】: `grep -rn "positions" frontend/src/api/client.ts frontend/src/components/ChatInput.tsx frontend/src/store | head`——确认发消息时 ui_context 是否携带 positions。
+- [ ] Step 2 分支 a（未携带）：从 workbench PortfolioEditor 的数据源（`grep -rn "usePortfolio\|portfolio" frontend/src/hooks`）取当前持仓，在 ChatInput 发送时写入 `ui_context.positions`（字段结构对齐 understand_request.py:2083 `_positions_from_ui_context` 期待的形状——先读该函数确认键名）。分支 b（已携带）：跳过。
+- [ ] Step 3: PortfolioSummaryBar 加「分析我的持仓」按钮 → `/chat` 预填 `我的持仓该怎么调整？`（后端 portfolio 意图路径此刻能拿到真持仓，blocked_tasks 的"缺持仓"分支不再误触发）。
+- [ ] Commit: `feat(linkage): real positions flow into chat portfolio analysis`
+
+### B-7: 晨报要点深入
+
+**Files:** Modify `frontend/src/components/workbench/MorningBriefCard.tsx`
+
+- [ ] Step 1: 晨报每个要点行尾加「深入 →」ghost 链接：`/chat` 预填 `晨报提到：{要点文本}。展开讲讲对 {关联ticker（若有）} 的影响。`
+- [ ] Commit: `feat(linkage): morning brief bullets expand into chat analysis`
+
+---
+
+## Part C: 摆设/死件处置清单（12 件，证据 + 决定 + 步骤）
+
+### C-1: ResearchCard —— 删除
+
+**证据:** `grep -rln "import.*ResearchCard" frontend/src --include="*.tsx"` 除自身外零引用（2026-07-03 复核）。
+- [ ] `git rm frontend/src/components/ResearchCard.tsx`（连同其测试若有）→ build 绿 → Commit: `chore(frontend): remove dead ResearchCard component`
+
+### C-2: MiniChat —— 保留并升级为全局"随处问"
+
+**证据:** 仅 RightPanel.tsx 引用；功能完好但可发现性≈0。
+**决定:** B-2 已把它接进 dashboard；此外给它一个全局快捷键。
+- [ ] CommandPalette 加一条命令「问 AI（带当前页面上下文）」；MiniChat 打开时读当前路由推断上下文（dashboard→symbol，workbench→无）。Commit: `feat(minichat): global ask-AI command with route context`
+
+### C-3: CommandPalette —— 保留，可见性已由 08 Task 7 解决
+
+- [ ] 登记项：确认 08 Task 7 的 ⌘K 假输入框已实装；本条无独立代码。补充命令清单：导航到各页 / 问 AI / 切主题 / 切涨跌色（`grep -n "commands\|items" frontend/src/components/CommandPalette.tsx` 对齐其命令注册结构后追加）。
+
+### C-4: Skills 三件套（SkillAutocomplete / SkillLibraryDrawer / skills_router）——【盘点】
+
+**证据:** 前端三组件互相引用成环，但 skills 实际内容未知。
+- [ ] Step 1【盘点】: `curl -s localhost:8000/api/skills | python -m json.tool | head -40`（或读 `backend/api/skills_router.py` + `backend/skills/` 目录）统计可用 skill 数量与质量。
+- [ ] Step 2 分支 a（≥3 个真实可用 skill）：保留，且在 ChatInput 输入 `/` 时的提示文案里写明可用技能数；分支 b（<3 或全是演示）：三组件与入口全部隐藏到开发者模式（`finsight_dev` 条件，同 08 Task 5 层3），不删代码。把结论写进 notes。
+- [ ] Commit: `chore(skills): gate skill UI by real skill availability`
+
+### C-5: @agent 提及与 agent 偏好 ——【盘点】接线
+
+**证据:** AgentMention 在 ChatInput/MiniChat 可用（`agents_override` 后端有强制直达逻辑，runner._route_after_understand_request:101-107 尊重它）；但 `agent_router.py` 的 GET/PUT `/api/agents/preferences` 前端消费点未知。
+- [ ] Step 1【盘点】: `grep -rn "preferences" frontend/src/api frontend/src/components/settings` → 找偏好 UI。
+- [ ] Step 2 分支 a（有 UI）：在设置里给它加说明文案（"控制报告默认参与的智能体"）并确认保存生效；分支 b（无 UI）：SettingsModal 加「智能体偏好」区（7 个 agent 的开关 + max_reflections 滑条，读写现有 preferences 端点——字段结构照 `backend/api/agent_router.py` 的 schema）。
+- [ ] Commit: `feat(settings): agent preferences surfaced and wired`
+
+### C-6: StockChart vs SmartChart vs InlineChart 三套图表组件 —— 合并
+
+**证据:** StockChart 仅 RightPanelChartTab 引用；InlineChart 与 SmartChart 的 line/candle builder 重复。
+- [ ] Step 1: RightPanelChartTab 改用 SmartChart 的 ref 模式（传 symbol + 真数据 fields）；`git rm` StockChart。
+- [ ] Step 2: InlineChart 的 buildLineOption/buildCandleOption 与 SmartChart 对应 builder 合并到一处（08 Task 6 的主题重写时顺路做，放 `charts/builders` 或先合入 SmartChart）。
+- [ ] Commit: `refactor(charts): one chart component family — StockChart removed, builders deduped`
+
+### C-7: rag-inspector / cost-audit —— 移出主导航，收进设置
+
+**证据:** 两页是内部诊断工具（RagInspectorPage 1412 行），出现在普通用户导航里加重"这产品是给开发者用的"感。
+- [ ] Step 1: 路由保留（直链可达），Sidebar 入口删除（08 Task 7 已做则登记）；SettingsModal「高级」区加「诊断工具」链接组（RAG Inspector / 成本审计 / 开发者模式开关）。
+- [ ] Commit: `chore(nav): diagnostics pages accessible via settings advanced section only`
+
+### C-8: 订阅/邮件提醒入口 —— 提升
+
+**证据:** SubscribeModal 存在但入口深；预警是核心卖点之一却难被发现。
+- [ ] Step 1: Sidebar「订阅与提醒」入口（08 Task 7 结构已含）→ 打开一个聚合页/抽屉：邮件订阅管理（SubscribeModal 内容平铺）+ 监控规则跳转（workbench MonitorConfigPanel 的深链）。
+- [ ] Commit: `feat(alerts): first-class subscriptions & alerts entry`
+
+### C-9: `/api/supabase` 前端残留 ——【盘点】
+
+**证据:** 前端 4 处引用 `/api/supabase`（client.ts 等），后端 24 个 router 无此前缀。
+- [ ] Step 1【盘点】: `grep -rn "/api/supabase" frontend/src` 逐处看语义：若是走 Supabase 官方 SDK 的相对路径拼接则改注释澄清；若是调不存在的后端端点则为死代码 → 删除该调用及其 UI 分支。结论写 notes。
+- [ ] Commit: `chore(frontend): resolve phantom /api/supabase references`
+
+### C-10: daily_tasks / task_generator 任务质量 ——【盘点】
+
+**证据:** TaskSection 从 `/api/tasks` 拉"今日任务"（task_generator 自动生成），生成质量未知——若任务是"看看 AAPL"这种水话，就是摆设感的直接来源。
+- [ ] Step 1【盘点】: 读 `backend/services/task_generator.py` 的生成规则 + 实际调一次看输出。判据：任务是否可执行（有明确对象+动作+入口）。
+- [ ] Step 2 分支 a（质量可）：TaskCard 加"去执行"按钮直连对应功能（分析→chat 预填；盯盘→monitor 配置）；分支 b（水话）：TaskSection 改为由**真实信号**驱动——只显示三类：watchlist 异动（monitor findings）、晨报待读、报告待对比，删除生成式任务。
+- [ ] Commit: `feat(workbench): tasks are real signals with execute actions (or pruned)`
+
+### C-11: Workbench 重定位 ——「今日驾驶舱」信息架构（"工作台不知道是干嘛的"的根治）
+
+**现状:** MorningBriefCard + TaskSection + RebalanceEntryCard + ReportSection 四个孤岛卡片堆放（Workbench.tsx:133-401），没有回答"我为什么每天要来这"。
+**目标信息架构（按晨间工作流纵向叙事）:**
+
+```
+  今日 · 7月3日 周五                        [生成晨报] 上次 08:30
+  ─────────────────────────────────────────────────────
+  ① 晨报速览        3 条要点 · 每条带「深入 →」(B-7)
+  ② 需要你注意      监控发现 2 条(B-4) + 到价提醒 1 条 —— 空则显示"一切平静"
+  ③ 我的持仓        SummaryBar + [分析持仓](B-6) + [再平衡建议]
+  ④ 研究归档        最近报告时间线 · 每份[继续追问](B-3) [对比] [回测](WP6 F7)
+```
+
+- [ ] Step 1: Workbench.tsx 按上述四段重排（组件全部复用现有：MorningBriefCard/FindingsFeed/PortfolioSummaryBar/RebalanceEntryCard/ReportSection，只动布局与段落标题）；段标题规格 `text-2xs uppercase tracking-wider text-t-text3`；顶部日期行 + 主操作。
+- [ ] Step 2: 每段空态用 EmptyState 带动作（晨报空→生成；发现空→"一切平静 · 配置监控"；持仓空→录入持仓；报告空→"去对话生成第一份报告"）。
+- [ ] Step 3: 路由默认 tab 逻辑不变；截图前后对比。
+- [ ] Commit: `feat(workbench): daily-cockpit information architecture — brief / attention / portfolio / archive`
+
+### C-12: thinking/ 与 execution/ 两套过程组件 —— 代码收编
+
+**证据:** `components/thinking/`（ThinkingProcess 等 5 件）与 `components/execution/`（17 件）都在展示"AI 在干嘛"，08 Task 5 已在 UI 层收敛为三层；本条处理代码层。
+- [ ] Step 1: `grep -rln "ThinkingProcess\|ThinkingUserView" frontend/src --include="*.tsx" | grep -v thinking/` 确认收敛后的引用面；把仍被引用的 thinking 组件迁入 `execution/`（同域合并），零引用的删除。
+- [ ] Commit: `refactor(execution): merge thinking/ components into execution/, drop unreferenced`
+
+---
+
+## 09 完成门禁
+
+- [ ] Part A: 让模型回答"画一下 AAPL 最近走势"→ 出的是真数据图（有来源徽标）；诱导模型输出内联价格图 → 不渲染或带「AI示意」标
+- [ ] Part B: 八条联动逐条手工走通（B-8 由 WP6 验收）；每条录一段 5 秒操作视频贴 PR
+- [ ] Part C: 12 条处置全部落地或按分支归档结论到 notes；`grep -rn "ResearchCard\|StockChart" frontend/src` → 0
+- [ ] 综合场景验收（模拟新用户 10 分钟）: 欢迎页进入 → 问一只票 → 点 ticker 进看板 → 看板问 AI → 加自选 → 工作台看晨报点深入 → 全程无死链、无"这是什么"时刻
