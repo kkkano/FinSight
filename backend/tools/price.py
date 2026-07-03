@@ -441,6 +441,16 @@ def _to_yahoo_cn_symbol(ticker: str) -> str:
 # key 统一大写 strip，value = {"source": 源函数名 or None, "attempt": 第几个源, "is_degraded": 是否降级}
 _last_fetch_info: dict[str, dict[str, Any]] = {}
 
+# ladder 追加用：从源文本中解析 $ 前缀价格数字
+_PRICE_DOLLAR_RE = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
+
+
+def _record_fetch_info(ticker_key: str, info: dict[str, Any]) -> None:
+    """写入取数信息注册表，带容量护栏防止长期运行无界增长。"""
+    if len(_last_fetch_info) > 512:
+        _last_fetch_info.clear()
+    _last_fetch_info[ticker_key] = info
+
 
 def get_last_fetch_info(ticker: str) -> dict[str, Any] | None:
     """返回最近一次 get_stock_price(ticker) 的取数信息：{source, attempt, is_degraded}。
@@ -531,36 +541,35 @@ def get_stock_price(ticker: str) -> str:
             if result:
                 logger.info(f"  OK source #{i} ({source_func.__name__})")
                 # 记录本次取数用的源：i > 1 即非首选源 = 降级（供 agent 传播到报告）
-                _last_fetch_info[ticker_key] = {
+                _record_fetch_info(ticker_key, {
                     "source": source_func.__name__,
                     "attempt": i,
                     "is_degraded": i > 1,
-                }
-                # 追加两档分批价，保证有具体数字
-                price_num = None
-                import re
-                m = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", result)
+                })
+                # 追加两档分批价——仅在能从文本解析出 $ 数字时；解析失败绝不影响本源结果
+                m = _PRICE_DOLLAR_RE.search(result)
                 if m:
                     try:
                         price_num = float(m.group(1))
+                        p1 = price_num * 0.99
+                        p2 = price_num * 0.98
+                        result = (
+                            f"{result} | Suggested ladder: ${p1:.2f} / ${p2:.2f} "
+                            f"(+/-1% / +/-2% from current)"
+                        )
                     except Exception:
-                        price_num = None
-                if price_num:
-                    p1 = price_num * 0.99
-                    p2 = price_num * 0.98
-                result = f"{result} | Suggested ladder: ${p1:.2f} / ${p2:.2f} (+/-1% / +/-2% from current)"
+                        logger.debug("ladder append skipped for %s", ticker_key, exc_info=True)
                 return result
-            time.sleep(0.5)
         except Exception as e:
             logger.info(f"  FAIL source #{i} ({source_func.__name__}) failed: {e}")
             continue
 
     # 全部源失败：记录降级信息（source=None 表示无可用源）
-    _last_fetch_info[ticker_key] = {
+    _record_fetch_info(ticker_key, {
         "source": None,
         "attempt": len(sources),
         "is_degraded": True,
-    }
+    })
     return f"Error: All data sources failed to retrieve the price for {ticker}. Please try again later."
 
 # ============================================
