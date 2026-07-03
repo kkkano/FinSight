@@ -25,7 +25,7 @@
 **Interfaces:**
 - Produces: `get_stock_price(ticker) -> str` 行为不变（正常路径）；新增行为：源文本无 `$数字` 时不再丢弃该源。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 新建 `backend/tests/test_price_cascade_ladder.py`：
 
@@ -72,12 +72,12 @@ def test_source_with_dollar_sign_appends_ladder():
     assert "Suggested ladder: $198.00 / $196.00" in result
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest backend/tests/test_price_cascade_ladder.py -x -q`
 Expected: 第一个测试 FAIL（返回值包含 "All data sources failed"）。
 
-- [ ] **Step 3: 修实现**
+- [x] **Step 3: 修实现**
 
 打开 `backend/tools/price.py`。锚点：`grep -n "Suggested ladder" backend/tools/price.py`（基线在 553 行附近）。将下面这段：
 
@@ -144,7 +144,7 @@ def _record_fetch_info(ticker_key: str, info: dict[str, Any]) -> None:
 
 然后把 `get_stock_price` 内两处 `_last_fetch_info[ticker_key] = {...}` 改为 `_record_fetch_info(ticker_key, {...})`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest backend/tests/test_price_cascade_ladder.py -x -q`
 Expected: 2 passed。
@@ -153,7 +153,7 @@ Expected: 2 passed。
 Run: `python -m pytest backend/tests -k "price" -q`
 Expected: 全绿。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/tools/price.py backend/tests/test_price_cascade_ladder.py
