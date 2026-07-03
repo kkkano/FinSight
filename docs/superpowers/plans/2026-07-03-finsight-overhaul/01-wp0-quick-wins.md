@@ -167,19 +167,19 @@ git commit -m "fix(price): ladder append no longer discards sources without \$-p
 **Files:**
 - Modify: `backend/api/main.py:1-12`
 
-- [ ] **Step 1: 确认现状**
+- [x] **Step 1: 确认现状**
 
 Run: `grep -n "^import asyncio" backend/api/main.py`
 Expected: 两行（基线为第 3 行与第 9 行）。
 
-- [ ] **Step 2: 删除第二处 `import asyncio`**（保留第一处）。
+- [x] **Step 2: 删除第二处 `import asyncio`**（保留第一处）。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 Run: `python -c "import backend.api.main"`
 Expected: 无报错（该 import 会拉起 app 装配，需 `.env.server` 存在；若本机无法 import，改跑 `python -m pytest backend/tests -k "smoke or health" -q`）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add backend/api/main.py
