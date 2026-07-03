@@ -6,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import re
-import asyncio
 import sys
 import time
 from collections import deque
