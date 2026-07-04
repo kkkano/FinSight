@@ -7,6 +7,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
 import { Dialog } from './ui/Dialog';
+import { useToast } from './ui/Toast';
 import { AgentControlPanel } from './settings/AgentControlPanel';
 
 interface SettingsModalProps {
@@ -189,6 +190,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   const [config, setConfig] = useState<UserConfig>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { toast } = useToast();
   const [showLegacyApiKey, setShowLegacyApiKey] = useState(false);
   const [showEndpointApiKeys, setShowEndpointApiKeys] = useState<Record<number, boolean>>({});
   const [activeLayer, setActiveLayer] = useState<SettingsLayer>('basic');
@@ -357,12 +359,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
       await apiClient.saveConfig(payload);
       setSaved(true);
+      toast({ type: 'success', title: '配置已保存' });
       setTimeout(() => {
         setSaved(false);
         onClose();
       }, 1500);
     } catch (error) {
       console.error('保存配置失败:', error);
+      toast({
+        type: 'error',
+        title: '保存失败',
+        message: '配置未生效，请检查网络或管理员令牌后重试。',
+      });
     } finally {
       setLoading(false);
     }
@@ -855,7 +863,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <div className="p-3 bg-fin-bg border border-fin-border rounded text-xs text-fin-muted">
             💡 <strong>提示</strong>：所有配置项都是可选的。如果不填写，系统将使用后端默认配置。
             <br />
-            API Key 仅存储在浏览器本地，不会上传到服务器。
+            API Key 会保存到服务端配置文件（仅持有管理员令牌时可修改），界面回显时只显示掩码，不会以明文回传。
           </div>
           ) : null}
         </div>
