@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -228,11 +229,20 @@ def simulate_llm_endpoint_failover_drill() -> dict[str, Any]:
         llm_config.time.time = original_time_fn
 
 
+def _assert_drill_allowed() -> None:
+    """release drill 只允许运维在 CLI 显式开启后执行，杜绝被任何服务路径意外触达（SEC-05）。"""
+    if os.getenv("FINSIGHT_RELEASE_DRILL_ALLOWED", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        raise RuntimeError(
+            "release drill blocked: set FINSIGHT_RELEASE_DRILL_ALLOWED=true to run this maintenance script"
+        )
+
+
 def run_security_final_checks(
     *,
     repo_root: Path,
     pytest_targets: Sequence[str] | None = None,
 ) -> dict[str, Any]:
+    _assert_drill_allowed()
     targets = list(
         pytest_targets
         or [
