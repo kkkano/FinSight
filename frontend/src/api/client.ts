@@ -292,8 +292,31 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json; charset=utf-8',
   },
-  timeout: 800000, // 120秒超时，防止 LLM 生成长文时前端断开
+  timeout: 30_000, // 普通 REST 请求 30s；长任务（聊天/报告/执行）走 SSE 通道不受此限，个别长耗时 POST 在调用处显式覆写
 });
+
+/**
+ * 与 axios 拦截器同源的鉴权头构造，供绕过 axios 的流式 fetch 复用（FE-05）。
+ */
+async function buildAuthHeaders(): Promise<Record<string, string>> {
+  const client = getSupabaseClient();
+  let accessToken: string | null = null;
+
+  if (client) {
+    try {
+      const { data } = await client.auth.getSession();
+      accessToken = data.session?.access_token || null;
+    } catch {
+      // Session probing is best-effort; fall back to the local dev token below.
+    }
+  }
+
+  if (!accessToken) {
+    accessToken = getRagInspectorDevAccessToken();
+  }
+
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
 
 api.interceptors.request.use(async (config) => {
   const client = getSupabaseClient();
@@ -1079,7 +1102,8 @@ export const apiClient = {
 
   // --- Backtest ---
   async runBacktest(payload: BacktestRunRequest): Promise<BacktestRunResponse> {
-    const response = await api.post<BacktestRunResponse>('/api/backtest/run', payload);
+    // 回测是同步长任务（非 SSE），显式放宽超时
+    const response = await api.post<BacktestRunResponse>('/api/backtest/run', payload, { timeout: 120_000 });
     return response.data;
   },
 
@@ -1103,7 +1127,8 @@ export const apiClient = {
       charts: charts || [],
       title: title || 'FinSight 对话记录'
     }, {
-      responseType: 'blob' // 关键：声明返回二进制流
+      responseType: 'blob', // 关键：声明返回二进制流
+      timeout: 120_000 // PDF 渲染是同步长任务，显式放宽
     });
     return response.data;
   },
@@ -1227,7 +1252,7 @@ export const apiClient = {
 
     const response = await fetch(buildApiUrl('/chat/supervisor/stream'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
       body: JSON.stringify(body),
       signal: opts.signal,
     });
@@ -1328,7 +1353,7 @@ export const apiClient = {
   ): Promise<void> {
     const response = await fetch(buildApiUrl(opts.endpoint ?? '/api/execute'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
       body: JSON.stringify(request),
       signal: opts.signal,
     });
@@ -1463,7 +1488,7 @@ export const apiClient = {
     const url = buildApiUrl('/api/execute/resume');
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
       body: JSON.stringify(params),
       signal: opts?.signal,
     });
@@ -1489,7 +1514,7 @@ export const apiClient = {
         },
       };
 
-      await parseSSEStream(response.clone(), wrappedCallbacks, opts);
+      await parseSSEStream(response, wrappedCallbacks, opts);
 
       if (opts?.signal?.aborted) {
         return response;
