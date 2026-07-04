@@ -197,18 +197,18 @@ git commit -m "chore(api): remove duplicate asyncio import in main.py"
 **Interfaces:**
 - Consumes: 项目已有 Toast 系统 `frontend/src/components/ui/Toast.tsx`。执行前先 `grep -n "export" frontend/src/components/ui/Toast.tsx` 确认导出名（预期是 `useToast` 或 `showToast` 一类）；下文以 `useToast` 书写，若实际导出名不同，按实际名替换（仅替换名字，结构不变）。
 
-- [ ] **Step 1: 定位虚假文案**
+- [x] **Step 1: 定位虚假文案**
 
 Run: `grep -n "仅存储在浏览器本地\|不会上传到服务器" frontend/src/components/SettingsModal.tsx`
 Expected: 命中 1 处（基线 855 行附近）。
 
-- [ ] **Step 2: 替换文案**
+- [x] **Step 2: 替换文案**
 
 将该段文案整体替换为（保留原有 JSX 结构/样式类名，只换文字）：
 
 > `API Key 会保存到服务端配置文件（仅持有管理员令牌时可修改），界面回显时只显示掩码，不会以明文回传。`
 
-- [ ] **Step 3: 写失败测试（保存失败必须弹 Toast）**
+- [x] **Step 3: 写失败测试（保存失败必须弹 Toast）**
 
 在 `SettingsModal.test.tsx` 中追加（按项目现有测试风格调整 render 辅助；mock `apiClient.saveConfig`——先 `grep -n "saveConfig\|/api/config" frontend/src/api/client.ts` 确认方法名）：
 
@@ -221,12 +221,12 @@ it("保存失败时显示错误提示而不是静默", async () => {
 })
 ```
 
-- [ ] **Step 4: 运行确认失败**
+- [x] **Step 4: 运行确认失败**
 
 Run: `cd frontend && pnpm test --run SettingsModal`
 Expected: 新用例 FAIL（找不到 "保存失败" 文案）。
 
-- [ ] **Step 5: 实现**
+- [x] **Step 5: 实现**
 
 在 `SettingsModal.tsx` 的 `handleSave` 中：定位 `grep -n "console.error" frontend/src/components/SettingsModal.tsx` 在 catch 块处，改为：
 
@@ -239,12 +239,12 @@ Expected: 新用例 FAIL（找不到 "保存失败" 文案）。
 
 组件顶部按 Toast 系统实际 API 引入（例：`const { toast } = useToast()`）。同时在保存成功分支加 `toast({ variant: "success", title: "已保存" })`。
 
-- [ ] **Step 6: 运行确认通过**
+- [x] **Step 6: 运行确认通过**
 
 Run: `cd frontend && pnpm test --run SettingsModal`
 Expected: PASS。
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/components/SettingsModal.tsx frontend/src/components/SettingsModal.test.tsx
@@ -351,21 +351,21 @@ git commit -m "fix(api-client): attach supabase bearer to streaming fetches; dro
 **Files:**
 - Modify: `docker-compose.yml:79-80`
 
-- [ ] **Step 1: 修改**
+- [x] **Step 1: 修改**
 
 ```yaml
     ports:
       - "127.0.0.1:8000:8000"   # 仅本机可直连；外部流量必须走 Cloudflare Tunnel / 前端反代
 ```
 
-- [ ] **Step 2: 兼容性检查**
+- [x] **Step 2: 兼容性检查**
 
 `grep -rn "localhost:8000\|127.0.0.1:8000\|:8000" docker-compose.yml frontend/nginx* scripts/ 2>/dev/null`——确认：
 - 前端容器访问后端走的是 compose 网络服务名（不受影响）；
 - 若宿主机上有 cloudflared 以 `localhost:8000` 为 origin，则 127.0.0.1 绑定仍可达，无需改动。
 把检查结论写进 commit body。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docker-compose.yml
@@ -380,15 +380,15 @@ git commit -m "fix(deploy): bind backend port to loopback only, close direct-to-
 - Delete: `backend/data/report_index_release_drill_existing_20260208050902.sqlite.pre_migration.bak`
 - Modify: `.gitignore`
 
-- [ ] **Step 1:** `git rm backend/data/*.bak`
-- [ ] **Step 2:** `.gitignore` 追加两行：
+- [x] **Step 1:** `git rm backend/data/*.bak`
+- [x] **Step 2:** `.gitignore` 追加两行：
 
 ```gitignore
 *.bak
 backend/data/*.sqlite.pre_migration.*
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "chore(repo): remove committed sqlite backup artifact; ignore future .bak files"
@@ -402,12 +402,12 @@ git commit -m "chore(repo): remove committed sqlite backup artifact; ignore futu
 - Modify: `backend/services/release_drills.py`
 - Test: `backend/tests/test_release_drills_guard.py`（新建）
 
-- [ ] **Step 1: 确认调用面**
+- [x] **Step 1: 确认调用面**
 
 Run: `grep -rn "release_drills" backend/api backend/graph backend/services --include="*.py" | grep -v release_drills.py`
 Expected: 无 HTTP router 引用（若有，停下并在 PR 描述中上报，本任务改为移除该引用）。
 
-- [ ] **Step 2: 写失败测试**
+- [x] **Step 2: 写失败测试**
 
 ```python
 # backend/tests/test_release_drills_guard.py
@@ -424,7 +424,7 @@ def test_run_drill_refuses_outside_cli(monkeypatch):
         release_drills._assert_drill_allowed()
 ```
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `release_drills.py` 模块内新增（并在调用 `subprocess.run` 的函数入口第一行调用它）：
 
@@ -439,7 +439,7 @@ def _assert_drill_allowed() -> None:
 
 `.env.server.example` 登记该变量（默认注释掉）。
 
-- [ ] **Step 4: 测试通过 + Commit**
+- [x] **Step 4: 测试通过 + Commit**
 
 Run: `python -m pytest backend/tests/test_release_drills_guard.py -x -q`
 
