@@ -258,28 +258,28 @@ git commit -m "fix(settings): truthful api-key storage copy; surface save succes
 **Files:**
 - Modify: `frontend/src/api/client.ts:290-296`
 
-- [ ] **Step 1: 定位**
+- [x] **Step 1: 定位**
 
 Run: `grep -n "timeout: 800000" frontend/src/api/client.ts`
 
-- [ ] **Step 2: 修改**
+- [x] **Step 2: 修改**
 
 ```ts
 // 普通 REST 请求 30s 超时；长任务（报告/回测/执行）一律走 SSE 通道，不受此限制
 timeout: 30_000,
 ```
 
-- [ ] **Step 3: 排查长耗时非 SSE 调用**
+- [x] **Step 3: 排查长耗时非 SSE 调用**
 
 Run: `grep -n "backtest\|export\|pdf" frontend/src/api/client.ts`
 对确属长耗时的普通 POST（如回测运行、PDF 导出），在该方法调用处显式覆写：`{ timeout: 120_000 }`（axios 第三参/config 位置）。逐个列出你改了哪些方法并写入 commit message。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 Run: `cd frontend && pnpm build`
 Expected: 构建通过。手工冒烟：dev 起前后端，正常聊天/拉行情不超时。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/client.ts
@@ -297,7 +297,7 @@ git commit -m "fix(api-client): default timeout 30s (comment said 120s but was 8
 - Consumes: axios 拦截器已有的 Supabase token 获取逻辑。执行前 `grep -n "interceptors.request" -A 15 frontend/src/api/client.ts` 找到它获取 token 的确切调用（预期形如 `supabase.auth.getSession()` 或从 `supabaseClient.ts` 导入的封装）。
 - Produces: `async function buildAuthHeaders(): Promise<Record<string, string>>`——供三个流式方法复用。
 
-- [ ] **Step 1: 抽取 buildAuthHeaders**
+- [x] **Step 1: 抽取 buildAuthHeaders**
 
 在 `client.ts` 中 axios 拦截器附近新增（token 获取表达式必须与拦截器**逐字相同**，不要自己发明）：
 
@@ -313,7 +313,7 @@ async function buildAuthHeaders(): Promise<Record<string, string>> {
 }
 ```
 
-- [ ] **Step 2: 三个流式方法接入**
+- [x] **Step 2: 三个流式方法接入**
 
 Run: `grep -n "fetch(" frontend/src/api/client.ts` 定位 `sendMessageStream`（~1228）、`executeAgent`（~1329）、`resumeExecution`（~1480s）三处。每处 fetch 的 `headers` 改为：
 
@@ -327,17 +327,17 @@ headers: {
 
 （所在函数若非 async，先确认——三者都是 async，可直接 await。）
 
-- [ ] **Step 3: 去掉 clone（FE-06）**
+- [x] **Step 3: 去掉 clone（FE-06）**
 
 Run: `grep -n "response.clone()" frontend/src/api/client.ts`
 将 `parseSSEStream(response.clone(), ...)` 改为 `parseSSEStream(response, ...)`。改完在该方法体内 `grep` 确认没有第二处消费 `response.body` 的代码。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 Run: `cd frontend && pnpm test --run && pnpm build`
 手工冒烟：登录态发消息，DevTools Network 确认 `/api/chat` 请求头携带 `Authorization: Bearer …`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/api/client.ts
