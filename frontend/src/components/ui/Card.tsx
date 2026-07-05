@@ -9,7 +9,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={`
-        border border-fin-border rounded-xl bg-fin-card
+        border border-fin-border rounded-lg bg-fin-card
         ${hoverable ? 'transition-colors duration-150 hover:bg-fin-hover cursor-pointer' : ''}
         ${className}
       `.trim()}
