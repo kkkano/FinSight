@@ -1035,8 +1035,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about markets, macro, themes, or a ticker... (e.g., AAPL price trend)"
-          disabled={isChatLoading}
+          placeholder={isChatLoading
+            ? '正在生成回答…可以先输入下一个问题，稍后发送'
+            : 'Ask about markets, macro, themes, or a ticker... (e.g., AAPL price trend)'}
           aria-label="输入聊天消息"
           rows={1}
           /* 移动端触摸目标：min-h-[44px] 确保输入框可点击区域 ≥44px */
