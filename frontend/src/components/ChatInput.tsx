@@ -275,31 +275,29 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDashboardRequest }) => {
   const [input, setInput] = useState('');
   const [outputMode, setOutputMode] = useState<'chat' | 'investment_report'>('chat');
-  const {
-    addMessageToSession,
-    updateMessageInSession,
-    setSessionLoading,
-    isChatLoading,
-    setTicker,
-    setStatus,
-    setExecutionState,
-    resetExecutionState,
-    setSessionAbortController,
-    cancelChatStream,
-    draft,
-    setDraft,
-    currentTicker,
-    subscriptionEmail,
-    sessionId,
-    setSessionId,
-    // Agent Logs
-    addAgentLog,
-    updateAgentStatus,
-    // Raw SSE Events
-    addRawEvent,
-    traceRawEnabled,
-    setRequestMetrics,
-  } = useStore();
+  // FE-07：原子 selector 订阅——整包解构会让流式期间的每个 rawEvent/agentLog 追加
+  // 都重渲染整个 ChatInput。actions 引用稳定，数据字段逐一订阅。
+  const addMessageToSession = useStore((s) => s.addMessageToSession);
+  const updateMessageInSession = useStore((s) => s.updateMessageInSession);
+  const setSessionLoading = useStore((s) => s.setSessionLoading);
+  const isChatLoading = useStore((s) => s.isChatLoading);
+  const setTicker = useStore((s) => s.setTicker);
+  const setStatus = useStore((s) => s.setStatus);
+  const setExecutionState = useStore((s) => s.setExecutionState);
+  const resetExecutionState = useStore((s) => s.resetExecutionState);
+  const setSessionAbortController = useStore((s) => s.setSessionAbortController);
+  const cancelChatStream = useStore((s) => s.cancelChatStream);
+  const draft = useStore((s) => s.draft);
+  const setDraft = useStore((s) => s.setDraft);
+  const currentTicker = useStore((s) => s.currentTicker);
+  const subscriptionEmail = useStore((s) => s.subscriptionEmail);
+  const sessionId = useStore((s) => s.sessionId);
+  const setSessionId = useStore((s) => s.setSessionId);
+  const addAgentLog = useStore((s) => s.addAgentLog);
+  const updateAgentStatus = useStore((s) => s.updateAgentStatus);
+  const addRawEvent = useStore((s) => s.addRawEvent);
+  const traceRawEnabled = useStore((s) => s.traceRawEnabled);
+  const setRequestMetrics = useStore((s) => s.setRequestMetrics);
   const { toast } = useToast();
   const { activeAsset, activeSelections, clearSelection } = useDashboardStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -669,44 +667,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }
 
           const evidencePool = meta?.evidence_pool ?? meta?.data?.evidence_pool;
-          const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
-          const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
-          const existingTickers = new Set(Array.from(fullContent.matchAll(markerRegex)).map((match) => match[1]));
-          const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
-          const forceMulti = tickers.length > 1;
 
-          if (chartInfo.chartType || forceMulti) {
-            const targetTickers = tickers.slice(0, MAX_AUTO_CHART_TICKERS);
-            const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
-            if (missingTickers.length > 0) {
-              const chartType = forceMulti ? 'line' : chartInfo.chartType || 'line';
-              missingTickers.forEach((ticker) => {
-                fullContent += `\n\n[CHART:${ticker}:${chartType}]`;
-              });
-              if (targetTickers.length === 1) {
-                setTicker(targetTickers[0]);
-              }
-            }
-          } else if (chartInfo.smartChart && !forceMulti) {
-            // SmartChart 数据路径（pie/bar）：按 data_kind 拉真实数据，成功才注入 <chart> 标记。
-            // 时机与 [CHART:...] 一致——收到回复后追加到消息内容，由 ChatList 的 parseSmartChartBlocks 渲染。
-            const smartTicker = tickers[0] || nextFocus || currentTicker || null;
-            if (smartTicker && !/<chart\s+/i.test(fullContent)) {
-              try {
-                const { chartType, dataKind, title } = chartInfo.smartChart;
-                const result = await apiClient.getChartData(smartTicker, dataKind);
-                if (result?.success && result.data && Array.isArray(result.data.values) && result.data.values.length > 0) {
-                  const safeTitle = (title || `${smartTicker} 图表`).replace(/"/g, '');
-                  fullContent += `\n\n<chart type="${chartType}" title="${safeTitle}">${JSON.stringify(result.data)}</chart>`;
-                  setTicker(smartTicker);
-                }
-                // 失败 / 无数据：诚实跳过，不出图（与现有 InlineChart 跳过行为一致）。
-              } catch (chartErr) {
-                console.error('SmartChart data fetch failed:', chartErr);
-              }
-            }
-          }
-
+          // UX-03：文本立即落定——图表检测是额外网络请求，不该让用户对着"加载中"干等
           updateScopedMessage(aiMsgId, {
             content: fullContent,
             isLoading: false,
@@ -714,6 +676,56 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             thinking: thinkingSteps,
             evidence_pool: evidencePool,
           });
+
+          // 图表异步补挂：检测/取数完成后二次 patch 追加标记，任何失败静默跳过
+          void (async () => {
+            let patched = fullContent;
+            try {
+              const chartInfo = await shouldGenerateChart(userMsgContent, nextFocus || currentTicker || null);
+              const markerRegex = /\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g;
+              const existingTickers = new Set(Array.from(patched.matchAll(markerRegex)).map((match) => match[1]));
+              const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(userMsgContent);
+              const forceMulti = tickers.length > 1;
+
+              if (chartInfo.chartType || forceMulti) {
+                const targetTickers = tickers.slice(0, MAX_AUTO_CHART_TICKERS);
+                const missingTickers = targetTickers.filter((ticker) => !existingTickers.has(ticker));
+                if (missingTickers.length > 0) {
+                  const chartType = forceMulti ? 'line' : chartInfo.chartType || 'line';
+                  missingTickers.forEach((ticker) => {
+                    patched += `
+
+[CHART:${ticker}:${chartType}]`;
+                  });
+                  if (targetTickers.length === 1) {
+                    setTicker(targetTickers[0]);
+                  }
+                }
+              } else if (chartInfo.smartChart && !forceMulti) {
+                // SmartChart 数据路径（pie/bar）：按 data_kind 拉真实数据，成功才注入 <chart> 标记。
+                // 时机改为落定后异步补挂——由 ChatList 的 parseSmartChartBlocks 渲染。
+                const smartTicker = tickers[0] || nextFocus || currentTicker || null;
+                if (smartTicker && !/<chart\s+/i.test(patched)) {
+                  const { chartType, dataKind, title } = chartInfo.smartChart;
+                  const result = await apiClient.getChartData(smartTicker, dataKind);
+                  if (result?.success && result.data && Array.isArray(result.data.values) && result.data.values.length > 0) {
+                    const safeTitle = (title || `${smartTicker} 图表`).replace(/"/g, '');
+                    patched += `
+
+<chart type="${chartType}" title="${safeTitle}">${JSON.stringify(result.data)}</chart>`;
+                    setTicker(smartTicker);
+                  }
+                  // 失败 / 无数据：诚实跳过，不出图（与现有 InlineChart 跳过行为一致）。
+                }
+              }
+
+              if (patched !== fullContent) {
+                updateScopedMessage(aiMsgId, { content: patched });
+              }
+            } catch (chartErr) {
+              console.warn('chart enrichment skipped:', chartErr);
+            }
+          })();
           if (execRunId) {
             useExecutionStore.getState().completeExternalExecution({
               runId: execRunId,
