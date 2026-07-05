@@ -3,47 +3,114 @@
 @tailwind utilities;
 
 :root {
-  /* FinSight Redesign · Light (靛蓝多色混合) */
-  --fin-bg: #f5f6f8;
-  --fin-bg-secondary: #eceef1;
-  --fin-card: #ffffff;
-  --fin-panel: #ffffff;
-  --fin-border: #e4e7ec;
-  --fin-hover: #eaeefe;
+  /* ===== TERMINAL 设计语言 · 浅色 ===== */
+  --t-bg: #f4f5f7;            /* 页面底 */
+  --t-surface: #ffffff;        /* 面板 */
+  --t-card: #ffffff;           /* 卡片 */
+  --t-elevated: #f8f9fb;       /* 卡片内嵌块 */
+  --t-border: #e2e5ea;
+  --t-divider: #edeff3;
+  --t-hover: #f0f2f6;
 
-  --fin-text: #181b21;
-  --fin-text-secondary: #5e6671;
-  --fin-muted: #98a0ab;
+  --t-text: #17191d;
+  --t-text-2: #565e6a;
+  --t-text-3: #8a93a1;
 
-  --fin-primary: 59 91 219;
-  --fin-success: #15a05a;
-  --fin-danger: #e03131;
-  --fin-warning: #ec8413;
-  --fin-predict: #7048e8;
+  --t-accent: 224 122 24;      /* #E07A18 终端橙，rgb 三元组供 alpha */
+  --t-accent-hi: #c96a0e;
+
+  --t-up: #0f9960;             /* 涨（国际默认绿涨）*/
+  --t-down: #d13d3d;
+  --t-warning: #b97509;
+  --t-info: #2f6fd0;
+  --t-predict: #7048e8;
+
+  --t-chart-grid: #e8eaef;
+  --t-shadow-card: 0 1px 2px rgb(16 18 24 / 0.06);
 
   color-scheme: light;
 }
 
 :root.dark {
-  /* FinSight Redesign · Dark (靛蓝镜像，同一设计系统的暗色) */
-  --fin-bg: #0f1116;
-  --fin-bg-secondary: #161922;
-  --fin-card: #181c24;
-  --fin-panel: #1f2430;
-  --fin-border: #2a3040;
-  --fin-hover: #1d2747;
+  /* ===== TERMINAL 设计语言 · 深色（主态）===== */
+  --t-bg: #0a0c10;
+  --t-surface: #10131a;
+  --t-card: #12161f;
+  --t-elevated: #171c27;
+  --t-border: #232b3a;
+  --t-divider: #1a2130;
+  --t-hover: #182031;
 
-  --fin-text: #e9ebef;
-  --fin-text-secondary: #99a1af;
-  --fin-muted: #5c6573;
+  --t-text: #e8eaed;
+  --t-text-2: #9aa3b2;
+  --t-text-3: #5b6472;
 
-  --fin-primary: 107 138 255;
-  --fin-success: #37d399;
-  --fin-danger: #ff6b6b;
-  --fin-warning: #ffa94d;
-  --fin-predict: #9775fa;
+  --t-accent: 255 138 0;       /* #FF8A00 */
+  --t-accent-hi: #ffa133;
+
+  --t-up: #2fbf7f;
+  --t-down: #ff5d5d;
+  --t-warning: #f5a623;
+  --t-info: #6b9eff;
+  --t-predict: #9775fa;
+
+  --t-chart-grid: #1a2130;
+  --t-shadow-card: none;       /* 深色不用投影，靠边框分层 */
 
   color-scheme: dark;
+}
+
+/* ===== 旧 token 兼容别名（迁移期 --fin-* 全部有效）===== */
+:root, :root.dark {
+  --fin-bg: var(--t-bg);
+  --fin-bg-secondary: var(--t-surface);
+  --fin-card: var(--t-card);
+  --fin-panel: var(--t-elevated);
+  --fin-border: var(--t-border);
+  --fin-hover: var(--t-hover);
+  --fin-text: var(--t-text);
+  --fin-text-secondary: var(--t-text-2);
+  --fin-muted: var(--t-text-3);
+  --fin-primary: var(--t-accent);
+  --fin-success: var(--t-up);
+  --fin-danger: var(--t-down);
+  --fin-warning: var(--t-warning);
+  --fin-predict: var(--t-predict);
+}
+
+/* ===== A股红涨绿跌模式（08 Task 9 在设置里接线）===== */
+:root.cn-colors { --t-up: #d13d3d; --t-down: #0f9960; }
+:root.dark.cn-colors { --t-up: #ff5d5d; --t-down: #2fbf7f; }
+
+/* ===== 全局数字规范 ===== */
+.num, .tabular {
+  font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ===== 终端光标（替代三点弹跳）===== */
+@keyframes t-caret { 0%, 45% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.t-caret::after {
+  content: "▍";
+  color: rgb(var(--t-accent));
+  animation: t-caret 1s steps(1) infinite;
+  margin-left: 2px;
+}
+
+/* ===== 价格闪动（数据更新反馈）===== */
+@keyframes t-flash-up { 0% { background: color-mix(in srgb, var(--t-up) 22%, transparent); } 100% { background: transparent; } }
+@keyframes t-flash-down { 0% { background: color-mix(in srgb, var(--t-down) 22%, transparent); } 100% { background: transparent; } }
+.t-flash-up { animation: t-flash-up 0.5s ease-out; }
+.t-flash-down { animation: t-flash-down 0.5s ease-out; }
+
+/* ===== 骨架屏 ===== */
+@keyframes t-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.t-skeleton {
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--t-elevated) 25%, var(--t-hover) 37%, var(--t-elevated) 63%);
+  background-size: 800px 100%;
+  animation: t-shimmer 1.4s ease-in-out infinite;
 }
 
 body {
