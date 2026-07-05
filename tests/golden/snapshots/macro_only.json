@@ -1,0 +1,14 @@
+{
+  "blocked_reasons": [],
+  "output_mode": "chat",
+  "plan_steps": [],
+  "route": "research",
+  "tasks": [
+    {
+      "operation": "qa",
+      "reason": "macro_hint",
+      "subject_type": "macro",
+      "tickers": []
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "blocked_reasons": [],
+  "output_mode": "chat",
+  "plan_steps": [
+    {
+      "group": "task_1",
+      "kind": "tool",
+      "name": "get_stock_price"
+    }
+  ],
+  "route": "research",
+  "tasks": [
+    {
+      "operation": "price",
+      "reason": "ticker_or_alias",
+      "subject_type": "company",
+      "tickers": [
+        "AAPL"
+      ]
+    }
+  ]
+}
