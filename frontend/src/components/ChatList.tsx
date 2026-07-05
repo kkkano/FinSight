@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
+import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
 import { normalizeMarkdown } from '../utils/markdown';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
@@ -771,9 +771,13 @@ const MessageActions: React.FC<{
     return lines.filter((line) => line !== undefined).join('\n');
   };
 
+  const [copied, setCopied] = useState(false);
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch (e) {
       console.error('Copy failed', e);
     }
@@ -799,8 +803,13 @@ const MessageActions: React.FC<{
         ? "mt-4 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200"
         : "absolute bottom-0 right-2 translate-y-full"
     )}>
-      <button className={btnClass} title="复制" onClick={handleCopy}>
-        <Copy size={14} />
+      <button
+        className={clsx(btnClass, copied && 'text-fin-success')}
+        title={copied ? '已复制' : '复制'}
+        aria-label={copied ? '已复制' : '复制回答'}
+        onClick={handleCopy}
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
       <button className={btnClass} title="重试" onClick={onRetry}>
         <RefreshCcw size={14} />
