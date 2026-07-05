@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, User, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
@@ -358,10 +358,32 @@ export const ChatList: React.FC = () => {
     || statusMessage === STOPPED_GENERATION_MESSAGE
     || currentStep === '已停止生成';
 
+  // FE-02：滚动停靠检测——只有用户停靠在底部时才自动跟随，向上回看不再被拽回
+  const PIN_THRESHOLD_PX = 80;
+  const isPinnedRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const pinned = distance < PIN_THRESHOLD_PX;
+    isPinnedRef.current = pinned;
+    setShowJumpToLatest((prev) => (prev === !pinned ? prev : !pinned));
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    const el = containerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    isPinnedRef.current = true;
+    setShowJumpToLatest(false);
+  }, []);
+
   useEffect(() => {
+    if (!isPinnedRef.current) return;
     const container = containerRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    container.scrollTo({ top: container.scrollHeight });
   }, [messages, isChatLoading, showExecutionBanner]);
 
   useEffect(() => {
@@ -496,12 +518,24 @@ export const ChatList: React.FC = () => {
     <div
       id="chat-scroll-container"
       ref={containerRef}
+      onScroll={handleScroll}
       className={clsx("flex-1 overflow-y-auto", isFlat ? "p-0" : "p-4 md:p-6 lg:p-8 space-y-6")}
     >
       {renderMessages()}
 
+      {showJumpToLatest && (
+        <button
+          type="button"
+          onClick={jumpToLatest}
+          aria-label="回到最新消息"
+          className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full border border-fin-border bg-fin-card px-3 py-1.5 text-xs text-fin-text shadow-lg hover:border-fin-primary/60 transition-colors"
+        >
+          ↓ 回到最新
+        </button>
+      )}
+
       {showExecutionBanner && (
-        <div className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
+        <div role="status" aria-live="polite" className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
           <div className={clsx(
             "rounded-xl border border-fin-border bg-fin-card px-4 py-3 shadow-sm min-w-[300px] max-w-[440px]",
             isFlat ? "max-w-3xl mx-auto w-full" : "ml-12"
@@ -519,7 +553,13 @@ export const ChatList: React.FC = () => {
               <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{elapsed}s</span>
             </div>
             <div className="mt-2.5">
-              <div className="h-1 overflow-hidden rounded-full bg-fin-border">
+              <div
+                role="progressbar"
+                aria-valuenow={Math.max(3, Math.min(100, executionProgress ?? 0))}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                className="h-1 overflow-hidden rounded-full bg-fin-border"
+              >
                 <div
                   className="h-full rounded-full bg-fin-primary transition-all duration-500 ease-out"
                   style={{ width: `${Math.max(3, Math.min(100, executionProgress ?? 0))}%` }}
