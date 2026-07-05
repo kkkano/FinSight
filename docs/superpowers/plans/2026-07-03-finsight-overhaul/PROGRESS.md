@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-05 | WP2-Task2 关键词单源+signals | a02d234 | identity断言+4信号测试绿；金样12/12零diff；understand回归71 passed |
 | 2026-07-05 | WP2-Task1 IntentFrame/AgentBrief 模型 | a3d241b | 4 passed(往返无损+contract吸收+route推断) |
 | 2026-07-05 | WP2-Task0 金样防护网 | eb7baf4 | 12快照首录+复跑零diff(50s)；审读发现cn_ticker空转怪癖已记录 KNOWN_QUIRKS |
 | 2026-07-05 | 08-Task3 对话区去廉价化 | fbb3c8c | Flat=TERMINAL文档流(FS▎+橙竖线),Bubble收角去阴影,LoadingDots→终端光标+真实文案,prose-terminal表格等宽,快捷建议>前缀+flex-wrap；215 passed+build 绿 |
@@ -25,6 +26,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-05 | WP2-T2 | conversation_router 的关键词是函数内联 token（非模块常量），与 understand 侧并集合并=行为变更，违背本任务零变更约束——合并推迟到 T3 意图管线重排（keywords.py 已注释说明）。29 个常量以'剪切+显式import回接'方式单源化，identity 测试守护。
 
 - 2026-07-05 | 08-T3 | MessagePayload 无 timestamp/agents 字段，元信息行暂不含时间戳与 agent chips（agent 署名按计划归 10 号文档 Task 9 随 AgentProfile 接线）；chatStyle 双风格并存：flat 按 TERMINAL 全量改造、bubble 收角去渐变保留为备选。
 

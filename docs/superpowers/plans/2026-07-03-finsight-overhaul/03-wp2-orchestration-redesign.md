@@ -320,12 +320,12 @@ class QuerySignals:
 def extract_signals(query: str, *, ui_context: dict) -> QuerySignals
 ```
 
-- [ ] **Step 1: 盘点两份关键词**
+- [x] **Step 1: 盘点两份关键词**
 
 Run: `grep -n "_HINTS\s*=\|_HINTS:" backend/graph/nodes/understand_request.py backend/graph/nodes/conversation_router.py`
 把所有元组名列成清单。对同名但内容漂移的元组（例如技术面/估值 hints），**取并集**并在 `keywords.py` 中用注释标注来源差异。
 
-- [ ] **Step 2: 写测试**（漂移回归：两个消费方看到同一份词表）
+- [x] **Step 2: 写测试**（漂移回归：两个消费方看到同一份词表）
 
 ```python
 # backend/tests/test_intent_signals.py
@@ -347,11 +347,11 @@ def test_extract_signals_basic():
     assert s.is_casual is False
 ```
 
-- [ ] **Step 3: 实现**：新建两个模块；`understand_request.py` / `conversation_router.py` 顶部改为 `from backend.graph.intent.keywords import *_HINTS…`（旧模块内保留 `_TECHNICAL_HINTS = keywords._TECHNICAL_HINTS` 别名以兼容既有引用）。`extract_signals` 的实现= 逐字搬运 `understand_request` 中 `extract_tickers/_extract_urls/_contains_any(_MACRO_HINTS)/is_casual_chat/_is_explicit_brief_request` 的现有调用组合。
+- [x] **Step 3: 实现**：新建两个模块；`understand_request.py` / `conversation_router.py` 顶部改为 `from backend.graph.intent.keywords import *_HINTS…`（旧模块内保留 `_TECHNICAL_HINTS = keywords._TECHNICAL_HINTS` 别名以兼容既有引用）。`extract_signals` 的实现= 逐字搬运 `understand_request` 中 `extract_tickers/_extract_urls/_contains_any(_MACRO_HINTS)/is_casual_chat/_is_explicit_brief_request` 的现有调用组合。
 
-- [ ] **Step 4: 验证**：`python -m pytest backend/tests/test_intent_signals.py tests/golden -x -q` → 全绿（金样零 diff 证明纯机械）。
+- [x] **Step 4: 验证**：`python -m pytest backend/tests/test_intent_signals.py tests/golden -x -q` → 全绿（金样零 diff 证明纯机械）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "refactor(intent): single-source keyword tables + QuerySignals extractor (zero behavior change)"
