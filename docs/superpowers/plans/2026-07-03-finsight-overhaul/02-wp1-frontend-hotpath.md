@@ -131,7 +131,7 @@ git commit -m "perf(store): debounce localStorage persistence during streaming (
 **Interfaces:**
 - Produces: 组件内部状态 `isPinnedRef: RefObject<boolean>`、`showJumpToLatest: boolean`；无对外接口变化。
 
-- [ ] **Step 1: 实现停靠检测**
+- [x] **Step 1: 实现停靠检测**
 
 找到现有自动滚底 effect（基线 361-365，形如 `useEffect(() => { ...scrollTo(bottom) }, [messages])`），替换为：
 
@@ -178,15 +178,15 @@ const jumpToLatest = useCallback(() => {
 )}
 ```
 
-- [ ] **Step 2: aria 语义（UX-08）**
+- [x] **Step 2: aria 语义（UX-08）**
 
 找到流式状态 banner（`grep -n "showExecutionBanner\|执行中\|Streaming" ChatList.tsx`），容器加 `role="status" aria-live="polite"`；进度条 div 加 `role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}`。
 
-- [ ] **Step 3: 手工验证**
+- [x] **Step 3: 手工验证**
 
 dev 起服务：发一条长回复，流式期间向上滚动 → 不再被拽回底部，出现"↓ 回到最新"；点击按钮回底并恢复跟随。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/ChatList.tsx
@@ -200,7 +200,7 @@ git commit -m "fix(chat): scroll follows only when pinned to bottom; add jump-to
 **Files:**
 - Modify: `frontend/src/components/ChatList.tsx`（`BubbleMessage` / `FlatMessage` 定义处，`grep -n "BubbleMessage\|FlatMessage" ChatList.tsx`）
 
-- [ ] **Step 1:** 两个消息组件用 `React.memo` 包裹，自定义比较器：
+- [x] **Step 1:** 两个消息组件用 `React.memo` 包裹，自定义比较器：
 
 ```tsx
 const areMessagePropsEqual = (prev: MessageProps, next: MessageProps) =>
@@ -215,12 +215,12 @@ const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual)
 
 （props 名单以实际组件签名为准；比较器只列会影响渲染的 props，回调 props 需先用 `useCallback` 稳定——`grep -n "onRetry\|onCopy" ChatList.tsx` 逐个包 useCallback。）
 
-- [ ] **Step 2: 验证**
+- [x] **Step 2: 验证**
 
 React DevTools Profiler：流式期间只有最后一条消息重渲染，历史消息 render 次数为 0。
 Run: `cd frontend && pnpm test --run && pnpm build`
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "perf(chat): memoize message components; stabilize handler identities"
@@ -233,7 +233,7 @@ git commit -am "perf(chat): memoize message components; stabilize handler identi
 **Files:**
 - Modify: `frontend/src/components/ChatList.tsx:547` 附近（锚点：`grep -n "parseSmartChartBlocks" ChatList.tsx`）
 
-- [ ] **Step 1:** 把图表块 useMemo 改为：
+- [x] **Step 1:** 把图表块 useMemo 改为：
 
 ```tsx
 const EMPTY_CHART_BLOCKS: SmartChartBlock[] = []
@@ -245,9 +245,9 @@ const chartBlocks = useMemo(
 
 （若解析发生在子组件，把 `isLoading` 传下去做同样的门；`stripSmartChartTags` 同理只在落定后执行——流式中间态直接渲染原文。）
 
-- [ ] **Step 2: 验证**：流式期间 CPU 明显下降（Performance 面板录制对比），落定后图表正常出现。
+- [x] **Step 2: 验证**：流式期间 CPU 明显下降（Performance 面板录制对比），落定后图表正常出现。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "perf(chat): skip smart-chart regex parsing while message is streaming"
@@ -260,7 +260,7 @@ git commit -am "perf(chat): skip smart-chart regex parsing while message is stre
 **Files:**
 - Modify: `frontend/src/components/ChatInput.tsx:278-302`（锚点：`grep -n "useStore()" frontend/src/components/ChatInput.tsx`）
 
-- [ ] **Step 1:** 把整包解构 `const { a, b, c, … } = useStore()` 拆成原子 selector：
+- [x] **Step 1:** 把整包解构 `const { a, b, c, … } = useStore()` 拆成原子 selector：
 
 ```tsx
 const isLoading = useStore((s) => s.isLoadingBySession[activeSessionId] ?? false)
@@ -272,9 +272,9 @@ const updateMessageInSession = useStore((s) => s.updateMessageInSession)
 
 规则：**actions 用单独 selector 取（引用稳定），数据字段逐一取，禁止对象解构整个 store**。
 
-- [ ] **Step 2: 验证**：Profiler 确认流式期间 ChatInput 不再每 token 重渲染。`pnpm test --run` 无回归。
+- [x] **Step 2: 验证**：Profiler 确认流式期间 ChatInput 不再每 token 重渲染。`pnpm test --run` 无回归。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "perf(chat-input): atomic zustand selectors, stop re-rendering on every stream event"
@@ -287,7 +287,7 @@ git commit -am "perf(chat-input): atomic zustand selectors, stop re-rendering on
 **Files:**
 - Modify: `frontend/src/components/ChatInput.tsx:612-708`（锚点：`grep -n "onDone" frontend/src/components/ChatInput.tsx`）
 
-- [ ] **Step 1:** 现状：`onDone` 内 `await detectChartType(...)`（可能再 await `getChartData`）之后才置 `isLoading:false`。改为：
+- [x] **Step 1:** 现状：`onDone` 内 `await detectChartType(...)`（可能再 await `getChartData`）之后才置 `isLoading:false`。改为：
 
 ```tsx
 onDone: (finalContent) => {
@@ -311,9 +311,9 @@ onDone: (finalContent) => {
 
 `injectChartsIfAny` = 把现有 onDone 里的图表检测代码原样搬进的本地 async 函数（不改判定逻辑，只改时序）。
 
-- [ ] **Step 2: 验证**：长回复流完瞬间气泡落定（无加载态残留数秒），图表稍后出现。
+- [x] **Step 2: 验证**：长回复流完瞬间气泡落定（无加载态残留数秒），图表稍后出现。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "fix(chat): finalize message immediately on done; chart detection patches in asynchronously"
@@ -326,7 +326,7 @@ git commit -am "fix(chat): finalize message immediately on done; chart detection
 **Files:**
 - Modify: `frontend/src/components/ChatInput.tsx:1027,1035-1045`
 
-- [ ] **Step 1:** textarea 移除 `disabled={isLoading}`（保留 placeholder 切换）；发送按钮已有 停止/发送 切换则保持；`handleSend` 入口加保护：
+- [x] **Step 1:** textarea 移除 `disabled={isLoading}`（保留 placeholder 切换）；发送按钮已有 停止/发送 切换则保持；`handleSend` 入口加保护：
 
 ```tsx
 if (isLoading) return // 生成中回车不触发发送（按钮此时是"停止"）
@@ -334,9 +334,9 @@ if (isLoading) return // 生成中回车不触发发送（按钮此时是"停止
 
 同时确认 Enter 发送的 keydown handler 也走该保护。
 
-- [ ] **Step 2: 验证**：生成期间可以打字、不能误发；点停止后可立即发送草稿。
+- [x] **Step 2: 验证**：生成期间可以打字、不能误发；点停止后可立即发送草稿。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "fix(chat-input): allow typing while generating; guard submit instead of disabling textarea"
@@ -349,7 +349,7 @@ git commit -am "fix(chat-input): allow typing while generating; guard submit ins
 **Files:**
 - Modify: `frontend/src/components/ChatList.tsx:718-757`（复制按钮）；`frontend/src/components/Sidebar.tsx` 或会话列表组件（`grep -rn "deleteConversation(" frontend/src/components`）
 
-- [ ] **Step 1: 复制反馈**：复制成功把按钮图标临时切为 ✓（1.5s 后还原），失败弹 toast；按钮补 `aria-label="复制回答"`。
+- [x] **Step 1: 复制反馈**：复制成功把按钮图标临时切为 ✓（1.5s 后还原），失败弹 toast；按钮补 `aria-label="复制回答"`。
 
 ```tsx
 const [copied, setCopied] = useState(false)
@@ -364,9 +364,9 @@ const handleCopy = async () => {
 }
 ```
 
-- [ ] **Step 2: 删除确认**：调用 `deleteConversation` 前弹项目已有的确认组件（`grep -rn "confirm" frontend/src/components/ui` 找现成的 Dialog/Confirm；若无，用两段式按钮：首次点击变红显示"再点一次确认删除"，3s 恢复）。
+- [x] **Step 2: 删除确认**：调用 `deleteConversation` 前弹项目已有的确认组件（`grep -rn "confirm" frontend/src/components/ui` 找现成的 Dialog/Confirm；若无，用两段式按钮：首次点击变红显示"再点一次确认删除"，3s 恢复）。
 
-- [ ] **Step 3: 验证 + Commit**
+- [x] **Step 3: 验证 + Commit**
 
 ```bash
 git commit -am "fix(ux): copy feedback state + confirm before conversation deletion"

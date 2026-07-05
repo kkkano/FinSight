@@ -2,6 +2,11 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-05 | WP1-Task2 滚动停靠+aria | 645c17a | 215 passed+build 绿 |
+| 2026-07-05 | WP1-Task3+4 memo+流式跳过图表解析 | 3acb7bd | 215 passed+build 绿 |
+| 2026-07-05 | WP1-Task5+6 selector收窄+文本先落定 | 108d722 | 215 passed+build 绿（T5/T6 同文件合并提交，账本注明） |
+| 2026-07-05 | WP1-Task7 生成中可打字 | 1ed52f6 | 215 passed+build 绿 |
+| 2026-07-05 | WP1-Task8 复制反馈 | f7b959b | 215 passed+build 绿；删除确认基线已有(confirmDeleteConversation)，仅补复制反馈 |
 | 2026-07-05 | WP0 完成门禁 | - | 后端 1841 passed/19 failed(=基线,无新增)+1条基线flaky翻绿；前端 215 passed+build 绿 → **WP0 完成** |
 | 2026-07-05 | WP1-Task1 localStorage去抖 | 5485ff5 | scheduler 4 passed；全量 215 passed(含流式切回恢复回归)；build 绿 |
 | 2026-07-04 | WP0-Task4+5 超时/流式鉴权/clone | f3ce2ff | vitest 211 passed + build 绿；backtest/pdf 显式120s |
@@ -15,6 +20,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-05 | WP1-T8 | 删除会话确认在基线已存在（ChatWorkspace confirmDeleteConversation），spec 该步骤按已完成处理；T9 虚拟化为可选任务按约定跳过。
 
 - 2026-07-05 | WP1-T1 | 无 jsdom（不在白名单），spec 的 localStorage 计数测试改为抽取 persistScheduler 纯模块 + fake timers 单测调度语义；useStore 接线由既有会话生命周期测试守护（曾抓出 startNewChat 缺 flush 的真 bug，已修）。基线 flaky 观察：test_chat_supervisor_uses_langgraph_stub_when_enabled 在门禁轮翻绿。
 
