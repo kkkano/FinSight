@@ -26,7 +26,7 @@
 - Produces: `schedulePersist(sessionId: string): void` 与 `flushPersist(sessionId?: string): void`（模块级，非 store 字段）。
 - 约束：`updateMessageInSession` 不再同步调用 `persistMessages`，改调 `schedulePersist`；以下时机必须 `flushPersist`：消息流结束（`isLoading` 置 false 处）、切换会话、删除会话、`beforeunload`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```ts
 // frontend/src/store/persistDebounce.test.ts
@@ -59,12 +59,12 @@ describe("persist debounce", () => {
 
 （action 名与签名以文件实际为准，测试骨架不变：**断言 50 次更新期间 setItem 调用数 ≤2、flush 后终态在盘上**。）
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd frontend && pnpm test --run persistDebounce`
 Expected: FAIL（当前每次 update 都 setItem，调用数 ≈100）。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `useStore.ts` 顶部（store 定义之外）加：
 
@@ -109,12 +109,12 @@ if (typeof window !== "undefined") {
    - `deleteConversation` / 切换会话 action → 先 `flushPersist(sessionId)` 再执行原逻辑
    - 其余低频调用点（新建会话等）保持直调 `...Now` 版本。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd frontend && pnpm test --run persistDebounce && pnpm test --run`
 Expected: 新测试 PASS，全量无回归。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/store/useStore.ts frontend/src/store/persistDebounce.test.ts

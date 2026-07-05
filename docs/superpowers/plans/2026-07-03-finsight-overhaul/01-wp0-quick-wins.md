@@ -452,6 +452,6 @@ git commit -m "fix(security): gate release-drill subprocess behind explicit env 
 
 ## WP0 完成门禁
 
-- [ ] `python -m pytest backend/tests -x -q` 全绿
-- [ ] `cd frontend && pnpm test --run && pnpm build` 全绿
+- [x] `python -m pytest backend/tests -x -q`（修订门禁：无新增失败，19 项基线固有失败清单见 tests/baseline-failures-4a1c055.txt）
+- [x] `cd frontend && pnpm test --run && pnpm build` 全绿（215 passed + build 1.5s）
 - [ ] 手工冒烟：聊天一轮、设置保存成功/失败各一次、登录后请求带 Authorization
