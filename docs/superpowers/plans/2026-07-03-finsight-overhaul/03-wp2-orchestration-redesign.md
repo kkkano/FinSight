@@ -403,7 +403,7 @@ def review_direct_decision(query: str, decision: ConversationDecision, signals: 
     不再伪造 research。判定条件逐字搬运原函数，但输出语义收窄。"""
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_intent_pipeline.py
@@ -449,9 +449,9 @@ async def test_multi_question_produces_multi_tasks():
 
 （`make_decision` 为测试内 helper，按 `ConversationDecision` 真实字段构造。）
 
-- [ ] **Step 2: 确认失败** → ImportError。
+- [x] **Step 2: 确认失败** → ImportError。
 
-- [ ] **Step 3: 实现（大工程，按序）**
+- [x] **Step 3: 实现（大工程，按序）**
 
 3a. `fallback_rules.build_tasks(signals, state) -> tuple[list[IntentTask], list[BlockedIntent], list[str]]`：把 `understand_request.py:2634-3000` 的关键词瀑布（active_symbol 兜底、holdings、selection、company 主块、macro、theme、portfolio）**整体剪切**进来，输出改为 IntentTask（用 Task1 的模型），行为逐字保持（对照金样）。
 3b. `pipeline.build_intent_frame` 按上面 docstring 的 9 步组装；步骤 2 的三个硬前置从原函数 :2413-2536 搬运；`_apply_reply_contract_to_tasks` + 二次 build 的双重构建改为**单次**：先 build tasks 完成后 build 一次 reply_plan（原双 build 的第二次输入=第一次输出，函数是幂等投影，单次等价——若金样 diff 证明不等价，保留双调用并在代码注释说明）。
@@ -473,14 +473,14 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
 
 3d. `state_updates_from_frame(frame, state) -> dict`：产出与旧返回 dict 完全同构的键集（`understanding/tasks/blocked_tasks/subject/operation/facets/output_mode/clarify/chat_responded/artifacts/trace` …），其中 `understanding = legacy_understanding_from_frame(frame)`，`understanding["intent_frame"] = frame.model_dump()`。`subject/operation/facets` 的推导逐字搬运原 :3286-3308。
 
-- [ ] **Step 4: 对拍验证**
+- [x] **Step 4: 对拍验证**
 
 Run: `python -m pytest backend/tests/test_intent_pipeline.py -x -q`（新逻辑单测）
 Run: `python -m pytest tests/golden -x -q`（默认 off，零 diff）
 Run: `FINSIGHT_INTENT_FRAME=on GOLDEN_UPDATE=1 python -m pytest tests/golden -x -q && git diff --stat tests/golden/snapshots`
 Expected: on 模式重录快照后，diff 仅限 `KNOWN_QUIRKS.md` 中登记过的荒谬项被修正（例如 direct 被强改 research 的路径消失）。**每一处 diff 都要能对着 D2 解释；解释不了的 diff = bug，修完再来。**审读完把 on 模式快照存到 `tests/golden/snapshots_v2/` 目录（两套并存，直到 WP2 收尾切换）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(intent): single-decision pipeline behind FINSIGHT_INTENT_FRAME flag; keyword cascade demoted to fallback"

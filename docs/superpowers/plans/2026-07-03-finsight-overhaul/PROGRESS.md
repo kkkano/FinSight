@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-05 | WP2-Task3 意图管线重排 | 3cbabfd | 管线5测试绿；金样 off/shadow/on 三模式 12/12 零diff；understand 回归绿 |
 | 2026-07-05 | WP2-Task2 关键词单源+signals | a02d234 | identity断言+4信号测试绿；金样12/12零diff；understand回归71 passed |
 | 2026-07-05 | WP2-Task1 IntentFrame/AgentBrief 模型 | a3d241b | 4 passed(往返无损+contract吸收+route推断) |
 | 2026-07-05 | WP2-Task0 金样防护网 | eb7baf4 | 12快照首录+复跑零diff(50s)；审读发现cn_ticker空转怪癖已记录 KNOWN_QUIRKS |
@@ -26,6 +27,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-05 | WP2-T3 | fallback_rules 未复制关键词瀑布，而是整体委托改名后的 _legacy_understand_request 并经 intent_frame_from_legacy 转换——瀑布零复制、fallback 与金样逐字节一致；物理拆分按计划归 WP3-T3。direct 复核新语义=只降级 clarify 不伪造 research（ORC-02 修复，测试守护）。shadow 模式管线+legacy 双跑（对拍成本，on 模式无双跑）。
 
 - 2026-07-05 | WP2-T2 | conversation_router 的关键词是函数内联 token（非模块常量），与 understand 侧并集合并=行为变更，违背本任务零变更约束——合并推迟到 T3 意图管线重排（keywords.py 已注释说明）。29 个常量以'剪切+显式import回接'方式单源化，identity 测试守护。
 
