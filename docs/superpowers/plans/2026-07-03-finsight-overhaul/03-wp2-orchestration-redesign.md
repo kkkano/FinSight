@@ -50,7 +50,7 @@
 **Interfaces:**
 - Produces: `run_pipeline_deterministic(query, ui_context) -> dict`（LLM 全关、工具 dry-run 下跑完整图并抽取稳定切片）。后续所有 WP2/WP3 任务以此为回归防线。
 
-- [ ] **Step 1: 写快照 harness**
+- [x] **Step 1: 写快照 harness**
 
 ```python
 # tests/golden/conftest.py
@@ -165,12 +165,12 @@ def test_golden(name, deterministic_env):
     assert_matches_snapshot(name, payload)
 ```
 
-- [ ] **Step 2: 首录快照并人工审读**
+- [x] **Step 2: 首录快照并人工审读**
 
 Run: `GOLDEN_UPDATE=1 python -m pytest tests/golden -x -q` 然后 `python -m pytest tests/golden -x -q`
 Expected: 第二次全绿。**打开每个 snapshot JSON 人工检查**：route/tasks/steps 是否符合直觉，把明显荒谬处记录到 `tests/golden/KNOWN_QUIRKS.md`（只记录，不修——它们是现状基线）。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/golden
