@@ -32,7 +32,7 @@
 - Modify: `frontend/src/main.tsx`（字体 import）
 - Create: `frontend/src/styles/tokens.md`
 
-- [ ] **Step 1: 替换 `index.css` 变量段**（基线 5-45 行两个 `:root` 块）为：
+- [x] **Step 1: 替换 `index.css` 变量段**（基线 5-45 行两个 `:root` 块）为：
 
 ```css
 :root {
@@ -145,7 +145,7 @@
 
 （文件其余部分——滚动条、`.card` 等 @apply 段——保留，它们引用的 `--fin-*` 自动吃到新值。）
 
-- [ ] **Step 2: tailwind.config.js**：`colors` 里 `fin` 同级新增 `t` 组（双轨过渡，不删 fin）：
+- [x] **Step 2: tailwind.config.js**：`colors` 里 `fin` 同级新增 `t` 组（双轨过渡，不删 fin）：
 
 ```js
         t: {
@@ -159,11 +159,11 @@
 
 `fontFamily.mono` 数组最前插入 `'"JetBrains Mono Variable"'`。
 
-- [ ] **Step 3: 字体**（依赖获批时）：`pnpm add @fontsource-variable/jetbrains-mono`，`main.tsx` 顶部 `import '@fontsource-variable/jetbrains-mono';`。未批 → 跳过本步。
+- [x] **Step 3: 字体**（依赖获批时）：`pnpm add @fontsource-variable/jetbrains-mono`，`main.tsx` 顶部 `import '@fontsource-variable/jetbrains-mono';`。未批 → 跳过本步。
 
-- [ ] **Step 4:** 写 `src/styles/tokens.md` 速查表（约 20 行）：背景四层怎么选（页面=bg、面板=surface、卡片=card、卡内块=elevated）、文字三层（正文=text、辅助=text2、元信息=text3）、涨跌必用 t-up/t-down、accent 只用于主操作/焦点/进行中、圆角表（卡 8 / 控件 6 / chip 4）。
+- [x] **Step 4:** 写 `src/styles/tokens.md` 速查表（约 20 行）：背景四层怎么选（页面=bg、面板=surface、卡片=card、卡内块=elevated）、文字三层（正文=text、辅助=text2、元信息=text3）、涨跌必用 t-up/t-down、accent 只用于主操作/焦点/进行中、圆角表（卡 8 / 控件 6 / chip 4）。
 
-- [ ] **Step 5:** `pnpm build` + 全站肉眼过一遍（整体换肤为终端橙但布局未动）。
+- [x] **Step 5:** `pnpm build` + 全站肉眼过一遍（整体换肤为终端橙但布局未动）。
 Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals, caret/flash/skeleton primitives`
 
 ---
@@ -187,9 +187,9 @@ Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals,
 | EmptyState | 竖排居中：lucide 图标 20px `text-t-text3` + 一句话 `text-sm text-t-text2` + 一个 ghost Button 主操作；**每个空状态必须带动作**，禁止裸"暂无数据" |
 | SourceBadge | `<SourceBadge source="yfinance" asOf="2026-07-03" degraded={false} synthetic={false}/>` → `text-2xs font-mono text-t-text3`；degraded 前缀 ⚠（`text-t-warning`）；synthetic=true 显示 `AI示意` 徽标（`border border-t-warning/50 text-t-warning px-1 rounded`）。**所有图表与数据卡片右上角必挂**（09 的真实性治理靠它落地） |
 
-- [ ] Step 1: 按表逐个实现/改造（新建四件按规格即完整需求）。
-- [ ] Step 2: `grep -rn "rounded-xl" frontend/src/components/ui` → 0。
-- [ ] Step 3: Commit: `feat(ui): atomic spec — Card/Button/Tag/Stat/Skeleton/EmptyState/SourceBadge`
+- [x] Step 1: 按表逐个实现/改造（新建四件按规格即完整需求）。
+- [x] Step 2: `grep -rn "rounded-xl" frontend/src/components/ui` → 0。
+- [x] Step 3: Commit: `feat(ui): atomic spec — Card/Button/Tag/Stat/Skeleton/EmptyState/SourceBadge`
 
 ---
 

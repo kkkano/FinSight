@@ -2,6 +2,8 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-05 | 08-Task1 TERMINAL token 层 | ce170a1 | build 绿(字体woff2入包)+215 passed；--fin-* 全量别名兼容 |
+| 2026-07-05 | 08-Task2 原子组件规范 | 20135dd | Card/Button/Badge/Skeleton 升级+Stat/EmptyState/SourceBadge 新建；ui/ 内 rounded-xl 清零 |
 | 2026-07-05 | WP1-Task2 滚动停靠+aria | 645c17a | 215 passed+build 绿 |
 | 2026-07-05 | WP1-Task3+4 memo+流式跳过图表解析 | 3acb7bd | 215 passed+build 绿 |
 | 2026-07-05 | WP1-Task5+6 selector收窄+文本先落定 | 108d722 | 215 passed+build 绿（T5/T6 同文件合并提交，账本注明） |
