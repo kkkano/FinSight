@@ -279,10 +279,10 @@ const BubbleMessageImpl: React.FC<{
     )}>
       <div className="mx-2"><Avatar role={msg.role} /></div>
       <div className={clsx(
-        "p-4 rounded-xl text-sm leading-relaxed shadow-sm",
+        "p-3.5 rounded-lg text-sm leading-relaxed",
         msg.role === 'user'
-          ? "bg-fin-hover text-fin-text rounded-tr-sm"
-          : "bg-fin-panel border border-fin-border text-fin-text rounded-tl-sm relative overflow-visible"
+          ? "bg-t-elevated border border-t-border/60 text-t-text"
+          : "bg-t-card border border-t-border text-t-text relative overflow-visible"
       )}>
         {msg.role === 'user' ? (
           msg.content
@@ -304,36 +304,29 @@ const FlatMessageImpl: React.FC<{
   onDelete: () => void;
 }> = ({ msg, onRetry, onDelete }) => {
   const isUser = msg.role === 'user';
-  return (
-    <div className="group/msg animate-slide-up">
-      <div className={clsx("py-6 px-4 md:px-6", isUser ? "bg-transparent" : "bg-transparent")}>
-        <div className="max-w-[48rem] mx-auto flex gap-4">
-          {/* Avatar */}
-          <div className="flex-shrink-0 pt-0.5">
-            <div className={clsx(
-              "w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold",
-              isUser
-                ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm"
-                : "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm"
-            )}>
-              {isUser ? <User size={16} /> : <Bot size={16} />}
-            </div>
+  if (isUser) {
+    // TERMINAL：用户消息 = 右对齐轻色块，无头像
+    return (
+      <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
+        <div className="max-w-[48rem] mx-auto flex justify-end">
+          <div className="max-w-[72%] rounded-lg bg-t-elevated border border-t-border/60 px-3.5 py-2.5 text-sm leading-relaxed text-t-text">
+            <p className="whitespace-pre-wrap m-0">{msg.content}</p>
           </div>
-
-          {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1.5 text-[13px] font-semibold text-fin-text">
-              {isUser ? '你' : 'FinSight'}
-            </div>
-            <div className="text-[14.5px] leading-7 text-fin-text">
-              {isUser ? (
-                <p className="whitespace-pre-wrap m-0">{msg.content}</p>
-              ) : (
-                <div className="relative overflow-visible">
-                  <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
-                </div>
-              )}
-            </div>
+        </div>
+      </div>
+    );
+  }
+  // TERMINAL：AI 回答 = 无框文档流，左侧橙色竖线贯穿 + 等宽元信息行
+  return (
+    <div className="group/msg animate-slide-up py-3 px-4 md:px-6">
+      <div className="max-w-[48rem] mx-auto">
+        <div className="relative pl-4 border-l-2 border-t-accent/70">
+          <div className="mb-1.5 flex items-center gap-2 text-2xs font-mono text-t-text3">
+            <span className="font-semibold text-t-accent">FS▎</span>
+            <span>FinSight</span>
+          </div>
+          <div className="text-[14.5px] leading-7 text-t-text relative overflow-visible">
+            <AssistantContent msg={msg} onRetry={onRetry} onDelete={onDelete} actionsInline />
           </div>
         </div>
       </div>
@@ -641,7 +634,7 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = (
   );
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-invert prose-sm max-w-none prose-terminal">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -824,12 +817,15 @@ const MessageActions: React.FC<{
   );
 };
 
-const LoadingDots: React.FC = () => (
-  <div className="flex space-x-2">
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '0ms' }} />
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '150ms' }} />
-    <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '300ms' }} />
-  </div>
-);
+const LoadingDots: React.FC = () => {
+  // TERMINAL：终端光标 + 真实阶段文案（取自 executionStore 的 statusMessage），拒绝三点弹跳
+  const statusMessage = useStore((s) => s.statusMessage);
+  return (
+    <div className="flex items-center text-2xs font-mono text-t-text3">
+      <span>{statusMessage || '正在分析'}</span>
+      <span className="t-caret" />
+    </div>
+  );
+};
 
 const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual);

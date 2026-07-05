@@ -357,3 +357,13 @@ input[type=number]::-webkit-outer-spin-button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ===== TERMINAL markdown 排版（08 Task3）===== */
+.prose-terminal h1, .prose-terminal h2 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; }
+.prose-terminal h3 { font-size: 13px; font-weight: 600; color: var(--t-text-2); margin: 12px 0 4px; }
+.prose-terminal table { font-size: 12.5px; width: 100%; border-collapse: collapse; }
+.prose-terminal th { text-align: left; color: var(--t-text-3); font-weight: 500; border-bottom: 1px solid var(--t-border); padding: 4px 8px; }
+.prose-terminal td { border-bottom: 1px solid var(--t-divider); padding: 4px 8px; }
+.prose-terminal td:not(:first-child) { font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; text-align: right; }
+.prose-terminal code { background: var(--t-elevated); border: 1px solid var(--t-border); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+.prose-terminal blockquote { border-left: 2px solid var(--t-border); color: var(--t-text-2); padding-left: 10px; margin: 8px 0; }

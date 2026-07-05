@@ -1041,7 +1041,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           aria-label="输入聊天消息"
           rows={1}
           /* 移动端触摸目标：min-h-[44px] 确保输入框可点击区域 ≥44px */
-          className="w-full bg-fin-panel text-fin-text border border-fin-border rounded-xl py-3 pl-4 pr-28 focus:outline-none focus:ring-2 focus:ring-fin-primary/50 focus:border-fin-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-fin-muted resize-none overflow-y-hidden min-h-[44px] max-h-[160px]"
+          className="w-full bg-t-surface text-t-text border border-t-border rounded-lg py-3 pl-4 pr-28 focus:outline-none focus:ring-1 focus:ring-t-accent/30 focus:border-t-accent/70 transition-all placeholder-t-text3 resize-none overflow-y-hidden min-h-[44px] max-h-[160px]"
         />
 
         <div className="absolute right-2 flex items-center gap-2">
@@ -1082,37 +1082,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
       />
       <div className="text-center mt-2">
         <AiDisclaimer variant="compact" />
-        <div className="mt-2 flex justify-center gap-2 text-[11px] text-fin-muted">
+        <div className="mt-2 flex flex-wrap justify-center gap-2 text-[11px]">
           <button
-            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
             onClick={() => setInput('英伟达（NVDA）技术面分析：RSI、MACD、关键支撑阻力位')}
             disabled={isChatLoading}
           >
-            NVDA 技术面
+            &gt; NVDA 技术面
           </button>
           <button
-            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
             onClick={() => setInput('对比 AAPL 与 MSFT：营收增长、估值水平、技术面强弱')}
             disabled={isChatLoading}
           >
-            AAPL 对比 MSFT
+            &gt; AAPL 对比 MSFT
           </button>
           <button
-            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
             onClick={() => setInput('特斯拉最新关键新闻（24小时）及对股价影响解读')}
             disabled={isChatLoading}
           >
-            特斯拉新闻
+            &gt; 特斯拉新闻
           </button>
           <button
-            className="px-2 py-1 rounded border border-fin-border hover:border-fin-primary transition-colors"
+            className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
             onClick={() => {
               setOutputMode('investment_report');
               setInput('请做 Apple 深度投资报告（deep report，filing document longform），重点引用 10-K/10-Q、业绩电话会与权威媒体来源，并给出明确结论与风险清单');
             }}
             disabled={isChatLoading}
           >
-            Apple 深度研报
+            &gt; Apple 深度研报
           </button>
         </div>
       </div>
