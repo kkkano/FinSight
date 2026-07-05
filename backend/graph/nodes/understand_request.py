@@ -2,6 +2,7 @@
 """请求理解节点：一次性完成闲聊、标的、任务和阻塞项识别。"""
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import replace
@@ -57,6 +58,8 @@ from backend.graph.request_task_contract import (
     wants_no_news_or_links,
 )
 from backend.graph.state import GraphState
+
+logger = logging.getLogger(__name__)
 
 
 from backend.graph.intent.keywords import (  # noqa: F401 —— 关键词单一来源（WP2-T2）
@@ -2253,7 +2256,7 @@ async def _emit_understanding_trace(understanding: dict[str, Any]) -> None:
     )
 
 
-async def understand_request(state: GraphState) -> dict[str, Any]:
+async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
     query = (state.get("query") or "").strip()
     ui_context = dict(state.get("ui_context") or {}) if isinstance(state.get("ui_context"), dict) else {}
     output_mode = (decide_output_mode(state).get("output_mode") or "chat")
@@ -3301,6 +3304,37 @@ async def understand_request(state: GraphState) -> dict[str, Any]:
     if contract_enforced and intent_contracts:
         result["intent_contracts"] = intent_contracts
     return result
+
+
+async def understand_request(state: GraphState) -> dict[str, Any]:
+    """分发壳（WP2 Task 3）：FINSIGHT_INTENT_FRAME=off|shadow|on。
+
+    off（默认）——完全走 legacy 关键词瀑布，行为与基线逐字节一致；
+    shadow——新管线跑一遍只记 trace 影子，行为仍取 legacy（对拍用）；
+    on——LLM 唯一决策者的新管线；任何未预期异常自动兜底回 legacy（安全阀）。
+    """
+    mode = str(os.getenv("FINSIGHT_INTENT_FRAME", "off")).strip().lower()
+    if mode in {"shadow", "on"}:
+        try:
+            from backend.graph.intent.pipeline import build_intent_result
+
+            frame, result = await build_intent_result(state)
+        except Exception:
+            logger.exception("[understand_request] intent pipeline failed; falling back to legacy")
+            frame, result = None, None
+        if mode == "on" and result is not None:
+            await _emit_understanding_trace(result.get("understanding") or {})
+            return result
+        if mode == "shadow" and frame is not None:
+            legacy = await _legacy_understand_request(state)
+            try:
+                trace = legacy.setdefault("trace", {})
+                if isinstance(trace, dict):
+                    trace["intent_frame_shadow"] = frame.model_dump()
+            except Exception:
+                logger.debug("shadow trace attach failed", exc_info=True)
+            return legacy
+    return await _legacy_understand_request(state)
 
 
 __all__ = ["understand_request"]
