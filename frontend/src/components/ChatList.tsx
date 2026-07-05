@@ -204,7 +204,7 @@ const AssistantContent: React.FC<{
   <>
     {msg.isLoading ? (
       msg.content ? (
-        <MessageWithChart content={msg.content} />
+        <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} />
       ) : (
         <div className="py-4 flex items-center justify-start">
           <LoadingDots />
@@ -213,7 +213,7 @@ const AssistantContent: React.FC<{
     ) : msg.report ? (
       <ReportView report={msg.report} />
     ) : (
-      <MessageWithChart content={msg.content} />
+      <MessageWithChart content={msg.content} isStreaming={Boolean(msg.isLoading)} />
     )}
     {msg.evidence_pool && msg.evidence_pool.length > 0 && (
       <EvidenceSection evidence_pool={msg.evidence_pool} />
@@ -258,7 +258,14 @@ const Avatar: React.FC<{ role: string; size?: number }> = ({ role, size = 32 }) 
 
 // ── Bubble Message (original layout) ──
 
-const BubbleMessage: React.FC<{
+const areMessagePropsEqual = (
+  prev: { msg: MessagePayload },
+  next: { msg: MessagePayload },
+): boolean => prev.msg === next.msg;
+// FE-03a：msg 在 store 中按不可变模式更新——内容变则引用变，历史消息引用稳定 → memo 命中。
+// onRetry/onDelete 是内联箭头（引用不稳定）但行为只依赖 msg.id，故比较器有意忽略。
+
+const BubbleMessageImpl: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
@@ -289,7 +296,9 @@ const BubbleMessage: React.FC<{
 
 // ── Flat Message (ChatGPT-style layout) ──
 
-const FlatMessage: React.FC<{
+const BubbleMessage = React.memo(BubbleMessageImpl, areMessagePropsEqual);
+
+const FlatMessageImpl: React.FC<{
   msg: MessagePayload;
   onRetry: () => void;
   onDelete: () => void;
@@ -581,12 +590,19 @@ export const ChatList: React.FC = () => {
 
 // ── MessageWithChart ──
 
-const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
+const EMPTY_SMART_CHART_BLOCKS: ReturnType<typeof parseSmartChartBlocks> = [];
+
+const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean }> = ({ content, isStreaming }) => {
   const [chartData, setChartData] = useState<Array<{ ticker: string; chartType: ChartType; summary: string }>>([]);
 
-  const smartChartBlocks = useMemo(() => parseSmartChartBlocks(content), [content]);
+  // FE-03b：流式中间态跳过全文图表正则解析（每 token 一次太贵），落定后一次解析
+  const smartChartBlocks = useMemo(
+    () => (isStreaming ? EMPTY_SMART_CHART_BLOCKS : parseSmartChartBlocks(content)),
+    [content, isStreaming],
+  );
 
   useEffect(() => {
+    if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
     const matches = Array.from(content.matchAll(/\[CHART:([A-Z0-9.^=-]+):([a-z]+)\]/g));
     if (matches.length === 0) {
       setChartData([]);
@@ -605,7 +621,7 @@ const MessageWithChart: React.FC<{ content: string }> = ({ content }) => {
       nextData.push({ ticker, chartType, summary: '' });
     });
     setChartData(nextData);
-  }, [content]);
+  }, [content, isStreaming]);
 
   const handleChartDataReady = (ticker: string, summary: string) => {
     setChartData((prev) => prev.map((item) => (item.ticker === ticker ? { ...item, summary } : item)));
@@ -806,3 +822,5 @@ const LoadingDots: React.FC = () => (
     <span className="w-2 h-2 rounded-full bg-fin-muted animate-bounce" style={{ animationDelay: '300ms' }} />
   </div>
 );
+
+const FlatMessage = React.memo(FlatMessageImpl, areMessagePropsEqual);
