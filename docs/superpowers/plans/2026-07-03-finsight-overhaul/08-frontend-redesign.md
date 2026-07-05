@@ -217,9 +217,9 @@ Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals,
   ^ 左侧 2px 橙色竖线贯穿整条 AI 回答
 ```
 
-- [ ] **Step 1: 用户消息**（锚点 `grep -n "rounded-tr-sm" ChatList.tsx`，基线 275-278）：容器类改 `max-w-[72%] rounded-lg bg-t-elevated border border-t-border/60 px-3.5 py-2.5 text-sm leading-relaxed text-t-text`；删除用户侧头像。
+- [x] **Step 1: 用户消息**（锚点 `grep -n "rounded-tr-sm" ChatList.tsx`，基线 275-278）：容器类改 `max-w-[72%] rounded-lg bg-t-elevated border border-t-border/60 px-3.5 py-2.5 text-sm leading-relaxed text-t-text`；删除用户侧头像。
 
-- [ ] **Step 2: AI 消息去气泡**：AI 分支删除 `bg-fin-panel border … rounded-*` 容器与两个渐变头像 div（基线 305-308），改为：
+- [x] **Step 2: AI 消息去气泡**：AI 分支删除 `bg-fin-panel border … rounded-*` 容器与两个渐变头像 div（基线 305-308），改为：
 
 ```tsx
 <div className="group relative pl-4 border-l-2 border-t-accent/70">
@@ -235,7 +235,7 @@ Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals,
 
 （`AGENT_LABELS` 中文名表：价格/新闻/基本面/技术面/宏观/风险/深搜——新建常量放 `src/config/agentLabels.ts`。）
 
-- [ ] **Step 3: Markdown 排版类 `prose-terminal`**（追加进 index.css）：
+- [x] **Step 3: Markdown 排版类 `prose-terminal`**（追加进 index.css）：
 
 ```css
 .prose-terminal h1, .prose-terminal h2 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; }
@@ -248,15 +248,15 @@ Commit: `feat(ui): TERMINAL design tokens — unified palette, tabular numerals,
 .prose-terminal blockquote { border-left: 2px solid var(--t-border); color: var(--t-text-2); padding-left: 10px; margin: 8px 0; }
 ```
 
-- [ ] **Step 4: 加载态**：删除 LoadingDots 三点弹跳（基线 762-768）；流式中最后一个文本节点尾部挂 `t-caret` 类；无文字阶段显示一行 `text-2xs font-mono text-t-text3` 的**真实动作文案**（取 executionStore 最近一条 stage/step 事件，如"正在检索 AAPL 行情…"），不显示任何百分比。
+- [x] **Step 4: 加载态**：删除 LoadingDots 三点弹跳（基线 762-768）；流式中最后一个文本节点尾部挂 `t-caret` 类；无文字阶段显示一行 `text-2xs font-mono text-t-text3` 的**真实动作文案**（取 executionStore 最近一条 stage/step 事件，如"正在检索 AAPL 行情…"），不显示任何百分比。
 
-- [ ] **Step 5: 操作按钮**：消息底部操作行加 `opacity-0 group-hover:opacity-100 transition-opacity`（触屏 `@media (hover:none)` 下恒显示），按钮用 ghost 规格 + `aria-label`。
+- [x] **Step 5: 操作按钮**：消息底部操作行加 `opacity-0 group-hover:opacity-100 transition-opacity`（触屏 `@media (hover:none)` 下恒显示），按钮用 ghost 规格 + `aria-label`。
 
-- [ ] **Step 6: 快捷建议终端化**（ChatInput 底部）：chips 改 `font-mono text-2xs border border-t-border rounded px-2 py-1 text-t-text2 hover:border-t-accent/60 hover:text-t-accent`，文案加前缀 `> `（如 `> 分析 AAPL 财报`），容器补 `flex-wrap`。
+- [x] **Step 6: 快捷建议终端化**（ChatInput 底部）：chips 改 `font-mono text-2xs border border-t-border rounded px-2 py-1 text-t-text2 hover:border-t-accent/60 hover:text-t-accent`，文案加前缀 `> `（如 `> 分析 AAPL 财报`），容器补 `flex-wrap`。
 
-- [ ] **Step 7: 输入框**：容器 `rounded-lg border border-t-border bg-t-surface focus-within:border-t-accent/70 focus-within:ring-1 focus-within:ring-t-accent/30`；发送按钮 primary 规格；@agent 与 /skill 弹层统一 `bg-t-elevated border border-t-border rounded-md`。
+- [x] **Step 7: 输入框**：容器 `rounded-lg border border-t-border bg-t-surface focus-within:border-t-accent/70 focus-within:ring-1 focus-within:ring-t-accent/30`；发送按钮 primary 规格；@agent 与 /skill 弹层统一 `bg-t-elevated border border-t-border rounded-md`。
 
-- [ ] **Step 8:** 改前/改后截图 + `pnpm test --run`（类名断言的测试同步改）。
+- [x] **Step 8:** 改前/改后截图 + `pnpm test --run`（类名断言的测试同步改）。
 Commit: `feat(chat): document-flow AI replies, terminal caret, real-action loading — kill bubble-template look`
 
 ---
