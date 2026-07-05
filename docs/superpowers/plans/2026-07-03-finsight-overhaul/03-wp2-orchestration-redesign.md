@@ -237,7 +237,7 @@ def intent_frame_from_legacy(understanding: dict, *, reply_contract: dict | None
 def legacy_understanding_from_frame(frame: IntentFrame) -> dict: ...
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_intent_frame.py
@@ -278,11 +278,11 @@ def test_required_evidence_absorbed_from_contract():
     assert frame.tasks[0].required_evidence == ["price_snapshot", "recent_news"]
 ```
 
-- [ ] **Step 2: 确认失败**：`python -m pytest backend/tests/test_intent_frame.py -x -q` → ImportError。
+- [x] **Step 2: 确认失败**：`python -m pytest backend/tests/test_intent_frame.py -x -q` → ImportError。
 
-- [ ] **Step 3: 实现 `frame.py`**（按上面签名完整实现；`intent_frame_from_legacy` 的映射规则：`understanding.route` 的 `"clarify"` 保持、`"alert"` 保持、`"research"` 保持，legacy 无 route 时按 tasks 非空 → research 否则 clarify；task.operation dict → 扁平字段；`intent_contract.required_evidence` 应用到 `primary_tickers` 命中的所有 task；`legacy_understanding_from_frame` 逆向重建，包含 `user_visible_summary` 的重新拼接——逻辑照抄 `understand_request.py:3315-3323` 的 summary_bits 规则）。
+- [x] **Step 3: 实现 `frame.py`**（按上面签名完整实现；`intent_frame_from_legacy` 的映射规则：`understanding.route` 的 `"clarify"` 保持、`"alert"` 保持、`"research"` 保持，legacy 无 route 时按 tasks 非空 → research 否则 clarify；task.operation dict → 扁平字段；`intent_contract.required_evidence` 应用到 `primary_tickers` 命中的所有 task；`legacy_understanding_from_frame` 逆向重建，包含 `user_visible_summary` 的重新拼接——逻辑照抄 `understand_request.py:3315-3323` 的 summary_bits 规则）。
 
-- [ ] **Step 4: 测试通过 + Commit**
+- [x] **Step 4: 测试通过 + Commit**
 
 ```bash
 git add backend/graph/intent backend/tests/test_intent_frame.py
