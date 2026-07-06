@@ -494,16 +494,16 @@ git commit -am "feat(intent): single-decision pipeline behind FINSIGHT_INTENT_FR
 - Modify: `backend/graph/nodes/understand_request.py`、`backend/graph/nodes/synthesize.py`、`backend/graph/nodes/policy_gate.py`、`backend/graph/report_builder.py`
 - Test: 既有测试套 + 金样
 
-- [ ] **Step 1: 盘点消费方**
+- [x] **Step 1: 盘点消费方**
 
 Run: `grep -rn "request_frame\|understanding_v2\|intent_contract" backend/graph backend/api --include="*.py" -l`
 对每个文件记录：读的是哪个字段、用来做什么。产出 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-contract-consumers.md`（一张表）。
 
-- [ ] **Step 2: 逐消费方切换**：读 `request_frame.workflow_action` 的 → 改读 `IntentTask(operation="backtest")`；读 `intent_contract.required_evidence` 的（policy_gate `_required_evidence_from_state` :338、planner）→ 改读 `IntentTask.required_evidence`；`understanding_v2` 消费方（`grep` 结果预期只有 trace/诊断）→ 直接删。每切一个消费方跑一次金样（on 模式）。
+- [x] **Step 2: 逐消费方切换**：读 `request_frame.workflow_action` 的 → 改读 `IntentTask(operation="backtest")`；读 `intent_contract.required_evidence` 的（policy_gate `_required_evidence_from_state` :338、planner）→ 改读 `IntentTask.required_evidence`；`understanding_v2` 消费方（`grep` 结果预期只有 trace/诊断）→ 直接删。每切一个消费方跑一次金样（on 模式）。
 
-- [ ] **Step 3: 默认值切换**：`FINSIGHT_UNDERSTANDING_V2_MODE` 默认改 `off`；`intent_contract_mode()`（`grep -n "def intent_contract_mode" backend/graph`）默认改 `off`，enforce 分支保留一个发布周期后由 WP3 删除。
+- [x] **Step 3: 默认值切换**：`FINSIGHT_UNDERSTANDING_V2_MODE` 默认改 `off`；`intent_contract_mode()`（`grep -n "def intent_contract_mode" backend/graph`）默认改 `off`，enforce 分支保留一个发布周期后由 WP3 删除。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "refactor(intent): consumers read IntentFrame fields; freeze understanding_v2/request_frame dual tracks"

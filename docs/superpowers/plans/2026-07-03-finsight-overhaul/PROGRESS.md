@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-06 | WP2-Task4 冻结双轨 | 8a06f03 | v2默认off+消费方清单存档；金样12/12零diff |
 | 2026-07-05 | WP2-Task3 意图管线重排 | 3cbabfd | 管线5测试绿；金样 off/shadow/on 三模式 12/12 零diff；understand 回归绿 |
 | 2026-07-05 | WP2-Task2 关键词单源+signals | a02d234 | identity断言+4信号测试绿；金样12/12零diff；understand回归71 passed |
 | 2026-07-05 | WP2-Task1 IntentFrame/AgentBrief 模型 | a3d241b | 4 passed(往返无损+contract吸收+route推断) |
@@ -27,6 +28,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-06 | WP2-T4 | spec 假设 intent_contract_mode 默认 shadow 有误——实际默认 enforce（生产现役 required_evidence 机制）。纠偏：只冻结真影子 understanding_v2（无任何消费方），contract 保持 enforce 不动，其收编改判 WP3-T3（notes-contract-consumers.md 已列消费方与 on 模式灰度观察点）。
 
 - 2026-07-05 | WP2-T3 | fallback_rules 未复制关键词瀑布，而是整体委托改名后的 _legacy_understand_request 并经 intent_frame_from_legacy 转换——瀑布零复制、fallback 与金样逐字节一致；物理拆分按计划归 WP3-T3。direct 复核新语义=只降级 clarify 不伪造 research（ORC-02 修复，测试守护）。shadow 模式管线+legacy 双跑（对拍成本，on 模式无双跑）。
 
