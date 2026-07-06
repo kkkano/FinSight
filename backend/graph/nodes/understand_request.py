@@ -3240,7 +3240,8 @@ async def _legacy_understand_request(state: GraphState) -> dict[str, Any]:
         "fallback_assumptions": fallback_assumptions,
         "facets": facets,
     }
-    understanding_v2_mode = str(os.getenv("FINSIGHT_UNDERSTANDING_V2_MODE") or "shadow").strip().lower()
+    # WP2-T4：understanding_v2 影子默认冻结（off）——纯对拍产物，无任何消费方（见 notes-contract-consumers.md）
+    understanding_v2_mode = str(os.getenv("FINSIGHT_UNDERSTANDING_V2_MODE") or "off").strip().lower()
     understanding_v2 = {}
     if understanding_v2_mode != "off":
         understanding_v2 = build_understanding_v2(
