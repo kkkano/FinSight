@@ -947,8 +947,8 @@ git commit -am "chore(rollout): document orchestration flags; promote v2 golden 
 
 ## WP2 完成门禁
 
-- [ ] 四个 flag 全 on 时：`python -m pytest backend/tests tests/golden -x -q` 全绿
-- [ ] 手工验收清单：
+- [x] 四个 flag 全 on 时：`python -m pytest backend/tests tests/golden -x -q` 全绿
+- [x] 手工验收清单：
   - "对比 AAPL 和 MSFT 的估值，另外美联储下次议息是什么时候" → 回答分两节，宏观节不缺失
   - "PE 是什么意思" → direct 秒回，不触发 agent
   - 断网 LLM router（改错 key）→ 仍能走规则 fallback 出研究结果，trace 标 `source=rules_fallback`

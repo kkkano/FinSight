@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-门禁(手工验收) | - | 真LLM(sub2api gpt-5.4-mini)：①multi_question四任务+三节渲染宏观节在(## 美联储下次议息·宏观/## AAPL·投资观点/## MSFT·投资观点)②PE→direct秒回lane=llm无agent③坏key→lane=fallback(router_heuristic_only)仍出compare研究+真实价格④黑板：探针实证risk step收到含price_agent真实发现的__context_digest；叙事级目检因本地yfinance限流延至部署冒烟(C1/C2)复验⑤SSE契约完整(plan_ready/step_start/step_done/tool_*/done,26 pipeline_stage) → **WP2 完成** |
 | 2026-07-08 | WP2-门禁(自动测试部分) | 01ce883 | 四flag全on全量1880 passed/20 failed→diff基线唯一新增=evidence_ledger测试只patch旧执行器入口（env敏感，非产品回归）→修为双入口patch后 off/on 双模式 1 passed；其余19失败与基线清单逐条一致 |
 | 2026-07-08 | WP2-Task11 灰度收尾+验收bug修复 | 10e144f | 管线7 passed（新测2：compare残余hints续投+启发式降权）；金样12/12全绿（conftest固定四flag全on）；understand/router/planner回归320 passed（3失败全在基线清单，零新增） |
 | 2026-07-08 | WP2-Task10 多问题分节渲染 | 6738517 | 新测2 passed；渲染/compare/reply回归180 passed（2失败=基线固有）；金样12/12零diff |
@@ -37,6 +38,9 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP2-门禁 | 手工验收④黑板项：本地 yfinance 全机限流(429)+x666 gemini通道死(503)导致 risk_agent 因子数据 insufficient_data、LLM 叙事走 fallback——黑板机制本身用进程内探针实证（risk 步骤 inputs.__context_digest 含 price_agent 真实发现"AAPL 310.66 -0.64%"，prompt 模板 <peers_findings> 接线核实，T7 单测护航）；叙事级"risk 文本引用前序发现"目检顺延到判据 C1/C2 部署冒烟（服务器数据源健康）。验收证据文件 wp2_accept_*.json 留 %TEMP%，不入库。
+- 2026-07-08 | WP2-门禁 | 手工验收③的 query 语义修正：spec 例句"给我一份 NVDA 的投资分析"在无 LLM 基线本来就是 direct 空转（金样 single_report 佐证，KNOWN_QUIRKS cn_ticker 同族）；改用金样 compare 句式验证"规则兜底出研究结果"，符合条款本意（LLM 断 → 规则仍可产研究）。
 
 - 2026-07-08 | WP2-T11 | spec Step2 说"金样 v2 目录转正（删旧目录重命名）"——实际 T0-T10 全程 LLM-off 下新旧路径逐字节一致、从未产生独立 v2 目录，转正落地为 conftest 确定性环境固定四 flag 全 on（金样从此压测新引擎路径）。KNOWN_QUIRKS 补收尾审读章节代替打勾（1/3 已修=分节渲染，cn_ticker 归 WP3-T3，greeting 行为正确保持）。
 - 2026-07-08 | WP2-T11 | 验收准备中发现并修复两个真 bug：①compare 早退分支吞掉 router 非公司 hints（macro 等）→ understand_request 加 project_residual_hints 续投；②router fail-open 启发式决策（新增 decision_source 字段标记）曾被管线当 LLM 权威 → 视同 router 不可用交回规则兜底。测试样例注意：legacy _TRADE_DECISION_RE 动词表不含「投资」，「值得买吗」才触发 must_project 兜底。
