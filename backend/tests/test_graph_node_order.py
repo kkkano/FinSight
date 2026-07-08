@@ -158,7 +158,7 @@ class TestGraphNodeOrderInvariant:
         assert "parse_operation" not in nodes
 
     def test_expected_node_count(self):
-        """Graph must register the new understanding node plus legacy compatibility nodes."""
+        """WP2-T8 图诚实化：图中只注册运行时真实经过的节点（legacy 前半段节点已摘除）。"""
         from backend.graph.runner import _build_graph
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -170,8 +170,7 @@ class TestGraphNodeOrderInvariant:
             "prepare_context",
             "trim_history", "summarize_history",
             "normalize_ui_context", "decide_output_mode",
-            "chat_respond", "resolve_subject", "clarify",
-            "parse_operation", "policy_gate", "planner",
+            "chat_respond", "policy_gate", "planner",
             "confirmation_gate", "execute_plan", "research_debate", "synthesize", "render",
             "alert_extractor", "alert_action", "understand_request",
         }

@@ -18,17 +18,14 @@ from backend.graph.nodes import (
     chat_respond,
     confirmation_gate,
     decide_output_mode,
-    clarify,
     execute_plan_stub,
     normalize_ui_context,
-    parse_operation,
     policy_gate,
     prepare_context,
     planner,
     render_stub,
     research_debate,
     reset_turn_state,
-    resolve_subject,
     synthesize,
     understand_request,
 )
@@ -58,9 +55,6 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("normalize_ui_context", with_node_trace("normalize_ui_context", normalize_ui_context))
     graph.add_node("decide_output_mode", with_node_trace("decide_output_mode", decide_output_mode))
     graph.add_node("chat_respond", with_node_trace("chat_respond", chat_respond))
-    graph.add_node("resolve_subject", with_node_trace("resolve_subject", resolve_subject))
-    graph.add_node("clarify", with_node_trace("clarify", clarify))
-    graph.add_node("parse_operation", with_node_trace("parse_operation", parse_operation))
     graph.add_node("understand_request", with_node_trace("understand_request", understand_request))
     graph.add_node("alert_extractor", with_node_trace("alert_extractor", alert_extractor))
     graph.add_node("alert_action", with_node_trace("alert_action", alert_action))
@@ -115,21 +109,9 @@ def _build_graph(*, checkpointer: Any) -> Any:
         {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate", END: END},
     )
 
-    # Legacy front-half nodes are still registered for compatibility and
-    # focused unit tests, but the main runtime path now uses understand_request.
-    graph.add_edge("resolve_subject", "clarify")
-
-    def _route_after_clarify(state: GraphState) -> str:
-        clarify_state = state.get("clarify") or {}
-        if isinstance(clarify_state, dict) and clarify_state.get("needed") is True:
-            return END
-        return "parse_operation"
-
-    graph.add_conditional_edges(
-        "clarify",
-        _route_after_clarify,
-        {"parse_operation": "parse_operation", END: END},
-    )
+    # WP2-T8 图诚实化：resolve_subject/clarify/parse_operation 不再注册进图——
+    # 它们不在主运行路径上（understand_request 内部按需直接函数调用），
+    # 节点函数本体保留，物理搬家归 WP3。
 
     graph.add_edge("policy_gate", "planner")
     graph.add_edge("planner", "confirmation_gate")
@@ -151,18 +133,6 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_edge("research_debate", "synthesize")
     graph.add_edge("synthesize", "render")
     graph.add_edge("render", END)
-
-    def _route_after_parse_operation(state: GraphState) -> str:
-        op = (state.get("operation") or {}).get("name", "qa")
-        if op == "alert_set":
-            return "alert_extractor"
-        return "policy_gate"
-
-    graph.add_conditional_edges(
-        "parse_operation",
-        _route_after_parse_operation,
-        {"alert_extractor": "alert_extractor", "policy_gate": "policy_gate"},
-    )
 
     def _route_after_alert_extractor(state: GraphState) -> str:
         if bool(state.get("alert_valid")):
