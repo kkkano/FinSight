@@ -1087,6 +1087,7 @@ def _add_router_task_hints_contract(
     selection_types: list[str] | None = None,
     intent_contracts: list[dict[str, Any]] | None = None,
     request_frames: list[dict[str, Any]] | None = None,
+    project_residual_hints: bool = False,
 ) -> bool:
     """Compile router hint frames through the evidence-first intent contract."""
     added = False
@@ -1257,9 +1258,22 @@ def _add_router_task_hints_contract(
                 "value": len([hint for hint in (decision.task_hints or ()) if isinstance(hint, dict)]),
             }
         )
-        return True
+        if not project_residual_hints:
+            return True
+        # WP2-T11 修复：compare 早退曾把 router 的非公司 hints（macro/theme 等）整体丢弃；
+        # 旧路径靠关键词瀑布事后加塞掩盖，新意图管线无瀑布，需在此续投残余 hints。
+        added = True
+        hints_to_project = [
+            hint
+            for hint in (decision.task_hints or ())
+            if isinstance(hint, dict)
+            and str(hint.get("subject_type") or "").strip().lower()
+            not in {"company", "index", "crypto", "fund"}
+        ]
+    else:
+        hints_to_project = list(decision.task_hints or ())
 
-    for idx, hint in enumerate(decision.task_hints or (), 1):
+    for idx, hint in enumerate(hints_to_project, 1):
         if not isinstance(hint, dict):
             continue
         operation_name = str(hint.get("operation") or "qa").strip().lower()

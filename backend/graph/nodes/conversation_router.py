@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import dataclasses
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
@@ -155,6 +156,9 @@ class ConversationDecision:
     reason: str = ""
     reply_guidance: str = ""
     task_hints: tuple[dict[str, Any], ...] = ()
+    # 决策来源：llm=真 LLM 输出；heuristic_fallback=fail-open 启发式（无 LLM 权威，
+    # 新意图管线视同 router 不可用）；fast_path=高置信显式执行捷径（保持权威）。
+    decision_source: str = "llm"
 
     def model_dump(self) -> dict[str, Any]:
         return {
@@ -167,6 +171,7 @@ class ConversationDecision:
             "reason": self.reason,
             "reply_guidance": self.reply_guidance,
             "task_hints": [dict(item) for item in self.task_hints],
+            "decision_source": self.decision_source,
         }
 
 
@@ -1432,6 +1437,7 @@ def _fallback_decision(
     output_mode = str(state.get("output_mode") or "").strip().lower()
     if output_mode == "investment_report" and (tickers or selection_ids):
         return ConversationDecision(
+            decision_source="heuristic_fallback",
             execution_route="research",
             context_binding=ContextBinding(),
             domain_intent="analysis",
@@ -1441,11 +1447,12 @@ def _fallback_decision(
         )
     alert_decision = _alert_decision_from_extractor(state, tickers=tickers)
     if alert_decision is not None:
-        return alert_decision
+        return dataclasses.replace(alert_decision, decision_source="heuristic_fallback")
     query = str(state.get("query") or "").strip()
     if selection_ids or (tickers and _query_explicitly_requests_grounding(query)):
         source: ContextSource = "selection" if selection_ids else "none"
         return ConversationDecision(
+            decision_source="heuristic_fallback",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.6),
             domain_intent="analysis",
@@ -1455,6 +1462,7 @@ def _fallback_decision(
         )
     if tickers:
         return ConversationDecision(
+            decision_source="heuristic_fallback",
             execution_route="direct_answer",
             context_binding=ContextBinding(
                 source="none",
@@ -1483,6 +1491,7 @@ def _fast_explicit_execution_decision(
 
     if output_mode == "investment_report":
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.72),
             relation="new_topic",
@@ -1510,6 +1519,7 @@ def _fast_explicit_execution_decision(
             for ticker in _dedupe_preserve_order(tickers)[:6]
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.73),
             relation="new_topic",
@@ -1536,6 +1546,7 @@ def _fast_explicit_execution_decision(
             for ticker in _dedupe_preserve_order(tickers)[:6]
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.72),
             relation="new_topic",
@@ -1563,6 +1574,7 @@ def _fast_explicit_execution_decision(
             for ticker in _dedupe_preserve_order(tickers)[:6]
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.7),
             relation="new_topic",
@@ -1590,6 +1602,7 @@ def _fast_explicit_execution_decision(
             for ticker in _dedupe_preserve_order(tickers)[:6]
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.72),
             relation="new_topic",
@@ -1617,6 +1630,7 @@ def _fast_explicit_execution_decision(
             },
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.72),
             relation="compare",
@@ -1644,6 +1658,7 @@ def _fast_explicit_execution_decision(
             for ticker in _dedupe_preserve_order(tickers)[:6]
         )
         return ConversationDecision(
+            decision_source="fast_path",
             execution_route="research",
             context_binding=ContextBinding(source=source, confidence=0.72),
             relation="new_topic",

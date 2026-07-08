@@ -23,6 +23,13 @@ DETERMINISTIC_ENV = {
     "OPENAI_COMPATIBLE_API_KEY": "",
     "OPENAI_COMPATIBLE_API_BASE": "",
     "GRAPH_CHECKPOINT_BACKEND": "memory",
+    # WP2 Task11 收尾：金样固定在新编排引擎（四 flag 全 on）。
+    # LLM-off 下 on/off 切片逐字节一致（T3/T5 三模式对拍已证明），
+    # 固定 on 让金样从此持续压测 IntentFrame 管线 + DAG 执行器路径。
+    "FINSIGHT_INTENT_FRAME": "on",
+    "FINSIGHT_DAG_EXECUTOR": "on",
+    "FINSIGHT_AGENT_BRIEF": "on",
+    "FINSIGHT_EVIDENCE_BUS": "on",
 }
 
 # Windows + asyncio.run：与 backend/api/main.py 相同的 event loop 策略

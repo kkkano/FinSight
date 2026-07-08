@@ -935,9 +935,9 @@ git commit -am "feat(render): multi-question replies render one section per task
 
 ### Task 11: 灰度切换与收尾
 
-- [ ] **Step 1:** `.env.server.example` 登记四个 flag 并注释含义；线上灰度顺序：`INTENT_FRAME=shadow`（观察 trace 对拍 3 天）→ `on` → `DAG_EXECUTOR=on` → `AGENT_BRIEF=on` → `EVIDENCE_BUS=on`。
-- [ ] **Step 2:** 全部 on 稳定后：金样 v2 目录转正为唯一快照（删旧 snapshots，重命名 v2），`KNOWN_QUIRKS.md` 中已修复项打勾。
-- [ ] **Step 3:** Commit
+- [x] **Step 1:** `.env.server.example` 登记四个 flag 并注释含义；线上灰度顺序：`INTENT_FRAME=shadow`（观察 trace 对拍 3 天）→ `on` → `DAG_EXECUTOR=on` → `AGENT_BRIEF=on` → `EVIDENCE_BUS=on`。
+- [x] **Step 2:** 全部 on 稳定后：金样 v2 目录转正为唯一快照（删旧 snapshots，重命名 v2），`KNOWN_QUIRKS.md` 中已修复项打勾。
+- [x] **Step 3:** Commit
 
 ```bash
 git commit -am "chore(rollout): document orchestration flags; promote v2 golden snapshots"

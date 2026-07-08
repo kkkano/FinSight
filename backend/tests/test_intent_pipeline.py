@@ -87,3 +87,48 @@ async def test_casual_greeting_short_circuits_without_llm():
         frame, result = await pipeline.build_intent_result({"query": "你好", "ui_context": {}})
     assert frame.route == "direct"
     assert result["chat_responded"] is True
+
+
+@pytest.mark.asyncio
+async def test_compare_query_keeps_non_company_hints(monkeypatch):
+    """WP2-T11 验收 bug：compare 分支不得吞掉 router 给的 macro 等非公司 hints。"""
+    decision = make_decision(
+        "research",
+        relation="compare",
+        task_hints=(
+            {"subject_type": "company", "subject_label": "AAPL", "tickers": ["AAPL"],
+             "operation": "valuation_sanity", "params": {"compare_with": "MSFT"}},
+            {"subject_type": "company", "subject_label": "MSFT", "tickers": ["MSFT"],
+             "operation": "valuation_sanity", "params": {"compare_with": "AAPL"}},
+            {"subject_type": "macro", "subject_label": "美联储下次议息", "tickers": [],
+             "operation": "macro_brief", "params": {"topic": "FOMC next meeting date"}},
+        ),
+    )
+    from backend.graph.intent.pipeline import build_intent_frame
+
+    with patch("backend.graph.intent.pipeline.route_conversation", new=AsyncMock(return_value=decision)):
+        frame = await build_intent_frame(
+            {"query": "对比 AAPL 和 MSFT 的估值，另外美联储下次议息是什么时候", "ui_context": {}}
+        )
+    subject_types = {t.subject_type for t in frame.tasks}
+    assert "macro" in subject_types, f"macro hint 被丢弃: {[(t.subject_type, t.operation) for t in frame.tasks]}"
+    assert "company" in subject_types
+
+
+@pytest.mark.asyncio
+async def test_heuristic_fallback_decision_is_not_authoritative():
+    """router 的 fail-open 启发式决策（decision_source=heuristic_fallback）
+    不得拥有 LLM 权威——投资类 query 必须交回规则 fallback 产生 research 任务。"""
+    decision = make_decision(
+        "direct_answer",
+        reason="explicit subject context without grounded data request",
+        decision_source="heuristic_fallback",
+    )
+    from backend.graph.intent.pipeline import build_intent_frame
+
+    with patch("backend.graph.intent.pipeline.route_conversation", new=AsyncMock(return_value=decision)):
+        # legacy 的 _TRADE_DECISION_RE 动词表不含「投资」——「值得买」才触发 must_project 兜底；
+        # 本测试验证的是"启发式决策交回 legacy 兜底"这条机制本身。
+        frame = await build_intent_frame({"query": "AAPL 值得买吗", "ui_context": {}})
+    assert frame.source == "rules_fallback"
+    assert frame.route == "research"

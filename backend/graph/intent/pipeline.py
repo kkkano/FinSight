@@ -185,6 +185,10 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
         decision = None
     if decision is None:
         return await _fallback_to_legacy(state, reason="router_unavailable")
+    if getattr(decision, "decision_source", "llm") == "heuristic_fallback":
+        # fail-open 启发式决策没有 LLM 权威（D2）：视同 router 不可用，交回规则兜底，
+        # 避免投资类 query 被低置信 direct 短路（legacy 靠 must_project 兜底的场景）。
+        return await _fallback_to_legacy(state, reason="router_heuristic_only")
 
     trace["conversation_router"] = decision.model_dump()
     trace["intent_pipeline"] = {"lane": "llm"}
@@ -235,6 +239,7 @@ async def build_intent_result(state: GraphState) -> tuple[IntentFrame, dict]:
                 output_mode=output_mode, current_tickers=signals.tickers,
                 selection_ids=selection_ids, selection_types=selection_types,
                 intent_contracts=[], request_frames=[],
+                project_residual_hints=True,
             )
         else:
             ur._add_router_task_hints(

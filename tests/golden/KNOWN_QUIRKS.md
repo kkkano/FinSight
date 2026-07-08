@@ -10,3 +10,17 @@
    WP2 T3 的 IntentFrame 会给 direct 一个显式 route 值（预期 diff，记录在案）。
 3. **multi_question：任务分解正确（compare + 2×investment_opinion + macro）**，
    但渲染端不分节（ORC-11）——WP2 T10 的靶子，改后 v2 快照预期在渲染层出现差异（本切片不含渲染文本，应零 diff）。
+
+---
+
+## WP2 Task11 收尾审读（2026-07-08）
+
+金样确定性环境已固定四 flag 全 on（LLM-off 下新旧路径逐字节一致，无独立 v2 快照目录）。
+上述怪癖均属 **LLM 不可用时的 fallback 规则路径**，在新引擎下的状态：
+
+1. cn_ticker 空转：fallback 路径仍保留（快照未变）——LLM router 可用时由 hints 正常产任务；
+   fallback 侧修复归 WP3-T3（关键词瀑布物理拆分时一并处理）。
+2. greeting route=None：仍是 chat_respond 提前终止路径，行为正确，保持现状。
+3. multi_question 渲染不分节：**已修**（WP2-T10 render_task_sections）——但仅在
+   task_results 按 task id 聚合且 ≥2 个非空 subject_label 时生效（LLM hints 路径）；
+   fallback 路径的 task_results 仍按 primary_company 等分组键聚合，不触发分节。
