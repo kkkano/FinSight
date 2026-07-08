@@ -13,6 +13,7 @@ from backend.graph.adapters import (
     build_agent_invokers as _build_agent_invokers,
     build_tool_invokers as _build_tool_invokers,
 )
+from backend.graph.dag_executor import execute_plan_dag
 from backend.graph.executor import execute_plan
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 from backend.graph.json_utils import json_dumps_safe
@@ -602,12 +603,20 @@ async def execute_plan_stub(state: GraphState) -> dict:
         tool_invokers = build_tool_invokers(list(allowed_tools or []))
         agent_invokers = build_agent_invokers(list(allowed_agents or []), state)
 
-    artifacts, exec_events = await execute_plan(
-        plan_ir,
-        tool_invokers=tool_invokers,
-        agent_invokers=agent_invokers,
-        dry_run=not live_tools,
-    )
+    if os.getenv("FINSIGHT_DAG_EXECUTOR", "off").strip().lower() == "on":
+        artifacts, exec_events = await execute_plan_dag(
+            plan_ir,
+            tool_invokers=tool_invokers,
+            agent_invokers=agent_invokers,
+            dry_run=not live_tools,
+        )
+    else:
+        artifacts, exec_events = await execute_plan(
+            plan_ir,
+            tool_invokers=tool_invokers,
+            agent_invokers=agent_invokers,
+            dry_run=not live_tools,
+        )
     artifacts = _merge_prior_artifacts(state.get("artifacts"), artifacts)
 
     # Phase 4: build a unified evidence_pool from selection (ephemeral, request-scoped).
