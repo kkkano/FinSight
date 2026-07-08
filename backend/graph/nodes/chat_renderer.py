@@ -2272,7 +2272,104 @@ def _render_research_compare_markdown(
     return _finalize_chat_markdown(lines, state)
 
 
+# WP2-T10: 多问题分节渲染（ORC-11 / D8）
+OPERATION_LABELS: dict[str, str] = {
+    "compare": "对比",
+    "price": "价格",
+    "macro_brief": "宏观",
+    "fetch": "资讯",
+    "investment_opinion": "投资观点",
+    "technical": "技术面",
+    "earnings_impact": "财报影响",
+    "news_impact": "新闻影响",
+    "qa": "问答",
+}
+
+
+def _task_section_state(state: GraphState, task: dict[str, Any], bucket: dict[str, Any]) -> dict[str, Any]:
+    """构造 task 级 state 切片，复用现有渲染函数逐节渲染。"""
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    step_results = artifacts.get("step_results") if isinstance(artifacts.get("step_results"), dict) else {}
+    task_id = str(task.get("id") or "")
+    step_ids = [str(sid) for sid in (bucket.get("step_ids") or [])]
+    sliced_results: dict[str, Any] = {sid: step_results[sid] for sid in step_ids if sid in step_results}
+    for sid, result in (bucket.get("results") or {}).items():
+        sliced_results.setdefault(str(sid), result)
+    sub_artifacts = {**artifacts, "step_results": sliced_results, "task_results": {task_id: bucket}}
+    # alert 前缀与 blocked 说明由顶层 _with_existing_prefixes 统一追加，避免每节重复
+    sub_artifacts.pop("alert_markdown", None)
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    operation_obj = task.get("operation") if isinstance(task.get("operation"), dict) else {"name": str(task.get("operation") or "")}
+    return {
+        **state,
+        "understanding": {**understanding, "tasks": [task], "blocked_tasks": []},
+        "tasks": [task],
+        "blocked_tasks": [],
+        "artifacts": sub_artifacts,
+        "subject": {
+            "subject_type": str(task.get("subject_type") or "unknown"),
+            "tickers": list(task.get("tickers") or []),
+        },
+        "operation": {"name": str(operation_obj.get("name") or "qa")},
+    }
+
+
+def render_task_sections(state: GraphState) -> str | None:
+    """多问题 query（≥2 个不同 subject_label 的 task 且 task_results 非空）按任务分节。
+
+    条件不满足返回 None（走既有整体渲染路径）。
+    """
+    understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
+    tasks = [t for t in (understanding.get("tasks") or []) if isinstance(t, dict)]
+    if len(tasks) < 2:
+        return None
+    labels = {str(t.get("subject_label") or "").strip() for t in tasks}
+    labels.discard("")
+    if len(labels) < 2:
+        return None
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    task_results = artifacts.get("task_results") if isinstance(artifacts.get("task_results"), dict) else {}
+    if not task_results:
+        return None
+
+    def _priority(task: dict[str, Any]) -> int:
+        try:
+            return int(task.get("priority") or 50)
+        except Exception:
+            return 50
+
+    sections: list[str] = []
+    for task in sorted(tasks, key=_priority):
+        label = str(task.get("subject_label") or "").strip()
+        if not label:
+            continue
+        task_id = str(task.get("id") or "")
+        bucket = task_results.get(task_id)
+        if not isinstance(bucket, dict) or not bucket.get("results"):
+            continue
+        operation_obj = task.get("operation") if isinstance(task.get("operation"), dict) else {"name": str(task.get("operation") or "")}
+        op_name = str(operation_obj.get("name") or "").strip() or "qa"
+        op_label = OPERATION_LABELS.get(op_name, op_name)
+        body = render_chat_markdown(_task_section_state(state, task, bucket)).strip()
+        section = f"## {label} · {op_label}"
+        if body:
+            section = f"{section}\n\n{body}"
+        sections.append(section)
+    if len(sections) < 2:
+        return None
+    return "\n\n".join(sections)
+
+
+def _with_existing_prefixes(markdown: str, state: GraphState) -> str:
+    """给分节结果套用既有的 alert 前缀 / blocked 说明包装（与整体渲染同一出口）。"""
+    return _finalize_chat_markdown([markdown], state)
+
+
 def render_chat_markdown(state: GraphState) -> str:
+    sectioned = render_task_sections(state)
+    if sectioned is not None:
+        return _with_existing_prefixes(sectioned, state)
+
     query = str(state.get("query") or "").strip()
     ticker_label = ", ".join(_tickers(state)) or "这个标的"
     operations = _operation_names(state)
