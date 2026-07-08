@@ -783,7 +783,7 @@ def render_bus(bus: dict[str, str], *, exclude: str, limit_chars: int = 1200) ->
 
 - 执行器契约：`run_single_step` 中 `kind == "agent"` 的 step：启动前 `inputs["__context_digest"] = render_bus(bus, exclude=name)`；成功后 `bus[name] = digest_agent_output(name, output)`。**注意**：注入发生在 cache key 计算**之后**（`__context_digest` 不参与 cache key，否则前序结果不同永远 miss）——实现方式：`step_cache_key` 调用处对 inputs 做 `{k: v for k, v in inputs.items() if not k.startswith("__")}` 过滤（旧执行器同样适用，`__escalation_stage/__force_run` 本就该排除——**该过滤对旧 executor 是行为变更，必须核对**：`grep -n "__escalation_stage\|__force_run\|__run_if" backend/graph` 确认这些键当前是否进 cache key；若是，旧执行器保持原样，只在 dag_executor 中过滤）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_context_bus.py
@@ -815,9 +815,9 @@ async def test_later_agent_sees_earlier_agent_digest():
     assert "price_agent: AAPL at $200" in seen["digest"]
 ```
 
-- [ ] **Step 2: 实现**（按契约；bus 默认 None=不启用，`FINSIGHT_EVIDENCE_BUS=on` 时 execute_plan_stub 传入 `{}`）。
+- [x] **Step 2: 实现**（按契约；bus 默认 None=不启用，`FINSIGHT_EVIDENCE_BUS=on` 时 execute_plan_stub 传入 `{}`）。
 
-- [ ] **Step 3: 验证 + Commit**
+- [x] **Step 3: 验证 + Commit**
 
 ```bash
 git commit -am "feat(executor): evidence digest bus — later agents read earlier agents' findings"
