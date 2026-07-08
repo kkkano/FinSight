@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-Task11 灰度收尾+验收bug修复 | 10e144f | 管线7 passed（新测2：compare残余hints续投+启发式降权）；金样12/12全绿（conftest固定四flag全on）；understand/router/planner回归320 passed（3失败全在基线清单，零新增） |
 | 2026-07-08 | WP2-Task10 多问题分节渲染 | 6738517 | 新测2 passed；渲染/compare/reply回归180 passed（2失败=基线固有）；金样12/12零diff |
 | 2026-07-08 | WP2-Task9 planner lane 具名化 | f67d98c | 新测4 passed；planner回归45+金样12 全绿（零diff） |
 | 2026-07-08 | WP2-Task8 图拓扑诚实化 | 7345450 | 全量 1873 passed/19 failed，失败清单与基线逐条 diff 一致=零新增；节点集断言更新为诚实拓扑 |
@@ -35,6 +36,9 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP2-T11 | spec Step2 说"金样 v2 目录转正（删旧目录重命名）"——实际 T0-T10 全程 LLM-off 下新旧路径逐字节一致、从未产生独立 v2 目录，转正落地为 conftest 确定性环境固定四 flag 全 on（金样从此压测新引擎路径）。KNOWN_QUIRKS 补收尾审读章节代替打勾（1/3 已修=分节渲染，cn_ticker 归 WP3-T3，greeting 行为正确保持）。
+- 2026-07-08 | WP2-T11 | 验收准备中发现并修复两个真 bug：①compare 早退分支吞掉 router 非公司 hints（macro 等）→ understand_request 加 project_residual_hints 续投；②router fail-open 启发式决策（新增 decision_source 字段标记）曾被管线当 LLM 权威 → 视同 router 不可用交回规则兜底。测试样例注意：legacy _TRADE_DECISION_RE 动词表不含「投资」，「值得买吗」才触发 must_project 兜底。
 
 - 2026-07-08 | WP2-T10 | 实证发现现网 artifacts.task_results 按分组名（如 primary_company）而非 task id 聚合（off/on 模式皆然）→ 分节只在"按 task id 聚合且 ≥2 个非空 subject_label"时触发，现有 compare/整体渲染路径不受影响。附加防御条件：空 label 的 task（如 compare 主任务）不出节。Task 11 灰度手工验收时用真 LLM 复核 multi_question 分节实际生效。
 
