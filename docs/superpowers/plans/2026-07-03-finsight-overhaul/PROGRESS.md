@@ -2,6 +2,8 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-Task9 planner lane 具名化 | f67d98c | 新测4 passed；planner回归45+金样12 全绿（零diff） |
+| 2026-07-08 | WP2-Task8 图拓扑诚实化 | 7345450 | 全量 1873 passed/19 failed，失败清单与基线逐条 diff 一致=零新增；节点集断言更新为诚实拓扑 |
 | 2026-07-08 | WP2-Task7 证据黑板 | 6cb53e4 | 新测2 passed；dag3+executor12+金样12 全绿；__前缀键 cache-key 过滤仅 dag_executor 启用（旧执行器行为核实保留） |
 | 2026-07-08 | WP2-Task6 AgentBrief注入 | d3e1be8 | 新测2 passed；agent/planner回归315 passed（仅基线固有1失败）；金样 off/brief-on 双模式 12/12 零diff |
 | 2026-07-08 | WP2-Task5 DAG执行器 | 45ae191 | 新测3 passed+旧executor 12 passed；金样 off/on 双模式 12/12 零diff；planner回归45 passed |

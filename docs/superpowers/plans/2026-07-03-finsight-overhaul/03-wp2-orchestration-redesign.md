@@ -831,10 +831,10 @@ git commit -am "feat(executor): evidence digest bus — later agents read earlie
 - Modify: `backend/graph/runner.py`
 - Modify: `backend/tests/` 中引用被删节点的测试（`grep -rln "resolve_subject\|add_node(\"clarify\"\|parse_operation" backend/tests`）
 
-- [ ] **Step 1:** `runner.py` 删除节点注册与边：`resolve_subject`、`clarify`、`parse_operation` 三个 `add_node` 行、`graph.add_edge("resolve_subject", "clarify")`、`_route_after_clarify`、`_route_after_parse_operation` 及对应 `add_conditional_edges`。（函数本体不删——`parse_operation` 仍被 understand 内部当纯函数调用，物理搬家在 WP3。）
-- [ ] **Step 2:** 引用这些节点做单测的文件：改为直接 import 函数测试（不经图）。
-- [ ] **Step 3:** 快照守护：`python -m pytest tests/golden backend/tests -x -q` 全绿。
-- [ ] **Step 4: Commit**
+- [x] **Step 1:** `runner.py` 删除节点注册与边：`resolve_subject`、`clarify`、`parse_operation` 三个 `add_node` 行、`graph.add_edge("resolve_subject", "clarify")`、`_route_after_clarify`、`_route_after_parse_operation` 及对应 `add_conditional_edges`。（函数本体不删——`parse_operation` 仍被 understand 内部当纯函数调用，物理搬家在 WP3。）
+- [x] **Step 2:** 引用这些节点做单测的文件：改为直接 import 函数测试（不经图）。
+- [x] **Step 3:** 快照守护：`python -m pytest tests/golden backend/tests -x -q` 全绿。
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "refactor(graph): unregister legacy nodes not on the runtime path — topology now matches execution"
@@ -861,9 +861,9 @@ def select_planner_lane(state: GraphState, ready_tasks: list[dict]) -> Literal["
     """语义与 _should_use_task_graph_planner 完全一致，True→'rule' False→'llm'。"""
 ```
 
-- [ ] **Step 1:** 测试：用 3 组代表性 state（纯 price 任务→rule；deep_research→llm；混合 URL 证据图→rule）断言 lane。
-- [ ] **Step 2:** 搬运实现；`planner.py` 原函数改为 `return select_planner_lane(state, ready_tasks) == "rule"` 的一行壳。
-- [ ] **Step 3:** 金样零 diff + Commit
+- [x] **Step 1:** 测试：用 3 组代表性 state（纯 price 任务→rule；deep_research→llm；混合 URL 证据图→rule）断言 lane。
+- [x] **Step 2:** 搬运实现；`planner.py` 原函数改为 `return select_planner_lane(state, ready_tasks) == "rule"` 的一行壳。
+- [x] **Step 3:** 金样零 diff + Commit
 
 ```bash
 git commit -am "refactor(planner): named lane selector with single source op/subject sets"
