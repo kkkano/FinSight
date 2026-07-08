@@ -1,9 +1,19 @@
 # -*- coding: utf-8 -*-
+"""understanding_v2 影子路径契约测试。
+
+WP2-T4 已把 FINSIGHT_UNDERSTANDING_V2_MODE 默认冻结为 off；
+本文件测的是 shadow 模式下的产出契约，因此各测试显式开启 shadow。
+默认 off 行为由 test_understanding_v2_can_be_disabled 守护。
+"""
 import asyncio
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _enable_v2_shadow(monkeypatch):
+    monkeypatch.setenv("FINSIGHT_UNDERSTANDING_V2_MODE", "shadow")
 
 
 def _ops_by_ticker(result: dict) -> set[tuple[tuple[str, ...], str]]:
@@ -19,6 +29,7 @@ def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatc
     from backend.graph.nodes.understand_request import understand_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
     understanding = _run(understand_request(state))
@@ -75,6 +86,7 @@ def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypat
     from backend.graph.nodes.understand_request import understand_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    _enable_v2_shadow(monkeypatch)
 
     result = _run(
         understand_request(
@@ -102,6 +114,7 @@ def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch
     from backend.graph.nodes.understand_request import understand_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    _enable_v2_shadow(monkeypatch)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat"}
     understanding = _run(understand_request(state))
@@ -133,6 +146,7 @@ def test_valuation_compare_chat_ticker_limit_is_env_configurable(monkeypatch):
     from backend.graph.nodes.understand_request import understand_request
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
+    _enable_v2_shadow(monkeypatch)
     monkeypatch.setenv("FINSIGHT_CHAT_MULTI_TICKER_RESEARCH_LIMIT", "2")
 
     result = _run(
