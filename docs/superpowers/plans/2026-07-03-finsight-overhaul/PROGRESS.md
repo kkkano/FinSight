@@ -2,6 +2,8 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-Task5 DAG执行器 | 45ae191 | 新测3 passed+旧executor 12 passed；金样 off/on 双模式 12/12 零diff；planner回归45 passed |
+| 2026-07-08 | 修复WP2-T4遗留 v2契约测试回归 | 9b8ef06 | test_understanding_v2_contract 5 passed（原4 failed，非基线固有） |
 | 2026-07-06 | WP2-Task4 冻结双轨 | 8a06f03 | v2默认off+消费方清单存档；金样12/12零diff |
 | 2026-07-05 | WP2-Task3 意图管线重排 | 3cbabfd | 管线5测试绿；金样 off/shadow/on 三模式 12/12 零diff；understand 回归绿 |
 | 2026-07-05 | WP2-Task2 关键词单源+signals | a02d234 | identity断言+4信号测试绿；金样12/12零diff；understand回归71 passed |
@@ -28,6 +30,9 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP2-T5 | 发现 WP2-T4 冻结 v2 默认值时漏跑 test_understanding_v2_contract.py（4个非基线失败）。修复方式：该文件是 v2 影子路径的契约测试，显式 monkeypatch shadow 模式（功能仍在 flag 后保留，默认 off 行为另有测试守护），未改任何生产代码。
+- 2026-07-08 | WP2-T5 | 按 spec 把旧 executor 的 _run_step 提为模块级 run_single_step(step, ctx) 供双执行器共用；cache_key_inputs 钩子默认恒等（__escalation_stage 等历史上就参与 cache key，旧行为保持），__ 前缀过滤留给 T7 且仅 dag_executor 启用。
 
 - 2026-07-06 | WP2-T4 | spec 假设 intent_contract_mode 默认 shadow 有误——实际默认 enforce（生产现役 required_evidence 机制）。纠偏：只冻结真影子 understanding_v2（无任何消费方），contract 保持 enforce 不动，其收编改判 WP3-T3（notes-contract-consumers.md 已列消费方与 on 模式灰度观察点）。
 

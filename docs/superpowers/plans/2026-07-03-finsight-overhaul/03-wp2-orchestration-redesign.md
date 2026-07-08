@@ -537,7 +537,7 @@ async def execute_plan_dag(plan_ir, *, tool_invokers, agent_invokers, dry_run,
     返回值结构与旧 execute_plan 完全一致（artifacts/step_results/task_results/errors/signals + exec_events）。"""
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_dag_executor.py
@@ -595,9 +595,9 @@ async def test_legacy_parallel_group_plans_get_implicit_dependencies():
     assert order.index("c") > order.index("a") and order.index("c") > order.index("b")
 ```
 
-- [ ] **Step 2: 确认失败** → ImportError。
+- [x] **Step 2: 确认失败** → ImportError。
 
-- [ ] **Step 3: 实现 `dag_executor.py`**
+- [x] **Step 3: 实现 `dag_executor.py`**
 
 调度核心（完整给出，事件发射/缓存/心跳直接复用旧 executor 的 `_run_step`——将旧 `execute_plan` 内的 `_run_step` 及其依赖 helper 提为模块级函数 `run_single_step(step, ctx)` 供两个执行器共用，`ctx` 打包 async_tools/async_agents/cache/artifacts/exec_events/cancel/emit）：
 
@@ -651,7 +651,7 @@ async def _schedule(steps: list[dict], ctx: StepContext) -> None:
 
 （`record_skipped` 写 `step_results[sid] = {"output": {"skipped": True, "reason": "upstream_failed"}, "status_reason": "upstream_failed", …}` 并发 `step_done(skipped=True)` 事件——事件字段与旧契约一致。）
 
-- [ ] **Step 4: 接线**：`backend/graph/nodes/execute_plan_stub.py` 中调用点按 flag 分发：
+- [x] **Step 4: 接线**：`backend/graph/nodes/execute_plan_stub.py` 中调用点按 flag 分发：
 
 ```python
 if os.getenv("FINSIGHT_DAG_EXECUTOR", "off").strip().lower() == "on":
@@ -660,9 +660,9 @@ else:
     artifacts, exec_events = await execute_plan(plan_ir, ...)
 ```
 
-- [ ] **Step 5: 验证**：新测试 + 金样（off 零 diff；on 模式下步骤集合不变、只有并发时序差异——金样切片不含时序所以应零 diff）。
+- [x] **Step 5: 验证**：新测试 + 金样（off 零 diff；on 模式下步骤集合不变、只有并发时序差异——金样切片不含时序所以应零 diff）。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -am "feat(executor): dependency-DAG scheduler behind FINSIGHT_DAG_EXECUTOR; legacy group plans get implicit deps"
