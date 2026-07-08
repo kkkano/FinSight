@@ -679,7 +679,7 @@ git commit -am "feat(executor): dependency-DAG scheduler behind FINSIGHT_DAG_EXE
 **Interfaces:**
 - Produces: `BaseFinancialAgent.research(self, query: str, ticker: str, on_event=None, brief: AgentBrief | None = None) -> AgentOutput`；planner 的 agent step `inputs` 增加键：`objective/required_evidence/time_scope/output_mode`（planner_stub 的 `_append_agent_step` 一处改动即可覆盖全部 agent step——锚点 `planner_stub.py:227`）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_agent_brief.py
@@ -719,7 +719,7 @@ async def test_adapter_builds_brief_from_step_inputs():
     assert brief.context_digest.startswith("news_agent")
 ```
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 2a. `base_agent.py`：`research` 增加 `brief` 形参（默认 None，完全向后兼容），入口处 `self._current_brief = brief`；`_llm_analyze` 的 prompt `<context>` 块扩为：
 
@@ -751,9 +751,9 @@ result = await asyncio.wait_for(
 
 2d. `planner_stub.py` `_append_agent_step`（:227）：inputs 组装处并入 `{"objective": operation_name, "required_evidence": task.get("required_evidence") or [], "time_scope": task.get("params", {}).get("time_scope") or {}}`。
 
-- [ ] **Step 3: 验证**：新测试 + 全量 + 金样（brief flag off → 零 diff；on → plan_steps 切片含新 inputs 键？金样切片只取 kind/name/group，零 diff）。
+- [x] **Step 3: 验证**：新测试 + 全量 + 金样（brief flag off → 零 diff；on → plan_steps 切片含新 inputs 键？金样切片只取 kind/name/group，零 diff）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "feat(agents): AgentBrief carries objective/required-evidence/peer-digest into agent research & prompts"

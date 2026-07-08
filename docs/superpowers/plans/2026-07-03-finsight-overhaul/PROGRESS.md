@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-Task6 AgentBrief注入 | d3e1be8 | 新测2 passed；agent/planner回归315 passed（仅基线固有1失败）；金样 off/brief-on 双模式 12/12 零diff |
 | 2026-07-08 | WP2-Task5 DAG执行器 | 45ae191 | 新测3 passed+旧executor 12 passed；金样 off/on 双模式 12/12 零diff；planner回归45 passed |
 | 2026-07-08 | 修复WP2-T4遗留 v2契约测试回归 | 9b8ef06 | test_understanding_v2_contract 5 passed（原4 failed，非基线固有） |
 | 2026-07-06 | WP2-Task4 冻结双轨 | 8a06f03 | v2默认off+消费方清单存档；金样12/12零diff |
@@ -30,6 +31,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP2-T6 | planner_stub 的 brief 字段注入放在 dedup key 计算之后（key 用原始 inputs）——保证既有"同 inputs 合并 task_ids"行为零变化；合并命中时保留首个 task 的 brief 字段。基类 __init__ 收编 tools_module 后，price/news/deep_search 的 super() 调用同步改为四参（防位置参数错位），fundamental/technical/macro/risk 四个同构 __init__ 删除。
 
 - 2026-07-08 | WP2-T5 | 发现 WP2-T4 冻结 v2 默认值时漏跑 test_understanding_v2_contract.py（4个非基线失败）。修复方式：该文件是 v2 影子路径的契约测试，显式 monkeypatch shadow 模式（功能仍在 flag 后保留，默认 off 行为另有测试守护），未改任何生产代码。
 - 2026-07-08 | WP2-T5 | 按 spec 把旧 executor 的 _run_step 提为模块级 run_single_step(step, ctx) 供双执行器共用；cache_key_inputs 钩子默认恒等（__escalation_stage 等历史上就参与 cache key，旧行为保持），__ 前缀过滤留给 T7 且仅 dag_executor 启用。
