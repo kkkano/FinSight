@@ -1427,7 +1427,7 @@ def test_report_followup_chat_uses_last_report_context_without_report_mode() -> 
 
 
 def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     def fake_get_company_news(ticker: str, limit: int = 5, fast: bool = False):
         assert ticker == "NVDA"
@@ -1441,8 +1441,8 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
             }
         ][:limit]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
 
     markdown = _render_chat(
         {
@@ -1474,7 +1474,7 @@ def test_news_link_request_fetches_article_fallback_when_plan_has_no_news(monkey
 
 
 def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     calls: list[str] = []
 
@@ -1489,8 +1489,8 @@ def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> N
             }
         ][:limit]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
     monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_MAX_TICKERS", "1")
     monkeypatch.setenv("CHAT_RENDER_NEWS_FALLBACK_BUDGET_SECONDS", "5")
 
@@ -1522,7 +1522,7 @@ def test_news_link_article_fallback_limits_render_time_surface(monkeypatch) -> N
 
 
 def test_news_article_fallback_does_not_run_for_direct_answer_route(monkeypatch) -> None:
-    from backend.graph.nodes import chat_renderer
+    from backend.graph.renderers import news_fallback as chat_renderer_news
 
     calls: list[str] = []
 
@@ -1537,8 +1537,8 @@ def test_news_article_fallback_does_not_run_for_direct_answer_route(monkeypatch)
             }
         ]
 
-    monkeypatch.setattr(chat_renderer, "get_company_news", fake_get_company_news, raising=False)
-    monkeypatch.setattr(chat_renderer, "get_authoritative_media_news", None, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_company_news", fake_get_company_news, raising=False)
+    monkeypatch.setattr(chat_renderer_news, "get_authoritative_media_news", None, raising=False)
 
     markdown = _render_chat(
         {

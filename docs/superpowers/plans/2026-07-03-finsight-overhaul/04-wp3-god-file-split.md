@@ -42,20 +42,20 @@ def render_chat_markdown(state: GraphState) -> str:
     return join_fragments(parts, state)  # 原函数结尾的拼接/前缀逻辑
 ```
 
-- [ ] **Step 1: 画迁移地图**
+- [x] **Step 1: 画迁移地图**
 
 Run: `grep -n "^def \|^async def " backend/graph/nodes/chat_renderer.py > /tmp/cr_functions.txt`
 按功能域给 ~110 个函数分桶（价格/新闻/持仓/财报/估值/观点/组合/对比/宏观/URL/杂项），写入 `docs/superpowers/plans/2026-07-03-finsight-overhaul/notes-chat-renderer-map.md`：每行 `函数名 → 目标文件`。`render_chat_markdown` 主体中每个 `if …: parts.append(xxx())` 分支按出现顺序编号——这个顺序表就是 `RENDERERS` 列表。
 
-- [ ] **Step 2: 建包并逐桶剪切**（一桶一次小 commit，桶内函数连同其私有 helper 一起走；跨桶共用的 helper 进 `renderers/shared.py`）。
+- [x] **Step 2: 建包并逐桶剪切**（一桶一次小 commit，桶内函数连同其私有 helper 一起走；跨桶共用的 helper 进 `renderers/shared.py`）。
 
-- [ ] **Step 3: 主入口改写**：`render_chat_markdown` 按上面契约改为查表循环；分支条件进各 renderer 内部（renderer 自己判断"该不该出场"，不出场返回 None）。
+- [x] **Step 3: 主入口改写**：`render_chat_markdown` 按上面契约改为查表循环；分支条件进各 renderer 内部（renderer 自己判断"该不该出场"，不出场返回 None）。
 
-- [ ] **Step 4: shim**：`chat_renderer.py` 结尾保留 `from backend.graph.renderers.registry import render_chat_markdown  # noqa: F401`，旧测试不改路径也能跑。
+- [x] **Step 4: shim**：`chat_renderer.py` 结尾保留 `from backend.graph.renderers.registry import render_chat_markdown  # noqa: F401`，旧测试不改路径也能跑。
 
-- [ ] **Step 5: 验证**：`python -m pytest backend/tests tests/golden -x -q` 全绿零 diff。
+- [x] **Step 5: 验证**：`python -m pytest backend/tests tests/golden -x -q` 全绿零 diff。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -am "refactor(render): split chat_renderer into renderers/ registry (mechanical, zero behavior change)"
