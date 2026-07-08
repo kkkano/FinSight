@@ -604,11 +604,15 @@ async def execute_plan_stub(state: GraphState) -> dict:
         agent_invokers = build_agent_invokers(list(allowed_agents or []), state)
 
     if os.getenv("FINSIGHT_DAG_EXECUTOR", "off").strip().lower() == "on":
+        context_bus: dict[str, str] | None = (
+            {} if os.getenv("FINSIGHT_EVIDENCE_BUS", "off").strip().lower() == "on" else None
+        )
         artifacts, exec_events = await execute_plan_dag(
             plan_ir,
             tool_invokers=tool_invokers,
             agent_invokers=agent_invokers,
             dry_run=not live_tools,
+            context_bus=context_bus,
         )
     else:
         artifacts, exec_events = await execute_plan(

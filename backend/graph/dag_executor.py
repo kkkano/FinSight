@@ -21,6 +21,7 @@ from collections import defaultdict
 from typing import Any, Callable, Mapping, MutableMapping
 
 from backend.graph.cancellation import get_cancel_event
+from backend.graph.context_bus import digest_agent_output, render_bus
 from backend.graph.event_bus import emit_event
 from backend.graph.executor import (
     StepContext,
@@ -34,6 +35,15 @@ from backend.graph.executor import (
 from backend.graph.failure import FAILURE_STRATEGY_VERSION
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_key_inputs_without_private(inputs: dict[str, Any]) -> dict[str, Any]:
+    """cache key 排除 __ 前缀键（__context_digest 随前序结果变化，进 key 会永远 miss）。
+
+    注意：__escalation_stage/__force_run 等键在旧执行器中历史上参与 cache key，
+    该过滤仅 dag_executor 启用（WP2-T7 spec 明确约束）。
+    """
+    return {k: v for k, v in inputs.items() if not str(k).startswith("__")}
 
 
 def _implicit_deps_from_groups(steps: list[dict[str, Any]]) -> dict[str, set[str]]:
@@ -137,10 +147,29 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                 await _record_skipped(by_id[nxt], ctx, reason="upstream_failed")
                 stack.append(nxt)
 
+    def _step_for_launch(sid: str) -> dict[str, Any]:
+        """agent step 且黑板启用时，注入前序摘要（不改原 plan step）。"""
+        step = by_id[sid]
+        if ctx.context_bus is None or str(step.get("kind") or "") != "agent":
+            return step
+        inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
+        digest = render_bus(ctx.context_bus, exclude=str(step.get("name") or ""))
+        return {**step, "inputs": {**inputs, "__context_digest": digest}}
+
+    def _write_bus_after_success(sid: str) -> None:
+        step = by_id[sid]
+        if ctx.context_bus is None or str(step.get("kind") or "") != "agent":
+            return
+        result = ctx.artifacts["step_results"].get(sid)
+        output = result.get("output") if isinstance(result, dict) else None
+        digest = digest_agent_output(str(step.get("name") or ""), output)
+        if digest:
+            ctx.context_bus[str(step.get("name") or "")] = digest
+
     try:
         while len(done) + len(failed) < len(by_id):
             for sid in _ready():
-                task = asyncio.create_task(run_single_step(by_id[sid], ctx))
+                task = asyncio.create_task(run_single_step(_step_for_launch(sid), ctx))
                 running[task] = sid
             if not running:
                 # 环：剩余节点计入 errors(reason="dependency_cycle")
@@ -175,6 +204,7 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                 exc = task.exception()
                 if exc is None:
                     done.add(sid)
+                    _write_bus_after_success(sid)
                 elif isinstance(exc, asyncio.CancelledError):
                     raise exc
                 else:
@@ -253,6 +283,7 @@ async def execute_plan_dag(
         exec_events=exec_events,
         raise_if_cancelled=_raise_if_cancelled,
         emit_cancelled_stage=_emit_cancelled_stage,
+        cache_key_inputs=_cache_key_inputs_without_private,
         context_bus=context_bus,
     )
 
