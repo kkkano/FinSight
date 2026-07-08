@@ -880,7 +880,7 @@ git commit -am "refactor(planner): named lane selector with single source op/sub
 **Interfaces:**
 - Produces: `def render_task_sections(state: GraphState) -> str | None` —— 条件：`understanding.tasks` ≥2 个**不同 subject_label** 且 `artifacts.task_results` 非空；输出：按 task priority 升序，每个 task 渲染 `## {subject_label} · {OPERATION_LABELS[operation]}` 小节，小节内容 = 该 task 关联 steps 的现有渲染（复用 chat_renderer 现有的按-state 渲染函数，把过滤后的 task 级 state 切片传入）；不满足条件返回 None（走旧路径）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # backend/tests/test_multi_task_sections.py
@@ -915,7 +915,7 @@ def test_single_task_returns_none():
     assert render_task_sections(state) is None
 ```
 
-- [ ] **Step 2: 实现**：`render_task_sections` 按契约实现（`OPERATION_LABELS` 中文标签表新建在 chat_renderer 顶部：`{"compare": "对比", "price": "价格", "macro_brief": "宏观", "fetch": "资讯", "investment_opinion": "投资观点", "technical": "技术面", "earnings_impact": "财报影响", "news_impact": "新闻影响", "qa": "问答"}`，未知 operation 用原名）；`render_chat_markdown` 入口第一段加：
+- [x] **Step 2: 实现**：`render_task_sections` 按契约实现（`OPERATION_LABELS` 中文标签表新建在 chat_renderer 顶部：`{"compare": "对比", "price": "价格", "macro_brief": "宏观", "fetch": "资讯", "investment_opinion": "投资观点", "technical": "技术面", "earnings_impact": "财报影响", "news_impact": "新闻影响", "qa": "问答"}`，未知 operation 用原名）；`render_chat_markdown` 入口第一段加：
 
 ```python
 sectioned = render_task_sections(state)
@@ -923,9 +923,9 @@ if sectioned is not None:
     return _with_existing_prefixes(sectioned, state)   # 保留现有社交前缀/假设声明的包装逻辑
 ```
 
-- [ ] **Step 3: 验证**：新测试 + 金样（multi_question 快照在 on 模式下出现两个小节——重录 v2 快照并审读）。
+- [x] **Step 3: 验证**：新测试 + 金样（multi_question 快照在 on 模式下出现两个小节——重录 v2 快照并审读）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "feat(render): multi-question replies render one section per task, ordered by priority"

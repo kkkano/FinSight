@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP2-Task10 多问题分节渲染 | 6738517 | 新测2 passed；渲染/compare/reply回归180 passed（2失败=基线固有）；金样12/12零diff |
 | 2026-07-08 | WP2-Task9 planner lane 具名化 | f67d98c | 新测4 passed；planner回归45+金样12 全绿（零diff） |
 | 2026-07-08 | WP2-Task8 图拓扑诚实化 | 7345450 | 全量 1873 passed/19 failed，失败清单与基线逐条 diff 一致=零新增；节点集断言更新为诚实拓扑 |
 | 2026-07-08 | WP2-Task7 证据黑板 | 6cb53e4 | 新测2 passed；dag3+executor12+金样12 全绿；__前缀键 cache-key 过滤仅 dag_executor 启用（旧执行器行为核实保留） |
@@ -34,6 +35,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP2-T10 | 实证发现现网 artifacts.task_results 按分组名（如 primary_company）而非 task id 聚合（off/on 模式皆然）→ 分节只在"按 task id 聚合且 ≥2 个非空 subject_label"时触发，现有 compare/整体渲染路径不受影响。附加防御条件：空 label 的 task（如 compare 主任务）不出节。Task 11 灰度手工验收时用真 LLM 复核 multi_question 分节实际生效。
 
 - 2026-07-08 | WP2-T6 | planner_stub 的 brief 字段注入放在 dedup key 计算之后（key 用原始 inputs）——保证既有"同 inputs 合并 task_ids"行为零变化；合并命中时保留首个 task 的 brief 字段。基类 __init__ 收编 tools_module 后，price/news/deep_search 的 super() 调用同步改为四参（防位置参数错位），fundamental/technical/macro/risk 四个同构 __init__ 删除。
 
