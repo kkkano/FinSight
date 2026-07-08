@@ -81,6 +81,9 @@ def test_execute_plan_stub_builds_evidence_ledger_from_execution_artifacts(monke
         )
 
     monkeypatch.setattr(execute_mod, "execute_plan", _fake_execute_plan)
+    # 执行器无关：FINSIGHT_DAG_EXECUTOR=on 时 stub 调度到 execute_plan_dag（模块内导入名），
+    # 两个入口都指向同一 fake，账本构建语义在任一执行器下都被验证。
+    monkeypatch.setattr(execute_mod, "execute_plan_dag", _fake_execute_plan)
     monkeypatch.setattr("backend.rag.observability_store.get_rag_observability_store", lambda: None)
     from backend.rag.rag_router import RAGPriority
 
