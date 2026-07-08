@@ -16,6 +16,7 @@ import re
 from typing import Any, Dict, Iterable, Optional
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
+from backend.graph.intent.frame import AgentBrief
 from backend.agents.chart_specs_extra import build_risk_chart_specs
 from backend.research.agent_quality_contract import (
     apply_agent_quality_contract,
@@ -161,10 +162,6 @@ class RiskAgent(BaseFinancialAgent):
         RiskLevel.HIGH: 3,
         RiskLevel.CRITICAL: 4,
     }
-
-    def __init__(self, llm: Any, cache: Any, tools_module: Any, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
 
     def _get_tool_registry(self) -> dict:
         """RiskAgent tool registry: quote, drawdown, factor and stress signals."""
@@ -532,10 +529,12 @@ class RiskAgent(BaseFinancialAgent):
         query: str,
         ticker: str,
         on_event: Optional[Any] = None,
+        brief: Optional[AgentBrief] = None,
     ) -> AgentOutput:
         """Adapter-compatible entrypoint for report pipeline."""
         query_text = str(query or "")
         del on_event
+        self._current_brief = brief
 
         clean_ticker = str(ticker or "").strip().upper() or "N/A"
         get_stock_price = getattr(self.tools, "get_stock_price", None)

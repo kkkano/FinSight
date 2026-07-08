@@ -21,10 +21,6 @@ class TechnicalAgent(BaseFinancialAgent):
     MIN_POINTS = 30
     MAX_REFLECTIONS = 1  # Signal Confluence: one reflection to re-check pattern interpretation
 
-    def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
-
     def _get_tool_registry(self) -> dict:
         """TechnicalAgent tool registry: K-line indicators with side-signal calibration.
 

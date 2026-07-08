@@ -50,10 +50,6 @@ class MacroAgent(BaseFinancialAgent):
         "yield_spread": 0.35,
     }
 
-    def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
-
     def _get_tool_registry(self) -> dict:
         """MacroAgent tool registry: official + market sources for Plan-Execute-Reflect pattern."""
         registry = {}

@@ -12,6 +12,7 @@ from backend.graph.cancellation import is_cancelled
 from backend.graph.event_bus import emit_event
 from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.research.claim_extractor import extract_claims_from_agent_output
+from backend.graph.intent.frame import AgentBrief
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +247,38 @@ def _normalize_agent_output(*, step_name: str, output: Any, query: str, ticker: 
     return payload
 
 
+def brief_from_inputs(
+    inputs: Mapping[str, Any],
+    *,
+    default_query: str,
+    default_ticker: str,
+    output_mode: str,
+) -> AgentBrief:
+    """从 plan step inputs 构造 AgentBrief（WP2 D4）。"""
+    data = inputs if isinstance(inputs, Mapping) else {}
+    query = data.get("query")
+    query = str(query).strip() if isinstance(query, str) and query.strip() else default_query
+    ticker = data.get("ticker")
+    ticker = (
+        str(ticker).strip().upper()
+        if isinstance(ticker, str) and ticker.strip()
+        else default_ticker
+    )
+    required_evidence = data.get("required_evidence")
+    required_evidence = [str(item) for item in required_evidence] if isinstance(required_evidence, list) else []
+    time_scope = data.get("time_scope")
+    time_scope = dict(time_scope) if isinstance(time_scope, dict) else {}
+    return AgentBrief(
+        query=query,
+        ticker=ticker,
+        objective=str(data.get("objective") or ""),
+        required_evidence=required_evidence,
+        time_scope=time_scope,
+        output_mode=str(output_mode or "chat"),
+        context_digest=str(data.get("__context_digest") or ""),
+    )
+
+
 def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, Any]) -> dict[str, Any]:
     """
     Build best-effort invokers for legacy specialist agents.
@@ -388,8 +421,15 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
                     invoke_timeout = (
                         deep_search_timeout_seconds if _name == "deep_search_agent" else timeout_seconds
                     )
+                    brief = brief_from_inputs(
+                        inputs if isinstance(inputs, dict) else {},
+                        default_query=default_query,
+                        default_ticker=default_ticker,
+                        output_mode=str(state.get("output_mode") or "chat"),
+                    )
+                    use_brief = os.getenv("FINSIGHT_AGENT_BRIEF", "off").strip().lower() == "on"
                     result = await asyncio.wait_for(
-                        _agent.research(query=query or "N/A", ticker=ticker),
+                        _agent.research(query=query or "N/A", ticker=ticker, brief=brief if use_brief else None),
                         timeout=invoke_timeout,
                     )
                     normalized = _normalize_agent_output(
@@ -466,4 +506,4 @@ def build_agent_invokers(*, allowed_agents: Iterable[str], state: Mapping[str, A
     return invokers
 
 
-__all__ = ["build_agent_invokers"]
+__all__ = ["build_agent_invokers", "brief_from_inputs"]

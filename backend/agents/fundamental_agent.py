@@ -39,10 +39,6 @@ class FundamentalAgent(BaseFinancialAgent):
         {"key": "total_liabilities", "label": "总负债", "table": "balance", "candidates": ["total liabilities"]},
     ]
 
-    def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
-
     def _get_tool_registry(self) -> dict:
         """FundamentalAgent tool registry: financial APIs + search for CoT reflection."""
         registry = {}

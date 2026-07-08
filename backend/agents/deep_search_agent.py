@@ -20,6 +20,7 @@ except ImportError:
 
 from langchain_core.messages import HumanMessage
 from backend.agents.base_agent import BaseFinancialAgent, AgentOutput, EvidenceItem
+from backend.graph.intent.frame import AgentBrief
 from backend.agents.chart_specs_extra import build_deepsearch_chart_specs
 from backend.orchestration.trace_schema import create_trace_event
 from backend.security.ssrf import is_safe_url
@@ -136,8 +137,7 @@ class DeepSearchAgent(BaseFinancialAgent):
     )
 
     def __init__(self, llm, cache, tools_module, circuit_breaker: Optional[CircuitBreaker] = None):
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
+        super().__init__(llm, cache, tools_module, circuit_breaker)
         self._session: Optional[requests.Session] = None
 
     def _get_session(self) -> requests.Session:
@@ -167,10 +167,17 @@ class DeepSearchAgent(BaseFinancialAgent):
             safe_results.append(item)
         return safe_results
 
-    async def research(self, query: str, ticker: str, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> AgentOutput:
+    async def research(
+        self,
+        query: str,
+        ticker: str,
+        on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
+        brief: Optional[AgentBrief] = None,
+    ) -> AgentOutput:
         """Run DeepSearch through the deterministic research flow facade."""
         from backend.research.deep_research_flow import run_deep_research_flow
 
+        self._current_brief = brief
         result = await run_deep_research_flow(self, query, ticker, on_event=on_event)
         return result.output
 

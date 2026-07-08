@@ -83,8 +83,7 @@ class NewsAgent(BaseFinancialAgent):
                 recovery_timeout=float(os.getenv("NEWS_CB_RECOVERY_TIMEOUT", "180")),
                 half_open_success_threshold=int(os.getenv("NEWS_CB_HALF_OPEN_SUCCESS", "1")),
             )
-        super().__init__(llm, cache, circuit_breaker)
-        self.tools = tools_module
+        super().__init__(llm, cache, tools_module, circuit_breaker)
         self._last_convergence = None
         self._last_event_calendar: Dict[str, Any] = {}
         self._last_reliability_summary: Dict[str, Any] = {}

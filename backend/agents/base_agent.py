@@ -9,6 +9,7 @@ import time
 from backend.services.circuit_breaker import CircuitBreaker
 from backend.orchestration.trace_schema import create_trace_event
 from backend.orchestration.trace_emitter import get_trace_emitter
+from backend.graph.intent.frame import AgentBrief
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,14 @@ class BaseFinancialAgent:
     AGENT_NAME = "base"
     MAX_REFLECTIONS = 0
 
-    def __init__(self, llm, cache, circuit_breaker: Optional[CircuitBreaker] = None):
+    def __init__(self, llm, cache, tools_module=None, circuit_breaker: Optional[CircuitBreaker] = None):
         self.llm = llm
         self.cache = cache
+        self.tools = tools_module
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
         self._current_query: Optional[str] = None
         self._current_ticker: Optional[str] = None
+        self._current_brief: Optional["AgentBrief"] = None
         self._llm_analyze_enabled_override: Optional[bool] = None
         self._llm_analyze_timeout_override: Optional[float] = None
         self._llm_analyze_call_timeout_override: Optional[float] = None
@@ -185,6 +188,7 @@ class BaseFinancialAgent:
 
         ticker = self._current_ticker or ""
         query = self._current_query or ""
+        brief = self._current_brief
 
         prompt = f"""<role>{role}</role>
 
@@ -195,6 +199,11 @@ class BaseFinancialAgent:
 <context>
 <query>{query}</query>
 <ticker>{ticker}</ticker>
+<objective>{(brief.objective if brief else "")}</objective>
+<required_evidence>{", ".join(brief.required_evidence) if brief else ""}</required_evidence>
+<peers_findings>
+{(brief.context_digest if brief else "")[:1200]}
+</peers_findings>
 </context>
 
 <data_summary>
@@ -273,7 +282,13 @@ class BaseFinancialAgent:
                 pass
             return None
 
-    async def research(self, query: str, ticker: str, on_event: Optional[Callable[[Dict[str, Any]], None]] = None) -> AgentOutput:
+    async def research(
+        self,
+        query: str,
+        ticker: str,
+        on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
+        brief: Optional[AgentBrief] = None,
+    ) -> AgentOutput:
         """
         Standard research flow:
         1. Initial search
@@ -283,6 +298,7 @@ class BaseFinancialAgent:
         """
         self._current_query = query
         self._current_ticker = ticker
+        self._current_brief = brief
         trace: List[Dict[str, Any]] = []
         global_emitter = get_trace_emitter()
         start_time = time.perf_counter()
@@ -405,6 +421,7 @@ class BaseFinancialAgent:
             return []
         query = self._current_query or ""
         ticker = self._current_ticker or ""
+        brief = self._current_brief
 
         # Build tool catalogue for the prompt
         registry = self._get_tool_registry()
@@ -422,6 +439,10 @@ class BaseFinancialAgent:
 <input>
 <query>{query}</query>
 <ticker>{ticker}</ticker>
+<objective>{(brief.objective if brief else "")}</objective>
+<peers_findings>
+{(brief.context_digest if brief else "")[:1200]}
+</peers_findings>
 <summary>{summary}</summary>
 </input>
 

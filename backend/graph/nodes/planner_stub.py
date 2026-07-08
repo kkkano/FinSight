@@ -75,6 +75,7 @@ def planner_stub(state: GraphState) -> dict:
         if isinstance(task, dict) and str(task.get("status") or "ready").strip().lower() != "blocked"
     ]
     ready_task_id_set = {str(task.get("id") or "").strip() for task in ready_tasks if str(task.get("id") or "").strip()}
+    ready_tasks_by_id = {str(task.get("id") or "").strip(): task for task in ready_tasks if str(task.get("id") or "").strip()}
     raw_request_frames = state.get("request_frames")
     request_frames = [
         frame for frame in (raw_request_frames if isinstance(raw_request_frames, list) else [])
@@ -264,11 +265,39 @@ def planner_stub(state: GraphState) -> dict:
                 existing["task_ids"] = merged
                 existing["task_id"] = merged[0]
             return
+        # WP2-T6: agent step 携带 AgentBrief 素材（objective/required_evidence/time_scope）。
+        # 注意 dedup key 用原始 inputs 计算，保持既有合并行为不变。
+        brief_task = next(
+            (ready_tasks_by_id[tid] for tid in normalized_task_ids if tid in ready_tasks_by_id),
+            None,
+        )
+        enriched_inputs = dict(inputs)
+        if brief_task is not None:
+            operation_obj = brief_task.get("operation")
+            operation_name = (
+                str(operation_obj.get("name") or "")
+                if isinstance(operation_obj, dict)
+                else str(operation_obj or "")
+            )
+            operation_params = (
+                operation_obj.get("params")
+                if isinstance(operation_obj, dict) and isinstance(operation_obj.get("params"), dict)
+                else {}
+            )
+            task_params = brief_task.get("params") if isinstance(brief_task.get("params"), dict) else {}
+            enriched_inputs.setdefault("objective", operation_name)
+            enriched_inputs.setdefault(
+                "required_evidence", list(brief_task.get("required_evidence") or [])
+            )
+            enriched_inputs.setdefault(
+                "time_scope",
+                dict(operation_params.get("time_scope") or task_params.get("time_scope") or {}),
+            )
         step = {
             "id": f"s{step_id}",
             "kind": "agent",
             "name": name,
-            "inputs": inputs,
+            "inputs": enriched_inputs,
             "why": why,
             "optional": optional,
         }
