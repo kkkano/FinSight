@@ -29,7 +29,8 @@ def _configure_auth(monkeypatch):
 
     monkeypatch.setenv('VITE_SUPABASE_URL', 'https://supabase.test')
     monkeypatch.setenv('VITE_SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test')
-    monkeypatch.setattr(main, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg
+    monkeypatch.setattr(_sg, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
     monkeypatch.setattr(main, 'get_rag_observability_store', lambda: _FakeRagStore())
     main._auth_identity_cache.clear()
     return main
@@ -50,8 +51,9 @@ def test_rag_diagnostics_read_allows_bearer_user_even_when_api_auth_enabled(monk
     main = _configure_auth(monkeypatch)
     monkeypatch.setenv('API_AUTH_ENABLED', 'true')
     monkeypatch.setenv('API_AUTH_KEYS', 'release-key-1')
+    import backend.api.security_gate as security_gate
     monkeypatch.setattr(
-        main,
+        security_gate,
         '_fetch_supabase_user_identity',
         lambda token: {'user_id': f'user:{token}', 'email': 'reader@example.com', 'auth_type': 'supabase', 'role': 'reader'},
     )
@@ -68,8 +70,9 @@ def test_rag_diagnostics_read_allows_bearer_user_even_when_api_auth_enabled(monk
 def test_rag_diagnostics_soft_delete_is_read_only_for_logged_in_user(monkeypatch):
     main = _configure_auth(monkeypatch)
     monkeypatch.setenv('API_AUTH_ENABLED', 'false')
+    import backend.api.security_gate as security_gate
     monkeypatch.setattr(
-        main,
+        security_gate,
         '_fetch_supabase_user_identity',
         lambda token: {'user_id': f'user:{token}', 'email': 'reader@example.com', 'auth_type': 'supabase', 'role': 'reader'},
     )
@@ -115,7 +118,8 @@ def test_rag_diagnostics_read_allows_local_dev_bearer_without_supabase(monkeypat
     monkeypatch.setenv('RAG_OBSERVABILITY_DEV_ACCESS_TOKEN', 'local-rag-dev-token')
     monkeypatch.setenv('RAG_OBSERVABILITY_DEV_USER_ID', 'dev-rag-user')
     monkeypatch.setenv('RAG_OBSERVABILITY_DEV_EMAIL', 'dev-rag@example.com')
-    monkeypatch.setattr(main, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg
+    monkeypatch.setattr(_sg, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
     monkeypatch.setattr(main, 'get_rag_observability_store', lambda: _FakeRagStore())
     main._auth_identity_cache.clear()
 

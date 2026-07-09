@@ -8,7 +8,7 @@ def test_security_gate_rejects_missing_api_key_when_enabled(monkeypatch):
 
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
-    monkeypatch.setattr(main, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:
         response = client.get("/api/user/profile", params={"user_id": "auth-check"})
@@ -23,7 +23,7 @@ def test_security_gate_returns_503_when_auth_enabled_without_keys(monkeypatch):
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.delenv("API_AUTH_KEYS", raising=False)
     monkeypatch.delenv("API_AUTH_KEY", raising=False)
-    monkeypatch.setattr(main, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:
         response = client.get("/api/user/profile", params={"user_id": "auth-empty-keys"})
@@ -37,7 +37,7 @@ def test_security_gate_allowlisted_path_bypasses_auth(monkeypatch):
 
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
-    monkeypatch.setattr(main, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:
         response = client.get("/health")
@@ -51,7 +51,7 @@ def test_security_gate_dashboard_requires_auth_by_default(monkeypatch):
     monkeypatch.setenv("API_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_AUTH_KEYS", "release-key-1")
     monkeypatch.delenv("API_PUBLIC_PATHS", raising=False)
-    monkeypatch.setattr(main, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
 
     with TestClient(main.app) as client:
         response = client.get("/api/dashboard", params={"symbol": "AAPL"})
@@ -75,7 +75,7 @@ def test_security_gate_rate_limit_blocks_second_request(monkeypatch):
     from backend.api import main
 
     monkeypatch.setenv("API_AUTH_ENABLED", "false")
-    monkeypatch.setattr(main, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=1, window_seconds=60, enabled=True))
+    import backend.api.security_gate as _sg; monkeypatch.setattr(_sg, "_rate_limiter", main.SimpleRateLimiter(limit_per_window=1, window_seconds=60, enabled=True))
 
     with TestClient(main.app) as client:
         first = client.get("/api/user/profile", params={"user_id": "rl-check"})
@@ -99,7 +99,9 @@ def test_rate_limited_response_carries_cors_headers(monkeypatch):
     monkeypatch.setenv("CORS_ALLOW_ORIGINS", "https://finsight-ai.chat")
 
     import importlib
+    import backend.api.security_gate as security_gate_module
     import backend.api.main as main_module
+    importlib.reload(security_gate_module)  # 限流器实例已迁 security_gate（WP3-T6），env 重读需重载新家
     importlib.reload(main_module)
 
     from fastapi.testclient import TestClient

@@ -14,7 +14,9 @@ from collections import deque
 from threading import Lock
 from typing import Any, Dict, Optional
 
-import requests
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
