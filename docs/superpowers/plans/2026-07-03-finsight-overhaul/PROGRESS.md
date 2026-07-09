@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-09 | WP3-Task6 api/main拆分+*_stub节点改名 | 987e466 | 全量1887 passed/19 failed=基线一致；金样12零diff；uvicorn /health=200；main 1355→288行(security_gate/lifespan/app_factory/session_context四件套)，execute_plan_node/render_node改名+shim，RAG ingestion 12函数迁backend/rag/ingestion.py |
 | 2026-07-09 | WP3-Task5 report_builder四域拆分+formatter注册表 | d4371a2 | report域回归149 passed（4失败=基线report项）+金样12零diff；全量1887 passed/19 failed=基线一致；report_builder 2693→1825行壳，citations/grounding/quality_hints/agent_formatters/util 五模块 |
 | 2026-07-09 | WP3-Task4 synthesize拆分(render_vars+verifier) | ca607d7 | 新对拍测试6条金样终态逐键全等；synthesize节点回归+金样12全绿；全量1887 passed/19 failed=基线一致；synthesize 3202→1785行，render_vars包10模块+verifier独立 |
 | 2026-07-09 | WP3-Task3 understand_request/router归位intent包 | 5b6d0fd | 意图域回归461 passed（2失败=基线）+金样12零diff；全量1881 passed/19 failed=基线逐条一致；UR瘦身3355→362行(shell+shim)，router整体迁intent/router.py，生产侧旧路径import清零 |
@@ -43,6 +44,7 @@
 ## Installed Dependencies
 
 ## Deviations
+- 2026-07-09 | WP3-T6 | ①main 288行未达spec≤120：bootstrap工具导入块+测试兼容再导出shim为必要占位（T8删shim后可达标）。②spec未列的 session_context.py 为会话/trace helper 新增归置文件；ROUTER_FACTORIES 草表的 AppDeps 统一签名未采纳（24个create_*签名异构，保持原构造顺序整体入create_app）。③三轮测试patch目标随迁：rag_observability_auth(get_rag_observability_store→app_factory；_fetch_supabase_user_identity/_rate_limiter→security_gate)、security_gate_auth_rate_limit(reload需重载security_gate+补善后恢复段——该测试此前就遗留1/min限流器污染，恰无人踩中)。④ingestion切割踩两坑：函数间模块级import不随AST函数块走(user_profile_memory)→memory_scope延迟导入破graph饿加载环；_env_int经_host_env_int延迟取宿主。36个测试文件execute_plan_stub/render_stub全局随迁新名。
 - 2026-07-09 | WP3-T5 | spec 草图 AgentClaimFormatter->list[str] 与现实不符：现网专属格式化仅 price_agent 且返回整段 summary 字符串 → 注册表按真实签名建 AGENT_REPORT_SUMMARY_FORMATTERS（未登记返回 None 走原默认路径）。共享叶子工具入 report/util.py（_safe_str 等7个，壳81处引用回接）；grounding 曾误判需宿主 _agent_summaries_from_steps（扫描误报，实际无引用）。地图见 notes-report-builder-map.md。
 - 2026-07-09 | WP3-T4 | ①spec 草图假设键累积器+板块合并，实际为 subject_type 分支树逐支返回 RenderVars → 适配 T2 同款 ctx 化闭包提升（RenderVarsCtx 19字段），build_render_vars spec 接口名保留。②对拍基准落地为 tests/fixtures/render_vars_legacy.py 冻结副本 + 6 金样终态逐键相等测试（spec 的"拆完删副本"改为副本留测试区，T8 评估）。③verifier 与宿主共享 helper 留 synthesize，verifier 经 _synth() 延迟解析（backend.graph.__init__ 饿加载 runner 导致的 import 环，两处踩中：json_utils 触发链、nodes/__init__ 函数名遮蔽子模块）。④spec synthesize≤900 未达（1785，剩余无拆分锚点）；report_agents.py 482 小幅超限（同族内聚优先）。地图见 notes-synthesize-map.md。
 - 2026-07-09 | WP3-T3 | ①spec 要求删除 _legacy_understand_request——但 WP2-T3 的 fallback_rules 是整体委托它（瀑布零复制），删除=杀死规则兜底 lane → 适配为物理搬家 intent/legacy_engine.py（1230行，主体为单个引擎函数），不删除；INTENT_FRAME 默认值不在代码翻转（灰度是部署期 env 决策，见 .env.server.example 顺序）。②spec 未列的 predicates.py(701)/legacy_engine.py 为新增归置文件；task_builders 1241 行超限（_add_router_task_hints_contract 单函数~430行，无锚不切）；router.py 1991=spec 明示整体迁移。③6 个测试文件 61 处 monkeypatch(route_conversation/generate_contextual_reply) 目标随迁 intent.legacy_engine（内联 import_module 形式，调用仍走 understand_request 壳）。④_build_subject 挪 predicates 解 direct_reply↔task_builders 环。

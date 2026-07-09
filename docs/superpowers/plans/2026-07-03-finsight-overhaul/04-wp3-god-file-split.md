@@ -209,7 +209,7 @@ git commit -am "refactor(report): citations/grounding/quality-hints modules + ag
 - Modify: `backend/graph/nodes/synthesize.py` 等处对 `render_stub` 的引用 → `render_node`（同模式改名）
 
 **Steps:**
-- [ ] Step 1: router 注册列表驱动：
+- [x] Step 1: router 注册列表驱动：
 
 ```python
 # app_factory.py
@@ -218,8 +218,8 @@ for factory in ROUTER_FACTORIES:
     app.include_router(factory(deps))
 ```
 
-- [ ] Step 2: 逐块剪切（security_gate → lifespan → 装配 → 改名），每块一 commit；`python -c "import backend.api.main"` + `uvicorn backend.api.main:app` 冒烟每块必跑。
-- [ ] Step 3: 全量 + 金样 + `/health` 冒烟；Commit：
+- [x] Step 2: 逐块剪切（security_gate → lifespan → 装配 → 改名），每块一 commit；`python -c "import backend.api.main"` + `uvicorn backend.api.main:app` 冒烟每块必跑。
+- [x] Step 3: 全量 + 金样 + `/health` 冒烟；Commit：
 
 ```bash
 git commit -am "refactor(api): main.py split into app_factory/lifespan/security_gate; execute_plan & render nodes renamed off *_stub"
