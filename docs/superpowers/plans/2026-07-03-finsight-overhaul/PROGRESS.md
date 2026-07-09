@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-09 | WP3-Task7 rebalance schema下沉+分层守护 | c821b96 | test_layering 1 passed（五下层包零 backend.api import）；rebalance回归5 passed；金样12零diff；main import冒烟OK |
 | 2026-07-09 | WP3-Task6 api/main拆分+*_stub节点改名 | 987e466 | 全量1887 passed/19 failed=基线一致；金样12零diff；uvicorn /health=200；main 1355→288行(security_gate/lifespan/app_factory/session_context四件套)，execute_plan_node/render_node改名+shim，RAG ingestion 12函数迁backend/rag/ingestion.py |
 | 2026-07-09 | WP3-Task5 report_builder四域拆分+formatter注册表 | d4371a2 | report域回归149 passed（4失败=基线report项）+金样12零diff；全量1887 passed/19 failed=基线一致；report_builder 2693→1825行壳，citations/grounding/quality_hints/agent_formatters/util 五模块 |
 | 2026-07-09 | WP3-Task4 synthesize拆分(render_vars+verifier) | ca607d7 | 新对拍测试6条金样终态逐键全等；synthesize节点回归+金样12全绿；全量1887 passed/19 failed=基线一致；synthesize 3202→1785行，render_vars包10模块+verifier独立 |
