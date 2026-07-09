@@ -126,10 +126,10 @@ git commit -am "refactor(planner): rule planner split into builders registry; re
 - Modify: `backend/graph/nodes/conversation_router.py` → `route_conversation/generate_contextual_reply/ConversationDecision` 迁到 `backend/graph/intent/router.py`，原文件变 shim
 
 **Steps:**
-- [ ] Step 1: 确认 WP2 Task 11 已完成（`FINSIGHT_INTENT_FRAME=on` 为默认）。未完成则本任务顺延。
-- [ ] Step 2: 按 Files 清单逐模块剪切（一模块一 commit），`understand_request.py` 最终只剩节点函数壳 + shim import。
-- [ ] Step 3: `graph/nodes/conversation_router.py` 变 shim 后，`api/conversation_router.py` 的命名冲突（BE-12）自然消解——grep 全仓确认没有模块把两者搞混：`grep -rn "from backend.graph.nodes.conversation_router import" backend | grep -v test`。
-- [ ] Step 4: 全量 + 金样零 diff；Commit：
+- [x] Step 1: 确认 WP2 Task 11 已完成（`FINSIGHT_INTENT_FRAME=on` 为默认）。未完成则本任务顺延。
+- [x] Step 2: 按 Files 清单逐模块剪切（一模块一 commit），`understand_request.py` 最终只剩节点函数壳 + shim import。
+- [x] Step 3: `graph/nodes/conversation_router.py` 变 shim 后，`api/conversation_router.py` 的命名冲突（BE-12）自然消解——grep 全仓确认没有模块把两者搞混：`grep -rn "from backend.graph.nodes.conversation_router import" backend | grep -v test`。
+- [x] Step 4: 全量 + 金样零 diff；Commit：
 
 ```bash
 git commit -am "refactor(intent): understand_request internals relocated into backend/graph/intent package"

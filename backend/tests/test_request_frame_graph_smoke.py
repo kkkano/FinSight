@@ -42,7 +42,7 @@ def test_graph_runner_forces_research_when_router_direct_conflicts_with_request_
 
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
     monkeypatch.setattr(runner_mod, "synthesize", _fake_synthesize)
 
     result = _run(
@@ -81,8 +81,8 @@ def test_graph_runner_preserves_no_news_direct_answer_without_research(monkeypat
 
     monkeypatch.setenv("LANGGRAPH_PLANNER_MODE", "stub")
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         runner_mod.GraphRunner.create().ainvoke(

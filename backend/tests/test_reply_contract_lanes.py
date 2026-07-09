@@ -77,7 +77,7 @@ def test_selected_url_context_builds_grounded_fetch_plan(monkeypatch):
             needs_tools=True,
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
 
     query = "This selected URL looks important; analyze it."
     result = _run(
@@ -142,7 +142,7 @@ def test_quote_plus_headline_link_keeps_news_task(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
 
     result = _run(
         understand_mod.understand_request(
@@ -204,7 +204,7 @@ def test_query_only_deep_report_upgrades_chat_default_to_report_generation(monke
             needs_tools=True,
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
 
     result = _run(
         understand_mod.understand_request(
@@ -253,8 +253,8 @@ def test_do_not_generate_report_turn_builds_chat_contract(monkeypatch):
     async def fake_generate_contextual_reply(_state, _decision):
         return "AAPL has three main risk buckets: demand, margins, and valuation."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_generate_contextual_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_generate_contextual_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -291,8 +291,8 @@ def test_do_not_look_up_news_stays_chat_without_tasks(monkeypatch):
     async def fake_generate_contextual_reply(_state, _decision):
         return "Semiconductors can sell off together when investors de-risk the whole group."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_generate_contextual_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_generate_contextual_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -533,7 +533,7 @@ def test_compound_alert_news_preserves_research_after_alert(monkeypatch):
             needs_tools=False,
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
 
     result = _run(
         understand_mod.understand_request(
@@ -580,7 +580,7 @@ def test_semiconductor_sector_headlines_project_theme_fetch(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
 
     result = _run(
         understand_mod.understand_request(
@@ -859,8 +859,8 @@ def test_price_word_in_mechanism_question_does_not_force_quote_tasks(monkeypatch
     async def fake_generate_contextual_reply(_state, _decision):
         return "Oil can affect inflation expectations and airline margins through energy costs."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route_conversation)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_generate_contextual_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route_conversation)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_generate_contextual_reply)
 
     result = _run(
         understand_mod.understand_request(

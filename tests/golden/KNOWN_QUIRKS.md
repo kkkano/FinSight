@@ -19,7 +19,8 @@
 上述怪癖均属 **LLM 不可用时的 fallback 规则路径**，在新引擎下的状态：
 
 1. cn_ticker 空转：fallback 路径仍保留（快照未变）——LLM router 可用时由 hints 正常产任务；
-   fallback 侧修复归 WP3-T3（关键词瀑布物理拆分时一并处理）。
+   fallback 侧行为在 WP3-T3 已随关键词瀑布**物理搬家**至 `backend/graph/intent/legacy_engine.py`
+   （零行为变更约束，怪癖原样保留）；行为级修复留待带行为预算的任务（09/WP6 范畴）。
 2. greeting route=None：仍是 chat_respond 提前终止路径，行为正确，保持现状。
 3. multi_question 渲染不分节：**已修**（WP2-T10 render_task_sections）——但仅在
    task_results 按 task id 聚合且 ≥2 个非空 subject_label 时生效（LLM hints 路径）；

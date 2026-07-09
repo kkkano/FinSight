@@ -115,8 +115,8 @@ class TestGreetingShortCircuit:
         understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
         monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
-        monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-        monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+        monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+        monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
         result = _run(
             GraphRunner.create().ainvoke(

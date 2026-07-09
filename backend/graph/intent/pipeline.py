@@ -24,7 +24,7 @@ from typing import Any
 from backend.graph.intent.frame import IntentFrame, intent_frame_from_legacy
 from backend.graph.intent.priorities import CONFIDENCE_NO_TASKS, CONFIDENCE_WITH_TASKS
 from backend.graph.intent.signals import extract_signals
-from backend.graph.nodes.conversation_router import route_conversation
+from backend.graph.intent.router import route_conversation
 from backend.graph.state import GraphState
 
 logger = logging.getLogger(__name__)

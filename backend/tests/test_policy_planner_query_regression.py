@@ -311,7 +311,7 @@ def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {"query": "NVDA 和 AMD 哪个估值更合理", "ui_context": {}, "output_mode": "chat", "trace": {}}
     understanding = asyncio.run(understand_mod.understand_request(state))
@@ -362,7 +362,7 @@ def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {
         "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
@@ -419,7 +419,7 @@ def test_router_hint_uses_company_alias_frame_for_external_impact_contract(monke
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {"query": query, "ui_context": {}, "output_mode": "chat", "trace": {}}
     understanding = asyncio.run(understand_mod.understand_request(state))

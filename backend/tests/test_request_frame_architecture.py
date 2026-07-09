@@ -321,7 +321,7 @@ def test_macro_mechanism_question_stays_answer_lane_without_evidence(monkeypatch
         return "Higher rates reduce the present value of long-duration earnings."
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "false")
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_generate_contextual_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_generate_contextual_reply)
 
     result = asyncio.run(
         understand_mod.understand_request(
@@ -480,7 +480,7 @@ def test_router_hints_compile_to_independent_request_frames(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {
         "query": "Check AAPL price, MSFT news, then explain Fed rate impact",
@@ -530,7 +530,7 @@ def test_router_direct_cannot_swallow_request_frame_evidence(monkeypatch):
             reason="router thought this was explainable without tools",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {
         "query": "Compare AAPL and MSFT risk",
@@ -577,7 +577,7 @@ def test_router_direct_no_news_compare_risk_still_requires_research(monkeypatch)
             reason="router over-applied no-news direct answer preference",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     state = {
         "query": "Do not look up news; compare AAPL and MSFT risk",

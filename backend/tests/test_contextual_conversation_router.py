@@ -1573,8 +1573,8 @@ def test_understand_request_uses_context_binding_for_direct_report_discussion(mo
         assert decision.context_binding.source == "last_report"
         return "这份报告最大的风险是估值对利率变化敏感。"
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1622,8 +1622,8 @@ def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
     async def fake_reply(_state, _decision):
         return "The core 问题：semiconductor ETFs are a concentrated AI-cycle bet.\n后续关注：valuation and demand."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1671,8 +1671,8 @@ def test_understand_request_strips_research_confirmation_cta_from_direct_reply(m
             "或者你可以指定一个你最想先深入探讨的维度。"
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1704,8 +1704,8 @@ def test_understand_request_no_news_mechanism_falls_back_to_direct_when_router_u
     async def fake_reply(_state, _decision):
         return "Semiconductors can sell off together when investors de-risk the whole group."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1739,8 +1739,8 @@ def test_understand_request_history_followup_falls_back_to_direct_when_router_un
         assert "GOOGL" in decision.context_binding.subject_hint
         return "Using the prior GOOGL quote, the gap from 307 is about 93.80."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1797,8 +1797,8 @@ def test_understand_request_direct_followup_keeps_last_turn_binding(monkeypatch)
         assert any("GOOGL" in str(item) for item in history)
         return "按刚才 GOOGL 的上下文继续算，不需要你再重复标的。"
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1852,8 +1852,8 @@ def test_understand_request_quote_label_without_price_request_stays_chat(monkeyp
         assert decision.domain_intent == "quote"
         return "Using the prior GOOGL context, 400.80 minus 307 is 93.80."
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -1900,7 +1900,7 @@ def test_understand_request_leaves_url_fetch_to_tools(monkeypatch):
         )
 
     monkeypatch.setattr(web_mod, "fetch_url_document", fail_prefetch)
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -1980,8 +1980,8 @@ def test_non_financial_open_chat_is_llm_direct_before_planner(monkeypatch):
         return "我不太适合推荐睡前歌曲；如果你想从投资角度看音乐流媒体或版权公司，我可以接着聊。"
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fake_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fake_reply)
 
     result = _run(
         GraphRunner.create().ainvoke(
@@ -2024,7 +2024,7 @@ def test_understand_request_can_bind_active_symbol_followup_to_research(monkeypa
             reason="需要当前标的新闻证据",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2072,7 +2072,7 @@ def test_understand_request_context_binding_wins_over_conflicting_task_hints(mon
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2105,7 +2105,7 @@ def test_understand_request_global_active_symbol_does_not_bypass_history_when_ro
             needs_tools=True,
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2146,7 +2146,7 @@ def test_understand_request_can_bind_last_report_followup_to_research(monkeypatc
             reason="报告上下文绑定到 AAPL，且需要新闻证据",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2196,7 +2196,7 @@ def test_understand_request_can_bind_recent_focus_to_research(monkeypatch):
             reason="需要继续分析最近关注标的",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2242,7 +2242,7 @@ def test_understand_request_switch_query_uses_effective_current_ticker(monkeypat
             reason="用户最终要求看谷歌新闻",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2278,7 +2278,7 @@ def test_understand_request_router_quote_intent_overrides_multi_ticker_compare(m
             reason="user asks current prices for each named ticker",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2325,7 +2325,7 @@ def test_understand_request_splits_multi_ticker_router_price_hint(monkeypatch):
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2369,7 +2369,7 @@ def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatc
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2425,8 +2425,8 @@ def test_understand_request_projects_direct_decision_with_executable_task_hints(
     async def fail_direct_reply(*_args, **_kwargs):
         raise AssertionError("executable task hints must not be swallowed by direct reply")
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fail_direct_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fail_direct_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -2473,8 +2473,8 @@ def test_understand_request_projects_direct_technical_decision_to_research(monke
     async def fail_direct_reply(*_args, **_kwargs):
         raise AssertionError("technical requests must enter research instead of direct chat")
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
-    monkeypatch.setattr(understand_mod, "generate_contextual_reply", fail_direct_reply)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "generate_contextual_reply", fail_direct_reply)
 
     result = _run(
         understand_mod.understand_request(
@@ -2524,7 +2524,7 @@ def test_understand_request_adds_price_anchor_for_router_fetch_analysis(monkeypa
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2571,7 +2571,7 @@ def test_understand_request_expands_quick_compare_hint_into_support_tasks(monkey
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2599,7 +2599,7 @@ def test_understand_request_fast_brief_with_explicit_tickers_does_not_wait_for_c
     async def fail_route(*_args, **_kwargs):
         raise AssertionError("explicit no-history brief should not call context router")
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fail_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fail_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2640,7 +2640,7 @@ def test_understand_request_honors_router_clarify_even_with_explicit_tickers(mon
             reply_guidance="I need to know what 'that' refers to before comparing NVDA and MSFT.",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2678,7 +2678,7 @@ def test_understand_request_router_analysis_new_topic_uses_light_current_snapsho
             reply_guidance="Briefly provide current price and key news.",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2725,7 +2725,7 @@ def test_understand_request_reconciles_quote_intent_with_generic_qa_hint(monkeyp
             ),
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2767,7 +2767,7 @@ def test_understand_request_can_bind_portfolio_context_to_research(monkeypatch):
             reason="需要按持仓上下文分析",
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
@@ -2801,7 +2801,7 @@ def test_understand_request_portfolio_router_clarify_with_positions_becomes_rese
             needs_tools=True,
         )
 
-    monkeypatch.setattr(understand_mod, "route_conversation", fake_route)
+    monkeypatch.setattr(importlib.import_module("backend.graph.intent.legacy_engine"), "route_conversation", fake_route)
 
     result = _run(
         understand_mod.understand_request(
