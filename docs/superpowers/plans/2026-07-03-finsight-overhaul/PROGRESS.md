@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-08 | WP3-Task1 chat_renderer→renderers注册表 | ac89268 | 渲染64+金样12全绿零diff；全量1881 passed/19 failed=基线逐条一致零新增；97函数守恒(新包113=97+14renderer+2ctx)，无重复定义，全文件≤400行(最大shared 356) |
 | 2026-07-08 | WP2-门禁(手工验收) | - | 真LLM(sub2api gpt-5.4-mini)：①multi_question四任务+三节渲染宏观节在(## 美联储下次议息·宏观/## AAPL·投资观点/## MSFT·投资观点)②PE→direct秒回lane=llm无agent③坏key→lane=fallback(router_heuristic_only)仍出compare研究+真实价格④黑板：探针实证risk step收到含price_agent真实发现的__context_digest；叙事级目检因本地yfinance限流延至部署冒烟(C1/C2)复验⑤SSE契约完整(plan_ready/step_start/step_done/tool_*/done,26 pipeline_stage) → **WP2 完成** |
 | 2026-07-08 | WP2-门禁(自动测试部分) | 01ce883 | 四flag全on全量1880 passed/20 failed→diff基线唯一新增=evidence_ledger测试只patch旧执行器入口（env敏感，非产品回归）→修为双入口patch后 off/on 双模式 1 passed；其余19失败与基线清单逐条一致 |
 | 2026-07-08 | WP2-Task11 灰度收尾+验收bug修复 | 10e144f | 管线7 passed（新测2：compare残余hints续投+启发式降权）；金样12/12全绿（conftest固定四flag全on）；understand/router/planner回归320 passed（3失败全在基线清单，零新增） |
@@ -38,6 +39,8 @@
 ## Installed Dependencies
 
 ## Deviations
+
+- 2026-07-08 | WP3-T1 | ①spec 草图的 RENDERERS 是 parts.append 拼接，实际原函数为互斥早退分支链 → 注册表语义适配为 first-non-None-wins（顺序=原分支顺序，末位 render_default 恒返回），ctx 两阶段构建保持原计算顺序与副作用时点（phase1→last_report renderer→phase2 含 news_map 联网 fallback 增补）。②spec 的 11 桶超 ≤400 行约束 → news 桶再切 news_items（条目工具底层，解 news↔fallback/snapshot 环）/news_fallback/news_snapshot，shared 再切 synthesis_vars，共 16 模块。③原 try-import 块按归属拆两半：COMPANY_MAP→news_items，get_company_news/get_authoritative_media_news→news_fallback；test_chat_response_contract 3 处 monkeypatch 目标随迁 backend.graph.renderers.news_fallback（shim re-export 无法传导 patch）。迁移地图与顺序表在 notes-chat-renderer-map.md。
 
 - 2026-07-08 | WP2-门禁 | 手工验收④黑板项：本地 yfinance 全机限流(429)+x666 gemini通道死(503)导致 risk_agent 因子数据 insufficient_data、LLM 叙事走 fallback——黑板机制本身用进程内探针实证（risk 步骤 inputs.__context_digest 含 price_agent 真实发现"AAPL 310.66 -0.64%"，prompt 模板 <peers_findings> 接线核实，T7 单测护航）；叙事级"risk 文本引用前序发现"目检顺延到判据 C1/C2 部署冒烟（服务器数据源健康）。验收证据文件 wp2_accept_*.json 留 %TEMP%，不入库。
 - 2026-07-08 | WP2-门禁 | 手工验收③的 query 语义修正：spec 例句"给我一份 NVDA 的投资分析"在无 LLM 基线本来就是 direct 空转（金样 single_report 佐证，KNOWN_QUIRKS cn_ticker 同族）；改用金样 compare 句式验证"规则兜底出研究结果"，符合条款本意（LLM 断 → 规则仍可产研究）。
