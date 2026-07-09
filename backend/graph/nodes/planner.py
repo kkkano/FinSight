@@ -19,7 +19,7 @@ from backend.graph.planner_prompt import build_planner_prompt
 from backend.graph.preference_timeouts import timeout_seconds_from_state
 from backend.graph.event_bus import emit_event
 from backend.graph.state import GraphState
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner
 from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
 
 logger = logging.getLogger(__name__)
@@ -1352,7 +1352,7 @@ async def planner(state: GraphState) -> dict:
                 }
             }
         )
-        out = {**planner_stub(state), "trace": trace}
+        out = {**rule_based_planner(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
         await _emit_plan_ready(
@@ -1383,7 +1383,7 @@ async def planner(state: GraphState) -> dict:
                 }
             }
         )
-        out = {**planner_stub(state), "trace": trace}
+        out = {**rule_based_planner(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
         await _emit_plan_ready(
@@ -1401,7 +1401,7 @@ async def planner(state: GraphState) -> dict:
 
     if mode != "llm":
         trace.update({"planner_runtime": {**build_runtime(mode="stub", fallback=False), "variant": planner_variant}})
-        out = {**planner_stub(state), "trace": trace}
+        out = {**rule_based_planner(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=False, retry_attempts=0, steps=steps)
         await _emit_plan_ready(
@@ -1451,7 +1451,7 @@ async def planner(state: GraphState) -> dict:
                 | {"variant": planner_variant}
             }
         )
-        out = {**planner_stub(state), "trace": trace}
+        out = {**rule_based_planner(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(variant=planner_variant, fallback=True, retry_attempts=0, steps=steps)
         await _emit_plan_ready(
@@ -1738,7 +1738,7 @@ async def planner(state: GraphState) -> dict:
                 }
             }
         )
-        out = {**planner_stub(state), "trace": trace}
+        out = {**rule_based_planner(state), "trace": trace}
         steps = len(((out.get("plan_ir") or {}).get("steps") or []))
         _record_planner_ab_metrics(
             variant=planner_variant,

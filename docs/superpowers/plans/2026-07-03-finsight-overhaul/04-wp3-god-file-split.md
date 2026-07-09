@@ -95,9 +95,9 @@ def rule_based_planner(state: GraphState) -> dict:
     组装 PlanIR（goal/budget/synthesis 的组装逻辑逐字搬运原函数尾部）。"""
 ```
 
-- [ ] **Step 1: 画迁移地图**：原函数内 `_append_company_task_steps(:863)/_append_macro_task_steps(:1143)/_append_portfolio_task_steps(:1182)/_append_holdings_task_steps(:1221)/_append_theme_task_steps(:1304)`、earnings/valuation 专用（:511/:593/:643）、evidence steps（:302）等 → 对应 builder 文件；闭包工具函数（`_task_id/_task_tickers/_plan_task_summary` 等）→ `planning/util.py`。写入 `notes-planner-map.md`。
-- [ ] **Step 2: 逐 builder 剪切**（闭包变量改经 `PlanContext` 传入；一 builder 一小 commit）。
-- [ ] **Step 3: 改名**：`planner_stub` 函数改名 `rule_based_planner`；`planner_stub.py` 变 shim：
+- [x] **Step 1: 画迁移地图**：原函数内 `_append_company_task_steps(:863)/_append_macro_task_steps(:1143)/_append_portfolio_task_steps(:1182)/_append_holdings_task_steps(:1221)/_append_theme_task_steps(:1304)`、earnings/valuation 专用（:511/:593/:643）、evidence steps（:302）等 → 对应 builder 文件；闭包工具函数（`_task_id/_task_tickers/_plan_task_summary` 等）→ `planning/util.py`。写入 `notes-planner-map.md`。
+- [x] **Step 2: 逐 builder 剪切**（闭包变量改经 `PlanContext` 传入；一 builder 一小 commit）。
+- [x] **Step 3: 改名**：`planner_stub` 函数改名 `rule_based_planner`；`planner_stub.py` 变 shim：
 
 ```python
 # -*- coding: utf-8 -*-
@@ -107,8 +107,8 @@ from backend.graph.planning.rule_planner import rule_based_planner as planner_st
 ```
 
 `planner.py:22` 改 `from backend.graph.planning.rule_planner import rule_based_planner`（fallback 调用点同步改名）。
-- [ ] **Step 4: 验证**：全量 + 金样零 diff（金样覆盖 rule planner 的全部 subject_type 路径——若 `notes-planner-map.md` 发现金样没覆盖的 builder，先补一条金样 query 再动那个 builder）。
-- [ ] **Step 5: Commit**
+- [x] **Step 4: 验证**：全量 + 金样零 diff（金样覆盖 rule planner 的全部 subject_type 路径——若 `notes-planner-map.md` 发现金样没覆盖的 builder，先补一条金样 query 再动那个 builder）。
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "refactor(planner): rule planner split into builders registry; retire misleading *_stub name"
