@@ -154,447 +154,58 @@ except Exception as e:
     memory_service = None
 
 
-_reference_contexts: Dict[str, ContextManager] = {}
-_reference_context_last_access: Dict[str, float] = {}
-_reference_lock = Lock()
-
-_SESSION_PART_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-_SENSITIVE_KEY_FRAGMENTS = (
-    "api_key",
-    "apikey",
-    "authorization",
-    "auth",
-    "token",
-    "cookie",
-    "password",
-    "secret",
-)
-_ESSENTIAL_SSE_TYPES = {
-    "token",
-    "done",
-    "error",
-    # Execution visibility essentials (kept even when trace_raw is OFF)
-    "plan_ready",
-    "pipeline_stage",
-    "step_start",
-    "step_done",
-    "step_error",
-    "agent_start",
-    "agent_done",
-    "agent_error",
-    "trace",
-    "decision_note",
-}
-
-
-def _mask_secret(value: str) -> str:
-    raw = str(value or "")
-    if len(raw) <= 8:
-        return "***"
-    return f"{raw[:3]}***{raw[-3:]}"
-
-
-def _redact_sensitive_payload(value: Any) -> Any:
-    if isinstance(value, dict):
-        redacted: dict[str, Any] = {}
-        for key, inner in value.items():
-            key_text = str(key).lower()
-            if any(fragment in key_text for fragment in _SENSITIVE_KEY_FRAGMENTS):
-                # token 计数等数值型指标不是凭据（如 total_tokens/prompt_tokens），不脱敏。
-                # 注意 bool 是 int 的子类，需单独判断后一并放行（计数场景不会出现 bool，但保持类型透明）。
-                if isinstance(inner, bool) or isinstance(inner, (int, float)):
-                    redacted[key] = inner
-                    continue
-                # 容器类型递归处理（如 tokens_by_model = {"gpt-4": 123}），不整体抹掉，
-                # 这样嵌套结构里若真有字符串凭据仍会在递归中被脱敏。
-                if isinstance(inner, (dict, list)):
-                    redacted[key] = _redact_sensitive_payload(inner)
-                    continue
-                # 纯数字字符串也是计数不是凭据（如 "12345"），保留原值。
-                if isinstance(inner, str) and inner.strip().isdigit():
-                    redacted[key] = inner
-                    continue
-                # 其余情况（真正的字符串凭据，如 "sk-xxx"/"Bearer xxx"）仍然脱敏。
-                redacted[key] = _mask_secret(str(inner)) if inner is not None else "***"
-                continue
-            redacted[key] = _redact_sensitive_payload(inner)
-        return redacted
-    if isinstance(value, list):
-        return [_redact_sensitive_payload(item) for item in value]
-    if isinstance(value, str):
-        # Best-effort key/token masking in free text.
-        masked = re.sub(r"(?i)(sk-[a-z0-9_-]{8,})", lambda m: _mask_secret(m.group(1)), value)
-        masked = re.sub(
-            r"(?i)(authorization\s*[:=]\s*bearer\s+)([a-z0-9._-]{8,})",
-            lambda m: f"{m.group(1)}{_mask_secret(m.group(2))}",
-            masked,
-        )
-        return masked
-    return value
-
-
-def _normalize_session_key(session_id: Optional[str]) -> str:
-    raw = (session_id or "").strip()
-    if not raw:
-        return f"public:anonymous:{uuid4()}"
-
-    parts = raw.split(":")
-    if len(parts) == 1:
-        parts = ["public", "anonymous", parts[0]]
-    elif len(parts) == 2:
-        parts = ["public", parts[0], parts[1]]
-    elif len(parts) != 3:
-        raise ValueError("session_id format invalid, expected tenant:user:thread")
-
-    normalized: list[str] = []
-    for idx, part in enumerate(parts):
-        text = (part or "").strip()
-        if not text:
-            raise ValueError("session_id contains empty segment")
-        if not _SESSION_PART_PATTERN.fullmatch(text):
-            raise ValueError(f"session_id segment[{idx}] contains illegal chars")
-        normalized.append(text)
-    return ":".join(normalized)
-
-
-def _resolve_trace_raw_enabled(request: ChatRequest) -> bool:
-    default_enabled = _env_bool("TRACE_RAW_ENABLED", "true")
-    override = None
-    if getattr(request, "options", None):
-        override = request.options.trace_raw_override
-    if override == "on":
-        return True
-    if override == "off":
-        return False
-    return default_enabled
-
-
-def _build_trace_digest(state: dict[str, Any] | None) -> dict[str, Any]:
-    payload = state if isinstance(state, dict) else {}
-    trace = payload.get("trace") if isinstance(payload.get("trace"), dict) else {}
-    spans = trace.get("spans") if isinstance(trace.get("spans"), list) else []
-    first_nodes: list[str] = []
-    for span in spans[:10]:
-        if not isinstance(span, dict):
-            continue
-        node = span.get("node")
-        if isinstance(node, str) and node:
-            first_nodes.append(node)
-    return {
-        "output_mode": payload.get("output_mode"),
-        "subject": payload.get("subject"),
-        "span_count": len(spans),
-        "first_nodes": first_nodes,
-    }
-
-
-def _index_report_async(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
-    try:
-        store = get_report_index_store()
-        store.upsert_report(
-            session_id=session_id,
-            report=report,
-            trace_digest=_build_trace_digest(state),
-        )
-    except Exception:
-        logger.exception("report index async upsert failed")
-
-
-def _schedule_report_index(*, session_id: str, report: dict[str, Any], state: dict[str, Any] | None) -> None:
-    if not (isinstance(report, dict) and report.get("report_id")):
-        return
-    try:
-        import asyncio as _asyncio
-
-        _asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: _index_report_async(session_id=session_id, report=report, state=state),
-        )
-    except Exception:
-        logger.exception("schedule async report indexing failed")
-
-
-def _is_raw_trace_event(payload: dict[str, Any]) -> bool:
-    event_type = str(payload.get("type") or "").strip().lower()
-    if not event_type:
-        return True
-    return event_type not in _ESSENTIAL_SSE_TYPES
-
-
-def _resolve_thread_id(session_id: Optional[str]) -> str:
-    return _normalize_session_key(session_id)
-
-
-def _cleanup_session_contexts(now_ts: Optional[float] = None) -> None:
-    now = now_ts if now_ts is not None else time.time()
-    ttl_minutes = max(1, _env_int("SESSION_CONTEXT_TTL_MINUTES", 240))
-    ttl_seconds = ttl_minutes * 60
-    max_threads = max(16, _env_int("SESSION_CONTEXT_MAX_THREADS", 1000))
-
-    expired = [
-        sid
-        for sid, last_access in list(_reference_context_last_access.items())
-        if now - float(last_access) >= ttl_seconds
-    ]
-    for sid in expired:
-        _reference_contexts.pop(sid, None)
-        _reference_context_last_access.pop(sid, None)
-
-    current_size = len(_reference_contexts)
-    if current_size <= max_threads:
-        return
-
-    overflow = current_size - max_threads
-    oldest_first = sorted(
-        _reference_context_last_access.items(),
-        key=lambda item: item[1],
-    )
-    for sid, _ in oldest_first[:overflow]:
-        _reference_contexts.pop(sid, None)
-        _reference_context_last_access.pop(sid, None)
-
-
-def _get_session_context(session_id: str) -> ContextManager:
-    with _reference_lock:
-        now = time.time()
-        _cleanup_session_contexts(now)
-        manager = _reference_contexts.get(session_id)
-        if manager is None:
-            manager = ContextManager(max_turns=20)
-            _reference_contexts[session_id] = manager
-        _reference_context_last_access[session_id] = now
-        return manager
-
-
-def _summarize_session_context(session_id: str, manager: ContextManager) -> dict[str, Any]:
-    try:
-        state = manager.get_state()
-    except Exception:
-        state = {}
-    if not isinstance(state, dict):
-        state = {}
-    return {
-        "session_id": session_id,
-        "turns": int(state.get("turns") or 0),
-        "current_focus": state.get("current_focus"),
-        "current_focus_name": state.get("current_focus_name"),
-        "current_focus_market": state.get("current_focus_market"),
-        "pending_clarification": bool(state.get("pending_clarification")),
-        "cached_data_keys": state.get("cached_data_keys") if isinstance(state.get("cached_data_keys"), list) else [],
-        "last_access": _reference_context_last_access.get(session_id),
-    }
-
-
-def _list_session_contexts() -> list[dict[str, Any]]:
-    with _reference_lock:
-        _cleanup_session_contexts(time.time())
-        items = [
-            _summarize_session_context(session_id, manager)
-            for session_id, manager in _reference_contexts.items()
-        ]
-    return sorted(items, key=lambda item: float(item.get("last_access") or 0), reverse=True)
-
-
-def _clear_thread_rag_artifacts(thread_id: str) -> dict[str, int]:
-    deleted_collections = 0
-    soft_deleted_runs = 0
-    try:
-        from backend.rag import get_rag_service
-        from backend.rag.layering import build_thread_memory_collection, build_thread_working_set_collection
-
-        collections = [
-            build_thread_working_set_collection(thread_id),
-            build_thread_memory_collection(thread_id=thread_id),
-        ]
-        service = get_rag_service()
-        delete_collections = getattr(service, "delete_collections", None)
-        if callable(delete_collections):
-            deleted_collections = int(delete_collections(collections=collections) or 0)
-
-        store = get_rag_observability_store()
-        soft_delete_runs_for_collections = getattr(store, "soft_delete_runs_for_collections", None)
-        if callable(soft_delete_runs_for_collections):
-            soft_deleted_runs = int(
-                soft_delete_runs_for_collections(
-                    collections=collections,
-                    deleted_by="conversation_api",
-                    reason="conversation_deleted",
-                )
-                or 0
-            )
-            return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}
-
-        list_runs = getattr(store, "list_runs", None)
-        soft_delete_run = getattr(store, "soft_delete_run", None)
-        if callable(list_runs) and callable(soft_delete_run):
-            cursor = None
-            seen_cursors: set[str] = set()
-            while True:
-                runs = list_runs(limit=200, cursor=cursor, include_deleted=False)
-                for item in runs.get("items") or []:
-                    if not isinstance(item, dict):
-                        continue
-                    if str(item.get("collection") or "").strip() not in collections:
-                        continue
-                    run_id = str(item.get("id") or "").strip()
-                    if not run_id:
-                        continue
-                    soft_delete_run(run_id, deleted_by="conversation_api", reason="conversation_deleted")
-                    soft_deleted_runs += 1
-                next_cursor = str(runs.get("next_cursor") or "").strip()
-                if not next_cursor or next_cursor in seen_cursors:
-                    break
-                seen_cursors.add(next_cursor)
-                cursor = next_cursor
-    except Exception:
-        logger.exception("failed to clear RAG artifacts for session")
-    return {"rag_collections": deleted_collections, "rag_runs": soft_deleted_runs}
-
-
-def _clear_session_context(thread_id: str) -> dict[str, Any]:
-    normalized = str(thread_id or "").strip()
-    result: dict[str, Any] = {
-        "context": False,
-        "reports": 0,
-        "citations": 0,
-        "rag_collections": 0,
-        "rag_runs": 0,
-    }
-    if not normalized:
-        return result
-
-    with _reference_lock:
-        manager = _reference_contexts.pop(normalized, None)
-        _reference_context_last_access.pop(normalized, None)
-    if manager is not None:
-        try:
-            manager.clear()
-        except Exception:
-            logger.debug("session context clear failed after pop", exc_info=True)
-        result["context"] = True
-
-    try:
-        delete_session = getattr(get_report_index_store(), "delete_session", None)
-        if callable(delete_session):
-            deleted = delete_session(session_id=normalized)
-            if isinstance(deleted, dict):
-                result["reports"] = int(deleted.get("reports") or 0)
-                result["citations"] = int(deleted.get("citations") or 0)
-    except Exception:
-        logger.exception("failed to delete report index session")
-
-    result.update(_clear_thread_rag_artifacts(normalized))
-    return result
-
-
-def _resolve_query_reference(query: str, thread_id: str) -> str:
-    try:
-        return _get_session_context(thread_id).resolve_reference(query)
-    except Exception:
-        return query
-
-
-def _update_session_context(
-    *,
-    thread_id: str,
-    original_query: str,
-    response_markdown: str,
-    subject: Optional[Dict[str, Any]] = None,
-    skip_context: bool = False,
-) -> None:
-    if not thread_id:
-        return
-    # 閹稿洣鎶ら崹瀣惙娴ｆ粣绱欐俊?alert_set閿涘绗夋惔鏃€钖勯弻鎾愁嚠鐠囨繀绗傛稉瀣瀮
-    if skip_context:
-        return
-    try:
-        tickers = []
-        if isinstance(subject, dict):
-            tickers = [str(t).strip().upper() for t in (subject.get("tickers") or []) if str(t).strip()]
-        metadata: Dict[str, Any] = {}
-        if tickers:
-            metadata["tickers"] = tickers
-        _get_session_context(thread_id).add_turn(
-            query=original_query,
-            intent="chat",
-            response=response_markdown or "",
-            metadata=metadata,
-        )
-    except Exception:
-        logger.exception("failed to update session context")
-
-
-def _build_ui_context(request: ChatRequest) -> Dict[str, Any]:
-    ui_context: Dict[str, Any] = {}
-    if not request.context:
-        return ui_context
-    if request.context.active_symbol:
-        ui_context["active_symbol"] = request.context.active_symbol
-    if request.context.view:
-        ui_context["view"] = request.context.view
-
-    selections: List[Dict[str, Any]] = []
-    if request.context.selection:
-        selections.append(request.context.selection.model_dump())
-    if getattr(request.context, "selections", None):
-        selections.extend([s.model_dump() for s in (request.context.selections or []) if s])
-    if selections:
-        ui_context["selections"] = selections
-    if request.context.user_email:
-        ui_context["user_email"] = request.context.user_email
-
-    raw_context = request.context.model_dump(exclude_none=True)
-    for key in ("portfolio", "positions", "holdings"):
-        value = raw_context.get(key)
-        if value:
-            ui_context[key] = value
-    return ui_context
-
-
-def _contract_info() -> Dict[str, str]:
-    return contract_manifest()
-
-
-def _get_orchestrator_safe():
-    try:
-        return get_global_orchestrator()
-    except Exception:
-        logger.exception("failed to initialize orchestrator")
-        return None
-
-
-
-
-
-
-
-def _cors_allow_origins() -> list[str]:
-    origins = _parse_csv_env(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
-    )
-    return origins or [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-    ]
-
-
-def _cors_allow_origin_regex() -> str | None:
-    configured = str(os.getenv("CORS_ALLOW_ORIGIN_REGEX") or "").strip()
-    if configured:
-        return configured
-    return r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-
-
-def _cors_allow_credentials() -> bool:
-    allow_credentials = _env_bool("CORS_ALLOW_CREDENTIALS", "false")
-    origins = _cors_allow_origins()
-    if allow_credentials and "*" in origins:
-        logger.warning("CORS_ALLOW_CREDENTIALS=true with wildcard origin is invalid. Force disabling credentials.")
-        return False
-    return allow_credentials
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -637,233 +248,41 @@ from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
 
 
 
-app = FastAPI(
-    title="FinSight API",
-    description="FinSight 閸氬海顏張宥呭",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-
-
-
-
-
-
-app.middleware("http")(security_gate)  # WP3-T6：gate 本体已迁 security_gate.py
-
-
-# CORS —— 必须注册在 security_gate 之后（add_middleware 是 prepend，后注册 = 最外层）。
-# 这样 security_gate 直接返回的 429/401/503 响应也会被 CORS 包裹；
-# 否则浏览器把这些响应报成 CORS 错误，掩盖真实的限流提示（线上事故 2026-06-03）。
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_allow_origins(),
-    allow_origin_regex=_cors_allow_origin_regex(),
-    allow_credentials=_cors_allow_credentials(),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# === API routers ===
-
-chat_router = create_chat_router(
-    ChatRouterDeps(
-        get_graph_runner=lambda: aget_graph_runner(),
-        resolve_thread_id=_resolve_thread_id,
-        build_ui_context=_build_ui_context,
-        resolve_query_reference=_resolve_query_reference,
-        schedule_report_index=_schedule_report_index,
-        update_session_context=_update_session_context,
-        contract_info=_contract_info,
-        resolve_trace_raw_enabled=_resolve_trace_raw_enabled,
-        is_raw_trace_event=_is_raw_trace_event,
-        redact_sensitive_payload=_redact_sensitive_payload,
-        get_session_context=_get_session_context,
-        chat_response_schema_version=CHAT_RESPONSE_SCHEMA_VERSION,
-        sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
-    )
-)
-
-conversation_router = create_conversation_router(
-    ConversationRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_session_context=_get_session_context,
-        list_session_contexts=_list_session_contexts,
-        clear_session_context=_clear_session_context,
-        list_conversation_records=lambda: get_conversation_store().list(),
-        get_conversation_record=lambda session_id: get_conversation_store().get(session_id),
-        upsert_conversation_record=lambda session_id, payload: get_conversation_store().upsert(session_id, payload),
-        patch_conversation_record=lambda session_id, payload: get_conversation_store().patch(session_id, payload),
-        delete_conversation_record=lambda session_id: get_conversation_store().delete(session_id),
-    )
-)
-
-system_router = create_system_router(
-    SystemRouterDeps(
-        metrics_enabled=METRICS_ENABLED,
-        metrics_payload=metrics_payload,
-        graph_runner_ready=graph_runner_ready,
-        get_graph_checkpointer_info=get_graph_checkpointer_info,
-        get_orchestrator_safe=_get_orchestrator_safe,
-        get_planner_ab_metrics=get_planner_ab_metrics,
-        get_rag_observability_store=lambda: get_rag_observability_store(),
-        get_cost_audit_store=lambda: get_cost_audit_store(),
-        require_rag_read_access=lambda request: _require_rag_read_access(request),
-        require_rag_mutation_access=lambda request: _require_rag_mutation_access(request),
-        memory_service=memory_service,
-        logger=logger,
-    )
-)
-
-user_router = create_user_router(
-    UserRouterDeps(
-        memory_service=memory_service,
-        user_profile_cls=UserProfile,
-    )
-)
-
-agent_router = create_agent_router(
-    AgentRouterDeps(
-        memory_service=memory_service,
-    )
-)
-
-market_router = create_market_router(
-    MarketRouterDeps(
-        get_orchestrator_safe=_get_orchestrator_safe,
-        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: {"error": "price tool unavailable"}),
-        get_company_news=globals().get("get_company_news") or (lambda _ticker: {"error": "news tool unavailable"}),
-        get_financial_statements=globals().get("get_financial_statements") or (lambda _ticker: {"error": "financials tool unavailable"}),
-        get_financial_statements_summary=globals().get("get_financial_statements_summary") or (lambda _ticker: {"error": "financials summary tool unavailable"}),
-        get_stock_historical_data=globals().get("get_stock_historical_data") or (lambda _ticker, **_kwargs: {"error": "history tool unavailable"}),
-        detect_chart_type=(ChartTypeDetector.detect_chart_type if ChartTypeDetector else None),
-        logger=logger,
-    )
-)
-
-subscription_router = create_subscription_router()
-alerts_router = create_alerts_router()
-
-config_router = create_config_router(
-    ConfigRouterDeps(
-        project_root=project_root,
-        logger=logger,
-    )
-)
-
-def _safe_fetch_price_snapshot(ticker: str):
-    """价差接口用的实时价获取器：导入或拉取失败时诚实降级为 None，不影响主流程。"""
-    try:
-        from backend.services.alert_scheduler import fetch_price_snapshot
-        return fetch_price_snapshot(ticker)
-    except Exception:
-        return None
-
-
-report_router = create_report_router(
-    ReportRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_report_index_store=lambda: get_report_index_store(),
-        fetch_price_snapshot=_safe_fetch_price_snapshot,
-    )
-)
-
-research_router = create_research_router(
-    ResearchRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_report_index_store=lambda: get_report_index_store(),
-    )
-)
-
-task_router = create_task_router(
-    TaskRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_report_index_store=lambda: get_report_index_store(),
-        get_portfolio_positions=get_portfolio_positions,
-        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
-    )
-)
-tools_router = create_tools_router()
-skills_router = create_skills_router()
-agents_router = create_agents_router()
-
-morning_brief_router = create_morning_brief_router(
-    MorningBriefRouterDeps(
-        resolve_thread_id=_resolve_thread_id,
-        get_portfolio_positions=get_portfolio_positions,
-        get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
-        get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
-        get_graph_runner=lambda: aget_graph_runner(),
-    )
-)
-
-execution_router = create_execution_router(
-    ExecutionRouterDeps(
-        get_graph_runner=lambda: aget_graph_runner(),
-        resolve_thread_id=_resolve_thread_id,
-        schedule_report_index=_schedule_report_index,
-        update_session_context=_update_session_context,
-        redact_sensitive_payload=_redact_sensitive_payload,
-        is_raw_trace_event=_is_raw_trace_event,
-        contract_info=_contract_info,
-        sse_event_schema_version=SSE_EVENT_SCHEMA_VERSION,
-    )
-)
-
-# --- Phase 3: Portfolio & Rebalance routers ---
-from backend.services.rebalance_engine import RebalanceEngine as _RebalanceEngine
-from backend.services.rebalance_llm_enhancer import AgentBackedEnhancer as _AgentBackedEnhancer
-
-_rebalance_llm_enhancer = _AgentBackedEnhancer(
-    get_company_news=globals().get("get_company_news"),
-    get_company_info=globals().get("get_company_info"),
-    create_llm_fn=None,  # Lazy init: set after LLM config is ready
-)
-try:
-    from backend.llm_config import create_llm as _create_llm_for_rebalance
-    _rebalance_llm_enhancer = _AgentBackedEnhancer(
-        get_company_news=globals().get("get_company_news"),
-        get_company_info=globals().get("get_company_info"),
-        create_llm_fn=_create_llm_for_rebalance,
-    )
-except Exception:
-    pass  # LLM unavailable, enhancer will be no-op
-
-_rebalance_engine = _RebalanceEngine(llm_enhancer=_rebalance_llm_enhancer)
-
-rebalance_router = create_rebalance_router(
-    RebalanceRouterDeps(
-        rebalance_engine=_rebalance_engine,
-        get_stock_price=globals().get("get_stock_price"),
-        get_company_info=globals().get("get_company_info"),
-    )
-)
-
-app.include_router(system_router)
-app.include_router(user_router)
-app.include_router(agent_router)
-app.include_router(conversation_router)
-app.include_router(chat_router)
-app.include_router(market_router)
-app.include_router(subscription_router)
-app.include_router(alerts_router)
-app.include_router(screener_router)
-app.include_router(cn_market_router)
-app.include_router(backtest_router)
-app.include_router(config_router)
-app.include_router(report_router)
-app.include_router(research_router)
-app.include_router(task_router)
-app.include_router(tools_router)
-app.include_router(skills_router)
-app.include_router(agents_router)
-app.include_router(execution_router)
-app.include_router(dashboard_router)
-app.include_router(portfolio_router)
-app.include_router(monitor_router)
-app.include_router(rebalance_router)
-app.include_router(morning_brief_router)
 # 閸氼垰濮╅崗銉ュ經
 if __name__ == "__main__":
     uvicorn.run("backend.api.main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+# ---- WP3-T6：装配已迁 app_factory；helper 已迁 session_context/security_gate/lifespan ----
+from backend.api.app_factory import create_app  # noqa: E402
+
+app = create_app()
+
+from backend.api.session_context import (  # noqa: F401,E402 —— 测试/旧调用方兼容再导出
+    _ESSENTIAL_SSE_TYPES,
+    _SENSITIVE_KEY_FRAGMENTS,
+    _SESSION_PART_PATTERN,
+    _build_trace_digest,
+    _build_ui_context,
+    _cleanup_session_contexts,
+    _clear_session_context,
+    _clear_thread_rag_artifacts,
+    _contract_info,
+    _get_orchestrator_safe,
+    _get_session_context,
+    _index_report_async,
+    _is_raw_trace_event,
+    _list_session_contexts,
+    _mask_secret,
+    _normalize_session_key,
+    _redact_sensitive_payload,
+    _reference_context_last_access,
+    _reference_contexts,
+    _reference_lock,
+    _resolve_query_reference,
+    _resolve_thread_id,
+    _resolve_trace_raw_enabled,
+    _schedule_report_index,
+    _summarize_session_context,
+    _update_session_context,
+)
