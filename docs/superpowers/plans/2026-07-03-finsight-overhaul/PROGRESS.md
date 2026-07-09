@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-09 | WP3-Task4 synthesize拆分(render_vars+verifier) | ca607d7 | 新对拍测试6条金样终态逐键全等；synthesize节点回归+金样12全绿；全量1887 passed/19 failed=基线一致；synthesize 3202→1785行，render_vars包10模块+verifier独立 |
 | 2026-07-09 | WP3-Task3 understand_request/router归位intent包 | 5b6d0fd | 意图域回归461 passed（2失败=基线）+金样12零diff；全量1881 passed/19 failed=基线逐条一致；UR瘦身3355→362行(shell+shim)，router整体迁intent/router.py，生产侧旧路径import清零 |
 | 2026-07-09 | WP3-Task2 planner→planning/builders注册表+改名 | 1e00d9f | planner回归169+金样12全绿零diff；全量1881 passed/19 failed=基线逐条一致；41闭包ctx化提升(tokenize精确改写)，TASK_BUILDERS查表替换双elif链，planner.py 5调用点改名rule_based_planner，trace字符串保持原样 |
 | 2026-07-08 | WP3-Task1 chat_renderer→renderers注册表 | ac89268 | 渲染64+金样12全绿零diff；全量1881 passed/19 failed=基线逐条一致零新增；97函数守恒(新包113=97+14renderer+2ctx)，无重复定义，全文件≤400行(最大shared 356) |
@@ -41,6 +42,7 @@
 ## Installed Dependencies
 
 ## Deviations
+- 2026-07-09 | WP3-T4 | ①spec 草图假设键累积器+板块合并，实际为 subject_type 分支树逐支返回 RenderVars → 适配 T2 同款 ctx 化闭包提升（RenderVarsCtx 19字段），build_render_vars spec 接口名保留。②对拍基准落地为 tests/fixtures/render_vars_legacy.py 冻结副本 + 6 金样终态逐键相等测试（spec 的"拆完删副本"改为副本留测试区，T8 评估）。③verifier 与宿主共享 helper 留 synthesize，verifier 经 _synth() 延迟解析（backend.graph.__init__ 饿加载 runner 导致的 import 环，两处踩中：json_utils 触发链、nodes/__init__ 函数名遮蔽子模块）。④spec synthesize≤900 未达（1785，剩余无拆分锚点）；report_agents.py 482 小幅超限（同族内聚优先）。地图见 notes-synthesize-map.md。
 - 2026-07-09 | WP3-T3 | ①spec 要求删除 _legacy_understand_request——但 WP2-T3 的 fallback_rules 是整体委托它（瀑布零复制），删除=杀死规则兜底 lane → 适配为物理搬家 intent/legacy_engine.py（1230行，主体为单个引擎函数），不删除；INTENT_FRAME 默认值不在代码翻转（灰度是部署期 env 决策，见 .env.server.example 顺序）。②spec 未列的 predicates.py(701)/legacy_engine.py 为新增归置文件；task_builders 1241 行超限（_add_router_task_hints_contract 单函数~430行，无锚不切）；router.py 1991=spec 明示整体迁移。③6 个测试文件 61 处 monkeypatch(route_conversation/generate_contextual_reply) 目标随迁 intent.legacy_engine（内联 import_module 形式，调用仍走 understand_request 壳）。④_build_subject 挪 predicates 解 direct_reply↔task_builders 环。
 - 2026-07-09 | WP3-T2 | ①行数约束偏差：rule_planner.py 997 行（主体尾部 ~600 行 lane 组装 spec 未给拆分锚点，不臆拆，WP3-T8 收尾再议）；company builder 超限已再切 builders/evidence.py(225)。②spec 草表 "unknown"->company 与现实不符（原 elif 链对未登记类型 no-op），未采纳；holdings 按 operation 名、URL 存在性两守卫保留在调度函数不进表。③spec 未列的 frames.py/report_mode.py/context.py 为闭包家族新增归置文件；selection.py 未建（无对应闭包，selection 逻辑在 report_mode 内）。④原文件重名闭包 _task_operation_params(:313/:782) 语义等价保后者；trace 标签 "type":"stub"/"fallback":"planner_stub" 字符串保持原样（零行为）。地图见 notes-planner-map.md。
 
