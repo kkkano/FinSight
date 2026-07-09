@@ -71,7 +71,7 @@ def test_execute_plan_stub_records_rag_observability(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     thread_id = "tenant1:userA:thread-rag-observe"
     selection_payload = [
@@ -118,7 +118,7 @@ def test_execute_plan_stub_records_rag_observability(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     rag_trace = (out.get("trace") or {}).get("rag") or {}
 
@@ -170,7 +170,7 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     selection_payload = [
         {
@@ -233,7 +233,7 @@ def test_execute_plan_stub_searches_memory_working_set_and_kb(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     rag_trace = (out.get("trace") or {}).get("rag") or {}
 
     scope_event = next(event for event in fake_store.events if event.event_type == "retrieval_scope_planned")
@@ -278,7 +278,7 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         lambda: fake_store,
     )
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     thread_id = "tenant1:userA:thread-rag-3layer"
     selection_payload = [
@@ -346,7 +346,7 @@ def test_execute_plan_stub_surfaces_memory_ws_kb_layers(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     rag_trace = (out.get("trace") or {}).get("rag") or {}
     rag_stats = (out.get("artifacts") or {}).get("rag_stats") or {}
 

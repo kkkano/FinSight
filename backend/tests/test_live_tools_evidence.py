@@ -20,7 +20,7 @@ def test_execute_plan_stub_merges_tool_output_into_evidence_pool(monkeypatch):
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "plan_ir": {
@@ -48,7 +48,7 @@ def test_execute_plan_stub_merges_tool_output_into_evidence_pool(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
     evidence_by_task = artifacts.get("evidence_by_task") or {}
@@ -63,7 +63,7 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
 
     import importlib
 
-    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_stub")
+    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_node")
 
     async def _fake_agent(_inputs):
         return {
@@ -76,7 +76,7 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
 
     monkeypatch.setattr(execute_mod, "build_agent_invokers", lambda allowed_agents, state: {"fundamental_agent": _fake_agent})
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "plan_ir": {
@@ -101,7 +101,7 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
 
@@ -117,7 +117,7 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
 
     reset_rag_service_cache()
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "thread_id": "thread-rag-1",
@@ -179,7 +179,7 @@ def test_execute_plan_stub_builds_rag_context_from_evidence_pool(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     rag_context = artifacts.get("rag_context") or []
     rag_stats = artifacts.get("rag_stats") or {}
@@ -221,7 +221,7 @@ def test_execute_plan_stub_expands_sec_filings_into_individual_evidence(monkeypa
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "plan_ir": {
@@ -246,7 +246,7 @@ def test_execute_plan_stub_expands_sec_filings_into_individual_evidence(monkeypa
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
 
@@ -284,7 +284,7 @@ def test_execute_plan_stub_expands_local_filings_into_evidence(monkeypatch):
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "plan_ir": {
@@ -309,7 +309,7 @@ def test_execute_plan_stub_expands_local_filings_into_evidence(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
 
@@ -355,7 +355,7 @@ def test_execute_plan_stub_expands_media_and_transcript_tools(monkeypatch):
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "plan_ir": {
@@ -392,7 +392,7 @@ def test_execute_plan_stub_expands_media_and_transcript_tools(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     pool = artifacts.get("evidence_pool") or []
 

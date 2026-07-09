@@ -12,7 +12,7 @@ def test_execute_plan_stub_builds_evidence_ledger_from_execution_artifacts(monke
     monkeypatch.setenv("RESEARCH_LEDGER_ENABLED", "true")
     monkeypatch.setenv("JINA_ENRICH_EVIDENCE", "false")
 
-    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_stub")
+    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_node")
 
     async def _fake_execute_plan(*_args, **_kwargs):
         return (
@@ -124,11 +124,11 @@ def test_execute_plan_stub_builds_evidence_ledger_from_execution_artifacts(monke
         "trace": {},
     }
 
-    out = _run(execute_mod.execute_plan_stub(state))
+    out = _run(execute_mod.execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     ledger = artifacts.get("evidence_ledger") or {}
 
-    assert ledger, "execute_plan_stub should attach evidence_ledger"
+    assert ledger, "execute_plan_node should attach evidence_ledger"
     assert any(
         item.get("source") == "pool_feed" and item.get("url") == "https://example.com/aapl-price"
         for item in (artifacts.get("evidence_pool") or [])

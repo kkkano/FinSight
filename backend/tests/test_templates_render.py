@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 FORBIDDEN_NORMAL_CHAT_MARKERS = (
@@ -36,7 +36,7 @@ def test_render_news_brief_uses_natural_chat_not_news_template():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     _assert_natural_chat(md)
     assert "可用新闻列表" in md or "不能硬编影响结论" in md
     assert "## 投资摘要" not in md
@@ -56,7 +56,7 @@ def test_render_news_report_uses_news_report_template():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "## 新闻事件研报" in md
     assert "## 投资摘要" not in md
 
@@ -75,7 +75,7 @@ def test_render_company_report_uses_company_report_template():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "## 投资研报：AAPL" in md
 
 
@@ -93,7 +93,7 @@ def test_render_company_brief_includes_evidence_pool_links_naturally():
         },
         "artifacts": {"evidence_pool": [{"title": "T", "url": "https://example.com", "snippet": "S"}]},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     _assert_natural_chat(md)
     assert "[T](https://example.com)" in md
 
@@ -112,7 +112,7 @@ def test_render_company_brief_includes_price_and_technical_data_naturally():
         },
         "artifacts": {"render_vars": {"price_snapshot": "- $100", "technical_snapshot": "- RSI(14): 55"}},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     _assert_natural_chat(md)
     assert "$100" in md
     assert "RSI(14): 55" in md
@@ -140,7 +140,7 @@ def test_render_company_compare_brief_uses_natural_comparison_not_template():
             },
         },
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     _assert_natural_chat(md)
     assert "- x" in md
     assert "- y" in md
@@ -160,13 +160,13 @@ def test_render_company_fetch_brief_uses_natural_news_not_template():
         },
         "artifacts": {"render_vars": {"news_summary": "- [t](https://example.com)", "conclusion": "- x"}},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     _assert_natural_chat(md)
     assert "[t](https://example.com)" in md
 
 
 def test_render_multitask_brief_uses_natural_answer_with_links():
-    from backend.graph.nodes.render_stub import render_stub
+    from backend.graph.nodes.render_node import render_node
 
     state = {
         "query": "小米和理想汽车，CPI 影响吗",
@@ -219,7 +219,7 @@ def test_render_multitask_brief_uses_natural_answer_with_links():
         },
     }
 
-    out = render_stub(state)
+    out = render_node(state)
     md = (out.get("artifacts") or {}).get("draft_markdown") or ""
 
     _assert_natural_chat(md)
@@ -230,7 +230,7 @@ def test_render_multitask_brief_uses_natural_answer_with_links():
 
 
 def test_render_multitask_brief_is_natural_not_report_template():
-    from backend.graph.nodes.render_stub import render_stub
+    from backend.graph.nodes.render_node import render_node
 
     state = {
         "query": "小米和理想汽车，CPI 影响吗",
@@ -271,7 +271,7 @@ def test_render_multitask_brief_is_natural_not_report_template():
         },
     }
 
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
 
     _assert_natural_chat(md)
     assert "LI" in md
@@ -281,7 +281,7 @@ def test_render_multitask_brief_is_natural_not_report_template():
 
 
 def test_render_multitask_search_output_adds_source_link():
-    from backend.graph.nodes.render_stub import render_stub
+    from backend.graph.nodes.render_node import render_node
 
     state = {
         "query": "小米和理想汽车，CPI 影响吗",
@@ -317,7 +317,7 @@ def test_render_multitask_search_output_adds_source_link():
         },
     }
 
-    out = render_stub(state)
+    out = render_node(state)
     md = (out.get("artifacts") or {}).get("draft_markdown") or ""
 
     assert "https://www.google.com/search?q=LI+CPI+impact" not in md
@@ -342,7 +342,7 @@ def test_render_two_tickers_qa_does_not_use_compare_template():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     # Should NOT use compare template
     assert "## 对比快评" not in md
     _assert_natural_chat(md)
@@ -364,7 +364,7 @@ def test_render_two_tickers_price_does_not_use_compare_template():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "## 对比快评" not in md
     _assert_natural_chat(md)
     assert "AAPL" in md and "TSLA" in md
@@ -385,7 +385,7 @@ def test_render_compare_no_evidence_degrades_to_company_brief():
         },
         "artifacts": {},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     # No evidence → should NOT use compare template
     assert "## 对比快评" not in md
     _assert_natural_chat(md)
@@ -422,7 +422,7 @@ def test_render_multitask_report_fallback_avoids_mechanical_markers():
         ],
         "artifacts": {"step_results": {}},
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "本轮问题包含" not in md
     assert "分析对象" not in md
     assert "## GOOGL vs MSFT 研究报告" in md
@@ -489,7 +489,7 @@ def test_render_multitask_report_fallback_sanitizes_tool_outputs():
         },
     }
 
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
 
     assert "get_stock_price" not in md
     assert "get_company_news" not in md
@@ -566,7 +566,7 @@ def test_render_chat_mixed_url_and_focus_task_does_not_become_empty_portfolio():
         },
     }
 
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
 
     assert md.strip()
     assert "我先按你给的持仓看" not in md
@@ -603,7 +603,7 @@ def test_render_chat_mixed_url_fallback_uses_tasks_without_render_vars():
         },
     }
 
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
 
     assert "AAPL" in md
     assert "MSFT" in md
@@ -615,7 +615,7 @@ def test_render_chat_mixed_url_fallback_uses_tasks_without_render_vars():
 def test_render_chat_empty_primary_renderer_falls_back_to_multitask(monkeypatch):
     import importlib
 
-    render_mod = importlib.import_module("backend.graph.nodes.render_stub")
+    render_mod = importlib.import_module("backend.graph.nodes.render_node")
 
     monkeypatch.setattr(render_mod, "render_chat_markdown", lambda _state: "")
 
@@ -656,7 +656,7 @@ def test_render_chat_empty_primary_renderer_falls_back_to_multitask(monkeypatch)
         },
     }
 
-    md = (render_mod.render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_mod.render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
 
     assert md.strip()
     assert "AAPL" in md
@@ -686,6 +686,6 @@ def test_render_filing_report_includes_section_level_citations():
             ]
         },
     }
-    md = (render_stub(state).get("artifacts") or {}).get("draft_markdown") or ""
+    md = (render_node(state).get("artifacts") or {}).get("draft_markdown") or ""
     assert "Section-Level Citations" in md
     assert "Item 1A" in md

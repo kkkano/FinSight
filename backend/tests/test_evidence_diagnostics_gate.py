@@ -9,7 +9,7 @@ def _run(coro):
 def test_execute_plan_stub_preserves_context_artifacts_across_execution(monkeypatch):
     monkeypatch.setenv("LANGGRAPH_EXECUTE_LIVE_TOOLS", "false")
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "query": "give recent news links",
@@ -33,7 +33,7 @@ def test_execute_plan_stub_preserves_context_artifacts_across_execution(monkeypa
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
 
     assert artifacts.get("alert_markdown") == "Created alert for TSLA at 180."
@@ -61,7 +61,7 @@ def test_failed_url_fetch_goes_to_tool_diagnostics_not_evidence(monkeypatch):
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "query": "Read https://example.com/blocked",
@@ -94,7 +94,7 @@ def test_failed_url_fetch_goes_to_tool_diagnostics_not_evidence(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
 
     assert artifacts.get("evidence_pool") == []
@@ -127,7 +127,7 @@ def test_rejected_empty_and_timeout_outputs_are_not_evidence(monkeypatch):
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool(name))
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     steps = [
         {"id": "s1", "kind": "tool", "name": "search", "inputs": {"query": "AAPL"}, "task_ids": ["task_1"], "optional": True},
@@ -150,7 +150,7 @@ def test_rejected_empty_and_timeout_outputs_are_not_evidence(monkeypatch):
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
 
     assert artifacts.get("evidence_pool") == []
@@ -186,7 +186,7 @@ def test_official_macro_releases_promote_nested_release_links_to_evidence(monkey
 
     monkeypatch.setattr(tools_mod, "get_tool_by_name", lambda name: _FakeTool())
 
-    from backend.graph.nodes.execute_plan_stub import execute_plan_stub
+    from backend.graph.nodes.execute_plan_node import execute_plan_node
 
     state = {
         "query": "Any latest Fed news that affects QQQ? Please cite sources.",
@@ -213,7 +213,7 @@ def test_official_macro_releases_promote_nested_release_links_to_evidence(monkey
         "trace": {},
     }
 
-    out = _run(execute_plan_stub(state))
+    out = _run(execute_plan_node(state))
     artifacts = out.get("artifacts") or {}
     evidence = artifacts.get("evidence_pool") or []
 

@@ -18,12 +18,12 @@ from backend.graph.nodes import (
     chat_respond,
     confirmation_gate,
     decide_output_mode,
-    execute_plan_stub,
+    execute_plan_node,
     normalize_ui_context,
     policy_gate,
     prepare_context,
     planner,
-    render_stub,
+    render_node,
     research_debate,
     reset_turn_state,
     synthesize,
@@ -61,10 +61,10 @@ def _build_graph(*, checkpointer: Any) -> Any:
     graph.add_node("policy_gate", with_node_trace("policy_gate", policy_gate))
     graph.add_node("planner", with_node_trace("planner", planner))
     graph.add_node("confirmation_gate", with_node_trace("confirmation_gate", confirmation_gate))
-    graph.add_node("execute_plan", with_node_trace("execute_plan", execute_plan_stub))
+    graph.add_node("execute_plan", with_node_trace("execute_plan", execute_plan_node))
     graph.add_node("research_debate", with_node_trace("research_debate", research_debate))
     graph.add_node("synthesize", with_node_trace("synthesize", synthesize))
-    graph.add_node("render", with_node_trace("render", render_stub))
+    graph.add_node("render", with_node_trace("render", render_node))
 
     graph.add_edge(START, "build_initial_state")
     graph.add_edge("build_initial_state", "reset_turn_state")

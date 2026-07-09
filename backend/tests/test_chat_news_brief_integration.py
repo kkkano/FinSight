@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""P0-9 corrected: 舆情简报接入真实 Chat 生产路径（render_stub -> chat_renderer）。
+"""P0-9 corrected: 舆情简报接入真实 Chat 生产路径（render_node -> chat_renderer）。
 
 两层测试：
 - build_light_snapshot 单元测试（轻量快照构建，零额外 API 调用）
-- Chat 链路集成测试（render_stub 真实路径，验证个股/泛市场新闻走简报渲染）
+- Chat 链路集成测试（render_node 真实路径，验证个股/泛市场新闻走简报渲染）
 """
 from __future__ import annotations
 
 from backend.agents.sentiment_brief import build_light_snapshot
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 # ──────────────────────────────────────────────────────────────
@@ -92,12 +92,12 @@ def test_build_light_snapshot_no_extra_api_calls():
 
 
 # ──────────────────────────────────────────────────────────────
-# Chat 链路集成测试（render_stub 真实生产路径）
+# Chat 链路集成测试（render_node 真实生产路径）
 # ──────────────────────────────────────────────────────────────
 
 
 def _render_chat(state: dict) -> str:
-    result = render_stub(
+    result = render_node(
         {
             "query": state.get("query", ""),
             "output_mode": state.get("output_mode", "chat"),

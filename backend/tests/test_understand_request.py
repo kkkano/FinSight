@@ -605,7 +605,7 @@ def test_planner_stub_builds_multitask_steps_from_understanding_tasks():
 
 
 def test_multitask_render_mentions_blocked_portfolio_without_hiding_ready_tasks():
-    from backend.graph.nodes.render_stub import render_stub
+    from backend.graph.nodes.render_node import render_node
 
     state = {
         "query": "谷歌新闻，然后微软新闻，最近有什么影响我的持仓？",
@@ -651,7 +651,7 @@ def test_multitask_render_mentions_blocked_portfolio_without_hiding_ready_tasks(
         },
     }
 
-    result = render_stub(state)
+    result = render_node(state)
     draft = result["artifacts"]["draft_markdown"]
 
     assert "GOOGL" in draft

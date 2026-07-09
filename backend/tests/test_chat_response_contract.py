@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.graph.nodes.decide_output_mode import decide_output_mode
-from backend.graph.nodes.render_stub import render_stub
+from backend.graph.nodes.render_node import render_node
 
 
 FORBIDDEN_CHAT_MARKERS = (
@@ -20,7 +20,7 @@ FORBIDDEN_CHAT_MARKERS = (
 
 
 def _render_chat(state: dict) -> str:
-    result = render_stub(
+    result = render_node(
         {
             "query": state.get("query", ""),
             "output_mode": "chat",
@@ -49,7 +49,7 @@ def _assert_chat_contract(markdown: str) -> None:
 
 def test_preserved_report_draft_strips_internal_price_ladder_and_template_marker(monkeypatch) -> None:
     monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "10")
-    result = render_stub(
+    result = render_node(
         {
             "query": "给我生成一份 AAPL 投资报告。",
             "output_mode": "investment_report",
@@ -73,7 +73,7 @@ def test_preserved_report_draft_strips_internal_price_ladder_and_template_marker
 
 def test_report_template_output_strips_template_marker(monkeypatch) -> None:
     monkeypatch.setenv("RENDER_NARRATIVE_MIN_CHARS", "100000")
-    result = render_stub(
+    result = render_node(
         {
             "query": "给我生成一份 AAPL 投资报告。",
             "output_mode": "investment_report",

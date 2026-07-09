@@ -1040,7 +1040,7 @@ def test_synthesize_narrative_kept_for_investment_report(monkeypatch):
 def test_synthesize_multi_task_forces_stub_even_with_narrative_env(monkeypatch):
     """
     Multi-task plan (>=2 tasks, not pure compare) must force stub mode so
-    render_stub._build_multitask_markdown can render per-task sections.
+    render_node._build_multitask_markdown can render per-task sections.
     Fixes the C20 bug where 「小米和理想，CPI 影响吗」only rendered 理想.
     """
     monkeypatch.setenv("LANGGRAPH_SYNTHESIZE_MODE", "narrative")
