@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-09 | WP3-Task2 planner→planning/builders注册表+改名 | 1e00d9f | planner回归169+金样12全绿零diff；全量1881 passed/19 failed=基线逐条一致；41闭包ctx化提升(tokenize精确改写)，TASK_BUILDERS查表替换双elif链，planner.py 5调用点改名rule_based_planner，trace字符串保持原样 |
 | 2026-07-08 | WP3-Task1 chat_renderer→renderers注册表 | ac89268 | 渲染64+金样12全绿零diff；全量1881 passed/19 failed=基线逐条一致零新增；97函数守恒(新包113=97+14renderer+2ctx)，无重复定义，全文件≤400行(最大shared 356) |
 | 2026-07-08 | WP2-门禁(手工验收) | - | 真LLM(sub2api gpt-5.4-mini)：①multi_question四任务+三节渲染宏观节在(## 美联储下次议息·宏观/## AAPL·投资观点/## MSFT·投资观点)②PE→direct秒回lane=llm无agent③坏key→lane=fallback(router_heuristic_only)仍出compare研究+真实价格④黑板：探针实证risk step收到含price_agent真实发现的__context_digest；叙事级目检因本地yfinance限流延至部署冒烟(C1/C2)复验⑤SSE契约完整(plan_ready/step_start/step_done/tool_*/done,26 pipeline_stage) → **WP2 完成** |
 | 2026-07-08 | WP2-门禁(自动测试部分) | 01ce883 | 四flag全on全量1880 passed/20 failed→diff基线唯一新增=evidence_ledger测试只patch旧执行器入口（env敏感，非产品回归）→修为双入口patch后 off/on 双模式 1 passed；其余19失败与基线清单逐条一致 |
@@ -39,6 +40,7 @@
 ## Installed Dependencies
 
 ## Deviations
+- 2026-07-09 | WP3-T2 | ①行数约束偏差：rule_planner.py 997 行（主体尾部 ~600 行 lane 组装 spec 未给拆分锚点，不臆拆，WP3-T8 收尾再议）；company builder 超限已再切 builders/evidence.py(225)。②spec 草表 "unknown"->company 与现实不符（原 elif 链对未登记类型 no-op），未采纳；holdings 按 operation 名、URL 存在性两守卫保留在调度函数不进表。③spec 未列的 frames.py/report_mode.py/context.py 为闭包家族新增归置文件；selection.py 未建（无对应闭包，selection 逻辑在 report_mode 内）。④原文件重名闭包 _task_operation_params(:313/:782) 语义等价保后者；trace 标签 "type":"stub"/"fallback":"planner_stub" 字符串保持原样（零行为）。地图见 notes-planner-map.md。
 
 - 2026-07-08 | WP3-T1 | ①spec 草图的 RENDERERS 是 parts.append 拼接，实际原函数为互斥早退分支链 → 注册表语义适配为 first-non-None-wins（顺序=原分支顺序，末位 render_default 恒返回），ctx 两阶段构建保持原计算顺序与副作用时点（phase1→last_report renderer→phase2 含 news_map 联网 fallback 增补）。②spec 的 11 桶超 ≤400 行约束 → news 桶再切 news_items（条目工具底层，解 news↔fallback/snapshot 环）/news_fallback/news_snapshot，shared 再切 synthesis_vars，共 16 模块。③原 try-import 块按归属拆两半：COMPANY_MAP→news_items，get_company_news/get_authoritative_media_news→news_fallback；test_chat_response_contract 3 处 monkeypatch 目标随迁 backend.graph.renderers.news_fallback（shim re-export 无法传导 patch）。迁移地图与顺序表在 notes-chat-renderer-map.md。
 
