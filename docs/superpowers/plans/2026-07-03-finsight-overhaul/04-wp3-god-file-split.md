@@ -190,9 +190,9 @@ def format_agent_claims(agent_name: str, output: dict) -> list[str]:
 ```
 
 **Steps:**
-- [ ] Step 1: 迁移地图（citations 域=`_build_citations`+URL 规范化；grounding 域=:1877-2044；quality 域=:1736 起；formatter 域=`_format_*_agent*`）→ `notes-report-builder-map.md`。
-- [ ] Step 2: 逐域剪切（一域一 commit），report_builder 主入口改查表。
-- [ ] Step 3: 全量 + 金样零 diff；Commit：
+- [x] Step 1: 迁移地图（citations 域=`_build_citations`+URL 规范化；grounding 域=:1877-2044；quality 域=:1736 起；formatter 域=`_format_*_agent*`）→ `notes-report-builder-map.md`。
+- [x] Step 2: 逐域剪切（一域一 commit），report_builder 主入口改查表。
+- [x] Step 3: 全量 + 金样零 diff；Commit：
 
 ```bash
 git commit -am "refactor(report): citations/grounding/quality-hints modules + agent claim formatter registry"

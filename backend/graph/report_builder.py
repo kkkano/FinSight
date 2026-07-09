@@ -18,6 +18,44 @@ from backend.report.validator import ReportValidator
 
 logger = logging.getLogger(__name__)
 
+from backend.report.agent_formatters import (  # WP3-T5 拆分回接
+    AGENT_REPORT_SUMMARY_FORMATTERS,
+    _extract_price_behavior_snapshot,
+    _format_price_agent_claims,
+    _format_price_agent_report_summary,
+    _format_price_behavior_snapshot,
+    format_agent_report_summary,
+)
+from backend.report.citations import (  # WP3-T5 拆分回接
+    _CitationBuild,
+    _build_citations,
+    _build_filing_section_citations,
+    _build_internal_citation_key,
+    _build_internal_citation_url,
+    _canonicalize_url_for_citation_match,
+    _detect_filing_section_ref,
+    _is_suspicious_citation_item,
+    _normalize_internal_citation_text,
+)
+from backend.report.grounding import (  # WP3-T5 拆分回接
+    _build_grounding_corpus,
+    _compute_grounding_stats,
+    _extract_grounding_claims,
+    _is_claim_grounded,
+    _normalize_for_grounding,
+)
+from backend.report.quality_hints import _build_report_quality_hints  # WP3-T5 拆分回接
+from backend.report.util import (  # WP3-T5 拆分回接
+    _classify_report_type,
+    _flatten_json_like_line,
+    _freshness_hours,
+    _parse_iso_datetime,
+    _safe_confidence,
+    _safe_str,
+    _sanitize_report_text_block,
+)
+
+
 
 _AGENT_TITLE_MAP: dict[str, str] = {
     "price_agent": "价格分析",
@@ -96,17 +134,6 @@ def _build_fact_check_payload(
     }
 
 
-def _safe_str(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except Exception:
-            pass
-    return str(value)
 
 
 def _to_json_compatible(value: Any) -> Any:
@@ -184,80 +211,8 @@ def _sanitize_deep_search_summary(summary: str, agent_name: str) -> str:
     )
 
 
-def _flatten_json_like_line(line: str) -> str:
-    text = _safe_str(line).strip()
-    if not text:
-        return ""
-
-    was_bullet = text.startswith("- ")
-    candidate = text[2:].strip() if was_bullet else text
-    if not (candidate.startswith("{") and candidate.endswith("}")):
-        return text
-
-    try:
-        obj = json.loads(candidate)
-    except Exception:
-        return text
-    if not isinstance(obj, dict):
-        return text
-
-    event = _safe_str(obj.get("event")).strip()
-    impact = _safe_str(obj.get("impact")).strip()
-    if event and impact:
-        merged = f"{event}：{impact}"
-        return f"- {merged}" if was_bullet else merged
-
-    risk = _safe_str(obj.get("risk")).strip()
-    detail = _safe_str(obj.get("detail")).strip()
-    if risk and detail:
-        merged = f"{risk}：{detail}"
-        return f"- {merged}" if was_bullet else merged
-
-    title = _safe_str(obj.get("title") or obj.get("name")).strip()
-    summary = _safe_str(obj.get("summary") or obj.get("reason") or obj.get("value")).strip()
-    if title and summary:
-        merged = f"{title}：{summary}"
-        return f"- {merged}" if was_bullet else merged
-
-    pairs: list[str] = []
-    for key, value in obj.items():
-        key_text = _safe_str(key).strip()
-        value_text = _safe_str(value).strip()
-        if not key_text or not value_text:
-            continue
-        pairs.append(f"{key_text}: {value_text}")
-        if len(pairs) >= 3:
-            break
-    if not pairs:
-        return text
-    merged = "；".join(pairs)
-    return f"- {merged}" if was_bullet else merged
 
 
-def _sanitize_report_text_block(text: str, *, max_lines: int = 24, max_chars: int = 4000) -> str:
-    raw = _safe_str(text)
-    if not raw.strip():
-        return ""
-
-    out_lines: list[str] = []
-    for line in raw.splitlines():
-        normalized = _flatten_json_like_line(line)
-        normalized = re.sub(r"\s+", " ", normalized).strip()
-        if not normalized:
-            continue
-        if any(marker in normalized for marker in ("<inputs>", "</inputs>", "```", "待实现", "TBD", "TODO")):
-            continue
-        out_lines.append(normalized)
-        if len(out_lines) >= max_lines:
-            break
-
-    if not out_lines:
-        return ""
-
-    normalized_text = "\n".join(out_lines)
-    if len(normalized_text) > max_chars:
-        normalized_text = normalized_text[:max_chars].rstrip(" ,.;，。；") + "…"
-    return normalized_text
 
 
 def _harden_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -354,30 +309,8 @@ def _harden_report_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def _parse_iso_datetime(value: str) -> datetime | None:
-    if not value or not isinstance(value, str):
-        return None
-    text = value.strip()
-    if not text:
-        return None
-    # Accept a few common formats.
-    try:
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        return datetime.fromisoformat(text)
-    except Exception:
-        return None
 
 
-def _freshness_hours(published_date: str | None) -> float:
-    if not published_date:
-        return 24.0
-    dt = _parse_iso_datetime(str(published_date))
-    if not dt:
-        return 24.0
-    now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-    delta = now - dt
-    return max(0.0, delta.total_seconds() / 3600.0)
 
 
 def _count_content_chars(markdown: str) -> int:
@@ -573,459 +506,38 @@ def _extend_synthesis_report_if_short(
     return _dedupe_markdown_lines(text).strip() + "\n"
 
 
-@dataclass
-class _CitationBuild:
-    citations: list[dict[str, Any]]
-    id_by_url: dict[str, str]
-    id_by_internal_key: dict[str, str]
 
 
-_TRACKING_QUERY_KEYS = {
-    "fbclid",
-    "gclid",
-    "igshid",
-    "mc_cid",
-    "mc_eid",
-    "ref",
-    "ref_src",
-    "source",
-    "sourceid",
-    "utm_campaign",
-    "utm_content",
-    "utm_id",
-    "utm_medium",
-    "utm_name",
-    "utm_source",
-    "utm_term",
-}
 
 
-_FILING_SECTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bItem\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
-    re.compile(r"\bNote\s+(\d+[A-Za-z]?)\b", flags=re.IGNORECASE),
-    re.compile(r"\bPart\s+([IVX]+)\b", flags=re.IGNORECASE),
-]
 
 
-def _detect_filing_section_ref(item: dict[str, Any]) -> str | None:
-    text = " ".join(
-        [
-            _safe_str(item.get("title") or ""),
-            _safe_str(item.get("snippet") or ""),
-            _safe_str((item.get("metadata") or {}).get("section") if isinstance(item.get("metadata"), dict) else ""),
-        ]
-    )
-    if not text:
-        return None
-    for pattern in _FILING_SECTION_PATTERNS:
-        m = pattern.search(text)
-        if not m:
-            continue
-        key = pattern.pattern.lower()
-        value = m.group(1).upper()
-        if "item" in key:
-            return f"Item {value}"
-        if "note" in key:
-            return f"Note {value}"
-        if "part" in key:
-            return f"Part {value}"
-    return None
 
 
-def _build_filing_section_citations(citations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    section_map: dict[str, list[str]] = {}
-    for item in citations:
-        if not isinstance(item, dict):
-            continue
-        section = _safe_str(item.get("section_ref") or "").strip()
-        source_id = _safe_str(item.get("source_id") or "").strip()
-        if not section or not source_id:
-            continue
-        section_map.setdefault(section, [])
-        if source_id not in section_map[section]:
-            section_map[section].append(source_id)
-
-    ordered = sorted(section_map.items(), key=lambda kv: kv[0])
-    return [{"section": section, "source_ids": source_ids} for section, source_ids in ordered]
 
 
-def _safe_confidence(value: Any, default: float = 0.7) -> float:
-    """Convert confidence to float safely — handles 'high'/'medium'/'low' strings."""
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return default
 
 
-def _canonicalize_url_for_citation_match(raw_url: str) -> str:
-    url = _safe_str(raw_url).strip()
-    if not url:
-        return ""
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return url
-    if not parsed.scheme or not parsed.netloc:
-        return url
-
-    scheme = parsed.scheme.lower()
-    netloc = parsed.netloc.lower()
-    path = parsed.path or "/"
-    if path != "/":
-        path = path.rstrip("/")
-        if not path:
-            path = "/"
-
-    filtered_query: list[tuple[str, str]] = []
-    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
-        clean_key = _safe_str(key).strip()
-        if not clean_key:
-            continue
-        lower_key = clean_key.lower()
-        if lower_key.startswith("utm_") or lower_key in _TRACKING_QUERY_KEYS:
-            continue
-        filtered_query.append((clean_key, _safe_str(value)))
-    filtered_query.sort(key=lambda item: (item[0].lower(), item[1]))
-    query = urlencode(filtered_query, doseq=True)
-
-    return urlunparse((scheme, netloc, path, "", query, ""))
 
 
-def _is_suspicious_citation_item(item: dict[str, Any]) -> bool:
-    if not isinstance(item, dict):
-        return True
-    url = _safe_str(item.get("url") or "").strip().lower()
-    title = _safe_str(item.get("title") or "").strip().lower()
-    snippet = _safe_str(item.get("snippet") or "").strip().lower()
-    if not url.startswith(("http://", "https://")):
-        return True
-    parsed = urlparse(url)
-    domain = (parsed.netloc or "").lower().lstrip("www.")
-    path = (parsed.path or "").lower()
-
-    if domain == "finnhub.io" and path.startswith("/api/news"):
-        return True
-
-    blocked_domains = (
-        "tangxin93.com",
-        "hinrijv.cc",
-        "xqdyzgc.com",
-        "yumiok.com",
-        "playfulsoul.net",
-        "mtevfryb.cc",
-        "ewfvsve.cc",
-        "maoyanqing.com",
-    )
-    blocked_tlds = (".cc", ".xyz", ".top", ".vip", ".club", ".porn", ".sex")
-    blocked_terms = (
-        "成人视频",
-        "乱伦",
-        "群p",
-        "porn",
-        "xxx",
-        "casino",
-        "betting",
-    )
-    text = " ".join((url, title, snippet))
-    if any(domain in url for domain in blocked_domains):
-        return True
-    if domain and any(domain.endswith(suffix) for suffix in blocked_tlds):
-        return True
-    if "/tag/" in path and any(token in path for token in ("群", "porn", "xxx", "sex")):
-        return True
-    if any(term in text for term in blocked_terms):
-        return True
-    return False
 
 
-def _build_citations(evidence_pool: list[dict[str, Any]] | None) -> _CitationBuild:
-    citations: list[dict[str, Any]] = []
-    id_by_url: dict[str, str] = {}
-    id_by_internal_key: dict[str, str] = {}
-    if not isinstance(evidence_pool, list):
-        return _CitationBuild(
-            citations=citations,
-            id_by_url=id_by_url,
-            id_by_internal_key=id_by_internal_key,
-        )
-
-    for item in evidence_pool:
-        if not isinstance(item, dict):
-            continue
-        if _is_suspicious_citation_item(item):
-            continue
-        url = item.get("url")
-        if not isinstance(url, str) or not url.strip():
-            continue
-        url = url.strip()
-        canonical_url = _canonicalize_url_for_citation_match(url)
-        if url in id_by_url or (canonical_url and canonical_url in id_by_url):
-            continue
-        source_id = str(len(citations) + 1)
-        id_by_url[url] = source_id
-        if canonical_url:
-            id_by_url[canonical_url] = source_id
-        citations.append(
-            {
-                "source_id": source_id,
-                "title": _safe_str(item.get("title") or item.get("source") or url)[:180] or url,
-                "url": url,
-                "snippet": _safe_str(item.get("snippet") or "")[:400],
-                "published_date": _safe_str(item.get("published_date") or ""),
-                "confidence": _safe_confidence(item.get("confidence", 0.7)),
-                "freshness_hours": _freshness_hours(item.get("published_date")),
-                "section_ref": _detect_filing_section_ref(item),
-            }
-        )
-        if len(citations) >= 24:
-            break
-
-    return _CitationBuild(
-        citations=citations,
-        id_by_url=id_by_url,
-        id_by_internal_key=id_by_internal_key,
-    )
 
 
-def _normalize_internal_citation_text(value: Any, *, limit: int = 200) -> str:
-    text = re.sub(r"\s+", " ", _safe_str(value)).strip().lower()
-    return text[:limit]
 
 
-def _build_internal_citation_key(
-    *,
-    agent_name: str,
-    source: str,
-    title: str,
-    snippet: str,
-    timestamp: str,
-) -> str:
-    agent_key = _normalize_internal_citation_text(agent_name, limit=64)
-    source_key = _normalize_internal_citation_text(source, limit=64)
-    title_key = _normalize_internal_citation_text(title, limit=120)
-    snippet_key = _normalize_internal_citation_text(snippet, limit=160)
-    timestamp_key = _normalize_internal_citation_text(timestamp, limit=64)
-    if not any((source_key, title_key, snippet_key, timestamp_key)):
-        return ""
-    return "|".join([agent_key, source_key, title_key, snippet_key, timestamp_key])
 
 
-def _build_internal_citation_url(*, agent_name: str, source: str, title: str) -> str:
-    seed = "-".join(
-        [
-            _normalize_internal_citation_text(agent_name, limit=32),
-            _normalize_internal_citation_text(source, limit=32),
-            _normalize_internal_citation_text(title, limit=48),
-        ]
-    )
-    slug = re.sub(r"[^a-z0-9]+", "-", seed).strip("-")
-    if not slug:
-        slug = f"agent-{uuid.uuid4().hex[:8]}"
-    return f"internal://{slug}"
 
 
-_PRICE_CLAIM_LABELS: dict[str, str] = {
-    "price_momentum": "价格动量",
-    "relative_strength": "相对强弱",
-    "volume_confirmation": "量价确认",
-    "volatility_regime": "波动率结构",
-    "key_level_risk": "关键价位风险",
-}
 
 
-def _extract_price_behavior_snapshot(output: dict[str, Any]) -> dict[str, Any] | None:
-    evidence = output.get("evidence")
-    if not isinstance(evidence, list):
-        return None
-    for item in evidence:
-        if not isinstance(item, dict):
-            continue
-        meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
-        snapshot = meta.get("snapshot")
-        if isinstance(snapshot, dict) and snapshot.get("snapshot_type") == "PriceBehaviorSnapshot":
-            return snapshot
-    return None
 
 
-def _format_price_behavior_snapshot(snapshot: dict[str, Any]) -> str:
-    quote = snapshot.get("quote") if isinstance(snapshot.get("quote"), dict) else {}
-    trend = snapshot.get("trend") if isinstance(snapshot.get("trend"), dict) else {}
-    returns = trend.get("returns") if isinstance(trend.get("returns"), dict) else {}
-    momentum = snapshot.get("momentum") if isinstance(snapshot.get("momentum"), dict) else {}
-    volume_price = snapshot.get("volume_price") if isinstance(snapshot.get("volume_price"), dict) else {}
-    relative_strength = snapshot.get("relative_strength") if isinstance(snapshot.get("relative_strength"), dict) else {}
-    benchmarks = relative_strength.get("benchmarks") if isinstance(relative_strength.get("benchmarks"), dict) else {}
-    volatility = snapshot.get("volatility_structure") if isinstance(snapshot.get("volatility_structure"), dict) else {}
-    key_levels = snapshot.get("key_levels") if isinstance(snapshot.get("key_levels"), dict) else {}
-    options = snapshot.get("options") if isinstance(snapshot.get("options"), dict) else {}
-
-    def _fmt_number(value: Any, digits: int = 2) -> str:
-        try:
-            return f"{float(value):.{digits}f}"
-        except (TypeError, ValueError):
-            return _safe_str(value).strip() if value is not None else ""
-
-    def _fmt_pct(value: Any, *, signed: bool = True) -> str:
-        try:
-            prefix = "+" if signed else ""
-            return f"{float(value):{prefix}.2f}%"
-        except (TypeError, ValueError):
-            return _safe_str(value).strip() if value is not None else ""
-
-    def _to_float(value: Any) -> float | None:
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _add_section(lines: list[str], heading: str, bits: list[str]) -> None:
-        clean_bits = [bit for bit in bits if bit]
-        if clean_bits:
-            lines.append(f"【{heading}】" + "；".join(clean_bits) + "。")
-
-    lines: list[str] = []
-    ticker = _safe_str(snapshot.get("ticker") or quote.get("ticker") or "标的").strip()
-    price_bits = []
-    price = quote.get("price", snapshot.get("price"))
-    currency = quote.get("currency", snapshot.get("currency", "USD"))
-    price_bits.append(f"{ticker} 当前价格: {currency} {price}" if price is not None else f"{ticker} 当前价格暂缺")
-    change_pct = quote.get("change_percent", snapshot.get("change_percent"))
-    if change_pct is not None:
-        price_bits.append(f"日内变动 {_fmt_pct(change_pct)}")
-    if quote.get("source"):
-        price_bits.append(f"来源 {quote.get('source')}")
-    if quote.get("as_of") or snapshot.get("as_of"):
-        price_bits.append(f"时间 {quote.get('as_of') or snapshot.get('as_of')}")
-    _add_section(lines, "价格状态", price_bits)
-
-    trend_bits = []
-    return_bits = [
-        f"{label} {_fmt_pct(returns.get(label))}"
-        for label in ("1d", "1w", "1mo", "3mo", "6mo", "1y")
-        if returns.get(label) is not None
-    ]
-    if return_bits:
-        trend_bits.append("区间收益 " + " / ".join(return_bits))
-    if trend.get("direction"):
-        trend_bits.append(f"趋势方向 {trend.get('direction')}")
-    if momentum.get("state"):
-        trend_bits.append(f"动量状态 {momentum.get('state')}")
-    if momentum.get("close_vs_sma20_pct") is not None:
-        trend_bits.append(f"相对SMA20 {_fmt_pct(momentum.get('close_vs_sma20_pct'))}")
-    _add_section(lines, "趋势与动量", trend_bits)
-
-    volume_bits = []
-    if volume_price.get("price_change_1d") is not None:
-        volume_bits.append(f"1日价格变动 {_fmt_pct(volume_price.get('price_change_1d'))}")
-    if volume_price.get("volume_ratio20") is not None:
-        volume_bits.append(f"成交量为20日均量 {_fmt_number(volume_price.get('volume_ratio20'))}x")
-    if volume_price.get("signal"):
-        volume_bits.append(f"量价信号 {volume_price.get('signal')}")
-    _add_section(lines, "量价关系", volume_bits)
-
-    rs_bits = []
-    for benchmark in ("SPY", "QQQ"):
-        payload = benchmarks.get(benchmark) if isinstance(benchmarks.get(benchmark), dict) else {}
-        parts = []
-        if payload.get("rs_1mo") is not None:
-            parts.append(f"1mo {_fmt_pct(payload.get('rs_1mo')).replace('%', 'pct')}")
-        if payload.get("rs_3mo") is not None:
-            parts.append(f"3mo {_fmt_pct(payload.get('rs_3mo')).replace('%', 'pct')}")
-        if parts:
-            rs_bits.append(f"{benchmark}: " + " / ".join(parts))
-    _add_section(lines, "相对强弱RS", rs_bits)
-
-    vol_bits = []
-    realized_vol = volatility.get("realized_volatility") if isinstance(volatility.get("realized_volatility"), dict) else {}
-    for label in ("20d", "60d"):
-        if realized_vol.get(label) is not None:
-            vol_bits.append(f"实现波动率{label} {_fmt_pct(realized_vol.get(label), signed=False)}")
-    if volatility.get("atr14_pct") is not None:
-        vol_bits.append(f"ATR14 {_fmt_pct(volatility.get('atr14_pct'), signed=False)}")
-    if options.get("iv_atm") is not None:
-        try:
-            vol_bits.append(f"ATM IV {float(options.get('iv_atm')):.2%}")
-        except (TypeError, ValueError):
-            vol_bits.append(f"ATM IV {options.get('iv_atm')}")
-    if options.get("put_call_ratio") is not None:
-        vol_bits.append(f"PCR {_fmt_number(options.get('put_call_ratio'))}")
-    _add_section(lines, "波动率与期权结构", vol_bits)
-
-    level_bits = []
-    for key, label in (
-        ("support_20d", "20日支撑"),
-        ("resistance_20d", "20日压力"),
-        ("high_52w", "52周高点"),
-        ("low_52w", "52周低点"),
-    ):
-        if key_levels.get(key) is not None:
-            level_bits.append(f"{label} {_fmt_number(key_levels.get(key))}")
-    if key_levels.get("distance_to_support_20d_pct") is not None:
-        level_bits.append(f"距20日支撑 {_fmt_pct(key_levels.get('distance_to_support_20d_pct'))}")
-    if key_levels.get("distance_to_resistance_20d_pct") is not None:
-        level_bits.append(f"距20日压力 {_fmt_pct(key_levels.get('distance_to_resistance_20d_pct'))}")
-    _add_section(lines, "关键价位", level_bits)
-
-    risk_bits = []
-    if snapshot.get("fallback_used"):
-        risk_bits.append(f"价格数据使用兜底路径，原因: {snapshot.get('fallback_reason') or 'primary_source_unavailable'}")
-    volume_signal = _safe_str(volume_price.get("signal") or "")
-    volume_ratio = _to_float(volume_price.get("volume_ratio20"))
-    if volume_signal == "price_down_distribution":
-        risk_bits.append(f"放量下跌信号，成交量约为20日均量 {volume_ratio:.2f}x" if volume_ratio is not None else "放量下跌信号")
-    elif volume_signal == "low_volume_move":
-        risk_bits.append(f"价格变动缺少量能确认，成交量约为20日均量 {volume_ratio:.2f}x" if volume_ratio is not None else "价格变动缺少量能确认")
-    atr_pct = _to_float(volatility.get("atr14_pct"))
-    if atr_pct is not None and atr_pct >= 4:
-        risk_bits.append(f"ATR14 达 {atr_pct:.2f}%，短线波动风险偏高")
-    pcr = _to_float(options.get("put_call_ratio"))
-    if pcr is not None and pcr >= 1.2:
-        risk_bits.append(f"Put/Call Ratio {pcr:.2f} 偏高，期权端防守需求较强")
-    distance_support = _to_float(key_levels.get("distance_to_support_20d_pct"))
-    if distance_support is not None and 0 <= distance_support <= 3:
-        risk_bits.append(f"价格距20日支撑仅 {distance_support:+.2f}%，跌破后可能触发止损压力")
-    event = snapshot.get("event_explanation") if isinstance(snapshot.get("event_explanation"), dict) else {}
-    if event.get("summary"):
-        risk_bits.append(f"价格异动需结合事件验证: {_safe_str(event.get('summary'))[:180]}")
-    elif event.get("todo"):
-        risk_bits.append(_safe_str(event.get("todo")))
-    _add_section(lines, "风险提示", risk_bits)
-    return "\n".join(lines)
 
 
-def _format_price_agent_claims(output: dict[str, Any]) -> str:
-    claims = output.get("claims")
-    if not isinstance(claims, list):
-        return ""
-    lines: list[str] = []
-    seen: set[str] = set()
-    for claim in claims:
-        if not isinstance(claim, dict):
-            continue
-        metadata = claim.get("metadata") if isinstance(claim.get("metadata"), dict) else {}
-        claim_type = _safe_str(metadata.get("claim_type") or "").strip()
-        if claim_type not in _PRICE_CLAIM_LABELS or claim_type in seen:
-            continue
-        claim_text = _safe_str(claim.get("claim") or "").strip()
-        if not claim_text:
-            continue
-        seen.add(claim_type)
-        lines.append(f"- {_PRICE_CLAIM_LABELS[claim_type]}：{claim_text[:260]}")
-    if not lines:
-        return ""
-    return "【结构化命题】\n" + "\n".join(lines)
 
 
-def _format_price_agent_report_summary(output: dict[str, Any]) -> str:
-    summary = _sanitize_report_text_block(_safe_str(output.get("summary") or ""), max_lines=24, max_chars=3600)
-    snapshot = _extract_price_behavior_snapshot(output)
-    if snapshot and "【价格状态】" not in summary:
-        summary = _format_price_behavior_snapshot(snapshot) or summary
-    claims_text = _format_price_agent_claims(output)
-    parts = [part for part in (summary, claims_text) if part]
-    return "\n".join(parts).strip()
 
 
 def _agent_status_from_steps(
@@ -1215,8 +727,9 @@ def _agent_summaries_from_steps(
             continue
 
         summary_max_chars = max(4000, _env_int("REPORT_AGENT_SUMMARY_MAX_CHARS", 12000))
-        if agent_name == "price_agent" and isinstance(output, dict):
-            summary = _format_price_agent_report_summary(output)[:summary_max_chars]
+        registry_summary = format_agent_report_summary(agent_name, output)
+        if registry_summary is not None:
+            summary = registry_summary[:summary_max_chars]
         else:
             summary = _safe_str(output.get("summary") if isinstance(output, dict) else "")[:summary_max_chars]
             summary = _sanitize_deep_search_summary(summary, agent_name)
@@ -1640,405 +1153,24 @@ def _is_deep_report_query(query: str) -> bool:
     return _classify_report_type(query) == "deep_financial"
 
 
-_QUALITY_PROFILES: dict[str, dict[str, bool]] = {
-    "deep_financial": {
-        "10k": True,
-        "10q": True,
-        "local_filing": False,
-        "transcript": True,
-        "media": True,
-        "snippets": True,
-    },
-    "general": {
-        "10k": False,
-        "10q": False,
-        "local_filing": False,
-        "transcript": False,
-        "media": True,
-        "snippets": True,
-    },
-    "technical": {
-        "10k": False,
-        "10q": False,
-        "local_filing": False,
-        "transcript": False,
-        "media": False,
-        "snippets": True,
-    },
-    "news": {
-        "10k": False,
-        "10q": False,
-        "local_filing": False,
-        "transcript": False,
-        "media": True,
-        "snippets": True,
-    },
-}
 
 
-def _classify_report_type(query: str) -> str:
-    q = _safe_str(query).strip().lower()
-    technical_tokens = (
-        "technical",
-        "macd",
-        "rsi",
-        "技术分析",
-        "支撑",
-        "阻力",
-        "趋势",
-    )
-    news_tokens = (
-        "news",
-        "新闻",
-        "影响分析",
-        "事件",
-    )
-    deep_tokens = (
-        "deep report",
-        "longform",
-        "filing",
-        "10-k",
-        "10-q",
-        "earnings call",
-        "transcript",
-        "deep research",
-        "深度",
-        "研报",
-        "财报",
-        "电话会",
-    )
-    if any(token in q for token in technical_tokens):
-        return "technical"
-    if any(token in q for token in news_tokens):
-        return "news"
-    if any(token in q for token in deep_tokens):
-        return "deep_financial"
-    return "general"
 
 
-def _infer_market_from_context(*, tickers: list[str] | None = None, market: str | None = None) -> str:
-    market_text = _safe_str(market).strip().upper()
-    if market_text in {"US", "CN", "HK"}:
-        return market_text
-
-    for ticker in tickers or []:
-        symbol = _safe_str(ticker).strip().upper()
-        if not symbol:
-            continue
-        if symbol.endswith((".SS", ".SZ", ".BJ")):
-            return "CN"
-        if symbol.endswith(".HK"):
-            return "HK"
-        return "US"
-    return "US"
 
 
-def _build_report_quality_hints(
-    *,
-    query: str,
-    citations: list[dict[str, Any]],
-    tickers: list[str] | None = None,
-    market: str | None = None,
-) -> dict[str, Any]:
-    authoritative_media_domains = (
-        "reuters.com",
-        "bloomberg.com",
-        "wsj.com",
-        "ft.com",
-        "cnbc.com",
-        "finance.yahoo.com",
-    )
-    local_filing_domains = (
-        "cninfo.com.cn",
-        "sse.com.cn",
-        "szse.cn",
-        "hkexnews.hk",
-        "hkex.com.hk",
-    )
-
-    report_type = _classify_report_type(query)
-    profile = dict(_QUALITY_PROFILES.get(report_type, _QUALITY_PROFILES["general"]))
-    report_market = _infer_market_from_context(tickers=tickers, market=market)
-    if report_type == "deep_financial":
-        if report_market == "US":
-            profile["10k"] = True
-            profile["10q"] = True
-            profile["local_filing"] = False
-        else:
-            profile["10k"] = False
-            profile["10q"] = False
-            profile["local_filing"] = True
-
-    deep_required = report_type == "deep_financial"
-
-    has_10k = False
-    has_10q = False
-    has_local_filing = False
-    has_earnings_transcript = False
-    authoritative_media_count = 0
-    sec_filing_count = 0
-    local_filing_count = 0
-    rich_snippet_count = 0
-
-    for item in citations:
-        if not isinstance(item, dict):
-            continue
-        url = _safe_str(item.get("url") or "").strip().lower()
-        source = _safe_str(item.get("source") or "").strip().lower()
-        title = _safe_str(item.get("title") or "").strip().lower()
-        snippet = _safe_str(item.get("snippet") or "").strip()
-        parsed = urlparse(url)
-        domain = (parsed.netloc or "").lower().lstrip("www.")
-        joined = f"{url} {title} {snippet.lower()}"
-
-        if domain.endswith("sec.gov") or "sec.gov/" in url:
-            sec_filing_count += 1
-            if re.search(r"\b10-k\b|annual report|form\s*10k", joined, flags=re.I):
-                has_10k = True
-            if re.search(r"\b10-q\b|quarterly report|form\s*10q", joined, flags=re.I):
-                has_10q = True
-
-        if any(domain.endswith(d) for d in local_filing_domains) or source == "local_disclosure":
-            local_filing_count += 1
-            has_local_filing = True
-
-        if re.search(r"earnings|conference call|transcript|业绩电话会|电话会纪要", joined, flags=re.I):
-            has_earnings_transcript = True
-
-        if any(domain.endswith(d) for d in authoritative_media_domains):
-            authoritative_media_count += 1
-
-        normalized_snippet = snippet.strip().lower()
-        if (
-            len(snippet) >= 40
-            and normalized_snippet
-            and normalized_snippet != url
-            and not normalized_snippet.startswith("http://")
-            and not normalized_snippet.startswith("https://")
-        ):
-            rich_snippet_count += 1
-
-    missing: list[str] = []
-    missing_counts = {"critical": 0, "important": 0, "minor": 0}
-
-    def _append_missing(message: str, severity: str) -> None:
-        missing.append(message)
-        if severity in missing_counts:
-            missing_counts[severity] += 1
-
-    if deep_required:
-        if profile.get("10k") and not has_10k:
-            _append_missing("缺少可识别的 10-K 引用", "critical")
-        if profile.get("10q") and not has_10q:
-            _append_missing("缺少可识别的 10-Q 引用", "critical")
-        if profile.get("local_filing") and not has_local_filing:
-            _append_missing("缺少本地市场披露引用（CN/HK）", "critical")
-        if profile.get("transcript") and not has_earnings_transcript:
-            _append_missing("缺少业绩电话会纪要/Transcript 引用", "important")
-        if profile.get("media") and authoritative_media_count <= 0:
-            _append_missing("缺少权威媒体交叉引用（Reuters/Bloomberg/WSJ/FT/CNBC/Yahoo）", "important")
-        if profile.get("snippets") and rich_snippet_count < 2:
-            _append_missing("证据摘录质量不足（多数仅 URL，缺少正文摘录）", "minor")
-
-    return {
-        "deep_report_required": deep_required,
-        "report_type": report_type,
-        "market": report_market,
-        "applied_profile": profile,
-        "qualified": not missing,
-        "missing_requirements": missing,
-        "missing_counts": missing_counts,
-        "stats": {
-            "citation_count": len(citations),
-            "sec_filing_count": sec_filing_count,
-            "local_filing_count": local_filing_count,
-            "authoritative_media_count": authoritative_media_count,
-            "rich_snippet_count": rich_snippet_count,
-            "has_10k": has_10k,
-            "has_10q": has_10q,
-            "has_local_filing": has_local_filing,
-            "has_earnings_transcript": has_earnings_transcript,
-        },
-    }
 
 
-_GROUNDING_CLAIM_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"(?<!\d)\d+(?:\.\d+)?\s*(?:%|倍|x|X|亿美元|万亿美元|亿|万|bps|bp|美元|元|点|亿元|万元)",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"20\d{2}\s*(?:年|Q[1-4])[^\n。；;]{0,16}(?:发布|推出|上线|发售|量产|并购|收购|拆分)",
-        flags=re.IGNORECASE,
-    ),
-)
 
 
-def _normalize_for_grounding(value: Any) -> str:
-    return re.sub(r"\s+", "", _safe_str(value)).lower()
 
 
-def _extract_grounding_claims(text: str, *, max_claims: int = 80) -> list[str]:
-    raw = _safe_str(text).strip()
-    if not raw:
-        return []
-
-    claims: list[str] = []
-    seen: set[str] = set()
-    for pattern in _GROUNDING_CLAIM_PATTERNS:
-        for match in pattern.finditer(raw):
-            claim = _safe_str(match.group(0)).strip()
-            if not claim:
-                continue
-            key = _normalize_for_grounding(claim)
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            claims.append(claim)
-            if len(claims) >= max_claims:
-                return claims
-    return claims
 
 
-def _build_grounding_corpus(
-    *,
-    citations: list[dict[str, Any]],
-    agent_summaries: list[dict[str, Any]] | dict[str, str],
-    step_results: dict[str, Any],
-) -> str:
-    parts: list[str] = []
-
-    for citation in citations:
-        if not isinstance(citation, dict):
-            continue
-        parts.extend([
-            _safe_str(citation.get("title")),
-            _safe_str(citation.get("snippet")),
-            _safe_str(citation.get("url")),
-            _safe_str(citation.get("source")),
-            _safe_str(citation.get("published_date")),
-        ])
-
-    # agent_summaries may be list[dict] (from _agent_summaries_from_steps) or dict[str, str]
-    if isinstance(agent_summaries, list):
-        for item in agent_summaries:
-            if isinstance(item, dict):
-                parts.append(_safe_str(item.get("summary", "")))
-            else:
-                parts.append(_safe_str(item))
-    elif isinstance(agent_summaries, dict):
-        for _, summary in agent_summaries.items():
-            parts.append(_safe_str(summary))
-
-    for _, item in (step_results or {}).items():
-        if not isinstance(item, dict):
-            continue
-        output = item.get("output")
-        if isinstance(output, dict):
-            parts.append(_safe_str(output.get("summary")))
-            parts.append(_safe_str(output.get("analysis")))
-            parts.append(_safe_str(output.get("text")))
-            evidence = output.get("evidence")
-            if isinstance(evidence, list):
-                for ev in evidence[:12]:
-                    if isinstance(ev, dict):
-                        parts.extend([
-                            _safe_str(ev.get("title")),
-                            _safe_str(ev.get("snippet")),
-                            _safe_str(ev.get("url")),
-                            _safe_str(ev.get("source")),
-                        ])
-        else:
-            parts.append(_safe_str(output))
-
-    return "\n".join([p for p in parts if p])
 
 
-def _is_claim_grounded(claim: str, normalized_corpus: str) -> bool:
-    normalized_claim = _normalize_for_grounding(claim)
-    if not normalized_claim or not normalized_corpus:
-        return False
-
-    if normalized_claim in normalized_corpus:
-        return True
-
-    number_tokens = re.findall(r"\d+(?:\.\d+)?", claim)
-    if not number_tokens:
-        return False
-    if not all(num in normalized_corpus for num in number_tokens[:2]):
-        return False
-
-    keyword_match = re.search(
-        r"(发布|推出|上线|并购|收购|营收|利润|增速|增长|同比|环比|eps|pe|rsi|毛利率|现金流|10-k|10-q|业绩会|电话会)",
-        claim,
-        flags=re.IGNORECASE,
-    )
-    if keyword_match:
-        keyword = _normalize_for_grounding(keyword_match.group(0))
-        if keyword and keyword not in normalized_corpus:
-            return False
-
-    return True
 
 
-def _compute_grounding_stats(
-    *,
-    generated_text: str,
-    citations: list[dict[str, Any]],
-    agent_summaries: list[dict[str, Any]] | dict[str, str],
-    render_vars: dict[str, Any],
-    step_results: dict[str, Any],
-) -> dict[str, Any]:
-    claims = _extract_grounding_claims(generated_text)
-    if not claims:
-        render_text = "\n".join(
-            _safe_str(render_vars.get(key))
-            for key in (
-                "investment_summary",
-                "valuation",
-                "analysis",
-                "highlights",
-                "company_overview",
-                "catalysts",
-                "risks",
-                "summary",
-            )
-            if _safe_str(render_vars.get(key)).strip()
-        )
-        claims = _extract_grounding_claims(render_text)
-
-    if not claims:
-        return {
-            "grounding_rate": None,
-            "claim_count": 0,
-            "grounded_count": 0,
-            "sample_ungrounded_claims": [],
-        }
-
-    corpus = _build_grounding_corpus(
-        citations=citations,
-        agent_summaries=agent_summaries,
-        step_results=step_results,
-    )
-    normalized_corpus = _normalize_for_grounding(corpus)
-
-    grounded_count = 0
-    ungrounded: list[str] = []
-    for claim in claims:
-        if _is_claim_grounded(claim, normalized_corpus):
-            grounded_count += 1
-        elif len(ungrounded) < 5:
-            ungrounded.append(claim)
-
-    claim_count = len(claims)
-    grounding_rate = grounded_count / claim_count if claim_count > 0 else None
-
-    return {
-        "grounding_rate": grounding_rate,
-        "claim_count": claim_count,
-        "grounded_count": grounded_count,
-        "sample_ungrounded_claims": ungrounded,
-    }
 
 
 def build_report_payload(*, state: dict[str, Any], query: str, thread_id: str) -> dict[str, Any] | None:
