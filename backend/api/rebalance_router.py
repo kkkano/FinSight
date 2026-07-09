@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from backend.api.rebalance_schemas import (
+from backend.services.rebalance.schemas import (
     GenerateRebalanceRequest,
     PatchSuggestionRequest,
     RebalanceSuggestion,

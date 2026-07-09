@@ -20,7 +20,7 @@ import inspect
 
 from pydantic import BaseModel, Field
 
-from backend.api.rebalance_schemas import (
+from backend.services.rebalance.schemas import (
     ActionType,
     EvidenceSnapshot,
     ExpectedImpact,

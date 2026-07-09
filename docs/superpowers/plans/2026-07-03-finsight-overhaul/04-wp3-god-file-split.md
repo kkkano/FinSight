@@ -234,8 +234,8 @@ git commit -am "refactor(api): main.py split into app_factory/lifespan/security_
 - Modify: `backend/api/rebalance_schemas.py`（变 shim）、`backend/services/rebalance_engine.py:23`、`backend/services/rebalance_llm_enhancer.py:19`、`backend/api/rebalance_router.py`（import 改指 services）
 
 **Steps:**
-- [ ] Step 1: 搬家 + shim + 三处 import 反转（api → services 方向恢复正确）。
-- [ ] Step 2: 守护：`grep -rn "from backend.api" backend/services backend/graph backend/agents backend/tools --include="*.py"` 结果必须为空（新增架构测试 `backend/tests/test_layering.py` 固化该断言）：
+- [x] Step 1: 搬家 + shim + 三处 import 反转（api → services 方向恢复正确）。
+- [x] Step 2: 守护：`grep -rn "from backend.api" backend/services backend/graph backend/agents backend/tools --include="*.py"` 结果必须为空（新增架构测试 `backend/tests/test_layering.py` 固化该断言）：
 
 ```python
 # backend/tests/test_layering.py
@@ -250,7 +250,7 @@ def test_lower_layers_never_import_api():
             assert not FORBIDDEN.search(text), f"{path} imports backend.api (layering violation)"
 ```
 
-- [ ] Step 3: Commit
+- [x] Step 3: Commit
 
 ```bash
 git commit -am "refactor(layering): rebalance schemas moved under services; add import-direction guard test"
