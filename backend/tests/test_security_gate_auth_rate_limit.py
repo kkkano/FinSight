@@ -119,6 +119,12 @@ def test_rate_limited_response_carries_cors_headers(monkeypatch):
         "429 response missing CORS headers — browser will mask it as a CORS error"
     )
 
+    # 善后：reload 过的模块持有 1/min 限流器实例，会污染同会话后续 API 测试
+    #（WP3-T6 后实例住 security_gate；此前该测试同样遗留污染，只是恰好无人踩中）。
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    importlib.reload(security_gate_module)
+    importlib.reload(main_module)
+
 
 def test_client_ip_resolution_prefers_cloudflare_header():
     """Cloudflare Tunnel 后面必须用 CF-Connecting-IP，否则全体用户共享限流桶。"""
