@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from backend.api.security_gate import _env_bool, logger
+
 logger = logging.getLogger(__name__)
 
 _schedulers = []
