@@ -157,11 +157,11 @@ def verify_and_redact_claims(draft: str, evidence_ledger: dict, *, config: Verif
 ```
 
 **Steps:**
-- [ ] Step 1: 键清单登记：读 `_stub_render_vars`，把 `vars["xxx"] = …` 的全部键按板块分组写入 `notes-synthesize-map.md`。
-- [ ] Step 2: 建守护测试 `backend/tests/test_render_vars_keys.py`：对 2 个有代表性的 state fixture（从金样 run 中 dump），断言 `set(build_render_vars(state)) == set(_stub_render_vars_legacy(state))` 且逐键 `==`（拆分期间 legacy 副本临时保留为 `_stub_render_vars_legacy` 供对拍，拆完删除）。
-- [ ] Step 3: 逐板块剪切（一板块一 commit）→ verifier 搬家 → `synthesize()` 内改调 `build_render_vars` / `verify_and_redact_claims`。
-- [ ] Step 4: `_generate_narrative_draft`（~360 行）留在 synthesize.py（单一职责尚可）；`synthesize.py` 目标 ≤900 行。
-- [ ] Step 5: 全量 + 金样零 diff + 对拍测试绿；Commit：
+- [x] Step 1: 键清单登记：读 `_stub_render_vars`，把 `vars["xxx"] = …` 的全部键按板块分组写入 `notes-synthesize-map.md`。
+- [x] Step 2: 建守护测试 `backend/tests/test_render_vars_keys.py`：对 2 个有代表性的 state fixture（从金样 run 中 dump），断言 `set(build_render_vars(state)) == set(_stub_render_vars_legacy(state))` 且逐键 `==`（拆分期间 legacy 副本临时保留为 `_stub_render_vars_legacy` 供对拍，拆完删除）。
+- [x] Step 3: 逐板块剪切（一板块一 commit）→ verifier 搬家 → `synthesize()` 内改调 `build_render_vars` / `verify_and_redact_claims`。
+- [x] Step 4: `_generate_narrative_draft`（~360 行）留在 synthesize.py（单一职责尚可）；`synthesize.py` 目标 ≤900 行。
+- [x] Step 5: 全量 + 金样零 diff + 对拍测试绿；Commit：
 
 ```bash
 git commit -am "refactor(synthesize): render vars per-section modules + report verifier extraction (parity-tested)"
