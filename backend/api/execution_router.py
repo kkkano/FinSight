@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, AsyncIterable, Awaitable, Callable, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -143,6 +143,20 @@ def _sse_response(pipeline: AsyncIterable[dict[str, Any]]) -> StreamingResponse:
     )
 
 
+def _enforce_user_quota(http_request: Request) -> str:
+    from backend.services.cost_audit import (
+        UserDailyCostLimitExceeded,
+        check_user_quota,
+    )
+
+    user_id = str(getattr(http_request.state, "user_id", "public") or "public")
+    try:
+        check_user_quota(user_id)
+    except UserDailyCostLimitExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return user_id
+
+
 # ---------------------------------------------------------------------------
 # Router factory
 # ---------------------------------------------------------------------------
@@ -151,7 +165,8 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Execution"])
 
     @router.post("/api/execute")
-    async def execute_endpoint(request: ExecuteRequest):
+    async def execute_endpoint(request: ExecuteRequest, http_request: Request):
+        user_id = _enforce_user_quota(http_request)
         try:
             thread_id = deps.resolve_thread_id(request.session_id)
         except ValueError as exc:
@@ -187,13 +202,18 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             output_mode=request.output_mode,
             confirmation_mode=parse_confirmation_mode(request.confirmation_mode),
             source=request.source or "execute",
+            user_id=user_id,
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
         )
 
         return _sse_response(pipeline)
 
     @router.post("/api/dashboard/deep-dive")
-    async def dashboard_deep_dive_endpoint(request: DashboardDeepDiveRequest):
+    async def dashboard_deep_dive_endpoint(
+        request: DashboardDeepDiveRequest,
+        http_request: Request,
+    ):
+        user_id = _enforce_user_quota(http_request)
         try:
             thread_id = deps.resolve_thread_id(request.session_id)
         except ValueError as exc:
@@ -212,6 +232,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             confirmation_mode=parse_confirmation_mode(bridge.confirmation_mode),
             original_query=bridge.original_query,
             source=bridge.source,
+            user_id=user_id,
             trace_raw_enabled=True if bridge.trace_raw is None else bool(bridge.trace_raw),
         )
 
@@ -222,7 +243,8 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
     # ------------------------------------------------------------------
 
     @router.post("/api/execute/resume")
-    async def resume_endpoint(request: ResumeRequest):
+    async def resume_endpoint(request: ResumeRequest, http_request: Request):
+        user_id = _enforce_user_quota(http_request)
         thread_id = request.thread_id
         if request.session_id:
             try:
@@ -238,6 +260,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             run_id=request.run_id,
             resume_value=request.resume_value,
             source=request.source or "resume",
+            user_id=user_id,
             trace_raw_enabled=True if request.trace_raw is None else bool(request.trace_raw),
         )
 

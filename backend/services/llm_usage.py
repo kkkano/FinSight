@@ -29,7 +29,8 @@ from typing import Any
 class TokenUsageAccumulator:
     """单次 run 的 token 累加器（线程内顺序累加，无需锁）。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, user_id: str = "public") -> None:
+        self.user_id = str(user_id or "public").strip() or "public"
         self.prompt_tokens: int = 0
         self.completion_tokens: int = 0
         self.call_count: int = 0

@@ -284,6 +284,7 @@ async def run_graph_pipeline(
     confirmation_mode: str | None = None,
     original_query: str | None = None,
     source: str | None = None,
+    user_id: str = "public",
     trace_raw_enabled: bool = False,
     markdown_chunk_size: int = 60,
 ) -> AsyncGenerator[dict[str, Any], None]:
@@ -329,7 +330,7 @@ async def run_graph_pipeline(
     cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
-    token_acc = TokenUsageAccumulator()
+    token_acc = TokenUsageAccumulator(user_id=user_id)
     stream_metrics: dict[str, int] = {
         "llm_start": 0,
         "llm_call": 0,
@@ -701,6 +702,7 @@ async def run_graph_pipeline(
                     session_id=thread_id,
                     source=source,
                     summary=token_acc.summary(),
+                    user_id=token_acc.user_id,
                 )
             except Exception as audit_exc:  # noqa: BLE001 — 审计为旁路，吞掉所有异常
                 logger.warning(
@@ -787,6 +789,7 @@ async def resume_graph_pipeline(
     run_id: str | None = None,
     resume_value: Any,
     source: str | None = None,
+    user_id: str = "public",
     trace_raw_enabled: bool = False,
     markdown_chunk_size: int = 60,
 ) -> AsyncGenerator[dict[str, Any], None]:
@@ -805,6 +808,7 @@ async def resume_graph_pipeline(
     cancel_event = asyncio.Event()
     run_id_value = _normalize_run_id(run_id)
     request_started_at = _utc_iso_now()
+    token_acc = TokenUsageAccumulator(user_id=user_id)
 
     def _stamp_ids(payload: dict[str, Any]) -> dict[str, Any]:
         outgoing = deps.redact_sensitive_payload(dict(payload))
@@ -851,6 +855,7 @@ async def resume_graph_pipeline(
     async def _producer() -> None:
         token = set_event_emitter(_emit)
         cancel_token = set_cancel_event(cancel_event)
+        set_token_accumulator(token_acc)
         trace_emitter = get_trace_emitter()
         trace_emitter.add_listener(_enqueue_trace_event)
         try:
@@ -1043,11 +1048,27 @@ async def resume_graph_pipeline(
                     "allow_continue_when_blocked": True,
                     "soft_blocked": soft_blocked,
                     "metrics": {
+                        **token_acc.summary(),
                         "request_started_at": request_started_at,
                         "request_finished_at": _utc_iso_now(),
                     },
                 }
             )
+            try:
+                from backend.services.cost_audit import get_cost_audit_store
+
+                get_cost_audit_store().record(
+                    session_id=thread_id,
+                    source="execute_resume",
+                    summary=token_acc.summary(),
+                    user_id=token_acc.user_id,
+                )
+            except Exception as audit_exc:  # noqa: BLE001 — 审计为旁路
+                logger.warning(
+                    "[resume_pipeline] cost audit record failed thread_id=%s: %s",
+                    thread_id,
+                    audit_exc,
+                )
         except asyncio.CancelledError:
             cancel_event.set()
             await _queue_event(_cancelled_trace_payload())

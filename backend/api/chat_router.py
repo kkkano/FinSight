@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, Awaitable, Callable, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
@@ -104,17 +104,32 @@ def _ensure_llm_available() -> None:
         )
 
 
+def _enforce_user_quota(http_request: Request) -> str:
+    from backend.services.cost_audit import (
+        UserDailyCostLimitExceeded,
+        check_user_quota,
+    )
+
+    user_id = str(getattr(http_request.state, "user_id", "public") or "public")
+    try:
+        check_user_quota(user_id)
+    except UserDailyCostLimitExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return user_id
+
+
 def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
     router = APIRouter(tags=["Chat"])
     _logger = logging.getLogger("chat_router")
 
     @router.post("/chat/supervisor")
-    async def chat_supervisor_endpoint(request: ChatRequest):
+    async def chat_supervisor_endpoint(request: ChatRequest, http_request: Request):
         if not _generation_enabled():
             raise HTTPException(
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        user_id = _enforce_user_quota(http_request)
         _ensure_llm_available()
         _t0 = _time.perf_counter()
         try:
@@ -156,6 +171,14 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             from backend.services.execution_service import _execution_timeout_seconds
 
             timeout_seconds = _execution_timeout_seconds(output_mode, ui_context=ui_context)
+            from backend.services.llm_usage import (
+                TokenUsageAccumulator,
+                reset_token_accumulator,
+                set_token_accumulator,
+            )
+
+            token_acc = TokenUsageAccumulator(user_id=user_id)
+            accumulator_token = set_token_accumulator(token_acc)
             try:
                 state = await asyncio.wait_for(
                     run_graph_traced(
@@ -180,6 +203,23 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
                     status_code=504,
                     detail=f"Execution timed out after {int(timeout_seconds)}s; increase the timeout preference or reduce the request scope.",
                 ) from exc
+            finally:
+                reset_token_accumulator(accumulator_token)
+                try:
+                    from backend.services.cost_audit import get_cost_audit_store
+
+                    get_cost_audit_store().record(
+                        session_id=thread_id,
+                        source="chat",
+                        summary=token_acc.summary(),
+                        user_id=token_acc.user_id,
+                    )
+                except Exception as audit_exc:  # noqa: BLE001 — 审计为旁路
+                    _logger.warning(
+                        "[chat/supervisor] cost audit record failed thread_id=%s: %s",
+                        thread_id,
+                        audit_exc,
+                    )
             markdown, state = _ensure_deliverable_markdown(state)
 
             report = None
@@ -248,12 +288,13 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     @router.post("/chat/supervisor/stream")
-    async def chat_supervisor_stream_endpoint(request: ChatRequest):
+    async def chat_supervisor_stream_endpoint(request: ChatRequest, http_request: Request):
         if not _generation_enabled():
             raise HTTPException(
                 status_code=503,
                 detail="服务临时维护中，报告生成已暂停，请稍后再试",
             )
+        user_id = _enforce_user_quota(http_request)
         _ensure_llm_available()
         import json as _json
 
@@ -313,6 +354,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             confirmation_mode=confirmation_mode,
             original_query=request.query,
             source="chat",
+            user_id=user_id,
             trace_raw_enabled=trace_raw_enabled,
         )
 

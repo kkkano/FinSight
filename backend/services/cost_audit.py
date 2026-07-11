@@ -33,6 +33,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.data.migrations import ensure_column
+from backend.utils.env import env_float
+
 logger = logging.getLogger(__name__)
 
 # 数据目录默认值以本文件位置锚定到「仓库根/data」，避免依赖启动 CWD 造成 split-brain。
@@ -69,6 +72,22 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _normalize_user_id(user_id: str | None) -> str:
+    return str(user_id or "public").strip() or "public"
+
+
+class UserDailyCostLimitExceeded(RuntimeError):
+    """用户当日 LLM 成本已经达到配置上限。"""
+
+    def __init__(self, *, user_id: str, limit_usd: float, used_usd: float) -> None:
+        self.user_id = user_id
+        self.limit_usd = limit_usd
+        self.used_usd = used_usd
+        super().__init__(
+            f"今日 AI 分析额度已用完（{limit_usd:.2f} USD/天），明天再来或联系管理员提额。"
+        )
 
 
 class CostAuditStore:
@@ -127,11 +146,28 @@ class CostAuditStore:
                 ON cost_records(source, created_at DESC);
             """
         )
+        ensure_column(
+            conn,
+            "cost_records",
+            "user_id",
+            "user_id TEXT NOT NULL DEFAULT 'public'",
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_cost_user_created
+               ON cost_records(user_id, created_at DESC)"""
+        )
         conn.commit()
 
     # ── 写入 ──────────────────────────────────────────────────
 
-    def record(self, *, session_id: str, source: str | None, summary: dict[str, Any]) -> None:
+    def record(
+        self,
+        *,
+        session_id: str,
+        source: str | None,
+        summary: dict[str, Any],
+        user_id: str = "public",
+    ) -> None:
         """记录一次请求的成本汇总。
 
         ``summary`` 来自 ``TokenUsageAccumulator.summary()``。空请求（0 token 且 0 调用）
@@ -150,8 +186,8 @@ class CostAuditStore:
         self._db().execute(
             """INSERT INTO cost_records
                (created_at, session_id, source, total_tokens, prompt_tokens,
-                completion_tokens, llm_calls, cost_usd, model_breakdown)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                completion_tokens, llm_calls, cost_usd, model_breakdown, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 _now_iso(),
                 str(session_id or "unknown"),
@@ -162,6 +198,7 @@ class CostAuditStore:
                 llm_calls,
                 round(cost_usd, 6),
                 json.dumps(breakdown, ensure_ascii=False) if breakdown else None,
+                _normalize_user_id(user_id),
             ),
         )
         self._db().commit()
@@ -217,13 +254,27 @@ class CostAuditStore:
 
         return [by_day[day] for day in sorted(by_day.keys())]
 
+    def today_cost_usd(self, user_id: str) -> float:
+        """返回指定用户在当前 UTC 自然日内累计的 LLM 成本。"""
+        now = datetime.now(timezone.utc)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        row = self._db().execute(
+            """SELECT COALESCE(SUM(cost_usd), 0.0)
+               FROM cost_records
+               WHERE user_id = ? AND created_at >= ? AND created_at < ?""",
+            (_normalize_user_id(user_id), start.isoformat(), end.isoformat()),
+        ).fetchone()
+        return round(_safe_float(row[0] if row else 0.0), 6)
+
     def top_requests(self, days: int = 7, limit: int = 20) -> list[dict[str, Any]]:
         """返回最近 ``days`` 天内 token 消耗最高的请求（降序）。"""
         cutoff = self._window_cutoff(days)
         safe_limit = max(1, min(_safe_int(limit) or 20, 200))
         rows = self._db().execute(
             """SELECT id, created_at, session_id, source, total_tokens,
-                      prompt_tokens, completion_tokens, llm_calls, cost_usd, model_breakdown
+                      prompt_tokens, completion_tokens, llm_calls, cost_usd,
+                      model_breakdown, user_id
                FROM cost_records
                WHERE created_at >= ?
                ORDER BY total_tokens DESC, id DESC
@@ -265,6 +316,7 @@ class CostAuditStore:
             "llm_calls": _safe_int(r[7]),
             "cost_usd": round(_safe_float(r[8]), 6),
             "model_breakdown": breakdown,
+            "user_id": r[10],
         }
 
     # ── 维护 ──────────────────────────────────────────────────
@@ -293,4 +345,30 @@ def get_cost_audit_store() -> CostAuditStore:
     return _STORE
 
 
-__all__ = ["CostAuditStore", "get_cost_audit_store"]
+def today_cost_usd(user_id: str) -> float:
+    """返回全局审计库中指定用户当前 UTC 自然日的成本。"""
+    return get_cost_audit_store().today_cost_usd(user_id)
+
+
+def check_user_quota(user_id: str) -> None:
+    """检查用户每日成本上限；0 或负数关闭，admin 永久豁免。"""
+    normalized_user_id = _normalize_user_id(user_id)
+    limit = env_float("USER_DAILY_COST_LIMIT_USD", 1.0)
+    if limit <= 0 or normalized_user_id == "admin":
+        return
+    used = today_cost_usd(normalized_user_id)
+    if used >= limit:
+        raise UserDailyCostLimitExceeded(
+            user_id=normalized_user_id,
+            limit_usd=limit,
+            used_usd=used,
+        )
+
+
+__all__ = [
+    "CostAuditStore",
+    "UserDailyCostLimitExceeded",
+    "check_user_quota",
+    "get_cost_audit_store",
+    "today_cost_usd",
+]
