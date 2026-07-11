@@ -678,6 +678,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/portfolio/attribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calculate Portfolio Attribution
+         * @description 按区间收益率 × 权重计算持仓贡献，并复用现有因子暴露工具。
+         */
+        post: operations["calculate_portfolio_attribution_api_portfolio_attribution_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/portfolio/positions": {
         parameters: {
             query?: never;
@@ -1770,6 +1790,39 @@ export interface components {
             /** Median */
             median?: number | null;
         };
+        /** AttributionPosition */
+        AttributionPosition: {
+            /** Ticker */
+            ticker: string;
+            /** Weight */
+            weight: number;
+        };
+        /** AttributionRequest */
+        AttributionRequest: {
+            /**
+             * Lookback Days
+             * @default 252
+             */
+            lookback_days: number;
+            /** Positions */
+            positions?: components["schemas"]["AttributionPosition"][];
+        };
+        /** AttributionResponse */
+        AttributionResponse: {
+            /** As Of */
+            as_of: string;
+            benchmark: components["schemas"]["BenchmarkResult"];
+            /** Beta */
+            beta: number | null;
+            /** Contribution */
+            contribution: components["schemas"]["ContributionItem"][];
+            /** Factor Exposure */
+            factor_exposure: {
+                [key: string]: unknown;
+            };
+            /** Warnings */
+            warnings: string[];
+        };
         /** BacktestRequest */
         BacktestRequest: {
             /**
@@ -1828,6 +1881,16 @@ export interface components {
              * @description ticker
              */
             ticker: string;
+        };
+        /** BenchmarkResult */
+        BenchmarkResult: {
+            /** Return Pct */
+            return_pct: number | null;
+            /**
+             * Symbol
+             * @default SPY
+             */
+            symbol: string;
         };
         /**
          * Capabilities
@@ -2030,6 +2093,17 @@ export interface components {
              * @description success flag
              */
             success: boolean;
+        };
+        /** ContributionItem */
+        ContributionItem: {
+            /** Contribution Pct */
+            contribution_pct: number | null;
+            /** Return Pct */
+            return_pct: number | null;
+            /** Ticker */
+            ticker: string;
+            /** Weight */
+            weight: number;
         };
         /** CreateTargetRequest */
         CreateTargetRequest: {
@@ -4674,6 +4748,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calculate_portfolio_attribution_api_portfolio_attribution_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionResponse"];
                 };
             };
             /** @description Validation Error */

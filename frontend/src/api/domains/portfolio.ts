@@ -67,6 +67,17 @@ async patchRebalanceSuggestion(suggestionId: string, body: { status: string }): 
     return response.data;
   },
 
+  async calculatePortfolioAttribution(
+    positions: Contracts.AttributionPositionInput[],
+    lookbackDays = 252,
+  ): Promise<Contracts.PortfolioAttributionResponse> {
+    const response = await api.post<Contracts.PortfolioAttributionResponse>(
+      '/api/portfolio/attribution',
+      { positions, lookback_days: lookbackDays },
+    );
+    return response.data;
+  },
+
 async syncPortfolioPositions(
     sessionId: string,
     positions: Array<{ ticker: string; shares: number; avg_cost?: number | null }>,

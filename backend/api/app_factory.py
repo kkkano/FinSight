@@ -33,6 +33,7 @@ from backend.api.execution_router import ExecutionRouterDeps, create_execution_r
 from backend.api.market_router import MarketRouterDeps, create_market_router
 from backend.api.monitor_router import monitor_router
 from backend.api.portfolio_router import portfolio_router
+from backend.api.attribution_router import attribution_router
 from backend.api.rebalance_router import RebalanceRouterDeps, create_rebalance_router
 from backend.api.report_router import ReportRouterDeps, create_report_router
 from backend.api.research_router import ResearchRouterDeps, create_research_router
@@ -434,6 +435,7 @@ def create_app() -> FastAPI:
     app.include_router(execution_router)
     app.include_router(dashboard_router)
     app.include_router(portfolio_router)
+    app.include_router(attribution_router)
     app.include_router(monitor_router)
     app.include_router(rebalance_router)
     app.include_router(morning_brief_router)

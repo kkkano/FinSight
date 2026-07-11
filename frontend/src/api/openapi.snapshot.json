@@ -129,6 +129,99 @@
         "title": "AnalystTargets",
         "type": "object"
       },
+      "AttributionPosition": {
+        "properties": {
+          "ticker": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Ticker",
+            "type": "string"
+          },
+          "weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "weight"
+        ],
+        "title": "AttributionPosition",
+        "type": "object"
+      },
+      "AttributionRequest": {
+        "properties": {
+          "lookback_days": {
+            "default": 252,
+            "maximum": 1260.0,
+            "minimum": 30.0,
+            "title": "Lookback Days",
+            "type": "integer"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/AttributionPosition"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "title": "AttributionRequest",
+        "type": "object"
+      },
+      "AttributionResponse": {
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "benchmark": {
+            "$ref": "#/components/schemas/BenchmarkResult"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "contribution": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionItem"
+            },
+            "title": "Contribution",
+            "type": "array"
+          },
+          "factor_exposure": {
+            "additionalProperties": true,
+            "title": "Factor Exposure",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "beta",
+          "factor_exposure",
+          "contribution",
+          "benchmark",
+          "as_of",
+          "warnings"
+        ],
+        "title": "AttributionResponse",
+        "type": "object"
+      },
       "BacktestRequest": {
         "properties": {
           "end_date": {
@@ -239,6 +332,31 @@
           "ticker"
         ],
         "title": "BacktestRequest",
+        "type": "object"
+      },
+      "BenchmarkResult": {
+        "properties": {
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "symbol": {
+            "default": "SPY",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "return_pct"
+        ],
+        "title": "BenchmarkResult",
         "type": "object"
       },
       "Capabilities": {
@@ -642,6 +760,48 @@
           "config"
         ],
         "title": "ConfigResponse",
+        "type": "object"
+      },
+      "ContributionItem": {
+        "properties": {
+          "contribution_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contribution Pct"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "weight",
+          "return_pct",
+          "contribution_pct"
+        ],
+        "title": "ContributionItem",
         "type": "object"
       },
       "CreateTargetRequest": {
@@ -5382,6 +5542,48 @@
         "summary": "Generate Morning Brief",
         "tags": [
           "MorningBrief"
+        ]
+      }
+    },
+    "/api/portfolio/attribution": {
+      "post": {
+        "description": "按区间收益率 × 权重计算持仓贡献，并复用现有因子暴露工具。",
+        "operationId": "calculate_portfolio_attribution_api_portfolio_attribution_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttributionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calculate Portfolio Attribution",
+        "tags": [
+          "Portfolio"
         ]
       }
     },

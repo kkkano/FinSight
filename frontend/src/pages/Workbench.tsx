@@ -14,6 +14,7 @@ import { ReportSection } from '../components/workbench/ReportSection';
 import { TaskSection } from '../components/workbench/TaskSection';
 import { FindingsFeed } from '../components/workbench/FindingsFeed';
 import { PortfolioEditor } from '../components/workbench/PortfolioEditor';
+import { AttributionPanel } from '../components/workbench/AttributionPanel';
 import { MonitorConfigPanel } from '../components/workbench/MonitorConfigPanel';
 import { MacroCalendarPanel } from '../components/workbench/MacroCalendarPanel';
 import { ReportView } from '../components/report/ReportView';
@@ -216,6 +217,10 @@ export function Workbench({
           </div>
           {/* 持仓收益追踪表（保留） */}
           <PortfolioPerformance
+            data={portfolioSummary.data}
+            loading={portfolioSummary.loading}
+          />
+          <AttributionPanel
             data={portfolioSummary.data}
             loading={portfolioSummary.loading}
           />

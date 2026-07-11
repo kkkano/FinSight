@@ -87,6 +87,33 @@ export interface PortfolioSummaryResponse {
   total_day_change?: number;
 }
 
+export interface AttributionPositionInput {
+  ticker: string;
+  weight: number;
+}
+
+export interface AttributionContribution {
+  ticker: string;
+  weight: number;
+  return_pct: number | null;
+  contribution_pct: number | null;
+}
+
+export interface PortfolioAttributionResponse {
+  beta: number | null;
+  factor_exposure: {
+    factor_beta?: Record<string, number | null>;
+    [key: string]: unknown;
+  };
+  contribution: AttributionContribution[];
+  benchmark: {
+    symbol: string;
+    return_pct: number | null;
+  };
+  as_of: string;
+  warnings: string[];
+}
+
 /**
  * Execute request — POST /api/execute
  */

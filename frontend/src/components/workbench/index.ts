@@ -15,4 +15,5 @@ export { PortfolioPerformance } from './PortfolioPerformance';
 export { FindingsFeed } from './FindingsFeed';
 export { FindingCard } from './FindingCard';
 export { PortfolioEditor } from './PortfolioEditor';
+export { AttributionPanel } from './AttributionPanel';
 export { MonitorConfigPanel } from './MonitorConfigPanel';
