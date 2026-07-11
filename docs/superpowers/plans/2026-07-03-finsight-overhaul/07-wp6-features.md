@@ -191,10 +191,10 @@ body: {"positions": [{"ticker": "AAPL", "weight": 0.4}, …], "lookback_days": 2
 ```
 
 **Tasks:**
-- [ ] T1: 后端 TDD（mock `_download_close_frame` 返回构造 DataFrame：两票已知收益 → 断言 contribution 数学正确、缺数据票进 warnings）。
-- [ ] T2: 前端面板：贡献瀑布图（ECharts bar，复用 `useChartTheme`）+ beta/因子卡片；从 PortfolioEditor 现有持仓一键计算。
-- [ ] 验收：录入两只票 → 归因面板出图，权重改动结果联动。
-- [ ] Commit: `feat(portfolio): attribution endpoint + workbench panel on existing factor/stress tooling`
+- [x] T1: 后端 TDD（mock `_download_close_frame` 返回构造 DataFrame：两票已知收益 → 断言 contribution 数学正确、缺数据票进 warnings）。
+- [x] T2: 前端面板：贡献瀑布图（ECharts bar，复用 `useChartTheme`）+ beta/因子卡片；从 PortfolioEditor 现有持仓一键计算。
+- [x] 验收：录入两只票 → 归因面板出图，权重改动结果联动。
+- [x] Commit: `feat(portfolio): attribution endpoint + workbench panel on existing factor/stress tooling`
 
 ---
 
