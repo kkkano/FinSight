@@ -105,10 +105,10 @@ type PredictionOverlay = {
 
 **Files:** Create `frontend/src/components/common/TickerLink.tsx`；Modify ChatList 的 markdown 渲染（ReactMarkdown components 映射处，`grep -n "ReactMarkdown\|components=" ChatList.tsx`）
 
-- [ ] Step 1: `TickerLink`：`<a>` 样式 `font-mono text-t-accent hover:underline cursor-pointer`，onClick → `navigate('/dashboard/' + ticker)`。
-- [ ] Step 2: markdown 后处理：对 AI 消息文本用已有 `extractTickers`（utils/ticker.ts）识别的 ticker 集合做精确词替换为 TickerLink（只替换本条消息确认过的 ticker，避免误伤普通大写词；在 ReactMarkdown 的 `text` 节点 renderer 里做）。
-- [ ] Step 3: vitest：含 "AAPL" 的消息渲染出可点链接，"CEO" 不变。
-- [ ] Commit: `feat(linkage): tickers in chat replies deep-link to dashboard`
+- [x] Step 1: `TickerLink`：`<a>` 样式 `font-mono text-t-accent hover:underline cursor-pointer`，onClick → `navigate('/dashboard/' + ticker)`。
+- [x] Step 2: markdown 后处理：对 AI 消息文本用已有 `extractTickers`（utils/ticker.ts）识别的 ticker 集合做精确词替换为 TickerLink（只替换本条消息确认过的 ticker，避免误伤普通大写词；在 ReactMarkdown 的 `text` 节点 renderer 里做）。
+- [x] Step 3: vitest：含 "AAPL" 的消息渲染出可点链接，"CEO" 不变。
+- [x] Commit: `feat(linkage): tickers in chat replies deep-link to dashboard`
 
 ### B-2: 看板「问 AI」
 

@@ -32,6 +32,8 @@ import { StageStepper, type StageStepperProps, type StageStatus } from './execut
 import { AgentWorkLog } from './execution/AgentWorkLog';
 import { EmptyState } from './ui/EmptyState';
 import { extractTickers } from '../utils/ticker';
+import { createTickerLinkPlugin, tickerFromDashboardHref } from '../utils/tickerMarkdown';
+import { TickerLink } from './common/TickerLink';
 
 // ── Shared sub-components ──
 
@@ -501,6 +503,10 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
     [content, isStreaming],
   );
   const tickerCandidates = useMemo(() => extractTickers(content), [content]);
+  const tickerLinkPlugin = useMemo(
+    () => createTickerLinkPlugin(tickerCandidates),
+    [tickerCandidates],
+  );
 
   useEffect(() => {
     if (isStreaming) return; // CHART 标记由收尾阶段注入，流式期间无需扫描
@@ -542,11 +548,14 @@ const MessageWithChart: React.FC<{ content: string; isStreaming?: boolean; onRet
   return (
     <div className="prose prose-invert prose-sm max-w-none prose-terminal">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, tickerLinkPlugin]}
         components={{
-          a: ({ href, children }) => (
-            <SourceLink href={href || ''} label={children} />
-          ),
+          a: ({ href, children }) => {
+            const ticker = tickerFromDashboardHref(href);
+            return ticker
+              ? <TickerLink ticker={ticker}>{children}</TickerLink>
+              : <SourceLink href={href || ''} label={children} />;
+          },
           /* 移动端：长报告 markdown 表格加横向滚动容器，避免窄屏溢出撑破布局 */
           table: ({ children }) => (
             <div className="overflow-x-auto scrollbar-hide">
