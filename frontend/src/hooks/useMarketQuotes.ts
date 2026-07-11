@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+
 import { apiClient } from '../api/client';
 import { parseQuotePayload } from '../utils/quote';
 
@@ -25,37 +27,30 @@ export const MARKET_INDICES: MarketQuoteSeed[] = [
 ];
 
 export function useMarketQuotes(seeds: MarketQuoteSeed[] = MARKET_INDICES) {
-  const [quotes, setQuotes] = useState<MarketQuote[]>(
-    seeds.map((m) => ({ label: m.label, flag: m.flag, loading: true })),
-  );
-
-  const refresh = useCallback(async () => {
-    const results = await Promise.all(
-      seeds.map(async (item) => {
+  const query = useQuery({
+    queryKey: ['market-quotes', seeds],
+    queryFn: () => Promise.all(
+      seeds.map(async (item): Promise<MarketQuote> => {
         try {
           const response = await apiClient.fetchStockPrice(item.ticker);
           const quote = parseQuotePayload(response?.data ?? response);
-
-          return {
-            label: item.label,
-            flag: item.flag,
-            price: quote.price,
-            changePct: quote.changePct,
-            loading: false,
-          } as MarketQuote;
+          return { label: item.label, flag: item.flag, price: quote.price, changePct: quote.changePct, loading: false };
         } catch {
-          return { label: item.label, flag: item.flag, loading: false } as MarketQuote;
+          return { label: item.label, flag: item.flag, loading: false };
         }
       }),
-    );
-    setQuotes(results);
-  }, [seeds]);
+    ),
+    staleTime: 5_000,
+    refetchInterval: 60_000,
+  });
+  const { data, refetch: refetchQuery } = query;
 
-  useEffect(() => {
-    refresh();
-    const timer = setInterval(refresh, 60_000);
-    return () => clearInterval(timer);
-  }, [refresh]);
+  const refresh = useCallback(async () => {
+    await refetchQuery();
+  }, [refetchQuery]);
+
+  const quotes: MarketQuote[] = data
+    ?? seeds.map((item): MarketQuote => ({ label: item.label, flag: item.flag, loading: true }));
 
   return { quotes, refresh };
 }

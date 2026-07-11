@@ -2,9 +2,9 @@
  * useFindings.ts —— 发现流数据 hook
  *
  * 负责：拉取 findings、60 秒轮询、手动扫描、标记已读。
- * 轮询在组件卸载时清理；扫描期间禁用并发。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import type { Finding, FindingStatus } from '../types/monitor';
@@ -38,84 +38,77 @@ export function sortFindings(findings: Finding[]): Finding[] {
 }
 
 export function useFindings(sessionId: string | null | undefined): UseFindingsResult {
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-
-  // 防止轮询与手动刷新并发
-  const inflightRef = useRef(false);
+  const queryClient = useQueryClient();
+  const sid = String(sessionId || '').trim();
+  const queryKey = ['findings', sid] as const;
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => sortFindings((await apiClient.getFindings(sid)).findings ?? []),
+    enabled: Boolean(sid),
+    refetchInterval: FINDINGS_POLL_INTERVAL_MS,
+  });
+  const {
+    data,
+    error: queryErrorValue,
+    isFetching,
+    refetch: refetchQuery,
+  } = query;
 
   const refresh = useCallback(async () => {
-    if (!sessionId || inflightRef.current) return;
+    if (!sid) return;
+    await refetchQuery();
+  }, [refetchQuery, sid]);
 
-    inflightRef.current = true;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await apiClient.getFindings(sessionId);
-      setFindings(sortFindings(response.findings ?? []));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '加载发现流失败，请稍后重试';
-      setError(message);
-    } finally {
-      setLoading(false);
-      inflightRef.current = false;
-    }
-  }, [sessionId]);
-
+  const scanMutation = useMutation({
+    mutationFn: () => apiClient.triggerMonitorScan(sid),
+    onSuccess: (response) => queryClient.setQueryData(queryKey, sortFindings(response.findings ?? [])),
+  });
+  const {
+    error: scanErrorValue,
+    isPending: isScanning,
+    mutateAsync: scanAsync,
+  } = scanMutation;
   const scan = useCallback(async () => {
-    if (!sessionId || scanning) return;
-
-    setScanning(true);
-    setError(null);
+    if (!sid || isScanning) return;
     try {
-      const response = await apiClient.triggerMonitorScan(sessionId);
-      setFindings(sortFindings(response.findings ?? []));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '扫描失败，请稍后重试';
-      setError(message);
-    } finally {
-      setScanning(false);
+      await scanAsync();
+    } catch {
+      // mutation.error 统一暴露给 UI。
     }
-  }, [sessionId, scanning]);
+  }, [isScanning, scanAsync, sid]);
 
-  const markViewed = useCallback(
-    async (finding: Finding) => {
-      if (!sessionId || finding.status !== 'new') return;
-
-      // 乐观更新：先改本地状态，失败时回滚
-      setFindings((prev) =>
-        sortFindings(
-          prev.map((item) => (item.id === finding.id ? { ...item, status: 'viewed' as const } : item)),
-        ),
-      );
-      try {
-        await apiClient.patchFindingStatus(sessionId, finding.id, 'viewed');
-      } catch {
-        // 回滚为新状态
-        setFindings((prev) =>
-          sortFindings(
-            prev.map((item) => (item.id === finding.id ? { ...item, status: 'new' as const } : item)),
-          ),
-        );
-      }
+  const markMutation = useMutation({
+    mutationFn: (finding: Finding) => apiClient.patchFindingStatus(sid, finding.id, 'viewed'),
+    onMutate: async (finding) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<Finding[]>(queryKey) ?? [];
+      queryClient.setQueryData(queryKey, sortFindings(
+        previous.map((item) => (item.id === finding.id ? { ...item, status: 'viewed' as const } : item)),
+      ));
+      return previous;
     },
-    [sessionId],
-  );
-
-  // 初次加载 + 60 秒轮询
-  useEffect(() => {
-    if (!sessionId) {
-      setFindings([]);
-      return;
+    onError: (_error, _finding, previous) => queryClient.setQueryData(queryKey, previous ?? []),
+  });
+  const { mutateAsync: markViewedAsync } = markMutation;
+  const markViewed = useCallback(async (finding: Finding) => {
+    if (!sid || finding.status !== 'new') return;
+    try {
+      await markViewedAsync(finding);
+    } catch {
+      // 乐观更新已由 onError 回滚。
     }
-    void refresh();
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, FINDINGS_POLL_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [sessionId, refresh]);
+  }, [markViewedAsync, sid]);
 
-  return { findings, loading, error, scanning, refresh, scan, markViewed };
+  const queryError = queryErrorValue instanceof Error ? queryErrorValue.message : null;
+  const scanError = scanErrorValue instanceof Error ? scanErrorValue.message : null;
+
+  return {
+    findings: data ?? [],
+    loading: isFetching,
+    error: scanError || queryError,
+    scanning: isScanning,
+    refresh,
+    scan,
+    markViewed,
+  };
 }

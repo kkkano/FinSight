@@ -1,87 +1,69 @@
 /**
  * Dashboard 数据加载 Hook
  *
- * 封装 Dashboard API 调用、abort 控制、loading/error 状态管理。
- * 当 symbol 变化时自动重新请求，快速切换时 abort 前一个请求。
+ * 通过 React Query 统一请求去重、取消与缓存，并同步既有 dashboard store 合同。
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { buildApiUrl } from '../config/runtime';
 import { useDashboardStore } from '../store/dashboardStore';
 import type { DashboardResponse } from '../types/dashboard';
-import { buildApiUrl } from '../config/runtime';
+
+const dashboardQueryKey = (symbol: string) => ['dashboard', symbol] as const;
+
+const fetchDashboard = async (symbol: string, signal?: AbortSignal): Promise<DashboardResponse> => {
+  const response = await fetch(buildApiUrl(`/api/dashboard?symbol=${encodeURIComponent(symbol)}`), { signal });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new Error(errorPayload?.detail?.message || errorPayload?.message || `HTTP ${response.status}`);
+  }
+  return response.json() as Promise<DashboardResponse>;
+};
 
 export function useDashboardData(symbol: string | null) {
-  const {
-    setActiveAsset,
-    setCapabilities,
-    setDashboardData,
-    setLoading,
-    setError,
-  } = useDashboardStore();
+  const queryClient = useQueryClient();
+  const setActiveAsset = useDashboardStore((state) => state.setActiveAsset);
+  const setCapabilities = useDashboardStore((state) => state.setCapabilities);
+  const setDashboardData = useDashboardStore((state) => state.setDashboardData);
+  const setLoading = useDashboardStore((state) => state.setLoading);
+  const setError = useDashboardStore((state) => state.setError);
+  const query = useQuery({
+    queryKey: dashboardQueryKey(symbol || ''),
+    queryFn: ({ signal }) => fetchDashboard(symbol!, signal),
+    enabled: Boolean(symbol),
+  });
+  const { data, error, isFetching } = query;
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchDashboard = useCallback(
-    async (sym: string) => {
-      // Abort 上一次请求
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(buildApiUrl(`/api/dashboard?symbol=${encodeURIComponent(sym)}`), {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const err = await response
-            .json()
-            .catch(() => ({ message: 'Unknown error' }));
-          throw new Error(
-            err?.detail?.message || err?.message || `HTTP ${response.status}`
-          );
-        }
-
-        const json: DashboardResponse = await response.json();
-
-        // 只有请求未被 abort 时才更新状态
-        if (!controller.signal.aborted) {
-          setActiveAsset(json.state.active_asset);
-          setCapabilities(json.state.capabilities);
-          setDashboardData(json.data);
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name !== 'AbortError') {
-          setError(err.message || 'Failed to load dashboard');
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    },
-    [
-      setActiveAsset,
-      setCapabilities,
-      setDashboardData,
-      setLoading,
-      setError,
-    ]
-  );
-
-  // symbol 变化时自动请求
   useEffect(() => {
-    if (symbol) {
-      fetchDashboard(symbol);
-    }
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [symbol, fetchDashboard]);
+    setLoading(isFetching);
+    setError(error instanceof Error ? error.message : null);
+    if (!data) return;
+    setActiveAsset(data.state.active_asset);
+    setCapabilities(data.state.capabilities);
+    setDashboardData(data.data);
+  }, [data, error, isFetching, setActiveAsset, setCapabilities, setDashboardData, setError, setLoading]);
 
-  return { refetch: fetchDashboard };
+  const refetch = useCallback(async (nextSymbol: string) => {
+    const normalized = nextSymbol.trim();
+    if (!normalized) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await queryClient.fetchQuery({
+        queryKey: dashboardQueryKey(normalized),
+        queryFn: ({ signal }) => fetchDashboard(normalized, signal),
+        staleTime: 0,
+      });
+      setActiveAsset(data.state.active_asset);
+      setCapabilities(data.state.capabilities);
+      setDashboardData(data.data);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [queryClient, setActiveAsset, setCapabilities, setDashboardData, setError, setLoading]);
+
+  return { refetch };
 }

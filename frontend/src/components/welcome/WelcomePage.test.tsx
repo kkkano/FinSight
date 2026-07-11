@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,14 +18,18 @@ vi.mock('../../auth/devAuth', () => ({
   verifyRagInspectorDevAccessPassword: () => false,
 }));
 
-const renderWelcomeText = (path: string) =>
-  renderToStaticMarkup(
-    <MemoryRouter initialEntries={[path]}>
-      <ToastProvider>
-        <WelcomePage />
-      </ToastProvider>
-    </MemoryRouter>,
+const renderWelcomeText = (path: string) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <ToastProvider>
+          <WelcomePage />
+        </ToastProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   ).replace(/\s+/g, ' ');
+};
 
 describe('WelcomePage', () => {
   it('keeps anonymous entry ahead of email login for normal workspace entry', () => {

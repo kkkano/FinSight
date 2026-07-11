@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient, type MorningBriefData } from '../api/client';
 
@@ -91,71 +92,60 @@ const savePersistedBrief = (sessionId: string, brief: MorningBriefData, generate
  * 30 分钟内重复调用会返回缓存结果（由后端 TTL 控制）。
  */
 export function useMorningBrief(sessionId: string | null | undefined): UseMorningBriefResult {
-  const [brief, setBrief] = useState<MorningBriefData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const sid = String(sessionId || '').trim();
+  const queryKey = ['morning-brief', sid] as const;
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey,
+    queryFn: () => loadPersistedBrief(sid),
+    enabled: Boolean(sid),
+  });
+  const mutation = useMutation({
+    mutationFn: async (tickers?: string[]) => {
+      const response = await apiClient.generateMorningBrief({ session_id: sid, tickers: tickers ?? [] });
+      if (!response.success || !response.brief) throw new Error('晨报生成失败，请稍后重试');
+      const generatedAt = response.brief.generated_at ?? new Date().toISOString();
+      return { brief: response.brief, generatedAt } satisfies PersistedMorningBrief;
+    },
+    onSuccess: (next) => {
+      savePersistedBrief(sid, next.brief, next.generatedAt);
+      queryClient.setQueryData(queryKey, next);
+    },
+  });
+  const {
+    error: mutationErrorValue,
+    isPending,
+    mutateAsync,
+    reset,
+  } = mutation;
 
-  // 防止并发请求
-  const inflightRef = useRef(false);
-
-  // session 切换时恢复缓存晨报
   useEffect(() => {
-    const sid = String(sessionId || '').trim();
-    if (!sid) {
-      setBrief(null);
-      setGeneratedAt(null);
-      setError(null);
-      return;
-    }
-    const cached = loadPersistedBrief(sid);
-    if (!cached) {
-      setBrief(null);
-      setGeneratedAt(null);
-      setError(null);
-      return;
-    }
-    setBrief(cached.brief);
-    setGeneratedAt(cached.generatedAt || cached.brief.generated_at || null);
-    setError(null);
-  }, [sessionId]);
+    setValidationError(null);
+    reset();
+  }, [reset, sid]);
 
   const generate = useCallback(async (tickers?: string[]) => {
-    if (!sessionId) {
-      setError('会话未初始化，请刷新页面后重试');
+    if (!sid) {
+      setValidationError('会话未初始化，请刷新页面后重试');
       return;
     }
-
-    if (inflightRef.current) {
-      return;
-    }
-
-    inflightRef.current = true;
-    setLoading(true);
-    setError(null);
-
     try {
-      const response = await apiClient.generateMorningBrief({
-        session_id: sessionId,
-        tickers: tickers ?? [],
-      });
-
-      if (response.success && response.brief) {
-        const nextGeneratedAt = response.brief.generated_at ?? new Date().toISOString();
-        setBrief(response.brief);
-        setGeneratedAt(nextGeneratedAt);
-        savePersistedBrief(sessionId, response.brief, nextGeneratedAt);
-      } else {
-        setError('晨报生成失败，请稍后重试');
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '网络异常，请检查连接后重试';
-      setError(message);
-    } finally {
-      setLoading(false);
-      inflightRef.current = false;
+      setValidationError(null);
+      await mutateAsync(tickers);
+    } catch {
+      // mutation.error 作为唯一请求错误源返回给调用方。
     }
-  }, [sessionId]);
+  }, [mutateAsync, sid]);
 
-  return { brief, loading, error, generate, generatedAt };
+  const persisted = query.data ?? null;
+  const mutationError = mutationErrorValue instanceof Error ? mutationErrorValue.message : null;
+
+  return {
+    brief: persisted?.brief ?? null,
+    loading: isPending,
+    error: validationError || mutationError,
+    generate,
+    generatedAt: persisted?.generatedAt || persisted?.brief.generated_at || null,
+  };
 }
