@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
 from backend.config.settings import security_settings
+from backend.security.supabase_auth import resolve_request_user
 
 logger = logging.getLogger(__name__)
 
@@ -333,9 +334,20 @@ async def security_gate(request: Request, call_next):
             else:
                 return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
 
+    user = resolve_request_user(request)
+    if user is None and _env_bool("SUPABASE_AUTH_REQUIRED", False):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "登录后才能使用，请先登录。"},
+        )
+    request.state.user_id = user.user_id if user else "public"
+    request.state.user_email = user.email if user else ""
+
     # 解析客户端标识（限流 + 并发限制共用）——必须用真实 IP（Cloudflare/代理感知）
     request_identity = getattr(request.state, "rag_authenticated_user", None)
-    if isinstance(request_identity, dict) and request_identity.get("user_id"):
+    if request.state.user_id != "public":
+        client_id = f"user:{request.state.user_id}"
+    elif isinstance(request_identity, dict) and request_identity.get("user_id"):
         client_id = f"user:{request_identity['user_id']}"
     else:
         client_id = api_key or _resolve_client_ip(request)
