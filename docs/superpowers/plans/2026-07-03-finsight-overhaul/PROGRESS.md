@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | WP6-F0 Phase Labs 收编与一级导航 | 4e61f29 | 原面板清单为 ScreenerResultPanel、CNMarketPanel、BacktestPanel；选股与回测复用原组件提升为 `/screener`、`/backtest` 一级页面，A 股沿用既有 `/cn-market`，旧 `/phase-labs` 兼容跳转到选股。Sidebar 使用 Filter/FlaskConical 新增两入口，既有订阅管理补稳定测试标识。页面单测 2 passed，完整前端 42 files/237 tests passed，定向 ESLint 0 问题，生产 build 成功；真实 Vite + Chromium 验证三入口、跳转与页面渲染，控制台 0 error，QA 进程已清理。 |
 | 2026-07-12 | WP5 完成门禁 | 72e8222 | 完整后端 `1979 passed/8 skipped`；认证、JWT、多用户隔离与配额聚焦矩阵 `31 passed`。覆盖 auth optional 匿名 `public` 兼容、auth required 业务 401/health 200、双用户三类 store 隔离、成本按用户与 UTC 日界隔离、聊天/执行超限 429、关闭配额与 admin 豁免。双浏览器真实 security_gate/API 隔离证据沿用 WP5-Task3；全程使用本地不可达测试 LLM endpoint。 |
 | 2026-07-12 | WP5-Task5 多用户部署说明与数据层校准 | 47915f6 | Runbook 新增个人自用、公开演示、多用户三种环境变量组合，明确匿名 `public` 数据共享告示、UTC 配额恢复、429 行为、双账号终验与 secret 管理；中英文 README 同步校准为 PostgreSQL/SQLite 可选 LangGraph checkpoint 与 pgvector、SQLite/JSON 承载业务数据。Markdown diff 校验通过，旧“PostgreSQL 承载报告/持仓”声明扫描 0 命中。 |
 | 2026-07-12 | WP5-Task4 每用户每日 LLM 成本配额 | 72e8222 | `cost_records` 幂等新增 `user_id` 与 `(user_id, created_at)` 索引，历史记录归 `public`；按 UTC 自然日汇总成本，`USER_DAILY_COST_LIMIT_USD<=0` 可关闭、`admin` 豁免。同步/流式聊天、execute、dashboard deep-dive、resume 均在生成前检查，run 级 token 累加器携带用户并写入审计库。新增迁移、用户隔离、日界、429/放行、关闭配额、admin 与埋点归属共 9 项离线测试；定向回归 56 passed，完整后端 `1979 passed/8 skipped`，未调用真实 LLM。 |

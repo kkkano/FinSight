@@ -25,11 +25,11 @@
 - Create: `frontend/src/pages/ScreenerPage.tsx`、`frontend/src/pages/BacktestPage.tsx`（从 Phase24PanelsPage 中把对应面板组件提升为页面）
 
 **Tasks:**
-- [ ] T1: 读 `Phase24PanelsPage.tsx`，列出其中的面板组件清单；把 screener 面板、backtest 面板分别包成独立 Page（复用组件本体，不重写）。
-- [ ] T2: 路由改造：`/screener`、`/backtest` 两条一级路由（EntryGuard 包裹，与 /chat 同级）；`/phase-labs` 保留 302 跳转到 `/screener`（外链兼容一个版本）。Sidebar 增两个入口（图标沿用项目 lucide 图标库习惯：`Filter`、`FlaskConical`）。
-- [ ] T3: 提醒/订阅入口：Sidebar 或设置里给"邮件订阅管理"一个可发现入口（现状订阅入口过深；复用现有订阅组件，只加导航）。
-- [ ] 验收：三个新入口可达且功能同旧；`/phase-labs` 跳转正常；`pnpm build` 绿。
-- [ ] Commit: `feat(nav): promote screener/backtest to first-class pages, retire Phase Labs naming`
+- [x] T1: 读 `Phase24PanelsPage.tsx`，列出其中的面板组件清单；把 screener 面板、backtest 面板分别包成独立 Page（复用组件本体，不重写）。
+- [x] T2: 路由改造：`/screener`、`/backtest` 两条一级路由（EntryGuard 包裹，与 /chat 同级）；`/phase-labs` 保留 302 跳转到 `/screener`（外链兼容一个版本）。Sidebar 增两个入口（图标沿用项目 lucide 图标库习惯：`Filter`、`FlaskConical`）。
+- [x] T3: 提醒/订阅入口：Sidebar 或设置里给"邮件订阅管理"一个可发现入口（现状订阅入口过深；复用现有订阅组件，只加导航）。
+- [x] 验收：三个新入口可达且功能同旧；`/phase-labs` 跳转正常；`pnpm build` 绿。
+- [x] Commit: `feat(nav): promote screener/backtest to first-class pages, retire Phase Labs naming`
 
 ---
 
