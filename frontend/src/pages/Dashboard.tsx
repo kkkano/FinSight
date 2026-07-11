@@ -7,7 +7,7 @@
  *                      | DashboardTabs -> [Tab panels]
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Sun, Moon } from 'lucide-react';
+import { MessageCircleQuestion, RefreshCw, Sun, Moon } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDashboardInsights } from '../hooks/useDashboardInsights';
@@ -23,6 +23,7 @@ import { useToast } from '../components/ui';
 import { useMarketQuotes } from '../hooks/useMarketQuotes';
 import { SmartChartRenderer, type SmartChartBlock } from '../components/SmartChart';
 import { getPredictionIdFromSearch } from '../components/chatChartIntent';
+import { buildDashboardAskAiDraft } from '../utils/dashboardAskAi';
 
 interface DashboardProps {
   initialSymbol?: string;
@@ -39,7 +40,7 @@ const formatClock = (): string =>
 
 export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWorkbench }: DashboardProps) {
   const { activeAsset, dashboardData, isLoading, error, setActiveAsset, watchlist } = useDashboardStore();
-  const { theme, setTheme, entryMode, authIdentity } = useStore();
+  const { theme, setTheme, entryMode, authIdentity, setDraft, setShowRightPanel } = useStore();
   const { quotes: marketQuotes } = useMarketQuotes();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -104,6 +105,20 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
   const handleRefresh = () => {
     refetch(currentSymbol);
     refetchInsights(currentSymbol, { force: true });
+  };
+
+  const handleAskAi = () => {
+    const symbol = (activeAsset?.symbol || currentSymbol).trim().toUpperCase();
+    if (!symbol) return;
+    if (!activeAsset || activeAsset.symbol !== symbol) {
+      setActiveAsset({
+        symbol,
+        display_name: activeAsset?.display_name || symbol,
+        type: activeAsset?.type || 'equity',
+      });
+    }
+    setDraft(buildDashboardAskAiDraft(symbol, searchParams.get('tab')));
+    setShowRightPanel(true);
   };
 
   const snapshot = dashboardData?.snapshot ?? {};
@@ -245,6 +260,22 @@ export function Dashboard({ initialSymbol, onBackToChat, onSymbolChange, onGoWor
 
             <div className="flex items-center gap-2 shrink-0">
               <DataSourceTrace meta={dashboardData?.meta} />
+
+              <button
+                type="button"
+                data-testid="dashboard-ask-ai"
+                onClick={handleAskAi}
+                className={[
+                  'min-h-9 px-3 rounded-lg border transition-colors text-xs inline-flex items-center gap-1.5',
+                  isTerminalStyle
+                    ? 'border-[#2b3a52] bg-transparent text-slate-300 hover:border-[#ff8c00] hover:text-[#ff8c00]'
+                    : 'border-fin-border bg-transparent text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary',
+                ].join(' ')}
+                title="带当前标的和标签页上下文提问"
+              >
+                <MessageCircleQuestion size={14} />
+                问 AI
+              </button>
 
               <button
                 type="button"

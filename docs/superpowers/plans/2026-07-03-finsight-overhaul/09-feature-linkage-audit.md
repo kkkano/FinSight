@@ -114,9 +114,9 @@ type PredictionOverlay = {
 
 **Files:** Modify `frontend/src/pages/Dashboard.tsx`（顶栏），复用 `MiniChat.tsx`
 
-- [ ] Step 1: Dashboard 顶栏加 ghost 按钮「问 AI」→ 打开右侧 MiniChat（或滑出面板），预填上下文：`ui_context.active_symbol = 当前symbol`、输入框预置 `关于 {symbol} 的{当前tab中文名}，` 让用户接着问。
-- [ ] Step 2: 确认 MiniChat 发送时把 `active_symbol` 写进请求 ui_context（`grep -n "active_symbol" frontend/src/components/MiniChat.tsx frontend/src/api/client.ts`；后端 understand_request 的 active_symbol 兜底机制立即生效——这是把现有后端能力接上前端的零成本联动）。
-- [ ] Commit: `feat(linkage): ask-AI from dashboard with active symbol context`
+- [x] Step 1: Dashboard 顶栏加 ghost 按钮「问 AI」→ 打开右侧 MiniChat（或滑出面板），预填上下文：`ui_context.active_symbol = 当前symbol`、输入框预置 `关于 {symbol} 的{当前tab中文名}，` 让用户接着问。
+- [x] Step 2: 确认 MiniChat 发送时把 `active_symbol` 写进请求 ui_context（`grep -n "active_symbol" frontend/src/components/MiniChat.tsx frontend/src/api/client.ts`；后端 understand_request 的 active_symbol 兜底机制立即生效——这是把现有后端能力接上前端的零成本联动）。
+- [x] Commit: `feat(linkage): ask-AI from dashboard with active symbol context`
 
 ### B-3: 报告 ↔ 工作台互链
 

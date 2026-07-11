@@ -20,6 +20,7 @@ import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
 import { SkillAutocomplete } from './SkillAutocomplete';
 import { useAgentMention, parseAgentMentions } from '../hooks/useAgentMention';
 import { AgentMention } from './AgentMention';
+import { buildMiniChatContext } from '../utils/miniChatContext';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -240,19 +241,12 @@ export const MiniChat: React.FC = () => {
 
       // 构建临时上下文（仅在 context pill 启用时传递）
       // 包括 active_symbol 和 selection（如果有选中的新闻/报告）
-      const context: ChatContext = {};
-
-      if (showContextPill && currentSymbol) {
-        context.active_symbol = currentSymbol;
-        context.view = 'dashboard';
-      }
-
-      if (activeSelections.length === 1) context.selection = activeSelections[0];
-      if (activeSelections.length > 1) context.selections = activeSelections;
-      if (subscriptionEmail) context.user_email = subscriptionEmail;
-
-      // 如果有任何上下文，才传递
-      const contextToSend = Object.keys(context).length > 0 ? context : undefined;
+      const contextToSend: ChatContext | undefined = buildMiniChatContext({
+        contextEnabled: showContextPill,
+        currentSymbol,
+        activeSelections,
+        subscriptionEmail,
+      });
       const streamOptions = effectiveOutputMode === 'investment_report'
         ? {
             output_mode: 'investment_report' as const,
