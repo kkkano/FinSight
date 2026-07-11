@@ -138,7 +138,7 @@ git commit -am "fix(llm-config): remove hardcoded third-party default endpoint; 
 - Modify: `frontend/package.json`（scripts + devDependency `openapi-typescript`）
 - Create: `frontend/src/api/schema.d.ts`（生成物，入库）
 
-- [ ] **Step 1: 后端导出快照**
+- [x] **Step 1: 后端导出快照**
 
 ```python
 # backend/tests/test_openapi_snapshot.py
@@ -160,15 +160,15 @@ def test_openapi_snapshot_is_current():
     )
 ```
 
-- [ ] **Step 2: 前端 codegen**：`pnpm add -D openapi-typescript`（**先获主人批准**）；`package.json` scripts 加：
+- [x] **Step 2: 前端 codegen**：`pnpm add -D openapi-typescript`（**先获主人批准**）；`package.json` scripts 加：
 
 ```json
 "gen:api": "openapi-typescript src/api/openapi.snapshot.json -o src/api/schema.d.ts"
 ```
 
 跑一次生成 `schema.d.ts` 入库。
-- [ ] **Step 3: CI 守护**：`.github/workflows` 现有 CI 里（`grep -rn "pytest" .github/workflows`）确认该测试被全量套覆盖；前端 job 加一步 `pnpm gen:api && git diff --exit-code src/api/schema.d.ts`。
-- [ ] **Step 4: Commit**
+- [x] **Step 3: CI 守护**：`.github/workflows` 现有 CI 里（`grep -rn "pytest" .github/workflows`）确认该测试被全量套覆盖；前端 job 加一步 `pnpm gen:api && git diff --exit-code src/api/schema.d.ts`。
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "feat(contract): openapi snapshot bridge + generated TS schema with CI drift guard"

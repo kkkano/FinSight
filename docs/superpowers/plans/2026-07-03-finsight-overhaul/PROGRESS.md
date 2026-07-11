@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task4 OpenAPI 快照桥 | 637a084 | 后端 OpenAPI 快照测试重复运行均 1 passed；`openapi-typescript` 7.13.0 生成 `schema.d.ts`，CI 同款重新生成后零 diff；前端 38 files/225 tests passed，生产 build 成功；快照测试 F821 通过。CI 后端全量已覆盖快照测试，frontend build job 新增生成类型漂移守护；npm/pnpm 双锁文件同步。 |
 | 2026-07-11 | WP4-Task3 llm_config 去硬编码端点 | d2e0040 | LLM/config/startup/lifespan 定向 50 passed；金样 12 passed；后端全量 + 金样 1940 passed/19 failed/8 skipped，19 项与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；运行时旧第三方端点与默认模型扫描零命中，相关 F821 与 compileall 通过；当前主机无 Docker CLI，Compose 解析留待本地 Docker 门禁。 |
 | 2026-07-11 | WP4-Task2 planner/executor/agent/security typed Settings | 94e48ee | 四域合同 + 受影响回归 67 passed；WP3/金样 16 passed、快照零差异；全后端 + 金样 1928 passed/29 failed/8 skipped 后，19 项与固化基线一致，10 项新增均定位为 Settings cache/reload 迁移问题并修复，修复集 19 passed、限流跨测试顺序集 14 passed；全仓 ruff F821 通过。 |
 | 2026-07-11 | WP4-Task1 统一 env helper | 756ec5f | helper 单测 16 passed；Task 1 定向 + 金样 247 passed；后端全量 1934 passed/19 failed/8 skipped，19 个失败与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；生产代码普通 `_env_*` 重复定义清零，5 个特殊语义变体明确命名并保留。 |
