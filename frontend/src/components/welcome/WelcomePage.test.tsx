@@ -32,6 +32,15 @@ const renderWelcomeText = (path: string) => {
 };
 
 describe('WelcomePage', () => {
+  it('uses the shared TERMINAL skin and atom styles', () => {
+    const markup = renderWelcomeText('/welcome?from=/chat');
+
+    expect(markup).not.toContain('--bb-');
+    expect(markup).not.toContain('linear-gradient(135deg');
+    expect(markup).toContain('bg-t-bg');
+    expect(markup).toContain('bg-t-accent');
+  });
+
   it('keeps anonymous entry ahead of email login for normal workspace entry', () => {
     const text = renderWelcomeText('/welcome?from=/chat');
 

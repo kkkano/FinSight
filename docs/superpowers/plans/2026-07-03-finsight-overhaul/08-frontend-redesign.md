@@ -402,9 +402,9 @@ export const terminalChartTheme = {
 
 **原则:** 欢迎页气质是对的（终端感），问题是它私有一套 `--bb-*`。**保留布局与 aurora 氛围，变量并轨：**
 
-- [ ] Step 1: `grep -n "\-\-bb-" WelcomePage.tsx` 列全 bb 变量 → 映射改写：`--bb-bg→--t-bg`、`--bb-surface→--t-surface`、`--bb-border→--t-border`、`--bb-text→--t-text`、`--bb-text-mute→--t-text-3`、`--bb-orange→rgb(var(--t-accent))`；aurora 渐变保留但把蓝紫色值换为 `rgb(var(--t-accent) / 0.15)` 与 `var(--t-info)`（10% 透明）双色。
-- [ ] Step 2: CTA 按钮/输入框换 Task 2 规格；删除 `paletteVars` 私有调色板对象。
-- [ ] Step 3: 验收：欢迎页 → 进应用无"换产品"感（录屏对比）。Commit: `refactor(welcome): merge bb-palette into TERMINAL tokens — one product, one skin`
+- [x] Step 1: `grep -n "\-\-bb-" WelcomePage.tsx` 列全 bb 变量 → 映射改写：`--bb-bg→--t-bg`、`--bb-surface→--t-surface`、`--bb-border→--t-border`、`--bb-text→--t-text`、`--bb-text-mute→--t-text-3`、`--bb-orange→rgb(var(--t-accent))`；aurora 渐变保留但把蓝紫色值换为 `rgb(var(--t-accent) / 0.15)` 与 `var(--t-info)`（10% 透明）双色。
+- [x] Step 2: CTA 按钮/输入框换 Task 2 规格；删除 `paletteVars` 私有调色板对象。
+- [x] Step 3: 验收：欢迎页 → 进应用无"换产品"感（录屏对比）。Commit: `refactor(welcome): merge bb-palette into TERMINAL tokens — one product, one skin`
 
 ---
 

@@ -45,11 +45,11 @@ const CAPABILITIES = [
   '邮件预警',
 ];
 
-// Aurora 配色语义：数据卡彩色顶边 + 数字色
+// TERMINAL 配色语义：数据卡顶边 + 数字色
 const METRIC_CARDS = [
-  { label: '智能体数', value: '7', change: '并行执行', accent: 'var(--bb-orange)' },
-  { label: '仪表盘', value: '6', change: '分析标签页', accent: 'var(--bb-purple)' },
-  { label: '冲突检测', value: '8', change: '智能体维度对', accent: 'var(--bb-green)' },
+  { label: '智能体数', value: '7', change: '并行执行', accent: 'rgb(var(--t-accent))' },
+  { label: '仪表盘', value: '6', change: '分析标签页', accent: 'var(--t-predict)' },
+  { label: '冲突检测', value: '8', change: '智能体维度对', accent: 'var(--t-up)' },
 ];
 
 const FALLBACK_TICKERS = [
@@ -373,73 +373,28 @@ export function WelcomePage() {
     }
   };
 
-  // ─────────────────────────────────────────────
-  // Aurora 调色板（自包含亮暗，不依赖全局 .dark class）
-  // 亮：白底靛蓝多彩；暗：深底亮靛蓝镜像
-  // ─────────────────────────────────────────────
-  const paletteVars = isDark
-    ? {
-        '--bb-bg': '#070a14',
-        '--bb-surface': '#101627',
-        '--bb-surface-2': '#192034',
-        '--bb-border': 'rgba(107,138,255,0.16)',
-        '--bb-border-2': 'rgba(107,138,255,0.28)',
-        '--bb-text': '#e9edfb',
-        '--bb-text-dim': '#9aa3c4',
-        '--bb-text-mute': '#69718f',
-        '--bb-orange': '#6b8aff',
-        '--bb-orange-dim': 'rgba(107,138,255,0.14)',
-        '--bb-blue': '#748ffc',
-        '--bb-green': '#2bd576',
-        '--bb-red': '#ff6b6b',
-        '--bb-amber': '#ffa94d',
-        '--bb-purple': '#9775fa',
-        '--bb-teal': '#3bc9db',
-        '--bb-aurora':
-          'radial-gradient(ellipse 52% 56% at 14% 16%, rgba(107,138,255,0.20), transparent 62%), radial-gradient(ellipse 46% 50% at 88% 8%, rgba(151,117,250,0.15), transparent 60%), radial-gradient(ellipse 42% 48% at 92% 88%, rgba(59,201,219,0.12), transparent 62%), radial-gradient(ellipse 48% 42% at 42% 98%, rgba(43,213,118,0.09), transparent 60%)',
-        '--bb-card-shadow': '0 1px 2px rgba(0,0,0,.4), 0 16px 48px -16px rgba(0,0,0,.6)',
-        '--bb-soft-shadow': '0 1px 2px rgba(0,0,0,.3), 0 10px 30px -16px rgba(0,0,0,.5)',
-      }
-    : {
-        '--bb-bg': '#eef1f8',
-        '--bb-surface': '#ffffff',
-        '--bb-surface-2': '#f4f6fc',
-        '--bb-border': 'rgba(59,91,219,0.12)',
-        '--bb-border-2': 'rgba(59,91,219,0.22)',
-        '--bb-text': '#0f1b4d',
-        '--bb-text-dim': '#5a6482',
-        '--bb-text-mute': '#8b93b0',
-        '--bb-orange': '#3b5bdb',
-        '--bb-orange-dim': 'rgba(59,91,219,0.10)',
-        '--bb-blue': '#4c6ef5',
-        '--bb-green': '#15a05a',
-        '--bb-red': '#e03131',
-        '--bb-amber': '#ec8413',
-        '--bb-purple': '#7048e8',
-        '--bb-teal': '#0c8599',
-        '--bb-aurora':
-          'radial-gradient(ellipse 52% 56% at 14% 16%, rgba(59,91,219,0.12), transparent 62%), radial-gradient(ellipse 46% 50% at 88% 8%, rgba(112,72,232,0.09), transparent 60%), radial-gradient(ellipse 42% 48% at 92% 88%, rgba(12,133,153,0.08), transparent 62%), radial-gradient(ellipse 48% 42% at 42% 98%, rgba(21,160,90,0.06), transparent 60%)',
-        '--bb-card-shadow': '0 1px 2px rgba(15,27,77,.05), 0 4px 12px rgba(59,91,219,.06), 0 24px 48px -20px rgba(59,91,219,.28)',
-        '--bb-soft-shadow': '0 1px 2px rgba(15,27,77,.04), 0 8px 24px -14px rgba(59,91,219,.20)',
-      };
-
   return (
-    <main className="relative h-screen overflow-y-auto" style={paletteVars as React.CSSProperties}>
-      <div className="fixed inset-0 bg-[var(--bb-bg)]" />
-      <div className="fixed inset-0" style={{ background: 'var(--bb-aurora)' }} />
+    <main className="relative h-screen overflow-y-auto bg-t-bg">
+      <div
+        className="fixed inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 52% 56% at 14% 16%, rgb(var(--t-accent) / 0.15), transparent 62%), radial-gradient(ellipse 46% 50% at 88% 8%, color-mix(in srgb, var(--t-info) 10%, transparent), transparent 60%)',
+        }}
+      />
 
-      <div className="relative z-20 h-9 border-b border-[var(--bb-border)] bg-[var(--bb-surface)] px-4 text-[11px] font-mono text-[var(--bb-text-mute)] flex items-center justify-between max-[480px]:px-2 max-[480px]:gap-2">
+      <div className="relative z-20 h-9 border-b border-t-border bg-t-surface px-4 text-[11px] font-mono text-t-text3 flex items-center justify-between max-[480px]:px-2 max-[480px]:gap-2">
         <div className="flex items-center gap-6 max-[480px]:gap-2 min-w-0">
-          <span className="tracking-[0.12em] font-semibold text-[var(--bb-orange)] shrink-0">FINSIGHT</span>
+          <span className="tracking-[0.12em] font-semibold text-t-accent shrink-0">FINSIGHT</span>
           <span className="max-[480px]:hidden">
-            SESSION: <span className="text-[var(--bb-text)]">{sessionText}</span>
+            SESSION: <span className="text-t-text">{sessionText}</span>
           </span>
           <span className="max-[640px]:hidden">
-            MARKET: <span className="text-[var(--bb-green)]">OPEN</span>
+            MARKET: <span className="text-t-up">OPEN</span>
           </span>
         </div>
         <div className="shrink-0">
-          <span className="font-semibold text-[var(--bb-orange)]">{clock}</span>
+          <span className="font-semibold text-t-accent">{clock}</span>
           <span className="ml-2 max-[480px]:hidden">UTC+8</span>
         </div>
       </div>
@@ -447,29 +402,29 @@ export function WelcomePage() {
       <section className="relative z-20 mx-auto grid min-h-[calc(100vh-68px)] w-full max-w-[1200px] grid-cols-[minmax(0,1fr)_412px] items-center justify-center gap-14 px-10 py-7 max-[960px]:grid-cols-1 max-[960px]:px-5 max-[960px]:py-8 max-[480px]:gap-5 max-[480px]:px-4 max-[480px]:py-5 max-[480px]:min-h-0">
         <div className="flex flex-col gap-7 max-[480px]:gap-5">
           <div className="flex items-center gap-3 max-[480px]:gap-2">
-            <div className="grid h-[50px] w-[50px] max-[480px]:h-9 max-[480px]:w-9 place-items-center rounded-[13px] border border-[var(--bb-border)] bg-[var(--bb-surface)] shadow-[var(--bb-soft-shadow)]">
+            <div className="grid h-[50px] w-[50px] max-[480px]:h-9 max-[480px]:w-9 place-items-center rounded-[13px] border border-t-border bg-t-surface shadow-[var(--t-shadow-card)]">
               <svg width="30" height="30" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <line x1="30" y1="8" x2="30" y2="36" stroke="var(--bb-amber)" strokeWidth="1.6" strokeLinecap="round" />
-                <rect x="26" y="14" width="8" height="14" rx="2" fill="var(--bb-amber)" />
-                <line x1="16" y1="6" x2="16" y2="38" stroke="var(--bb-orange)" strokeWidth="1.6" strokeLinecap="round" />
-                <rect x="12" y="12" width="8" height="16" rx="2" fill="var(--bb-orange)" />
-                <rect x="12" y="24" width="20" height="2.6" rx="1.3" fill="var(--bb-orange)" opacity="0.25" />
+                <line x1="30" y1="8" x2="30" y2="36" stroke="var(--t-warning)" strokeWidth="1.6" strokeLinecap="round" />
+                <rect x="26" y="14" width="8" height="14" rx="2" fill="var(--t-warning)" />
+                <line x1="16" y1="6" x2="16" y2="38" stroke="rgb(var(--t-accent))" strokeWidth="1.6" strokeLinecap="round" />
+                <rect x="12" y="12" width="8" height="16" rx="2" fill="rgb(var(--t-accent))" />
+                <rect x="12" y="24" width="20" height="2.6" rx="1.3" fill="rgb(var(--t-accent))" opacity="0.25" />
               </svg>
             </div>
-            <div className="text-[30px] max-[480px]:text-[24px] leading-none font-bold tracking-tight text-[var(--bb-text)]">
-              Fin<span className="text-[var(--bb-orange)]">Sight</span> AI
+            <div className="text-[30px] max-[480px]:text-[24px] leading-none font-bold tracking-tight text-t-text">
+              Fin<span className="text-t-accent">Sight</span> AI
             </div>
-            <span className="ml-1 rounded-md border border-[var(--bb-border-2)] px-2 py-0.5 text-[10px] font-mono tracking-[0.14em] text-[var(--bb-orange)] max-[480px]:hidden">
+            <span className="ml-1 rounded-md border border-t-border px-2 py-0.5 text-[10px] font-mono tracking-[0.14em] text-t-accent max-[480px]:hidden">
               PRO TERMINAL
             </span>
           </div>
 
-          <h1 className="max-w-[720px] text-[46px] leading-[1.12] font-extrabold tracking-tight text-[var(--bb-text)] max-[960px]:text-[34px] max-[480px]:text-[26px]">
+          <h1 className="max-w-[720px] text-[46px] leading-[1.12] font-extrabold tracking-tight text-t-text max-[960px]:text-[34px] max-[480px]:text-[26px]">
             面向实盘研究的
-            <span className="block text-[var(--bb-orange)]">AI 投研工作台</span>
+            <span className="block text-t-accent">AI 投研工作台</span>
           </h1>
 
-          <p className="max-w-[640px] text-[15px] leading-[1.85] text-[var(--bb-text-dim)] max-[480px]:text-sm max-[480px]:leading-7">
+          <p className="max-w-[640px] text-[15px] leading-[1.85] text-t-text2 max-[480px]:text-sm max-[480px]:leading-7">
             7 个研究智能体并行执行 · 有状态 LangGraph 编排 · 6 个专业仪表盘标签页
             <br />
             混合 RAG 检索 · 跨智能体冲突检测 · 实时邮件预警
@@ -479,12 +434,12 @@ export function WelcomePage() {
             {METRIC_CARDS.map((item) => (
               <div
                 key={item.label}
-                className="relative overflow-hidden rounded-[14px] border border-[var(--bb-border)] bg-[var(--bb-surface)] p-4 max-[480px]:p-3 shadow-[var(--bb-soft-shadow)] transition-transform duration-200 hover:-translate-y-[3px]"
+                className="relative overflow-hidden rounded-[14px] border border-t-border bg-t-surface p-4 max-[480px]:p-3 shadow-[var(--t-shadow-card)] transition-transform duration-200 hover:-translate-y-[3px]"
               >
                 <div className="absolute left-0 right-0 top-0 h-[2px]" style={{ background: item.accent }} />
-                <div className="mb-2 text-[9.5px] font-mono uppercase tracking-[0.12em] text-[var(--bb-text-mute)]">{item.label}</div>
+                <div className="mb-2 text-[9.5px] font-mono uppercase tracking-[0.12em] text-t-text3">{item.label}</div>
                 <div className="text-[34px] max-[480px]:text-[26px] font-mono font-semibold leading-none" style={{ color: item.accent }}>{item.value}</div>
-                <div className="mt-2 text-[11px] text-[var(--bb-text-dim)]">{item.change}</div>
+                <div className="mt-2 text-[11px] text-t-text2">{item.change}</div>
               </div>
             ))}
           </div>
@@ -493,7 +448,7 @@ export function WelcomePage() {
             {CAPABILITIES.map((item) => (
               <span
                 key={item}
-                className="rounded-lg border border-[var(--bb-border)] bg-[var(--bb-surface)] px-3 py-1.5 text-[12px] text-[var(--bb-text-dim)] transition-all hover:border-[var(--bb-orange)] hover:bg-[var(--bb-orange-dim)] hover:text-[var(--bb-orange)]"
+                className="rounded-lg border border-t-border bg-t-surface px-3 py-1.5 text-[12px] text-t-text2 transition-all hover:border-t-accent hover:bg-t-accent/10 hover:text-t-accent"
               >
                 {item}
               </span>
@@ -501,28 +456,28 @@ export function WelcomePage() {
           </div>
 
           <svg className="max-w-[600px] opacity-90 max-[480px]:hidden" width="100%" height="40" viewBox="0 0 580 40" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <polyline points="0,30 48,27 96,28 144,22 192,24 240,17 288,19 336,12 384,14 432,8 480,11 528,6 580,9" fill="none" stroke="var(--bb-orange)" strokeWidth="1.5" opacity="0.32" />
+            <polyline points="0,30 48,27 96,28 144,22 192,24 240,17 288,19 336,12 384,14 432,8 480,11 528,6 580,9" fill="none" stroke="rgb(var(--t-accent))" strokeWidth="1.5" opacity="0.32" />
             <g opacity="0.7">
-              <line x1="144" y1="18" x2="144" y2="28" stroke="var(--bb-green)" strokeWidth="1.5" /><rect x="138" y="20" width="12" height="8" rx="1.5" fill="var(--bb-green)" />
-              <line x1="288" y1="14" x2="288" y2="24" stroke="var(--bb-red)" strokeWidth="1.5" /><rect x="282" y="16" width="12" height="8" rx="1.5" fill="var(--bb-red)" />
-              <line x1="432" y1="4" x2="432" y2="14" stroke="var(--bb-green)" strokeWidth="1.5" /><rect x="426" y="6" width="12" height="8" rx="1.5" fill="var(--bb-green)" />
-              <line x1="528" y1="2" x2="528" y2="12" stroke="var(--bb-green)" strokeWidth="1.5" /><rect x="522" y="4" width="12" height="8" rx="1.5" fill="var(--bb-green)" />
+              <line x1="144" y1="18" x2="144" y2="28" stroke="var(--t-up)" strokeWidth="1.5" /><rect x="138" y="20" width="12" height="8" rx="1.5" fill="var(--t-up)" />
+              <line x1="288" y1="14" x2="288" y2="24" stroke="var(--t-down)" strokeWidth="1.5" /><rect x="282" y="16" width="12" height="8" rx="1.5" fill="var(--t-down)" />
+              <line x1="432" y1="4" x2="432" y2="14" stroke="var(--t-up)" strokeWidth="1.5" /><rect x="426" y="6" width="12" height="8" rx="1.5" fill="var(--t-up)" />
+              <line x1="528" y1="2" x2="528" y2="12" stroke="var(--t-up)" strokeWidth="1.5" /><rect x="522" y="4" width="12" height="8" rx="1.5" fill="var(--t-up)" />
             </g>
           </svg>
         </div>
 
-        <div className="rounded-[20px] border border-[var(--bb-border)] bg-[var(--bb-surface)] p-[30px] max-[480px]:p-5 shadow-[var(--bb-card-shadow)] relative overflow-hidden h-fit">
-          <div className="absolute left-0 right-0 top-0 h-[3px] bg-[linear-gradient(90deg,var(--bb-orange),var(--bb-purple),var(--bb-teal),var(--bb-green))]" />
+        <div className="rounded-[20px] border border-t-border bg-t-surface p-[30px] max-[480px]:p-5 shadow-[var(--t-shadow-card)] relative overflow-hidden h-fit">
+          <div className="absolute left-0 right-0 top-0 h-[3px] bg-[linear-gradient(90deg,rgb(var(--t-accent)),var(--t-info))]" />
 
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-[var(--bb-text)]">接入工作台</h2>
-              <p className="mt-1.5 text-sm text-[var(--bb-text-dim)]">匿名本地会话最快；需要跨设备时再登录</p>
+              <h2 className="text-2xl font-bold tracking-tight text-t-text">接入工作台</h2>
+              <p className="mt-1.5 text-sm text-t-text2">匿名本地会话最快；需要跨设备时再登录</p>
             </div>
             <button
               type="button"
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bb-border)] bg-[var(--bb-surface-2)] px-2.5 py-1.5 text-[11px] font-mono text-[var(--bb-text-dim)] transition-colors hover:border-[var(--bb-orange)] hover:text-[var(--bb-orange)]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-t-border bg-t-elevated px-2.5 py-1.5 text-[11px] font-mono text-t-text2 transition-colors hover:border-t-accent hover:text-t-accent"
               title="切换亮暗主题"
             >
               {isDark ? <Sun size={12} /> : <Moon size={12} />}
@@ -532,8 +487,8 @@ export function WelcomePage() {
 
           {isLoggedIn ? (
             <div className="mt-6 space-y-4">
-              <div className="rounded-xl border border-[var(--bb-border)] bg-[var(--bb-surface-2)] px-4 py-3 text-sm text-[var(--bb-text-dim)]">
-                当前账号：<span className="font-medium text-[var(--bb-text)]">{authIdentity?.email || '已验证用户'}</span>
+              <div className="rounded-xl border border-t-border bg-t-elevated px-4 py-3 text-sm text-t-text2">
+                当前账号：<span className="font-medium text-t-text">{authIdentity?.email || '已验证用户'}</span>
               </div>
               <Button
                 variant="primary"
@@ -542,7 +497,7 @@ export function WelcomePage() {
                   markWelcomeGatePassed();
                   navigate(redirectPath);
                 }}
-                className="w-full !rounded-[11px] !bg-[linear-gradient(135deg,var(--bb-orange),var(--bb-blue))] !text-white font-semibold !shadow-[0_8px_20px_-8px_var(--bb-orange)]"
+                className="w-full font-semibold"
               >
                 继续进入
               </Button>
@@ -550,7 +505,7 @@ export function WelcomePage() {
                 type="button"
                 onClick={handleSwitchAccount}
                 disabled={switchingAccount}
-                className="mx-auto block text-xs text-[var(--bb-text-dim)] hover:text-[var(--bb-orange)] disabled:opacity-60"
+                className="mx-auto block text-xs text-t-text2 hover:text-t-accent disabled:opacity-60"
               >
                 {switchingAccount ? '切换中...' : '切换邮箱'}
               </button>
@@ -563,15 +518,15 @@ export function WelcomePage() {
                     variant="primary"
                     size="lg"
                     onClick={handleAnonymousEnter}
-                    className="w-full !rounded-[11px] !bg-[linear-gradient(135deg,var(--bb-orange),var(--bb-blue))] !text-white font-semibold !shadow-[0_8px_20px_-8px_var(--bb-orange)]"
+                    className="w-full font-semibold"
                   >
                     匿名体验（本地会话）
                   </Button>
 
-                  <div className="my-3 flex items-center gap-3 text-xs text-[var(--bb-text-mute)]">
-                    <div className="h-px flex-1 bg-[var(--bb-border)]" />
+                  <div className="my-3 flex items-center gap-3 text-xs text-t-text3">
+                    <div className="h-px flex-1 bg-t-border" />
                     或用邮箱登录
-                    <div className="h-px flex-1 bg-[var(--bb-border)]" />
+                    <div className="h-px flex-1 bg-t-border" />
                   </div>
                 </>
               ) : null}
@@ -586,14 +541,14 @@ export function WelcomePage() {
                 }}
                 placeholder="trader@example.com"
                 autoComplete="email"
-                className="py-2.5 font-mono !rounded-[10px] !bg-[var(--bb-surface-2)] !border-[var(--bb-border)] !text-[var(--bb-text)] focus:!border-[var(--bb-orange)]"
+                className="font-mono"
               />
               <Button
                 variant="primary"
                 size="lg"
                 onClick={handleSendCode}
                 disabled={sending || !supabaseReady}
-                className="w-full !rounded-[11px] !bg-[linear-gradient(135deg,var(--bb-orange),var(--bb-blue))] !text-white font-semibold !shadow-[0_8px_20px_-8px_var(--bb-orange)]"
+                className="w-full font-semibold"
               >
                 <Mail size={14} />
                 {sending ? '发送中...' : '发送验证码'}
@@ -610,21 +565,21 @@ export function WelcomePage() {
                 }}
                 placeholder="输入邮箱收到的验证码"
                 autoComplete="one-time-code"
-                className="py-2.5 font-mono !rounded-[10px] !bg-[var(--bb-surface-2)] !border-[var(--bb-border)] !text-[var(--bb-text)] focus:!border-[var(--bb-orange)]"
+                className="font-mono"
               />
               <Button
                 variant="secondary"
                 size="lg"
                 onClick={handleVerifyCode}
                 disabled={verifying || !supabaseReady || !otpCode.trim()}
-                className="w-full !rounded-[11px] !border-[var(--bb-border-2)] !bg-transparent !text-[var(--bb-text)] hover:!bg-[var(--bb-surface-2)] hover:!border-[var(--bb-orange)]"
+                className="w-full"
               >
                 <Mail size={14} />
                 {verifying ? '验证中...' : '验证并登录'}
               </Button>
 
               {requiresAuthenticatedEntry && devAuthReady ? (
-                <div className="mt-3 space-y-3 rounded-xl border border-[var(--bb-border-2)] bg-[var(--bb-orange-dim)] px-3 py-3">
+                <div className="mt-3 space-y-3 rounded-xl border border-t-border bg-t-accent/10 px-3 py-3">
                   <Input
                     label={'RAG Inspector 密码'}
                     type="password"
@@ -638,35 +593,35 @@ export function WelcomePage() {
                     }}
                     placeholder={'输入本地访问密码'}
                     autoComplete="current-password"
-                    className="py-2.5 font-mono !rounded-[10px] !bg-[var(--bb-surface-2)] !border-[var(--bb-border-2)] !text-[var(--bb-text)]"
+                    className="font-mono"
                   />
                   <Button
                     variant="secondary"
                     size="lg"
                     onClick={handleDevPasswordEnter}
-                    className="w-full !rounded-[11px] !border-[var(--bb-border-2)] !bg-[var(--bb-orange-dim)] !text-[var(--bb-text)] hover:!bg-[var(--bb-surface-2)]"
+                    className="w-full"
                   >
                     {'输入密码进入 RAG Inspector'}
                   </Button>
-                  <div className="text-[11px] leading-5 text-[var(--bb-text-dim)]">
+                  <div className="text-[11px] leading-5 text-t-text2">
                     {'这是本地开发门禁，主要用于联调入口收口；真正的数据读取权限仍由后端鉴权决定。'}
                   </div>
                 </div>
               ) : null}
 
               {requiresAuthenticatedEntry ? (
-                <div className="mt-3 rounded-xl border border-[var(--bb-border-2)] bg-[var(--bb-orange-dim)] px-3 py-3 text-xs text-[var(--bb-text-dim)] leading-6">
+                <div className="mt-3 rounded-xl border border-t-border bg-t-accent/10 px-3 py-3 text-xs text-t-text2 leading-6">
                   <div className="flex items-start gap-2">
-                    <CircleAlert size={14} className="mt-1 shrink-0 text-[var(--bb-orange)]" />
+                    <CircleAlert size={14} className="mt-1 shrink-0 text-t-accent" />
                     <div className="min-w-0">
-                      <div className="font-semibold text-[var(--bb-text)]">{ragAccessDiagnostics.title}</div>
+                      <div className="font-semibold text-t-text">{ragAccessDiagnostics.title}</div>
                       <ul className="mt-1 space-y-1">
                         {ragAccessDiagnostics.reasons.map((reason) => (
                           <li key={reason}>{reason}</li>
                         ))}
                       </ul>
                       {ragAccessDiagnostics.nextSteps.length > 0 ? (
-                        <div className="mt-2 text-[var(--bb-orange)]">
+                        <div className="mt-2 text-t-accent">
                           {ragAccessDiagnostics.nextSteps.join(' ')}
                         </div>
                       ) : null}
@@ -675,25 +630,25 @@ export function WelcomePage() {
                 </div>
               ) : null}
 
-              <div className="mt-2 rounded-xl border border-[var(--bb-border-2)] bg-[var(--bb-orange-dim)] px-3 py-2.5 text-xs text-[var(--bb-text-dim)] flex items-start gap-2 leading-6">
-                <CircleAlert size={14} className="mt-1 shrink-0 text-[var(--bb-orange)]" />
+              <div className="mt-2 rounded-xl border border-t-border bg-t-accent/10 px-3 py-2.5 text-xs text-t-text2 flex items-start gap-2 leading-6">
+                <CircleAlert size={14} className="mt-1 shrink-0 text-t-accent" />
                 <span>邮箱验证码登录支持跨设备持久化会话；匿名体验更快，但清理缓存后数据可能丢失。</span>
               </div>
             </div>
           )}
 
-          <p className="mt-6 text-center text-[11px] font-mono leading-5 text-[var(--bb-text-mute)] opacity-80">
+          <p className="mt-6 text-center text-[11px] font-mono leading-5 text-t-text3 opacity-80">
             FinSight AI v2.0 · 基于 LangGraph 构建
           </p>
         </div>
       </section>
 
-      <div className="relative z-20 h-8 border-t border-[var(--bb-border)] bg-[var(--bb-surface)] overflow-hidden flex items-center">
-        <div className="flex w-max items-center gap-10 px-4 text-[11px] font-mono text-[var(--bb-text-dim)]" style={{ animation: 'finsight-marquee 30s linear infinite' }}>
+      <div className="relative z-20 h-8 border-t border-t-border bg-t-surface overflow-hidden flex items-center">
+        <div className="flex w-max items-center gap-10 px-4 text-[11px] font-mono text-t-text2" style={{ animation: 'finsight-marquee 30s linear infinite' }}>
           {[...tickerItems, ...tickerItems].map((item, index) => (
             <span key={`${item.label}-${index}`} className="whitespace-nowrap">
               {item.label}{' '}
-              <span className={item.up ? 'text-[var(--bb-green)]' : 'text-[var(--bb-red)]'}>
+              <span className={item.up ? 'text-t-up' : 'text-t-down'}>
                 {item.price} {item.pct}
               </span>
             </span>
