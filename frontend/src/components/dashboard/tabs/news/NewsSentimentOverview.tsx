@@ -10,6 +10,7 @@ import { Activity, Flame, Minus, RadioTower, TrendingDown, TrendingUp } from 'lu
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
 import type { NewsItem, NewsTimeRange } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 import {
   classifySentiment,
   deriveImpactLevel,
@@ -537,7 +538,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">情绪分布</h3>
-            <span className="text-2xs text-fin-muted">看多 / 中性 / 看空</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           <DistributionChart stats={stats} theme={theme} />
         </div>
@@ -545,7 +546,7 @@ export function NewsSentimentOverview({ news, timeRange, ticker }: NewsSentiment
         <div className="rounded-lg border border-fin-border bg-fin-card p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fin-text">情绪时间线</h3>
-            <span className="text-2xs text-fin-muted">客户端聚合情绪分</span>
+            <DashboardSourceBadge metaKey="news_market" fallbackSource="hybrid_news" />
           </div>
           <TimelineChart stats={stats} theme={theme} />
         </div>

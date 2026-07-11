@@ -345,6 +345,7 @@ export interface KlineResponse {
     kline_data?: KlineData[];
     error?: string;
     source?: string;
+    as_of?: string;
     period?: string;
     interval?: string;
   };

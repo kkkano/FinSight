@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import { CardInfoTip } from '../../../ui/CardInfoTip';
 import type { AnalystTargets, RecommendationsSummary } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -37,9 +38,9 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
 
     const segments = [
       { label: '强买', count: recommendations.strong_buy, color: theme.success },
-      { label: '买入', count: recommendations.buy, color: '#22d3ee' },
+      { label: '买入', count: recommendations.buy, color: theme.colorPalette[6] },
       { label: '持有', count: recommendations.hold, color: theme.warning },
-      { label: '卖出', count: recommendations.sell, color: '#f97316' },
+      { label: '卖出', count: recommendations.sell, color: theme.colorPalette[0] },
       { label: '强卖', count: recommendations.strong_sell, color: theme.danger },
     ].filter((s) => s.count > 0);
 
@@ -143,10 +144,13 @@ export function AnalystTargetCard({ targets, recommendations, currentPrice }: An
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="flex items-center gap-1 text-xs font-medium text-fin-muted mb-2">
-        分析师目标价
-        <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1 text-xs font-medium text-fin-muted">
+          分析师目标价
+          <CardInfoTip content="来源：yfinance 分析师目标价预测 + 评级分布" />
+        </div>
+        <DashboardSourceBadge metaKey="analyst_targets" fallbackSource="yfinance" />
       </div>
 
       {option && (

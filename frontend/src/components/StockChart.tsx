@@ -5,6 +5,7 @@ import { apiClient } from '../api/client';
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { KlineData } from '../types/index';
 import { Loader2, BarChart3, TrendingUp, Activity } from 'lucide-react';
+import { SourceBadge } from './ui/SourceBadge';
 
 // 时间周期选项
 const PERIOD_OPTIONS = [
@@ -30,6 +31,8 @@ export const StockChart: React.FC = () => {
   const [period, setPeriod] = useState('5d'); // 默认显示24小时
   const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [isMockData, setIsMockData] = useState(false);
+  const [dataSource, setDataSource] = useState<string | null>(null);
+  const [dataAsOf, setDataAsOf] = useState<string | null>(null);
 
   // 根据周期获取对应的 interval 和实际 period
   const getPeriodConfig = (periodValue: string): { interval: string; period: string } => {
@@ -51,6 +54,8 @@ export const StockChart: React.FC = () => {
       setLoading(true);
       setError(null);
       setIsMockData(false);
+      setDataSource(null);
+      setDataAsOf(null);
 
       try {
         const { interval, period: actualPeriod } = getPeriodConfig(period);
@@ -90,6 +95,8 @@ export const StockChart: React.FC = () => {
 
             setData(processedData);
             setIsMockData(false);
+            setDataSource(typeof responseData.source === 'string' ? responseData.source : null);
+            setDataAsOf(typeof responseData.as_of === 'string' ? responseData.as_of : null);
             setError(null); // 清除错误
           }
           // 数据为空
@@ -418,6 +425,13 @@ export const StockChart: React.FC = () => {
 
         {/* 图表类型切换 */}
         <div className="flex gap-2">
+          <SourceBadge
+            className="mr-1 self-center"
+            source={dataSource ?? undefined}
+            asOf={dataAsOf}
+            synthetic={isMockData}
+            degraded={isMockData}
+          />
           <button
             onClick={() => setChartType('candlestick')}
             className={`p-1.5 rounded transition-colors ${chartType === 'candlestick'
@@ -443,8 +457,8 @@ export const StockChart: React.FC = () => {
 
       {/* 警告信息 */}
       {isMockData && error && (
-        <div className="p-2 bg-yellow-500/10 border-b border-yellow-500/20 text-yellow-500 text-xs">
-          ⚠️ {error} (显示模拟数据)
+        <div className="p-2 bg-t-warning/10 border-b border-t-warning/20 text-t-warning text-xs">
+          ⚠ {error}（显示模拟数据）
         </div>
       )}
 
@@ -454,6 +468,7 @@ export const StockChart: React.FC = () => {
           option={option}
           style={{ height: '100%', width: '100%', minHeight: '200px' }}
           autoResize={true}
+          opts={{ renderer: data.length > 200 ? 'canvas' : 'svg' }}
         />
       </div>
     </div>

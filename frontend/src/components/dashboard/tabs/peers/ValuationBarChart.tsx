@@ -9,6 +9,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { PeerMetrics } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -99,7 +100,10 @@ export function ValuationBarChart({ peers, subjectSymbol }: ValuationBarChartPro
 
   return (
     <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-fin-text mb-2">P/E 对比</h4>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">P/E 对比</h4>
+        <DashboardSourceBadge metaKey="peers" />
+      </div>
       <ReactECharts
         option={option}
         style={{ width: '100%', height: chartHeight }}

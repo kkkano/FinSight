@@ -11,6 +11,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { IndicatorSeries } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -165,15 +166,18 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
     <div className="flex flex-col gap-4">
       {/* RSI Chart */}
       {rsiOption && (
-        <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-          <div className="text-xs font-medium text-fin-muted mb-2">
-            RSI (14)
-            <span className="ml-2 text-2xs text-fin-border">70 超买 / 30 超卖</span>
+        <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-xs font-medium text-fin-muted">
+              RSI (14)
+              <span className="ml-2 text-2xs text-fin-border">70 超买 / 30 超卖</span>
+            </div>
+            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="yfinance" />
           </div>
           <ReactECharts
             option={rsiOption}
             style={{ width: '100%', height: 180 }}
-            opts={{ renderer: 'svg' }}
+            opts={{ renderer: (indicatorSeries?.dates.length ?? 0) > 200 ? 'canvas' : 'svg' }}
             notMerge
             lazyUpdate
           />
@@ -182,12 +186,15 @@ export function TechnicalSubCharts({ indicatorSeries }: TechnicalSubChartsProps)
 
       {/* MACD Chart */}
       {macdOption && (
-        <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-          <div className="text-xs font-medium text-fin-muted mb-2">MACD (12, 26, 9)</div>
+        <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-xs font-medium text-fin-muted">MACD (12, 26, 9)</div>
+            <DashboardSourceBadge metaKey="indicator_series" fallbackSource="yfinance" />
+          </div>
           <ReactECharts
             option={macdOption}
             style={{ width: '100%', height: 200 }}
-            opts={{ renderer: 'svg' }}
+            opts={{ renderer: (indicatorSeries?.dates.length ?? 0) > 200 ? 'canvas' : 'svg' }}
             notMerge
             lazyUpdate
           />

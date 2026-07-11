@@ -14,6 +14,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme, type ChartTheme } from '../hooks/useChartTheme';
 import { useDashboardStore } from '../store/dashboardStore';
+import { SourceBadge } from './ui/SourceBadge';
 import type {
   ChartPoint,
   DashboardData,
@@ -52,6 +53,7 @@ export interface SmartChartBlock {
   /** For ref mode */
   source?: string;
   fields?: string;
+  asOf?: string;
 }
 
 export type SmartChartOhlcPoint = [open: number, close: number, low: number, high: number];
@@ -209,7 +211,8 @@ export function parseSmartChartBlocks(content: string): SmartChartBlock[] {
     const source = extractAttr(attrs, 'source') ?? '';
     const fields = extractAttr(attrs, 'fields') ?? '';
     if (!isSmartChartType(type)) continue;
-    blocks.push({ mode: 'ref', type, title, source, fields });
+    const asOf = extractAttr(attrs, 'as_of') ?? extractAttr(attrs, 'asOf');
+    blocks.push({ mode: 'ref', type, title, source, fields, asOf });
   }
 
   // 每条消息最多渲染 4 张 SmartChart，避免聊天气泡过长。
@@ -476,7 +479,7 @@ function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) 
     value: data.values[i],
   }));
 
-  const colors = [theme.primary, theme.success, theme.warning, theme.danger, '#8b5cf6', '#06b6d4', '#ec4899'];
+  const colors = theme.colorPalette;
 
   return {
     tooltip: {
@@ -501,7 +504,7 @@ function buildPieOption(data: SmartChartData, title: string, theme: ChartTheme) 
         formatter: '{b}: {d}%',
       },
       itemStyle: {
-        borderColor: theme.isDark ? '#1e2028' : '#ffffff',
+        borderColor: theme.tooltipBackground,
         borderWidth: 2,
       },
       color: colors,
@@ -591,15 +594,7 @@ function buildGaugeOption(data: SmartChartData, title: string, theme: ChartTheme
   };
 }
 
-const FINANCIAL_CHART_COLORS = (theme: ChartTheme) => [
-  theme.primary,
-  theme.success,
-  theme.warning,
-  theme.danger,
-  '#8b5cf6',
-  '#06b6d4',
-  '#ec4899',
-];
+const FINANCIAL_CHART_COLORS = (theme: ChartTheme) => theme.colorPalette;
 
 function buildSmartChartTitle(title: string, theme: ChartTheme) {
   return {
@@ -1626,11 +1621,36 @@ interface SmartChartRendererProps {
   block: SmartChartBlock;
 }
 
+const DENSE_SERIES_TYPES = new Set<SmartChartType>([
+  'line',
+  'candlestick',
+  'price_volume',
+  'rs_line',
+  'valuation_band',
+  'drawdown',
+]);
+
+function getSmartChartPointCount(data: SmartChartData): number {
+  return Math.max(
+    data.labels.length,
+    data.values.length,
+    data.ohlc?.length ?? 0,
+    data.volume?.length ?? 0,
+    ...(data.series?.map((series) => series.values.length) ?? [0]),
+    ...(data.bands?.map((band) => band.values.length) ?? [0]),
+  );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- renderer policy is unit-tested independently
+export function getSmartChartRenderer(type: SmartChartType, data: SmartChartData): 'canvas' | 'svg' {
+  return DENSE_SERIES_TYPES.has(type) && getSmartChartPointCount(data) > 200 ? 'canvas' : 'svg';
+}
+
 export function SmartChartRenderer({ block }: SmartChartRendererProps) {
   const theme = useChartTheme();
   const dashboardData = useDashboardStore((s) => s.dashboardData);
 
-  const option = useMemo(() => {
+  const chart = useMemo(() => {
     let data: SmartChartData | null = null;
 
     if (block.mode === 'inline' && block.dataJson) {
@@ -1644,19 +1664,31 @@ export function SmartChartRenderer({ block }: SmartChartRendererProps) {
     }
 
     if (!data) return null;
-    return buildOption(block.type, data, block.title, theme);
+    const option = buildOption(block.type, data, block.title, theme);
+    if (!option) return null;
+    return { option, renderer: getSmartChartRenderer(block.type, data) };
   }, [block, dashboardData, theme]);
 
-  if (!option) return null;
+  if (!chart) return null;
 
   const height = block.type === 'gauge' ? 200 : block.type === 'pie' ? 220 : 200;
+  const sourceMeta = block.mode === 'ref' && block.source
+    ? dashboardData?.meta?.[block.source]
+    : undefined;
 
   return (
-    <div className="my-3 p-3 bg-fin-card rounded-xl border border-fin-border">
+    <div className="relative my-3 p-3 bg-fin-card rounded-lg border border-fin-border">
+      <SourceBadge
+        className="absolute right-3 top-2 z-10"
+        synthetic={block.mode === 'inline'}
+        source={sourceMeta?.provider ?? (block.mode === 'ref' ? block.source : undefined)}
+        asOf={block.asOf ?? sourceMeta?.as_of}
+        degraded={sourceMeta?.fallback_used}
+      />
       <ReactECharts
-        option={option}
+        option={chart.option}
         style={{ width: '100%', height }}
-        opts={{ renderer: 'svg' }}
+        opts={{ renderer: chart.renderer }}
         notMerge
         lazyUpdate
       />

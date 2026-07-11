@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme, type ChartTheme } from '../../../../hooks/useChartTheme';
 import type { ChartPoint, TechnicalData } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -183,12 +184,15 @@ export function SupportResistanceChart({ technicals, marketChart }: SupportResis
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-2">K线图 · 支撑/阻力位</div>
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">K线图 · 支撑/阻力位</div>
+        <DashboardSourceBadge metaKey="market_chart" />
+      </div>
       <ReactECharts
         option={option}
         style={{ width: '100%', height: 360 }}
-        opts={{ renderer: 'svg' }}
+        opts={{ renderer: (marketChart?.length ?? 0) > 200 ? 'canvas' : 'svg' }}
         notMerge
         lazyUpdate
       />

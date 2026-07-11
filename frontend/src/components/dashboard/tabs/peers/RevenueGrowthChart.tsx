@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { PeerMetrics } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -112,7 +113,10 @@ export function RevenueGrowthChart({ peers, subjectSymbol }: RevenueGrowthChartP
 
   return (
     <div className="bg-fin-card border border-fin-border rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-fin-text mb-2">营收增长对比</h4>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-fin-text">营收增长对比</h4>
+        <DashboardSourceBadge metaKey="peers" />
+      </div>
       <ReactECharts
         option={option}
         style={{ width: '100%', height: chartHeight }}

@@ -10,6 +10,7 @@ import ReactECharts from 'echarts-for-react';
 
 import { useChartTheme } from '../../../../hooks/useChartTheme';
 import type { EarningsHistoryEntry } from '../../../../types/dashboard';
+import { DashboardSourceBadge } from '../../DashboardSourceBadge';
 
 // --- Props ---
 
@@ -115,8 +116,11 @@ export function EarningsSurpriseChart({ data }: EarningsSurpriseChartProps) {
   }
 
   return (
-    <div className="p-4 bg-fin-card rounded-xl border border-fin-border">
-      <div className="text-xs font-medium text-fin-muted mb-2">EPS 预期 vs 实际</div>
+    <div className="p-4 bg-fin-card rounded-lg border border-fin-border">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs font-medium text-fin-muted">EPS 预期 vs 实际</div>
+        <DashboardSourceBadge metaKey="earnings_history" fallbackSource="yfinance" />
+      </div>
       <ReactECharts
         option={option}
         style={{ width: '100%', height: 240 }}

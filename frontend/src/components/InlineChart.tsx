@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { ChartType, KlineData } from '../types';
+import { SourceBadge } from './ui/SourceBadge';
 
 interface InlineChartProps {
   ticker: string;
@@ -177,6 +178,7 @@ export const InlineChart: React.FC<InlineChartProps> = ({
   const [data, setData] = useState<KlineData[]>([]);
   // 数据来源标记：price_fallback* 表示后端全源失败后生成的合成占位 K 线（非真实行情）
   const [dataSource, setDataSource] = useState<string | null>(null);
+  const [dataAsOf, setDataAsOf] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const onDataReadyRef = useRef(onDataReady);
   const lastSummaryRef = useRef<string>('');
@@ -196,10 +198,12 @@ export const InlineChart: React.FC<InlineChartProps> = ({
         const kline = responseData?.data?.kline_data ?? responseData?.kline_data ?? [];
         // 读取后端 source 标记（price_fallback / price_fallback_hourly = 合成占位行情）
         const source = responseData?.data?.source ?? responseData?.source ?? null;
+        const asOf = responseData?.data?.as_of ?? responseData?.as_of ?? null;
 
         if (!active) return;
         setData(kline);
         setDataSource(typeof source === 'string' ? source : null);
+        setDataAsOf(typeof asOf === 'string' ? asOf : null);
         if (kline.length) {
           const summary = generateDataSummary(ticker, kline);
           if (summary && summary !== lastSummaryRef.current) {
@@ -244,16 +248,27 @@ export const InlineChart: React.FC<InlineChartProps> = ({
 
   return (
     <div className="my-4 p-4 bg-fin-panel rounded-lg border border-fin-border">
-      <div className="text-xs text-fin-muted mb-2">
-        {ticker} {chartLabels[chartType] || 'Chart'} ({period})
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs text-fin-muted">
+          {ticker} {chartLabels[chartType] || 'Chart'} ({period})
+        </div>
+        <SourceBadge
+          source={dataSource ?? undefined}
+          asOf={dataAsOf}
+          synthetic={isSynthetic}
+          degraded={isSynthetic}
+        />
       </div>
       {isSynthetic && (
         <div className="mb-2 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-600 text-xs font-medium">
           ⚠ 合成占位 · 非真实行情：实时数据源全部失败，下图为按最新价生成的等值占位序列，仅供形态参考，不可用于交易决策。
         </div>
       )}
-      <ReactECharts option={option} style={{ height: '300px', width: '100%' }} />
+      <ReactECharts
+        option={option}
+        style={{ height: '300px', width: '100%' }}
+        opts={{ renderer: data.length > 200 ? 'canvas' : 'svg' }}
+      />
     </div>
   );
 };
-

@@ -79,7 +79,7 @@ export function PortfolioPieChart({ positions, totalValue }: PortfolioPieChartPr
           lineStyle: { color: theme.border },
         },
         itemStyle: {
-          borderColor: theme.isDark ? '#1e2028' : '#ffffff',
+          borderColor: theme.tooltipBackground,
           borderWidth: 2,
         },
         color: colors,

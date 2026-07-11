@@ -358,10 +358,10 @@ export const terminalChartTheme = {
 // （ECharts 不认 CSS var，必须读算后值；现有 hook 已随主题重算，沿用其机制）
 ```
 
-- [ ] Step 1: useChartTheme 重写为上表；清零图表硬编码色：`grep -rn "#1e2028\|#3b82f6" src/components | grep -i chart` → 0。
-- [ ] Step 2: 大数据图切 canvas：SmartChart 基线 1649-1655 `renderer: 'svg'` → 点数>200 的 K线/长序列用 `'canvas'`，小型饼/条保持 svg。
-- [ ] Step 3: SourceBadge 接线：四处图表组件右上角统一挂 `<SourceBadge/>`——ref 模式传真实 source/asOf（chart_ref 响应字段，`grep -n "source\|as_of" SmartChart.tsx` 对齐）；**inline 模式一律 `synthetic={true}`**（数据是 LLM 生成的——与 09 文档 Task A 联动）。
-- [ ] Step 4: Commit: `feat(charts): unified terminal ECharts theme, canvas for dense series, source badges everywhere`
+- [x] Step 1: useChartTheme 重写为上表；清零图表硬编码色：`grep -rn "#1e2028\|#3b82f6" src/components | grep -i chart` → 0。
+- [x] Step 2: 大数据图切 canvas：SmartChart 基线 1649-1655 `renderer: 'svg'` → 点数>200 的 K线/长序列用 `'canvas'`，小型饼/条保持 svg。
+- [x] Step 3: SourceBadge 接线：四处图表组件右上角统一挂 `<SourceBadge/>`——ref 模式传真实 source/asOf（chart_ref 响应字段，`grep -n "source\|as_of" SmartChart.tsx` 对齐）；**inline 模式一律 `synthetic={true}`**（数据是 LLM 生成的——与 09 文档 Task A 联动）。
+- [x] Step 4: Commit: `feat(charts): unified terminal ECharts theme, canvas for dense series, source badges everywhere`
 
 ---
 
