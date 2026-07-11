@@ -42,9 +42,9 @@
 **Files:**
 - Modify: 图表指令注入点（`grep -rn "chart_ref\|<chart" backend/graph/nodes/chat_renderer.py backend/graph/nodes/synthesize.py backend/prompts -l` 定位 prompt/模板）
 
-- [ ] Step 1: prompt 规则改写：要求模型对价格/行情/财务序列一律输出 `<chart_ref source=… fields=…/>`，`<chart>` 内联仅允许"无真实数据源的概念示意"，且必须在 JSON 外附一句"（示意图，非真实数据）"。
-- [ ] Step 2: 金样/既有图表测试回归（`python -m pytest backend/tests -k chart -q`）。
-- [ ] Commit: `fix(prompt): chart_ref-first policy — LLM may not fabricate price series for inline charts`
+- [x] Step 1: prompt 规则改写：要求模型对价格/行情/财务序列一律输出 `<chart_ref source=… fields=…/>`，`<chart>` 内联仅允许"无真实数据源的概念示意"，且必须在 JSON 外附一句"（示意图，非真实数据）"。
+- [x] Step 2: 金样/既有图表测试回归（`python -m pytest backend/tests -k chart -q`）。
+- [x] Commit: `fix(prompt): chart_ref-first policy — LLM may not fabricate price series for inline charts`
 
 ### A-3: Dashboard 数据来源审计（一次性盘点 + 补标注）
 

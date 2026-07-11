@@ -305,8 +305,8 @@ async def generate_narrative_draft(
 8) 末尾附一行免责声明："*以上内容仅供参考，不构成投资建议。*"
 9) 禁止出现"补充分析"、"核心发现"等附录性标题，所有内容必须融入上述五大章节中。
 10) **可选可视化**：当可视化确实有助于读者理解时，可在正文中插入图表标签（每篇报告最多 4 个，按章节需要自适应；不滥用）：
-    - 优先使用真实数据引用：`<chart_ref type="price_volume" source="market_chart" fields="ohlcv" title="量价走势"/>`；source 仅限 peers / financials / valuation / market_chart / technicals / news / earnings。
-    - 如确需 LLM 概览数据才使用 `<chart>`，示例：`<chart type="bar" title="标题">{{"labels":["A","B"],"values":[10,20]}}</chart>`；inline 数据易失真，禁止编造数字。
+    - **真实数据优先且不可降级为模型数组**：价格、行情、成交量、技术指标和财务时间序列一律输出 `<chart_ref>`，例如 `<chart_ref type="price_volume" source="market_chart" fields="ohlcv" title="量价走势"/>`；source 仅限 peers / financials / valuation / market_chart / technicals / news / earnings。拿不到真实字段时省略图表并在正文标注数据缺失，禁止改用 `<chart>` 编造序列。
+    - `<chart>` 仅允许表达没有真实数据源的概念关系、流程或情景示意，示例：`<chart type="pie" title="情景权重示意">{{"labels":["基准","乐观"],"values":[60,40]}}</chart>`。每个 inline 图表标签后必须紧跟一句：`（示意图，非真实数据）`；不得把价格、行情、财务数字或任何看似真实的时间序列放进 `<chart>`。
     - Chart catalog: bar / line / pie / scatter / gauge / candlestick / price_volume / rs_line / waterfall / heatmap / radar / valuation_band / bubble / drawdown / scenario。
     - 图种选择规则：价格/趋势/技术面优先 candlestick / price_volume / rs_line / drawdown；同行对比优先 bubble / heatmap / bar；财务结构优先 waterfall / 多序列 line / bar；估值优先 valuation_band / bar；风险/情景优先 scenario / drawdown；综合评分优先 radar / gauge。
     - 图表只辅助文字分析，不替代结论、证据解释和风险说明。

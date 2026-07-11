@@ -91,3 +91,14 @@ def test_existing_report_structure_keywords_preserved():
     assert "影响路径（事件" in src
     # 原有约束块仍在
     assert "<constraints>" in src
+
+
+# ---------------------------------------------------------------------------
+# 6. 图表真实性：价格/行情/财务序列只能走 chart_ref
+# ---------------------------------------------------------------------------
+def test_chart_prompt_requires_real_data_refs_for_market_and_financial_series():
+    src = _SYNTHESIZE_SRC
+    assert "价格、行情、成交量、技术指标和财务时间序列一律输出 `<chart_ref>`" in src
+    assert "禁止改用 `<chart>` 编造序列" in src
+    assert "`<chart>` 仅允许表达没有真实数据源的概念关系、流程或情景示意" in src
+    assert "（示意图，非真实数据）" in src
