@@ -164,7 +164,7 @@ export function InterruptCard({ data, onResume, onCancel }: InterruptCardProps) 
   };
 
   return (
-    <div className="bg-fin-card border border-fin-border rounded-xl p-5 space-y-4">
+    <div className="bg-fin-card border border-fin-border rounded-lg p-5 space-y-4">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
           <Settings size={16} className="text-amber-500" />

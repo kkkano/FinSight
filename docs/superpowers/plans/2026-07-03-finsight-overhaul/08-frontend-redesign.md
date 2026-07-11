@@ -433,7 +433,7 @@ export const terminalChartTheme = {
 
 ### Task 11: 清扫与回归
 
-- [ ] Step 1: 全仓禁用清单清零验证：
+- [x] Step 1: 全仓禁用清单清零验证：
 
 ```bash
 cd frontend
@@ -441,16 +441,16 @@ grep -rn "animate-bounce\|animate-ping\|from-blue-500\|from-emerald-500" src --i
 grep -rn "rounded-xl" src/components/ChatList.tsx src/components/ChatInput.tsx src/components/dashboard src/components/workbench src/components/execution   # 期望 0
 ```
 
-- [ ] Step 2: 浅色模式全站过一遍（重点查对比度：正文 ≥4.5:1，devtools 抽查 5 处）。
-- [ ] Step 3: `pnpm test:unit && pnpm build`；对话/看板/工作台/欢迎四张截图贴 PR。
-- [ ] Step 4: Commit: `chore(ui): sweep banned patterns, light-mode contrast pass`
+- [x] Step 2: 浅色模式全站过一遍（重点查对比度：正文 ≥4.5:1，devtools 抽查 5 处）。
+- [x] Step 3: `pnpm test:unit && pnpm build`；对话/看板/工作台/欢迎四张截图贴 PR。
+- [x] Step 4: Commit: `chore(ui): sweep banned patterns, light-mode contrast pass`
 
 ---
 
 ## 08 完成门禁
 
-- [ ] 禁用清单 grep 全零；`pnpm test:unit && pnpm build` 全绿
-- [ ] 走查清单（逐条截图/录屏）：
+- [x] 禁用清单 grep 全零；`pnpm test:unit && pnpm build` 全绿
+- [x] 走查清单（逐条截图/录屏）：
   - 欢迎页 → 应用内：同一设计语言，无"换产品"感
   - 对话：AI 回答无气泡无渐变头像；流式尾部是闪烁光标；进度是阶段步进器而非百分比；表格数字等宽右对齐
   - 执行过程：默认只见步进器 + 工作日志；专家内容收在右栏"过程"tab；控制台仅开发者模式可见

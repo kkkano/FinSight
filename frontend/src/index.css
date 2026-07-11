@@ -16,7 +16,7 @@
   --t-text-2: #565e6a;
   --t-text-3: #8a93a1;
 
-  --t-accent: 224 122 24;      /* #E07A18 终端橙，rgb 三元组供 alpha */
+  --t-accent: 184 91 0;        /* #B85B00 终端橙：对白底与黑字均满足 4.5:1 */
   --t-accent-hi: #c96a0e;
 
   --t-up: #0f9960;             /* 涨（国际默认绿涨）*/
@@ -154,7 +154,7 @@ input[type=number]::-webkit-outer-spin-button {
 
 /* Markdown tweaks */
 .prose-invert {
-  @apply text-fin-muted;
+  @apply text-fin-text-secondary;
 }
 .prose-invert strong {
   @apply text-fin-text font-semibold;

@@ -27,7 +27,7 @@ const TabButton: FC<{
       {icon}
       {pulse && (
         <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-fin-primary/50 opacity-80" />
+          <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-fin-primary/50 opacity-80" />
           <span className="relative inline-flex h-3 w-3 rounded-full bg-fin-primary" />
         </span>
       )}

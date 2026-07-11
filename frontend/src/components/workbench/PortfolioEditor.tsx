@@ -105,7 +105,7 @@ export function PortfolioEditor({ data, loading, onChanged }: PortfolioEditorPro
   return (
     <div id="portfolio-editor-card" className="bg-fin-card border border-fin-border rounded-lg overflow-hidden">
       {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-gradient-to-r from-emerald-500/5 to-transparent">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-fin-border bg-t-elevated/40">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
             <Wallet size={14} />

@@ -127,7 +127,7 @@ export function ThinkingBubble({ timeline, isRunning, className = '' }: Thinking
           <div
             key={bubble.id}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-xl text-xs
+              flex items-center gap-2 px-3 py-2 rounded-lg text-xs
               transition-all duration-300 ease-out
               ${bubble.isDone
                 ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
@@ -147,7 +147,7 @@ export function ThinkingBubble({ timeline, isRunning, className = '' }: Thinking
         );
       })}
       {isRunning && visibleBubbles.length === 0 && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs bg-fin-bg/40 text-fin-muted border border-fin-border/40">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-fin-bg/40 text-fin-muted border border-fin-border/40">
           <Loader2 size={12} className="animate-spin" />
           <span>正在准备分析...</span>
         </div>
