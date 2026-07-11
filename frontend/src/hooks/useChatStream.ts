@@ -8,13 +8,13 @@ import { useToast } from '../components/ui';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useExecutionStore } from '../store/executionStore';
 import { useStore } from '../store/useStore';
+import { zh } from '../locales/zh';
 import type { AgentLogSource, Message, ThinkingStep } from '../types';
 import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
 import { extractTicker, extractTickers } from '../utils/ticker';
 import { parseAgentMentions } from './useAgentMention';
 
 const DEFAULT_HISTORY_LIMIT = Number(import.meta.env.VITE_CHAT_HISTORY_MAX_MESSAGES) || 12;
-const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
 export interface SendChatStreamOptions {
   agentsOverride?: string[];
@@ -33,14 +33,14 @@ interface RunChatStreamOptions extends SendChatStreamOptions {
 
 const buildCancelledThinkingStep = (): ThinkingStep => ({
   stage: 'cancelled',
-  message: STOPPED_GENERATION_MESSAGE,
+  message: zh.chat.stopped,
   timestamp: new Date().toISOString(),
   eventType: 'trace',
   result: {
     type: 'trace',
     stage: 'cancelled',
     status: 'cancelled',
-    summary: STOPPED_GENERATION_MESSAGE,
+    summary: zh.chat.stopped,
   },
 });
 
@@ -129,7 +129,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       initialState.addMessageToSession(requestSessionId, {
         id: uuidv4(),
         role: 'assistant',
-        content: '请告诉我具体要分析哪只股票或公司，例如：\n• 输入股票代码：`AAPL`、`TSLA`、`600036`\n• 输入公司名：`苹果`、`特斯拉`、`招商银行`\n• 或直接说："分析苹果最近的股价走势"',
+        content: zh.chat.clarification,
         timestamp: Date.now(),
       });
       initialState.setDraft('');
@@ -169,7 +169,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
 
     const store = useStore.getState();
     store.setSessionLoading(requestSessionId, true);
-    if (isRequestSessionActive()) store.setStatus(retryMessageId ? 'Retrying request...' : 'Streaming response...');
+    if (isRequestSessionActive()) store.setStatus(retryMessageId ? zh.chat.retrying : zh.chat.streaming);
     const streamController = new AbortController();
     store.setSessionAbortController(requestSessionId, streamController);
     store.addAgentLog({
@@ -177,7 +177,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
       timestamp: new Date().toISOString(),
       source: 'system',
       level: 'info',
-      message: `${retryMessageId ? 'Retry' : 'New query'}: "${userMsgContent.slice(0, 50)}${userMsgContent.length > 50 ? '...' : ''}"`,
+      message: zh.chat.queryLog(Boolean(retryMessageId), `${userMsgContent.slice(0, 50)}${userMsgContent.length > 50 ? '...' : ''}`),
     });
     store.updateAgentStatus('supervisor', { status: 'running', startTime: new Date().toISOString() });
 
@@ -205,13 +205,13 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         });
         if (!replay?.report) return false;
         updateScopedMessage(aiMsgId, {
-          content: replay.report.summary || fullContent || 'Report recovered after stream interruption.',
+          content: replay.report.summary || fullContent || zh.execution.recovered,
           isLoading: false,
           report: replay.report,
           evidence_pool: replay.citations,
         });
         if (isRequestSessionActive()) useStore.getState().setStatus(null);
-        toast({ type: 'success', title: '已恢复报告', message: '流式连接中断后已从后端取回报告' });
+        toast({ type: 'success', title: zh.chat.recoveredTitle, message: zh.chat.recoveredMessage });
         return true;
       } catch {
         return false;
@@ -223,17 +223,17 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         thinkingSteps = [...thinkingSteps, buildCancelledThinkingStep()];
       }
       updateScopedMessage(aiMsgId, {
-        content: fullContent || STOPPED_GENERATION_MESSAGE,
+        content: fullContent || zh.chat.stopped,
         isLoading: false,
         thinking: thinkingSteps,
       });
       const current = useStore.getState();
-      if (isRequestSessionActive()) current.setStatus(STOPPED_GENERATION_MESSAGE);
+      if (isRequestSessionActive()) current.setStatus(zh.chat.stopped);
       current.addAgentLog({
-        id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'warn', message: STOPPED_GENERATION_MESSAGE,
+        id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'warn', message: zh.chat.stopped,
       });
       current.updateAgentStatus('supervisor', {
-        status: 'waiting', endTime: new Date().toISOString(), lastMessage: STOPPED_GENERATION_MESSAGE,
+        status: 'waiting', endTime: new Date().toISOString(), lastMessage: zh.chat.stopped,
       });
       if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'cancelled' });
     };
@@ -278,24 +278,24 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           },
           onToolStart: (name) => {
             const current = useStore.getState();
-            if (isRequestSessionActive()) current.setStatus(`Calling tool: ${name}...`);
+            if (isRequestSessionActive()) current.setStatus(zh.chat.callingTool(name));
             current.addAgentLog({
               id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'info',
-              message: `Tool started: ${name}`, tool_name: name,
+              message: zh.chat.toolStarted(name), tool_name: name,
             });
           },
           onToolEnd: () => {
             const current = useStore.getState();
-            if (isRequestSessionActive()) current.setStatus('Generating response...');
+            if (isRequestSessionActive()) current.setStatus(zh.chat.generatingResponse);
             current.addAgentLog({
               id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'success',
-              message: 'Tool execution completed',
+              message: zh.chat.toolCompleted,
             });
           },
           onDone: async (report, thinking, meta) => {
             const doneStep: ThinkingStep = {
               stage: 'done',
-              message: meta?.synthetic_done ? '已根据流式输出自动完成' : '分析完成',
+              message: meta?.synthetic_done ? zh.chat.syntheticDone : zh.chat.analysisDone,
               timestamp: new Date().toISOString(),
               eventType: 'done',
               result: { type: 'done', status: 'done', synthetic_done: Boolean(meta?.synthetic_done), reason: meta?.reason },
@@ -353,7 +353,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
                     const { chartType, dataKind, title } = chartInfo.smartChart;
                     const result = await apiClient.getChartData(smartTicker, dataKind);
                     if (result?.success && result.data && Array.isArray(result.data.values) && result.data.values.length > 0) {
-                      const safeTitle = (title || `${smartTicker} 图表`).replace(/"/g, '');
+                      const safeTitle = (title || zh.chat.chartTitle(smartTicker)).replace(/"/g, '');
                       patched += `\n\n<chart type="${chartType}" title="${safeTitle}">${JSON.stringify(result.data)}</chart>`;
                       useStore.getState().setTicker(smartTicker);
                     }
@@ -373,12 +373,12 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           onError: (error) => {
             void (async () => {
               if (await recoverReportIfAvailable()) return;
-              updateScopedMessage(aiMsgId, { content: `Error: ${error}`, isLoading: false });
+              updateScopedMessage(aiMsgId, { content: zh.chat.errorPrefix(String(error)), isLoading: false });
               const current = useStore.getState();
-              if (isRequestSessionActive()) current.setStatus('Stream interrupted');
-              toast({ type: 'error', title: '流式连接中断', message: '连接被中断或服务暂不可用，请重试' });
+              if (isRequestSessionActive()) current.setStatus(zh.chat.streamInterrupted);
+              toast({ type: 'error', title: zh.chat.streamInterruptedTitle, message: zh.chat.streamInterruptedMessage });
               current.addAgentLog({
-                id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: `Error: ${error}`,
+                id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error', message: zh.chat.errorPrefix(String(error)),
               });
               current.updateAgentStatus('supervisor', { status: 'error', lastMessage: error });
               if (execRunId) useExecutionStore.getState().completeExternalExecution({ runId: execRunId, status: 'error', error: String(error) });
@@ -431,22 +431,22 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
         return;
       }
       updateScopedMessage(aiMsgId, {
-        content: 'Network request failed. Please confirm the backend service is running.',
+        content: zh.chat.networkRequestFailed,
         isLoading: false,
       });
       const current = useStore.getState();
-      if (isRequestSessionActive()) current.setStatus('Request failed');
-      toast({ type: 'error', title: '请求失败', message: '网络异常或服务不可用，请稍后重试' });
+      if (isRequestSessionActive()) current.setStatus(zh.chat.requestFailed);
+      toast({ type: 'error', title: zh.chat.requestFailed, message: zh.chat.requestFailedMessage });
       current.addAgentLog({
         id: uuidv4(), timestamp: new Date().toISOString(), source: 'system', level: 'error',
-        message: error instanceof Error ? error.message : 'Network request failed',
+        message: error instanceof Error ? error.message : zh.chat.networkRequestFailed,
       });
     } finally {
       // 7. 会话级 loading/AbortController 收尾；executionStore 保持唯一进度真相源。
       const current = useStore.getState();
       current.setSessionLoading(requestSessionId, false);
       if (isRequestSessionActive()) {
-        if (streamController.signal.aborted) current.setStatus(STOPPED_GENERATION_MESSAGE);
+        if (streamController.signal.aborted) current.setStatus(zh.chat.stopped);
         else current.setStatus(null);
         current.resetExecutionState();
       }
@@ -463,7 +463,7 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
     if (state.isChatLoading) return;
     const query = findRetryQuery(state.messages, messageId);
     if (!query) {
-      state.setStatus('No user query found to retry');
+      state.setStatus(zh.chat.noRetryQuery);
       setTimeout(() => {
         if (useStore.getState().sessionId === sessionId) useStore.getState().setStatus(null);
       }, 1500);

@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
 import type { Message, AgentLogEntry, AgentStatus, AgentLogSource, RawSSEEvent, TraceViewMode } from '../types';
 import { apiClient } from '../api/client';
+import { zh } from '../locales/zh';
 import { cancelPersist, flushPersist, schedulePersist } from './persistScheduler';
 
 type Theme = 'dark' | 'light';
@@ -238,7 +239,7 @@ const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '您好，我是 FinSight AI 金融助手。直接输入股票代码或问题（例如：AAPL 股价走势、特斯拉最新新闻），我会用实时数据和图表帮你分析。',
+    zh.chat.welcome,
   timestamp: Date.now(),
 };
 
@@ -246,7 +247,6 @@ const MESSAGES_STORAGE_PREFIX = 'finsight-messages:';
 const CONVERSATIONS_STORAGE_KEY = 'finsight-conversations';
 const MAX_PERSISTED_MESSAGES = 100;
 const MAX_CONVERSATIONS = 50;
-const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 const memoryMessageStore = new Map<string, string>();
 let memoryConversationSummaries: ConversationSummary[] = [];
 
@@ -314,7 +314,7 @@ const normalizeConversationSummaries = (raw: string | null): ConversationSummary
     return parsed
       .map((item) => ({
         sessionId: String(item?.sessionId || '').trim(),
-        title: String(item?.title || '').trim() || '新对话',
+        title: String(item?.title || '').trim() || zh.chat.newConversation,
         lastMessagePreview: String(item?.lastMessagePreview || '').trim(),
         messageCount: Math.max(0, Number(item?.messageCount || 0)),
         createdAt: Number(item?.createdAt || Date.now()),
@@ -337,14 +337,14 @@ const buildConversationSummary = (
   const nonWelcome = visibleMessages.filter((m) => m.id !== WELCOME_MESSAGE.id && m.content.trim());
   const firstUser = nonWelcome.find((m) => m.role === 'user');
   const latest = [...nonWelcome].reverse()[0] || visibleMessages[visibleMessages.length - 1] || WELCOME_MESSAGE;
-  const titleSource = firstUser?.content || latest?.content || previous?.title || '新对话';
+  const titleSource = firstUser?.content || latest?.content || previous?.title || zh.chat.newConversation;
   const previewSource = latest?.content || previous?.lastMessagePreview || '';
   const createdAt = previous?.createdAt || visibleMessages[0]?.timestamp || Date.now();
   const updatedAt = latest?.timestamp || previous?.updatedAt || Date.now();
 
   return {
     sessionId,
-    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || '新对话',
+    title: titleSource.replace(/\s+/g, ' ').trim().slice(0, 42) || zh.chat.newConversation,
     lastMessagePreview: previewSource.replace(/\s+/g, ' ').trim().slice(0, 90),
     messageCount: nonWelcome.length,
     createdAt,
@@ -856,16 +856,16 @@ export const useStore = create<AppState>((set) => ({
           [state.sessionId]: false,
         },
         isChatLoading: false,
-        statusMessage: STOPPED_GENERATION_MESSAGE,
+        statusMessage: zh.chat.stopped,
         statusSince: Date.now(),
-        currentStep: '已停止生成',
+        currentStep: zh.chat.stoppedLabel,
         executionProgress: progress,
         chatStatusBySession: {
           ...state.chatStatusBySession,
           [state.sessionId]: {
-            statusMessage: STOPPED_GENERATION_MESSAGE,
+            statusMessage: zh.chat.stopped,
             statusSince: Date.now(),
-            currentStep: '已停止生成',
+            currentStep: zh.chat.stoppedLabel,
             executionProgress: progress,
           },
         },

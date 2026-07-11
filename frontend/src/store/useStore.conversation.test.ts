@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { zh } from '../locales/zh';
 import { useStore } from './useStore';
 
 describe('useStore conversation lifecycle', () => {
@@ -235,8 +236,8 @@ describe('useStore conversation lifecycle', () => {
     const next = useStore.getState();
     expect(controller.signal.aborted).toBe(true);
     expect(next.isChatLoading).toBe(false);
-    expect(next.statusMessage).toBe('已停止生成，保留已完成的结果。');
-    expect(next.currentStep).toBe('已停止生成');
+    expect(next.statusMessage).toBe(zh.chat.stopped);
+    expect(next.currentStep).toBe(zh.chat.stoppedLabel);
     expect(next.executionProgress).toBe(40);
     expect(next.abortController).toBeNull();
   });

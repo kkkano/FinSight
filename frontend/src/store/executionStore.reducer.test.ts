@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { zh } from '../locales/zh';
 import { pipelineReducer } from './executionStore';
 import type {
   AgentRunInfo,
@@ -308,6 +309,6 @@ describe('pipelineReducer', () => {
     };
 
     const patch = pipelineReducer(run, step, [buildTimelineEvent('quality_blocked')]);
-    expect(patch.currentStep).toBe('Report blocked by quality gate');
+    expect(patch.currentStep).toBe(zh.execution.qualityBlocked);
   });
 });

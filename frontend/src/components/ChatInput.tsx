@@ -5,6 +5,7 @@ import { Paperclip, SendHorizontal, Square, X } from 'lucide-react';
 import { useAgentMention } from '../hooks/useAgentMention';
 import { useChatStream } from '../hooks/useChatStream';
 import { useSkillAutocomplete } from '../hooks/useSkillAutocomplete';
+import { zh } from '../locales/zh';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStore } from '../store/useStore';
 import { TICKER_PATTERN } from '../utils/ticker';
@@ -25,6 +26,13 @@ const hasActionableResearchInput = (text: string): boolean => {
   if (!withoutPunctuation || EMPTY_RESEARCH_PROMPTS.has(withoutPunctuation)) return false;
   if (!/[A-Za-z0-9\u3400-\u9FFF]/.test(trimmed)) return false;
   return withoutPunctuation.length >= 2 || TICKER_PATTERN.test(trimmed.toUpperCase());
+};
+
+const selectionKindLabel = (type: string): string => {
+  if (type === 'news') return zh.chat.selectionKinds.news;
+  if (type === 'risk') return zh.chat.selectionKinds.risk;
+  if (type === 'insight') return zh.chat.selectionKinds.insight;
+  return zh.chat.selectionKinds.report;
 };
 
 interface ChatInputProps {
@@ -107,16 +115,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium max-w-[400px] border border-amber-500/20">
             <Paperclip size={12} className="shrink-0" />
             <span className="truncate">
-              {activeSelections[0].type === 'news' ? '新闻' : activeSelections[0].type === 'risk' ? '风险' : activeSelections[0].type === 'insight' ? '洞察' : '报告'}{' '}
-              已选: {activeSelections.length === 1
+              {selectionKindLabel(activeSelections[0].type)}{' '}
+              {zh.chat.selectedPrefix}: {activeSelections.length === 1
                 ? `${activeSelections[0].title.slice(0, 40)}${activeSelections[0].title.length > 40 ? '...' : ''}`
-                : `${activeSelections.length} 条${activeSelections[0].type === 'news' ? '新闻' : activeSelections[0].type === 'risk' ? '风险' : activeSelections[0].type === 'insight' ? '洞察' : '报告'}`}
+                : zh.chat.selectedCount(activeSelections.length, selectionKindLabel(activeSelections[0].type))}
             </span>
             <button
               onClick={clearSelection}
               className="shrink-0 p-0.5 rounded-full hover:bg-amber-500/20 transition-colors"
-              title="清除选择"
-              aria-label="清除选择"
+              title={zh.chat.clearSelection}
+              aria-label={zh.chat.clearSelection}
             >
               <X size={12} />
             </button>
@@ -134,9 +142,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               ? 'border-amber-500 text-amber-500 bg-amber-500/10'
               : 'border-fin-border text-fin-text-secondary hover:border-amber-500/50'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
-          title={canGenerateReport ? '生成结构化长报告' : '输入可研究的问题、选择标的或引用内容后启用报告'}
+          title={canGenerateReport ? zh.chat.reportEnabledTitle : zh.chat.reportDisabledTitle}
         >
-          报告
+          {zh.chat.report}
         </button>
       </div>
       <div className="relative flex items-end max-w-5xl mx-auto">
@@ -168,9 +176,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }}
           onKeyDown={handleKeyDown}
           placeholder={isChatLoading
-            ? '正在生成回答…可以先输入下一个问题，稍后发送'
-            : 'Ask about markets, macro, themes, or a ticker... (e.g., AAPL price trend)'}
-          aria-label="输入聊天消息"
+            ? zh.chat.inputWhileStreaming
+            : zh.chat.inputPlaceholder}
+          aria-label={zh.chat.inputLabel}
           rows={1}
           className="w-full bg-t-surface text-t-text border border-t-border rounded-lg py-3 pl-4 pr-28 focus:outline-none focus:ring-1 focus:ring-t-accent/30 focus:border-t-accent/70 transition-all placeholder-t-text3 resize-none overflow-y-hidden min-h-[44px] max-h-[160px]"
         />
@@ -180,9 +188,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             <button
               data-testid="chat-stop-btn"
               onClick={chatStream.stop}
-              aria-label="停止生成"
+              aria-label={zh.chat.stop}
               className="p-2 max-lg:min-h-[44px] max-lg:min-w-[44px] flex items-center justify-center bg-fin-danger text-white rounded-lg hover:bg-red-600 transition-colors"
-              title="停止生成"
+              title={zh.chat.stop}
             >
               <Square size={16} fill="currentColor" />
             </button>
@@ -191,9 +199,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
               data-testid="chat-send-btn"
               onClick={handleSend}
               disabled={!input.trim()}
-              aria-label={outputMode === 'investment_report' ? '发送并生成报告' : '发送消息'}
+              aria-label={outputMode === 'investment_report' ? zh.chat.sendReport : zh.chat.sendMessage}
               className="p-2 max-lg:min-h-[44px] max-lg:min-w-[44px] flex items-center justify-center bg-fin-primary text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={outputMode === 'investment_report' ? '发送并生成报告' : '发送'}
+              title={outputMode === 'investment_report' ? zh.chat.sendReport : zh.chat.send}
             >
               <SendHorizontal size={18} />
             </button>
@@ -213,34 +221,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-[11px]">
           <button
             className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText('英伟达（NVDA）技术面分析：RSI、MACD、关键支撑阻力位')}
+            onClick={() => setComposerText(zh.chat.suggestions.nvdaPrompt)}
             disabled={isChatLoading}
           >
-            &gt; NVDA 技术面
+            {zh.chat.suggestions.nvdaLabel}
           </button>
           <button
             className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText('对比 AAPL 与 MSFT：营收增长、估值水平、技术面强弱')}
+            onClick={() => setComposerText(zh.chat.suggestions.comparePrompt)}
             disabled={isChatLoading}
           >
-            &gt; AAPL 对比 MSFT
+            {zh.chat.suggestions.compareLabel}
           </button>
           <button
             className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
-            onClick={() => setComposerText('特斯拉最新关键新闻（24小时）及对股价影响解读')}
+            onClick={() => setComposerText(zh.chat.suggestions.teslaPrompt)}
             disabled={isChatLoading}
           >
-            &gt; 特斯拉新闻
+            {zh.chat.suggestions.teslaLabel}
           </button>
           <button
             className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
             onClick={() => {
               setOutputMode('investment_report');
-              setComposerText('请做 Apple 深度投资报告（deep report，filing document longform），重点引用 10-K/10-Q、业绩电话会与权威媒体来源，并给出明确结论与风险清单');
+              setComposerText(zh.chat.suggestions.reportPrompt);
             }}
             disabled={isChatLoading}
           >
-            &gt; Apple 深度研报
+            {zh.chat.suggestions.reportLabel}
           </button>
         </div>
       </div>

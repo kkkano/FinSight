@@ -18,17 +18,16 @@ import {
   messageActionContainerClass,
 } from './chatMessageActions';
 import { useChatStream } from '../hooks/useChatStream';
-
-const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
+import { zh } from '../locales/zh';
 
 // ── Shared sub-components ──
 
 const EvidenceSection: React.FC<{ evidence_pool: EvidenceItem[] }> = ({ evidence_pool }) => (
   <div className="mt-3 rounded-lg border border-fin-border/60 bg-fin-bg/40 px-3 py-2">
-    <div className="text-[11px] text-fin-muted mb-2">Evidence ({evidence_pool.length})</div>
+    <div className="text-[11px] text-fin-muted mb-2">{zh.chat.source} ({evidence_pool.length})</div>
     <div className="flex flex-wrap gap-2">
       {evidence_pool.map((ev, idx) => {
-        const label = ev.title || ev.source || ev.url || `Source ${idx + 1}`;
+        const label = ev.title || ev.source || ev.url || `${zh.chat.source} ${idx + 1}`;
         if (ev.url) {
           return <SourceLink key={`${ev.url}-${idx}`} href={ev.url} label={label} />;
         }
@@ -49,11 +48,11 @@ const DataOriginTag: React.FC<{ data_origin?: string; fallback_used?: boolean; a
   return (
     <div className="mt-2 text-[11px] text-fin-muted flex items-center gap-2">
       <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">
-        来源: {data_origin} {fallback_used ? '(兜底)' : ''}
+        {zh.chat.source}: {data_origin} {fallback_used ? `(${zh.chat.fallback})` : ''}
       </span>
-      {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">截至: {as_of}</span>}
+      {as_of && <span className="px-2 py-0.5 rounded-full border border-fin-border/60 bg-fin-bg/60">{zh.chat.asOf}: {as_of}</span>}
       {tried_sources && tried_sources.length > 0 && (
-        <span className="text-2xs text-fin-muted/70">尝试: {tried_sources.join(' → ')}</span>
+        <span className="text-2xs text-fin-muted/70">{zh.chat.triedSources}: {tried_sources.join(' → ')}</span>
       )}
     </div>
   );
@@ -232,8 +231,8 @@ export const ChatList: React.FC = () => {
   const [elapsed, setElapsed] = useState<string>('0.0');
   const isFlat = chatStyle === 'flat';
   const showExecutionBanner = isChatLoading
-    || statusMessage === STOPPED_GENERATION_MESSAGE
-    || currentStep === '已停止生成';
+    || statusMessage === zh.chat.stopped
+    || currentStep === zh.chat.stoppedLabel;
 
   // FE-02：滚动停靠检测——只有用户停靠在底部时才自动跟随，向上回看不再被拽回
   const PIN_THRESHOLD_PX = 80;
@@ -313,10 +312,10 @@ export const ChatList: React.FC = () => {
         <button
           type="button"
           onClick={jumpToLatest}
-          aria-label="回到最新消息"
+          aria-label={zh.chat.backToLatest}
           className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full border border-fin-border bg-fin-card px-3 py-1.5 text-xs text-fin-text shadow-lg hover:border-fin-primary/60 transition-colors"
         >
-          ↓ 回到最新
+          ↓ {zh.chat.backToLatest}
         </button>
       )}
 
@@ -332,9 +331,9 @@ export const ChatList: React.FC = () => {
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-fin-primary" />
               </span>
               <span className="flex-1 truncate text-[13px] font-medium text-fin-text">
-                {statusMessage === STOPPED_GENERATION_MESSAGE
-                  ? '已停止生成（结果已保留）'
-                  : statusMessage || '正在分析…'}
+                {statusMessage === zh.chat.stopped
+                  ? zh.chat.stoppedResult
+                  : statusMessage || zh.chat.analyzing}
               </span>
               <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{elapsed}s</span>
             </div>
@@ -352,7 +351,7 @@ export const ChatList: React.FC = () => {
                 />
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2">
-                <span className="truncate text-2xs text-fin-text-secondary">{currentStep || '准备执行…'}</span>
+                <span className="truncate text-2xs text-fin-text-secondary">{currentStep || zh.chat.preparing}</span>
                 <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{Math.round(executionProgress ?? 0)}%</span>
               </div>
             </div>
@@ -469,7 +468,7 @@ const SourceLink: React.FC<{ href: string; label: React.ReactNode }> = ({ href, 
   const displayText =
     stringLabel && stringLabel !== href
       ? stringLabel
-      : urlMeta.domain || '来源链接';
+      : urlMeta.domain || zh.chat.sourceLink;
 
   return (
     <a
@@ -559,7 +558,7 @@ const MessageActions: React.FC<{
       },
       (error) => {
         console.error('Copy failed', error);
-        toast({ type: 'error', title: '复制失败', message: '浏览器未允许访问剪贴板，请检查权限后重试。' });
+        toast({ type: 'error', title: zh.chat.copyFailedTitle, message: zh.chat.copyFailedMessage });
       },
     );
   };
@@ -581,19 +580,19 @@ const MessageActions: React.FC<{
     <div className={messageActionContainerClass(Boolean(inline))}>
       <button
         className={clsx(btnClass, copied && 'text-fin-success')}
-        title={copied ? '已复制' : '复制'}
-        aria-label={copied ? '已复制' : '复制回答'}
+        title={copied ? zh.chat.copied : zh.chat.copy}
+        aria-label={copied ? zh.chat.copied : zh.chat.copyAnswer}
         onClick={handleCopy}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
-      <button className={btnClass} title="重试" aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
+      <button className={btnClass} title={zh.chat.retry} aria-label={MESSAGE_ACTION_LABELS.retry} onClick={onRetry}>
         <RefreshCcw size={14} />
       </button>
-      <button className={btnClass} title="导出" aria-label={MESSAGE_ACTION_LABELS.export} onClick={handleExport}>
+      <button className={btnClass} title={zh.chat.export} aria-label={MESSAGE_ACTION_LABELS.export} onClick={handleExport}>
         <Download size={14} />
       </button>
-      <button className={btnClass} title="删除" aria-label={MESSAGE_ACTION_LABELS.delete} onClick={onDelete}>
+      <button className={btnClass} title={zh.chat.delete} aria-label={MESSAGE_ACTION_LABELS.delete} onClick={onDelete}>
         <Trash2 size={14} />
       </button>
     </div>
@@ -605,7 +604,7 @@ const LoadingDots: React.FC = () => {
   const statusMessage = useStore((s) => s.statusMessage);
   return (
     <div className="flex items-center text-2xs font-mono text-t-text3">
-      <span>{statusMessage || '正在分析'}</span>
+      <span>{statusMessage || zh.chat.analyzingShort}</span>
       <span className="t-caret" />
     </div>
   );

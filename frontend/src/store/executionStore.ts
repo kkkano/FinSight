@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { apiClient } from '../api/client';
 import type { ExecuteRequest, SSECallbacks } from '../api/client';
 import { getAgentPreferences } from '../components/settings/AgentControlPanel';
+import { zh } from '../locales/zh';
 import type {
   AgentRunInfo,
   BudgetPriorityItem,
@@ -430,7 +431,7 @@ function createExecutionRunState(params: {
     decisionNotes: [],
     etaSeconds: null,
     progress: 0,
-    currentStep: '准备执行...',
+    currentStep: zh.execution.preparing,
     timeline: [],
     report: null,
       qualityBlocked: false,
@@ -490,7 +491,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     patch.hasParallelPlan = result.has_parallel === true;
     patch.budgetPriority = asBudgetPriority(result.agent_selection);
     patch.reasoningBrief = typeof result.reasoning_brief === 'string' ? result.reasoning_brief : undefined;
-    patch.currentStep = message || '计划已生成';
+    patch.currentStep = message || zh.execution.planReady;
     patch.progress = Math.max(run.progress, 8);
     return mergePatchAndEstimateEta(run, patch);
   }
@@ -531,7 +532,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     const note: DecisionNote = {
       id: `${run.runId}:decision:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
       scope: typeof result.scope === 'string' ? result.scope : undefined,
-      title: typeof result.title === 'string' && result.title.trim() ? result.title : '决策说明',
+      title: typeof result.title === 'string' && result.title.trim() ? result.title : zh.execution.decisionNote,
       reason: typeof result.reason === 'string' ? result.reason : undefined,
       impact: typeof result.impact === 'string' ? result.impact : undefined,
       nextStep: typeof result.next_step === 'string'
@@ -552,8 +553,8 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     const qualityPatch = extractRunQualityPatch(result);
     // P1-4: 执行失败（报告构建崩溃）≠ 质量拦截，fallback 文案区分两种情况
     const fallbackMessage = result.failure_kind === 'execution_error'
-      ? '报告生成过程出错，请重试'
-      : 'Report blocked by quality gate';
+      ? zh.execution.reportFailed
+      : zh.execution.qualityBlocked;
     patch.currentStep = message || fallbackMessage;
     patch.progress = Math.max(run.progress, 98);
     return mergePatchAndEstimateEta(run, {
@@ -582,7 +583,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
     }
     patch.agentStatuses = { ...run.agentStatuses, ...newStatuses };
     patch.progress = Math.max(run.progress, 5);
-    patch.currentStep = message || '协调器已启动';
+    patch.currentStep = message || zh.execution.coordinatorStarted;
     return mergePatchAndEstimateEta(run, patch);
   }
 
@@ -612,7 +613,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       };
       patch.agentStatuses = statuses;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 执行中...`;
+      patch.currentStep = zh.execution.agentRunning(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -674,7 +675,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       };
       patch.agentStatuses = statuses;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 完成`;
+      patch.currentStep = zh.execution.agentCompleted(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -685,7 +686,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       const timestamp = typeof step?.timestamp === 'string' ? step.timestamp : new Date().toISOString();
       const statuses = { ...run.agentStatuses };
       const existing = statuses[agentName] ?? { name: agentName, status: 'pending' as const };
-      const errorText = typeof result.error === 'string' ? result.error : 'Unknown error';
+      const errorText = typeof result.error === 'string' ? result.error : zh.execution.unknownError;
       statuses[agentName] = {
         ...existing,
         status: 'error',
@@ -704,7 +705,7 @@ export function pipelineReducer(run: ExecutionRun, step: any, timeline: Timeline
       patch.agentStatuses = statuses;
       patch.fallbackReasons = fallbackReasons;
       patch.progress = calculateAgentProgress(statuses, run.progress);
-      patch.currentStep = `${agentName} 异常`;
+      patch.currentStep = zh.execution.agentFailed(agentName);
       return mergePatchAndEstimateEta(run, patch);
     }
   }
@@ -759,7 +760,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
       decisionNotes: [],
       etaSeconds: null,
       progress: 0,
-      currentStep: '准备执行...',
+      currentStep: zh.execution.preparing,
       timeline: [],
       report: null,
     qualityBlocked: false,
@@ -862,12 +863,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           ...pipelineStages.rendering,
           status: pipelineStages.rendering.status === 'done' ? 'done' : 'running',
           startedAt: pipelineStages.rendering.startedAt ?? timestamp,
-          message: 'Rendering markdown stream',
+          message: zh.execution.renderingStream,
         };
         updateRun({
           streamedContent: run.streamedContent + token,
           progress: Math.max(run.progress, 92),
-          currentStep: '生成报告中...',
+          currentStep: zh.execution.generatingReport,
           pipelineStages,
           pipelineCurrentStage: run.pipelineCurrentStage ?? 'rendering',
           etaSeconds: run.etaSeconds,
@@ -902,7 +903,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           status: 'done',
           startedAt: pipelineStages.done.startedAt ?? doneAt,
           completedAt: doneAt,
-          message: 'Execution completed',
+          message: zh.execution.doneEvent,
         };
         if (pipelineStages.rendering.status === 'running') {
           pipelineStages.rendering = {
@@ -938,14 +939,14 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
               timestamp: new Date().toISOString(),
               eventType: 'error',
               stage: 'error',
-              message: error ?? 'Unknown error',
+              message: error ?? zh.execution.unknownError,
               runId,
             })
           : [];
 
         completeRun({
           status: 'error',
-          error: error ?? 'Unknown error',
+          error: error ?? zh.execution.unknownError,
           currentStep: null,
           timeline,
         });
@@ -959,7 +960,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
               timestamp: new Date().toISOString(),
               eventType: 'interrupt',
               stage: 'interrupt',
-              message: data.prompt ?? '等待确认...',
+              message: data.prompt ?? zh.execution.awaitingConfirmation,
               runId,
               raw: data as unknown as Record<string, unknown>,
             })
@@ -967,7 +968,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
         updateRun({
           status: 'interrupted',
-          currentStep: data.prompt ?? '等待确认...',
+          currentStep: data.prompt ?? zh.execution.awaitingConfirmation,
           interruptData: data,
           timeline,
           etaSeconds: null,
@@ -990,11 +991,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
 
         const run = getRun();
         if (run && run.status === 'running') {
-          callbacks.onError?.('Execution stream ended unexpectedly (missing done event)');
+          callbacks.onError?.(zh.execution.streamEndedUnexpectedly);
         }
       } catch (err: unknown) {
         if (abortController.signal.aborted) return;
-        const message = err instanceof Error ? err.message : 'Execution failed';
+        const message = err instanceof Error ? err.message : zh.execution.failed;
         callbacks.onError?.(message);
       }
     })();
@@ -1149,12 +1150,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         ...pipelineStages.rendering,
         status: pipelineStages.rendering.status === 'done' ? 'done' : 'running',
         startedAt: pipelineStages.rendering.startedAt ?? timestamp,
-        message: 'Rendering markdown stream',
+        message: zh.execution.renderingStream,
       };
       const patch = mergePatchAndEstimateEta(run, {
         streamedContent: run.streamedContent + token,
         progress: Math.max(run.progress, 92),
-        currentStep: '生成报告中...',
+        currentStep: zh.execution.generatingReport,
         pipelineStages,
         pipelineCurrentStage: run.pipelineCurrentStage ?? 'rendering',
       });
@@ -1205,7 +1206,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
             status: 'done',
             startedAt: pipelineStages.done.startedAt ?? doneAt,
             completedAt: doneAt,
-            message: 'Execution completed',
+            message: zh.execution.doneEvent,
           },
           rendering: pipelineStages.rendering.status === 'running'
             ? {
@@ -1218,7 +1219,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         nextCurrentStage = 'done';
         nextProgress = 100;
       } else if (status === 'error') {
-        const message = nextError || 'Unknown error';
+        const message = nextError || zh.execution.unknownError;
         timeline = pushTimeline(run, {
           id: `${runId}:${Date.now()}:error`,
           timestamp: doneAt,
@@ -1235,11 +1236,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
           timestamp: doneAt,
           eventType: 'cancel',
           stage: 'cancel',
-          message: nextError || 'Execution cancelled',
+          message: nextError || zh.execution.cancelled,
           runId,
           raw: (meta && typeof meta === 'object') ? meta : {},
         });
-        nextError = nextError || 'Execution cancelled';
+        nextError = nextError || zh.execution.cancelled;
       }
 
       const metricsObj = (meta && typeof meta === 'object' && meta.metrics && typeof meta.metrics === 'object')
@@ -1322,7 +1323,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         return {
           ...item,
           status: 'running' as const,
-          currentStep: 'Resuming execution...',
+          currentStep: zh.execution.resuming,
           error: null,
           interruptData: null,
           abortController,
@@ -1360,7 +1361,7 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         get().completeExternalExecution({
           runId,
           status: 'error',
-          error: error ?? 'Resume failed',
+          error: error ?? zh.execution.resumeFailed,
         });
       },
       onInterrupt: (data) => {
@@ -1393,12 +1394,12 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
         get().completeExternalExecution({
           runId,
           status: 'error',
-          error: 'Resume stream ended unexpectedly (missing done event)',
+          error: zh.execution.resumeStreamEndedUnexpectedly,
         });
       }
     } catch (err: unknown) {
       if (abortController.signal.aborted) return;
-      const message = err instanceof Error ? err.message : 'Resume failed';
+      const message = err instanceof Error ? err.message : zh.execution.resumeFailed;
       get().completeExternalExecution({
         runId,
         status: 'error',
