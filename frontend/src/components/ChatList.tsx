@@ -19,6 +19,10 @@ import {
 } from './chatMessageActions';
 import { useChatStream } from '../hooks/useChatStream';
 import { zh } from '../locales/zh';
+import { useExecutionStore } from '../store/executionStore';
+import type { ExecutionRun, PipelineStage } from '../types/execution';
+import { getAgentDisplayName } from '../utils/userMessageMapper';
+import { StageStepper, type StageStepperProps, type StageStatus } from './execution/StageStepper';
 
 // ── Shared sub-components ──
 
@@ -71,6 +75,102 @@ type MessagePayload = {
   tried_sources?: string[];
   thinking?: ThinkingStep[];
 };
+
+const CHAT_PIPELINE_STAGES: Array<{
+  key: string;
+  label: string;
+  pipelineStage?: PipelineStage;
+}> = [
+  { key: 'understand', label: '理解' },
+  { key: 'plan', label: '计划', pipelineStage: 'planning' },
+  { key: 'execute', label: '执行', pipelineStage: 'executing' },
+  { key: 'synthesize', label: '综合', pipelineStage: 'synthesizing' },
+  { key: 'render', label: '撰写', pipelineStage: 'rendering' },
+];
+
+function countCompletedPlanSteps(run: ExecutionRun): { completed: number; total: number } {
+  const planSteps = run.planSteps ?? [];
+  const total = planSteps.length;
+  if (total === 0) return { completed: 0, total: 0 };
+
+  const terminalEventTypes = new Set(['step_done', 'step_error', 'step_skipped']);
+  const terminalEvents = run.timeline.filter((event) => terminalEventTypes.has(event.eventType));
+  const terminalStepIds = new Set(
+    terminalEvents.map((event) => event.stepId).filter((stepId): stepId is string => Boolean(stepId)),
+  );
+  const matched = new Set<string>();
+
+  for (const step of planSteps) {
+    const agent = run.agentStatuses[step.name];
+    const agentFinished = agent && ['done', 'error', 'skipped'].includes(agent.status);
+    const stepAgentFinished = Object.values(run.agentStatuses).some(
+      (candidate) => candidate.stepId === step.id && ['done', 'error', 'skipped'].includes(candidate.status),
+    );
+    if (terminalStepIds.has(step.id) || agentFinished || stepAgentFinished) matched.add(step.id);
+  }
+
+  const unmatchedTerminalEvents = terminalEvents.filter(
+    (event) => !event.stepId || !planSteps.some((step) => step.id === event.stepId),
+  ).length;
+  return {
+    completed: Math.min(total, matched.size + unmatchedTerminalEvents),
+    total,
+  };
+}
+
+function toStageStatus(run: ExecutionRun, pipelineStage: PipelineStage): StageStatus {
+  const status = run.pipelineStages?.[pipelineStage]?.status;
+  if (status === 'done') return 'done';
+  if (status === 'running') return 'active';
+  if (status === 'error') return 'error';
+  return 'pending';
+}
+
+function buildChatStages(run: ExecutionRun | undefined, isChatLoading: boolean): StageStepperProps['stages'] {
+  if (!run) {
+    return CHAT_PIPELINE_STAGES.map((stage, index) => ({
+      key: stage.key,
+      label: stage.label,
+      status: index === 0 && isChatLoading ? 'active' : 'pending',
+    }));
+  }
+
+  const executionCount = countCompletedPlanSteps(run);
+  const pipelineDone = run.pipelineCurrentStage === 'done' || run.status === 'done';
+  const stages = CHAT_PIPELINE_STAGES.map((stage, index) => {
+    let status: StageStatus = index === 0 ? 'done' : toStageStatus(run, stage.pipelineStage!);
+    if (pipelineDone) status = 'done';
+    return {
+      key: stage.key,
+      label: stage.label,
+      status,
+      detail: stage.pipelineStage === 'executing' && executionCount.total > 0
+        ? `${executionCount.completed}/${executionCount.total}`
+        : undefined,
+    };
+  });
+
+  const activeIndex = stages.findIndex((stage) => stage.status === 'active' || stage.status === 'error');
+  if (activeIndex > 0) {
+    for (let index = 0; index < activeIndex; index += 1) {
+      if (stages[index].status === 'pending') stages[index].status = 'done';
+    }
+  } else if (activeIndex < 0 && run.status === 'running') {
+    stages[1].status = 'active';
+  }
+  return stages;
+}
+
+function getCurrentAction(run: ExecutionRun | undefined, fallback?: string | null): string | undefined {
+  if (!run) return fallback || undefined;
+  const latestAction = [...run.timeline].reverse().find((event) =>
+    ['step_start', 'agent_start', 'agent_step', 'tool_start'].includes(event.eventType),
+  );
+  const action = latestAction?.userMessage || latestAction?.message;
+  const agent = latestAction?.agent || latestAction?.name;
+  if (action && agent) return `${getAgentDisplayName(agent)} · ${action}`;
+  return action || run.currentStep || fallback || undefined;
+}
 
 const AssistantContent: React.FC<{
   msg: MessagePayload;
@@ -219,17 +319,29 @@ export const ChatList: React.FC = () => {
     isChatLoading,
     statusMessage,
     statusSince,
-    executionProgress,
     currentStep,
     removeMessage,
     sessionId,
     chatStyle,
   } = useStore();
+  const activeRuns = useExecutionStore((state) => state.activeRuns);
   const chatStream = useChatStream(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [elapsed, setElapsed] = useState<string>('0.0');
+  const [elapsedMs, setElapsedMs] = useState(0);
   const isFlat = chatStyle === 'flat';
+  const activeChatRun = useMemo(
+    () => [...activeRuns].reverse().find((run) => run.source === 'chat'),
+    [activeRuns],
+  );
+  const executionStages = useMemo(
+    () => buildChatStages(activeChatRun, isChatLoading),
+    [activeChatRun, isChatLoading],
+  );
+  const currentAction = useMemo(
+    () => getCurrentAction(activeChatRun, currentStep || statusMessage),
+    [activeChatRun, currentStep, statusMessage],
+  );
   const showExecutionBanner = isChatLoading
     || statusMessage === zh.chat.stopped
     || currentStep === zh.chat.stoppedLabel;
@@ -263,16 +375,18 @@ export const ChatList: React.FC = () => {
   }, [messages, isChatLoading, showExecutionBanner]);
 
   useEffect(() => {
-    if (!statusSince) {
-      setElapsed('0.0');
+    const runStartedAt = activeChatRun ? Date.parse(activeChatRun.startedAt) : Number.NaN;
+    const startedAt = Number.isFinite(runStartedAt) ? runStartedAt : statusSince;
+    if (!startedAt) {
+      setElapsedMs(0);
       return;
     }
     const timer = setInterval(() => {
-      const delta = (Date.now() - statusSince) / 1000;
-      setElapsed(delta.toFixed(1));
-    }, 200);
+      setElapsedMs(Math.max(0, Date.now() - startedAt));
+    }, 1000);
+    setElapsedMs(Math.max(0, Date.now() - startedAt));
     return () => clearInterval(timer);
-  }, [statusSince]);
+  }, [activeChatRun, statusSince]);
 
   const renderMessages = () => {
     const items = messages.map((msg) =>
@@ -322,39 +436,14 @@ export const ChatList: React.FC = () => {
       {showExecutionBanner && (
         <div role="status" aria-live="polite" className={clsx("flex w-full justify-start animate-fade-in", isFlat && "px-2 py-3")}>
           <div className={clsx(
-            "rounded-xl border border-fin-border bg-fin-card px-4 py-3 shadow-sm min-w-[300px] max-w-[440px]",
-            isFlat ? "max-w-3xl mx-auto w-full" : "ml-12"
+            "min-w-[300px] max-w-[48rem]",
+            isFlat ? "mx-auto w-full" : "ml-12 w-full max-w-[440px]"
           )}>
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-fin-primary opacity-60 animate-ping" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-fin-primary" />
-              </span>
-              <span className="flex-1 truncate text-[13px] font-medium text-fin-text">
-                {statusMessage === zh.chat.stopped
-                  ? zh.chat.stoppedResult
-                  : statusMessage || zh.chat.analyzing}
-              </span>
-              <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{elapsed}s</span>
-            </div>
-            <div className="mt-2.5">
-              <div
-                role="progressbar"
-                aria-valuenow={Math.max(3, Math.min(100, executionProgress ?? 0))}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                className="h-1 overflow-hidden rounded-full bg-fin-border"
-              >
-                <div
-                  className="h-full rounded-full bg-fin-primary transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(3, Math.min(100, executionProgress ?? 0))}%` }}
-                />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2">
-                <span className="truncate text-2xs text-fin-text-secondary">{currentStep || zh.chat.preparing}</span>
-                <span className="shrink-0 font-mono text-2xs tabular-nums text-fin-muted">{Math.round(executionProgress ?? 0)}%</span>
-              </div>
-            </div>
+            <StageStepper
+              stages={executionStages}
+              elapsedMs={elapsedMs}
+              currentAction={statusMessage === zh.chat.stopped ? zh.chat.stoppedResult : currentAction}
+            />
           </div>
         </div>
       )}

@@ -290,10 +290,10 @@ export interface StageStepperProps {
 // 阶段映射(写死): understand→理解, plan→计划, executing→执行, synthesize→综合, render→撰写
 ```
 
-- [ ] Step 1: 实现 StageStepper + vitest 快照（四种 status 渲染断言）。
-- [ ] Step 2: ChatList 执行 banner 替换：删除百分比条与 `animate-ping` 圆点（基线 511-524），改挂 StageStepper；数据映射复用 executionStore 现有阶段常量（`grep -n "PIPELINE_STAGE" src/store/executionStore.ts`）。
-- [ ] Step 3: `grep -rn "estimateProgress\|progress_percent" src/components/ChatList.tsx` → 0。
-- [ ] Step 4: Commit: `feat(execution): honest stage stepper replaces fabricated percentage bar`
+- [x] Step 1: 实现 StageStepper + vitest 快照（四种 status 渲染断言）。
+- [x] Step 2: ChatList 执行 banner 替换：删除百分比条与 `animate-ping` 圆点（基线 511-524），改挂 StageStepper；数据映射复用 executionStore 现有阶段常量（`grep -n "PIPELINE_STAGE" src/store/executionStore.ts`）。
+- [x] Step 3: `grep -rn "estimateProgress\|progress_percent" src/components/ChatList.tsx` → 0。
+- [x] Step 4: Commit: `feat(execution): honest stage stepper replaces fabricated percentage bar`
 
 ---
 
