@@ -218,10 +218,10 @@ POST /api/backtest/prefill-from-report {"report_id": "…"}
 ```
 
 **Tasks:**
-- [ ] T1: prefill 纯函数 TDD（三种 stance → 三种 config；报告缺 stance → 默认 buy_and_hold + warning）。
-- [ ] T2: 报告页操作区加"🧪 回测此观点"按钮 → 跳 `/backtest?prefill={report_id}`，BacktestPage 读参调 prefill 端点填表单。
-- [ ] 验收：任一份历史报告一键生成可运行回测并出净值曲线（BacktestEquityChart 复用）。
-- [ ] Commit: `feat(backtest): one-click backtest prefilled from research report stance`
+- [x] T1: prefill 纯函数 TDD（三种 stance → 三种 config；报告缺 stance → 默认 buy_and_hold + warning）。
+- [x] T2: 报告页操作区加"🧪 回测此观点"按钮 → 跳 `/backtest?prefill={report_id}`，BacktestPage 读参调 prefill 端点填表单。
+- [x] 验收：任一份历史报告一键生成可运行回测并出净值曲线（BacktestEquityChart 复用）。
+- [x] Commit: `feat(backtest): one-click backtest prefilled from research report stance`
 
 ---
 
