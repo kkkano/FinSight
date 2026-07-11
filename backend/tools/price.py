@@ -437,6 +437,166 @@ def _to_yahoo_cn_symbol(ticker: str) -> str:
     return t
 
 
+def _is_china_ticker(ticker: str) -> bool:
+    upper = str(ticker or "").strip().upper()
+    return (
+        upper.endswith((".SS", ".SZ", ".BJ"))
+        or (
+            len(upper) == 6
+            and upper.isdigit()
+            and (
+                upper[:3] in ("600", "601", "603", "605", "688", "000", "001", "002", "003", "300", "301")
+                or upper.startswith("8")
+            )
+        )
+    )
+
+
+def _akshare_symbol(ticker: str) -> str | None:
+    normalized = _to_yahoo_cn_symbol(ticker)
+    symbol = normalized.split(".", 1)[0]
+    return symbol if len(symbol) == 6 and symbol.isdigit() else None
+
+
+def _akshare_item_map(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, dict):
+        return {str(key).strip().lower(): value for key, value in payload.items()}
+    if isinstance(payload, pd.Series):
+        return {str(key).strip().lower(): value for key, value in payload.to_dict().items()}
+    if isinstance(payload, pd.DataFrame) and not payload.empty:
+        columns = {str(column).strip().lower(): column for column in payload.columns}
+        item_column = columns.get("item") or columns.get("项目")
+        value_column = columns.get("value") or columns.get("值")
+        if item_column is not None and value_column is not None:
+            return {
+                str(row[item_column]).strip().lower(): row[value_column]
+                for _, row in payload.iterrows()
+            }
+        if len(payload.index) == 1:
+            return {
+                str(key).strip().lower(): value
+                for key, value in payload.iloc[0].to_dict().items()
+            }
+    return {}
+
+
+def _first_numeric(mapping: dict[str, Any], aliases: tuple[str, ...]) -> float | None:
+    for alias in aliases:
+        value = mapping.get(alias.lower())
+        if value is None:
+            continue
+        try:
+            number = float(str(value).replace("%", "").replace(",", "").strip())
+        except (TypeError, ValueError):
+            continue
+        if pd.notna(number):
+            return number
+    return None
+
+
+def _fetch_with_akshare_spot(ticker: str) -> str | None:
+    """通过 akshare/Eastmoney 轻接口获取单只 A 股最新价。"""
+    symbol = _akshare_symbol(ticker)
+    if symbol is None:
+        return None
+    try:
+        import akshare as ak  # type: ignore
+    except (ImportError, ModuleNotFoundError):
+        logger.debug("akshare 未安装，跳过 A 股实时行情首选源")
+        return None
+
+    try:
+        payload = ak.stock_bid_ask_em(symbol=symbol)
+        values = _akshare_item_map(payload)
+        latest = _first_numeric(values, ("最新", "最新价", "current", "latest", "price"))
+        change_pct = _first_numeric(values, ("涨幅", "涨跌幅", "change_percent", "change pct"))
+        if latest is None or latest <= 0:
+            return None
+        pct_text = f"{change_pct:.2f}" if change_pct is not None else "0.00"
+        normalized = _to_yahoo_cn_symbol(ticker)
+        return (
+            f"The current price of {normalized} is ${latest:.2f} (CNY {latest:.2f}), "
+            f"change {pct_text}% (source: akshare/eastmoney)"
+        )
+    except Exception as exc:
+        logger.debug("akshare A 股实时行情失败 ticker=%s: %s", ticker, exc)
+        return None
+
+
+def _fetch_with_akshare_hist(ticker: str, period: str = "1y") -> dict | None:
+    """通过 akshare/Eastmoney 获取 A 股前复权日线并映射为图表合同。"""
+    symbol = _akshare_symbol(ticker)
+    if symbol is None:
+        return None
+    try:
+        import akshare as ak  # type: ignore
+    except (ImportError, ModuleNotFoundError):
+        logger.debug("akshare 未安装，跳过 A 股历史行情首选源")
+        return None
+
+    days_map = {
+        "1d": 5,
+        "5d": 10,
+        "1mo": 40,
+        "3mo": 120,
+        "6mo": 200,
+        "1y": 365,
+        "2y": 730,
+        "5y": 1825,
+        "10y": 3650,
+    }
+    end = date.today()
+    if period == "max":
+        start = date(1990, 1, 1)
+    elif period == "ytd":
+        start = date(end.year, 1, 1)
+    else:
+        start = end - timedelta(days=days_map.get(period, 365))
+
+    try:
+        frame = ak.stock_zh_a_hist(
+            symbol=symbol,
+            period="daily",
+            start_date=start.strftime("%Y%m%d"),
+            end_date=end.strftime("%Y%m%d"),
+            adjust="qfq",
+        )
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            return None
+        required = {"日期", "开盘", "最高", "最低", "收盘"}
+        if not required.issubset(frame.columns):
+            return None
+        rows: list[dict[str, Any]] = []
+        for _, row in frame.sort_values("日期").iterrows():
+            try:
+                close = float(row["收盘"])
+                if close <= 0:
+                    continue
+                rows.append(
+                    {
+                        "time": f"{str(row['日期'])[:10]} 00:00",
+                        "open": float(row["开盘"]),
+                        "high": float(row["最高"]),
+                        "low": float(row["最低"]),
+                        "close": close,
+                        "volume": float(row.get("成交量", 0) or 0),
+                    }
+                )
+            except (TypeError, ValueError):
+                continue
+        if not rows:
+            return None
+        return {
+            "kline_data": rows,
+            "period": period,
+            "interval": "1d",
+            "source": "akshare/eastmoney",
+        }
+    except Exception as exc:
+        logger.debug("akshare A 股历史行情失败 ticker=%s: %s", ticker, exc)
+        return None
+
+
 # tool 层降级信息注册表：记录每个 ticker 最近一次取数用的源（供 agent 读取，传播到报告）
 # key 统一大写 strip，value = {"source": 源函数名 or None, "attempt": 第几个源, "is_degraded": 是否降级}
 _last_fetch_info: dict[str, dict[str, Any]] = {}
@@ -474,14 +634,7 @@ def get_stock_price(ticker: str) -> str:
     # 判断资产类型
     is_index = ticker.startswith('^')
     is_crypto = any(crypto in upper for crypto in ['BTC', 'ETH', 'USDT', 'BNB', 'XRP', 'SOL', 'DOGE', 'ADA']) and '-' in upper
-    is_china = (
-        upper.endswith('.SS') or upper.endswith('.SZ') or upper.endswith('.BJ')
-        or (len(upper) == 6 and upper.isdigit() and upper[:3] in (
-            '600', '601', '603', '605', '688',  # 上交所
-            '000', '001', '002', '003', '300', '301',  # 深交所
-        ))
-        or (len(upper) == 6 and upper.isdigit() and upper.startswith('8'))  # 北交所
-    )
+    is_china = _is_china_ticker(upper)
     is_commodity = '=' in upper  # GC=F, CL=F, SI=F
 
     # A股代码标准化：裸数字代码 → Yahoo Finance 格式（如 600036 → 600036.SS）
@@ -499,8 +652,9 @@ def get_stock_price(ticker: str) -> str:
             _search_for_price
         ]
     elif is_china:
-        # A股：只用 yfinance 和搜索（其他源不支持）
+        # A股：akshare/Eastmoney 首选，失败后回退 Yahoo 体系与搜索。
         sources = [
+            _fetch_with_akshare_spot,
             _fetch_with_yfinance,
             _fetch_yahoo_api_v8,
             _search_for_price
@@ -1200,6 +1354,13 @@ def get_stock_historical_data(ticker: str, period: str = "1y", interval: str = "
     Returns:
         dict: {"kline_data": [...]} 或 {"error": "..."}
     """
+    if _is_china_ticker(ticker):
+        ticker = _to_yahoo_cn_symbol(ticker)
+        akshare_result = _fetch_with_akshare_hist(ticker, period)
+        if akshare_result and akshare_result.get("kline_data"):
+            logger.info("[get_stock_historical_data] akshare A 股首选源命中 %s", ticker)
+            return akshare_result
+
     # 指数优先尝试 Stooq（免 Key，避免 yfinance 速率限制）
     is_index = ticker.startswith("^")
     if is_index:
