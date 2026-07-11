@@ -192,12 +192,12 @@ git commit -am "feat(quota): per-user daily LLM cost limit on chat/execution ent
 **Files:**
 - Modify: `docs/11_PRODUCTION_RUNBOOK.md`、`README_CN.md`/`README.md`
 
-- [ ] **Step 1:** 运维手册新增小节"多用户与配额"：三种部署姿势的 env 组合表——
+- [x] **Step 1:** 运维手册新增小节"多用户与配额"：三种部署姿势的 env 组合表——
   1. 个人自用（默认）：全关，行为同旧版；
   2. 公开演示：`SUPABASE_AUTH_REQUIRED=false` + `USER_DAILY_COST_LIMIT_USD=0.5`（匿名共享 public 桶但有 IP 限流 + 总量兜底——明确写出"匿名数据全站共享"的告示义务）；
   3. 多用户：`SUPABASE_AUTH_REQUIRED=true` + secret/URL + 配额。
-- [ ] **Step 2:** README 数据层描述修正（架构审查发现 README 宣称 PostgreSQL 存业务数据与实现不符）：改为"PostgreSQL（LangGraph checkpoint，可选）+ SQLite（业务数据）"。
-- [ ] **Step 3: Commit**
+- [x] **Step 2:** README 数据层描述修正（架构审查发现 README 宣称 PostgreSQL 存业务数据与实现不符）：改为"PostgreSQL（LangGraph checkpoint，可选）+ SQLite（业务数据）"。
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -am "docs(deploy): multiuser/quota deployment modes; correct data-layer claims in README"
