@@ -171,7 +171,7 @@ input[type=number]::-webkit-outer-spin-button {
 
 /* Watchlist 侧边栏 */
 .dashboard-watchlist {
-  @apply w-[200px] shrink-0 border-r border-fin-border overflow-y-auto;
+  @apply w-[216px] shrink-0 border-r border-fin-border overflow-y-auto;
 }
 
 /* Dashboard 主内容区 */

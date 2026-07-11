@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
-import { AlertTriangle, Menu, WifiOff } from 'lucide-react';
+import { AlertTriangle, WifiOff } from 'lucide-react';
 import Sidebar from '../Sidebar';
 import { SettingsModal } from '../SettingsModal';
 import { SubscribeModal } from '../SubscribeModal';
@@ -189,16 +189,6 @@ export function WorkspaceShell({
 
   return (
     <div className="flex h-screen w-screen bg-fin-bg text-fin-text font-mono overflow-hidden">
-      {/* Mobile menu button */}
-      {isMobile && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-3 left-3 z-50 min-h-11 min-w-11 p-2 rounded-lg bg-fin-card border border-fin-border text-fin-text hover:bg-fin-hover transition-colors lg:hidden flex items-center justify-center"
-          aria-label="打开导航菜单"
-        >
-          <Menu size={20} />
-        </button>
-      )}
       <Sidebar
         onSettingsClick={() => setIsSettingsOpen(true)}
         onSubscribeClick={() => setIsSubscribeOpen(true)}
@@ -208,10 +198,11 @@ export function WorkspaceShell({
         onCnMarketClick={() => { navigateToCnMarket(); setIsSidebarOpen(false); }}
         currentView={view}
         isMobileOpen={isSidebarOpen}
+        onMobileOpen={() => setIsSidebarOpen(true)}
         onMobileClose={() => setIsSidebarOpen(false)}
       />
 
-      <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+      <div id="main-content" className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden max-md:ml-14">
         <div className="mx-3 mt-3 shrink-0">
           <AiDisclaimer variant="banner" />
         </div>

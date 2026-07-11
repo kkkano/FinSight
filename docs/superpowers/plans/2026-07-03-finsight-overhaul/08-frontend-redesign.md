@@ -389,9 +389,9 @@ export const terminalChartTheme = {
   （rag-inspector / cost-audit 从导航移除 → 设置>高级>诊断工具，见 09 文档 C-7）
 ```
 
-- [ ] Step 1: 按结构重排；条目规格 `h-9 px-3 rounded-md text-[13px] text-t-text2 hover:bg-t-hover`，激活态 `bg-t-hover text-t-text border-l-2 border-t-accent -ml-px`；图标 lucide 16px。
-- [ ] Step 2: 宽度 200px → 216px（`grep -n "w-\[200px\]" frontend/src/index.css` 基线 107 行）；<768px 折叠为 56px 图标栏（配合 WP6 F5）。
-- [ ] Step 3: Commit: `feat(nav): grouped sidebar with command palette entry; diagnostics moved out of primary nav`
+- [x] Step 1: 按结构重排；条目规格 `h-9 px-3 rounded-md text-[13px] text-t-text2 hover:bg-t-hover`，激活态 `bg-t-hover text-t-text border-l-2 border-t-accent -ml-px`；图标 lucide 16px。
+- [x] Step 2: 宽度 200px → 216px（`grep -n "w-\[200px\]" frontend/src/index.css` 基线 107 行）；<768px 折叠为 56px 图标栏（配合 WP6 F5）。
+- [x] Step 3: Commit: `feat(nav): grouped sidebar with command palette entry; diagnostics moved out of primary nav`
 
 ---
 

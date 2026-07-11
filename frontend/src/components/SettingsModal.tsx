@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Eye, EyeOff, Database, ReceiptText } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { useDeveloperMode } from '../hooks/useDeveloperMode';
 import { useStore } from '../store/useStore';
@@ -805,6 +805,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <p className="text-xs text-fin-muted mt-2">
               默认关闭。开启后才会在工作区底部显示原始 SSE 事件；采集开关会随请求透传到后端。
             </p>
+          </Card>
+          ) : null}
+
+          {activeLayer === 'advanced' ? (
+          <Card className="p-4 bg-fin-bg/40">
+            <h3 className="text-sm font-medium text-fin-text mb-1">诊断工具</h3>
+            <p className="mb-3 text-xs text-fin-muted">面向开发与运维的观测页面，不占用日常主导航。</p>
+            <div className="grid gap-2 md:grid-cols-2">
+              <button
+                type="button"
+                data-testid="settings-open-rag-inspector"
+                onClick={() => {
+                  onClose();
+                  window.location.assign('/rag-inspector');
+                }}
+                className="flex items-center gap-2 rounded-md border border-t-border px-3 py-2 text-left text-sm text-t-text2 hover:border-t-accent/50 hover:bg-t-hover hover:text-t-text"
+              >
+                <Database size={16} className="text-t-accent" />
+                RAG 检索观测
+              </button>
+              <button
+                type="button"
+                data-testid="settings-open-cost-audit"
+                onClick={() => {
+                  onClose();
+                  window.location.assign('/cost-audit');
+                }}
+                className="flex items-center gap-2 rounded-md border border-t-border px-3 py-2 text-left text-sm text-t-text2 hover:border-t-accent/50 hover:bg-t-hover hover:text-t-text"
+              >
+                <ReceiptText size={16} className="text-t-accent" />
+                成本审计
+              </button>
+            </div>
           </Card>
           ) : null}
 

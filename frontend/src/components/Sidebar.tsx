@@ -1,35 +1,24 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Command,
   Filter,
   FlaskConical,
-  Search,
-  FileText,
   LayoutDashboard,
   LineChart,
-  LogOut,
+  Menu,
   MessageSquare,
-  Plus,
   Settings,
-  User,
   X,
+  FileText,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { isRagInspectorDevAuthActive, setRagInspectorDevAuthActive } from '../auth/devAuth';
-import { apiClient } from '../api/client';
-import { getSupabaseClient } from '../api/supabaseClient';
-import { buildAnonymousSessionId, deriveUserIdFromSessionId, useStore } from '../store/useStore';
-import { useDashboardStore } from '../store/dashboardStore';
-import { usePortfolioSummary, buildPositionsMap } from '../hooks/usePortfolioSummary';
-import { parseQuotePayload } from '../utils/quote';
-import { useToast } from './ui';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-interface QuoteInfo {
-  price?: string;
-  change?: string;
-  isUp?: boolean;
-}
+import { apiClient } from '../api/client';
+import { usePortfolioSummary, buildPositionsMap } from '../hooks/usePortfolioSummary';
+import { useDashboardStore } from '../store/dashboardStore';
+import { useStore } from '../store/useStore';
+import { useToast } from './ui';
 
 interface SidebarProps {
   onSettingsClick?: () => void;
@@ -40,15 +29,9 @@ interface SidebarProps {
   onCnMarketClick?: () => void;
   currentView?: 'chat' | 'dashboard' | 'workbench' | 'cn-market';
   isMobileOpen?: boolean;
+  onMobileOpen?: () => void;
   onMobileClose?: () => void;
 }
-
-const RISK_LABELS: Record<string, string> = {
-  conservative: '保守型',
-  balanced: '稳健型',
-  aggressive: '进取型',
-};
-const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
 
 const readStoredDashboardSymbol = (): string => {
   if (typeof window === 'undefined') return '';
@@ -70,124 +53,24 @@ const Sidebar: React.FC<SidebarProps> = ({
   onCnMarketClick,
   currentView,
   isMobileOpen = false,
+  onMobileOpen,
   onMobileClose,
 }) => {
-  const [activeTab, setActiveTab] = useState(
-    currentView === 'dashboard'
-      ? 'dashboard'
-      : currentView === 'workbench'
-        ? 'workbench'
-        : currentView === 'cn-market'
-          ? 'cn-market'
-          : 'chat',
-  );
-  const [userName, setUserName] = useState('用户');
-  const [riskPreference, setRiskPreference] = useState('balanced');
-  const [quotes, setQuotes] = useState<Record<string, QuoteInfo>>({});
   const [alertCount, setAlertCount] = useState(0);
-  const [showAddInput, setShowAddInput] = useState(false);
-  const [newTicker, setNewTicker] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-
   const { toast } = useToast();
-  const {
-    subscriptionEmail,
-    currentTicker,
-    sessionId,
-    authIdentity,
-    setAuthIdentity,
-    setEntryMode,
-    setSessionId,
-    setSubscriptionEmail,
-  } = useStore();
-  // 持仓徽章统一读后端单一真相源（portfolio.db），只读
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { subscriptionEmail, currentTicker, sessionId } = useStore();
   const { data: portfolioData } = usePortfolioSummary(sessionId);
   const portfolioPositions = useMemo(() => buildPositionsMap(portfolioData), [portfolioData]);
-  const userId = useMemo(() => deriveUserIdFromSessionId(sessionId), [sessionId]);
-  const navigate = useNavigate();
+  const { watchlist, initWatchlist, activeAsset: lastDashboardAsset } = useDashboardStore();
 
-  const {
-    watchlist,
-    initWatchlist,
-    addWatchItemApi,
-    removeWatchItemApi,
-    activeAsset: lastDashboardAsset,
-  } = useDashboardStore();
-
-  useEffect(() => {
-    if (currentView === 'dashboard') setActiveTab('dashboard');
-    else if (currentView === 'workbench') setActiveTab('workbench');
-    else if (currentView === 'cn-market') setActiveTab('cn-market');
-    else if (currentView === 'chat') setActiveTab('chat');
-  }, [currentView]);
-
-  const handleAddTicker = async () => {
-    const ticker = newTicker.trim().toUpperCase();
-    if (!ticker) return;
-    try {
-      await addWatchItemApi(ticker);
-      setNewTicker('');
-      setShowAddInput(false);
-    } catch (error) {
-      toast({
-        type: 'error',
-        title: '添加失败',
-        message: error instanceof Error ? error.message : '添加关注失败，请稍后重试',
-      });
-    }
-  };
-
-  const handleRemoveTicker = async (ticker: string) => {
-    try {
-      await removeWatchItemApi(ticker);
-    } catch (error) {
-      toast({
-        type: 'error',
-        title: '移除失败',
-        message: error instanceof Error ? error.message : '移除关注失败，请稍后重试',
-      });
-    }
-  };
-
-  const loadUserProfileInfo = useCallback(async () => {
-    try {
-      const response = await apiClient.getUserProfile(userId);
-      const profile = response?.profile;
-      if (!profile) return;
-      setUserName(profile.name || '用户');
-      setRiskPreference(profile.risk_preference || 'balanced');
-    } catch {
-      // 保持默认展示
-    }
-  }, [userId]);
-
-  const loadWatchlistQuotes = useCallback(async () => {
-    if (watchlist.length === 0) {
-      setQuotes({});
-      return;
-    }
-
-    const results: Record<string, QuoteInfo> = {};
-    await Promise.all(
-      watchlist.map(async (item) => {
-        try {
-          const priceRes = await apiClient.fetchStockPrice(item.symbol);
-          const quote = parseQuotePayload(priceRes?.data ?? priceRes);
-          if (quote.price === undefined) return;
-
-          const price = `$${quote.price.toFixed(2)}`;
-          const pct = quote.changePct;
-          const isUp = pct === undefined ? true : pct >= 0;
-          const change = pct === undefined ? undefined : `${isUp ? '+' : ''}${pct.toFixed(2)}%`;
-          results[item.symbol] = { price, change, isUp };
-        } catch {
-          // 保持空报价
-        }
-      }),
-    );
-
-    setQuotes(results);
-  }, [watchlist]);
+  const compactMobile = !isMobileOpen;
+  const activeKey = location.pathname.startsWith('/screener')
+    ? 'screener'
+    : location.pathname.startsWith('/backtest')
+      ? 'backtest'
+      : currentView ?? 'chat';
 
   const loadAlertCount = useCallback(async () => {
     if (!subscriptionEmail) {
@@ -203,368 +86,149 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [subscriptionEmail]);
 
-  const handleLogout = useCallback(async () => {
-    const client = getSupabaseClient();
-    const devAuthActive = isRagInspectorDevAuthActive();
-    if (!client && !devAuthActive) return;
-    setAuthLoading(true);
-    try {
-      if (client) {
-        const { error } = await client.auth.signOut();
-        if (error) throw error;
-      }
-      setRagInspectorDevAuthActive(false);
-      setAuthIdentity(null);
-      setEntryMode('anonymous');
-      setSessionId(buildAnonymousSessionId());
-      setSubscriptionEmail('');
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(WELCOME_GATE_KEY);
-      }
-      toast({
-        type: 'success',
-        title: '已退出登录',
-        message: '已切换到匿名会话',
-      });
-      navigate('/welcome', { replace: true });
-    } catch (error) {
-      toast({
-        type: 'error',
-        title: '退出失败',
-        message: error instanceof Error ? error.message : '退出登录失败',
-      });
-    } finally {
-      setAuthLoading(false);
-    }
-  }, [navigate, setAuthIdentity, setEntryMode, setSessionId, setSubscriptionEmail, toast]);
-
   useEffect(() => {
     initWatchlist();
-    loadUserProfileInfo();
-    loadAlertCount();
-  }, [initWatchlist, loadUserProfileInfo, loadAlertCount]);
+    void loadAlertCount();
+  }, [initWatchlist, loadAlertCount]);
 
-  useEffect(() => {
-    loadWatchlistQuotes();
-    const timer = setInterval(loadWatchlistQuotes, 60_000);
-    return () => clearInterval(timer);
-  }, [loadWatchlistQuotes]);
+  const closeMobile = () => onMobileClose?.();
+
+  const openDashboard = () => {
+    if (!onDashboardClick) return;
+    const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
+    const fallbackSymbol = (
+      lastDashboardAsset?.symbol
+      || currentTicker
+      || readStoredDashboardSymbol()
+      || firstPositionSymbol
+      || watchlist[0]?.symbol
+      || 'AAPL'
+    ).toString().trim();
+
+    if (!fallbackSymbol) {
+      toast({ type: 'info', title: '还没有可用标的', message: '请先添加股票，例如 AAPL' });
+      return;
+    }
+    onDashboardClick(fallbackSymbol);
+    closeMobile();
+  };
 
   return (
     <>
       {isMobileOpen && (
-        <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={onMobileClose} aria-hidden="true" />
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={closeMobile} aria-hidden="true" />
       )}
       <aside
         data-testid="sidebar"
         role="navigation"
         aria-label="主导航栏"
         className={[
-          'w-[260px] h-full bg-fin-card border-r border-fin-border flex flex-col p-5 shrink-0 z-40 relative',
-          'max-lg:fixed max-lg:top-0 max-lg:left-0 max-lg:h-full max-lg:border-r max-lg:border-b-0',
-          'max-lg:transition-transform max-lg:duration-300',
-          isMobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+          'relative z-40 flex h-full w-[216px] shrink-0 flex-col border-r border-t-border bg-t-surface px-3 py-4 transition-[width] duration-200',
+          'max-md:fixed max-md:inset-y-0 max-md:left-0',
+          compactMobile ? 'max-md:w-14 max-md:px-2' : 'max-md:w-[216px]',
         ].join(' ')}
       >
+        <div className="flex h-9 items-center justify-between px-2">
+          <button
+            type="button"
+            onClick={compactMobile ? onMobileOpen : undefined}
+            className="flex min-w-0 items-center gap-2 text-left"
+            aria-label={compactMobile ? '展开导航菜单' : 'FinSight 首页'}
+            title="FINSIGHT"
+          >
+            <span className={`${compactMobile ? 'max-md:hidden' : ''} font-mono text-sm font-semibold tracking-[0.12em] text-t-accent`}>
+              FINSIGHT
+            </span>
+            <span className="font-mono font-semibold text-t-accent">▎</span>
+            {compactMobile && <Menu size={16} className="hidden text-t-text2 max-md:block" />}
+          </button>
+          {isMobileOpen && (
+            <button
+              type="button"
+              onClick={closeMobile}
+              className="hidden h-9 w-9 items-center justify-center rounded-md text-t-text3 hover:bg-t-hover hover:text-t-text max-md:flex"
+              aria-label="收起导航菜单"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
         <button
           type="button"
-          onClick={onMobileClose}
-          className="absolute right-3 top-3 hidden min-h-11 min-w-11 items-center justify-center rounded-lg text-fin-muted hover:bg-fin-hover hover:text-fin-text max-lg:flex"
-          aria-label="关闭导航菜单"
+          data-testid="sidebar-nav-command-palette"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('finsight:open-command-palette'));
+            closeMobile();
+          }}
+          className={[
+            'mt-3 flex h-9 items-center gap-2 rounded-md border border-t-border bg-t-bg px-3 text-[12px] text-t-text3 hover:border-t-accent/50 hover:text-t-text',
+            compactMobile ? 'max-md:justify-center max-md:px-0' : '',
+          ].join(' ')}
+          title="搜索/命令（⌘K）"
         >
-          <X size={20} />
+          <Command size={16} className="shrink-0" />
+          <span className={compactMobile ? 'max-md:hidden' : ''}>搜索/命令…</span>
+          <kbd className={`${compactMobile ? 'max-md:hidden' : ''} ml-auto font-mono text-2xs text-t-text3`}>⌘K</kbd>
         </button>
-        <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
-          <img src="/logo.svg" alt="FinSight AI" className="h-8 w-8 rounded-md" /> FinSight AI
-        </div>
 
-        <div className="bg-fin-bg-secondary p-4 rounded-xl mb-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-fin-bg-secondary rounded-full flex items-center justify-center overflow-hidden">
-              <User size={24} className="text-fin-muted" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-fin-text text-sm truncate">{authIdentity?.email || userName}</div>
-              <span className="text-2xs bg-fin-primary/15 text-fin-primary px-2 py-0.5 rounded-full font-bold">
-                {RISK_LABELS[riskPreference] || '稳健型'}
-              </span>
-              <div className="mt-2">
-                {authIdentity?.userId ? (
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    disabled={authLoading}
-                    className="inline-flex items-center gap-1.5 text-2xs px-2 py-1 rounded-md border border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary disabled:opacity-60"
-                  >
-                    <LogOut size={12} />
-                    退出登录
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/welcome')}
-                    disabled={authLoading}
-                    title="前往欢迎页登录"
-                    className="inline-flex items-center gap-1.5 text-2xs px-2 py-1 rounded-md border border-fin-border text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary disabled:opacity-60"
-                  >
-                    <User size={12} />
-                    前往欢迎页
-                  </button>
-                )}
-              </div>
-            </div>
+        <nav className="mt-1 flex min-h-0 flex-1 flex-col">
+          <NavGroupLabel compact={compactMobile}>工作区</NavGroupLabel>
+          <NavItem icon={<MessageSquare size={16} />} label="对话" active={activeKey === 'chat'} compact={compactMobile} testId="sidebar-nav-chat" onClick={() => { onChatClick?.(); closeMobile(); }} />
+          <NavItem icon={<LayoutDashboard size={16} />} label="看板" active={activeKey === 'dashboard'} compact={compactMobile} testId="sidebar-nav-dashboard" onClick={openDashboard} />
+          <NavItem icon={<FileText size={16} />} label="工作台" active={activeKey === 'workbench'} compact={compactMobile} testId="sidebar-nav-workbench" onClick={() => { onWorkbenchClick?.(); closeMobile(); }} />
+          <NavItem icon={<LineChart size={16} />} label="A股市场" active={activeKey === 'cn-market'} compact={compactMobile} testId="sidebar-nav-cn-market" onClick={() => { onCnMarketClick?.(); closeMobile(); }} />
+
+          <NavGroupLabel compact={compactMobile}>工具</NavGroupLabel>
+          <NavItem icon={<Filter size={16} />} label="筛选器" active={activeKey === 'screener'} compact={compactMobile} testId="sidebar-nav-screener" onClick={() => { navigate('/screener'); closeMobile(); }} />
+          <NavItem icon={<FlaskConical size={16} />} label="回测" active={activeKey === 'backtest'} compact={compactMobile} testId="sidebar-nav-backtest" onClick={() => { navigate('/backtest'); closeMobile(); }} />
+
+          <div className="mt-auto border-t border-t-border pt-2">
+            <NavItem icon={<Bell size={16} />} label="订阅与提醒" active={false} compact={compactMobile} testId="sidebar-nav-subscriptions" badge={alertCount > 0 ? String(alertCount) : undefined} onClick={() => { onSubscribeClick?.(); closeMobile(); }} />
+            <NavItem icon={<Settings size={16} />} label="设置" active={false} compact={compactMobile} testId="sidebar-nav-settings" onClick={() => { onSettingsClick?.(); closeMobile(); }} />
           </div>
-        </div>
-
-        <nav className="flex flex-col gap-1 flex-1">
-          <NavItem
-            icon={<MessageSquare size={18} />}
-            label="智能对话"
-            active={activeTab === 'chat'}
-            testId="sidebar-nav-chat"
-            onClick={() => {
-              setActiveTab('chat');
-              onChatClick?.();
-            }}
-          />
-
-          <NavItem
-            icon={<LayoutDashboard size={18} />}
-            label="仪表盘"
-            active={activeTab === 'dashboard'}
-            testId="sidebar-nav-dashboard"
-            onClick={() => {
-              if (!onDashboardClick) return;
-              const firstPositionSymbol = Object.keys(portfolioPositions ?? {})[0];
-              const firstWatchlistSymbol = watchlist[0]?.symbol;
-              const storedDashboardSymbol = readStoredDashboardSymbol();
-              const fallbackSymbol = (lastDashboardAsset?.symbol || currentTicker || storedDashboardSymbol || firstPositionSymbol || firstWatchlistSymbol || 'AAPL')
-                .toString()
-                .trim();
-              if (!fallbackSymbol) {
-                toast({
-                  type: 'info',
-                  title: '还没有可用标的',
-                  message: '请先在"我的关注"里添加股票，例如 AAPL',
-                });
-                if (currentView !== 'dashboard') {
-                  setShowAddInput(true);
-                }
-                return;
-              }
-              setActiveTab('dashboard');
-              onDashboardClick(fallbackSymbol);
-            }}
-          />
-
-          <NavItem
-            icon={<FileText size={18} />}
-            label="工作台"
-            testId="sidebar-nav-workbench"
-            active={activeTab === 'workbench' || activeTab === 'reports'}
-            onClick={() => {
-              setActiveTab('workbench');
-              onWorkbenchClick?.();
-            }}
-          />
-
-          <NavItem
-            icon={<LineChart size={18} />}
-            label="A 股市场"
-            testId="sidebar-nav-cn-market"
-            active={activeTab === 'cn-market'}
-            onClick={() => {
-              setActiveTab('cn-market');
-              onCnMarketClick?.();
-            }}
-          />
-
-          <NavItem
-            icon={<Command size={18} />}
-            label="命令面板"
-            testId="sidebar-nav-command-palette"
-            active={false}
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('finsight:open-command-palette'));
-              onMobileClose?.();
-            }}
-          />
-
-          <NavItem
-            icon={<Search size={18} />}
-            label="RAG 观测"
-            testId="sidebar-nav-rag-inspector"
-            active={activeTab === 'rag-inspector'}
-            onClick={() => {
-              setActiveTab('rag-inspector');
-              navigate('/rag-inspector');
-            }}
-          />
-
-          <NavItem
-            icon={<Filter size={18} />}
-            label="智能选股"
-            testId="sidebar-nav-screener"
-            active={activeTab === 'screener'}
-            onClick={() => {
-              setActiveTab('screener');
-              navigate('/screener');
-            }}
-          />
-
-          <NavItem
-            icon={<FlaskConical size={18} />}
-            label="策略回测"
-            testId="sidebar-nav-backtest"
-            active={activeTab === 'backtest'}
-            onClick={() => {
-              setActiveTab('backtest');
-              navigate('/backtest');
-            }}
-          />
-
-          <NavItem
-            icon={<Bell size={18} />}
-            label="订阅管理"
-            testId="sidebar-nav-subscriptions"
-            active={activeTab === 'alerts'}
-            badge={alertCount > 0 ? String(alertCount) : undefined}
-            onClick={() => {
-              setActiveTab('alerts');
-              onSubscribeClick?.();
-            }}
-          />
-
-          <NavItem
-            icon={<Settings size={18} />}
-            label="偏好设置"
-            testId="sidebar-nav-settings"
-            active={activeTab === 'settings'}
-            onClick={() => {
-              setActiveTab('settings');
-              onSettingsClick?.();
-            }}
-          />
         </nav>
-
-        {currentView !== 'dashboard' && (
-          <div className="mt-auto border-t border-fin-border pt-5">
-            <div className="flex items-center justify-between mb-3 text-fin-text font-semibold text-sm">
-              <span>我的关注 ({watchlist.length})</span>
-              <button
-                type="button"
-                aria-label="添加关注股票"
-                onClick={() => setShowAddInput((prev) => !prev)}
-                className="cursor-pointer hover:text-fin-primary bg-transparent border-none p-0"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-
-            {showAddInput && (
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  value={newTicker}
-                  onChange={(event) => setNewTicker(event.target.value)}
-                  onKeyDown={(event) => event.key === 'Enter' && handleAddTicker()}
-                  placeholder="输入股票代码"
-                  className="flex-1 px-2 py-1 text-sm border border-fin-border rounded bg-fin-bg text-fin-text focus:outline-none focus:border-fin-primary"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTicker}
-                  className="px-2 py-1 text-xs bg-fin-primary text-white rounded hover:opacity-90"
-                >
-                  添加
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {watchlist.length > 0 ? (
-                watchlist.map((item) => {
-                  const quote = quotes[item.symbol];
-                  const isUp = quote?.isUp !== false;
-                  const shares = portfolioPositions[item.symbol.toUpperCase()] || 0;
-                  return (
-                    <div
-                      key={item.symbol}
-                      className="group flex justify-between items-center py-2 px-1 hover:bg-fin-bg-secondary rounded cursor-pointer transition-colors"
-                      onClick={() => onDashboardClick?.(item.symbol)}
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-fin-text text-sm truncate">{item.symbol}</span>
-                        <span className="text-2xs text-fin-muted truncate">{item.name}</span>
-                        {shares > 0 && (
-                          <span className="text-2xs text-fin-primary bg-fin-bg px-1.5 py-0.5 rounded-full w-fit mt-1">
-                            持仓 {shares}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="text-right">
-                          <div className={`font-medium text-sm ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                            {quote?.price || '--'}
-                          </div>
-                          <div className={`text-2xs ${isUp ? 'text-fin-success' : 'text-fin-danger'}`}>
-                            {quote?.change || '--'}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          aria-label={`移除 ${item.symbol}`}
-                          className="text-fin-muted hover:text-fin-danger opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none p-0"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleRemoveTicker(item.symbol);
-                          }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-xs text-fin-muted py-2">暂无关注股票</div>
-              )}
-            </div>
-          </div>
-        )}
       </aside>
     </>
   );
 };
 
+const NavGroupLabel: React.FC<{ compact: boolean; children: React.ReactNode }> = ({ compact, children }) => (
+  <div className={`${compact ? 'max-md:hidden' : ''} px-3 pb-1 pt-4 text-2xs uppercase tracking-wider text-t-text3`}>
+    {children}
+  </div>
+);
+
 const NavItem: React.FC<{
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  compact: boolean;
   onClick: () => void;
   badge?: string;
   testId?: string;
-}> = ({ icon, label, active, onClick, badge, testId }) => (
+}> = ({ icon, label, active, compact, onClick, badge, testId }) => (
   <button
     type="button"
     data-testid={testId}
     onClick={onClick}
     aria-current={active ? 'page' : undefined}
-    className={`
-      flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 text-sm text-left
-      ${
-        active
-          ? 'bg-fin-primary/10 text-fin-primary font-medium'
-          : 'text-fin-text-secondary hover:bg-fin-bg-secondary hover:text-fin-primary'
-      }
-    `}
+    title={label}
+    className={[
+      'relative flex h-9 w-full items-center gap-3 rounded-md px-3 text-left text-[13px] transition-colors',
+      compact ? 'max-md:justify-center max-md:px-0' : '',
+      active
+        ? '-ml-px border-l-2 border-t-accent bg-t-hover text-t-text'
+        : 'text-t-text2 hover:bg-t-hover hover:text-t-text',
+    ].join(' ')}
   >
-    {icon}
-    <span>{label}</span>
-    {badge && <span className="ml-auto bg-fin-danger text-white text-2xs px-1.5 py-0.5 rounded-full">{badge}</span>}
+    <span className="shrink-0">{icon}</span>
+    <span className={compact ? 'max-md:hidden' : ''}>{label}</span>
+    {badge && (
+      <span className={`${compact ? 'max-md:absolute max-md:ml-5 max-md:-mt-5 max-md:px-1' : 'ml-auto px-1.5'} rounded-full bg-t-down text-2xs text-white`}>
+        {badge}
+      </span>
+    )}
   </button>
 );
 
