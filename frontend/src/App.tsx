@@ -2,7 +2,6 @@
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { WorkspaceShell } from './components/layout/WorkspaceShell';
 import { WelcomePage } from './components/welcome/WelcomePage';
-import { Phase24PanelsPage } from './components/labs/Phase24PanelsPage';
 import { ToastProvider } from './components/ui';
 import { RateLimitToastListener } from './components/common/RateLimitToastListener';
 import { CommandPalette } from './components/CommandPalette';
@@ -11,6 +10,8 @@ import { getSupabaseClient } from './api/supabaseClient';
 import { getRagInspectorDevIdentity, isRagInspectorDevAuthActive } from './auth/devAuth';
 import { RagInspectorPage } from './pages/RagInspectorPage';
 import { CostAuditPage } from './pages/CostAuditPage';
+import { BacktestPage } from './pages/BacktestPage';
+import { ScreenerPage } from './pages/ScreenerPage';
 import { buildAnonymousSessionId, buildUserSessionId, useStore } from './store/useStore';
 
 const WELCOME_GATE_KEY = 'finsight-welcome-gate-passed';
@@ -145,10 +146,6 @@ function WelcomeRoute() {
   return <WelcomePage />;
 }
 
-function PhaseLabsRoute() {
-  return <Phase24PanelsPage />;
-}
-
 function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const setAuthIdentity = useStore((state) => state.setAuthIdentity);
@@ -256,7 +253,9 @@ function App() {
         <Route path="/cn-market" element={<EntryGuard><CnMarketRoute /></EntryGuard>} />
         <Route path="/rag-inspector" element={<AuthenticatedGuard><RagInspectorPage /></AuthenticatedGuard>} />
         <Route path="/cost-audit" element={<AuthenticatedGuard><CostAuditPage /></AuthenticatedGuard>} />
-        <Route path="/phase-labs" element={<EntryGuard><PhaseLabsRoute /></EntryGuard>} />
+        <Route path="/screener" element={<EntryGuard><ScreenerPage /></EntryGuard>} />
+        <Route path="/backtest" element={<EntryGuard><BacktestPage /></EntryGuard>} />
+        <Route path="/phase-labs" element={<EntryGuard><Navigate to="/screener" replace /></EntryGuard>} />
         <Route path="/dashboard" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="/dashboard/:symbol" element={<EntryGuard><DashboardRoute /></EntryGuard>} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />

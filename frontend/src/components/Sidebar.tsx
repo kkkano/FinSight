@@ -1,8 +1,9 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  BarChart2,
   Bell,
   Command,
+  Filter,
+  FlaskConical,
   Search,
   FileText,
   LayoutDashboard,
@@ -393,19 +394,31 @@ const Sidebar: React.FC<SidebarProps> = ({
           />
 
           <NavItem
-            icon={<BarChart2 size={18} />}
-            label="实验面板"
-            testId="sidebar-nav-phase-labs"
-            active={activeTab === 'phase-labs'}
+            icon={<Filter size={18} />}
+            label="智能选股"
+            testId="sidebar-nav-screener"
+            active={activeTab === 'screener'}
             onClick={() => {
-              setActiveTab('phase-labs');
-              navigate('/phase-labs');
+              setActiveTab('screener');
+              navigate('/screener');
+            }}
+          />
+
+          <NavItem
+            icon={<FlaskConical size={18} />}
+            label="策略回测"
+            testId="sidebar-nav-backtest"
+            active={activeTab === 'backtest'}
+            onClick={() => {
+              setActiveTab('backtest');
+              navigate('/backtest');
             }}
           />
 
           <NavItem
             icon={<Bell size={18} />}
             label="订阅管理"
+            testId="sidebar-nav-subscriptions"
             active={activeTab === 'alerts'}
             badge={alertCount > 0 ? String(alertCount) : undefined}
             onClick={() => {
