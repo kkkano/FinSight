@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task9 中文文案常量表 | c204ea9 | 新建纯常量 `locales/zh.ts`，集中聊天输入、消息列表、会话状态和执行状态的用户可见文案，混合英文状态统一为中文；Task 7 已迁出的流式职责同步接入 `useChatStream`，避免形成第二文案源。停止状态与质量门禁测试引用同一常量；定向 lint 0 问题，相关 21 tests passed，完整前端 41 files/235 tests passed，生产 build 成功。 |
 | 2026-07-11 | WP4-Task8 React Query 热数据 hook 收敛 | 6132519 | 新增根级 `QueryClientProvider`，默认 staleTime 30s、行情 5s，关闭自动重试与窗口聚焦刷新以保持原语义；`useDashboardData/useMarketQuotes/useMorningBrief/useFindings/usePortfolioSummary` 迁入统一 query/mutation 缓存，保留 60s 轮询、晨报 localStorage 当日 TTL、发现流乐观更新和既有返回合同。删除持仓汇总 100+ 行自建缓存/订阅/定时器。npm/pnpm 双锁同步；41 files/235 tests passed，生产 build 成功，改动文件定向 lint 0 问题。 |
 | 2026-07-11 | WP4-Task7 useChatStream 统一发送/重试/停止 | c039b43 | `useChatStream` 以七块注释锚点统一模糊查询守卫、ticker/history、SSE/store 桥接、报告回捞、图表补挂与会话收尾；Retry 改为同一 SSE 管线并原位更新。`ChatInput.tsx` 由约 930 行降至 249 行，组件内 `handleSend` 5 行；本地假进度映射和 ChatList 非流式 Retry 清零。前端 40 files/234 tests passed，生产 build 成功；真实 Vite + Chromium 冒烟覆盖发送、重试、停止、断流回捞与执行台联动，全部通过且控制台 0 error；本任务四文件定向 lint 0 问题，全仓 lint 仍仅为未改动文件既有 2 errors/3 warnings。 |
 | 2026-07-11 | WP4-Task6 ticker/图表工具归一 | 7ac4719 | `utils/ticker.ts` 收口 ticker 提取/过滤/去重，`utils/chartIntent.ts` 收口 API 检测、关键词回退、Inline/SmartChart 分流与 `[CHART]` 去重注入；ChatInput/ChatList 本地重复定义扫描 0 命中，净删 98 行。新增 AAPL K 线、NVDA 趋势图、普通介绍反例、渲染能力和最多三标的注入测试；前端 39 files/232 tests passed，生产 build 成功；全仓 lint 仍仅为未改动文件既有 2 errors/3 warnings。 |
@@ -57,6 +58,7 @@
 - 2026-07-11 | `@tanstack/react-query@5.101.2` | WP4-Task8 经主人对完整 Goal 所需依赖的授权安装；用于高频数据 hook 的请求去重、缓存、轮询与 mutation 状态收敛，npm/pnpm 双锁文件已同步。
 
 ## Deviations
+- 2026-07-11 | WP4-T9 | spec 按 Task 9 编写时只列出 `ChatInput/ChatList/executionStore/useStore`；Task 7 已将发送、重试、停止和 SSE 状态从组件迁入 `useChatStream`。为保持文案单一事实源，本任务将该 hook 一并纳入替换范围，未引入 i18n 框架。
 - 2026-07-11 | WP4-T8 | spec 按候选名写 `usePortfolio`，仓库实际不存在该 hook；按“以 hooks 目录实际为准”迁移被 Workbench、Sidebar、Watchlist、右侧栏共同高频消费的 `usePortfolioSummary`。晨报生成是写操作，采用 `useMutation` 负责生成、`useQuery` 负责按会话读取当日 localStorage 缓存，而非把 POST 伪装成 query。
 - 2026-07-11 | WP4-T7 | spec 以旧版 `handleSend` 543 行估算组件收缩目标；实际任务开始时 `ChatInput.tsx` 约 930 行。完成后组件为 249 行，但真正的组件内 `handleSend` 仅 5 行，全部流式职责已迁入 478 行的 `useChatStream`；hook 作为单一管线保留七块职责锚点，不为追求文件行数再做无契约收益的拆分。
 - 2026-07-11 | WP4-T6 | ChatInput 与 ChatList 的关键词集合和普通 ticker 长度规则存在漂移：统一实现取语义并集，保留 `趋势`/`k线` 两个关键词和 ChatList 的单字母 ticker 能力，同时继续用停用词过滤 A/I 等误报。既有 `components/chatChartIntent.ts` 未物理删除，改为指向 `utils/chartIntent.ts` 的薄兼容出口，公共逻辑只有一份。

@@ -303,6 +303,11 @@ export const zh = {
 
 **Steps:** grep 上述四文件中全部用户可见硬编码串 → 挪入常量表 → 引用替换 → `pnpm test:unit`（涉及断言文案的测试同步改）→ Commit：
 
+- [x] Step 1: 新建纯常量 `frontend/src/locales/zh.ts`，覆盖聊天、选择、来源、错误、执行与恢复状态文案。
+- [x] Step 2: 替换 `ChatInput/ChatList/executionStore/useStore` 用户可见硬编码，并同步纳入 Task 7 新增的 `useChatStream` 流式文案入口。
+- [x] Step 3: 涉及停止状态与质量门禁文案的测试改为引用同一常量表，扫描确认剩余命中仅为协议字段、类型、注释或导出内容。
+- [x] Step 4: 定向 lint 0 问题，相关 21 tests passed，完整 `pnpm test:unit` 41 files/235 tests passed，`pnpm build` 成功。
+
 ```bash
 git commit -am "refactor(i18n): user-facing copy centralized in locales/zh.ts, mixed-language strings unified to Chinese"
 ```
