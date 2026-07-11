@@ -159,10 +159,10 @@ class ReplayBuffer:
 - Modify: `frontend/src/components/WorkspaceShell*.tsx`（`grep -rln "WorkspaceShell" frontend/src`）、`ChatInput.tsx:1072-1104`（快捷建议 `flex-wrap`）
 
 **Tasks:**
-- [ ] T1: 响应式审计清单落地（≤768px）：侧栏抽屉化（汉堡开合）、执行指挥台默认收起、dashboard 标签横向可滚动、快捷建议 `flex-wrap`、触控目标 ≥44px 抽查。每项一个小 commit。
-- [ ] T2: PWA：manifest（name=FinSight AI、theme_color 取项目主色、display=standalone）+ SW 仅缓存静态资源（`workbox.runtimeCaching` 明确排除 `/api/**`，SSE 不可缓存）。
-- [ ] 验收：手机浏览器走一遍聊天+看板核心流程无横向滚动条；Lighthouse PWA 检查通过"可安装"。
-- [ ] Commit: `feat(mobile): responsive shell + installable PWA (static assets only, api excluded)`
+- [x] T1: 响应式审计清单落地（≤768px）：侧栏抽屉化（汉堡开合）、执行指挥台默认收起、dashboard 标签横向可滚动、快捷建议 `flex-wrap`、触控目标 ≥44px 抽查。每项一个小 commit。
+- [x] T2: PWA：manifest（name=FinSight AI、theme_color 取项目主色、display=standalone）+ SW 仅缓存静态资源（`workbox.runtimeCaching` 明确排除 `/api/**`，SSE 不可缓存）。
+- [x] 验收：手机浏览器走一遍聊天+看板核心流程无横向滚动条；Lighthouse PWA 检查通过"可安装"。
+- [x] Commit: `feat(mobile): responsive shell + installable PWA (static assets only, api excluded)`
 
 ---
 
