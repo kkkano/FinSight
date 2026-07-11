@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Bot, User, Check, Copy, RefreshCcw, Trash2, Download, ExternalLink, Link2 } from 'lucide-react';
 import { normalizeMarkdown } from '../utils/markdown';
-import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 import { InlineChart } from './InlineChart';
 import { SmartChartRenderer, getRenderableMessageContent, parseSmartChartBlocks } from './SmartChart';
@@ -15,13 +14,10 @@ import type { ChartType, ThinkingStep, ReportIR, EvidenceItem } from '../types/i
 import { useToast } from './ui/Toast';
 import {
   MESSAGE_ACTION_LABELS,
-  canRetryMessage,
   copyTextWithFeedback,
   messageActionContainerClass,
 } from './chatMessageActions';
-import { createChatRetryScope } from './chatRetryScope';
-import { injectChartMarkers, shouldGenerateChart } from '../utils/chartIntent';
-import { extractTickers } from '../utils/ticker';
+import { useChatStream } from '../hooks/useChatStream';
 
 const STOPPED_GENERATION_MESSAGE = '已停止生成，保留已完成的结果。';
 
@@ -227,10 +223,10 @@ export const ChatList: React.FC = () => {
     executionProgress,
     currentStep,
     removeMessage,
-    setStatus,
-    setTicker,
+    sessionId,
     chatStyle,
   } = useStore();
+  const chatStream = useChatStream(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsed, setElapsed] = useState<string>('0.0');
@@ -279,103 +275,20 @@ export const ChatList: React.FC = () => {
     return () => clearInterval(timer);
   }, [statusSince]);
 
-  const findNearestUserQuery = (index: number): string | null => {
-    const before = [...messages.slice(0, index)].reverse().find((m) => m.role === 'user');
-    if (before?.content?.trim()) return before.content.trim();
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    return lastUser?.content?.trim() || null;
-  };
-
-  const handleRetry = async (messageId: string) => {
-    if (!canRetryMessage(useStore.getState)) return;
-    const requestSessionId = useStore.getState().sessionId;
-    const scope = createChatRetryScope(requestSessionId, useStore);
-
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx === -1) return;
-    const originalMsg = messages[idx];
-    const query = findNearestUserQuery(idx);
-    if (!query) {
-      if (scope.isActive()) setStatus('No user query found to retry');
-      setTimeout(() => {
-        if (scope.isActive()) setStatus(null);
-      }, 1500);
-      return;
-    }
-
-    scope.setLoading(true);
-    if (scope.isActive()) setStatus('Retrying request...');
-    scope.updateMessage(messageId, { isLoading: true, content: '' });
-
-    try {
-      const response = await apiClient.sendMessage(query, requestSessionId, {
-        output_mode: 'chat',
-        confirmation_mode: 'skip',
-      });
-
-      const chartInfo = await shouldGenerateChart(query, response.current_focus ?? null);
-      const tickerToChart = chartInfo.tickers[0] || null;
-      const evidencePool = (response as any).evidence_pool ?? response.data?.evidence_pool;
-
-      let responseContent = typeof response.response === 'string'
-        ? response.response
-        : JSON.stringify(response.response, null, 2);
-      const tickers = chartInfo.tickers.length ? chartInfo.tickers : extractTickers(query);
-      responseContent = injectChartMarkers(responseContent, tickers, chartInfo.chartType);
-
-      scope.updateMessage(messageId, {
-        content: responseContent,
-        timestamp: Date.now(),
-        intent: response.intent,
-        relatedTicker: response.current_focus || tickerToChart || undefined,
-        thinking: response.thinking,
-        data_origin: response.data?.data_origin,
-        as_of: response.data?.as_of ?? null,
-        fallback_used: response.data?.fallback_used,
-        tried_sources: response.data?.tried_sources,
-        evidence_pool: evidencePool,
-        report: response.report,
-        isLoading: false,
-      });
-
-      const elapsedSeconds =
-        (response.thinking_elapsed_seconds ?? (response.response_time_ms != null ? response.response_time_ms / 1000 : 0)).toFixed(1);
-      if (scope.isActive()) setStatus(`Completed in ${elapsedSeconds}s`);
-
-      if (scope.isActive() && (response.current_focus || tickerToChart)) {
-        setTicker(response.current_focus || tickerToChart);
-      }
-    } catch {
-      scope.updateMessage(messageId, { content: originalMsg.content, isLoading: false });
-      scope.addMessage({
-        id: uuidv4(),
-        role: 'system',
-        content: 'Retry failed. Please confirm the backend service is running.',
-        timestamp: Date.now(),
-      });
-      if (scope.isActive()) setStatus('Retry failed');
-    } finally {
-      scope.setLoading(false);
-      setTimeout(() => {
-        if (scope.isActive()) setStatus(null);
-      }, 2000);
-    }
-  };
-
   const renderMessages = () => {
     const items = messages.map((msg) =>
       isFlat ? (
         <FlatMessage
           key={msg.id}
           msg={msg}
-          onRetry={() => handleRetry(msg.id)}
+          onRetry={() => void chatStream.retry(msg.id)}
           onDelete={() => removeMessage(msg.id)}
         />
       ) : (
         <BubbleMessage
           key={msg.id}
           msg={msg}
-          onRetry={() => handleRetry(msg.id)}
+          onRetry={() => void chatStream.retry(msg.id)}
           onDelete={() => removeMessage(msg.id)}
         />
       )
