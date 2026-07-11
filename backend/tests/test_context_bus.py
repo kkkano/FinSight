@@ -30,3 +30,39 @@ async def test_later_agent_sees_earlier_agent_digest():
     await execute_plan_dag(plan, tool_invokers={}, agent_invokers={"price_agent": price_agent, "risk_agent": risk_agent},
                            dry_run=False, context_bus={})
     assert "price_agent: AAPL at $200" in seen["digest"]
+
+
+@pytest.mark.asyncio
+async def test_context_bus_isolated_by_task_id():
+    seen: dict[str, str] = {}
+
+    async def price_agent(_inputs):
+        return {"summary": "AAPL price evidence", "evidence": []}
+
+    async def news_agent(_inputs):
+        return {"summary": "MSFT news evidence", "evidence": []}
+
+    async def risk_agent(inputs):
+        seen[inputs["ticker"]] = inputs.get("__context_digest", "")
+        return {"summary": "done", "evidence": []}
+
+    plan = {
+        "steps": [
+            {"id": "a1", "kind": "agent", "name": "price_agent", "inputs": {"ticker": "AAPL"}, "task_ids": ["t1"]},
+            {"id": "b1", "kind": "agent", "name": "news_agent", "inputs": {"ticker": "MSFT"}, "task_ids": ["t2"]},
+            {"id": "a2", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "AAPL"}, "task_ids": ["t1"], "depends_on": ["a1"]},
+            {"id": "b2", "kind": "agent", "name": "risk_agent", "inputs": {"ticker": "MSFT"}, "task_ids": ["t2"], "depends_on": ["b1"]},
+        ]
+    }
+    await execute_plan_dag(
+        plan,
+        tool_invokers={},
+        agent_invokers={"price_agent": price_agent, "news_agent": news_agent, "risk_agent": risk_agent},
+        dry_run=False,
+        context_bus={},
+    )
+
+    assert "AAPL price evidence" in seen["AAPL"]
+    assert "MSFT news evidence" not in seen["AAPL"]
+    assert "MSFT news evidence" in seen["MSFT"]
+    assert "AAPL price evidence" not in seen["MSFT"]

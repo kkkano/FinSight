@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from backend.graph.nodes.planner import _enforce_policy
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.nodes.policy_gate import policy_gate
 
 
@@ -290,7 +290,7 @@ def test_router_compare_hints_are_recompiled_to_valuation_contract(monkeypatch):
     import asyncio
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -340,7 +340,7 @@ def test_router_hint_operations_do_not_pollute_frame_contracts(monkeypatch):
     import asyncio
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -397,7 +397,7 @@ def test_router_hint_uses_company_alias_frame_for_external_impact_contract(monke
     import asyncio
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 

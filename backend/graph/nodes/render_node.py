@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 from langchain_core.messages import AIMessage
 
 from backend.graph.intent_contract import is_research_compare_contract
-from backend.graph.nodes.chat_renderer import render_chat_markdown
+from backend.graph.renderers import render_chat_markdown
 from backend.graph.nodes.compare_gate import should_render_compare, is_compare_operation
 from backend.graph.state import GraphState
 from backend.utils.quote import parse_quote_payload

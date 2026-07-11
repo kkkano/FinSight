@@ -23,7 +23,6 @@ from backend.api.schemas import (
     ChatRequest,
 )
 from backend.api.chat_router import ChatRouterDeps, create_chat_router
-from backend.api.agent_router import AgentRouterDeps, create_agent_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
 from backend.api.dashboard_router import dashboard_router
@@ -44,7 +43,6 @@ from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morn
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.skills_router import create_skills_router
-from backend.api.agents_router import create_agents_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload

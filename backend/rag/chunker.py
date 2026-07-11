@@ -15,7 +15,10 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,7 @@ def _get_recursive_splitter(
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
     separators: list[str] | None = None,
-) -> "RecursiveCharacterTextSplitter":  # type: ignore[name-defined]
+) -> RecursiveCharacterTextSplitter:
     """Lazily import and return a LangChain RecursiveCharacterTextSplitter."""
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter

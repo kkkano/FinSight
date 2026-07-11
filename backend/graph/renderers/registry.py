@@ -163,9 +163,19 @@ def _task_section_state(state: GraphState, task: dict[str, Any], bucket: dict[st
     sliced_results: dict[str, Any] = {sid: step_results[sid] for sid in step_ids if sid in step_results}
     for sid, result in (bucket.get("results") or {}).items():
         sliced_results.setdefault(str(sid), result)
-    sub_artifacts = {**artifacts, "step_results": sliced_results, "task_results": {task_id: bucket}}
-    # alert 前缀与 blocked 说明由顶层 _with_existing_prefixes 统一追加，避免每节重复
-    sub_artifacts.pop("alert_markdown", None)
+    evidence_by_task = (
+        artifacts.get("evidence_by_task")
+        if isinstance(artifacts.get("evidence_by_task"), dict)
+        else {}
+    )
+    task_evidence = evidence_by_task.get(task_id)
+    task_evidence = task_evidence if isinstance(task_evidence, list) else []
+    sub_artifacts = {
+        "step_results": sliced_results,
+        "task_results": {task_id: bucket},
+        "evidence_pool": task_evidence,
+        "evidence_by_task": {task_id: task_evidence},
+    }
     understanding = state.get("understanding") if isinstance(state.get("understanding"), dict) else {}
     operation_obj = task.get("operation") if isinstance(task.get("operation"), dict) else {"name": str(task.get("operation") or "")}
     return {

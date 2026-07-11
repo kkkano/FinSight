@@ -59,7 +59,7 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
                     generated_dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
                     age_days = (datetime.now(timezone.utc) - generated_dt).days
                 except Exception:
-                    pass
+                    logger.debug("invalid report generated_at; using unknown age", exc_info=True)
 
             recent_reports[ticker] = {
                 "report_id": report.get("report_id", ""),
@@ -128,7 +128,7 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
                     if now > expires_at_dt and payload.get("status") != "done":
                         payload["status"] = "expired"
                 except Exception:
-                    pass
+                    logger.debug("invalid task expires_at; preserving stored status", exc_info=True)
             serialized_tasks.append(payload)
 
         return {

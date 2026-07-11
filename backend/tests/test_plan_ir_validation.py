@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.plan_ir import plan_ir_json_schema, validate_plan_ir
 
 

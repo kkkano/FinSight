@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_str(value: Any) -> str:
@@ -18,7 +21,7 @@ def _safe_str(value: Any) -> str:
         try:
             return value.isoformat()
         except Exception:
-            pass
+            logger.debug("isoformat conversion failed", exc_info=True)
     return str(value)
 
 def _flatten_json_like_line(line: str) -> str:

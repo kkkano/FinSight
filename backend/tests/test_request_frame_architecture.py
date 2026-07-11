@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.nodes.policy_gate import policy_gate
 
 
@@ -458,7 +458,7 @@ def test_plain_compare_request_frame_full_path_plans_performance_comparison(monk
 def test_router_hints_compile_to_independent_request_frames(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -513,7 +513,7 @@ def test_router_hints_compile_to_independent_request_frames(monkeypatch):
 def test_router_direct_cannot_swallow_request_frame_evidence(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -560,7 +560,7 @@ def test_router_direct_cannot_swallow_request_frame_evidence(monkeypatch):
 def test_router_direct_no_news_compare_risk_still_requires_research(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 

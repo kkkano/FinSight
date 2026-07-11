@@ -2,16 +2,21 @@
 """P2-3 同质化章节数据化改造 — 报告生成 prompt 结构化要求断言测试。
 
 这是 prompt 文本断言测试（不调 LLM），轻量但能防止结构化要求被误删。
-通过读取 synthesize.py 源码做字符串断言，覆盖两条报告生成 prompt 链路：
+通过读取合成入口与 narrative 实现源码做字符串断言，覆盖两条报告生成 prompt 链路：
   1. _generate_narrative_draft 的 <report_structure>（投资报告叙述正文）
   2. synthesize 节点的 <field_quality_guidelines>（catalysts/risks/conclusion 字段填充）
 """
 
 from pathlib import Path
 
-_SYNTHESIZE_SRC = (
-    Path(__file__).resolve().parents[1] / "graph" / "nodes" / "synthesize.py"
-).read_text(encoding="utf-8")
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_SYNTHESIZE_SRC = "\n".join(
+    path.read_text(encoding="utf-8")
+    for path in (
+        _BACKEND_ROOT / "graph" / "nodes" / "synthesize.py",
+        _BACKEND_ROOT / "graph" / "synthesis" / "narrative.py",
+    )
+)
 
 
 # ---------------------------------------------------------------------------

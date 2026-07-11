@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import json
+from collections.abc import Iterable
 
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
 from backend.graph.capability_registry import select_agents_for_request
@@ -14,6 +15,91 @@ from backend.graph.request_task_contract import reply_contract_disallows_news
 from backend.graph.state import GraphState
 from backend.graph.plan_ir import PlanIR, PlanBudget, PlanSubject
 from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE, project_v2_tasks_to_legacy
+
+
+def _step_task_ids(step: dict) -> list[str]:
+    values = step.get("task_ids") if isinstance(step.get("task_ids"), list) else []
+    task_ids = [str(value or "").strip() for value in values if str(value or "").strip()]
+    single = str(step.get("task_id") or "").strip()
+    if single and single not in task_ids:
+        task_ids.insert(0, single)
+    return task_ids
+
+
+def _contiguous_groups(steps: list[dict]) -> list[list[dict]]:
+    groups: list[list[dict]] = []
+    current: list[dict] = []
+    current_group: str | None = None
+    for step in steps:
+        raw_group = step.get("parallel_group")
+        group = str(raw_group).strip() if isinstance(raw_group, str) and raw_group.strip() else None
+        if group is None:
+            if current:
+                groups.append(current)
+                current = []
+                current_group = None
+            groups.append([step])
+        elif current and current_group == group:
+            current.append(step)
+        else:
+            if current:
+                groups.append(current)
+            current = [step]
+            current_group = group
+    if current:
+        groups.append(current)
+    return groups
+
+
+def finalize_step_dependencies(steps: list[dict]) -> list[dict]:
+    """补齐显式 DAG：同 task 串联，不同 task 的根阶段保持并发。"""
+    valid_ids = {str(step.get("id") or "").strip() for step in steps}
+    valid_ids.discard("")
+    last_ids_by_task: dict[str, list[str]] = {}
+    latest_unscoped_group: list[str] = []
+    previous_group_ids: list[str] = []
+
+    for group in _contiguous_groups(steps):
+        group_ids = [str(step.get("id") or "").strip() for step in group]
+        group_ids = [step_id for step_id in group_ids if step_id]
+        group_tasks = {task_id for step in group for task_id in _step_task_ids(step)}
+        has_unscoped_step = any(not _step_task_ids(step) for step in group)
+
+        for step in group:
+            step_id = str(step.get("id") or "").strip()
+            raw_dependencies = step.get("depends_on")
+            explicit_values: Iterable = raw_dependencies if isinstance(raw_dependencies, list) else []
+            explicit: list[str] = []
+            for value in explicit_values:
+                dependency = str(value or "").strip()
+                if dependency and dependency != step_id and dependency in valid_ids and dependency not in explicit:
+                    explicit.append(dependency)
+            if isinstance(raw_dependencies, list):
+                step["depends_on"] = explicit
+                continue
+
+            task_ids = _step_task_ids(step)
+            inferred: list[str] = []
+            for task_id in task_ids:
+                for dependency in last_ids_by_task.get(task_id, latest_unscoped_group):
+                    if dependency != step_id and dependency not in inferred:
+                        inferred.append(dependency)
+            if not task_ids:
+                inferred = list(previous_group_ids)
+            step["depends_on"] = inferred
+
+        for task_id in group_tasks:
+            last_ids_by_task[task_id] = [
+                str(step.get("id") or "").strip()
+                for step in group
+                if task_id in _step_task_ids(step) and str(step.get("id") or "").strip()
+            ]
+        if has_unscoped_step:
+            latest_unscoped_group = list(group_ids)
+            for task_id in last_ids_by_task:
+                last_ids_by_task[task_id] = list(group_ids)
+        previous_group_ids = list(group_ids)
+    return steps
 
 
 def _append_tool_step(ctx, 

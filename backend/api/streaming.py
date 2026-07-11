@@ -33,8 +33,7 @@ async def _drain_trace_queue(queue: asyncio.Queue, timeout: float = 0.01) -> Lis
             event = queue.get_nowait()
             events.append(event)
     except asyncio.QueueEmpty:
-        pass
-    return events
+        return events
 
 
 class ThinkingStream:
@@ -359,4 +358,3 @@ def create_thinking_callback(stream_generator):
         "on_llm_start": on_llm_start,
         "on_llm_end": on_llm_end
     }
-

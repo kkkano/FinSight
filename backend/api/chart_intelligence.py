@@ -155,7 +155,7 @@ def _extract_json(text: str) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return parsed
     except Exception:
-        pass
+        logger.debug("chart detector response is not a complete JSON object", exc_info=True)
     # 退而求其次：抓取首个 {...} 片段
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:

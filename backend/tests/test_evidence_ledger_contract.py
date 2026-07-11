@@ -14,6 +14,7 @@ from backend.research.evidence_ledger import (
     from_agent_output,
     to_prompt_context,
 )
+from backend.research.ledger_builder import build_ledger_from_artifacts
 
 
 def test_research_claim_rejects_empty_claim() -> None:
@@ -189,3 +190,169 @@ def test_to_prompt_context_is_compact_and_excludes_private_diagnostics() -> None
     assert "raw_trace" not in encoded
     assert "private_diagnostics" not in encoded
     assert "secret-token" not in encoded
+
+
+def test_pool_sources_bind_only_to_claims_in_the_same_task() -> None:
+    artifacts = {
+        "step_results": {
+            "agent-a": {
+                "task_ids": ["task-a"],
+                "output": {
+                    "agent_name": "news_agent",
+                    "claims": [{"claim": "Claim for A", "evidence_ids": []}],
+                },
+            },
+            "agent-b": {
+                "task_ids": ["task-b"],
+                "output": {
+                    "agent_name": "news_agent",
+                    "claims": [{"claim": "Claim for B", "evidence_ids": []}],
+                },
+            },
+        },
+        "evidence_pool": [
+            {
+                "title": "Source for A",
+                "url": "https://example.com/a",
+                "source": "fixture",
+                "task_ids": ["task-a"],
+            },
+            {
+                "title": "Source for B",
+                "url": "https://example.com/b",
+                "source": "fixture",
+                "task_ids": ["task-b"],
+            },
+        ],
+    }
+
+    ledger = build_ledger_from_artifacts({"query": "A and B"}, artifacts)
+    sources = {source["source_id"]: source for source in ledger["sources"]}
+    claims = {claim["claim"]: claim for claim in ledger["claims"]}
+
+    assert {source["url"]: source["task_ids"] for source in sources.values()} == {
+        "https://example.com/a": ["task-a"],
+        "https://example.com/b": ["task-b"],
+    }
+    assert [sources[source_id]["url"] for source_id in claims["Claim for A"]["evidence_ids"]] == [
+        "https://example.com/a"
+    ]
+    assert [sources[source_id]["url"] for source_id in claims["Claim for B"]["evidence_ids"]] == [
+        "https://example.com/b"
+    ]
+
+
+def test_shared_agent_source_merges_task_scope_without_evidence_pool() -> None:
+    shared_url = "https://example.com/shared-agent-source"
+    artifacts = {
+        "step_results": {
+            "agent-a": {
+                "task_ids": ["task-a"],
+                "output": {
+                    "agent_name": "news_agent",
+                    "claims": [{"claim": "Agent claim for A"}],
+                    "evidence": [
+                        {
+                            "title": "Shared agent source",
+                            "url": shared_url,
+                            "text": "Evidence observed by task A",
+                            "source": "fixture",
+                        }
+                    ],
+                },
+            },
+            "agent-b": {
+                "task_ids": ["task-b"],
+                "output": {
+                    "agent_name": "news_agent",
+                    "claims": [{"claim": "Agent claim for B"}],
+                    "evidence": [
+                        {
+                            "title": "Shared agent source",
+                            "url": shared_url,
+                            "text": "Evidence observed by task B",
+                            "source": "fixture",
+                        }
+                    ],
+                },
+            },
+        }
+    }
+
+    ledger = build_ledger_from_artifacts({"query": "A and B share a source"}, artifacts)
+
+    assert len(ledger["sources"]) == 1
+    source = ledger["sources"][0]
+    claims = {claim["claim"]: claim for claim in ledger["claims"]}
+    assert source["url"] == shared_url
+    assert source["task_ids"] == ["task-a", "task-b"]
+    assert claims["Agent claim for A"]["task_ids"] == ["task-a"]
+    assert claims["Agent claim for B"]["task_ids"] == ["task-b"]
+    assert claims["Agent claim for A"]["evidence_ids"] == [source["source_id"]]
+    assert claims["Agent claim for B"]["evidence_ids"] == [source["source_id"]]
+
+
+def test_embedded_ledger_claim_inherits_step_scope_without_binding_other_task_pool() -> None:
+    task_a_url = "https://example.com/deepsearch-a"
+    task_b_url = "https://example.com/deepsearch-b"
+    artifacts = {
+        "step_results": {
+            "deepsearch-a": {
+                "task_ids": ["task-a"],
+                "output": {
+                    "agent_name": "deep_search_agent",
+                    "ledger": {
+                        "ledger_id": "ledger:deepsearch-a",
+                        "query": "DeepSearch A",
+                        "subject": {"ticker": "AAPL"},
+                        "sources": [
+                            {
+                                "source_id": "deep-source-a",
+                                "title": "DeepSearch source A",
+                                "url": task_a_url,
+                                "source": "deep_search",
+                            }
+                        ],
+                        "claims": [
+                            {
+                                "claim_id": "claim:missing-scope",
+                                "claim": "Embedded claim without scope",
+                                "evidence_ids": [],
+                            },
+                            {
+                                "claim_id": "claim:explicit-scope",
+                                "claim": "Embedded claim with explicit scope",
+                                "evidence_ids": ["deep-source-a"],
+                                "task_ids": ["task-explicit"],
+                            },
+                        ],
+                    },
+                },
+            }
+        },
+        "evidence_pool": [
+            {
+                "title": "Pool source A",
+                "url": task_a_url,
+                "source": "fixture",
+                "task_ids": ["task-a"],
+            },
+            {
+                "title": "Pool source B",
+                "url": task_b_url,
+                "source": "fixture",
+                "task_ids": ["task-b"],
+            },
+        ],
+    }
+
+    ledger = build_ledger_from_artifacts({"query": "DeepSearch A"}, artifacts)
+    sources = {source["source_id"]: source for source in ledger["sources"]}
+    claims = {claim["claim_id"]: claim for claim in ledger["claims"]}
+    inherited = claims["claim:missing-scope"]
+
+    assert inherited["task_ids"] == ["task-a"]
+    assert [sources[source_id]["url"] for source_id in inherited["evidence_ids"]] == [
+        task_a_url
+    ]
+    assert claims["claim:explicit-scope"]["task_ids"] == ["task-explicit"]

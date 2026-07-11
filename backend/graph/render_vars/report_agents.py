@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -12,6 +13,8 @@ from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 from backend.graph.render_vars.model import RenderVars
 from backend.graph.render_vars.access import _get_agent_output, _get_tool_output
+
+logger = logging.getLogger(__name__)
 
 
 def _collect_conflict_disclosure(ctx) -> str:
@@ -360,7 +363,7 @@ def _build_investment_thesis(ctx) -> str:
                 label = aname.replace("_agent", "")
                 coverage.append(f"{label} {conf:.0%}")
             except (ValueError, TypeError):
-                pass
+                logger.debug("agent confidence is not numeric", exc_info=True)
     if coverage:
         sections.append(f"**数据置信度：** {' | '.join(coverage)}")
         sections.append("")

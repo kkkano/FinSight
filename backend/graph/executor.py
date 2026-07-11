@@ -131,7 +131,7 @@ class StepContext:
     # cache key 前对 inputs 的投影；旧执行器保持恒等（__escalation_stage 等历史上就参与 key）
     cache_key_inputs: Callable[[dict[str, Any]], dict[str, Any]] = _identity_inputs
     # 证据黑板（WP2 Task7 接线；None=不启用）
-    context_bus: dict[str, str] | None = None
+    context_bus: dict[str, Any] | None = None
 
 
 def step_task_ids(step: dict[str, Any]) -> list[str]:

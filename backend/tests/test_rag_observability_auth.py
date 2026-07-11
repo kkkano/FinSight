@@ -30,9 +30,9 @@ def _configure_auth(monkeypatch):
     monkeypatch.setenv('VITE_SUPABASE_URL', 'https://supabase.test')
     monkeypatch.setenv('VITE_SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test')
     import backend.api.security_gate as _sg
-    monkeypatch.setattr(_sg, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    monkeypatch.setattr(_sg, '_rate_limiter', _sg.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
     import backend.api.app_factory as _af; monkeypatch.setattr(_af, 'get_rag_observability_store', lambda: _FakeRagStore())
-    main._auth_identity_cache.clear()
+    _sg._auth_identity_cache.clear()
     return main
 
 
@@ -119,9 +119,9 @@ def test_rag_diagnostics_read_allows_local_dev_bearer_without_supabase(monkeypat
     monkeypatch.setenv('RAG_OBSERVABILITY_DEV_USER_ID', 'dev-rag-user')
     monkeypatch.setenv('RAG_OBSERVABILITY_DEV_EMAIL', 'dev-rag@example.com')
     import backend.api.security_gate as _sg
-    monkeypatch.setattr(_sg, '_rate_limiter', main.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
+    monkeypatch.setattr(_sg, '_rate_limiter', _sg.SimpleRateLimiter(limit_per_window=100, window_seconds=60, enabled=False))
     import backend.api.app_factory as _af; monkeypatch.setattr(_af, 'get_rag_observability_store', lambda: _FakeRagStore())
-    main._auth_identity_cache.clear()
+    _sg._auth_identity_cache.clear()
 
     with TestClient(main.app) as client:
         response = client.get('/diagnostics/rag/status', headers={'Authorization': 'Bearer local-rag-dev-token'})

@@ -93,7 +93,7 @@ class TestGreetingShortCircuit:
     )
     def test_open_chat_goes_to_llm_router_not_local_short_circuit(self, query: str, monkeypatch):
         from backend.graph import GraphRunner
-        from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+        from backend.graph.intent.router import ContextBinding, ConversationDecision
 
         async def fake_route(_state, *, tickers, selection_ids):
             assert tickers == []

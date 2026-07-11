@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+from backend.graph.intent.router import ContextBinding, ConversationDecision
 
 
 def make_decision(route: str, task_hints: tuple = (), **kw) -> ConversationDecision:

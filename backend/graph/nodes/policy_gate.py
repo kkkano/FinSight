@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import os
-import re
-
+from backend.graph.capability_registry import (
+    REPORT_AGENT_CANDIDATES,
+    select_agents_for_request,
+)
 from backend.graph.earnings_intent import query_requests_earnings_price_impact
-from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES, select_agents_for_request
 from backend.graph.intent_contract import (
     canonical_evidence_kinds,
     evidence_agents_for_kinds,
@@ -14,17 +14,111 @@ from backend.graph.intent_contract import (
     evidence_tools_for_kinds,
     is_valuation_contract,
 )
+from backend.graph.policy.runtime import (
+    _agent_research_config as _agent_research_config,
+)
+from backend.graph.policy.runtime import (
+    _append_missing as _append_missing,
+)
+from backend.graph.policy.runtime import (
+    _contains_any as _contains_any,
+)
+from backend.graph.policy.runtime import (
+    _env_bool as _env_bool,
+)
+from backend.graph.policy.runtime import (
+    _env_int as _env_int,
+)
+from backend.graph.policy.runtime import (
+    _has_ready_operation as _has_ready_operation,
+)
+from backend.graph.policy.runtime import (
+    _infer_market_from_subject as _infer_market_from_subject,
+)
+from backend.graph.policy.runtime import (
+    _infer_market_from_task as _infer_market_from_task,
+)
+from backend.graph.policy.runtime import (
+    _infer_market_from_ticker as _infer_market_from_ticker,
+)
+from backend.graph.policy.runtime import (
+    _is_dashboard_source as _is_dashboard_source,
+)
+from backend.graph.policy.runtime import (
+    _is_truthy as _is_truthy,
+)
+from backend.graph.policy.runtime import (
+    _operation_params as _operation_params,
+)
+from backend.graph.policy.runtime import (
+    _ready_understanding_tasks as _ready_understanding_tasks,
+)
+from backend.graph.policy.runtime import (
+    _request_frame_evidence_from_state as _request_frame_evidence_from_state,
+)
+from backend.graph.policy.runtime import (
+    _request_frame_results_from_state as _request_frame_results_from_state,
+)
+from backend.graph.policy.runtime import (
+    _request_frames_from_state as _request_frames_from_state,
+)
+from backend.graph.policy.runtime import (
+    _required_evidence_from_state as _required_evidence_from_state,
+)
+from backend.graph.policy.runtime import (
+    _state_contains_url_reference as _state_contains_url_reference,
+)
+from backend.graph.policy.runtime import (
+    _task_operation_name as _task_operation_name,
+)
+from backend.graph.policy.runtime import (
+    _task_param_profiles as _task_param_profiles,
+)
+from backend.graph.policy.runtime import (
+    _task_subject_type as _task_subject_type,
+)
+from backend.graph.policy.tools import (
+    _ACTION_RESULT_TOOLS as _ACTION_RESULT_TOOLS,
+)
+from backend.graph.policy.tools import (
+    _SEC_HOLDINGS_TOOL_NAMES as _SEC_HOLDINGS_TOOL_NAMES,
+)
+from backend.graph.policy.tools import (
+    _VALUATION_COMPARE_LIGHT_TOOLS as _VALUATION_COMPARE_LIGHT_TOOLS,
+)
+from backend.graph.policy.tools import (
+    _filter_tools_for_market as _filter_tools_for_market,
+)
+from backend.graph.policy.tools import (
+    _legacy_select_tools as _legacy_select_tools,
+)
+from backend.graph.policy.tools import (
+    _tools_for_required_results as _tools_for_required_results,
+)
+from backend.graph.policy.tools import (
+    _valuation_compare_light_tool_floor as _valuation_compare_light_tool_floor,
+)
+from backend.graph.policy.tools import (
+    _with_earnings_impact_tools as _with_earnings_impact_tools,
+)
+from backend.graph.policy.tools import (
+    _with_us_holdings_tools as _with_us_holdings_tools,
+)
+from backend.graph.policy.tools import (
+    _without_holdings_tools as _without_holdings_tools,
+)
 from backend.graph.request_facets import derive_request_facets
-from backend.graph.request_task_contract import NEWS_TOOL_NAMES, reply_contract_disallows_news
+from backend.graph.request_task_contract import (
+    NEWS_TOOL_NAMES,
+    reply_contract_disallows_news,
+)
 from backend.graph.state import GraphState
 from backend.graph.understanding_v2 import (
     VALUATION_COMPARE_LIGHT_PROFILE,
     evidence_profiles,
-    project_v2_tasks_to_legacy,
 )
 from backend.skills.registry import get_builtin_skill_registry
 from backend.skills.selector import extract_explicit_skill, select_skill_for_facets
-
 
 _DASHBOARD_CORE_AGENTS: tuple[str, ...] = (
     "price_agent",
@@ -50,22 +144,6 @@ _DEEP_RESEARCH_HINTS: tuple[str, ...] = (
     "深度研报",
     "深度研究",
     "财报电话会",
-)
-
-_SEC_HOLDINGS_TOOL_NAMES: tuple[str, ...] = (
-    "get_institutional_holdings",
-    "get_institution_holdings_by_ticker",
-    "get_insider_transactions",
-    "get_holdings_overlap",
-)
-
-_VALUATION_COMPARE_LIGHT_TOOLS: tuple[str, ...] = (
-    "get_stock_price",
-    "get_company_info",
-    "get_sec_company_facts_quarterly",
-    "get_earnings_estimates",
-    "get_current_datetime",
-    "search",
 )
 
 _SHORT_RESEARCH_AGENT_CONFIG: dict[str, dict[str, object]] = {
@@ -98,502 +176,6 @@ _SHORT_RESEARCH_AGENT_CONFIG: dict[str, dict[str, object]] = {
         "reason": "semantic_technical_indicator_request",
     },
 }
-
-
-def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
-    raw = os.getenv(name)
-    if not isinstance(raw, str) or not raw.strip():
-        return default
-    try:
-        value = int(raw.strip())
-    except Exception:
-        return default
-    return max(min_value, min(max_value, value))
-
-
-def _is_dashboard_source(ui_context: dict | None) -> bool:
-    if not isinstance(ui_context, dict):
-        return False
-    source = str(ui_context.get("source") or "").strip().lower()
-    return bool(source) and source.startswith("dashboard")
-
-
-def _is_truthy(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return False
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return _is_truthy(raw)
-
-
-def _agent_research_config(agent_preferences: dict) -> dict[str, int | bool]:
-    """Build the per-agent research config.
-
-    ``FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG`` is an ops override for production
-    experiments: it wins over stale browser-local preferences that still submit
-    ``enableLLMAnalysis=false``.
-    """
-
-    forced = _env_bool("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", False)
-    env_reflections = _env_int(
-        "FINSIGHT_AGENT_REFLECTION_ROUNDS",
-        _env_int("BASE_AGENT_MAX_REFLECTIONS", 3 if forced else 0, min_value=0, max_value=3),
-        min_value=0,
-        max_value=3,
-    )
-    env_analysis_timeout = _env_int(
-        "FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS",
-        _env_int("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", 120 if forced else 0, min_value=0, max_value=120),
-        min_value=0,
-        max_value=120,
-    )
-    env_token_timeout = _env_int(
-        "FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS",
-        _env_int("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", 60 if forced else 0, min_value=0, max_value=60),
-        min_value=0,
-        max_value=60,
-    )
-
-    if forced:
-        return {
-            "enable_llm_analysis": True,
-            "max_reflections": env_reflections,
-            "analysis_timeout_seconds": env_analysis_timeout,
-            "token_acquire_timeout_seconds": env_token_timeout,
-        }
-
-    enable_default = _env_bool("AGENT_LLM_ANALYZE_ENABLED", False)
-    pref_enable = agent_preferences.get("enableLLMAnalysis")
-    enable_llm = pref_enable if isinstance(pref_enable, bool) else enable_default
-
-    def _pref_int(key: str, default: int, *, min_value: int, max_value: int) -> int:
-        raw = agent_preferences.get(key)
-        try:
-            value = int(raw)
-        except Exception:
-            value = default
-        return max(min_value, min(max_value, value))
-
-    return {
-        "enable_llm_analysis": bool(enable_llm),
-        "max_reflections": _pref_int("reflectionRounds", env_reflections, min_value=0, max_value=3),
-        "analysis_timeout_seconds": _pref_int(
-            "analysisTimeoutSeconds",
-            env_analysis_timeout,
-            min_value=0,
-            max_value=120,
-        ),
-        "token_acquire_timeout_seconds": _pref_int(
-            "tokenAcquireTimeoutSeconds",
-            env_token_timeout,
-            min_value=0,
-            max_value=60,
-        ),
-    }
-
-
-def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
-    lowered = str(text or "").lower()
-    return any(str(needle or "").lower() in lowered for needle in needles)
-
-
-def _append_missing(items: list[str], names: tuple[str, ...]) -> list[str]:
-    seen = set(items)
-    for name in names:
-        if name in seen:
-            continue
-        items.append(name)
-        seen.add(name)
-    return items
-
-
-def _valuation_compare_light_tool_floor(required_evidence: list[str], *, market: str) -> tuple[str, ...]:
-    """Light profile 可裁增强项，但不能裁契约声明的最低证据工具。"""
-    market_norm = str(market or "US").strip().upper() or "US"
-    minimum_tools_by_evidence = {
-        "price_snapshot": ("get_stock_price",),
-        "company_profile": ("get_company_info",),
-        "earnings_estimates": ("get_earnings_estimates",),
-        "filing_context": (
-            ("get_sec_company_facts_quarterly",)
-            if market_norm == "US"
-            else ("get_local_market_filings",)
-        ),
-        "news_context": ("get_company_news",),
-    }
-    required_tools: list[str] = []
-    for kind in canonical_evidence_kinds(required_evidence):
-        required_tools.extend(minimum_tools_by_evidence.get(kind, ()))
-    return tuple(_append_missing(list(_VALUATION_COMPARE_LIGHT_TOOLS), tuple(required_tools)))
-
-
-def _task_param_profiles(tasks: list[dict]) -> set[str]:
-    profiles: set[str] = set()
-    for task in tasks:
-        operation = task.get("operation") if isinstance(task.get("operation"), dict) else {}
-        params = operation.get("params") if isinstance(operation.get("params"), dict) else {}
-        for key in ("evidence_profile", "comparison_data_profile", "budget_profile"):
-            value = str(params.get(key) or "").strip()
-            if value:
-                profiles.add(value)
-        if str(params.get("evidence_focus") or "").strip().lower() == "valuation":
-            profiles.add(VALUATION_COMPARE_LIGHT_PROFILE)
-    return profiles
-
-
-def _infer_market_from_ticker(ticker: str) -> str | None:
-    symbol = str(ticker or "").strip().upper()
-    if not symbol:
-        return None
-    if symbol.endswith((".SS", ".SZ", ".BJ")):
-        return "CN"
-    if symbol.endswith(".HK"):
-        return "HK"
-    return "US"
-
-
-def _infer_market_from_subject(subject: dict | None) -> str | None:
-    if not isinstance(subject, dict):
-        return None
-    tickers = subject.get("tickers")
-    if not isinstance(tickers, list):
-        return None
-    for ticker in tickers:
-        if not isinstance(ticker, str):
-            continue
-        inferred = _infer_market_from_ticker(ticker)
-        if inferred:
-            return inferred
-    return None
-
-
-def _ready_understanding_tasks(state: GraphState) -> list[dict]:
-    tasks = state.get("tasks")
-    if not isinstance(tasks, list):
-        tasks = project_v2_tasks_to_legacy(state.get("understanding_v2"))
-    if not isinstance(tasks, list):
-        return []
-    ready: list[dict] = []
-    for task in tasks:
-        if not isinstance(task, dict):
-            continue
-        status = str(task.get("status") or "ready").strip().lower()
-        if status == "blocked":
-            continue
-        ready.append(task)
-    return ready
-
-
-def _state_contains_url_reference(state: GraphState, ui_context: dict) -> bool:
-    query = str(state.get("query") or "")
-    if re.search(r"https?://[^\s<>\]\)\"']+", query, re.IGNORECASE):
-        return True
-    raw_selections = ui_context.get("selections")
-    if not raw_selections and isinstance(ui_context.get("selection"), dict):
-        raw_selections = [ui_context["selection"]]
-    if not isinstance(raw_selections, list):
-        return False
-    for item in raw_selections:
-        if isinstance(item, dict) and str(item.get("url") or "").startswith(("http://", "https://")):
-            return True
-    return False
-
-
-def _task_operation_name(task: dict) -> str:
-    operation = task.get("operation")
-    if isinstance(operation, dict):
-        name = operation.get("name")
-        if isinstance(name, str) and name.strip():
-            return name.strip()
-    return "qa"
-
-
-def _task_subject_type(task: dict) -> str:
-    value = task.get("subject_type")
-    return str(value).strip().lower() if isinstance(value, str) and value.strip() else "unknown"
-
-
-def _has_ready_operation(tasks: list[dict], operation_name: str) -> bool:
-    target = str(operation_name or "").strip().lower()
-    if not target:
-        return False
-    return any(_task_operation_name(task).strip().lower() == target for task in tasks)
-
-
-def _operation_params(operation: object) -> dict:
-    if isinstance(operation, dict) and isinstance(operation.get("params"), dict):
-        return operation.get("params") or {}
-    return {}
-
-
-def _required_evidence_from_state(
-    *,
-    intent_contract: dict,
-    operation: object,
-    ready_tasks: list[dict],
-) -> list[str]:
-    required: list[str] = []
-    contract_required = intent_contract.get("required_evidence") if isinstance(intent_contract, dict) else []
-    if isinstance(contract_required, list):
-        required.extend(str(item) for item in contract_required if str(item).strip())
-    op_required = _operation_params(operation).get("required_evidence")
-    if isinstance(op_required, list):
-        required.extend(str(item) for item in op_required if str(item).strip())
-    for task in ready_tasks:
-        task_operation = task.get("operation")
-        task_required = _operation_params(task_operation).get("required_evidence")
-        if isinstance(task_required, list):
-            required.extend(str(item) for item in task_required if str(item).strip())
-        task_params = task.get("params")
-        if isinstance(task_params, dict) and isinstance(task_params.get("required_evidence"), list):
-            required.extend(str(item) for item in task_params.get("required_evidence") if str(item).strip())
-    return canonical_evidence_kinds(required)
-
-
-_ACTION_RESULT_TOOLS: dict[str, tuple[str, ...]] = {
-    "backtest_result": ("run_strategy_backtest", "get_current_datetime", "search"),
-}
-
-
-def _request_frames_from_state(state: GraphState) -> list[dict]:
-    frames: list[dict] = []
-    raw_frames = state.get("request_frames")
-    if isinstance(raw_frames, list):
-        frames.extend(item for item in raw_frames if isinstance(item, dict))
-    raw_frame = state.get("request_frame")
-    if isinstance(raw_frame, dict) and raw_frame not in frames:
-        frames.append(raw_frame)
-    return frames
-
-
-def _request_frame_evidence_from_state(state: GraphState) -> list[str]:
-    required: list[str] = []
-    for frame in _request_frames_from_state(state):
-        raw = frame.get("evidence_obligations")
-        if isinstance(raw, list):
-            required.extend(str(item) for item in raw if str(item).strip())
-    return canonical_evidence_kinds(required)
-
-
-def _request_frame_results_from_state(state: GraphState) -> list[str]:
-    results: list[str] = []
-    seen: set[str] = set()
-    for frame in _request_frames_from_state(state):
-        raw_results = frame.get("required_results")
-        if isinstance(raw_results, list):
-            for item in raw_results:
-                value = str(item or "").strip()
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                results.append(value)
-        workflow_action = frame.get("workflow_action")
-        if isinstance(workflow_action, dict) and isinstance(workflow_action.get("required_results"), list):
-            for item in workflow_action.get("required_results") or []:
-                value = str(item or "").strip()
-                if not value or value in seen:
-                    continue
-                seen.add(value)
-                results.append(value)
-    return results
-
-
-def _tools_for_required_results(required_results: list[str]) -> list[str]:
-    tools: list[str] = []
-    seen: set[str] = set()
-    for result in required_results:
-        for tool_name in _ACTION_RESULT_TOOLS.get(str(result or "").strip(), ()):
-            if tool_name in seen:
-                continue
-            seen.add(tool_name)
-            tools.append(tool_name)
-    return tools
-
-
-def _infer_market_from_task(task: dict, fallback: str) -> str:
-    tickers = task.get("tickers")
-    if isinstance(tickers, list):
-        for ticker in tickers:
-            if not isinstance(ticker, str):
-                continue
-            inferred = _infer_market_from_ticker(ticker)
-            if inferred:
-                return inferred
-    return fallback
-
-
-def _with_us_holdings_tools(tools: list[str], *, subject_type: str, op_name: str, market: str) -> list[str]:
-    if market != "US" or op_name != "holdings" or subject_type not in {"company", "portfolio"}:
-        return tools
-    result = list(tools)
-    seen = set(result)
-    for tool_name in _SEC_HOLDINGS_TOOL_NAMES:
-        if tool_name in seen:
-            continue
-        seen.add(tool_name)
-        result.append(tool_name)
-    return result
-
-
-def _without_holdings_tools(tools: list[str]) -> list[str]:
-    return [tool_name for tool_name in tools if tool_name not in _SEC_HOLDINGS_TOOL_NAMES]
-
-
-def _filter_tools_for_market(tools: list[str], *, market: str) -> list[str]:
-    market_norm = str(market or "US").strip().upper() or "US"
-    try:
-        from backend.tools.manifest import TOOL_MANIFEST
-
-        markets_by_tool = {entry.name: set(entry.markets) for entry in TOOL_MANIFEST}
-    except Exception:
-        markets_by_tool = {}
-    filtered: list[str] = []
-    seen: set[str] = set()
-    for tool_name in tools:
-        if tool_name in seen:
-            continue
-        seen.add(tool_name)
-        markets = markets_by_tool.get(tool_name)
-        if markets and market_norm not in markets:
-            continue
-        filtered.append(tool_name)
-    return filtered
-
-
-def _with_earnings_impact_tools(tools: list[str], *, market: str) -> list[str]:
-    result = list(tools)
-    seen = set(result)
-    required = [
-        "get_stock_price",
-        "get_company_info",
-        "get_company_news",
-        "get_authoritative_media_news",
-        "get_earnings_call_transcripts",
-        "get_earnings_estimates",
-        "get_eps_revisions",
-        "analyze_historical_drawdowns",
-        "get_current_datetime",
-        "search",
-    ]
-    if str(market or "").strip().upper() == "US":
-        required.insert(2, "get_sec_company_facts_quarterly")
-    else:
-        required.insert(2, "get_local_market_filings")
-    for tool_name in required:
-        if tool_name in seen:
-            continue
-        seen.add(tool_name)
-        result.append(tool_name)
-    return result
-
-
-def _legacy_select_tools(subject_type: str, op_name: str) -> list[str]:
-    """Legacy hardcoded allowlist selector kept as manifest fallback."""
-    if op_name == "holdings" and subject_type in {"company", "portfolio"}:
-        return [
-            "get_institutional_holdings",
-            "get_institution_holdings_by_ticker",
-            "get_insider_transactions",
-            "get_holdings_overlap",
-            "get_current_datetime",
-            "search",
-        ]
-    if op_name == "screen":
-        return ["screen_stocks", "search", "get_current_datetime"]
-    if op_name == "cn_market":
-        return [
-            "get_cn_market_fund_flow",
-            "get_cn_market_northbound",
-            "get_cn_limit_board",
-            "get_cn_lhb",
-            "get_cn_concept_map",
-            "search",
-            "get_current_datetime",
-        ]
-    if op_name == "backtest":
-        return ["run_strategy_backtest", "search", "get_current_datetime"]
-    if op_name == "morning_brief":
-        return ["get_stock_price", "get_company_news", "get_current_datetime"]
-    if subject_type in ("news_item", "news_set"):
-        return [
-            "fetch_url_content",
-            "get_company_news",
-            "get_event_calendar",
-            "score_news_source_reliability",
-            "get_authoritative_media_news",
-            "search",
-            "get_current_datetime",
-        ]
-    if subject_type in ("filing", "research_doc"):
-        return ["fetch_url_content", "search", "get_current_datetime"]
-    if subject_type == "macro":
-        return [
-            "get_official_macro_releases",
-            "get_authoritative_media_news",
-            "search",
-            "get_current_datetime",
-        ]
-    if subject_type in ("theme", "unknown"):
-        return [
-            "fetch_url_content",
-            "get_authoritative_media_news",
-            "search",
-            "get_current_datetime",
-        ]
-    if subject_type in ("company", "index", "commodity"):
-        if op_name == "price":
-            return [
-                "get_stock_price",
-                "get_option_chain_metrics",
-                "get_current_datetime",
-                "search",
-            ]
-        if op_name == "technical":
-            return [
-                "get_stock_price",
-                "get_technical_snapshot",
-                "get_option_chain_metrics",
-                "get_current_datetime",
-                "search",
-            ]
-        if op_name == "compare":
-            return [
-                "get_performance_comparison",
-                "get_stock_price",
-                "get_company_news",
-                "get_company_info",
-                "get_current_datetime",
-                "search",
-            ]
-        return [
-            "get_stock_price",
-            "get_technical_snapshot",
-            "get_option_chain_metrics",
-            "get_company_info",
-            "get_company_news",
-            "get_event_calendar",
-            "get_authoritative_media_news",
-            "get_earnings_call_transcripts",
-            "score_news_source_reliability",
-            "get_local_market_filings",
-            "get_earnings_estimates",
-            "get_eps_revisions",
-            "analyze_historical_drawdowns",
-            "get_factor_exposure",
-            "run_portfolio_stress_test",
-            "get_current_datetime",
-            "search",
-        ]
-    return ["fetch_url_content", "search", "get_current_datetime"]
 
 
 def policy_gate(state: GraphState) -> dict:

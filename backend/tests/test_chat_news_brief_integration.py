@@ -355,7 +355,7 @@ def test_full_snapshot_preferred_over_light():
 
 def test_snapshot_text_parsing():
     """meta 丢失时从快照文本正则提取数值（平均分/占比/催化数/趋势）。"""
-    from backend.graph.nodes.chat_renderer import _parse_snapshot_text
+    from backend.graph.renderers.news_snapshot import _parse_snapshot_text
 
     parsed = _parse_snapshot_text(_SNAPSHOT_TEXT)
     assert parsed is not None

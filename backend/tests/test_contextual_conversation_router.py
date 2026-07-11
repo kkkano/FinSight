@@ -25,7 +25,7 @@ def _assert_evidence_task(result: dict, tickers: tuple[str, ...], expected: set[
 
 
 def test_context_router_schema_separates_execution_from_followup_context():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         _coerce_decision,
@@ -57,7 +57,7 @@ def test_context_router_schema_separates_execution_from_followup_context():
 
 
 def test_context_router_coerces_compound_task_hints():
-    from backend.graph.nodes.conversation_router import _coerce_decision
+    from backend.graph.intent.router import _coerce_decision
 
     decision = _coerce_decision(
         {
@@ -88,7 +88,7 @@ def test_theme_matching_does_not_treat_again_as_ai_topic():
 
 
 def test_context_router_rejects_bespoke_followup_routes():
-    from backend.graph.nodes.conversation_router import _coerce_decision
+    from backend.graph.intent.router import _coerce_decision
 
     decision = _coerce_decision(
         {
@@ -106,7 +106,7 @@ def test_context_router_rejects_bespoke_followup_routes():
 
 def test_context_router_preserves_extractable_alert_when_llm_picks_news(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     class _Resp:
         content = """
@@ -145,7 +145,7 @@ def test_context_router_preserves_extractable_alert_when_llm_picks_news(monkeypa
 
 def test_context_router_empty_llm_output_uses_explicit_subject_fallback(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
 
@@ -178,7 +178,7 @@ def test_context_router_empty_llm_output_uses_explicit_subject_fallback(monkeypa
 
 def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
 
@@ -211,7 +211,7 @@ def test_context_router_invalid_json_with_explicit_subject_does_not_retry(monkey
 
 def test_context_router_downgrades_llm_macro_proxy_hint_for_mechanism_question(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     monkeypatch.setenv("FINSIGHT_CONTEXT_ROUTER_ENABLED", "true")
 
@@ -253,7 +253,7 @@ def test_context_router_downgrades_llm_macro_proxy_hint_for_mechanism_question(m
 
 
 def test_finance_concept_fallback_answers_macro_mechanism():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         _fallback_direct_reply,
@@ -280,7 +280,7 @@ def test_finance_concept_fallback_answers_macro_mechanism():
 
 
 def test_context_router_inputs_include_visible_portfolio():
-    from backend.graph.nodes.conversation_router import _router_inputs
+    from backend.graph.intent.router import _router_inputs
 
     inputs = _router_inputs(
         {
@@ -303,7 +303,7 @@ def test_context_router_inputs_include_visible_portfolio():
 
 
 def test_context_router_new_topic_clears_implicit_history_binding():
-    from backend.graph.nodes.conversation_router import _coerce_decision
+    from backend.graph.intent.router import _coerce_decision
 
     decision = _coerce_decision(
         {
@@ -326,7 +326,7 @@ def test_context_router_new_topic_clears_implicit_history_binding():
 
 
 def test_context_router_keeps_global_chat_history_over_active_symbol():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -366,7 +366,7 @@ def test_context_router_keeps_global_chat_history_over_active_symbol():
 
 
 def test_context_router_uses_scoped_active_symbol_over_implicit_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -401,7 +401,7 @@ def test_context_router_uses_scoped_active_symbol_over_implicit_history():
 
 
 def test_context_router_corrected_ticker_becomes_direct_acknowledgement():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -431,7 +431,7 @@ def test_context_router_corrected_ticker_becomes_direct_acknowledgement():
 
 
 def test_context_router_current_turn_ticker_overrides_implicit_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -458,7 +458,7 @@ def test_context_router_current_turn_ticker_overrides_implicit_history():
 
 
 def test_context_router_portfolio_context_overrides_implicit_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -493,7 +493,7 @@ def test_context_router_portfolio_context_overrides_implicit_history():
 
 
 def test_context_router_report_refresh_followup_uses_last_report_when_router_unbound():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -530,7 +530,7 @@ def test_context_router_report_refresh_followup_uses_last_report_when_router_unb
 
 
 def test_context_router_historical_last_report_without_current_thread_clarifies():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -571,7 +571,7 @@ def test_context_router_historical_last_report_without_current_thread_clarifies(
 
 
 def test_context_router_missing_last_report_falls_back_to_same_thread_report_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -613,7 +613,7 @@ def test_context_router_missing_last_report_falls_back_to_same_thread_report_his
 
 
 def test_context_router_current_turn_ticker_overrides_last_report_followup():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -644,7 +644,7 @@ def test_context_router_current_turn_ticker_overrides_last_report_followup():
 
 
 def test_context_router_current_turn_ticker_overrides_all_inherited_contexts():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -675,7 +675,7 @@ def test_context_router_current_turn_ticker_overrides_all_inherited_contexts():
 
 
 def test_context_router_does_not_bind_user_level_recent_focus_without_thread_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -716,7 +716,7 @@ def test_context_router_does_not_bind_user_level_recent_focus_without_thread_his
 
 
 def test_context_router_deictic_none_binding_without_thread_history_clarifies():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -744,7 +744,7 @@ def test_context_router_deictic_none_binding_without_thread_history_clarifies():
 
 
 def test_context_router_unbound_clarify_uses_same_thread_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -781,7 +781,7 @@ def test_context_router_unbound_clarify_uses_same_thread_history():
 
 
 def test_context_router_accepts_session_history_as_thread_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -824,7 +824,7 @@ def test_context_router_accepts_session_history_as_thread_history():
 
 
 def test_context_router_keeps_history_ticker_in_last_turn_subject_hint():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -864,7 +864,7 @@ def test_context_router_keeps_history_ticker_in_last_turn_subject_hint():
 
 
 def test_context_router_style_only_market_mechanism_news_decision_stays_chat():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -901,7 +901,7 @@ def test_context_router_style_only_market_mechanism_news_decision_stays_chat():
 
 
 def test_context_router_no_news_theme_research_decision_stays_chat():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -937,7 +937,7 @@ def test_context_router_no_news_theme_research_decision_stays_chat():
 
 
 def test_context_router_resolved_bound_clarify_continues_conversation():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -980,7 +980,7 @@ def test_context_router_resolved_bound_clarify_continues_conversation():
 
 def test_route_conversation_normalizes_llm_clarify_when_context_is_bound(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
     from langchain_core.messages import AIMessage, HumanMessage
 
     class _Resp:
@@ -1032,7 +1032,7 @@ def test_route_conversation_normalizes_llm_clarify_when_context_is_bound(monkeyp
 
 def test_route_conversation_deictic_without_context_clarifies_without_llm(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     def fail_create_llm(*_args, **_kwargs):
         raise AssertionError("unbound deictic follow-up should not spend a router LLM call")
@@ -1056,7 +1056,7 @@ def test_route_conversation_deictic_without_context_clarifies_without_llm(monkey
 
 def test_route_conversation_explicit_technical_query_uses_fast_path_without_llm(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     def fail_create_llm(*_args, **_kwargs):
         raise AssertionError("explicit technical requests should not spend a router LLM call")
@@ -1087,7 +1087,7 @@ def test_route_conversation_explicit_technical_query_uses_fast_path_without_llm(
 
 def test_route_conversation_explicit_earnings_query_uses_fast_path_without_llm(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     def fail_create_llm(*_args, **_kwargs):
         raise AssertionError("explicit earnings performance requests should not spend a router LLM call")
@@ -1119,7 +1119,7 @@ def test_route_conversation_explicit_earnings_query_uses_fast_path_without_llm(m
 
 def test_route_conversation_explicit_earnings_impact_query_uses_fast_path_without_llm(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     def fail_create_llm(*_args, **_kwargs):
         raise AssertionError("explicit earnings impact requests should not spend a router LLM call")
@@ -1150,7 +1150,7 @@ def test_route_conversation_explicit_earnings_impact_query_uses_fast_path_withou
 
 def test_route_conversation_explicit_report_mode_uses_fast_path_without_llm(monkeypatch):
     import backend.llm_config as llm_config
-    from backend.graph.nodes.conversation_router import route_conversation
+    from backend.graph.intent.router import route_conversation
 
     def fail_create_llm(*_args, **_kwargs):
         raise AssertionError("explicit report mode with a ticker should not spend a router LLM call")
@@ -1178,7 +1178,7 @@ def test_route_conversation_explicit_report_mode_uses_fast_path_without_llm(monk
 
 
 def test_context_router_single_word_it_prefers_thread_history_over_recent_focus():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1219,7 +1219,7 @@ def test_context_router_single_word_it_prefers_thread_history_over_recent_focus(
 
 
 def test_context_router_resolved_followup_research_without_grounding_returns_to_chat():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1265,7 +1265,7 @@ def test_context_router_resolved_followup_research_without_grounding_returns_to_
 
 
 def test_context_router_resolved_quote_request_stays_research_when_query_asks_price():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1304,7 +1304,7 @@ def test_context_router_resolved_quote_request_stays_research_when_query_asks_pr
 
 
 def test_context_router_resolved_followup_keeps_user_action_task_hints():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1347,7 +1347,7 @@ def test_context_router_resolved_followup_keeps_user_action_task_hints():
 
 
 def test_context_router_current_query_ticker_overrides_session_history():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1383,7 +1383,7 @@ def test_context_router_current_query_ticker_overrides_session_history():
 
 
 def test_context_router_named_analytical_followup_keeps_context_without_tools():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1419,7 +1419,7 @@ def test_context_router_named_analytical_followup_keeps_context_without_tools():
 
 
 def test_context_router_visible_portfolio_context_turns_clarify_into_research():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1457,7 +1457,7 @@ def test_context_router_visible_portfolio_context_turns_clarify_into_research():
 
 
 def test_context_router_accepts_llm_safety_decision_without_tools():
-    from backend.graph.nodes.conversation_router import _coerce_decision
+    from backend.graph.intent.router import _coerce_decision
 
     decision = _coerce_decision(
         {
@@ -1478,7 +1478,7 @@ def test_context_router_accepts_llm_safety_decision_without_tools():
 
 
 def test_context_router_blocks_insider_information_requests_from_research():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -1517,7 +1517,7 @@ def test_context_router_blocks_insider_information_requests_from_research():
 
 
 def test_context_router_switch_query_keeps_only_current_effective_ticker():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         _effective_current_turn_tickers,
@@ -1547,7 +1547,7 @@ def test_context_router_switch_query_keeps_only_current_effective_ticker():
 
 
 def test_understand_request_uses_context_binding_for_direct_report_discussion(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -1602,7 +1602,7 @@ def test_understand_request_uses_context_binding_for_direct_report_discussion(mo
 
 
 def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -1647,7 +1647,7 @@ def test_understand_request_sanitizes_direct_chat_template_markers(monkeypatch):
 
 
 def test_understand_request_strips_research_confirmation_cta_from_direct_reply(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -1763,7 +1763,7 @@ def test_understand_request_history_followup_falls_back_to_direct_when_router_un
 
 
 def test_understand_request_direct_followup_keeps_last_turn_binding(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
     from langchain_core.messages import AIMessage, HumanMessage
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
@@ -1825,7 +1825,7 @@ def test_understand_request_direct_followup_keeps_last_turn_binding(monkeypatch)
 
 
 def test_understand_request_quote_label_without_price_request_stays_chat(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
     from langchain_core.messages import AIMessage, HumanMessage
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
@@ -1877,7 +1877,7 @@ def test_understand_request_quote_label_without_price_request_stays_chat(monkeyp
 
 
 def test_understand_request_leaves_url_fetch_to_tools(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
     web_mod = importlib.import_module("backend.tools.web")
@@ -1958,7 +1958,7 @@ def test_policy_and_planner_prompt_expose_url_fetch_tool_for_mixed_query():
 
 def test_non_financial_open_chat_is_llm_direct_before_planner(monkeypatch):
     from backend.graph import GraphRunner
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2002,7 +2002,7 @@ def test_non_financial_open_chat_is_llm_direct_before_planner(monkeypatch):
 
 
 def test_understand_request_can_bind_active_symbol_followup_to_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2044,7 +2044,7 @@ def test_understand_request_can_bind_active_symbol_followup_to_research(monkeypa
 
 
 def test_understand_request_context_binding_wins_over_conflicting_task_hints(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2091,7 +2091,7 @@ def test_understand_request_context_binding_wins_over_conflicting_task_hints(mon
 
 
 def test_understand_request_global_active_symbol_does_not_bypass_history_when_router_unbound(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2124,7 +2124,7 @@ def test_understand_request_global_active_symbol_does_not_bypass_history_when_ro
 
 
 def test_understand_request_can_bind_last_report_followup_to_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2173,7 +2173,7 @@ def test_understand_request_can_bind_last_report_followup_to_research(monkeypatc
 
 
 def test_understand_request_can_bind_recent_focus_to_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
     from langchain_core.messages import AIMessage, HumanMessage
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
@@ -2225,7 +2225,7 @@ def test_understand_request_can_bind_recent_focus_to_research(monkeypatch):
 
 
 def test_understand_request_switch_query_uses_effective_current_ticker(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2261,7 +2261,7 @@ def test_understand_request_switch_query_uses_effective_current_ticker(monkeypat
 
 
 def test_understand_request_router_quote_intent_overrides_multi_ticker_compare(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2299,7 +2299,7 @@ def test_understand_request_router_quote_intent_overrides_multi_ticker_compare(m
 
 
 def test_understand_request_splits_multi_ticker_router_price_hint(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2347,7 +2347,7 @@ def test_understand_request_splits_multi_ticker_router_price_hint(monkeypatch):
 
 
 def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2396,7 +2396,7 @@ def test_understand_request_uses_router_task_hints_for_compound_query(monkeypatc
 
 
 def test_understand_request_projects_direct_decision_with_executable_task_hints(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2453,7 +2453,7 @@ def test_understand_request_projects_direct_decision_with_executable_task_hints(
 
 
 def test_understand_request_projects_direct_technical_decision_to_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2493,7 +2493,7 @@ def test_understand_request_projects_direct_technical_decision_to_research(monke
 
 
 def test_understand_request_adds_price_anchor_for_router_fetch_analysis(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2547,7 +2547,7 @@ def test_understand_request_adds_price_anchor_for_router_fetch_analysis(monkeypa
 
 
 def test_understand_request_expands_quick_compare_hint_into_support_tasks(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2622,7 +2622,7 @@ def test_understand_request_fast_brief_with_explicit_tickers_does_not_wait_for_c
 
 
 def test_understand_request_honors_router_clarify_even_with_explicit_tickers(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2660,7 +2660,7 @@ def test_understand_request_honors_router_clarify_even_with_explicit_tickers(mon
 
 
 def test_understand_request_router_analysis_new_topic_uses_light_current_snapshot(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2698,7 +2698,7 @@ def test_understand_request_router_analysis_new_topic_uses_light_current_snapsho
 
 
 def test_understand_request_reconciles_quote_intent_with_generic_qa_hint(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2745,7 +2745,7 @@ def test_understand_request_reconciles_quote_intent_with_generic_qa_hint(monkeyp
 
 
 def test_understand_request_can_bind_portfolio_context_to_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -2787,7 +2787,7 @@ def test_understand_request_can_bind_portfolio_context_to_research(monkeypatch):
 
 
 def test_understand_request_portfolio_router_clarify_with_positions_becomes_research(monkeypatch):
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 

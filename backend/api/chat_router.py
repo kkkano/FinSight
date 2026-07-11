@@ -71,7 +71,7 @@ def _ensure_deliverable_markdown(state: dict[str, Any]) -> tuple[str, dict[str, 
     if markdown.strip():
         return markdown, state
     try:
-        from backend.graph.nodes.render_stub import render_stub
+        from backend.graph.nodes.render_node import render_node as render_stub
 
         rendered = render_stub(state)
         rendered_artifacts = rendered.get("artifacts") if isinstance(rendered, dict) else None

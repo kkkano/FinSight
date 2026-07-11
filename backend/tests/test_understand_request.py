@@ -538,7 +538,7 @@ def test_policy_gate_unions_tools_for_all_understanding_tasks():
 
 
 def test_planner_stub_builds_multitask_steps_from_understanding_tasks():
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = {

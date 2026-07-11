@@ -7,6 +7,7 @@ import time
 import pytest
 
 from backend.agents.base_agent import AgentOutput, BaseFinancialAgent, EvidenceItem
+from backend.graph.intent.frame import AgentBrief
 from backend.research.agent_quality_contract import apply_agent_quality_contract, build_agent_claim
 from backend.research.agent_research_loop import (
     apply_agent_self_check,
@@ -113,6 +114,47 @@ async def test_base_agent_research_attaches_self_check_diagnostics() -> None:
     assert output.evidence_quality["agent_quality"]["status"] == "warn"
     assert output.evidence_quality["agent_self_check"]["status"] == "warn"
     assert output.evidence_quality["agent_self_check"]["gaps"][0]["code"] == "extract_claims"
+
+
+@pytest.mark.asyncio
+async def test_base_agent_keeps_research_context_isolated_per_async_task() -> None:
+    class _ConcurrentAgent(BaseFinancialAgent):
+        AGENT_NAME = "concurrent_context_agent"
+
+        def __init__(self) -> None:
+            super().__init__(llm=None, cache=None)
+            self.first_search_started = asyncio.Event()
+            self.second_search_started = asyncio.Event()
+
+        async def _initial_search(self, query: str, ticker: str) -> dict[str, str]:
+            del query
+            if ticker == "AAPL":
+                self.first_search_started.set()
+                await self.second_search_started.wait()
+            else:
+                await self.first_search_started.wait()
+                self.second_search_started.set()
+
+            return {
+                "query": self._current_query or "",
+                "ticker": self._current_ticker or "",
+                "objective": self._current_brief.objective if self._current_brief else "",
+            }
+
+        async def _first_summary(self, data: dict[str, str]) -> str:
+            return "|".join((data["query"], data["ticker"], data["objective"]))
+
+    agent = _ConcurrentAgent()
+    apple_brief = AgentBrief(query="apple query", ticker="AAPL", objective="apple objective")
+    microsoft_brief = AgentBrief(query="microsoft query", ticker="MSFT", objective="microsoft objective")
+
+    apple_output, microsoft_output = await asyncio.gather(
+        agent.research("apple query", "AAPL", brief=apple_brief),
+        agent.research("microsoft query", "MSFT", brief=microsoft_brief),
+    )
+
+    assert apple_output.summary == "apple query|AAPL|apple objective"
+    assert microsoft_output.summary == "microsoft query|MSFT|microsoft objective"
 
 
 @pytest.mark.asyncio

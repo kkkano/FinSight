@@ -1,6 +1,6 @@
 import pytest
 
-from backend.api.rebalance_schemas import RebalanceConstraints, RiskTier
+from backend.services.rebalance.schemas import RebalanceConstraints, RiskTier
 from backend.services.rebalance_engine import RebalanceContext, RebalanceEngine
 
 

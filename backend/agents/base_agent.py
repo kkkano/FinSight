@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
 import asyncio
+from contextvars import ContextVar
 import json
 import logging
 import os
@@ -69,9 +70,18 @@ class BaseFinancialAgent:
         self.cache = cache
         self.tools = tools_module
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
-        self._current_query: Optional[str] = None
-        self._current_ticker: Optional[str] = None
-        self._current_brief: Optional["AgentBrief"] = None
+        self.__current_query: ContextVar[Optional[str]] = ContextVar(
+            f"{type(self).__name__}._current_query",
+            default=None,
+        )
+        self.__current_ticker: ContextVar[Optional[str]] = ContextVar(
+            f"{type(self).__name__}._current_ticker",
+            default=None,
+        )
+        self.__current_brief: ContextVar[Optional["AgentBrief"]] = ContextVar(
+            f"{type(self).__name__}._current_brief",
+            default=None,
+        )
         self._llm_analyze_enabled_override: Optional[bool] = None
         self._llm_analyze_timeout_override: Optional[float] = None
         self._llm_analyze_call_timeout_override: Optional[float] = None
@@ -82,6 +92,30 @@ class BaseFinancialAgent:
             )
         except Exception:
             self.max_reflections = max(0, self.MAX_REFLECTIONS)
+
+    @property
+    def _current_query(self) -> Optional[str]:
+        return self.__current_query.get()
+
+    @_current_query.setter
+    def _current_query(self, value: Optional[str]) -> None:
+        self.__current_query.set(value)
+
+    @property
+    def _current_ticker(self) -> Optional[str]:
+        return self.__current_ticker.get()
+
+    @_current_ticker.setter
+    def _current_ticker(self, value: Optional[str]) -> None:
+        self.__current_ticker.set(value)
+
+    @property
+    def _current_brief(self) -> Optional["AgentBrief"]:
+        return self.__current_brief.get()
+
+    @_current_brief.setter
+    def _current_brief(self, value: Optional["AgentBrief"]) -> None:
+        self.__current_brief.set(value)
 
     def configure_research(
         self,

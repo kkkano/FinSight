@@ -24,7 +24,7 @@ def _ops_by_ticker(result: dict) -> set[tuple[tuple[str, ...], str]]:
 
 
 def test_multiticker_valuation_rank_expands_per_ticker_evidence_tasks(monkeypatch):
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
     from backend.graph.nodes.understand_request import understand_request
 
@@ -109,7 +109,7 @@ def test_multiticker_technical_rank_expands_per_ticker_technical_tasks(monkeypat
 
 
 def test_policy_and_planner_can_read_v2_when_legacy_tasks_are_absent(monkeypatch):
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
     from backend.graph.nodes.understand_request import understand_request
 

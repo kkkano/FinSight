@@ -56,8 +56,8 @@ def test_url_turn_with_error_boundary_wording_still_plans_url_fetch():
 def test_selected_url_context_builds_grounded_fetch_plan(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
@@ -120,7 +120,7 @@ def test_selected_url_context_builds_grounded_fetch_plan(monkeypatch):
 def test_quote_plus_headline_link_keeps_news_task(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -188,7 +188,7 @@ def test_report_mode_builds_report_generation_contract():
 def test_query_only_deep_report_upgrades_chat_default_to_report_generation(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
     calls = {"router": 0}
@@ -236,7 +236,7 @@ def test_negated_report_trigger_stays_chat_mode():
 def test_do_not_generate_report_turn_builds_chat_contract(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -274,7 +274,7 @@ def test_do_not_generate_report_turn_builds_chat_contract(monkeypatch):
 def test_do_not_look_up_news_stays_chat_without_tasks(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -311,7 +311,7 @@ def test_do_not_look_up_news_stays_chat_without_tasks(monkeypatch):
 
 
 def test_generic_company_compare_does_not_force_grounded_research():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -337,7 +337,7 @@ def test_generic_company_compare_does_not_force_grounded_research():
 
 
 def test_corrected_quote_request_still_uses_grounded_research():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -363,7 +363,7 @@ def test_corrected_quote_request_still_uses_grounded_research():
 
 
 def test_explicit_subject_fallback_stays_chat_without_grounding_request():
-    from backend.graph.nodes.conversation_router import _fallback_decision
+    from backend.graph.intent.router import _fallback_decision
 
     decision = _fallback_decision(
         {"query": "Do not generate a report; just summarize the three risks for AAPL."},
@@ -377,7 +377,7 @@ def test_explicit_subject_fallback_stays_chat_without_grounding_request():
 
 
 def test_explicit_subject_fallback_uses_research_for_quote_request():
-    from backend.graph.nodes.conversation_router import _fallback_decision
+    from backend.graph.intent.router import _fallback_decision
 
     decision = _fallback_decision(
         {"query": "Wrong ticker: use NFLX, not NVDA. Current price?"},
@@ -391,7 +391,7 @@ def test_explicit_subject_fallback_uses_research_for_quote_request():
 
 
 def test_explicit_subject_fallback_uses_research_for_compound_grounded_analysis():
-    from backend.graph.nodes.conversation_router import _fallback_decision
+    from backend.graph.intent.router import _fallback_decision
 
     decision = _fallback_decision(
         {"query": "请深度分析 INTC 最新财报、Arrow Lake 进展、NVIDIA/AMD/TSMC 竞争、分析师评级和目标价。"},
@@ -405,7 +405,7 @@ def test_explicit_subject_fallback_uses_research_for_compound_grounded_analysis(
 
 
 def test_no_news_constraint_keeps_qa_chat_lane_out_of_news_tools():
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = {
@@ -458,7 +458,7 @@ def test_no_sources_constraint_overrides_source_word():
 
 
 def test_historical_report_does_not_become_continuation_target():
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
     from backend.graph.request_task_contract import build_reply_contract
 
     contract = build_reply_contract(
@@ -486,7 +486,7 @@ def test_historical_report_does_not_become_continuation_target():
 
 
 def test_current_report_populates_continuation_target():
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
     from backend.graph.request_task_contract import build_reply_contract
 
     contract = build_reply_contract(
@@ -519,7 +519,7 @@ def test_current_report_populates_continuation_target():
 def test_compound_alert_news_preserves_research_after_alert(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -557,7 +557,7 @@ def test_compound_alert_news_preserves_research_after_alert(monkeypatch):
 def test_semiconductor_sector_headlines_project_theme_fetch(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -602,7 +602,7 @@ def test_semiconductor_sector_headlines_project_theme_fetch(monkeypatch):
 
 
 def test_single_theme_fetch_task_plans_search_steps():
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = {
@@ -636,7 +636,7 @@ def test_single_theme_fetch_task_plans_search_steps():
 
 
 def test_price_turn_contract_allows_quote_tool():
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = {
@@ -672,7 +672,7 @@ def test_price_turn_contract_allows_quote_tool():
 
 
 def test_single_url_task_plans_fetch_url_content():
-    from backend.graph.nodes.planner_stub import planner_stub
+    from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
     from backend.graph.nodes.policy_gate import policy_gate
 
     state = {
@@ -715,7 +715,7 @@ def test_single_url_task_plans_fetch_url_content():
 
 
 def test_finance_concept_clarify_normalizes_to_direct_answer():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         _STRUCTURAL_DEIXIS_RE,
@@ -748,7 +748,7 @@ def test_finance_concept_clarify_normalizes_to_direct_answer():
 
 
 def test_ordinary_research_mechanism_decision_normalizes_to_chat():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -784,7 +784,7 @@ def test_ordinary_research_mechanism_decision_normalizes_to_chat():
 
 
 def test_synthetic_macro_proxy_hint_does_not_force_mechanism_research():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,
@@ -821,7 +821,7 @@ def test_synthetic_macro_proxy_hint_does_not_force_mechanism_research():
 
 
 def test_current_data_macro_proxy_hint_still_requires_research():
-    from backend.graph.nodes.conversation_router import _task_hints_require_execution
+    from backend.graph.intent.router import _task_hints_require_execution
 
     task_hints = (
         {
@@ -842,7 +842,7 @@ def test_current_data_macro_proxy_hint_still_requires_research():
 def test_price_word_in_mechanism_question_does_not_force_quote_tasks(monkeypatch):
     import importlib
 
-    from backend.graph.nodes.conversation_router import ContextBinding, ConversationDecision
+    from backend.graph.intent.router import ContextBinding, ConversationDecision
 
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
 
@@ -879,7 +879,7 @@ def test_price_word_in_mechanism_question_does_not_force_quote_tasks(monkeypatch
 
 
 def test_deictic_followup_prefers_same_session_last_turn_over_recent_focus():
-    from backend.graph.nodes.conversation_router import (
+    from backend.graph.intent.router import (
         ContextBinding,
         ConversationDecision,
         normalize_context_decision,

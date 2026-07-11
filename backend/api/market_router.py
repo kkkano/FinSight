@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -9,6 +10,8 @@ from fastapi import APIRouter, HTTPException
 
 from backend.api.schemas import KlineResponse
 from backend.utils.quote import parse_quote_payload, resolve_live_quote
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -62,7 +65,7 @@ def _extract_ticker_candidates(query: str, provided_ticker: str | None = None) -
         for ticker in metadata.get("tickers") or []:
             _add(str(ticker))
     except Exception:
-        pass
+        logger.debug("ticker extraction from query failed", exc_info=True)
 
     return candidates
 

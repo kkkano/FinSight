@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 
 
 def test_planner_includes_selection_summary_step_first_when_selection_present():

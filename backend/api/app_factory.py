@@ -26,7 +26,6 @@ from backend.api.schemas import (
     ChatRequest,
 )
 from backend.api.chat_router import ChatRouterDeps, create_chat_router
-from backend.api.agent_router import AgentRouterDeps, create_agent_router
 from backend.api.config_router import ConfigRouterDeps, create_config_router
 from backend.api.conversation_router import ConversationRouterDeps, create_conversation_router
 from backend.api.dashboard_router import dashboard_router
@@ -47,7 +46,7 @@ from backend.api.morning_brief_router import MorningBriefRouterDeps, create_morn
 from backend.api.task_router import TaskRouterDeps, create_task_router
 from backend.api.tools_router import create_tools_router
 from backend.api.skills_router import create_skills_router
-from backend.api.agents_router import create_agents_router
+from backend.api.agents_router import AgentsRouterDeps, create_agents_router
 from backend.api.user_router import UserRouterDeps, create_user_router
 from backend.contracts import CHAT_RESPONSE_SCHEMA_VERSION, SSE_EVENT_SCHEMA_VERSION, contract_manifest
 from backend.metrics import METRICS_ENABLED, metrics_payload
@@ -292,12 +291,6 @@ def create_app() -> FastAPI:
         )
     )
 
-    agent_router = create_agent_router(
-        AgentRouterDeps(
-            memory_service=memory_service,
-        )
-    )
-
     market_router = create_market_router(
         MarketRouterDeps(
             get_orchestrator_safe=_get_orchestrator_safe,
@@ -355,7 +348,7 @@ def create_app() -> FastAPI:
     )
     tools_router = create_tools_router()
     skills_router = create_skills_router()
-    agents_router = create_agents_router()
+    agents_router = create_agents_router(AgentsRouterDeps(memory_service=memory_service))
 
     morning_brief_router = create_morning_brief_router(
         MorningBriefRouterDeps(
@@ -397,7 +390,7 @@ def create_app() -> FastAPI:
             create_llm_fn=_create_llm_for_rebalance,
         )
     except Exception:
-        pass  # LLM unavailable, enhancer will be no-op
+        logger.debug("rebalance LLM enhancer unavailable; using no-op enhancer", exc_info=True)
 
     _rebalance_engine = _RebalanceEngine(llm_enhancer=_rebalance_llm_enhancer)
 
@@ -411,7 +404,6 @@ def create_app() -> FastAPI:
 
     app.include_router(system_router)
     app.include_router(user_router)
-    app.include_router(agent_router)
     app.include_router(conversation_router)
     app.include_router(chat_router)
     app.include_router(market_router)

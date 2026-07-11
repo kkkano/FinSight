@@ -12,7 +12,7 @@ def test_execute_plan_stub_builds_evidence_ledger_from_execution_artifacts(monke
     monkeypatch.setenv("RESEARCH_LEDGER_ENABLED", "true")
     monkeypatch.setenv("JINA_ENRICH_EVIDENCE", "false")
 
-    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_node")
+    execute_mod = importlib.import_module("backend.graph.execution.plan_pipeline")
 
     async def _fake_execute_plan(*_args, **_kwargs):
         return (

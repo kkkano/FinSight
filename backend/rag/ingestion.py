@@ -17,7 +17,7 @@ _HIGH_RELIABILITY_SOURCE_HINTS = frozenset({
 
 def _host_env_int(name, default, **kw):
     """宿主 _env_int 延迟解析（execute_plan_node 顶层 import 本模块，直接互 import 成环）。"""
-    from backend.graph.nodes.execute_plan_node import _env_int
+    from backend.graph.execution.plan_pipeline import _env_int
 
     return _env_int(name, default, **kw)
 

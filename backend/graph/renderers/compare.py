@@ -9,7 +9,6 @@ import time
 from typing import Any
 from urllib.parse import quote_plus
 
-from backend.graph.state import GraphState
 from backend.graph.renderers.news import _format_news_item
 from backend.graph.renderers.price import _format_price_line, _price_change_pct
 from backend.graph.renderers.shared import (
@@ -22,6 +21,8 @@ from backend.graph.renderers.shared import (
     _v2_profiles,
 )
 from backend.graph.renderers.synthesis_vars import _agent_summary
+from backend.graph.state import GraphState
+from backend.graph.understanding_v2 import VALUATION_COMPARE_LIGHT_PROFILE
 
 
 def _render_compare_or_basket_markdown(

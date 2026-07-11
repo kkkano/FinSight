@@ -70,6 +70,16 @@ def test_conversation_module():
         pytest.fail(f"conversation 模块测试失败: {e}")
 
 
+def test_handlers_module():
+    """测试 handlers 包仍可作为兼容命名空间导入。"""
+    try:
+        import backend.handlers as handlers
+
+        assert handlers is not None
+    except ImportError as e:
+        pytest.fail(f"handlers 模块导入失败: {e}")
+
+
 def test_prompts_module():
     """测试 prompts 模块"""
     try:

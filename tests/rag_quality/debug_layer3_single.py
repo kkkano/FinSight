@@ -56,7 +56,7 @@ async def debug_single_case():
 
     try:
         with mock.patch(
-            "backend.graph.nodes.execute_plan_stub.execute_plan_stub",
+            "backend.graph.runner.execute_plan_node",
             side_effect=_injected_execute_plan_stub,
         ):
             from backend.graph.runner import GraphRunner

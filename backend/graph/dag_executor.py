@@ -147,13 +147,28 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
                 await _record_skipped(by_id[nxt], ctx, reason="upstream_failed")
                 stack.append(nxt)
 
+    def _scope_ids(step: dict[str, Any]) -> list[str]:
+        return step_task_ids(step) or ["__global__"]
+
+    def _scoped_bus(scope_id: str) -> dict[str, str]:
+        assert ctx.context_bus is not None
+        existing = ctx.context_bus.get(scope_id)
+        if isinstance(existing, dict):
+            return existing
+        scoped: dict[str, str] = {}
+        ctx.context_bus[scope_id] = scoped
+        return scoped
+
     def _step_for_launch(sid: str) -> dict[str, Any]:
         """agent step 且黑板启用时，注入前序摘要（不改原 plan step）。"""
         step = by_id[sid]
         if ctx.context_bus is None or str(step.get("kind") or "") != "agent":
             return step
         inputs = step.get("inputs") if isinstance(step.get("inputs"), dict) else {}
-        digest = render_bus(ctx.context_bus, exclude=str(step.get("name") or ""))
+        scoped_findings: dict[str, str] = {}
+        for scope_id in _scope_ids(step):
+            scoped_findings.update(_scoped_bus(scope_id))
+        digest = render_bus(scoped_findings, exclude=str(step.get("name") or ""))
         return {**step, "inputs": {**inputs, "__context_digest": digest}}
 
     def _write_bus_after_success(sid: str) -> None:
@@ -164,7 +179,8 @@ async def _schedule(steps: list[dict[str, Any]], ctx: StepContext) -> None:
         output = result.get("output") if isinstance(result, dict) else None
         digest = digest_agent_output(str(step.get("name") or ""), output)
         if digest:
-            ctx.context_bus[str(step.get("name") or "")] = digest
+            for scope_id in _scope_ids(step):
+                _scoped_bus(scope_id)[str(step.get("name") or "")] = digest
 
     try:
         while len(done) + len(failed) < len(by_id):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-from backend.graph.nodes.planner_stub import planner_stub
+from backend.graph.planning.rule_planner import rule_based_planner as planner_stub
 from backend.graph.nodes.policy_gate import policy_gate
 from backend.graph.nodes.understand_request import understand_request
 

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
 from backend.report.util import _freshness_hours, _safe_confidence, _safe_str
 
 _TRACKING_QUERY_KEYS = {

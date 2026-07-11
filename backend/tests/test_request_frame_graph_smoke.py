@@ -25,7 +25,7 @@ def _primary_frame(result: dict) -> dict:
 def test_graph_runner_forces_research_when_router_direct_conflicts_with_request_frame(monkeypatch):
     runner_mod = importlib.import_module("backend.graph.runner")
     understand_mod = importlib.import_module("backend.graph.nodes.understand_request")
-    router_mod = importlib.import_module("backend.graph.nodes.conversation_router")
+    router_mod = importlib.import_module("backend.graph.intent.router")
 
     async def fake_route(_state, *, tickers, selection_ids):
         assert tickers == ["AAPL", "MSFT"]

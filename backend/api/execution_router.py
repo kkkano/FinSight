@@ -228,7 +228,7 @@ def create_execution_router(deps: ExecutionRouterDeps) -> APIRouter:
             try:
                 thread_id = deps.resolve_thread_id(request.session_id)
             except ValueError:
-                pass
+                logger.debug("resume request contains an invalid session_id; keeping thread_id", exc_info=True)
 
         exec_deps = _build_execution_deps(deps)
 

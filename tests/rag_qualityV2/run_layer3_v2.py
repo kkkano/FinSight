@@ -233,7 +233,7 @@ async def _run_pipeline_for_case(case: dict[str, Any], output_mode: str, ticker:
     }
     try:
         with mock.patch(
-            "backend.graph.nodes.execute_plan_stub.execute_plan_stub",
+            "backend.graph.runner.execute_plan_node",
             side_effect=_injected_execute_plan_stub,
         ):
             from backend.graph.runner import GraphRunner

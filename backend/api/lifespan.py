@@ -13,6 +13,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.api.security_gate import _env_bool, logger
+from backend.graph import aget_graph_runner, reset_graph_runner
+from backend.rag import get_rag_observability_store, install_rag_observability_hooks
+from backend.services.langfuse_tracer import flush_langfuse, shutdown_langfuse
 
 logger = logging.getLogger(__name__)
 

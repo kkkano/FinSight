@@ -12,7 +12,7 @@ Layer 3：完整 LangGraph Pipeline E2E 测试（基于 RAGAS）
 
 测试策略：
   - 使用 GraphRunner.create()（内存 MemorySaver，不依赖外部 PostgreSQL）
-  - 通过 monkeypatch 将每个 case 的 mock_contexts 注入为 execute_plan_stub 的 evidence_pool
+  - 通过 monkeypatch 将每个 case 的 mock_contexts 注入为 execute_plan_node 的 evidence_pool
     → 绕过真实 tool 调用（确保测试稳定可重复），同时保留完整 planner / synthesize / render 流程
   - confirmation_mode="skip" 跳过人工确认步骤
   - 从 artifacts.draft_markdown 或 artifacts.render_vars 提取最终答案文本
@@ -76,7 +76,7 @@ METRIC_LABELS = {
 
 # ── 全局测试证据注入注册表 ───────────────────────────────────────────────────
 # 键：thread_id（测试专用）→ 值：{"contexts": [...], "doc_type": str, "case_id": str}
-# monkeypatched execute_plan_stub 从此处读取测试上下文
+# monkeypatched execute_plan_node 从此处读取测试上下文
 _TEST_EVIDENCE_REGISTRY: dict[str, dict[str, Any]] = {}
 
 # ── 测试用 case → ticker 映射 ──────────────────────────────────────────────
@@ -217,12 +217,12 @@ def _extract_score(raw: Any) -> float | None:
 
 async def _injected_execute_plan_stub(state: Any) -> dict[str, Any]:
     """
-    Layer 3 专用 execute_plan_stub 替换实现。
+    Layer 3 专用 execute_plan_node 替换实现。
 
     将 _TEST_EVIDENCE_REGISTRY 中预注册的 mock_contexts 转换为 evidence_pool，
     模拟真实 tool 调用完成后的 artifacts 结构，让 synthesize 节点可以正常运行。
 
-    与真实 execute_plan_stub 的区别：
+    与真实 execute_plan_node 的区别：
     - 不调用任何真实外部 API
     - evidence_pool 来自测试注册表，保证稳定可重复
     - 保留 RAG 相关字段占位（rag_context=[]），synthesize 节点忽略空 RAG context
@@ -247,7 +247,7 @@ async def _injected_execute_plan_stub(state: Any) -> dict[str, Any]:
         for i, ctx in enumerate(contexts)
     ]
 
-    # 构造与真实 execute_plan_stub 兼容的 artifacts 结构
+    # 构造与真实 execute_plan_node 兼容的 artifacts 结构
     artifacts: dict[str, Any] = {
         "evidence_pool": evidence_pool,
         "rag_context": [],          # 空 RAG context，synthesize 节点会优雅跳过
@@ -383,7 +383,7 @@ async def _run_pipeline_for_case(
 
     流程：
     1. 在 _TEST_EVIDENCE_REGISTRY 注册 mock_contexts
-    2. monkeypatch execute_plan_stub
+    2. monkeypatch execute_plan_node
     3. GraphRunner.create() 构建内存 graph
     4. runner.ainvoke() 运行完整 pipeline
     5. 提取答案文本
@@ -407,7 +407,7 @@ async def _run_pipeline_for_case(
     try:
         # Step 2 & 3: monkeypatch + 构建 graph
         with mock.patch(
-            "backend.graph.nodes.execute_plan_stub.execute_plan_stub",
+            "backend.graph.runner.execute_plan_node",
             side_effect=_injected_execute_plan_stub,
         ):
             # 导入必须在 patch context 内完成，确保 runner 使用 patched 版本
@@ -869,7 +869,7 @@ def main() -> None:
 
     # ── 运行评估 ─────────────────────────────────────────────────────────────
     print(f"► 开始 Layer 3 E2E 评估...\n"
-          f"  注意：execute_plan_stub 已被 monkeypatch（注入 mock_contexts 为 evidence_pool）\n")
+          f"  注意：execute_plan_node 已被 monkeypatch（注入 mock_contexts 为 evidence_pool）\n")
     results = evaluate_cases(
         cases=cases,
         ragas_llm=ragas_llm,

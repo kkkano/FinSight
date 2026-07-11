@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -18,6 +19,8 @@ from backend.graph.renderers.news_items import (
     _news_items,
 )
 from backend.graph.renderers.shared import _tasks, _tickers
+
+logger = logging.getLogger(__name__)
 try:  # Optional live-news fallback for link-required chat answers.
     from backend.tools.authoritative_feeds import get_authoritative_media_news
     from backend.tools.news import get_company_news
@@ -138,7 +141,7 @@ def _direct_news_article_fallback_map(state: GraphState, *, count: int) -> dict[
                     )
                 )
             except Exception:
-                pass
+                logger.debug("live company-news fallback failed for %s", ticker, exc_info=True)
 
         if (
             _has_budget()

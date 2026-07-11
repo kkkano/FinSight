@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_agent_preferences_normalize_timeout_seconds():
-    from backend.api.agent_router import _normalize_preferences
+    from backend.api.agents_router import _normalize_preferences
 
     assert _normalize_preferences({"timeoutSeconds": 0})["timeoutSeconds"] == 0
     assert _normalize_preferences({"timeoutSeconds": 5})["timeoutSeconds"] == 30

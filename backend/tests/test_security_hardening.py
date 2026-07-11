@@ -24,7 +24,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from backend.api import main as main_module  # noqa: E402
+from backend.api import security_gate as security_gate_module  # noqa: E402
 from backend.api.main import app  # noqa: E402
 from backend.services import subscription_service as subs  # noqa: E402
 
@@ -38,9 +38,13 @@ def _disable_rate_limiter(monkeypatch):
     自动还原），保证测试聚焦于安全逻辑本身。
     """
     monkeypatch.setattr(
-        main_module,
+        security_gate_module,
         "_rate_limiter",
-        main_module.SimpleRateLimiter(limit_per_window=10000, window_seconds=60, enabled=False),
+        security_gate_module.SimpleRateLimiter(
+            limit_per_window=10000,
+            window_seconds=60,
+            enabled=False,
+        ),
     )
 
 
@@ -191,8 +195,6 @@ def test_subscription_service_email_none_with_include_all_false_returns_empty(tm
 
 def test_client_ip_ignores_proxy_headers_when_trust_disabled(monkeypatch):
     """TRUST_PROXY_HEADERS=false 时忽略 CF/XFF 头，回退连接对端 IP（防伪造头绕过限流）。"""
-    import backend.api.main as main_module
-
     monkeypatch.setenv("TRUST_PROXY_HEADERS", "false")
 
     request = MagicMock()
@@ -200,20 +202,18 @@ def test_client_ip_ignores_proxy_headers_when_trust_disabled(monkeypatch):
     request.client.host = "172.18.0.5"
 
     # 不信任头 → 用真实连接对端，攻击者换头无效
-    assert main_module._resolve_client_ip(request) == "172.18.0.5"
+    assert security_gate_module._resolve_client_ip(request) == "172.18.0.5"
 
 
 def test_client_ip_trusts_proxy_headers_by_default(monkeypatch):
     """默认（未设置）信任代理头，保持线上 Cloudflare 部署行为不变。"""
-    import backend.api.main as main_module
-
     monkeypatch.delenv("TRUST_PROXY_HEADERS", raising=False)
 
     request = MagicMock()
     request.headers = {"CF-Connecting-IP": "1.2.3.4"}
     request.client.host = "172.18.0.5"
 
-    assert main_module._resolve_client_ip(request) == "1.2.3.4"
+    assert security_gate_module._resolve_client_ip(request) == "1.2.3.4"
 
 
 # ---------------------------------------------------------------------------

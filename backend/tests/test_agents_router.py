@@ -5,13 +5,13 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.api.agents_router import create_agents_router
+from backend.api.agents_router import AgentsRouterDeps, create_agents_router
 from backend.graph.capability_registry import REPORT_AGENT_CANDIDATES
 
 
 def _client() -> TestClient:
     app = FastAPI()
-    app.include_router(create_agents_router())
+    app.include_router(create_agents_router(AgentsRouterDeps(memory_service=None)))
     return TestClient(app)
 
 

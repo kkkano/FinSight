@@ -7,22 +7,27 @@ API key / Supabase / RAG 观测台鉴权全家（身份缓存含锁）。
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 from collections import deque
 from threading import Lock
 from typing import Any, Dict, Optional
-
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
+from dotenv import load_dotenv
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.concurrency import ConcurrencyLimiter, is_generation_path
 
 logger = logging.getLogger(__name__)
+
+# 本模块在 app_factory/main 调用 load_dotenv 前即被导入，限流器又在导入期构造。
+# 因此必须先加载项目环境，避免实例永久固化为代码默认值。
+load_dotenv()
 
 _AUTH_IDENTITY_CACHE_SENTINEL = object()
 

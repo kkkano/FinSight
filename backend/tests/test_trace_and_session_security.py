@@ -144,7 +144,7 @@ def test_session_context_isolation_blocks_cross_session_reference(monkeypatch):
 
 
 def test_rag_collection_name_uses_session_key_shape():
-    exec_node = importlib.import_module('backend.graph.nodes.execute_plan_node')
+    exec_node = importlib.import_module('backend.graph.execution.plan_pipeline')
 
     assert exec_node._collection_from_thread_id("tenant1:user1:thread-1") == "ws:thread:tenant1:user1:thread-1"
     assert exec_node._collection_from_thread_id("tenant 1:user/1:thread@1") == "ws:thread:tenant_1:user_1:thread_1"

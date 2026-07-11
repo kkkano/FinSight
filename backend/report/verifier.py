@@ -8,11 +8,15 @@ import logging
 import os
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from typing import TYPE_CHECKING
+from langchain_core.messages import HumanMessage
 
-from backend.services.llm_retry import ainvoke_with_rate_limit_retry, is_rate_limit_error
+from backend.graph.failure import utc_now_iso
+from backend.services.llm_retry import (
+    ainvoke_with_rate_limit_retry,
+    is_rate_limit_error,
+)
 
 if TYPE_CHECKING:  # GraphState 仅作类型注解——避免触发 backend.graph.__init__ 饿加载环
     from backend.graph.state import GraphState

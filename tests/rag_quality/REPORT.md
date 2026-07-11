@@ -189,7 +189,7 @@ result = evaluate(
 | 门控阈值 | faithfulness ≥ 0.75 | faithfulness ≥ 0.65（stub 模式容忍占位文本） |
 
 **monkeypatch 策略**：
-- `execute_plan_stub` 被替换为 `_injected_execute_plan_stub`
+- `execute_plan_node` 被替换为 `_injected_execute_plan_stub`
 - 从全局注册表 `_TEST_EVIDENCE_REGISTRY` 读取 mock_contexts，转换为 `evidence_pool`
 - 保留完整 planner / synthesize / render 节点运行，不跳过任何路由逻辑
 

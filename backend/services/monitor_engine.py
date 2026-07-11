@@ -28,6 +28,7 @@ import asyncio
 import logging
 import os
 import uuid
+from typing import Any
 from datetime import datetime, timezone
 
 from backend.services.alert_scheduler import fetch_price_snapshot

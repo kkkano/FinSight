@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from backend.api.schemas import ConfigResponse
 from backend.llm_config import USER_CONFIG_PATH
+
+logger = logging.getLogger(__name__)
 
 _SENSITIVE_FRAGMENTS = ("api_key", "apikey", "token", "secret", "password")
 
@@ -217,7 +220,7 @@ def create_config_router(deps: ConfigRouterDeps) -> APIRouter:
                 with open(config_file, "r", encoding="utf-8") as file_obj:
                     existing = json.load(file_obj)
             except (FileNotFoundError, json.JSONDecodeError):
-                pass
+                logger.debug("existing user config unavailable; starting from defaults", exc_info=True)
 
             # 已通过守卫的敏感字段 + 公开字段合并为最终允许写入的集合。
             filtered = {**public_fields, **sensitive_fields}

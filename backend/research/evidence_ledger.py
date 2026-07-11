@@ -117,6 +117,7 @@ class SourceRef(BaseModel):
     freshness_hours: float | None = Field(default=None, ge=0.0)
     layer: str | None = None
     collection: str | None = None
+    task_ids: list[str] = Field(default_factory=list)
 
     @field_validator("source_id")
     @classmethod
@@ -136,6 +137,11 @@ class SourceRef(BaseModel):
     def _strip_nullable_text(cls, value: Any) -> str | None:
         cleaned = _clean_text(value)
         return cleaned or None
+
+    @field_validator("task_ids", mode="before")
+    @classmethod
+    def _normalise_task_ids(cls, value: Any) -> list[str]:
+        return _dedupe_strings(_list_of_strings(value))
 
 
 class ResearchClaim(BaseModel):
@@ -218,7 +224,12 @@ class EvidenceLedger(BaseModel):
         return _list_of_dicts(value)
 
 
-def source_from_evidence_item(item: Any, agent_name: str, index: int) -> SourceRef:
+def source_from_evidence_item(
+    item: Any,
+    agent_name: str,
+    index: int,
+    task_ids: list[str] | None = None,
+) -> SourceRef:
     meta = _as_dict(_get_value(item, "meta", {}))
     title = (
         _clean_text(_get_value(item, "title"))
@@ -247,6 +258,11 @@ def source_from_evidence_item(item: Any, agent_name: str, index: int) -> SourceR
 
     freshness = meta.get("freshness_hours", _get_value(item, "freshness_hours", None))
     freshness_hours = None if freshness in (None, "") else max(0.0, _safe_float(freshness, 0.0))
+    source_task_ids = _dedupe_strings(
+        _list_of_strings(_get_value(item, "task_ids"))
+        + _list_of_strings(meta.get("task_ids"))
+        + [_clean_text(_get_value(item, "task_id")), _clean_text(meta.get("task_id"))]
+    ) or _dedupe_strings(task_ids or [])
 
     return SourceRef(
         source_id=explicit_id or stable_id("source", agent_name, index, url, title, source),
@@ -259,6 +275,7 @@ def source_from_evidence_item(item: Any, agent_name: str, index: int) -> SourceR
         freshness_hours=freshness_hours,
         layer=_clean_text(_get_value(item, "layer")) or _clean_text(meta.get("layer")) or None,
         collection=_clean_text(_get_value(item, "collection")) or _clean_text(meta.get("collection")) or None,
+        task_ids=source_task_ids,
     )
 
 
@@ -342,7 +359,10 @@ def _contradictions_from_output(output: Any) -> list[dict[str, Any] | str]:
 def from_agent_output(output: Any, query: str, subject: dict[str, Any], task_ids: list[str]) -> EvidenceLedger:
     agent_name = _clean_text(_get_value(output, "agent_name")) or "unknown_agent"
     evidence_items = _output_list(output, "evidence")
-    sources = [source_from_evidence_item(item, agent_name, index) for index, item in enumerate(evidence_items)]
+    sources = [
+        source_from_evidence_item(item, agent_name, index, task_ids=task_ids)
+        for index, item in enumerate(evidence_items)
+    ]
     source_ids = [source.source_id for source in sources]
     confidence = _clamp(_get_value(output, "confidence", 0.5))
 
@@ -398,7 +418,15 @@ def merge_ledgers(query: str, subject: dict[str, Any], ledgers: list[EvidenceLed
 
     for ledger in ledgers:
         for source in ledger.sources:
-            sources_by_id.setdefault(source.source_id, source)
+            existing = sources_by_id.get(source.source_id)
+            if existing is None:
+                sources_by_id[source.source_id] = source
+                continue
+            task_ids = _dedupe_strings([*existing.task_ids, *source.task_ids])
+            if task_ids != existing.task_ids:
+                sources_by_id[source.source_id] = existing.model_copy(
+                    update={"task_ids": task_ids}
+                )
         for claim in ledger.claims:
             claims_by_id.setdefault(claim.claim_id, claim)
         uncertainties.extend(ledger.uncertainties)
@@ -456,6 +484,7 @@ def to_prompt_context(ledger: EvidenceLedger, max_claims: int = 24, max_sources:
                 "freshness_hours": source.freshness_hours,
                 "layer": source.layer,
                 "collection": source.collection,
+                "task_ids": source.task_ids,
             }
         )
         for source in ledger.sources[:source_limit]

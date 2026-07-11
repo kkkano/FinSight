@@ -63,7 +63,7 @@ def test_execute_plan_stub_merges_agent_output_into_evidence_pool(monkeypatch):
 
     import importlib
 
-    execute_mod = importlib.import_module("backend.graph.nodes.execute_plan_node")
+    execute_mod = importlib.import_module("backend.graph.execution.plan_pipeline")
 
     async def _fake_agent(_inputs):
         return {

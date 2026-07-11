@@ -5,7 +5,6 @@ from backend.graph.nodes.chat_respond import chat_respond
 from backend.graph.nodes.clarify import clarify
 from backend.graph.nodes.decide_output_mode import decide_output_mode
 from backend.graph.nodes.execute_plan_node import execute_plan_node
-from backend.graph.nodes.execute_plan_stub import execute_plan_stub
 from backend.graph.nodes.normalize_ui_context import normalize_ui_context
 from backend.graph.nodes.parse_operation import parse_operation
 from backend.graph.nodes.prepare_context import prepare_context
@@ -13,10 +12,8 @@ from backend.graph.nodes.alert_extractor import alert_extractor
 from backend.graph.nodes.alert_action import alert_action
 from backend.graph.nodes.policy_gate import policy_gate
 from backend.graph.nodes.planner import planner
-from backend.graph.nodes.planner_stub import planner_stub
 from backend.graph.nodes.query_intent import is_casual_chat, is_greeting
 from backend.graph.nodes.render_node import render_node
-from backend.graph.nodes.render_stub import render_stub
 from backend.graph.nodes.reset_turn_state import reset_turn_state
 from backend.graph.nodes.resolve_subject import resolve_subject
 from backend.graph.nodes.research_debate import research_debate
@@ -49,13 +46,10 @@ __all__ = [
     "alert_action",
     "policy_gate",
     "planner",
-    "planner_stub",
     "execute_plan_node",
-    "execute_plan_stub",
     "research_debate",
     "synthesize",
     "render_node",
-    "render_stub",
     "reset_turn_state",
     "confirmation_gate",
     "is_greeting",
