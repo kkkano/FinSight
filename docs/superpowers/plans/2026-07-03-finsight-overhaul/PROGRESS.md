@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task1 统一 env helper | 756ec5f | helper 单测 16 passed；Task 1 定向 + 金样 247 passed；后端全量 1934 passed/19 failed/8 skipped，19 个失败与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；生产代码普通 `_env_*` 重复定义清零，5 个特殊语义变体明确命名并保留。 |
 | 2026-07-11 | WP3-Task8 收尾实现与完成门禁 | defa0ce | shim/旧 router 清理、silent pass 治理与 execution/policy/synthesis 拆分完成；全量 1898 passed/26 failed/13 errors 后定位 20 个新增结果均为测试 patch 目标未迁移，修正后受影响 26 passed；剩余 19 项与固化环境基线一致；本次提交前关键回归 62 passed；nodes 最大 799 行、main 42 行、生产 `_stub.py` 为 0；假 Agent 演练为新实现文件 + 3 个既有接线点。 |
 | 2026-07-11 | WP2 任务级隔离纠偏复审 | defa0ce | 显式空依赖、全局 barrier、无 URL 去重、跨 task 可变别名、selection evidence、共享 source scope、embedded claim scope 共 7 passed；全仓 ruff F821 通过。 |
 | 2026-07-11 | WP0/WP1 手工与前端完成门禁 | e453959 | mock SSE 聊天/Authorization/设置成功失败/生成中输入/停靠滚动/复制/重试/删除确认通过；3231 字、373 帧，P95 16.8ms、最大 33.4ms、0 long task；当前 `pnpm test:unit` 38 files/225 passed，`pnpm build` 成功。 |

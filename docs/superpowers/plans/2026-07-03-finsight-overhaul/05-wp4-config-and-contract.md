@@ -33,11 +33,11 @@ def env_bool(key: str, default: bool = False) -> bool  # {"1","true","yes","on"}
 def env_csv(key: str, default: str = "") -> list[str]
 ```
 
-- [ ] **Step 1: 写测试**（覆盖：正常/缺失/解析失败/bool 真值表/csv 去空白）。
-- [ ] **Step 2: 实现**（语义以 `backend/graph/nodes/planner.py:28-47` 版本为准——它是最常见变体；迁移前 diff 各文件变体，发现语义不同的变体（如 min/max 钳制版）保留原地不动并在 notes 登记）。
-- [ ] **Step 3: 逐文件替换**：删除本地 `_env_*` 定义，`from backend.utils.env import env_int as _env_int`（别名保持模块内旧调用名，行数改动最小）。一文件一验证。
-- [ ] **Step 4: 守护**：`grep -rn "def _env_int\|def _env_bool" backend --include="*.py" | grep -v utils/env.py | wc -l` → 0。全量 + 金样零 diff。
-- [ ] **Step 5: Commit**
+- [x] **Step 1: 写测试**（覆盖：正常/缺失/解析失败/bool 真值表/csv 去空白）。
+- [x] **Step 2: 实现**（语义以 `backend/graph/nodes/planner.py:28-47` 版本为准——它是最常见变体；迁移前 diff 各文件变体，发现语义不同的变体（如 min/max 钳制版）保留原地不动并在 notes 登记）。
+- [x] **Step 3: 逐文件替换**：删除本地 `_env_*` 定义，`from backend.utils.env import env_int as _env_int`（别名保持模块内旧调用名，行数改动最小）。一文件一验证。
+- [x] **Step 4: 守护**：`grep -rn "def _env_int\|def _env_bool" backend --include="*.py" | grep -v utils/env.py | wc -l` → 0。全量 + 金样零 diff。
+- [x] **Step 5: Commit**（`756ec5f`）
 
 ```bash
 git commit -am "refactor(config): single env helper module replaces 34 duplicated _env_* definitions"
