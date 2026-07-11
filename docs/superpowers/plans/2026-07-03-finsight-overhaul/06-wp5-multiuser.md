@@ -40,7 +40,7 @@ def resolve_request_user(request: Request) -> AuthenticatedUser | None:
     """从 Authorization: Bearer 提取并校验；无头或校验失败返回 None（是否放行由调用方定）。"""
 ```
 
-- [ ] **Step 1: 写失败测试**（用 `jwt.encode` 现造 HS256 token 正/负用例：有效、过期、错 secret、缺 sub）：
+- [x] **Step 1: 写失败测试**（用 `jwt.encode` 现造 HS256 token 正/负用例：有效、过期、错 secret、缺 sub）：
 
 ```python
 import time
@@ -77,7 +77,7 @@ def test_wrong_secret_rejected(monkeypatch):
         verify_supabase_jwt(make_token(secret="other"))
 ```
 
-- [ ] **Step 2-4:** 实现（按契约）→ 测试绿 → Commit：
+- [x] **Step 2-4:** 实现（按契约）→ 测试绿 → Commit：
 
 ```bash
 git commit -am "feat(auth): supabase JWT verification module (HS256 secret / JWKS auto-detect)"

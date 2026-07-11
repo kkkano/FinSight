@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP5-Task1 Supabase JWT 校验 | 7595d56 | 新增 HS256 secret 与 RS256/ES256 JWKS 自动探测校验、30 秒时钟偏移、10 分钟 JWKS 缓存及刷新失败旧缓存回退；Bearer 请求解析失败安全返回匿名。离线覆盖有效、过期、错密钥、缺 `sub`、缺配置、Bearer 异常、JWKS 缓存/回退共 12 passed；未访问真实 Supabase 或 LLM。 |
 | 2026-07-11 | WP4 完成门禁 | a0e71fa | 使用仓库 `.venv` 锁定 FastAPI 0.122.0/Pydantic 2.12.3，并注入不联网的测试专用兼容端点；修正 datetime SSE 测试的旧 `main.aget_graph_runner` patch 目标与列表式 trace 断言后，后端 + 金样 `1960 passed/8 skipped`，OpenAPI 快照通过。前端重新生成 API 类型零漂移，41 files/235 tests passed，生产 build 成功；`_env_int` 重复和 `Promise<any>` 均为 0。真实 Vite + Chromium 验证聊天发送/重试、设置保存成功且控制台 0 error；仓库 Playwright 仪表盘路由与 MiniChat 2/2 通过。 |
 | 2026-07-11 | WP4-Task9 中文文案常量表 | c204ea9 | 新建纯常量 `locales/zh.ts`，集中聊天输入、消息列表、会话状态和执行状态的用户可见文案，混合英文状态统一为中文；Task 7 已迁出的流式职责同步接入 `useChatStream`，避免形成第二文案源。停止状态与质量门禁测试引用同一常量；定向 lint 0 问题，相关 21 tests passed，完整前端 41 files/235 tests passed，生产 build 成功。 |
 | 2026-07-11 | WP4-Task8 React Query 热数据 hook 收敛 | 6132519 | 新增根级 `QueryClientProvider`，默认 staleTime 30s、行情 5s，关闭自动重试与窗口聚焦刷新以保持原语义；`useDashboardData/useMarketQuotes/useMorningBrief/useFindings/usePortfolioSummary` 迁入统一 query/mutation 缓存，保留 60s 轮询、晨报 localStorage 当日 TTL、发现流乐观更新和既有返回合同。删除持仓汇总 100+ 行自建缓存/订阅/定时器。npm/pnpm 双锁同步；41 files/235 tests passed，生产 build 成功，改动文件定向 lint 0 问题。 |
@@ -56,6 +57,7 @@
 | 2026-07-03 | WP0-Task1 price.py级联bug | 79ffdfd | 新测2 passed(旧实现复验FAIL)+回归22 passed |
 
 ## Installed Dependencies
+- 2026-07-11 | `PyJWT[crypto] 2.13.0` | WP5-Task1 白名单依赖，仅安装到仓库 `.venv` 并以 `PyJWT[crypto]>=2.0,<3.0` 登记 requirements；用于 Supabase HS256/RS256/ES256 JWT 校验。
 - 2026-07-11 | `.venv playwright==1.61.0` | 仅用于 WP4 浏览器门禁的本地 QA 运行，不写入项目 requirements/前端锁文件；Chromium 复用主机 Chrome 可执行文件。
 - 2026-07-11 | `@tanstack/react-query@5.101.2` | WP4-Task8 经主人对完整 Goal 所需依赖的授权安装；用于高频数据 hook 的请求去重、缓存、轮询与 mutation 状态收敛，npm/pnpm 双锁文件已同步。
 
