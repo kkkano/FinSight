@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | WP5 完成门禁 | 72e8222 | 完整后端 `1979 passed/8 skipped`；认证、JWT、多用户隔离与配额聚焦矩阵 `31 passed`。覆盖 auth optional 匿名 `public` 兼容、auth required 业务 401/health 200、双用户三类 store 隔离、成本按用户与 UTC 日界隔离、聊天/执行超限 429、关闭配额与 admin 豁免。双浏览器真实 security_gate/API 隔离证据沿用 WP5-Task3；全程使用本地不可达测试 LLM endpoint。 |
 | 2026-07-12 | WP5-Task5 多用户部署说明与数据层校准 | 47915f6 | Runbook 新增个人自用、公开演示、多用户三种环境变量组合，明确匿名 `public` 数据共享告示、UTC 配额恢复、429 行为、双账号终验与 secret 管理；中英文 README 同步校准为 PostgreSQL/SQLite 可选 LangGraph checkpoint 与 pgvector、SQLite/JSON 承载业务数据。Markdown diff 校验通过，旧“PostgreSQL 承载报告/持仓”声明扫描 0 命中。 |
 | 2026-07-12 | WP5-Task4 每用户每日 LLM 成本配额 | 72e8222 | `cost_records` 幂等新增 `user_id` 与 `(user_id, created_at)` 索引，历史记录归 `public`；按 UTC 自然日汇总成本，`USER_DAILY_COST_LIMIT_USD<=0` 可关闭、`admin` 豁免。同步/流式聊天、execute、dashboard deep-dive、resume 均在生成前检查，run 级 token 累加器携带用户并写入审计库。新增迁移、用户隔离、日界、429/放行、关闭配额、admin 与埋点归属共 9 项离线测试；定向回归 56 passed，完整后端 `1979 passed/8 skipped`，未调用真实 LLM。 |
 | 2026-07-12 | WP5-Task3 portfolio/conversation/monitor 多用户隔离 | e8e4ca9 | 新增 SQLite 幂等加列与复合用户主键迁移，旧 SQLite/JSON 数据无损归 `public`；三 store 全公开 CRUD 末尾新增默认 `user_id`，三主 router 及调仓、晨报、每日任务、宏观日历、后台盯盘旁路同步透传，缓存与调度均纳入用户维度。隔离/老库迁移/真实 Router 测试 7 passed；完整后端 `1970 passed/8 skipped`。使用两个独立 Chromium context 经真实 security_gate/API 验证同 session 的 Alice 与匿名用户持仓、会话、盯盘目标互不可见，QA 进程已清理。 |

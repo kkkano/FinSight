@@ -207,8 +207,8 @@ git commit -am "docs(deploy): multiuser/quota deployment modes; correct data-lay
 
 ## WP5 完成门禁
 
-- [ ] `python -m pytest backend/tests -x -q` 全绿（含 4 组新测试）
-- [ ] 手工验证矩阵：
+- [x] `python -m pytest backend/tests -x -q` 全绿（含 4 组新测试）
+- [x] 手工验证矩阵：
   - `SUPABASE_AUTH_REQUIRED=false` + 匿名：功能与旧版完全一致（回归）
   - `=true` + 无 token：业务 API 401、`/health` 正常
   - 双账号：持仓/会话/监控互不可见
