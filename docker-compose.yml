@@ -105,8 +105,7 @@ services:
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
         # RAG Inspector 本地开发密码 token（敏感，默认空——生产走 Supabase 登录）
         VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN: ${VITE_RAG_INSPECTOR_DEV_ACCESS_TOKEN:-}
-        # SSE 与对话历史调参（合理默认，按需在 .env 覆盖）
-        VITE_SSE_IDLE_DONE_FALLBACK_MS: ${VITE_SSE_IDLE_DONE_FALLBACK_MS:-8000}
+        # SSE 读取与对话历史调参（合理默认，按需在 .env 覆盖）
         VITE_SSE_READ_TIMEOUT_MS: ${VITE_SSE_READ_TIMEOUT_MS:-30000}
         VITE_CHAT_HISTORY_MAX_MESSAGES: ${VITE_CHAT_HISTORY_MAX_MESSAGES:-12}
     container_name: finsight-frontend

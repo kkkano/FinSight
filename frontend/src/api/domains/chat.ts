@@ -94,7 +94,7 @@ async deleteConversation(sessionId: string): Promise<{
     callbacks: Contracts.SSECallbacks,
     opts: StreamOpts = {},
   ): Promise<void> {
-    const response = await fetch(buildApiUrl('/chat/supervisor/stream'), {
+    let response = await fetch(buildApiUrl('/chat/supervisor/stream'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await buildAuthHeaders()) },
       body: JSON.stringify(body),
@@ -103,8 +103,83 @@ async deleteConversation(sessionId: string): Promise<{
 
     ensureStreamResponseOk(response);
     const guarded = withStreamGuards(callbacks, opts);
-    await parseSSEStream(response, guarded, opts);
-    guarded.finish();
+    const reconnectDelays = opts.reconnectDelaysMs ?? [1000, 4000];
+    let runId = response.headers.get('X-Run-Id');
+    let lastSeq = 0;
+    let attempt = 0;
+
+    opts.signal?.addEventListener('abort', () => {
+      const activeRunId = runId;
+      if (!activeRunId) return;
+      void buildAuthHeaders().then((headers) => fetch(
+        buildApiUrl(`/api/chat/stream/${encodeURIComponent(activeRunId)}/cancel`),
+        { method: 'POST', headers },
+      )).catch(() => undefined);
+    }, { once: true });
+
+    const waitForReconnect = async (delayMs: number): Promise<void> => {
+      if (delayMs <= 0) return;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, delayMs);
+        const abort = () => {
+          clearTimeout(timer);
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        if (opts.signal?.aborted) abort();
+        else opts.signal?.addEventListener('abort', abort, { once: true });
+      });
+    };
+
+    while (!opts.signal?.aborted && !guarded.terminalState()) {
+      try {
+        await parseSSEStream(response, guarded, {
+          ...opts,
+          disconnectMode: 'throw',
+          onEnvelope: (data) => {
+            if (typeof data.run_id === 'string' && data.run_id) runId = data.run_id;
+            if (typeof data.seq === 'number' && Number.isFinite(data.seq)) {
+              lastSeq = Math.max(lastSeq, data.seq);
+            }
+          },
+        });
+        if (guarded.terminalState() || opts.signal?.aborted) break;
+        throw new Error('stream ended before done');
+      } catch {
+        if (opts.signal?.aborted || guarded.terminalState()) break;
+        if (!runId || attempt >= reconnectDelays.length) {
+          opts.onConnectionState?.('lost', attempt);
+          guarded.finish('连接中断，内容可能不完整，请重试');
+          break;
+        }
+
+        attempt += 1;
+        opts.onConnectionState?.('reconnecting', attempt);
+        try {
+          await waitForReconnect(reconnectDelays[attempt - 1]);
+          response = await fetch(
+            buildApiUrl(`/api/chat/stream/${encodeURIComponent(runId)}?after_seq=${lastSeq}`),
+            {
+              method: 'GET',
+              headers: await buildAuthHeaders(),
+              signal: opts.signal,
+            },
+          );
+          ensureStreamResponseOk(response);
+          opts.onConnectionState?.('connected', attempt);
+        } catch (resumeError) {
+          if (opts.signal?.aborted) break;
+          if (attempt >= reconnectDelays.length) {
+            opts.onConnectionState?.('lost', attempt);
+            guarded.finish(
+              response.status === 410
+                ? '连接已过期，内容可能不完整，请重试'
+                : `连接中断，内容可能不完整，请重试：${String(resumeError)}`,
+            );
+            break;
+          }
+        }
+      }
+    }
   },
 
 /**

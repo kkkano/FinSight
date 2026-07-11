@@ -295,10 +295,10 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           onDone: async (report, thinking, meta) => {
             const doneStep: ThinkingStep = {
               stage: 'done',
-              message: meta?.synthetic_done ? zh.chat.syntheticDone : zh.chat.analysisDone,
+              message: zh.chat.analysisDone,
               timestamp: new Date().toISOString(),
               eventType: 'done',
-              result: { type: 'done', status: 'done', synthetic_done: Boolean(meta?.synthetic_done), reason: meta?.reason },
+              result: { type: 'done', status: 'done', reason: meta?.reason },
             };
             thinkingSteps = [...thinkingSteps, doneStep];
             const metrics = meta?.metrics || {};
@@ -373,7 +373,12 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           onError: (error) => {
             void (async () => {
               if (await recoverReportIfAvailable()) return;
-              updateScopedMessage(aiMsgId, { content: zh.chat.errorPrefix(String(error)), isLoading: false });
+              updateScopedMessage(aiMsgId, {
+                content: fullContent || zh.chat.streamInterrupted,
+                isLoading: false,
+                error: String(error),
+                canRetry: true,
+              });
               const current = useStore.getState();
               if (isRequestSessionActive()) current.setStatus(zh.chat.streamInterrupted);
               toast({ type: 'error', title: zh.chat.streamInterruptedTitle, message: zh.chat.streamInterruptedMessage });
@@ -422,7 +427,17 @@ export function useChatStream(sessionId: string): UseChatStreamResult {
           },
           onRawEvent: (event) => useStore.getState().addRawEvent(event),
         },
-        { traceRawEnabled: initialState.traceRawEnabled, signal: streamController.signal },
+        {
+          traceRawEnabled: initialState.traceRawEnabled,
+          signal: streamController.signal,
+          onConnectionState: (state) => {
+            if (!isRequestSessionActive()) return;
+            const current = useStore.getState();
+            if (state === 'reconnecting') current.setStatus(zh.chat.reconnecting);
+            else if (state === 'connected') current.setStatus(zh.chat.streaming);
+            else current.setStatus(zh.chat.streamInterrupted);
+          },
+        },
       );
       if (streamController.signal.aborted) finishAbortedStream();
     } catch (error) {

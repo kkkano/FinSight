@@ -13,6 +13,14 @@ function sseResponse(events: Array<Record<string, unknown>>): Response {
   return new Response(stream);
 }
 
+function sseResponseWithHeaders(
+  events: Array<Record<string, unknown>>,
+  headers: Record<string, string>,
+): Response {
+  const response = sseResponse(events);
+  return new Response(response.body, { headers });
+}
+
 describe('parseSSEStream', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -198,7 +206,7 @@ describe('withStreamGuards', () => {
   it('deduplicates terminal callbacks', () => {
     const onDone = vi.fn();
     const onError = vi.fn();
-    const guarded = withStreamGuards({ onDone, onError }, { idleDoneMs: 0 });
+    const guarded = withStreamGuards({ onDone, onError });
 
     guarded.onDone?.();
     guarded.onDone?.();
@@ -208,18 +216,83 @@ describe('withStreamGuards', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('emits one synthetic done after token idle', () => {
-    vi.useFakeTimers();
+  it('never turns an incomplete stream into synthetic done', () => {
     const onDone = vi.fn();
-    const onThinking = vi.fn();
-    const guarded = withStreamGuards({ onDone, onThinking }, { idleDoneMs: 25 });
+    const onError = vi.fn();
+    const guarded = withStreamGuards({ onDone, onError });
 
     guarded.onToken?.('partial');
-    vi.advanceTimersByTime(25);
+    guarded.finish();
 
-    expect(onThinking).toHaveBeenCalledWith(expect.objectContaining({ stage: 'done' }));
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('内容可能不完整'));
+  });
+});
+
+describe('chat SSE auto resume', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('replays only events after the last sequence and completes once', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponseWithHeaders(
+        [{ type: 'token', content: 'A', run_id: 'run-1', seq: 1 }],
+        { 'X-Run-Id': 'run-1' },
+      ))
+      .mockResolvedValueOnce(sseResponse([
+        { type: 'token', content: 'B', run_id: 'run-1', seq: 2 },
+        { type: 'done', response: 'AB', run_id: 'run-1', seq: 3 },
+      ]));
+    vi.stubGlobal('fetch', fetchMock);
+    const tokens: string[] = [];
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const connectionStates: string[] = [];
+
+    await apiClient.sendMessageStream(
+      { query: 'AAPL 分析' },
+      { onToken: (token) => tokens.push(String(token)), onDone, onError },
+      {
+        reconnectDelaysMs: [0, 0],
+        onConnectionState: (state) => connectionStates.push(state),
+      },
+    );
+
+    expect(tokens).toEqual(['A', 'B']);
     expect(onDone).toHaveBeenCalledTimes(1);
-    expect(onDone.mock.calls[0][2]).toEqual(expect.objectContaining({ synthetic_done: true }));
+    expect(onError).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[1][0]).toContain('/api/chat/stream/run-1?after_seq=1');
+    expect(connectionStates).toEqual(['reconnecting', 'connected']);
+  });
+
+  it('tries resume at most twice before reporting honest connection loss', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(sseResponseWithHeaders(
+        [{ type: 'token', content: 'partial', run_id: 'run-2', seq: 1 }],
+        { 'X-Run-Id': 'run-2' },
+      ))
+      .mockRejectedValueOnce(new Error('offline-1'))
+      .mockRejectedValueOnce(new Error('offline-2'));
+    vi.stubGlobal('fetch', fetchMock);
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const connectionStates: string[] = [];
+
+    await apiClient.sendMessageStream(
+      { query: 'AAPL 分析' },
+      { onDone, onError },
+      {
+        reconnectDelaysMs: [0, 0],
+        onConnectionState: (state) => connectionStates.push(state),
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toContain('内容可能不完整');
+    expect(connectionStates).toEqual(['reconnecting', 'reconnecting', 'lost']);
   });
 });
 

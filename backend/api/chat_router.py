@@ -5,6 +5,7 @@ import logging
 import os
 import traceback
 import time as _time
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time
 from typing import Any, Awaitable, Callable, Optional
@@ -14,8 +15,25 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
 from backend.api.schemas import ChatRequest, ChartDataResponse
+from backend.api.stream_replay import replay_buffer
 from backend.graph.confirmation_policy import parse_confirmation_mode
 from backend.report.quality_engine import apply_quality_to_report, record_quality_metrics
+
+
+_STREAM_TASKS: set[asyncio.Task[Any]] = set()
+_STREAM_TASKS_BY_RUN: dict[str, asyncio.Task[Any]] = {}
+
+
+def _track_stream_task(run_id: str, task: asyncio.Task[Any]) -> None:
+    _STREAM_TASKS.add(task)
+    _STREAM_TASKS_BY_RUN[run_id] = task
+
+    def _cleanup(done_task: asyncio.Task[Any]) -> None:
+        _STREAM_TASKS.discard(done_task)
+        if _STREAM_TASKS_BY_RUN.get(run_id) is done_task:
+            _STREAM_TASKS_BY_RUN.pop(run_id, None)
+
+    task.add_done_callback(_cleanup)
 
 
 @dataclass(frozen=True)
@@ -344,6 +362,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             sse_event_schema_version=deps.sse_event_schema_version,
         )
 
+        run_id = uuid.uuid4().hex
         pipeline = run_graph_pipeline(
             deps=exec_deps,
             query=resolved_query,
@@ -356,6 +375,7 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
             source="chat",
             user_id=user_id,
             trace_raw_enabled=trace_raw_enabled,
+            run_id=run_id,
         )
 
         def _serialize_sse_item(item: object) -> str:
@@ -366,18 +386,114 @@ def create_chat_router(deps: ChatRouterDeps) -> APIRouter:
 
             return _json.dumps(jsonable_encoder(item), ensure_ascii=False, default=_fallback)
 
-        async def _stream():
-            async for event in pipeline:
-                if isinstance(event, dict) and event.get("type") == "keep-alive":
-                    yield f"data: {_serialize_sse_item(event)}\n\n"
-                else:
-                    yield f"data: {_serialize_sse_item(event)}\n\n"
+        replay_buffer.start_run(run_id)
+
+        async def _pump_pipeline() -> None:
+            try:
+                async for event in pipeline:
+                    payload = jsonable_encoder(event)
+                    if not isinstance(payload, dict):
+                        payload = {"type": "system", "data": payload}
+                    payload.setdefault("run_id", run_id)
+                    payload.setdefault("session_id", thread_id)
+                    replay_buffer.append(run_id, payload)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — 转成 SSE error，保持续传可观察
+                _logger.exception("[chat/stream] pipeline failed run_id=%s", run_id)
+                replay_buffer.append(
+                    run_id,
+                    {
+                        "type": "error",
+                        "message": str(exc),
+                        "run_id": run_id,
+                        "session_id": thread_id,
+                    },
+                )
+            finally:
+                replay_buffer.mark_complete(run_id)
+
+        async def _stream_replay(after_seq: int = 0):
+            cursor = max(0, int(after_seq))
+            last_keep_alive = _time.monotonic()
+            while True:
+                batch = replay_buffer.replay_from(run_id, cursor)
+                if batch is None:
+                    return
+                if batch:
+                    for seq, payload in batch:
+                        cursor = seq
+                        yield f"data: {payload}\n\n"
+                    last_keep_alive = _time.monotonic()
+                    continue
+                if replay_buffer.is_complete(run_id):
+                    return
+                now = _time.monotonic()
+                if now - last_keep_alive >= 15:
+                    heartbeat = {"type": "keep-alive", "run_id": run_id, "session_id": thread_id}
+                    yield f"data: {_serialize_sse_item(heartbeat)}\n\n"
+                    last_keep_alive = now
+                await asyncio.sleep(0.1)
+
+        _track_stream_task(run_id, asyncio.create_task(_pump_pipeline()))
 
         return StreamingResponse(
-            _stream(),
+            _stream_replay(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "X-Run-Id": run_id,
+            },
+        )
+
+    @router.get("/api/chat/stream/{run_id}")
+    async def resume_chat_stream(run_id: str, after_seq: int = 0):
+        import json as _json
+
+        normalized_run_id = str(run_id or "").strip()
+        if not normalized_run_id or len(normalized_run_id) > 128:
+            raise HTTPException(status_code=410, detail="stream replay expired or unknown")
+        if replay_buffer.replay_from(normalized_run_id, max(0, after_seq)) is None:
+            raise HTTPException(status_code=410, detail="stream replay expired or unknown")
+
+        async def _stream_replay():
+            cursor = max(0, int(after_seq))
+            last_keep_alive = _time.monotonic()
+            while True:
+                batch = replay_buffer.replay_from(normalized_run_id, cursor)
+                if batch is None:
+                    return
+                if batch:
+                    for seq, payload in batch:
+                        cursor = seq
+                        yield f"data: {payload}\n\n"
+                    last_keep_alive = _time.monotonic()
+                    continue
+                if replay_buffer.is_complete(normalized_run_id):
+                    return
+                now = _time.monotonic()
+                if now - last_keep_alive >= 15:
+                    heartbeat = {"type": "keep-alive", "run_id": normalized_run_id}
+                    yield f"data: {_json.dumps(heartbeat, ensure_ascii=False)}\n\n"
+                    last_keep_alive = now
+                await asyncio.sleep(0.1)
+
+        return StreamingResponse(
+            _stream_replay(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
         )
+
+    @router.post("/api/chat/stream/{run_id}/cancel")
+    async def cancel_chat_stream(run_id: str):
+        normalized_run_id = str(run_id or "").strip()
+        task = _STREAM_TASKS_BY_RUN.get(normalized_run_id)
+        if task is None or task.done():
+            raise HTTPException(status_code=404, detail="active stream not found")
+        task.cancel()
+        return {"cancelled": True, "run_id": normalized_run_id}
 
     @router.post("/api/chat/add-chart-data", response_model=ChartDataResponse)
     async def add_chart_data(request: dict):

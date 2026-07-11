@@ -1,12 +1,6 @@
 import type { RawEventType } from '../types/index';
 import type { SSECallbacks } from './contracts';
 
-const sseIdleDoneFallbackMs = (): number => {
-  const raw = Number(import.meta.env.VITE_SSE_IDLE_DONE_FALLBACK_MS ?? 8000);
-  if (!Number.isFinite(raw)) return 8000;
-  return Math.max(0, raw);
-};
-
 /**
  * P1-2: SSE 读超时（毫秒）。超过该时长未收到任何数据帧（包括后端心跳）
  * 视为连接断开，向用户明确报错而不是让进度条永久卡住。设 0 禁用。
@@ -20,73 +14,37 @@ const sseReadTimeoutMs = (): number => {
 /** 内部标记：SSE 读超时错误（与业务错误区分） */
 const SSE_READ_TIMEOUT_ERROR = 'SSE_READ_TIMEOUT';
 
-const isCompletionProgressSignal = (step: any): boolean => {
-  const stage = String(step?.stage || step?.result?.stage || '').trim().toLowerCase();
-  const eventType = String(step?.eventType || step?.result?.type || '').trim().toLowerCase();
-  const status = String(step?.result?.status || '').trim().toLowerCase();
-  return (
-    eventType === 'done'
-    || stage === 'done'
-    || stage === 'langgraph_render_done'
-    || (stage === 'rendering' && ['done', 'success', 'completed'].includes(status))
-  );
-};
-
 export interface StreamOpts {
   traceRawEnabled?: boolean;
   signal?: AbortSignal;
   readTimeoutMs?: number;
-  idleDoneMs?: number;
+  reconnectDelaysMs?: number[];
+  onConnectionState?: (state: 'reconnecting' | 'connected' | 'lost', attempt: number) => void;
 }
 
 export interface GuardedSSECallbacks extends SSECallbacks {
   clear(): void;
-  finish(): void;
+  finish(message?: string): void;
+  terminalState(): 'done' | 'error' | null;
 }
 
-/** 统一聊天与 Agent SSE 的终态去重、空闲兜底和异常结束处理。 */
+/** 统一聊天与 Agent SSE 的终态去重和异常结束处理。 */
 export function withStreamGuards(
   callbacks: SSECallbacks,
-  opts: Pick<StreamOpts, 'signal' | 'idleDoneMs'> = {},
+  opts: Pick<StreamOpts, 'signal'> = {},
 ): GuardedSSECallbacks {
   let sawDone = false;
   let sawError = false;
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const clear = () => {
-    if (idleTimer) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
-    }
-  };
-
-  const schedule = (reason: string) => {
-    const timeoutMs = opts.idleDoneMs ?? sseIdleDoneFallbackMs();
-    if (timeoutMs <= 0 || sawDone || sawError || opts.signal?.aborted) return;
-    clear();
-    idleTimer = setTimeout(() => {
-      if (sawDone || sawError || opts.signal?.aborted) return;
-      const timestamp = new Date().toISOString();
-      guarded.onThinking?.({
-        stage: 'done',
-        message: 'Execution completed',
-        result: { type: 'done', status: 'done', synthetic_done: true, reason },
-        timestamp,
-        eventType: 'done',
-      });
-      guarded.onDone?.(undefined, undefined, { synthetic_done: true, reason, timestamp });
-    }, timeoutMs);
-  };
+  const clear = () => undefined;
 
   const guarded: GuardedSSECallbacks = {
     ...callbacks,
     onToken: (token) => {
       callbacks.onToken?.(token);
-      schedule('idle_after_token');
     },
     onThinking: (step) => {
       callbacks.onThinking?.(step);
-      if (isCompletionProgressSignal(step)) schedule('idle_after_completion_signal');
     },
     onDone: (report, thinking, meta) => {
       if (sawDone || sawError) return;
@@ -101,12 +59,13 @@ export function withStreamGuards(
       callbacks.onError?.(error);
     },
     clear,
-    finish: () => {
+    finish: (message = '连接中断，内容可能不完整，请重试') => {
       clear();
       if (!opts.signal?.aborted && !sawDone && !sawError) {
-        guarded.onError?.('Execution stream ended unexpectedly (missing done event)');
+        guarded.onError?.(message);
       }
     },
+    terminalState: () => (sawDone ? 'done' : sawError ? 'error' : null),
   };
   return guarded;
 }
@@ -122,7 +81,13 @@ export function withStreamGuards(
 export async function parseSSEStream(
   response: Response,
   callbacks: SSECallbacks,
-  opts: { traceRawEnabled?: boolean; signal?: AbortSignal; readTimeoutMs?: number } = {},
+  opts: {
+    traceRawEnabled?: boolean;
+    signal?: AbortSignal;
+    readTimeoutMs?: number;
+    disconnectMode?: 'callback' | 'throw';
+    onEnvelope?: (data: Record<string, unknown>) => void;
+  } = {},
 ): Promise<void> {
   const { onToken, onToolStart, onToolEnd, onDone, onError, onThinking, onRawEvent, onInterrupt } = callbacks;
   const traceRawEnabled = opts.traceRawEnabled ?? true;
@@ -176,9 +141,9 @@ export async function parseSSEStream(
         if (e instanceof Error && e.message === SSE_READ_TIMEOUT_ERROR) {
           // 中止前再确认一次没有被外部取消
           if (!opts.signal?.aborted) {
-            onError?.(
-              `连接中断：${Math.round(readTimeoutMs / 1000)} 秒未收到服务器数据，请检查网络后重试`,
-            );
+            const message = `连接中断：${Math.round(readTimeoutMs / 1000)} 秒未收到服务器数据`;
+            if (opts.disconnectMode === 'throw') throw new Error(message);
+            onError?.(message);
           }
           break;
         }
@@ -198,6 +163,7 @@ export async function parseSSEStream(
         const rawJson = line.slice(6);
         try {
           const data = JSON.parse(rawJson);
+          opts.onEnvelope?.(data);
 
           // 跳过后端 keep-alive / heartbeat 心跳帧（仅用于保持 Cloudflare Tunnel 连接）
           if (data.type === 'heartbeat' || data.type === 'keep-alive') continue;

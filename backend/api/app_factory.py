@@ -233,6 +233,7 @@ def create_app() -> FastAPI:
         allow_credentials=_cors_allow_credentials(),
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Run-Id"],
     )
 
     # === API routers ===
