@@ -35,7 +35,7 @@ def _resolve_dsn() -> str:
     ).strip()
 
 
-def _env_int(name: str, default: int, *, min_value: int = 1, max_value: int = 3650) -> int:
+def _bounded_env_int(name: str, default: int, *, min_value: int = 1, max_value: int = 3650) -> int:
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -160,7 +160,7 @@ class SQLRAGObservabilityStore:
 
     def cleanup_retention(self) -> int:
         self.ensure_schema()
-        threshold = _utc_now() - timedelta(days=_env_int("RAG_OBSERVABILITY_RETENTION_DAYS", 30))
+        threshold = _utc_now() - timedelta(days=_bounded_env_int("RAG_OBSERVABILITY_RETENTION_DAYS", 30))
         total = 0
         with self._engine.begin() as conn:
             total += int(conn.execute(text("DELETE FROM rag_query_runs WHERE started_at < :threshold"), {'threshold': threshold}).rowcount or 0)

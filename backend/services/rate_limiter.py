@@ -11,6 +11,9 @@
 
 from __future__ import annotations
 
+from backend.utils.env import env_float as _env_float
+from backend.utils.env import env_int as _env_int
+
 import asyncio
 import logging
 import os
@@ -19,22 +22,6 @@ from collections import defaultdict
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-
-def _env_int(name: str, default: int) -> int:
-    """从环境变量获取整数配置"""
-    try:
-        return int(os.getenv(name, default))
-    except Exception:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    """从环境变量获取浮点数配置"""
-    try:
-        return float(os.getenv(name, default))
-    except Exception:
-        return default
 
 
 class LLMRateLimiter:

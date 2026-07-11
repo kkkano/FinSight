@@ -195,7 +195,7 @@ def _cors_allow_origin_regex() -> str | None:
     return r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 def _cors_allow_credentials() -> bool:
-    allow_credentials = _env_bool("CORS_ALLOW_CREDENTIALS", "false")
+    allow_credentials = _env_bool("CORS_ALLOW_CREDENTIALS", False)
     origins = _cors_allow_origins()
     if allow_credentials and "*" in origins:
         logger.warning("CORS_ALLOW_CREDENTIALS=true with wildcard origin is invalid. Force disabling credentials.")

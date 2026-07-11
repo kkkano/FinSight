@@ -260,7 +260,7 @@ def _normalize_session_key(session_id: Optional[str]) -> str:
     return ":".join(normalized)
 
 def _resolve_trace_raw_enabled(request: ChatRequest) -> bool:
-    default_enabled = _env_bool("TRACE_RAW_ENABLED", "true")
+    default_enabled = _env_bool("TRACE_RAW_ENABLED", True)
     override = None
     if getattr(request, "options", None):
         override = request.options.trace_raw_override

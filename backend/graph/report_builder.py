@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from backend.utils.env import env_int as _env_int
+
 import json
 import logging
-import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -66,16 +67,6 @@ _AGENT_TITLE_MAP: dict[str, str] = {
     "risk_agent": "风险分析",
     "deep_search_agent": "深度搜索",
 }
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(str(raw).strip())
-    except Exception:
-        return default
 
 
 def _now_iso() -> str:

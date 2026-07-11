@@ -1,6 +1,8 @@
 """Request and runtime helpers used by the policy gate node."""
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+
 import os
 import re
 
@@ -12,7 +14,7 @@ from backend.graph.understanding_v2 import (
 )
 
 
-def _env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
+def _bounded_env_int(name: str, default: int, *, min_value: int, max_value: int) -> int:
     raw = os.getenv(name)
     if not isinstance(raw, str) or not raw.strip():
         return default
@@ -40,13 +42,6 @@ def _is_truthy(value: object) -> bool:
     return False
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return _is_truthy(raw)
-
-
 def _agent_research_config(agent_preferences: dict) -> dict[str, int | bool]:
     """Build the per-agent research config.
 
@@ -56,21 +51,21 @@ def _agent_research_config(agent_preferences: dict) -> dict[str, int | bool]:
     """
 
     forced = _env_bool("FINSIGHT_FORCE_AGENT_RESEARCH_CONFIG", False)
-    env_reflections = _env_int(
+    env_reflections = _bounded_env_int(
         "FINSIGHT_AGENT_REFLECTION_ROUNDS",
-        _env_int("BASE_AGENT_MAX_REFLECTIONS", 3 if forced else 0, min_value=0, max_value=3),
+        _bounded_env_int("BASE_AGENT_MAX_REFLECTIONS", 3 if forced else 0, min_value=0, max_value=3),
         min_value=0,
         max_value=3,
     )
-    env_analysis_timeout = _env_int(
+    env_analysis_timeout = _bounded_env_int(
         "FINSIGHT_AGENT_ANALYSIS_TIMEOUT_SECONDS",
-        _env_int("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", 120 if forced else 0, min_value=0, max_value=120),
+        _bounded_env_int("AGENT_LLM_ANALYZE_CALL_TIMEOUT_SECONDS", 120 if forced else 0, min_value=0, max_value=120),
         min_value=0,
         max_value=120,
     )
-    env_token_timeout = _env_int(
+    env_token_timeout = _bounded_env_int(
         "FINSIGHT_AGENT_TOKEN_ACQUIRE_TIMEOUT_SECONDS",
-        _env_int("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", 60 if forced else 0, min_value=0, max_value=60),
+        _bounded_env_int("AGENT_LLM_ANALYZE_TIMEOUT_SECONDS", 60 if forced else 0, min_value=0, max_value=60),
         min_value=0,
         max_value=60,
     )

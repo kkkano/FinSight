@@ -13,10 +13,12 @@ possible context bindings; none of them gets a bespoke route function.
 """
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_float as _env_float
+
 import asyncio
 import json
 import logging
-import os
 import re
 import dataclasses
 from dataclasses import dataclass, replace
@@ -173,23 +175,6 @@ class ConversationDecision:
             "task_hints": [dict(item) for item in self.task_hints],
             "decision_source": self.decision_source,
         }
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return float(str(raw).strip())
-    except Exception:
-        return default
 
 
 def _coerce_confidence(value: Any, default: float = 0.0) -> float:

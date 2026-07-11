@@ -15,20 +15,15 @@ P1-6: 生成端点并发限制（全局 + 单客户端）
 
 from __future__ import annotations
 
+from backend.utils.env import env_int as _env_int
+
 import os
 import threading
 from typing import Dict
 
 
-def _env_bool(name: str, default: str) -> bool:
+def _env_enabled_unless_disabled(name: str, default: str) -> bool:
     return str(os.getenv(name, default)).strip().lower() not in {"false", "0", "off"}
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except (TypeError, ValueError):
-        return default
 
 
 # 昂贵生成端点的路径前缀（这些请求会触发多次 LLM 调用 + 长时间占用）
@@ -59,7 +54,7 @@ class ConcurrencyLimiter:
         return cls(
             max_global=_env_int("GENERATION_MAX_CONCURRENT", 10),
             max_per_client=_env_int("GENERATION_MAX_CONCURRENT_PER_CLIENT", 2),
-            enabled=_env_bool("CONCURRENCY_LIMIT_ENABLED", "true"),
+            enabled=_env_enabled_unless_disabled("CONCURRENCY_LIMIT_ENABLED", "true"),
         )
 
     def try_acquire(self, client_id: str) -> bool:

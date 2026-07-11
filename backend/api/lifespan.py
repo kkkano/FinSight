@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     from backend.services.alert_scheduler import run_price_change_cycle
     from backend.services.scheduler_runner import start_interval_scheduler, start_price_change_scheduler
 
-    enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", "false")
+    enabled = _env_bool("PRICE_ALERT_SCHEDULER_ENABLED", False)
     if enabled:
         interval = float(os.getenv("PRICE_ALERT_INTERVAL_MINUTES", "15"))
         sched = start_price_change_scheduler(
@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
 
     # News scheduler
     from backend.services.alert_scheduler import run_news_alert_cycle
-    news_enabled = _env_bool("NEWS_ALERT_SCHEDULER_ENABLED", "false")
+    news_enabled = _env_bool("NEWS_ALERT_SCHEDULER_ENABLED", False)
     if news_enabled:
         news_interval = float(os.getenv("NEWS_ALERT_INTERVAL_MINUTES", "30"))
         sched = start_price_change_scheduler(
@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
 
     # Risk scheduler
     from backend.services.alert_scheduler import run_risk_alert_cycle
-    risk_enabled = _env_bool("RISK_ALERT_SCHEDULER_ENABLED", "false")
+    risk_enabled = _env_bool("RISK_ALERT_SCHEDULER_ENABLED", False)
     if risk_enabled:
         risk_interval = float(os.getenv("RISK_ALERT_INTERVAL_MINUTES", "60"))
         sched = start_price_change_scheduler(
@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
 
     # Health probe scheduler (optional)
     from backend.services.health_probe import run_health_probe_cycle
-    health_enabled = _env_bool("HEALTH_PROBE_ENABLED", "false")
+    health_enabled = _env_bool("HEALTH_PROBE_ENABLED", False)
     if health_enabled:
         health_interval = float(os.getenv("HEALTH_PROBE_INTERVAL_MINUTES", "30"))
         sched = start_price_change_scheduler(
@@ -143,7 +143,7 @@ async def lifespan(app: FastAPI):
     # Workbench: 交易时段感知 L1 盯盘调度（零 LLM 成本）
     # 调度心跳固定 5 分钟，实际扫描频率由 dispatcher 按时段间隔节流
     # （盘前 10 / 盘中 15 / 盘后 30 / 闭市 60 分钟）。
-    monitor_enabled = _env_bool("MONITOR_SCAN_ENABLED", "true")
+    monitor_enabled = _env_bool("MONITOR_SCAN_ENABLED", True)
     if monitor_enabled:
         from backend.services.monitor_engine import run_monitor_dispatch_cycle
 
@@ -167,7 +167,7 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.exception("[RAGObservability] initialization failed in lifespan: %s", exc)
 
-    rag_retention_enabled = _env_bool("RAG_OBSERVABILITY_RETENTION_ENABLED", "true")
+    rag_retention_enabled = _env_bool("RAG_OBSERVABILITY_RETENTION_ENABLED", True)
     if rag_retention_enabled:
         rag_retention_interval = float(os.getenv("RAG_OBSERVABILITY_RETENTION_INTERVAL_MINUTES", "360"))
 

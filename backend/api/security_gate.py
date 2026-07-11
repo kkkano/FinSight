@@ -7,6 +7,9 @@ API key / Supabase / RAG 观测台鉴权全家（身份缓存含锁）。
 """
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_int as _env_int
+
 import json
 import logging
 import os
@@ -34,15 +37,6 @@ _AUTH_IDENTITY_CACHE_SENTINEL = object()
 _auth_identity_cache: Dict[str, tuple[float, Optional[Dict[str, Any]]]] = {}
 
 _auth_identity_lock = Lock()
-
-def _env_bool(key: str, default: str = "false") -> bool:
-    return os.getenv(key, default).lower() in ("true", "1", "yes", "on")
-
-def _env_int(key: str, default: int) -> int:
-    try:
-        return int(os.getenv(key, default))
-    except Exception:
-        return default
 
 def _parse_csv_env(key: str, default: str) -> list[str]:
     raw = os.getenv(key, default)
@@ -85,7 +79,7 @@ def _resolve_rag_observability_dev_auth_config() -> tuple[str, str, Optional[str
 
 def _is_rag_observability_dev_auth_enabled() -> bool:
     token, _, _ = _resolve_rag_observability_dev_auth_config()
-    return _env_bool("RAG_OBSERVABILITY_DEV_AUTH_ENABLED", "false") and bool(token)
+    return _env_bool("RAG_OBSERVABILITY_DEV_AUTH_ENABLED", False) and bool(token)
 
 def _resolve_rag_observability_dev_user_identity(token: str) -> Optional[Dict[str, Any]]:
     normalized = str(token or "").strip()
@@ -250,7 +244,7 @@ class SimpleRateLimiter:
 
     @classmethod
     def from_env(cls) -> "SimpleRateLimiter":
-        enabled = _env_bool("RATE_LIMIT_ENABLED", "true")  # P0-7: 公网产品限流默认开启
+        enabled = _env_bool("RATE_LIMIT_ENABLED", True)  # P0-7: 公网产品限流默认开启
         # 默认 300/分钟：Dashboard/A股页一次加载就有 10-20 个数据请求 + 轮询，
         # 120 对单个真实用户太紧（修复真实 IP 识别后限流桶已按用户隔离）
         limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "300"))
@@ -284,7 +278,7 @@ def _trust_proxy_headers() -> bool:
     默认 true：保持线上 Cloudflare 部署行为不变（向后兼容）。
     直连公网部署应显式设置 TRUST_PROXY_HEADERS=false。
     """
-    return _env_bool("TRUST_PROXY_HEADERS", "true")
+    return _env_bool("TRUST_PROXY_HEADERS", True)
 
 def _resolve_client_ip(request: Request) -> str:
     """解析真实客户端 IP（Cloudflare Tunnel / 反向代理感知）。
@@ -317,7 +311,7 @@ async def security_gate(request: Request, call_next):
         return await call_next(request)
 
     api_key = None
-    if _env_bool("API_AUTH_ENABLED", "false"):
+    if _env_bool("API_AUTH_ENABLED", False):
         keys = _parse_api_keys()
         if not keys:
             return JSONResponse(status_code=503, content={"detail": "API auth enabled but no keys configured"})

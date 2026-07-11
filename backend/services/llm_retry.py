@@ -11,9 +11,12 @@ This module provides a conservative "wait and retry" loop for *rate limit* error
 
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_float as _env_float
+from backend.utils.env import env_int as _env_int
+
 import asyncio
 import logging
-import os
 import random
 import re
 from typing import Any, Callable, Optional
@@ -26,27 +29,6 @@ from backend.services.llm_usage import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except Exception:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, default))
-    except Exception:
-        return default
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in ("true", "1", "yes", "on")
 
 
 def is_rate_limit_error(exc: BaseException) -> bool:

@@ -2,7 +2,8 @@
 """Planner 输出的政策、预算与执行步骤约束。"""
 from __future__ import annotations
 
-import os
+from backend.utils.env import env_str as _env_str
+
 import re
 from typing import Any
 
@@ -13,11 +14,6 @@ from backend.graph.state import GraphState
 
 
 _HIGH_COST_AGENTS: set[str] = {"macro_agent", "deep_search_agent"}
-
-
-def _env_str(key: str, default: str) -> str:
-    raw = os.getenv(key)
-    return raw.strip() if isinstance(raw, str) and raw.strip() else default
 
 
 def _is_deep_hint(query: str, state: GraphState | None = None) -> bool:

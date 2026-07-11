@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from backend.utils.env import env_float as _env_float
+from backend.utils.env import env_int as _env_int
+
 import asyncio
 from dataclasses import asdict, is_dataclass
 import logging
@@ -15,20 +18,6 @@ from backend.research.claim_extractor import extract_claims_from_agent_output
 from backend.graph.intent.frame import AgentBrief
 
 logger = logging.getLogger(__name__)
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, default))
-    except Exception:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, default))
-    except Exception:
-        return default
 
 
 def _serialize_agent_output(output: Any, *, step_name: str) -> dict[str, Any]:

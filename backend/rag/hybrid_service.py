@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+
 import json
 import logging
 import os
@@ -27,14 +29,7 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in ("1", "true", "yes", "on")
-
-
-def _env_int(name: str, default: int, *, min_value: int = 1, max_value: int = 64) -> int:
+def _bounded_env_int(name: str, default: int, *, min_value: int = 1, max_value: int = 64) -> int:
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -67,7 +62,7 @@ def _search_many_bounded(
         return []
 
     candidate_k = max(1, int(top_k))
-    worker_count = min(len(normalized), max(1, int(max_workers or _env_int("RAG_SEARCH_MANY_MAX_WORKERS", 4, min_value=1, max_value=16))))
+    worker_count = min(len(normalized), max(1, int(max_workers or _bounded_env_int("RAG_SEARCH_MANY_MAX_WORKERS", 4, min_value=1, max_value=16))))
     groups: list[list[dict[str, Any]]] = [[] for _ in normalized]
 
     def _run(collection_index: int, collection: str) -> tuple[int, list[dict[str, Any]]]:

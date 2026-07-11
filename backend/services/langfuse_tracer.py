@@ -17,6 +17,8 @@
 """
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -26,15 +28,6 @@ logger = logging.getLogger(__name__)
 
 _langfuse_client: Any | None = None
 _init_attempted: bool = False
-
-
-# ==================== 环境变量工具 ====================
-
-def _env_bool(key: str, default: bool = False) -> bool:
-    raw = os.getenv(key)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 # ==================== 全局 Client 初始化 ====================

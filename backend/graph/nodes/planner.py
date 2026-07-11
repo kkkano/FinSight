@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_int as _env_int
+from backend.utils.env import env_str as _env_str
+
 import hashlib
 import logging
 import os
@@ -84,28 +88,6 @@ __all__ = [
     "get_planner_ab_metrics",
     "planner",
 ]
-
-
-def _env_str(key: str, default: str) -> str:
-    raw = os.getenv(key)
-    return raw.strip() if isinstance(raw, str) and raw.strip() else default
-
-
-def _env_bool(key: str, default: bool = False) -> bool:
-    raw = os.getenv(key)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _env_int(key: str, default: int) -> int:
-    raw = os.getenv(key)
-    if raw is None:
-        return default
-    try:
-        return int(str(raw).strip())
-    except Exception:
-        return default
 
 
 def _planner_llm_limits(state: GraphState) -> dict[str, float | int]:

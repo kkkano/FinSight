@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from backend.utils.env import env_int as _env_int
+
 import json
 import logging
 import os
@@ -91,13 +93,6 @@ def _load_user_config() -> dict:
         except Exception as exc:
             logger.info("[Config] Failed to load user_config.json: %s", exc)
     return {}
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.getenv(name, str(default)))
-    except Exception:
-        return default
 
 
 def _mask(value: str | None) -> str:

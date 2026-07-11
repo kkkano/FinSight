@@ -2,9 +2,12 @@
 """Synthesis input/output normalization helpers."""
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+from backend.utils.env import env_int as _env_int
+from backend.utils.env import env_str as _env_str
+
 import json
 import logging
-import os
 import re
 from typing import Any
 
@@ -86,28 +89,6 @@ def _format_memory_context_for_synth(state: GraphState) -> str:
         + json_dumps_safe(payload, ensure_ascii=False, indent=2)
         + "\n</memory_context>\n"
     )
-
-
-def _env_str(key: str, default: str) -> str:
-    raw = os.getenv(key)
-    return raw.strip() if isinstance(raw, str) and raw.strip() else default
-
-
-def _env_int(key: str, default: int) -> int:
-    raw = os.getenv(key)
-    if raw is None:
-        return default
-    try:
-        return int(str(raw).strip())
-    except Exception:
-        return default
-
-
-def _env_bool(key: str, default: bool) -> bool:
-    raw = os.getenv(key)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _extract_json_object(text: str) -> str:

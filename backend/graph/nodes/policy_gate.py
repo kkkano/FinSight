@@ -27,7 +27,7 @@ from backend.graph.policy.runtime import (
     _env_bool as _env_bool,
 )
 from backend.graph.policy.runtime import (
-    _env_int as _env_int,
+    _bounded_env_int as _env_int,
 )
 from backend.graph.policy.runtime import (
     _has_ready_operation as _has_ready_operation,

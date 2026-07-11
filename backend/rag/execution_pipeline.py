@@ -23,7 +23,7 @@ from backend.rag.execution_support import (
     _build_vector_source_id,
     _chunk_profile,
     _decorate_rag_hit,
-    _env_int,
+    _bounded_env_int as _env_int,
     _infer_chunk_doc_type,
     _infer_chunk_strategy,
     _parse_datetime,

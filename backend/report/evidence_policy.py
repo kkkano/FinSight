@@ -5,7 +5,9 @@ Evidence policy and canonical report quality helpers.
 
 from __future__ import annotations
 
-import os
+from backend.utils.env import env_float as _env_float
+from backend.utils.env import env_int as _env_int
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable, Literal, TypedDict
@@ -68,26 +70,6 @@ class EvidencePolicyResult:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return float(str(raw).strip())
-    except Exception:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(str(raw).strip())
-    except Exception:
-        return default
 
 
 def _is_internal_citation_url(url: Any) -> bool:

@@ -13,7 +13,7 @@ from backend.graph.json_utils import json_dumps_safe
 from backend.graph.state import GraphState
 
 
-def _env_int(name: str, default: int, *, min_value: int = 0, max_value: int = 10_000) -> int:
+def _bounded_env_int(name: str, default: int, *, min_value: int = 0, max_value: int = 10_000) -> int:
     raw = os.getenv(name)
     if raw is None:
         return default

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from backend.utils.env import env_bool as _env_bool
+
 import asyncio
 import atexit
 import logging
@@ -19,13 +21,6 @@ CHECKPOINTER_SCHEMA_VERSION = "checkpointer.v1"
 _async_bundle: Optional["CheckpointerBundle"] = None
 _async_lock: Optional[asyncio.Lock] = None
 _async_bundle_loop_id: Optional[int] = None
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return str(raw).strip().lower() in ("true", "1", "yes", "on")
 
 
 def _resolve_backend() -> str:
