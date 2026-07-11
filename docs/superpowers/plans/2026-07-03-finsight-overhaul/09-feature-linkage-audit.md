@@ -138,8 +138,8 @@ type PredictionOverlay = {
 
 **Files:** Modify `frontend/src/components/screener/**` 结果表组件（`ls frontend/src/components/screener/`）
 
-- [ ] Step 1: 结果表每行尾部三个 ghost 图标按钮：看板（navigate）/ 加自选（WP6 F2 的 `POST /api/watchlist`，未做 WP6 前该按钮隐藏）/ 问 AI（`/chat` 预填 `分析一下 {ticker}，它在筛选条件"{当前筛选条件摘要}"下入选`）。
-- [ ] Commit: `feat(linkage): screener rows act — dashboard / watchlist / ask-AI`
+- [x] Step 1: 结果表每行尾部三个 ghost 图标按钮：看板（navigate）/ 加自选（WP6 F2 的 `POST /api/watchlist`，未做 WP6 前该按钮隐藏）/ 问 AI（`/chat` 预填 `分析一下 {ticker}，它在筛选条件"{当前筛选条件摘要}"下入选`）。
+- [x] Commit: `feat(linkage): screener rows act — dashboard / watchlist / ask-AI`
 
 ### B-6: 持仓上下文接线【盘点】
 

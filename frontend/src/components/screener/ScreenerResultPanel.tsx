@@ -1,15 +1,72 @@
 ﻿import React, { useState } from 'react';
+import { LayoutDashboard, MessageCircle, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
 import { apiClient } from '../../api/client';
+import { useDashboardStore } from '../../store/dashboardStore';
+import { useStore } from '../../store/useStore';
+import { buildScreenerAskAiPrompt, buildScreenerFilterSummary } from '../../utils/screenerLinkage';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { useToast } from '../ui/Toast';
 
 export const ScreenerResultPanel: React.FC = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { watchlist, addWatchItemApi, setActiveAsset } = useDashboardStore();
+  const setDraft = useStore((state) => state.setDraft);
   const [market, setMarket] = useState<'US' | 'CN' | 'HK'>('US');
   const [sector, setSector] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [capabilityNote, setCapabilityNote] = useState<string | null>(null);
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
+  const [addingTicker, setAddingTicker] = useState<string | null>(null);
+  const filterSummary = buildScreenerFilterSummary(market, sector);
+
+  const normalizeTicker = (item: Record<string, unknown>) => String(item.symbol || '').trim().toUpperCase();
+
+  const activateTicker = (ticker: string, name?: string) => {
+    setActiveAsset({
+      symbol: ticker,
+      type: 'equity',
+      display_name: name?.trim() || ticker,
+    });
+  };
+
+  const openDashboard = (item: Record<string, unknown>) => {
+    const ticker = normalizeTicker(item);
+    if (!ticker) return;
+    activateTicker(ticker, String(item.name || ''));
+    navigate(`/dashboard/${encodeURIComponent(ticker)}`);
+  };
+
+  const askAi = (item: Record<string, unknown>) => {
+    const ticker = normalizeTicker(item);
+    if (!ticker) return;
+    const prompt = buildScreenerAskAiPrompt(ticker, filterSummary);
+    activateTicker(ticker, String(item.name || ''));
+    setDraft(prompt);
+    navigate(`/chat?prompt=${encodeURIComponent(prompt)}`);
+  };
+
+  const addToWatchlist = async (item: Record<string, unknown>) => {
+    const ticker = normalizeTicker(item);
+    if (!ticker || addingTicker) return;
+    setAddingTicker(ticker);
+    try {
+      await addWatchItemApi(ticker);
+      toast({ type: 'success', title: '已加入自选', message: ticker });
+    } catch (caught) {
+      toast({
+        type: 'error',
+        title: '加入自选失败',
+        message: caught instanceof Error ? caught.message : '请稍后重试',
+      });
+    } finally {
+      setAddingTicker(null);
+    }
+  };
 
   const run = async () => {
     setLoading(true);
@@ -78,20 +135,62 @@ export const ScreenerResultPanel: React.FC = () => {
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Price</th>
               <th className="px-3 py-2">Market Cap</th>
+              <th className="px-3 py-2 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={String(item.symbol || item.name || Math.random())} className="border-t border-fin-border">
-                <td className="px-3 py-2">{String(item.symbol || '-')}</td>
-                <td className="px-3 py-2">{String(item.name || '-')}</td>
-                <td className="px-3 py-2">{String(item.price ?? '-')}</td>
-                <td className="px-3 py-2">{String(item.market_cap ?? '-')}</td>
-              </tr>
-            ))}
+            {items.map((item) => {
+              const ticker = normalizeTicker(item);
+              const isWatched = watchlist.some((entry) => entry.symbol.toUpperCase() === ticker);
+              return (
+                <tr key={String(item.symbol || item.name || Math.random())} className="border-t border-fin-border">
+                  <td className="px-3 py-2">{String(item.symbol || '-')}</td>
+                  <td className="px-3 py-2">{String(item.name || '-')}</td>
+                  <td className="px-3 py-2">{String(item.price ?? '-')}</td>
+                  <td className="px-3 py-2">{String(item.market_cap ?? '-')}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openDashboard(item)}
+                        disabled={!ticker}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fin-muted transition-colors hover:bg-fin-primary/10 hover:text-fin-primary disabled:opacity-40"
+                        title={`查看 ${ticker || '该标的'} 看板`}
+                        aria-label={`查看 ${ticker || '该标的'} 看板`}
+                        data-testid={`screener-dashboard-${ticker}`}
+                      >
+                        <LayoutDashboard size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void addToWatchlist(item)}
+                        disabled={!ticker || isWatched || addingTicker !== null}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fin-muted transition-colors hover:bg-fin-warning/10 hover:text-fin-warning disabled:opacity-40"
+                        title={isWatched ? `${ticker} 已在自选` : `将 ${ticker || '该标的'} 加入自选`}
+                        aria-label={isWatched ? `${ticker} 已在自选` : `将 ${ticker || '该标的'} 加入自选`}
+                        data-testid={`screener-watchlist-${ticker}`}
+                      >
+                        <Star size={15} fill={isWatched ? 'currentColor' : 'none'} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => askAi(item)}
+                        disabled={!ticker}
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-fin-muted transition-colors hover:bg-fin-primary/10 hover:text-fin-primary disabled:opacity-40"
+                        title={`让 AI 分析 ${ticker || '该标的'}`}
+                        aria-label={`让 AI 分析 ${ticker || '该标的'}`}
+                        data-testid={`screener-ask-ai-${ticker}`}
+                      >
+                        <MessageCircle size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {items.length === 0 && (
               <tr>
-                <td className="px-3 py-6 text-center text-fin-muted" colSpan={4}>
+                <td className="px-3 py-6 text-center text-fin-muted" colSpan={5}>
                   暂无结果
                 </td>
               </tr>
