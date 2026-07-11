@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task5 API client 分域、类型收口与统一 SSE guard | 814178a | 旧/新 `apiClient` 经 TypeScript AST 对拍均为同一组 78 个方法，拆入 11 个领域模块，兼容出口由 1715 行收至 28 行；`Promise<any>` 扫描 0 命中；新增终态去重与 token idle synthetic-done 测试，前端 38 files/227 tests passed，生产 build 成功；真实 Vite + Chromium mock API/SSE 冒烟覆盖聊天、报告领域、执行流和工作台，控制台 0 error。全仓 lint 仅余未改动 `SettingsModal.tsx` 的 2 个既有声明顺序错误及 3 个既有 warning，本任务新增 lint 错误为 0。 |
 | 2026-07-11 | WP4-Task4 OpenAPI 快照桥 | 637a084 | 后端 OpenAPI 快照测试重复运行均 1 passed；`openapi-typescript` 7.13.0 生成 `schema.d.ts`，CI 同款重新生成后零 diff；前端 38 files/225 tests passed，生产 build 成功；快照测试 F821 通过。CI 后端全量已覆盖快照测试，frontend build job 新增生成类型漂移守护；npm/pnpm 双锁文件同步。 |
 | 2026-07-11 | WP4-Task3 llm_config 去硬编码端点 | d2e0040 | LLM/config/startup/lifespan 定向 50 passed；金样 12 passed；后端全量 + 金样 1940 passed/19 failed/8 skipped，19 项与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；运行时旧第三方端点与默认模型扫描零命中，相关 F821 与 compileall 通过；当前主机无 Docker CLI，Compose 解析留待本地 Docker 门禁。 |
 | 2026-07-11 | WP4-Task2 planner/executor/agent/security typed Settings | 94e48ee | 四域合同 + 受影响回归 67 passed；WP3/金样 16 passed、快照零差异；全后端 + 金样 1928 passed/29 failed/8 skipped 后，19 项与固化基线一致，10 项新增均定位为 Settings cache/reload 迁移问题并修复，修复集 19 passed、限流跨测试顺序集 14 passed；全仓 ruff F821 通过。 |
@@ -52,6 +53,7 @@
 ## Installed Dependencies
 
 ## Deviations
+- 2026-07-11 | WP4-T5 | spec 估算原 `apiClient` 为 60+/76 个方法、`sendMessageStream` 有 13 个调用点；AST 与全仓调用扫描确认实际为 78 个方法、3 个调用点（ChatInput、MiniChat、SSE 测试），迁移地图按代码事实记录。11 个领域模块共享同一公共合同/SSE 层，拆分中间态不能独立通过 build，故按 Task 5 整体一次提交，而非机械制造 11 个不可独立验证的 commit；最终用旧/新 AST 方法集合完全相等守护无遗漏。
 - 2026-07-09 | WP3-T6 | ①main 288行未达spec≤120：bootstrap工具导入块+测试兼容再导出shim为必要占位（T8删shim后可达标）。②spec未列的 session_context.py 为会话/trace helper 新增归置文件；ROUTER_FACTORIES 草表的 AppDeps 统一签名未采纳（24个create_*签名异构，保持原构造顺序整体入create_app）。③三轮测试patch目标随迁：rag_observability_auth(get_rag_observability_store→app_factory；_fetch_supabase_user_identity/_rate_limiter→security_gate)、security_gate_auth_rate_limit(reload需重载security_gate+补善后恢复段——该测试此前就遗留1/min限流器污染，恰无人踩中)。④ingestion切割踩两坑：函数间模块级import不随AST函数块走(user_profile_memory)→memory_scope延迟导入破graph饿加载环；_env_int经_host_env_int延迟取宿主。36个测试文件execute_plan_stub/render_stub全局随迁新名。
 - 2026-07-09 | WP3-T5 | spec 草图 AgentClaimFormatter->list[str] 与现实不符：现网专属格式化仅 price_agent 且返回整段 summary 字符串 → 注册表按真实签名建 AGENT_REPORT_SUMMARY_FORMATTERS（未登记返回 None 走原默认路径）。共享叶子工具入 report/util.py（_safe_str 等7个，壳81处引用回接）；grounding 曾误判需宿主 _agent_summaries_from_steps（扫描误报，实际无引用）。地图见 notes-report-builder-map.md。
 - 2026-07-09 | WP3-T4 | ①spec 草图假设键累积器+板块合并，实际为 subject_type 分支树逐支返回 RenderVars → 适配 T2 同款 ctx 化闭包提升（RenderVarsCtx 19字段），build_render_vars spec 接口名保留。②对拍基准落地为 tests/fixtures/render_vars_legacy.py 冻结副本 + 6 金样终态逐键相等测试（spec 的"拆完删副本"改为副本留测试区，T8 评估）。③verifier 与宿主共享 helper 留 synthesize，verifier 经 _synth() 延迟解析（backend.graph.__init__ 饿加载 runner 导致的 import 环，两处踩中：json_utils 触发链、nodes/__init__ 函数名遮蔽子模块）。④spec synthesize≤900 未达（1785，剩余无拆分锚点）；report_agents.py 482 小幅超限（同族内聚优先）。地图见 notes-synthesize-map.md。

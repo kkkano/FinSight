@@ -183,9 +183,9 @@ git commit -am "feat(contract): openapi snapshot bridge + generated TS schema wi
 - Modify: `frontend/src/api/client.ts` → 兼容出口：`export const apiClient = { ...chatApi, ...reportsApi, … }`（旧调用点零改动）
 
 **Steps:**
-- [ ] Step 1: 迁移地图：`grep -n "  [a-zA-Z]*(" frontend/src/api/client.ts` 给 60+ 方法分域，写 `notes-client-map.md`。
-- [ ] Step 2: 一域一 commit 剪切；方法签名不变；**返回 `Promise<any>` 的 15 个方法**（`grep -n "Promise<any>" client.ts` 列清单）改用 `schema.d.ts` 生成类型：`import type { paths } from "../schema"; type ConfigResponse = paths["/api/config"]["get"]["responses"]["200"]["content"]["application/json"]`。
-- [ ] Step 3: `withStreamGuards`（FE 报告 A4 的 idle-done 重复逻辑）在 `sse.ts` 实现一份：
+- [x] Step 1: 迁移地图：`grep -n "  [a-zA-Z]*(" frontend/src/api/client.ts` 给 60+ 方法分域，写 `notes-client-map.md`。
+- [x] Step 2: 一域一 commit 剪切；方法签名不变；**返回 `Promise<any>` 的 15 个方法**（`grep -n "Promise<any>" client.ts` 列清单）改用 `schema.d.ts` 生成类型：`import type { paths } from "../schema"; type ConfigResponse = paths["/api/config"]["get"]["responses"]["200"]["content"]["application/json"]`。
+- [x] Step 3: `withStreamGuards`（FE 报告 A4 的 idle-done 重复逻辑）在 `sse.ts` 实现一份：
 
 ```ts
 export interface SSECallbacks { onEvent?; onThinking?; onDone?; onError?; /* …与 executeAgent 现有对象风格一致 */ }
@@ -198,8 +198,8 @@ export function withStreamGuards(cb: SSECallbacks, opts: { idleDoneMs?: number }
 ```
 
 `sendMessageStream` 改签名 `(body: SendMessageBody, callbacks: SSECallbacks, opts?: StreamOpts)`；原 13 位置参数的调用点（ChatInput）同步改写。
-- [ ] Step 4: `pnpm test:unit && pnpm build` + 手工冒烟聊天/报告/执行台。
-- [ ] Step 5: Commit
+- [x] Step 4: `pnpm test:unit && pnpm build` + 手工冒烟聊天/报告/执行台。
+- [x] Step 5: Commit（`814178a`）
 
 ```bash
 git commit -am "refactor(api-client): domain modules + typed responses + unified stream guards; sendMessageStream object params"
