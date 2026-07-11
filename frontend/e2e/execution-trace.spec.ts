@@ -8,18 +8,11 @@ const fulfillJson = async (route: any, payload: unknown) => {
   });
 };
 
-// On the dashboard the execution panel auto-collapses once a run terminates
-// (done/error). Clicking the collapsed toggle mirrors what a real user does to
-// inspect the trace. If the run is still running/interrupted the panel may
-// already be auto-expanded, in which case the toggle is absent and we skip.
-const expandExecutionPanel = async (page: any) => {
-  const toggle = page.getByRole('button', { name: '执行追踪（已折叠）' });
-  try {
-    await toggle.waitFor({ state: 'visible', timeout: 8000 });
-    await toggle.click();
-  } catch {
-    // Panel already expanded (running/interrupted auto-expand) — nothing to do.
-  }
+// 专家执行详情固定收纳在右侧「过程」页签，不再出现在页面底部。
+const openExecutionPanel = async (page: any) => {
+  const expand = page.getByTestId('context-panel-expand');
+  if (await expand.isVisible()) await expand.click();
+  await page.getByTestId('context-tab-execution').click();
 };
 
 const buildDashboardPayload = (symbol = 'AAPL') => ({
@@ -123,19 +116,21 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('traceViewMode=dev 时展示原始 AgentLogPanel', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finsight-trace-view-mode', 'dev');
-  });
+test('原始 AgentLogPanel 默认隐藏，设置开启开发者模式后即时显示', async ({ page }) => {
   await page.goto('/dashboard/AAPL');
-  await expect(page.getByText('Console')).toBeVisible();
+  await expect(page.getByText('Console', { exact: true })).toHaveCount(0);
+
+  await page.getByTestId('sidebar-nav-settings').click();
+  await page.getByRole('button', { name: '高级设置' }).click();
+  await expect(page.locator('[data-testid^="settings-trace-view-"]')).toHaveCount(0);
+  await page.getByTestId('settings-developer-mode-toggle').click();
+  await page.getByRole('button', { name: '关闭设置' }).click();
+
+  await expect(page.getByText('Console', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/task5-three-tier.png', fullPage: true });
 });
 
-test('traceViewMode=expert 时展示执行面板并消费计划/决策事件', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finsight-trace-view-mode', 'expert');
-  });
-
+test('右侧过程页签展示专家执行面板并消费计划/决策事件', async ({ page }) => {
   await page.route('**/api/execute', async (route) => {
     const frames = [
       { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
@@ -183,7 +178,7 @@ test('traceViewMode=expert 时展示执行面板并消费计划/决策事件', a
 
   await page.goto('/dashboard/AAPL');
   await page.getByRole('button', { name: '快速分析' }).click();
-  await expandExecutionPanel(page);
+  await openExecutionPanel(page);
 
   await expect(page.getByText('计划摘要')).toBeVisible();
   await expect(page.getByText('决策说明', { exact: true })).toBeVisible();
@@ -193,7 +188,6 @@ test('traceViewMode=expert 时展示执行面板并消费计划/决策事件', a
 
 test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('finsight-trace-view-mode', 'expert');
     localStorage.setItem('finsight-trace-raw-enabled', 'false');
   });
 
@@ -229,17 +223,13 @@ test('traceRawEnabled=false 时仍可见关键阶段进度', async ({ page }) =>
 
   await page.goto('/dashboard/AAPL');
   await page.getByRole('button', { name: '快速分析' }).click();
-  await expandExecutionPanel(page);
+  await openExecutionPanel(page);
 
   await expect(page.getByText('Planner selection summary')).toBeVisible();
   await expect(page.getByText('Planner selected one agent.')).toBeVisible();
 });
 
 test('interrupt 事件会停在等待确认状态', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('finsight-trace-view-mode', 'expert');
-  });
-
   await page.route('**/api/execute', async (route) => {
     const frames = [
       { type: 'pipeline_stage', stage: 'planning', status: 'start', message: 'Planner started' },
@@ -261,7 +251,7 @@ test('interrupt 事件会停在等待确认状态', async ({ page }) => {
 
   await page.goto('/dashboard/AAPL');
   await page.getByRole('button', { name: '快速分析' }).click();
-  await expandExecutionPanel(page);
+  await openExecutionPanel(page);
 
   await expect(page.getByText('Need confirmation to continue').first()).toBeVisible();
 });

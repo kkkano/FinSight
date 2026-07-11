@@ -23,6 +23,7 @@ import { useExecutionStore } from '../store/executionStore';
 import type { ExecutionRun, PipelineStage } from '../types/execution';
 import { getAgentDisplayName } from '../utils/userMessageMapper';
 import { StageStepper, type StageStepperProps, type StageStatus } from './execution/StageStepper';
+import { AgentWorkLog } from './execution/AgentWorkLog';
 
 // ── Shared sub-components ──
 
@@ -325,18 +326,26 @@ export const ChatList: React.FC = () => {
     chatStyle,
   } = useStore();
   const activeRuns = useExecutionStore((state) => state.activeRuns);
+  const recentRuns = useExecutionStore((state) => state.recentRuns);
   const chatStream = useChatStream(sessionId);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [showRecentExecutionSummary, setShowRecentExecutionSummary] = useState(false);
   const isFlat = chatStyle === 'flat';
   const activeChatRun = useMemo(
     () => [...activeRuns].reverse().find((run) => run.source === 'chat'),
     [activeRuns],
   );
+  const recentChatRun = useMemo(
+    () => recentRuns.find((run) => run.source === 'chat'),
+    [recentRuns],
+  );
+  const previousRecentRunIdRef = useRef(recentChatRun?.runId);
+  const displayChatRun = activeChatRun ?? (showRecentExecutionSummary ? recentChatRun : undefined);
   const executionStages = useMemo(
-    () => buildChatStages(activeChatRun, isChatLoading),
-    [activeChatRun, isChatLoading],
+    () => buildChatStages(displayChatRun, isChatLoading),
+    [displayChatRun, isChatLoading],
   );
   const currentAction = useMemo(
     () => getCurrentAction(activeChatRun, currentStep || statusMessage),
@@ -344,7 +353,8 @@ export const ChatList: React.FC = () => {
   );
   const showExecutionBanner = isChatLoading
     || statusMessage === zh.chat.stopped
-    || currentStep === zh.chat.stoppedLabel;
+    || currentStep === zh.chat.stoppedLabel
+    || showRecentExecutionSummary;
 
   // FE-02：滚动停靠检测——只有用户停靠在底部时才自动跟随，向上回看不再被拽回
   const PIN_THRESHOLD_PX = 80;
@@ -375,7 +385,21 @@ export const ChatList: React.FC = () => {
   }, [messages, isChatLoading, showExecutionBanner]);
 
   useEffect(() => {
-    const runStartedAt = activeChatRun ? Date.parse(activeChatRun.startedAt) : Number.NaN;
+    const recentRunId = recentChatRun?.runId;
+    if (activeChatRun) {
+      setShowRecentExecutionSummary(false);
+      previousRecentRunIdRef.current = recentRunId;
+      return;
+    }
+    if (!recentRunId || previousRecentRunIdRef.current === recentRunId) return;
+    previousRecentRunIdRef.current = recentRunId;
+    setShowRecentExecutionSummary(true);
+    const timer = window.setTimeout(() => setShowRecentExecutionSummary(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [activeChatRun, recentChatRun?.runId]);
+
+  useEffect(() => {
+    const runStartedAt = displayChatRun ? Date.parse(displayChatRun.startedAt) : Number.NaN;
     const startedAt = Number.isFinite(runStartedAt) ? runStartedAt : statusSince;
     if (!startedAt) {
       setElapsedMs(0);
@@ -386,7 +410,7 @@ export const ChatList: React.FC = () => {
     }, 1000);
     setElapsedMs(Math.max(0, Date.now() - startedAt));
     return () => clearInterval(timer);
-  }, [activeChatRun, statusSince]);
+  }, [displayChatRun, statusSince]);
 
   const renderMessages = () => {
     const items = messages.map((msg) =>
@@ -442,8 +466,11 @@ export const ChatList: React.FC = () => {
             <StageStepper
               stages={executionStages}
               elapsedMs={elapsedMs}
-              currentAction={statusMessage === zh.chat.stopped ? zh.chat.stoppedResult : currentAction}
+              currentAction={displayChatRun?.status === 'running'
+                ? (statusMessage === zh.chat.stopped ? zh.chat.stoppedResult : currentAction)
+                : undefined}
             />
+            {displayChatRun && <AgentWorkLog run={displayChatRun} />}
           </div>
         </div>
       )}

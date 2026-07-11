@@ -8,8 +8,6 @@ import { ExecutionStats } from './ExecutionStats';
 import { GroupedTimeline } from './GroupedTimeline';
 import { ParallelWaterfall } from './ParallelWaterfall';
 import { PipelineStageBar } from './PipelineStageBar';
-import { ThinkingBubble } from './ThinkingBubble';
-import { AgentProgressList } from './AgentProgressList';
 
 /** Max characters for details JSON before truncation. */
 const DETAILS_MAX_CHARS = 500;
@@ -40,11 +38,8 @@ function CollapsibleDetails({ details }: { details: Record<string, unknown> }) {
   );
 }
 
-type ExecutionPanelMode = 'user' | 'expert';
-
 type ExecutionPanelProps = {
   runId?: string | null;
-  mode?: ExecutionPanelMode;
   compact?: boolean;
   collapsible?: boolean;
   onCollapse?: () => void;
@@ -160,7 +155,6 @@ function renderDecisionNotes(run: ExecutionRun) {
 
 export function ExecutionPanel({
   runId,
-  mode = 'user',
   compact = false,
   collapsible = false,
   onCollapse,
@@ -184,10 +178,8 @@ export function ExecutionPanel({
     return null;
   }
 
-  const isExpert = mode === 'expert';
-
   return (
-    <div className={`rounded-xl border border-fin-border bg-fin-card px-3 py-3 space-y-3 ${className}`}>
+    <div className={`rounded-lg border border-t-border bg-t-card px-3 py-3 space-y-3 ${className}`}>
       <div className="flex items-center justify-between gap-2">
         <div className={`flex items-center gap-1.5 text-xs ${statusInfo.className}`}>
           {statusInfo.icon}
@@ -213,25 +205,9 @@ export function ExecutionPanel({
       <PipelineStageBar
         stages={run.pipelineStages}
         currentStage={run.pipelineCurrentStage}
-        compact={!isExpert}
+        compact={compact}
       />
 
-      {/* ===== 用户模式：ThinkingBubble + AgentSummaryCards ===== */}
-      {!isExpert && (
-        <>
-          <ThinkingBubble
-            timeline={run.timeline}
-            isRunning={run.status === 'running'}
-          />
-          <AgentProgressList
-            agentStatuses={run.agentStatuses}
-            selectedAgents={run.selectedAgents}
-            planSteps={run.planSteps}
-          />
-        </>
-      )}
-
-      {/* ===== 通用状态栏（两种模式共用） ===== */}
       <div className="rounded-lg border border-fin-border bg-fin-bg/20 px-3 py-2 text-xs text-fin-text/90">
         <div>{run.currentStep || '等待执行事件...'}</div>
         {run.status === 'running' && typeof run.etaSeconds === 'number' && run.etaSeconds > 0 && (
@@ -245,21 +221,19 @@ export function ExecutionPanel({
         </div>
       )}
 
-      {isExpert && renderPlanSummary(run)}
+      {renderPlanSummary(run)}
 
-      {isExpert && <ParallelWaterfall timeline={run.timeline} compact={compact} />}
+      <ParallelWaterfall timeline={run.timeline} compact={compact} />
 
-      {isExpert && (
-        <GroupedTimeline
-          timeline={run.timeline}
-          compact={compact}
-          maxGroups={compact ? 6 : 10}
-        />
-      )}
+      <GroupedTimeline
+        timeline={run.timeline}
+        compact={compact}
+        maxGroups={compact ? 6 : 10}
+      />
 
-      {isExpert && <ExecutionStats run={run} />}
+      <ExecutionStats run={run} />
 
-      {isExpert && renderDecisionNotes(run)}
+      {renderDecisionNotes(run)}
     </div>
   );
 }

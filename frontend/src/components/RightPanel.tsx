@@ -5,7 +5,7 @@ import { RightPanelHeader } from './right-panel/RightPanelHeader';
 import { RightPanelAlertsTab } from './right-panel/RightPanelAlertsTab';
 import { RightPanelPortfolioTab } from './right-panel/RightPanelPortfolioTab';
 import { RightPanelChartTab } from './right-panel/RightPanelChartTab';
-import { StreamingResultPanel } from './execution/StreamingResultPanel';
+import { ExecutionPanel } from './execution/ExecutionPanel';
 import { useRightPanelData } from './right-panel/useRightPanelData';
 import { useExecutionStore } from '../store/executionStore';
 import type { RightPanelTab } from './right-panel/types';
@@ -22,7 +22,6 @@ type RightPanelProps = {
 export const RightPanel: FC<RightPanelProps> = ({
   onCollapse,
   onSubscribeClick,
-  onNavigateToChat,
   showMiniChat = true,
   autoSwitchExecution = true,
   className,
@@ -67,11 +66,11 @@ export const RightPanel: FC<RightPanelProps> = ({
     }
   };
 
-  // Latest runId for StreamingResultPanel
+  // 右侧「过程」页签固定承载专家视图。
   const latestRunId = activeRuns.length > 0
     ? activeRuns[activeRuns.length - 1].runId
     : recentRuns.length > 0
-      ? recentRuns[recentRuns.length - 1].runId
+      ? recentRuns[0].runId
       : null;
 
   // Auto-switch to execution tab ONLY on 0->N transition.
@@ -149,7 +148,7 @@ export const RightPanel: FC<RightPanelProps> = ({
         {activeTab === 'chart' && <RightPanelChartTab />}
         {activeTab === 'execution' && (
           <div className="h-full overflow-y-auto p-3">
-            <StreamingResultPanel runId={latestRunId} compact onNavigateToChat={onNavigateToChat} />
+            <ExecutionPanel runId={latestRunId} compact className="border-0 bg-transparent p-0" />
           </div>
         )}
       </div>

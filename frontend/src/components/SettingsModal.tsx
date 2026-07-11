@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Settings, Sun, Moon, Activity, CheckCircle, XCircle, RefreshCw, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { useDeveloperMode } from '../hooks/useDeveloperMode';
 import { useStore } from '../store/useStore';
 // 共享 UI 组件
 import { Button } from './ui/Button';
@@ -231,23 +232,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setLayoutMode,
     traceRawEnabled,
     setTraceRawEnabled,
-    traceViewMode,
-    setTraceViewMode,
     traceRawShowRawJson,
     setTraceRawShowRawJson,
   } = useStore();
+  const [developerMode, setDeveloperMode] = useDeveloperMode();
 
   // Diagnostics State
   const [orchestratorStats, setOrchestratorStats] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagError, setDiagError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadConfig();
-      loadDiagnostics();
-    }
-  }, [isOpen]);
 
   const loadConfig = async () => {
     try {
@@ -319,6 +312,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       setDiagLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadConfig();
+      void loadDiagnostics();
+    }
+  }, [isOpen]);
 
   const handleChange = (key: keyof UserConfig, value: string) => {
     setConfig((prev) => {
@@ -755,11 +755,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </Card>
           ) : null}
 
-          {/* Trace 可见性 — 使用共享 Card 组件 */}
+          {/* 开发者控制台：默认关闭，原始事件入口仅在显式开启后出现 */}
           {activeLayer === 'advanced' ? (
           <Card className="p-4 bg-fin-bg/40">
-            <h3 className="text-sm font-medium text-fin-text mb-3">Trace 可见性</h3>
-            <div className="grid md:grid-cols-2 gap-3 text-sm">
+            <h3 className="text-sm font-medium text-fin-text mb-3">开发者模式</h3>
+            <button
+              type="button"
+              data-testid="settings-developer-mode-toggle"
+              onClick={() => setDeveloperMode(!developerMode)}
+              className={`flex w-full items-center justify-between rounded border px-3 py-2 text-sm transition-colors ${
+                developerMode
+                  ? 'border-t-accent/60 bg-t-accent/10 text-t-accent'
+                  : 'border-t-border text-t-text hover:border-t-accent/50'
+              }`}
+            >
+              <span>原始事件控制台</span>
+              <span className="font-mono text-xs">{developerMode ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {developerMode && <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
               <button
                 type="button"
                 data-testid="settings-trace-raw-toggle"
@@ -787,50 +801,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                 <span>控制台显示 Raw JSON</span>
                 <span className="text-xs">{traceRawShowRawJson ? 'ON' : 'OFF'}</span>
               </button>
-            </div>
-            <div className="mt-3">
-              <div className="text-xs text-fin-muted mb-2">Trace 展示层级</div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  data-testid="settings-trace-view-user"
-                  onClick={() => setTraceViewMode('user')}
-                  className={`px-3 py-1.5 rounded border text-xs transition-colors ${
-                    traceViewMode === 'user'
-                      ? 'border-fin-primary bg-fin-primary/10 text-fin-primary'
-                      : 'border-fin-border text-fin-text hover:border-fin-primary/50'
-                  }`}
-                >
-                  用户
-                </button>
-                <button
-                  type="button"
-                  data-testid="settings-trace-view-expert"
-                  onClick={() => setTraceViewMode('expert')}
-                  className={`px-3 py-1.5 rounded border text-xs transition-colors ${
-                    traceViewMode === 'expert'
-                      ? 'border-fin-primary bg-fin-primary/10 text-fin-primary'
-                      : 'border-fin-border text-fin-text hover:border-fin-primary/50'
-                  }`}
-                >
-                  专家
-                </button>
-                <button
-                  type="button"
-                  data-testid="settings-trace-view-dev"
-                  onClick={() => setTraceViewMode('dev')}
-                  className={`px-3 py-1.5 rounded border text-xs transition-colors ${
-                    traceViewMode === 'dev'
-                      ? 'border-fin-primary bg-fin-primary/10 text-fin-primary'
-                      : 'border-fin-border text-fin-text hover:border-fin-primary/50'
-                  }`}
-                >
-                  开发
-                </button>
-              </div>
-            </div>
+            </div>}
             <p className="text-xs text-fin-muted mt-2">
-              默认开启。采集开关会随请求透传到后端，并即时影响当前会话。
+              默认关闭。开启后才会在工作区底部显示原始 SSE 事件；采集开关会随请求透传到后端。
             </p>
           </Card>
           ) : null}

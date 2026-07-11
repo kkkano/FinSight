@@ -325,11 +325,11 @@ export interface StageStepperProps {
 数据源: executionStore agentStatuses + step 事件(AgentSummaryCards.tsx:65-70 归一化逻辑搬来复用)
 ```
 
-- [ ] Step 1: 实现 AgentWorkLog（含折叠态；vitest：三种状态行 + 完成折叠断言）。
-- [ ] Step 2: ChatList 执行 banner 下挂 AgentWorkLog；移除聊天内联的 AgentSummaryCards/ThinkingBubble 重复展示（组件本体保留给层2）。
-- [ ] Step 3: 层2 收纳：RightPanel execution tab 固定为 ExecutionPanel expert 内容，删除 user/expert 切换 UI（`grep -n "isExpert\|mode ===" execution/ExecutionPanel.tsx`）。
-- [ ] Step 4: 层3 隔离：AgentLogPanel 渲染入口与按钮包 `localStorage.getItem('finsight_dev') === '1'` 条件；设置「高级」区加开发者模式开关写此 key。
-- [ ] Step 5: Commit: `feat(execution): three-tier process UX — inline work log / expert drawer / dev-only console`
+- [x] Step 1: 实现 AgentWorkLog（含折叠态；vitest：三种状态行 + 完成折叠断言）。
+- [x] Step 2: ChatList 执行 banner 下挂 AgentWorkLog；移除聊天内联的 AgentSummaryCards/ThinkingBubble 重复展示（组件本体保留给层2）。
+- [x] Step 3: 层2 收纳：RightPanel execution tab 固定为 ExecutionPanel expert 内容，删除 user/expert 切换 UI（`grep -n "isExpert\|mode ===" execution/ExecutionPanel.tsx`）。
+- [x] Step 4: 层3 隔离：AgentLogPanel 渲染入口与按钮包 `localStorage.getItem('finsight_dev') === '1'` 条件；设置「高级」区加开发者模式开关写此 key。
+- [x] Step 5: Commit: `feat(execution): three-tier process UX — inline work log / expert drawer / dev-only console`
 
 ---
 

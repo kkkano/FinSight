@@ -1,14 +1,13 @@
-import { Eraser, Moon, Plus, Sun, Bell, ChevronUp, Loader2, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Eraser, Moon, Plus, Sun, Bell, MessageSquare, Trash2, MessageSquareText, AlignLeft } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { AgentLogPanel } from '../agent-log';
-import { ExecutionPanel } from '../execution/ExecutionPanel';
 import { ChatInput } from '../ChatInput';
 import { ChatList } from '../ChatList';
 import { ContextPanelShell } from './ContextPanelShell';
 import type { MarketQuote } from '../../hooks/useMarketQuotes';
+import { useDeveloperMode } from '../../hooks/useDeveloperMode';
 import { apiClient } from '../../api/client';
-import { useExecutionStore } from '../../store/executionStore';
 import { useStore } from '../../store/useStore';
 import type { ConversationSummary } from '../../store/useStore';
 
@@ -65,7 +64,7 @@ export function ChatWorkspace({
   marketQuotes,
   initialReportId,
 }: ChatWorkspaceProps) {
-  const traceViewMode = useStore((state) => state.traceViewMode);
+  const [developerMode] = useDeveloperMode();
   const chatStyle = useStore((state) => state.chatStyle);
   const setChatStyle = useStore((state) => state.setChatStyle);
   const sessionId = useStore((state) => state.sessionId);
@@ -74,28 +73,6 @@ export function ChatWorkspace({
   const deleteConversation = useStore((state) => state.deleteConversation);
   const startNewChat = useStore((state) => state.startNewChat);
   const clearConversationContext = useStore((state) => state.clearConversationContext);
-  const latestRunId = useExecutionStore((state) => (
-    state.activeRuns[state.activeRuns.length - 1]?.runId
-      ?? state.recentRuns[0]?.runId
-      ?? null
-  ));
-  const latestRunStatus = useExecutionStore((state) => {
-    const run = state.activeRuns[state.activeRuns.length - 1]
-      ?? state.recentRuns[0]
-      ?? null;
-    return run?.status ?? null;
-  });
-
-  const [execCollapsed, setExecCollapsed] = useState(true);
-
-  // 执行中自动展开，完成后自动折叠
-  useEffect(() => {
-    if (latestRunStatus === 'running' || latestRunStatus === 'interrupted') {
-      setExecCollapsed(false);
-    } else if (latestRunStatus === 'done' || latestRunStatus === 'error') {
-      setExecCollapsed(true);
-    }
-  }, [latestRunStatus]);
 
   // --- P0-2: report_id replay ---
   const replayLoadedRef = useRef<string | null>(null);
@@ -289,32 +266,7 @@ export function ChatWorkspace({
             <ChatList />
             <ChatInput onDashboardRequest={onDashboardRequest} />
           </div>
-          <div className="shrink-0">
-            {traceViewMode === 'dev' ? (
-              <AgentLogPanel />
-            ) : latestRunId ? (
-              execCollapsed ? (
-                <button
-                  type="button"
-                  onClick={() => setExecCollapsed(false)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-fin-border bg-fin-card text-xs text-fin-muted hover:bg-fin-hover transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    {latestRunStatus === 'running' && <Loader2 size={12} className="animate-spin text-blue-300" />}
-                    执行追踪（已折叠）
-                  </span>
-                  <ChevronUp size={14} />
-                </button>
-              ) : (
-                <ExecutionPanel
-                  runId={latestRunId}
-                  mode={traceViewMode === 'expert' ? 'expert' : 'user'}
-                  collapsible
-                  onCollapse={() => setExecCollapsed(true)}
-                />
-              )
-            ) : null}
-          </div>
+          {developerMode && <div className="shrink-0"><AgentLogPanel /></div>}
         </div>
 
         <ContextPanelShell
