@@ -98,7 +98,7 @@ git commit -am "feat(config): typed pydantic-settings for planner/executor/agent
 - Modify: `.env.server.example`、`README.md` / `README_CN.md`（快速开始注明必填）
 - Test: `backend/tests/test_llm_config_requires_endpoint.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 import pytest
@@ -112,7 +112,7 @@ def test_create_llm_fails_loudly_without_endpoint(monkeypatch):
         llm_config.create_llm()
 ```
 
-- [ ] **Step 2: 实现**：删除 `DEFAULT_OPENAI_COMPATIBLE_API_BASE/MODEL` 两个硬编码常量；`create_llm`（及 EndpointManager 初始化）在 base/model 均缺失时抛：
+- [x] **Step 2: 实现**：删除 `DEFAULT_OPENAI_COMPATIBLE_API_BASE/MODEL` 两个硬编码常量；`create_llm`（及 EndpointManager 初始化）在 base/model 均缺失时抛：
 
 ```python
 raise RuntimeError(
@@ -122,8 +122,8 @@ raise RuntimeError(
 ```
 
 注意排查所有引用点：`grep -rn "DEFAULT_OPENAI_COMPATIBLE" backend`。`.env.server.example` 给出示例值（占位符 `https://your-llm-endpoint/v1`，**不写任何真实商业端点**）。
-- [ ] **Step 3:** 全量测试（凡依赖隐式默认端点的测试改为显式 monkeypatch env）。
-- [ ] **Step 4: Commit**
+- [x] **Step 3:** 全量测试（凡依赖隐式默认端点的测试改为显式 monkeypatch env）。
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "fix(llm-config): remove hardcoded third-party default endpoint; fail loudly with setup guidance"

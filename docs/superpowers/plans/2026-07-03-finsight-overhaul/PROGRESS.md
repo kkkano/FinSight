@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-11 | WP4-Task3 llm_config 去硬编码端点 | d2e0040 | LLM/config/startup/lifespan 定向 50 passed；金样 12 passed；后端全量 + 金样 1940 passed/19 failed/8 skipped，19 项与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；运行时旧第三方端点与默认模型扫描零命中，相关 F821 与 compileall 通过；当前主机无 Docker CLI，Compose 解析留待本地 Docker 门禁。 |
 | 2026-07-11 | WP4-Task2 planner/executor/agent/security typed Settings | 94e48ee | 四域合同 + 受影响回归 67 passed；WP3/金样 16 passed、快照零差异；全后端 + 金样 1928 passed/29 failed/8 skipped 后，19 项与固化基线一致，10 项新增均定位为 Settings cache/reload 迁移问题并修复，修复集 19 passed、限流跨测试顺序集 14 passed；全仓 ruff F821 通过。 |
 | 2026-07-11 | WP4-Task1 统一 env helper | 756ec5f | helper 单测 16 passed；Task 1 定向 + 金样 247 passed；后端全量 1934 passed/19 failed/8 skipped，19 个失败与 `tests/baseline-failures-4a1c055.txt` 逐项一致、零新增；生产代码普通 `_env_*` 重复定义清零，5 个特殊语义变体明确命名并保留。 |
 | 2026-07-11 | WP3-Task8 收尾实现与完成门禁 | defa0ce | shim/旧 router 清理、silent pass 治理与 execution/policy/synthesis 拆分完成；全量 1898 passed/26 failed/13 errors 后定位 20 个新增结果均为测试 patch 目标未迁移，修正后受影响 26 passed；剩余 19 项与固化环境基线一致；本次提交前关键回归 62 passed；nodes 最大 799 行、main 42 行、生产 `_stub.py` 为 0；假 Agent 演练为新实现文件 + 3 个既有接线点。 |
