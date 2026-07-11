@@ -131,8 +131,8 @@ type PredictionOverlay = {
 
 **Files:** Modify `frontend/src/components/workbench/FindingCard.tsx:150` 附近
 
-- [ ] Step 1: 现有 `case 'chat'` 的跳转只带标题（读代码确认），改为把 finding 的 `title + summary + ticker + 触发规则` 拼成预填问题：`监控发现：{title}（{ticker}）。{summary}。帮我分析这个发现的影响和应对。`，并设 `ui_context.active_symbol = ticker`。
-- [ ] Commit: `feat(linkage): monitor findings open chat with full context`
+- [x] Step 1: 现有 `case 'chat'` 的跳转只带标题（读代码确认），改为把 finding 的 `title + summary + ticker + 触发规则` 拼成预填问题：`监控发现：{title}（{ticker}）。{summary}。帮我分析这个发现的影响和应对。`，并设 `ui_context.active_symbol = ticker`。
+- [x] Commit: `feat(linkage): monitor findings open chat with full context`
 
 ### B-5: 筛选器结果行动作
 

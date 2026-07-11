@@ -21,6 +21,7 @@ import {
 } from '../../types/monitor';
 import {
   formatConfidence,
+  buildFindingChatPrompt,
   isActionEnabled,
   resolveActionTarget,
   resolveAgentLabel,
@@ -33,7 +34,7 @@ interface FindingCardProps {
   /** 点击卡片标记已读 */
   onView?: (finding: Finding) => void;
   /** 行动按钮：跳转 Chat 深挖（带 ticker） */
-  onNavigateToChat?: (ticker: string) => void;
+  onNavigateToChat?: (ticker: string, prompt: string) => void;
   /** 行动按钮：联动到调仓卡片（滚动 + 高亮） */
   onNavigateToRebalance?: () => void;
 }
@@ -148,7 +149,7 @@ export function FindingCard({
         onNavigateToRebalance?.();
         break;
       case 'chat':
-        onNavigateToChat?.(target.ticker);
+        onNavigateToChat?.(target.ticker, buildFindingChatPrompt(finding, target.ticker));
         break;
       default:
         break; // 'none'：不可点击 / 无具体标的

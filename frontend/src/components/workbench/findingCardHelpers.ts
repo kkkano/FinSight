@@ -15,10 +15,37 @@ import {
 import type { ComponentType } from 'react';
 
 import type {
+  Finding,
   FindingAction,
   FindingTriggerType,
   MarketSession,
 } from '../../types/monitor';
+
+function formatTriggerValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** 将完整监控发现收口为可继续分析的聊天上下文，避免只传标题或 ticker。 */
+export function buildFindingChatPrompt(finding: Finding, ticker: string): string {
+  const normalizedTicker = ticker.trim().toUpperCase();
+  const summary = finding.summary.trim().replace(/[。.!！?？；;\s]+$/u, '');
+  const detail = Object.entries(finding.trigger_detail || {})
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .slice(0, 8)
+    .map(([key, value]) => `${key}=${formatTriggerValue(value)}`)
+    .join('，');
+  const triggerRule = detail
+    ? `${finding.trigger_type}（${detail}）`
+    : finding.trigger_type;
+
+  return `监控发现：${finding.title.trim()}（${normalizedTicker}）。${summary}。触发规则：${triggerRule}。帮我分析这个发现的影响和应对。`;
+}
 
 /** trigger_type 视觉映射（图标 + 主色 class，仅用 fin-* / Tailwind 调色板） */
 export interface TriggerVisual {

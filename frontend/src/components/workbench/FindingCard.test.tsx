@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FindingCard } from './FindingCard';
 import {
+  buildFindingChatPrompt,
   formatConfidence,
   isActionEnabled,
   resolveActionTarget,
@@ -218,6 +219,14 @@ describe('FindingCard rebalance action', () => {
       'AAPL',
     );
     expect(target).toEqual({ kind: 'chat', ticker: 'AAPL' });
+  });
+
+  it('builds chat context from title, ticker, summary and trigger rule', () => {
+    const prompt = buildFindingChatPrompt(makeFinding(), 'TSLA');
+
+    expect(prompt).toBe(
+      '监控发现：TSLA 单日下跌 5.2%（TSLA）。特斯拉今日大幅下挫，触发价格异动阈值。触发规则：price_move（change_pct=-5.2，threshold=5）。帮我分析这个发现的影响和应对。',
+    );
   });
 
   it('routes PORTFOLIO-level full_report (no ticker) to none', () => {

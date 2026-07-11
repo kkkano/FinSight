@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, FileText, Newspaper } from 'lucide-react';
 
 import { useStore } from '../store/useStore';
+import { useDashboardStore } from '../store/dashboardStore';
 import { migrateLegacyPortfolio } from '../utils/portfolioMigration';
 import { Card } from '../components/ui/Card';
 import { PortfolioSummaryBar } from '../components/workbench/PortfolioSummaryBar';
@@ -42,6 +43,7 @@ export function Workbench({
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedReportId = searchParams.get('report')?.trim() || null;
   const { sessionId, setDraft } = useStore();
+  const setActiveAsset = useDashboardStore((state) => state.setActiveAsset);
   const portfolioSummary = usePortfolioSummary(sessionId);
 
   const {
@@ -111,20 +113,21 @@ export function Workbench({
     navigate(`/chat?report_id=${encodeURIComponent(selectedReportId)}`);
   }, [navigate, selectedReportId]);
 
-  // 发现卡片「看完整简报」→ 带 ticker 跳转 Chat：预填查询并切到聊天视图
+  // 发现卡片「看完整简报」→ 携带完整发现与 ticker 跳转 Chat。
   const handleNavigateToChatWithTicker = useCallback(
-    (ticker: string) => {
+    (ticker: string, prompt: string) => {
       const normalized = ticker.trim().toUpperCase();
       if (normalized) {
-        setDraft(`分析 ${normalized} 的投资前景`);
+        setActiveAsset({
+          symbol: normalized,
+          type: 'equity',
+          display_name: normalized,
+        });
       }
-      if (onNavigateToChat) {
-        onNavigateToChat();
-      } else {
-        navigate('/chat');
-      }
+      setDraft(prompt);
+      navigate(`/chat?prompt=${encodeURIComponent(prompt)}`);
     },
-    [setDraft, onNavigateToChat, navigate],
+    [navigate, setActiveAsset, setDraft],
   );
 
   // 发现卡片「调仓建议」→ 滚动到调仓卡片并短暂高亮（2 秒后取消）

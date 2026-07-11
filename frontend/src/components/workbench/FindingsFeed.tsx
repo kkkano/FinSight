@@ -16,7 +16,7 @@ import { FindingCard } from './FindingCard';
 interface FindingsFeedProps {
   sessionId: string | null | undefined;
   /** 行动按钮跳转 Chat 深挖 */
-  onNavigateToChat?: (ticker: string) => void;
+  onNavigateToChat?: (ticker: string, prompt: string) => void;
   /** 行动按钮联动调仓卡片（滚动 + 高亮） */
   onNavigateToRebalance?: () => void;
 }
