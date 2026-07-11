@@ -253,20 +253,41 @@ export const MiniChat: React.FC = () => {
 
       // 如果有任何上下文，才传递
       const contextToSend = Object.keys(context).length > 0 ? context : undefined;
+      const streamOptions = effectiveOutputMode === 'investment_report'
+        ? {
+            output_mode: 'investment_report' as const,
+            strict_selection: false,
+            confirmation_mode: 'skip' as const,
+            trace_raw_override: traceRawEnabled ? 'on' as const : 'off' as const,
+            agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
+          }
+        : {
+            output_mode: 'chat' as const,
+            confirmation_mode: 'skip' as const,
+            trace_raw_override: traceRawEnabled ? 'on' as const : 'off' as const,
+            agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
+          };
 
       // SSE 流式获取响应
       await apiClient.sendMessageStream(
-        queryToSend,
-        (token: string) => {
+        {
+          query: queryToSend,
+          history,
+          context: contextToSend,
+          options: streamOptions,
+          session_id: requestSessionId || undefined,
+        },
+        {
+          onToken: (token: string) => {
           accumulatedContentRef.current += token;
           updateScopedMessage(aiMsgId, {
             content: accumulatedContentRef.current,
             isLoading: true,
           });
         },
-        undefined, // onToolStart
-        undefined, // onToolEnd
-        (report, thinking, meta) => {
+          onDone: (report, thinking, meta) => {
           // onDone
           const metrics = meta?.metrics || {};
           if (metrics && typeof metrics === 'object') {
@@ -286,7 +307,7 @@ export const MiniChat: React.FC = () => {
             thinking,
           });
         },
-        (error: string) => {
+          onError: (error: string) => {
           const handleFailure = async () => {
             const recovered = await recoverReportIfAvailable();
             if (recovered) return;
@@ -303,37 +324,18 @@ export const MiniChat: React.FC = () => {
           };
           void handleFailure();
         },
-        (step) => {
+          onThinking: (step) => {
           // onThinking
           accumulatedThinkingRef.current = [...accumulatedThinkingRef.current, step];
           updateScopedMessage(aiMsgId, {
             thinking: accumulatedThinkingRef.current,
           });
         },
-        history,
-        (event) => {
+          onRawEvent: (event) => {
           addRawEvent(event);
         },
-        contextToSend,   // 临时上下文（symbol + selection）
-        effectiveOutputMode === 'investment_report'
-          ? {
-            output_mode: 'investment_report',
-            strict_selection: false,
-            confirmation_mode: 'skip' as const,
-            trace_raw_override: traceRawEnabled ? 'on' : 'off',
-            agent_preferences: agentPreferences,
-            agents: selectedAgents.length ? selectedAgents : undefined,
-          }
-          : {
-            output_mode: 'chat',
-            confirmation_mode: 'skip' as const,
-            trace_raw_override: traceRawEnabled ? 'on' : 'off',
-            agent_preferences: agentPreferences,
-            agents: selectedAgents.length ? selectedAgents : undefined,
-          },
-        requestSessionId || undefined,
-        traceRawEnabled,
-        { signal: streamController.signal },
+        },
+        { traceRawEnabled, signal: streamController.signal },
       );
       if (streamController.signal.aborted) {
         accumulatedThinkingRef.current = [

@@ -568,9 +568,43 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
     try {
       const agentPreferences = getAgentPreferences();
+      const streamContext = (() => {
+        const ctx: ChatContext = {};
+        if (activeAsset?.symbol) {
+          ctx.active_symbol = activeAsset.symbol;
+          ctx.view = 'chat';
+        }
+        if (activeSelections.length === 1) ctx.selection = activeSelections[0];
+        if (activeSelections.length > 1) ctx.selections = activeSelections;
+        if (subscriptionEmail) ctx.user_email = subscriptionEmail;
+        return Object.keys(ctx).length > 0 ? ctx : undefined;
+      })();
+      const streamOptions = effectiveOutputMode === 'investment_report'
+        ? {
+            output_mode: 'investment_report' as const,
+            strict_selection: false,
+            confirmation_mode: 'skip' as const,
+            trace_raw_override: traceRawEnabled ? 'on' as const : 'off' as const,
+            agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
+          }
+        : {
+            output_mode: 'chat' as const,
+            confirmation_mode: 'skip' as const,
+            trace_raw_override: traceRawEnabled ? 'on' as const : 'off' as const,
+            agent_preferences: agentPreferences,
+            agents: selectedAgents.length ? selectedAgents : undefined,
+          };
       await apiClient.sendMessageStream(
-        queryToSend,
-        (token) => {
+        {
+          query: queryToSend,
+          history,
+          context: streamContext,
+          options: streamOptions,
+          session_id: requestSessionId || undefined,
+        },
+        {
+          onToken: (token) => {
           const safeToken = typeof token === 'string' ? token : JSON.stringify(token);
           if (safeToken) {
             fullContent += safeToken;
@@ -578,7 +612,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           }
           updateScopedMessage(aiMsgId, { content: fullContent, isLoading: true });
         },
-        (name) => {
+          onToolStart: (name) => {
           const current = useStore.getState().executionProgress ?? 0;
           if (isRequestSessionActive()) {
             setStatus(`Calling tool: ${name}...`);
@@ -593,7 +627,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             tool_name: name,
           });
         },
-        () => {
+          onToolEnd: () => {
           const current = useStore.getState().executionProgress ?? 0;
           if (isRequestSessionActive()) {
             setStatus('Generating response...');
@@ -607,7 +641,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             message: 'Tool execution completed',
           });
         },
-        async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
+          onDone: async (report?: any, thinking?: ThinkingStep[], meta?: any) => {
           const doneStep: ThinkingStep = {
             stage: 'done',
             message: meta?.synthetic_done ? '已根据流式输出自动完成' : '分析完成',
@@ -739,7 +773,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             setStatus(null);
           }
         },
-        (error) => {
+          onError: (error) => {
           const handleFailure = async () => {
             const recovered = await recoverReportIfAvailable();
             if (recovered) return;
@@ -776,7 +810,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
 
           void handleFailure();
         },
-        (step) => {
+          onThinking: (step) => {
           // 接通底部指挥台：把同一条 SSE 事件喂给 executionStore（step.result 即原始 payload，
           // 内部 pipelineReducer 自动解析 plan/step/agent/decision/stage）
           const stepRunId = (typeof step.runId === 'string' && step.runId)
@@ -841,40 +875,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
             });
           }
         },
-        history,
-        (event) => {
+          onRawEvent: (event) => {
           addRawEvent(event);
         },
-        (() => {
-          const ctx: ChatContext = {};
-          if (activeAsset?.symbol) {
-            ctx.active_symbol = activeAsset.symbol;
-            ctx.view = 'chat';
-          }
-          if (activeSelections.length === 1) ctx.selection = activeSelections[0];
-          if (activeSelections.length > 1) ctx.selections = activeSelections;
-          if (subscriptionEmail) ctx.user_email = subscriptionEmail;
-          return Object.keys(ctx).length > 0 ? ctx : undefined;
-        })(),
-        effectiveOutputMode === 'investment_report'
-          ? {
-              output_mode: 'investment_report',
-              strict_selection: false,
-              confirmation_mode: 'skip' as const,
-              trace_raw_override: traceRawEnabled ? 'on' : 'off',
-              agent_preferences: agentPreferences,
-              agents: selectedAgents.length ? selectedAgents : undefined,
-            }
-          : {
-              output_mode: 'chat',
-              confirmation_mode: 'skip' as const,
-              trace_raw_override: traceRawEnabled ? 'on' : 'off',
-              agent_preferences: agentPreferences,
-              agents: selectedAgents.length ? selectedAgents : undefined,
-            },
-        requestSessionId || undefined,
-        traceRawEnabled,
-        { signal: streamController.signal },
+        },
+        { traceRawEnabled, signal: streamController.signal },
       );
       if (streamController.signal.aborted) {
         finishAbortedStream();

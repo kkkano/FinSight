@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { apiClient, parseSSEStream, RATE_LIMIT_EVENT, rateLimitEvents } from './client';
+import { apiClient, parseSSEStream, RATE_LIMIT_EVENT, rateLimitEvents, withStreamGuards } from './client';
 
 function sseResponse(events: Array<Record<string, unknown>>): Response {
   const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
@@ -189,6 +189,40 @@ describe('SSE read timeout (P1-2)', () => {
   });
 });
 
+describe('withStreamGuards', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('deduplicates terminal callbacks', () => {
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const guarded = withStreamGuards({ onDone, onError }, { idleDoneMs: 0 });
+
+    guarded.onDone?.();
+    guarded.onDone?.();
+    guarded.finish();
+
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('emits one synthetic done after token idle', () => {
+    vi.useFakeTimers();
+    const onDone = vi.fn();
+    const onThinking = vi.fn();
+    const guarded = withStreamGuards({ onDone, onThinking }, { idleDoneMs: 25 });
+
+    guarded.onToken?.('partial');
+    vi.advanceTimersByTime(25);
+
+    expect(onThinking).toHaveBeenCalledWith(expect.objectContaining({ stage: 'done' }));
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone.mock.calls[0][2]).toEqual(expect.objectContaining({ synthetic_done: true }));
+  });
+});
+
 describe('429 rate limit event (P1-8)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -209,7 +243,7 @@ describe('429 rate limit event (P1-8)', () => {
     );
 
     await expect(
-      apiClient.sendMessageStream('AAPL 分析', vi.fn()),
+      apiClient.sendMessageStream({ query: 'AAPL 分析' }, { onToken: vi.fn() }),
     ).rejects.toThrow();
 
     expect(listener).toHaveBeenCalledTimes(1);
