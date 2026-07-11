@@ -178,8 +178,8 @@ def check_user_quota(user_id: str) -> None:
 
 同时把 user_id 写进 LLM 用量埋点：`grep -rn "ContextVar" backend/services/llm_usage.py` 找到 run 级累加器，run 开始时挂上 user_id，落库带上。
 
-- [ ] **Step 1:** 失败测试（预写两条今日成本记录 → 超限用户请求 429，未超限用户 200，`USER_DAILY_COST_LIMIT_USD=0` 关闭配额）。
-- [ ] **Step 2-3:** 实现 → 绿 → `.env.server.example` 登记 → Commit：
+- [x] **Step 1:** 失败测试（预写两条今日成本记录 → 超限用户请求 429，未超限用户 200，`USER_DAILY_COST_LIMIT_USD=0` 关闭配额）。
+- [x] **Step 2-3:** 实现 → 绿 → `.env.server.example` 登记 → Commit：
 
 ```bash
 git commit -am "feat(quota): per-user daily LLM cost limit on chat/execution entrypoints"

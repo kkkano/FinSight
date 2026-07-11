@@ -2,6 +2,7 @@
 
 | 日期 | 任务 | commit | 测试结果 |
 |------|------|--------|----------|
+| 2026-07-12 | WP5-Task4 每用户每日 LLM 成本配额 | 72e8222 | `cost_records` 幂等新增 `user_id` 与 `(user_id, created_at)` 索引，历史记录归 `public`；按 UTC 自然日汇总成本，`USER_DAILY_COST_LIMIT_USD<=0` 可关闭、`admin` 豁免。同步/流式聊天、execute、dashboard deep-dive、resume 均在生成前检查，run 级 token 累加器携带用户并写入审计库。新增迁移、用户隔离、日界、429/放行、关闭配额、admin 与埋点归属共 9 项离线测试；定向回归 56 passed，完整后端 `1979 passed/8 skipped`，未调用真实 LLM。 |
 | 2026-07-12 | WP5-Task3 portfolio/conversation/monitor 多用户隔离 | e8e4ca9 | 新增 SQLite 幂等加列与复合用户主键迁移，旧 SQLite/JSON 数据无损归 `public`；三 store 全公开 CRUD 末尾新增默认 `user_id`，三主 router 及调仓、晨报、每日任务、宏观日历、后台盯盘旁路同步透传，缓存与调度均纳入用户维度。隔离/老库迁移/真实 Router 测试 7 passed；完整后端 `1970 passed/8 skipped`。使用两个独立 Chromium context 经真实 security_gate/API 验证同 session 的 Alice 与匿名用户持仓、会话、盯盘目标互不可见，QA 进程已清理。 |
 | 2026-07-11 | WP5-Task2 security_gate 用户身份接入 | 450e412 | API key 检查后解析 Supabase JWT，写入 `request.state.user_id/user_email`；可选强制登录模式对非白名单返回中文 401，默认匿名保持 `public`；已登录用户使用独立限流/并发桶，RAG 既有身份回退保留。新增 5 项身份中间件测试；认证/安全/RAG 定向回归 43 passed，金样 12 passed 零漂移。 |
 | 2026-07-11 | WP5-Task1 Supabase JWT 校验 | 7595d56 | 新增 HS256 secret 与 RS256/ES256 JWKS 自动探测校验、30 秒时钟偏移、10 分钟 JWKS 缓存及刷新失败旧缓存回退；Bearer 请求解析失败安全返回匿名。离线覆盖有效、过期、错密钥、缺 `sub`、缺配置、Bearer 异常、JWKS 缓存/回退共 12 passed；未访问真实 Supabase 或 LLM。 |
