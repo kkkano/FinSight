@@ -193,7 +193,7 @@ export function WorkspaceShell({
       {isMobile && (
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-3 left-3 z-50 p-2 rounded-lg bg-fin-card border border-fin-border text-fin-text hover:bg-fin-hover transition-colors lg:hidden"
+          className="fixed top-3 left-3 z-50 min-h-11 min-w-11 p-2 rounded-lg bg-fin-card border border-fin-border text-fin-text hover:bg-fin-hover transition-colors lg:hidden flex items-center justify-center"
           aria-label="打开导航菜单"
         >
           <Menu size={20} />

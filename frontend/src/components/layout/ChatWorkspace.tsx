@@ -130,8 +130,8 @@ export function ChatWorkspace({
 
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
-      <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:px-3">
-        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-hide">
+      <header className="h-[60px] bg-fin-card border-b border-fin-border flex items-center justify-between px-6 shrink-0 max-lg:pl-14 max-lg:pr-3">
+        <div className="flex gap-4 text-xs text-fin-text font-medium overflow-x-auto scrollbar-hide max-lg:hidden">
           {marketQuotes.map((quote) => (
             <span key={quote.label} className="flex items-center gap-1 whitespace-nowrap">
               {quote.flag} {quote.label}:{' '}
@@ -150,11 +150,11 @@ export function ChatWorkspace({
           ))}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 max-lg:w-full max-lg:justify-end max-lg:overflow-x-auto scrollbar-hide">
           <button
             type="button"
             onClick={startNewChat}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
             title="新建对话"
             aria-label="新建对话"
           >
@@ -164,7 +164,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={clearConversationContext}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
             title="清空上下文"
             aria-label="清空上下文"
           >
@@ -174,7 +174,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={() => setChatStyle(chatStyle === 'bubble' ? 'flat' : 'bubble')}
-            className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            className="min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
             title={chatStyle === 'bubble' ? '切换平铺布局' : '切换气泡布局'}
             aria-label="切换聊天布局"
           >
@@ -183,7 +183,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            className="min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
             title={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
             aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
           >
@@ -192,7 +192,7 @@ export function ChatWorkspace({
           <button
             type="button"
             onClick={contextPanel.onExpand}
-            className="relative p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary"
+            className="relative min-h-11 min-w-11 p-2 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-fin-text-secondary flex items-center justify-center"
             title="告警与订阅"
             aria-label="告警与订阅"
           >
@@ -200,7 +200,7 @@ export function ChatWorkspace({
           </button>
           <button
             type="button"
-            className="px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text"
+            className="min-h-11 px-3 py-1.5 rounded-lg border border-fin-border bg-fin-bg hover:bg-fin-hover transition-colors text-xs font-medium text-fin-text whitespace-nowrap"
           >
             导出 PDF
           </button>

@@ -224,7 +224,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onDashboardRequest: _onDas
           {suggestions.map((suggestion) => (
             <button
               key={suggestion.label}
-              className="px-2 py-1 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
+              className="min-h-11 px-3 py-2 rounded font-mono text-2xs border border-t-border text-t-text2 hover:border-t-accent/60 hover:text-t-accent transition-colors"
               onClick={() => {
                 if (suggestion.report) setOutputMode('investment_report');
                 setComposerText(suggestion.prompt);

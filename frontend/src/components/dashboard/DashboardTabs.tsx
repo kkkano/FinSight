@@ -86,7 +86,7 @@ export function DashboardTabs() {
         value={activeTab}
         onChange={handleTabChange}
         listClassName="flex items-end gap-0 border-b border-fin-border bg-fin-card px-5 overflow-x-auto scrollbar-hide shrink-0 max-lg:px-3"
-        buttonClassName="px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
+        buttonClassName="min-h-11 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 border-transparent"
         activeClassName="text-fin-primary border-fin-primary"
         inactiveClassName="text-fin-muted hover:text-fin-text"
       />

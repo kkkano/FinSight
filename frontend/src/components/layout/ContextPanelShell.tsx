@@ -34,8 +34,9 @@ export function ContextPanelShell({
         type="button"
         data-testid="context-panel-expand"
         onClick={onExpand}
-        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm"
+        className="absolute right-2 top-1/2 -translate-y-1/2 z-20 min-h-11 min-w-11 p-2 rounded-full border border-fin-border bg-fin-card text-fin-text-secondary hover:text-fin-primary hover:border-fin-primary transition-colors shadow-sm flex items-center justify-center"
         title="展开右侧面板"
+        aria-label="展开右侧面板"
       >
         <ChevronLeft size={16} />
       </button>

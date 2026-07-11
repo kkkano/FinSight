@@ -266,6 +266,14 @@ const Sidebar: React.FC<SidebarProps> = ({
           isMobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
         ].join(' ')}
       >
+        <button
+          type="button"
+          onClick={onMobileClose}
+          className="absolute right-3 top-3 hidden min-h-11 min-w-11 items-center justify-center rounded-lg text-fin-muted hover:bg-fin-hover hover:text-fin-text max-lg:flex"
+          aria-label="关闭导航菜单"
+        >
+          <X size={20} />
+        </button>
         <div className="text-xl font-extrabold text-fin-primary mb-8 flex items-center gap-2">
           <img src="/logo.svg" alt="FinSight AI" className="h-8 w-8 rounded-md" /> FinSight AI
         </div>
