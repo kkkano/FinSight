@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.dashboard.cache import dashboard_cache
@@ -39,7 +39,7 @@ class MorningBriefRouterDeps:
     """晨报路由依赖注入"""
 
     resolve_thread_id: Callable[[Optional[str]], str]
-    get_portfolio_positions: Callable[[str], list[dict[str, Any]]]
+    get_portfolio_positions: Callable[[str, str], list[dict[str, Any]]]
     get_stock_price: Callable[[str], Any]
     get_company_news: Callable[[str, int], Any]
     # P1: Graph Pipeline support (optional, fallback to direct fetch when None)
@@ -173,10 +173,14 @@ def _extract_headline(news_raw: Any, ticker: str) -> str:
     return headlines[0][:120]
 
 
-def _cache_key(session_id: str, tickers: list[str]) -> str:
+def _cache_key(
+    session_id: str,
+    tickers: list[str],
+    user_id: str = "public",
+) -> str:
     """生成晨报缓存键"""
     sorted_tickers = sorted(set(t.upper() for t in tickers))
-    raw = f"{session_id}:{','.join(sorted_tickers)}"
+    raw = f"{user_id}:{session_id}:{','.join(sorted_tickers)}"
     digest = hashlib.md5(raw.encode()).hexdigest()[:12]
     return f"morning_brief_{digest}"
 
@@ -186,7 +190,10 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
     router = APIRouter(tags=["MorningBrief"])
 
     @router.post("/api/morning-brief/generate")
-    async def generate_morning_brief(request: MorningBriefRequest):
+    async def generate_morning_brief(
+        request: MorningBriefRequest,
+        http_request: Request,
+    ):
         """生成一键晨报"""
         # 验证 session_id
         try:
@@ -198,7 +205,10 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
         request_tickers = {t.strip().upper() for t in request.tickers if t.strip()}
 
         try:
-            stored_positions = deps.get_portfolio_positions(normalized_session) or []
+            stored_positions = deps.get_portfolio_positions(
+                normalized_session,
+                getattr(http_request.state, "user_id", "public"),
+            ) or []
         except Exception as exc:
             logger.warning("[MorningBrief] get_portfolio_positions failed: %s", exc)
             stored_positions = []
@@ -225,7 +235,11 @@ def create_morning_brief_router(deps: MorningBriefRouterDeps) -> APIRouter:
             }
 
         # 检查缓存
-        cache_k = _cache_key(normalized_session, all_tickers)
+        cache_k = _cache_key(
+            normalized_session,
+            all_tickers,
+            user_id=getattr(http_request.state, "user_id", "public"),
+        )
         cached = dashboard_cache.get("__morning_brief__", cache_k)
         if cached is not None:
             return {"success": True, "brief": cached}

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from backend.services.task_generator import TaskContext, TaskGenerator
 from backend.utils.quote import parse_quote_payload, safe_float
@@ -20,7 +20,7 @@ _task_generator = TaskGenerator()
 class TaskRouterDeps:
     resolve_thread_id: Callable[[Optional[str]], str]
     get_report_index_store: Callable[[], Any]
-    get_portfolio_positions: Callable[[str], list[dict[str, Any]]]
+    get_portfolio_positions: Callable[[str, str], list[dict[str, Any]]]
     get_stock_price: Callable[[str], Any]
 
 
@@ -29,6 +29,7 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
 
     @router.get("/api/tasks/daily")
     async def get_daily_tasks(
+        request: Request,
         session_id: str,
         risk_preference: str = "balanced",
         news_count: int = 0,  # reserved for future weighting
@@ -68,7 +69,10 @@ def create_task_router(deps: TaskRouterDeps) -> APIRouter:
             }
 
         try:
-            stored_positions = deps.get_portfolio_positions(normalized_session) or []
+            stored_positions = deps.get_portfolio_positions(
+                normalized_session,
+                getattr(request.state, "user_id", "public"),
+            ) or []
         except Exception as exc:
             logger.warning("[Tasks] get_portfolio_positions failed: %s", exc)
             stored_positions = []

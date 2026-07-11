@@ -87,6 +87,23 @@ def _derive_preview(messages: list[dict[str, Any]]) -> str:
     return ""
 
 
+def _normalize_user_id(user_id: str) -> str:
+    return str(user_id or "public").strip() or "public"
+
+
+def _record_key(session_id: str, user_id: str) -> str:
+    normalized_user = _normalize_user_id(user_id)
+    if normalized_user == "public":
+        return session_id
+    return f"{normalized_user}\x1f{session_id}"
+
+
+def _external_record(record: dict[str, Any]) -> dict[str, Any]:
+    result = dict(record)
+    result.pop("user_id", None)
+    return result
+
+
 class ConversationStore:
     """轻量会话快照存储，负责服务端消息、标题和列表元数据。"""
 
@@ -106,7 +123,14 @@ class ConversationStore:
         rows = payload.get("conversations")
         if not isinstance(rows, dict):
             return {}
-        return {str(k): v for k, v in rows.items() if isinstance(v, dict)}
+        records: dict[str, dict[str, Any]] = {}
+        for key, value in rows.items():
+            if not isinstance(value, dict):
+                continue
+            record = dict(value)
+            record["user_id"] = _normalize_user_id(str(record.get("user_id") or "public"))
+            records[str(key)] = record
+        return records
 
     def _save(self, records: dict[str, dict[str, Any]]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -117,33 +141,47 @@ class ConversationStore:
         )
         os.replace(tmp, self.path)
 
-    def get(self, session_id: str) -> dict[str, Any] | None:
+    def get(self, session_id: str, user_id: str = "public") -> dict[str, Any] | None:
         sid = str(session_id or "").strip()
         if not sid:
             return None
         with self._lock:
-            record = self._load().get(sid)
-        return dict(record) if isinstance(record, dict) else None
+            record = self._load().get(_record_key(sid, user_id))
+        return _external_record(record) if isinstance(record, dict) else None
 
-    def list(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+    def list(
+        self,
+        *,
+        include_archived: bool = False,
+        user_id: str = "public",
+    ) -> list[dict[str, Any]]:
+        normalized_user = _normalize_user_id(user_id)
         with self._lock:
             records = list(self._load().values())
         rows = [
-            dict(item)
+            _external_record(item)
             for item in records
-            if include_archived or not bool(item.get("archived"))
+            if item.get("user_id", "public") == normalized_user
+            and (include_archived or not bool(item.get("archived")))
         ]
         return sorted(rows, key=lambda item: float(item.get("updated_at") or 0), reverse=True)
 
-    def upsert(self, session_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def upsert(
+        self,
+        session_id: str,
+        payload: dict[str, Any] | None = None,
+        user_id: str = "public",
+    ) -> dict[str, Any]:
         sid = str(session_id or "").strip()
         if not sid:
             raise ValueError("session_id required")
         data = payload if isinstance(payload, dict) else {}
+        normalized_user = _normalize_user_id(user_id)
+        key = _record_key(sid, normalized_user)
         now = _now()
         with self._lock:
             records = self._load()
-            current = dict(records.get(sid) or {})
+            current = dict(records.get(key) or {})
             messages = (
                 _sanitize_messages(data.get("messages"))
                 if "messages" in data
@@ -154,6 +192,7 @@ class ConversationStore:
             if not title:
                 title = _derive_title(messages)
             record = {
+                "user_id": normalized_user,
                 "session_id": sid,
                 "title": title,
                 "messages": messages,
@@ -164,18 +203,33 @@ class ConversationStore:
                 "created_at": float(current.get("created_at") or now),
                 "updated_at": now,
             }
-            records[sid] = record
+            records[key] = record
             self._save(records)
-        return dict(record)
+        return _external_record(record)
 
-    def patch(self, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def patch(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+        user_id: str = "public",
+    ) -> dict[str, Any]:
         sid = str(session_id or "").strip()
         if not sid:
             raise ValueError("session_id required")
         data = payload if isinstance(payload, dict) else {}
+        normalized_user = _normalize_user_id(user_id)
+        key = _record_key(sid, normalized_user)
         with self._lock:
             records = self._load()
-            current = dict(records.get(sid) or {"session_id": sid, "created_at": _now(), "messages": []})
+            current = dict(
+                records.get(key)
+                or {
+                    "user_id": normalized_user,
+                    "session_id": sid,
+                    "created_at": _now(),
+                    "messages": [],
+                }
+            )
             if "title" in data:
                 title = str(data.get("title") or "").strip()
                 if title:
@@ -192,19 +246,21 @@ class ConversationStore:
             current["message_count"] = len(messages)
             current["last_message_preview"] = _derive_preview(messages)
             current["updated_at"] = _now()
-            records[sid] = current
+            current["user_id"] = normalized_user
+            records[key] = current
             self._save(records)
-        return dict(current)
+        return _external_record(current)
 
-    def delete(self, session_id: str) -> bool:
+    def delete(self, session_id: str, user_id: str = "public") -> bool:
         sid = str(session_id or "").strip()
         if not sid:
             return False
+        key = _record_key(sid, user_id)
         with self._lock:
             records = self._load()
-            existed = sid in records
+            existed = key in records
             if existed:
-                records.pop(sid, None)
+                records.pop(key, None)
                 self._save(records)
         return existed
 

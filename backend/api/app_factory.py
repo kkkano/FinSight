@@ -259,11 +259,11 @@ def create_app() -> FastAPI:
             get_session_context=_get_session_context,
             list_session_contexts=_list_session_contexts,
             clear_session_context=_clear_session_context,
-            list_conversation_records=lambda: get_conversation_store().list(),
-            get_conversation_record=lambda session_id: get_conversation_store().get(session_id),
-            upsert_conversation_record=lambda session_id, payload: get_conversation_store().upsert(session_id, payload),
-            patch_conversation_record=lambda session_id, payload: get_conversation_store().patch(session_id, payload),
-            delete_conversation_record=lambda session_id: get_conversation_store().delete(session_id),
+            list_conversation_records=lambda user_id: get_conversation_store().list(user_id=user_id),
+            get_conversation_record=lambda session_id, user_id: get_conversation_store().get(session_id, user_id=user_id),
+            upsert_conversation_record=lambda session_id, payload, user_id: get_conversation_store().upsert(session_id, payload, user_id=user_id),
+            patch_conversation_record=lambda session_id, payload, user_id: get_conversation_store().patch(session_id, payload, user_id=user_id),
+            delete_conversation_record=lambda session_id, user_id: get_conversation_store().delete(session_id, user_id=user_id),
         )
     )
 
@@ -342,7 +342,9 @@ def create_app() -> FastAPI:
         TaskRouterDeps(
             resolve_thread_id=_resolve_thread_id,
             get_report_index_store=lambda: get_report_index_store(),
-            get_portfolio_positions=get_portfolio_positions,
+            get_portfolio_positions=lambda session_id, user_id: get_portfolio_positions(
+                session_id, user_id=user_id
+            ),
             get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
         )
     )
@@ -353,7 +355,9 @@ def create_app() -> FastAPI:
     morning_brief_router = create_morning_brief_router(
         MorningBriefRouterDeps(
             resolve_thread_id=_resolve_thread_id,
-            get_portfolio_positions=get_portfolio_positions,
+            get_portfolio_positions=lambda session_id, user_id: get_portfolio_positions(
+                session_id, user_id=user_id
+            ),
             get_stock_price=globals().get("get_stock_price") or (lambda _ticker: None),
             get_company_news=globals().get("get_company_news") or (lambda _ticker, _limit=5: []),
             get_graph_runner=lambda: aget_graph_runner(),

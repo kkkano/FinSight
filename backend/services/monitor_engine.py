@@ -14,7 +14,7 @@
 - 舆情/日历复用 tools.get_news_sentiment_score / get_event_calendar（外部 API，慢）
 - 产出前 has_recent_finding 去重（默认 4 小时窗口）
 - 单条规则内捕获异常，互不影响（外部 API 慢且易失败，逐 ticker 独立 try/except）
-- 模块级引用 fetch_price_snapshot / get_positions / list_session_ids / get_monitor_store /
+- 模块级引用 fetch_price_snapshot / get_positions / list_user_sessions / get_monitor_store /
   get_news_sentiment_score / get_event_calendar，便于测试 monkeypatch
 
 配额护栏：
@@ -40,7 +40,11 @@ from backend.services.market_hours import (
 from backend.services.email_service import get_email_service
 from backend.services.monitor_l2 import get_l2_budget, l2_enabled, run_l2_analysis
 from backend.services.monitor_store import get_monitor_store
-from backend.services.portfolio_store import get_positions, list_session_ids
+from backend.services.portfolio_store import (
+    get_positions,
+    list_session_ids,  # 兼容旧测试/扩展注入点；现役调度使用 list_user_sessions
+    list_user_sessions,
+)
 from backend.services.session_price import fetch_session_aware_price_snapshot
 from backend.tools import get_event_calendar, get_news_sentiment_score
 
@@ -146,12 +150,23 @@ _SESSION_MOVE_PREFIX = {
 }
 
 
+def _get_positions_for_user(session_id: str, user_id: str) -> list[dict]:
+    """兼容只接受 session_id 的旧注入桩；非 public 请求绝不降级。"""
+    try:
+        return get_positions(session_id, user_id=user_id)
+    except TypeError as exc:
+        if user_id != "public" or "unexpected keyword argument" not in str(exc):
+            raise
+        return get_positions(session_id)
+
+
 async def _scan_price_move(
     session_id: str,
     store,
     positions: list[dict],
     config_map: dict[str, dict],
     market_session: str = "regular",
+    user_id: str = "public",
 ) -> list[dict]:
     """价格异动规则：覆盖持仓 + watchlist target 的全部 ticker。
 
@@ -178,7 +193,13 @@ async def _scan_price_move(
             if abs(change_pct) < threshold:
                 continue
 
-            if store.has_recent_finding(session_id, ticker, "price_move", within_hours=DEDUP_WINDOW_HOURS):
+            if store.has_recent_finding(
+                session_id,
+                ticker,
+                "price_move",
+                within_hours=DEDUP_WINDOW_HOURS,
+                user_id=user_id,
+            ):
                 continue
 
             direction = "上涨" if change_pct >= 0 else "下跌"
@@ -200,7 +221,7 @@ async def _scan_price_move(
                     {"type": "chart", "label": "看图表", "ticker": ticker},
                 ],
             )
-            store.insert_finding(finding)
+            store.insert_finding(finding, user_id=user_id)
             findings.append(finding)
         except Exception as exc:  # noqa: BLE001 - 单条规则失败不影响其他
             logger.warning("[MonitorEngine] price_move scan failed for %s: %s", ticker, exc)
@@ -213,6 +234,7 @@ async def _scan_concentration(
     store,
     positions: list[dict],
     conc_config: dict,
+    user_id: str = "public",
 ) -> list[dict]:
     """集中度规则：单一持仓市值占比超阈值则告警（PORTFOLIO 级）。"""
     findings: list[dict] = []
@@ -245,7 +267,13 @@ async def _scan_concentration(
         if pct <= threshold:
             return findings
 
-        if store.has_recent_finding(session_id, "PORTFOLIO", "concentration", within_hours=DEDUP_WINDOW_HOURS):
+        if store.has_recent_finding(
+            session_id,
+            "PORTFOLIO",
+            "concentration",
+            within_hours=DEDUP_WINDOW_HOURS,
+            user_id=user_id,
+        ):
             return findings
 
         finding = _new_finding(
@@ -263,7 +291,7 @@ async def _scan_concentration(
                 {"type": "rebalance", "label": "调仓建议", "ticker": "PORTFOLIO"},
             ],
         )
-        store.insert_finding(finding)
+        store.insert_finding(finding, user_id=user_id)
         findings.append(finding)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[MonitorEngine] concentration scan failed for %s: %s", session_id, exc)
@@ -285,6 +313,7 @@ async def _scan_sentiment_shift(
     store,
     positions: list[dict],
     config_map: dict[str, dict],
+    user_id: str = "public",
 ) -> list[dict]:
     """规则 3：舆情突变。
 
@@ -312,7 +341,13 @@ async def _scan_sentiment_shift(
             if abs(score) < threshold:
                 continue
 
-            if store.has_recent_finding(session_id, ticker, "sentiment_shift", within_hours=DEDUP_WINDOW_HOURS):
+            if store.has_recent_finding(
+                session_id,
+                ticker,
+                "sentiment_shift",
+                within_hours=DEDUP_WINDOW_HOURS,
+                user_id=user_id,
+            ):
                 continue
 
             tone = "强正面" if score >= 0 else "强负面"
@@ -336,7 +371,7 @@ async def _scan_sentiment_shift(
                     {"type": "chart", "label": "看图表", "ticker": ticker},
                 ],
             )
-            store.insert_finding(finding)
+            store.insert_finding(finding, user_id=user_id)
             findings.append(finding)
         except Exception as exc:  # noqa: BLE001 - 单 ticker 失败不影响其他
             logger.warning("[MonitorEngine] sentiment_shift scan failed for %s: %s", ticker, exc)
@@ -362,6 +397,7 @@ async def _scan_earnings_near(
     store,
     positions: list[dict],
     config_map: dict[str, dict],
+    user_id: str = "public",
 ) -> list[dict]:
     """规则 4：财报临近。
 
@@ -400,7 +436,13 @@ async def _scan_earnings_near(
                 continue
 
             days, earnings_date = nearest
-            if store.has_recent_finding(session_id, ticker, "earnings_near", within_hours=DEDUP_WINDOW_HOURS):
+            if store.has_recent_finding(
+                session_id,
+                ticker,
+                "earnings_near",
+                within_hours=DEDUP_WINDOW_HOURS,
+                user_id=user_id,
+            ):
                 continue
 
             when = "今日" if days == 0 else f"{days} 天后"
@@ -420,7 +462,7 @@ async def _scan_earnings_near(
                     {"type": "chart", "label": "看图表", "ticker": ticker},
                 ],
             )
-            store.insert_finding(finding)
+            store.insert_finding(finding, user_id=user_id)
             findings.append(finding)
         except Exception as exc:  # noqa: BLE001
             logger.warning("[MonitorEngine] earnings_near scan failed for %s: %s", ticker, exc)
@@ -433,6 +475,7 @@ async def _scan_macro_event(
     store,
     positions: list[dict],
     portfolio_config: dict | None = None,
+    user_id: str = "public",
 ) -> list[dict]:
     """规则 5：宏观事件（PORTFOLIO 级，target='MACRO'）。
 
@@ -480,7 +523,13 @@ async def _scan_macro_event(
             return findings
 
         upcoming.sort(key=lambda e: e["days_until"])
-        if store.has_recent_finding(session_id, "MACRO", "macro_event", within_hours=DEDUP_WINDOW_HOURS):
+        if store.has_recent_finding(
+            session_id,
+            "MACRO",
+            "macro_event",
+            within_hours=DEDUP_WINDOW_HOURS,
+            user_id=user_id,
+        ):
             return findings
 
         head = upcoming[0]
@@ -500,7 +549,7 @@ async def _scan_macro_event(
                 {"type": "full_report", "label": "宏观影响分析", "ticker": "MACRO"},
             ],
         )
-        store.insert_finding(finding)
+        store.insert_finding(finding, user_id=user_id)
         findings.append(finding)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[MonitorEngine] macro_event scan failed for %s: %s", session_id, exc)
@@ -508,7 +557,11 @@ async def _scan_macro_event(
     return findings
 
 
-async def _run_l2_for_findings(store, findings: list[dict]) -> None:
+async def _run_l2_for_findings(
+    store,
+    findings: list[dict],
+    user_id: str = "public",
+) -> None:
     """Phase 2：对新产生的 findings 逐条做 L2 agent 深析（带成本护栏）。
 
     - 总开关 / 熔断 / 预算任一不满足则整体跳过
@@ -524,7 +577,12 @@ async def _run_l2_for_findings(store, findings: list[dict]) -> None:
         analysis = await run_l2_analysis(finding)
         if analysis:
             budget.record_spend()
-            store.update_finding_analysis(finding["session_id"], finding["id"], analysis)
+            store.update_finding_analysis(
+                finding["session_id"],
+                finding["id"],
+                analysis,
+                user_id=user_id,
+            )
             finding["agent_analysis"] = analysis  # 返回值里也带上
 
 
@@ -533,7 +591,11 @@ def _smtp_configured() -> bool:
     return bool(os.getenv("SMTP_USER")) and bool(os.getenv("SMTP_PASSWORD"))
 
 
-def _notify_findings(session_id: str, findings: list[dict]) -> None:
+def _notify_findings(
+    session_id: str,
+    findings: list[dict],
+    user_id: str = "public",
+) -> None:
     """把本轮新 findings 汇总成一封邮件发出（受开关 + SMTP 配置 + 冷却限制）。
 
     - 仅当 settings.notify_enabled 且 notify_email 非空 且 SMTP 已配置时才发
@@ -546,7 +608,7 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
             return
 
         store = get_monitor_store()
-        settings = store.get_settings(session_id)
+        settings = store.get_settings(session_id, user_id=user_id)
         notify_email = settings.get("notify_email")
         if not settings.get("notify_enabled") or not notify_email:
             return
@@ -556,7 +618,7 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
 
         # 冷却：距上次发信不足 1 小时则跳过。时间戳落库（跨重启 / 多 worker 共享）。
         now = datetime.now(timezone.utc)
-        last = store.get_last_notified_at(session_id)
+        last = store.get_last_notified_at(session_id, user_id=user_id)
         if last is not None:
             elapsed = (now - last).total_seconds()
             # elapsed < 0 视为时钟回拨/异常未来戳：保守按冷却中处理，避免重发
@@ -604,7 +666,7 @@ def _notify_findings(session_id: str, findings: list[dict]) -> None:
             notify_email, subject, html_content, text_content
         )
         if success:
-            store.set_last_notified_at(session_id, now)
+            store.set_last_notified_at(session_id, now, user_id=user_id)
             logger.info(
                 "[MonitorEngine] notify sent for session %s (%s findings) to %s",
                 session_id,
@@ -626,6 +688,7 @@ async def run_l1_scan(
     session_id: str,
     enable_l2: bool = True,
     market_session: str | None = None,
+    user_id: str = "public",
 ) -> list[dict]:
     """对单个 session 跑 L1 规则扫描，返回本次新产生的 findings。
 
@@ -640,8 +703,8 @@ async def run_l1_scan(
         market_session = get_market_session()
 
     store = get_monitor_store()
-    positions = get_positions(session_id)
-    targets = store.list_targets(session_id)
+    positions = _get_positions_for_user(session_id, user_id)
+    targets = store.list_targets(session_id, user_id=user_id)
 
     # 无持仓且无盯盘标的 -> 直接返回
     if not positions and not targets:
@@ -654,13 +717,26 @@ async def run_l1_scan(
     # 价格异动：闭市价格不动，跳过（不调价格 API，省请求且不报无意义异动）
     if price_rules_active(market_session):
         findings += await _scan_price_move(
-            session_id, store, positions, config_map, market_session
+            session_id,
+            store,
+            positions,
+            config_map,
+            market_session,
+            user_id=user_id,
         )
-    findings += await _scan_concentration(session_id, store, positions, conc_config)
-    findings += await _scan_sentiment_shift(session_id, store, positions, config_map)
-    findings += await _scan_earnings_near(session_id, store, positions, config_map)
+    findings += await _scan_concentration(
+        session_id, store, positions, conc_config, user_id=user_id
+    )
+    findings += await _scan_sentiment_shift(
+        session_id, store, positions, config_map, user_id=user_id
+    )
+    findings += await _scan_earnings_near(
+        session_id, store, positions, config_map, user_id=user_id
+    )
     # 宏观天数窗口复用 PORTFOLIO 级 config（与集中度同一份 conc_config）
-    findings += await _scan_macro_event(session_id, store, positions, conc_config)
+    findings += await _scan_macro_event(
+        session_id, store, positions, conc_config, user_id=user_id
+    )
 
     # 说明：market_session 只写入价格异动规则的 trigger_detail（已在 _scan_price_move
     # 落库时带上，库与内存一致）。非价格规则（财报/宏观/集中度/舆情）与时段语义无关，
@@ -668,11 +744,11 @@ async def run_l1_scan(
 
     # Phase 2: L2 agent 自动深析（有成本护栏）
     if enable_l2 and findings:
-        await _run_l2_for_findings(store, findings)
+        await _run_l2_for_findings(store, findings, user_id=user_id)
 
     # Phase 3: 新 finding 邮件通知（受 session 级开关 + 冷却限制，失败不影响主流程）
     if findings:
-        _notify_findings(session_id, findings)
+        _notify_findings(session_id, findings, user_id=user_id)
 
     return findings
 
@@ -687,20 +763,24 @@ def run_monitor_scan_cycle(market_session: str | None = None) -> None:
         market_session = get_market_session()
 
     try:
-        session_ids = list_session_ids()
+        user_sessions = list_user_sessions()
     except Exception as exc:  # noqa: BLE001
         logger.warning("[MonitorEngine] failed to list sessions: %s", exc)
         return
 
-    if not session_ids:
+    if not user_sessions:
         logger.info("[MonitorEngine] no sessions with holdings; skip L1 scan.")
         return
 
     async def _scan_all() -> int:
         total = 0
-        for sid in session_ids:
+        for user_id, sid in user_sessions:
             try:
-                produced = await run_l1_scan(sid, market_session=market_session)
+                produced = await run_l1_scan(
+                    sid,
+                    market_session=market_session,
+                    user_id=user_id,
+                )
                 total += len(produced)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("[MonitorEngine] L1 scan failed for session %s: %s", sid, exc)
@@ -711,7 +791,7 @@ def run_monitor_scan_cycle(market_session: str | None = None) -> None:
         logger.info(
             "[MonitorEngine] L1 scan cycle done: session_state=%s sessions=%s findings=%s",
             market_session,
-            len(session_ids),
+            len(user_sessions),
             produced,
         )
     except Exception as exc:  # noqa: BLE001

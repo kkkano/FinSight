@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from backend.services.rebalance.schemas import (
@@ -73,18 +73,22 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
         "/api/rebalance/suggestions/generate",
         response_model=RebalanceSuggestion,
     )
-    async def generate_suggestion(request: GenerateRebalanceRequest):
+    async def generate_suggestion(
+        request: GenerateRebalanceRequest,
+        http_request: Request,
+    ):
         """Generate a rebalance suggestion for the portfolio.
 
         HC-2: Forces suggestion_only mode and executable=False.
         """
         if not request.session_id:
             raise HTTPException(status_code=422, detail="session_id is required")
+        user_id = getattr(http_request.state, "user_id", "public")
 
         # Build portfolio from request or fetch from store
         portfolio = request.portfolio
         if not portfolio:
-            portfolio = get_positions(request.session_id)
+            portfolio = get_positions(request.session_id, user_id=user_id)
 
         if not portfolio:
             raise HTTPException(
@@ -179,6 +183,7 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
                 suggestion_id=suggestion.suggestion_id,
                 session_id=request.session_id,
                 data=suggestion.model_dump(),
+                user_id=user_id,
             )
         except Exception as exc:
             logger.exception("Failed to save suggestion: %s", exc)
@@ -188,13 +193,19 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
 
     @router.get("/api/rebalance/suggestions")
     async def list_suggestions_endpoint(
-        session_id: str, limit: int = 10
+        request: Request,
+        session_id: str,
+        limit: int = 10,
     ):
         """List recent rebalance suggestions for a session."""
         if not session_id:
             raise HTTPException(status_code=422, detail="session_id is required")
 
-        results = list_suggestions(session_id, limit=min(limit, 50))
+        results = list_suggestions(
+            session_id,
+            limit=min(limit, 50),
+            user_id=getattr(request.state, "user_id", "public"),
+        )
         return {
             "success": True,
             "session_id": session_id,
@@ -204,13 +215,19 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
 
     @router.patch("/api/rebalance/suggestions/{suggestion_id}")
     async def patch_suggestion_endpoint(
-        suggestion_id: str, request: PatchSuggestionRequest
+        suggestion_id: str,
+        request: PatchSuggestionRequest,
+        http_request: Request,
     ):
         """Update the status of a rebalance suggestion."""
         if not suggestion_id:
             raise HTTPException(status_code=422, detail="suggestion_id is required")
 
-        updated = patch_suggestion(suggestion_id, status=request.status)
+        updated = patch_suggestion(
+            suggestion_id,
+            status=request.status,
+            user_id=getattr(http_request.state, "user_id", "public"),
+        )
         if not updated:
             raise HTTPException(status_code=404, detail="Suggestion not found")
 
@@ -221,7 +238,10 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
         }
 
     @router.post("/api/rebalance/suggestions/generate-stream")
-    async def generate_suggestion_stream(request: GenerateRebalanceRequest):
+    async def generate_suggestion_stream(
+        request: GenerateRebalanceRequest,
+        http_request: Request,
+    ):
         """SSE streaming rebalance suggestion generation (P2).
 
         Streams progress events during diagnosis/generation/solving steps,
@@ -229,6 +249,7 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
         """
         if not request.session_id:
             raise HTTPException(status_code=422, detail="session_id is required")
+        user_id = getattr(http_request.state, "user_id", "public")
 
         async def _event_stream():
             started_at = time.perf_counter()
@@ -242,7 +263,7 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
             # Build portfolio
             portfolio = request.portfolio
             if not portfolio:
-                portfolio = get_positions(request.session_id)
+                portfolio = get_positions(request.session_id, user_id=user_id)
 
             if not portfolio:
                 yield _sse("error", {"message": "未找到持仓数据，请先添加持仓。"})
@@ -343,6 +364,7 @@ def create_rebalance_router(deps: RebalanceRouterDeps) -> APIRouter:
                     suggestion_id=suggestion.suggestion_id,
                     session_id=request.session_id,
                     data=suggestion.model_dump(),
+                    user_id=user_id,
                 )
             except Exception as exc:
                 logger.warning("Failed to save suggestion: %s", exc)

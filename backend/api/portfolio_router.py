@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.services.portfolio_store import (
@@ -42,12 +42,15 @@ class UpdatePositionRequest(BaseModel):
 
 
 @portfolio_router.get("/api/portfolio/summary")
-async def get_portfolio_summary(session_id: str):
+async def get_portfolio_summary(session_id: str, request: Request):
     """Return all positions with calculated market values."""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
 
-    positions = get_positions(session_id)
+    positions = get_positions(
+        session_id,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
 
     total_value = 0.0
     total_cost = 0.0
@@ -121,12 +124,16 @@ async def get_portfolio_summary(session_id: str):
 
 
 @portfolio_router.post("/api/portfolio/positions")
-async def sync_positions_endpoint(request: SyncPositionsRequest):
+async def sync_positions_endpoint(request: SyncPositionsRequest, http_request: Request):
     """Bulk-replace all positions for a session."""
     if not request.session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
 
-    count = sync_positions(request.session_id, request.positions)
+    count = sync_positions(
+        request.session_id,
+        request.positions,
+        user_id=getattr(http_request.state, "user_id", "public"),
+    )
     return {
         "success": True,
         "session_id": request.session_id,
@@ -139,6 +146,7 @@ async def update_position_endpoint(
     ticker: str,
     session_id: str,
     request: UpdatePositionRequest,
+    http_request: Request,
 ):
     """Upsert a single position (create or update)."""
     if not session_id:
@@ -153,6 +161,7 @@ async def update_position_endpoint(
         ticker=clean_ticker,
         shares=request.shares,
         avg_cost=request.avg_cost,
+        user_id=getattr(http_request.state, "user_id", "public"),
     )
     return {
         "success": True,
@@ -164,7 +173,7 @@ async def update_position_endpoint(
 
 
 @portfolio_router.delete("/api/portfolio/positions/{ticker}")
-async def remove_position_endpoint(ticker: str, session_id: str):
+async def remove_position_endpoint(ticker: str, session_id: str, request: Request):
     """Remove a single position from the portfolio."""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
@@ -173,7 +182,11 @@ async def remove_position_endpoint(ticker: str, session_id: str):
     if not clean_ticker:
         raise HTTPException(status_code=422, detail="ticker is required")
 
-    remove_position(session_id=session_id, ticker=clean_ticker)
+    remove_position(
+        session_id=session_id,
+        ticker=clean_ticker,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
     return {
         "success": True,
         "session_id": session_id,
@@ -182,4 +195,3 @@ async def remove_position_endpoint(ticker: str, session_id: str):
 
 
 __all__ = ["portfolio_router"]
-

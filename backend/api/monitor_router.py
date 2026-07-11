@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.services.monitor_engine import run_l1_scan
@@ -80,6 +80,16 @@ def _smtp_configured() -> bool:
     return bool(os.getenv("SMTP_USER")) and bool(os.getenv("SMTP_PASSWORD"))
 
 
+def _get_positions_for_user(session_id: str, user_id: str) -> list[dict[str, Any]]:
+    """兼容 public 模式下旧的一参数测试/注入函数。"""
+    try:
+        return get_positions(session_id, user_id=user_id)
+    except TypeError as exc:
+        if user_id != "public" or "unexpected keyword argument" not in str(exc):
+            raise
+        return get_positions(session_id)
+
+
 # ── 请求模型 ──────────────────────────────────────────────────
 
 
@@ -110,27 +120,47 @@ class UpsertSettingsRequest(BaseModel):
 
 
 @monitor_router.get("/api/monitor/findings")
-async def list_findings_endpoint(session_id: str, status: str | None = None, limit: int = 50):
+async def list_findings_endpoint(
+    request: Request,
+    session_id: str,
+    status: str | None = None,
+    limit: int = 50,
+):
     """返回 session 的盯盘发现（按时间倒序，可按状态过滤）。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
-    findings = get_monitor_store().list_findings(session_id, status=status, limit=limit)
+    findings = get_monitor_store().list_findings(
+        session_id,
+        status=status,
+        limit=limit,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
     return {"findings": findings, "count": len(findings)}
 
 
 @monitor_router.patch("/api/monitor/findings/{finding_id}")
-async def update_finding_endpoint(finding_id: str, session_id: str, request: UpdateFindingRequest):
+async def update_finding_endpoint(
+    finding_id: str,
+    session_id: str,
+    request: UpdateFindingRequest,
+    http_request: Request,
+):
     """更新某条 finding 的状态（new/viewed/acted）。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
-    ok = get_monitor_store().update_finding_status(session_id, finding_id, request.status)
+    ok = get_monitor_store().update_finding_status(
+        session_id,
+        finding_id,
+        request.status,
+        user_id=getattr(http_request.state, "user_id", "public"),
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="finding not found")
     return {"success": True, "finding_id": finding_id, "status": request.status}
 
 
 @monitor_router.post("/api/monitor/scan")
-async def scan_endpoint(session_id: str, enable_l2: bool = True):
+async def scan_endpoint(request: Request, session_id: str, enable_l2: bool = True):
     """手动触发该 session 的 L1 规则扫描，返回本次新产生的 findings。
 
     enable_l2 默认 True：手动扫描时附带 L2 agent 深析（受同样的成本护栏限制）。
@@ -138,7 +168,11 @@ async def scan_endpoint(session_id: str, enable_l2: bool = True):
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
     try:
-        findings = await run_l1_scan(session_id, enable_l2=enable_l2)
+        findings = await run_l1_scan(
+            session_id,
+            enable_l2=enable_l2,
+            user_id=getattr(request.state, "user_id", "public"),
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[MonitorRouter] manual scan failed for %s: %s", session_id, exc)
         raise HTTPException(status_code=500, detail="scan failed") from exc
@@ -149,16 +183,19 @@ async def scan_endpoint(session_id: str, enable_l2: bool = True):
 
 
 @monitor_router.get("/api/monitor/targets")
-async def list_targets_endpoint(session_id: str):
+async def list_targets_endpoint(session_id: str, request: Request):
     """返回 session 的盯盘标的列表。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
-    targets = get_monitor_store().list_targets(session_id)
+    targets = get_monitor_store().list_targets(
+        session_id,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
     return {"targets": targets, "count": len(targets)}
 
 
 @monitor_router.post("/api/monitor/targets")
-async def create_target_endpoint(request: CreateTargetRequest):
+async def create_target_endpoint(request: CreateTargetRequest, http_request: Request):
     """新建盯盘标的（id / created_at 由服务端生成）。"""
     if not request.session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
@@ -174,12 +211,20 @@ async def create_target_endpoint(request: CreateTargetRequest):
         "enabled": request.enabled,
         "created_at": _now_iso(),
     }
-    get_monitor_store().upsert_target(target)
+    get_monitor_store().upsert_target(
+        target,
+        user_id=getattr(http_request.state, "user_id", "public"),
+    )
     return {"success": True, "target": target}
 
 
 @monitor_router.patch("/api/monitor/targets/{target_id}")
-async def patch_target_endpoint(target_id: str, session_id: str, request: PatchTargetRequest):
+async def patch_target_endpoint(
+    target_id: str,
+    session_id: str,
+    request: PatchTargetRequest,
+    http_request: Request,
+):
     """更新盯盘标的的 config / enabled（部分字段）。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
@@ -188,7 +233,11 @@ async def patch_target_endpoint(target_id: str, session_id: str, request: PatchT
         _validate_config(request.config)
 
     store = get_monitor_store()
-    existing = next((t for t in store.list_targets(session_id) if t["id"] == target_id), None)
+    user_id = getattr(http_request.state, "user_id", "public")
+    existing = next(
+        (t for t in store.list_targets(session_id, user_id=user_id) if t["id"] == target_id),
+        None,
+    )
     if existing is None:
         raise HTTPException(status_code=404, detail="target not found")
 
@@ -197,16 +246,20 @@ async def patch_target_endpoint(target_id: str, session_id: str, request: PatchT
         "config": request.config if request.config is not None else existing["config"],
         "enabled": request.enabled if request.enabled is not None else existing["enabled"],
     }
-    store.upsert_target(updated)
+    store.upsert_target(updated, user_id=user_id)
     return {"success": True, "target": updated}
 
 
 @monitor_router.delete("/api/monitor/targets/{target_id}")
-async def delete_target_endpoint(target_id: str, session_id: str):
+async def delete_target_endpoint(target_id: str, session_id: str, request: Request):
     """删除盯盘标的（session 隔离）。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
-    ok = get_monitor_store().delete_target(session_id, target_id)
+    ok = get_monitor_store().delete_target(
+        session_id,
+        target_id,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="target not found")
     return {"success": True, "removed_target_id": target_id}
@@ -214,8 +267,8 @@ async def delete_target_endpoint(target_id: str, session_id: str):
 
 # ── 宏观日历聚合 ──────────────────────────────────────────────
 
-# 模块级缓存：(session_id, days_ahead) -> (单调时间戳, events 列表)
-_MACRO_CACHE: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+# 模块级缓存：(user_id, session_id, days_ahead) -> (单调时间戳, events 列表)
+_MACRO_CACHE: dict[tuple[str, str, int], tuple[float, list[dict[str, Any]]]] = {}
 _MACRO_CACHE_TTL_SECONDS = 3600.0  # 缓存 1 小时，避免每次刷新都打外部 API
 
 
@@ -229,7 +282,11 @@ def _days_until(date_str: str) -> int | None:
     return (target - today).days
 
 
-def _build_macro_calendar(session_id: str, days_ahead: int) -> list[dict[str, Any]]:
+def _build_macro_calendar(
+    session_id: str,
+    days_ahead: int,
+    user_id: str = "public",
+) -> list[dict[str, Any]]:
     """聚合该 session 持仓 ticker 的财报事件 + 一次宏观事件，按 days_until 升序。
 
     - 财报：逐持仓 ticker 调 get_event_calendar 取 earnings_events（kind=earnings，带 ticker）
@@ -239,7 +296,7 @@ def _build_macro_calendar(session_id: str, days_ahead: int) -> list[dict[str, An
     诚实原则：没有确定日期的事件不展示。
     """
     try:
-        positions = get_positions(session_id)
+        positions = _get_positions_for_user(session_id, user_id)
     except Exception as exc:  # noqa: BLE001
         logger.warning("[MonitorRouter] macro-calendar get_positions failed: %s", exc)
         positions = []
@@ -320,20 +377,25 @@ def _build_macro_calendar(session_id: str, days_ahead: int) -> list[dict[str, An
 
 
 @monitor_router.get("/api/monitor/macro-calendar")
-async def macro_calendar_endpoint(session_id: str, days_ahead: int = 14):
+async def macro_calendar_endpoint(
+    request: Request,
+    session_id: str,
+    days_ahead: int = 14,
+):
     """聚合该 session 的财报 + 宏观事件日历（缓存 1 小时，外部 API 全挂返回空列表）。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
 
     days_ahead = max(1, min(int(days_ahead or 14), 120))
-    cache_key = (session_id, days_ahead)
+    user_id = getattr(request.state, "user_id", "public")
+    cache_key = (user_id, session_id, days_ahead)
 
     now = _time.monotonic()
     cached = _MACRO_CACHE.get(cache_key)
     if cached is not None and (now - cached[0]) < _MACRO_CACHE_TTL_SECONDS:
         events = cached[1]
     else:
-        events = _build_macro_calendar(session_id, days_ahead)
+        events = _build_macro_calendar(session_id, days_ahead, user_id=user_id)
         _MACRO_CACHE[cache_key] = (now, events)
 
     return {
@@ -347,11 +409,14 @@ async def macro_calendar_endpoint(session_id: str, days_ahead: int = 14):
 
 
 @monitor_router.get("/api/monitor/settings")
-async def get_settings_endpoint(session_id: str):
+async def get_settings_endpoint(session_id: str, request: Request):
     """返回 session 的通知设置 + SMTP 是否已配置。"""
     if not session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
-    settings = get_monitor_store().get_settings(session_id)
+    settings = get_monitor_store().get_settings(
+        session_id,
+        user_id=getattr(request.state, "user_id", "public"),
+    )
     return {
         "success": True,
         "notify_email": settings.get("notify_email"),
@@ -361,7 +426,7 @@ async def get_settings_endpoint(session_id: str):
 
 
 @monitor_router.put("/api/monitor/settings")
-async def upsert_settings_endpoint(request: UpsertSettingsRequest):
+async def upsert_settings_endpoint(request: UpsertSettingsRequest, http_request: Request):
     """更新 session 的通知设置（邮箱格式校验 + SMTP 未配置时禁止启用通知）。"""
     if not request.session_id:
         raise HTTPException(status_code=422, detail="session_id is required")
@@ -378,7 +443,12 @@ async def upsert_settings_endpoint(request: UpsertSettingsRequest):
                 status_code=422, detail="服务器未配置 SMTP，无法启用邮件通知"
             )
 
-    get_monitor_store().upsert_settings(request.session_id, email, request.notify_enabled)
+    get_monitor_store().upsert_settings(
+        request.session_id,
+        email,
+        request.notify_enabled,
+        user_id=getattr(http_request.state, "user_id", "public"),
+    )
     return {"success": True}
 
 

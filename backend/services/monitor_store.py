@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.data.migrations import ensure_column
+
 logger = logging.getLogger(__name__)
 
 # 数据目录默认值以本文件位置锚定到「仓库根/data」，避免依赖启动 CWD 造成 split-brain。
@@ -73,7 +75,8 @@ class MonitorStore:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS findings (
-                id              TEXT PRIMARY KEY,
+                user_id         TEXT NOT NULL DEFAULT 'public',
+                id              TEXT NOT NULL,
                 session_id      TEXT NOT NULL,
                 created_at      TEXT NOT NULL,
                 target          TEXT NOT NULL,
@@ -83,56 +86,140 @@ class MonitorStore:
                 summary         TEXT,
                 agent_analysis  TEXT,
                 actions         TEXT,
-                status          TEXT NOT NULL DEFAULT 'new'
+                status          TEXT NOT NULL DEFAULT 'new',
+                PRIMARY KEY (user_id, id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_findings_session
-                ON findings(session_id, created_at DESC);
-
-            CREATE INDEX IF NOT EXISTS idx_findings_dedup
-                ON findings(session_id, target, trigger_type, created_at DESC);
-
             CREATE TABLE IF NOT EXISTS monitor_targets (
-                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL DEFAULT 'public',
+                id          TEXT NOT NULL,
                 session_id  TEXT NOT NULL,
                 type        TEXT NOT NULL,
                 ticker      TEXT,
                 config      TEXT,
                 enabled     INTEGER NOT NULL DEFAULT 1,
-                created_at  TEXT NOT NULL
+                created_at  TEXT NOT NULL,
+                PRIMARY KEY (user_id, id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_targets_session
-                ON monitor_targets(session_id);
-
             CREATE TABLE IF NOT EXISTS monitor_settings (
-                session_id     TEXT PRIMARY KEY,
+                user_id        TEXT NOT NULL DEFAULT 'public',
+                session_id     TEXT NOT NULL,
                 notify_email   TEXT,
                 notify_enabled INTEGER NOT NULL DEFAULT 0,
-                updated_at     TEXT NOT NULL
+                updated_at     TEXT NOT NULL,
+                PRIMARY KEY (user_id, session_id)
             );
 
             -- 邮件通知冷却落库：last_notified_at 存上次成功发信的 ISO UTC 时间戳。
             -- 用绝对时间（而非进程内 monotonic），使冷却跨进程重启 / 多 worker 共享生效，
             -- 避免重启后立即重发、多 worker 各自冷却互不可见导致重复发信。
             CREATE TABLE IF NOT EXISTS notify_cooldown (
-                session_id       TEXT PRIMARY KEY,
-                last_notified_at TEXT NOT NULL
+                user_id          TEXT NOT NULL DEFAULT 'public',
+                session_id       TEXT NOT NULL,
+                last_notified_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, session_id)
             );
+            """
+        )
+        for table in (
+            "findings",
+            "monitor_targets",
+            "monitor_settings",
+            "notify_cooldown",
+        ):
+            ensure_column(
+                conn,
+                table,
+                "user_id",
+                "user_id TEXT NOT NULL DEFAULT 'public'",
+            )
+        MonitorStore._ensure_user_primary_keys(conn)
+        conn.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS idx_findings_user_session
+                ON findings(user_id, session_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_findings_user_dedup
+                ON findings(user_id, session_id, target, trigger_type, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_targets_user_session
+                ON monitor_targets(user_id, session_id);
             """
         )
         conn.commit()
 
+    @staticmethod
+    def _primary_key_columns(conn: sqlite3.Connection, table: str) -> list[str]:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return [
+            str(row[1])
+            for row in sorted(rows, key=lambda row: int(row[5]))
+            if row[5]
+        ]
+
+    @staticmethod
+    def _ensure_user_primary_keys(conn: sqlite3.Connection) -> None:
+        migrations = {
+            "findings": (
+                ["user_id", "id"],
+                """CREATE TABLE findings (
+                    user_id TEXT NOT NULL DEFAULT 'public', id TEXT NOT NULL,
+                    session_id TEXT NOT NULL, created_at TEXT NOT NULL, target TEXT NOT NULL,
+                    trigger_type TEXT NOT NULL, trigger_detail TEXT, title TEXT, summary TEXT,
+                    agent_analysis TEXT, actions TEXT, status TEXT NOT NULL DEFAULT 'new',
+                    PRIMARY KEY (user_id, id))""",
+                "user_id, id, session_id, created_at, target, trigger_type, trigger_detail, title, summary, agent_analysis, actions, status",
+            ),
+            "monitor_targets": (
+                ["user_id", "id"],
+                """CREATE TABLE monitor_targets (
+                    user_id TEXT NOT NULL DEFAULT 'public', id TEXT NOT NULL,
+                    session_id TEXT NOT NULL, type TEXT NOT NULL, ticker TEXT, config TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, id))""",
+                "user_id, id, session_id, type, ticker, config, enabled, created_at",
+            ),
+            "monitor_settings": (
+                ["user_id", "session_id"],
+                """CREATE TABLE monitor_settings (
+                    user_id TEXT NOT NULL DEFAULT 'public', session_id TEXT NOT NULL,
+                    notify_email TEXT, notify_enabled INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL, PRIMARY KEY (user_id, session_id))""",
+                "user_id, session_id, notify_email, notify_enabled, updated_at",
+            ),
+            "notify_cooldown": (
+                ["user_id", "session_id"],
+                """CREATE TABLE notify_cooldown (
+                    user_id TEXT NOT NULL DEFAULT 'public', session_id TEXT NOT NULL,
+                    last_notified_at TEXT NOT NULL, PRIMARY KEY (user_id, session_id))""",
+                "user_id, session_id, last_notified_at",
+            ),
+        }
+        for table, (expected_pk, create_sql, columns) in migrations.items():
+            if MonitorStore._primary_key_columns(conn, table) == expected_pk:
+                continue
+            legacy = f"{table}_legacy"
+            conn.execute(f"ALTER TABLE {table} RENAME TO {legacy}")
+            conn.execute(create_sql)
+            conn.execute(
+                f"INSERT OR REPLACE INTO {table} ({columns}) SELECT {columns} FROM {legacy}"
+            )
+            conn.execute(f"DROP TABLE {legacy}")
+
     # ── Finding ───────────────────────────────────────────────
 
-    def insert_finding(self, finding: dict[str, Any]) -> None:
+    def insert_finding(
+        self,
+        finding: dict[str, Any],
+        user_id: str = "public",
+    ) -> None:
         """插入一条 Finding（id 由调用方提供，uuid4 hex）。"""
         self._db().execute(
             """INSERT INTO findings
-               (id, session_id, created_at, target, trigger_type, trigger_detail,
+               (user_id, id, session_id, created_at, target, trigger_type, trigger_detail,
                 title, summary, agent_analysis, actions, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                user_id,
                 finding["id"],
                 finding["session_id"],
                 finding.get("created_at") or _now_iso(),
@@ -151,14 +238,18 @@ class MonitorStore:
         self._db().commit()
 
     def list_findings(
-        self, session_id: str, status: str | None = None, limit: int = 50
+        self,
+        session_id: str,
+        status: str | None = None,
+        limit: int = 50,
+        user_id: str = "public",
     ) -> list[dict[str, Any]]:
         """按 created_at 倒序返回 session 的 findings，可按 status 过滤。"""
         sql = (
             "SELECT id, session_id, created_at, target, trigger_type, trigger_detail, "
-            "title, summary, agent_analysis, actions, status FROM findings WHERE session_id = ?"
+            "title, summary, agent_analysis, actions, status FROM findings WHERE session_id = ? AND user_id = ?"
         )
-        params: list[Any] = [session_id]
+        params: list[Any] = [session_id, user_id]
         if status:
             sql += " AND status = ?"
             params.append(status)
@@ -184,17 +275,27 @@ class MonitorStore:
             "status": r[10],
         }
 
-    def update_finding_status(self, session_id: str, finding_id: str, status: str) -> bool:
+    def update_finding_status(
+        self,
+        session_id: str,
+        finding_id: str,
+        status: str,
+        user_id: str = "public",
+    ) -> bool:
         """更新指定 finding 的状态；session 隔离，跨 session 不可改。"""
         cursor = self._db().execute(
-            "UPDATE findings SET status = ? WHERE id = ? AND session_id = ?",
-            (status, finding_id, session_id),
+            "UPDATE findings SET status = ? WHERE id = ? AND session_id = ? AND user_id = ?",
+            (status, finding_id, session_id, user_id),
         )
         self._db().commit()
         return cursor.rowcount > 0
 
     def update_finding_analysis(
-        self, session_id: str, finding_id: str, analysis: dict[str, Any] | None
+        self,
+        session_id: str,
+        finding_id: str,
+        analysis: dict[str, Any] | None,
+        user_id: str = "public",
     ) -> bool:
         """写入 L2 agent 分析结果（Phase 2）；session 隔离，跨 session 不可改。
 
@@ -204,41 +305,51 @@ class MonitorStore:
             json.dumps(analysis, ensure_ascii=False) if analysis is not None else None
         )
         cursor = self._db().execute(
-            "UPDATE findings SET agent_analysis = ? WHERE id = ? AND session_id = ?",
-            (payload, finding_id, session_id),
+            "UPDATE findings SET agent_analysis = ? WHERE id = ? AND session_id = ? AND user_id = ?",
+            (payload, finding_id, session_id, user_id),
         )
         self._db().commit()
         return cursor.rowcount > 0
 
     def has_recent_finding(
-        self, session_id: str, target: str, trigger_type: str, within_hours: int = 4
+        self,
+        session_id: str,
+        target: str,
+        trigger_type: str,
+        within_hours: int = 4,
+        user_id: str = "public",
     ) -> bool:
         """去重：同 session 同标的同类型在 within_hours 窗口内是否已有 finding。"""
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=within_hours)).isoformat()
         row = self._db().execute(
             """SELECT 1 FROM findings
-               WHERE session_id = ? AND target = ? AND trigger_type = ? AND created_at >= ?
+               WHERE session_id = ? AND target = ? AND trigger_type = ? AND created_at >= ? AND user_id = ?
                LIMIT 1""",
-            (session_id, target, trigger_type, cutoff),
+            (session_id, target, trigger_type, cutoff, user_id),
         ).fetchone()
         return row is not None
 
-    def cleanup_old_findings(self, days: int = 30) -> int:
+    def cleanup_old_findings(self, days: int = 30, user_id: str = "public") -> int:
         """清理超过 days 天的 findings，返回删除条数。"""
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         cursor = self._db().execute(
-            "DELETE FROM findings WHERE created_at < ?", (cutoff,)
+            "DELETE FROM findings WHERE created_at < ? AND user_id = ?",
+            (cutoff, user_id),
         )
         self._db().commit()
         return cursor.rowcount
 
     # ── MonitorTarget ─────────────────────────────────────────
 
-    def list_targets(self, session_id: str) -> list[dict[str, Any]]:
+    def list_targets(
+        self,
+        session_id: str,
+        user_id: str = "public",
+    ) -> list[dict[str, Any]]:
         rows = self._db().execute(
             """SELECT id, session_id, type, ticker, config, enabled, created_at
-               FROM monitor_targets WHERE session_id = ? ORDER BY created_at""",
-            (session_id,),
+               FROM monitor_targets WHERE session_id = ? AND user_id = ? ORDER BY created_at""",
+            (session_id, user_id),
         ).fetchall()
         return [
             {
@@ -253,17 +364,22 @@ class MonitorStore:
             for r in rows
         ]
 
-    def upsert_target(self, target: dict[str, Any]) -> None:
+    def upsert_target(
+        self,
+        target: dict[str, Any],
+        user_id: str = "public",
+    ) -> None:
         """按 id upsert 一个 MonitorTarget。"""
         self._db().execute(
-            """INSERT INTO monitor_targets (id, session_id, type, ticker, config, enabled, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
+            """INSERT INTO monitor_targets (user_id, id, session_id, type, ticker, config, enabled, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, id) DO UPDATE SET
                    type=excluded.type,
                    ticker=excluded.ticker,
                    config=excluded.config,
                    enabled=excluded.enabled""",
             (
+                user_id,
                 target["id"],
                 target["session_id"],
                 target.get("type", "custom"),
@@ -275,39 +391,53 @@ class MonitorStore:
         )
         self._db().commit()
 
-    def delete_target(self, session_id: str, target_id: str) -> bool:
+    def delete_target(
+        self,
+        session_id: str,
+        target_id: str,
+        user_id: str = "public",
+    ) -> bool:
         """删除 target；session 隔离。返回是否实际删除。"""
         cursor = self._db().execute(
-            "DELETE FROM monitor_targets WHERE id = ? AND session_id = ?",
-            (target_id, session_id),
+            "DELETE FROM monitor_targets WHERE id = ? AND session_id = ? AND user_id = ?",
+            (target_id, session_id, user_id),
         )
         self._db().commit()
         return cursor.rowcount > 0
 
     # ── MonitorSettings（session 级通知设置）──────────────────
 
-    def get_settings(self, session_id: str) -> dict[str, Any]:
+    def get_settings(
+        self,
+        session_id: str,
+        user_id: str = "public",
+    ) -> dict[str, Any]:
         """读取 session 的通知设置；无记录时返回默认（未配置邮箱、关闭）。"""
         row = self._db().execute(
-            "SELECT notify_email, notify_enabled FROM monitor_settings WHERE session_id = ?",
-            (session_id,),
+            "SELECT notify_email, notify_enabled FROM monitor_settings WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
         ).fetchone()
         if row is None:
             return {"notify_email": None, "notify_enabled": False}
         return {"notify_email": row[0], "notify_enabled": bool(row[1])}
 
     def upsert_settings(
-        self, session_id: str, notify_email: str | None, notify_enabled: bool
+        self,
+        session_id: str,
+        notify_email: str | None,
+        notify_enabled: bool,
+        user_id: str = "public",
     ) -> None:
         """按 session_id upsert 通知设置。"""
         self._db().execute(
-            """INSERT INTO monitor_settings (session_id, notify_email, notify_enabled, updated_at)
-               VALUES (?, ?, ?, ?)
-               ON CONFLICT(session_id) DO UPDATE SET
+            """INSERT INTO monitor_settings (user_id, session_id, notify_email, notify_enabled, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, session_id) DO UPDATE SET
                    notify_email=excluded.notify_email,
                    notify_enabled=excluded.notify_enabled,
                    updated_at=excluded.updated_at""",
             (
+                user_id,
                 session_id,
                 notify_email,
                 1 if notify_enabled else 0,
@@ -318,11 +448,15 @@ class MonitorStore:
 
     # ── 邮件通知冷却（落库，跨重启 / 多 worker 共享）──────────────
 
-    def get_last_notified_at(self, session_id: str) -> datetime | None:
+    def get_last_notified_at(
+        self,
+        session_id: str,
+        user_id: str = "public",
+    ) -> datetime | None:
         """读取 session 上次成功发信时间（UTC aware datetime）；无记录返回 None。"""
         row = self._db().execute(
-            "SELECT last_notified_at FROM notify_cooldown WHERE session_id = ?",
-            (session_id,),
+            "SELECT last_notified_at FROM notify_cooldown WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
         ).fetchone()
         if row is None or not row[0]:
             return None
@@ -336,18 +470,21 @@ class MonitorStore:
         return ts
 
     def set_last_notified_at(
-        self, session_id: str, when: datetime | None = None
+        self,
+        session_id: str,
+        when: datetime | None = None,
+        user_id: str = "public",
     ) -> None:
         """记录 session 本次成功发信时间（默认现在，UTC）。"""
         moment = when or datetime.now(timezone.utc)
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=timezone.utc)
         self._db().execute(
-            """INSERT INTO notify_cooldown (session_id, last_notified_at)
-               VALUES (?, ?)
-               ON CONFLICT(session_id) DO UPDATE SET
+            """INSERT INTO notify_cooldown (user_id, session_id, last_notified_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(user_id, session_id) DO UPDATE SET
                    last_notified_at=excluded.last_notified_at""",
-            (session_id, moment.isoformat()),
+            (user_id, session_id, moment.isoformat()),
         )
         self._db().commit()
 

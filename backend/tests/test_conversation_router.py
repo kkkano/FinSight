@@ -73,7 +73,7 @@ def _build_store_client() -> tuple[TestClient, dict[str, dict]]:
     def list_session_contexts():
         return [{"session_id": session_id, "turns": context.get_state()["turns"]} for session_id, context in contexts.items()]
 
-    def upsert_record(session_id: str, payload: dict):
+    def upsert_record(session_id: str, payload: dict, _user_id: str):
         current = dict(records.get(session_id) or {"session_id": session_id, "messages": []})
         if "title" in payload:
             current["title"] = payload["title"]
@@ -83,7 +83,7 @@ def _build_store_client() -> tuple[TestClient, dict[str, dict]]:
         records[session_id] = current
         return dict(current)
 
-    def patch_record(session_id: str, payload: dict):
+    def patch_record(session_id: str, payload: dict, _user_id: str):
         current = dict(records.get(session_id) or {"session_id": session_id, "messages": []})
         current.update(payload)
         records[session_id] = current
@@ -97,11 +97,11 @@ def _build_store_client() -> tuple[TestClient, dict[str, dict]]:
                 get_session_context=get_session_context,
                 list_session_contexts=list_session_contexts,
                 clear_session_context=lambda session_id: {"context": contexts.pop(session_id, None) is not None},
-                list_conversation_records=lambda: list(records.values()),
-                get_conversation_record=lambda session_id: records.get(session_id),
+                list_conversation_records=lambda _user_id: list(records.values()),
+                get_conversation_record=lambda session_id, _user_id: records.get(session_id),
                 upsert_conversation_record=upsert_record,
                 patch_conversation_record=patch_record,
-                delete_conversation_record=lambda session_id: records.pop(session_id, None) is not None,
+                delete_conversation_record=lambda session_id, _user_id: records.pop(session_id, None) is not None,
             )
         )
     )
