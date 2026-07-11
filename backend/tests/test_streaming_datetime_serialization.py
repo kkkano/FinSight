@@ -4,28 +4,26 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 
-class _StubRunner:
-    async def ainvoke(self, **_kwargs):
+def test_chat_supervisor_stream_serializes_datetime(monkeypatch):
+    import backend.api.main as main
+
+    async def _stub_run_graph_traced(*_args, **_kwargs):
         return {
             "artifacts": {"draft_markdown": "ok"},
             "subject": {"tickers": ["NVDA"]},
             "output_mode": "report",
-            "trace": [
-                {
-                    "event": "node_end",
-                    "timestamp": datetime(2026, 2, 7, 12, 0, tzinfo=timezone.utc),
-                }
-            ],
+            "trace": {
+                "routing_chain": ["langgraph"],
+                "spans": [
+                    {
+                        "node": "stub",
+                        "timestamp": datetime(2026, 2, 7, 12, 0, tzinfo=timezone.utc),
+                    }
+                ],
+            },
         }
 
-
-def test_chat_supervisor_stream_serializes_datetime(monkeypatch):
-    import backend.api.main as main
-
-    async def _stub_get_runner():
-        return _StubRunner()
-
-    monkeypatch.setattr(main, "aget_graph_runner", _stub_get_runner)
+    monkeypatch.setattr("backend.graph.runner.run_graph_traced", _stub_run_graph_traced)
 
     events = []
     with TestClient(main.app) as client:
@@ -41,7 +39,9 @@ def test_chat_supervisor_stream_serializes_datetime(monkeypatch):
 
     done_event = next((item for item in events if item.get("type") == "done"), None)
     assert done_event is not None
-    trace = ((done_event.get("graph") or {}).get("trace")) or []
+    trace = ((done_event.get("graph") or {}).get("trace")) or {}
     assert trace
-    assert isinstance(trace[0].get("timestamp"), str)
-    assert trace[0]["timestamp"].startswith("2026-02-07T12:00:00")
+    spans = trace.get("spans") or []
+    assert spans
+    assert isinstance(spans[0].get("timestamp"), str)
+    assert spans[0]["timestamp"].startswith("2026-02-07T12:00:00")
